@@ -49,7 +49,7 @@ import {globalSettings} from '$lib/stores/app/globalSettings';
 
 /** User settings naming this Default Currency, everything else at what a new account gets. */
 function settingsWith(base_currency: string): UserSettings {
-    return {language: 'en', base_currency, theme: 'auto', avatar_url: null};
+    return {language: 'en', base_currency, avatar_url: null, ui_preferences: {}, ui_preference_defaults: {theme: 'auto', chart_line_shape: 'segments'}};
 }
 
 /**
@@ -115,6 +115,84 @@ describe('defaultDisplayCurrency — the Default Currency of the user first, the
         } finally {
             unsubscribe();
         }
+    });
+});
+
+describe('userSettings.updateUiPreference — optimistic write of one interface preference (lot UIP)', () => {
+    const putSettings = vi.mocked(zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put);
+
+    function withOwn(own: UserSettings['ui_preferences']): UserSettings {
+        return {...settingsWith('EUR'), ui_preferences: own};
+    }
+
+    beforeEach(() => {
+        resetStores();
+        putSettings.mockReset();
+    });
+    afterEach(() => {
+        resetStores();
+        putSettings.mockReset();
+    });
+
+    it('shows the new value before the PUT resolves, and sends only that key', async () => {
+        userSettings.setDirect(withOwn({}));
+        let release!: (value: UserSettings) => void;
+        putSettings.mockImplementationOnce(() => new Promise((resolve) => (release = resolve as typeof release)) as never);
+
+        const pending = userSettings.updateUiPreference('chart_line_shape', 'steps');
+
+        expect(userSettings.get()?.ui_preferences, 'optimistic: visible while the request is in flight').toEqual({chart_line_shape: 'steps'});
+        expect(putSettings).toHaveBeenCalledTimes(1);
+        expect(putSettings.mock.calls[0][0], 'body is exactly the one key').toEqual({ui_preferences: {chart_line_shape: 'steps'}});
+
+        release(withOwn({chart_line_shape: 'steps'}));
+        expect(await pending).toBe(true);
+    });
+
+    it('sends null to remove a key', async () => {
+        userSettings.setDirect(withOwn({theme: 'dark'}));
+        putSettings.mockResolvedValueOnce(withOwn({}) as never);
+
+        expect(await userSettings.updateUiPreference('theme', null)).toBe(true);
+
+        expect(putSettings.mock.calls[0][0]).toEqual({ui_preferences: {theme: null}});
+    });
+
+    it('stores the server response on success, not its own guess', async () => {
+        userSettings.setDirect(withOwn({}));
+        // The server also holds a key another tab wrote: the response wins.
+        putSettings.mockResolvedValueOnce(withOwn({theme: 'dark', chart_line_shape: 'spline'}) as never);
+
+        await userSettings.updateUiPreference('theme', 'dark');
+
+        expect(userSettings.get()?.ui_preferences).toEqual({theme: 'dark', chart_line_shape: 'spline'});
+    });
+
+    it('restores the previous own value on failure and returns false', async () => {
+        userSettings.setDirect(withOwn({theme: 'light'}));
+        putSettings.mockRejectedValueOnce(new Error('boom'));
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            expect(await userSettings.updateUiPreference('theme', 'dark')).toBe(false);
+        } finally {
+            consoleError.mockRestore();
+        }
+
+        expect(userSettings.get()?.ui_preferences).toEqual({theme: 'light'});
+    });
+
+    it('restores the absence of a key on failure', async () => {
+        userSettings.setDirect(withOwn({}));
+        putSettings.mockRejectedValueOnce(new Error('boom'));
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            expect(await userSettings.updateUiPreference('chart_line_shape', 'steps')).toBe(false);
+        } finally {
+            consoleError.mockRestore();
+        }
+
+        expect(userSettings.get()?.ui_preferences, 'no own key again').toEqual({});
+        expect('chart_line_shape' in (userSettings.get()?.ui_preferences ?? {})).toBe(false);
     });
 });
 

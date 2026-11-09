@@ -153,7 +153,7 @@ const test = base.extend<{uploaderPage: Page}>({
                     },
                 },
             ],
-            ['/api/v1/settings/user', {body: {language: 'en', base_currency: 'EUR', theme: 'light', avatar_url: null}}],
+            ['/api/v1/settings/user', {body: {language: 'en', base_currency: 'EUR', avatar_url: null, ui_preferences: {theme: 'light'}, ui_preference_defaults: {theme: 'auto', chart_line_shape: 'segments'}}}],
             ['/api/v1/settings/global', {body: {items: []}}],
             ['/api/v1/settings/onboarding', {body: everyFlowCompleted()}],
             ['/api/v1/system/connection', {body: loopbackConnection()}],

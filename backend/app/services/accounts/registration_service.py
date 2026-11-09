@@ -9,8 +9,9 @@ invitation keeps its place until it is used, revoked or expired, and so does an 
 verification while its link is live (workstream E). An invalid limit closes too, as a limit of 0.
 
 ``register_user`` holds the whole rule of ``POST /auth/register`` and owns its transaction: the account, the invitation
-it spends and the check of the limit are committed together, or not at all. ``create_invite`` and ``revoke_invite``
-flush without committing, like the token service they build on.
+it spends and the check of the limit are committed together, or not at all. ``create_invite`` flushes without
+committing, like the token service it builds on; an invitation is revoked as any account link
+(``account_links.revoke_link``).
 """
 
 import functools
@@ -29,7 +30,7 @@ from backend.app.db.session import begin_writes
 from backend.app.schemas.settings import SETTINGS_REGISTRY
 from backend.app.services.accounts import token_service, user_service
 from backend.app.services.accounts.global_settings_service import get_setting_value
-from backend.app.utils.datetime_utils import ensure_utc, utcnow
+from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
 
@@ -196,18 +197,6 @@ async def list_pending_invites(session: AsyncSession, *, now: Optional[datetime]
     """The live invitations, oldest first."""
     statement = select(AccountToken).where(*_live_invites(now or utcnow())).order_by(AccountToken.created_at, AccountToken.id)
     return list((await session.execute(statement)).scalars().all())
-
-
-async def revoke_invite(session: AsyncSession, invite_id: int, *, now: Optional[datetime] = None) -> bool:
-    """Revoke a live invitation (flushed, not committed); False when ``invite_id`` is not one."""
-    moment = now or utcnow()
-    invite = await session.get(AccountToken, invite_id)
-    if invite is None or invite.purpose != AccountTokenPurpose.INVITE or invite.consumed_at is not None or invite.revoked_at is not None or ensure_utc(invite.expires_at) <= ensure_utc(moment):
-        return False
-    revoked = await token_service.revoke_tokens(session, token_id=invite_id, purpose=AccountTokenPurpose.INVITE, now=moment)
-    if revoked:
-        logger.info("Invitation revoked", invite_id=invite_id)
-    return revoked == 1
 
 
 async def _admission(session: AsyncSession, invite_token: Optional[str], now: datetime) -> tuple[bool, bool, bool]:

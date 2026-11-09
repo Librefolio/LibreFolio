@@ -1,4 +1,4 @@
-/** Shapes of the Users tab (administrators), as `GET /users` and `GET /users/invites` return them. */
+/** Shapes of the Users tab (administrators), as `GET /users` and `GET /users/account-links` return them. */
 
 export interface AdminAccount {
     id: number;
@@ -19,12 +19,27 @@ export interface AdminAccount {
     avatar_url?: string | null;
 }
 
-export interface OpenInvite {
+export type AccountLinkPurpose = 'invite' | 'password_reset' | 'email_verification' | 'admin_setup' | 'email_change';
+export type AccountLinkState = 'open' | 'used' | 'expired' | 'revoked';
+
+/** One account link (lot UA3): never its token. The backend decides its state and whether it can be revoked here. */
+export interface AccountLink {
     id: number;
-    grants_admin: boolean;
+    purpose: AccountLinkPurpose;
+    state: AccountLinkState;
+    revocable: boolean;
+    user_id?: number | null;
+    username?: string | null;
     email?: string | null;
+    grants_admin: boolean;
+    created_by_user_id?: number | null;
+    created_by_username?: string | null;
     created_at: string;
     expires_at: string;
+    used_at?: string | null;
+    used_by_user_id?: number | null;
+    used_by_username?: string | null;
+    revoked_at?: string | null;
 }
 
 export interface AccountsUsage {

@@ -1,5 +1,6 @@
 <!--
-UsersTab — administrators only: the accounts of the instance and the invitations still open (decision D-A10).
+UsersTab — administrators only: the accounts of the instance (decision D-A10) and every account link (lot UA3): the open
+ones in a table, the closed ones (used, expired, revoked) in a second table inside a folded panel.
 
 At the top, the places taken against the limit («N / max», «Manage subscription» when the hoster set a billing page,
 decision D-A9), who can sign up (N69c: the registration mode, saved at the choice, asked about only for «open»; the Global
@@ -19,16 +20,17 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import AccountDeletionDialog from '../AccountDeletionDialog.svelte';
+    import FoldPanel from '$lib/components/ui/display/FoldPanel.svelte';
     import UserRow from '../users/UserRow.svelte';
-    import InvitationsList from '../users/InvitationsList.svelte';
+    import AccountLinksTable from '../users/AccountLinksTable.svelte';
     import InviteDialog from '../users/InviteDialog.svelte';
     import ResetLinkDialog from '../users/ResetLinkDialog.svelte';
     import {accountErrorText, describeAccountError} from '../users/accountErrors';
     import {lockedByEnv, refreshRegistrationConfig, registrationModeOptions, saveRegistrationMode, REGISTRATION_VARIABLE, type RegistrationMode} from '../registrationMode';
-    import type {AccountsUsage, AdminAccount, OpenInvite, UserAction} from '../users/types';
+    import type {AccountLink, AccountsUsage, AdminAccount, UserAction} from '../users/types';
 
     type Confirmable = 'deactivate' | 'cancel-setup' | 'promote' | 'demote' | 'sign-out' | 'restart-guides';
-    type Pending = {kind: Confirmable; account: AdminAccount} | {kind: 'revoke-invite'; invite: OpenInvite} | {kind: 'registration-open'};
+    type Pending = {kind: Confirmable; account: AdminAccount} | {kind: 'revoke-link'; link: AccountLink} | {kind: 'registration-open'};
 
     const CONFIRM_KEYS: Record<Pending['kind'], {title: string; message: string; confirm: string; danger: boolean}> = {
         deactivate: {
@@ -68,10 +70,10 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
             confirm: 'settings.usersTab.confirm.restartGuides.confirm',
             danger: false,
         },
-        'revoke-invite': {
-            title: 'settings.usersTab.confirm.revokeInvite.title',
-            message: 'settings.usersTab.confirm.revokeInvite.message',
-            confirm: 'settings.usersTab.confirm.revokeInvite.confirm',
+        'revoke-link': {
+            title: 'settings.usersTab.confirm.revokeLink.title',
+            message: 'settings.usersTab.confirm.revokeLink.message',
+            confirm: 'settings.usersTab.confirm.revokeLink.confirm',
             danger: true,
         },
         // «Open» lets in anyone who reaches the login page: asked about first, once chosen (N69c)
@@ -85,7 +87,9 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
 
     let accounts = $state<AdminAccount[]>([]);
     let usage = $state<AccountsUsage | null>(null);
-    let invites = $state<OpenInvite[]>([]);
+    let links = $state<AccountLink[]>([]);
+    const openLinks = $derived(links.filter((link) => link.state === 'open'));
+    const closedLinks = $derived(links.filter((link) => link.state !== 'open'));
     let busy = $state(true);
     let loadFailed = $state(false);
     let pending = $state<Pending | null>(null);
@@ -115,17 +119,23 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
             return null;
         }
         const keys = CONFIRM_KEYS[pending.kind];
-        const values = pending.kind === 'registration-open' ? {} : pending.kind === 'revoke-invite' ? {email: pending.invite.email || $_('settings.usersTab.invites.noEmail')} : {username: pending.account.username};
+        const values = pending.kind === 'registration-open' ? {} : pending.kind === 'revoke-link' ? linkValues(pending.link) : {username: pending.account.username};
         return {title: $_(keys.title, {values}), message: $_(keys.message, {values}), confirm: $_(keys.confirm), danger: keys.danger};
     });
+
+    /** The confirmation's words for a link: its type and whom it is for, as its table row shows them. */
+    function linkValues(link: AccountLink): {type: string; target: string} {
+        const target = link.username ?? (link.email || $_('settings.usersTab.links.anyone'));
+        return {type: $_(`settings.usersTab.links.purpose.${link.purpose}`), target};
+    }
 
     async function load() {
         busy = true;
         try {
-            const [list, open] = await Promise.all([zodiosApi.list_accounts_api_v1_users_get(), zodiosApi.list_invites_api_v1_users_invites_get()]);
+            const [list, linkList] = await Promise.all([zodiosApi.list_accounts_api_v1_users_get(), zodiosApi.list_account_links_api_v1_users_account_links_get()]);
             accounts = (list.items ?? []) as AdminAccount[];
             usage = list.usage as AccountsUsage;
-            invites = (open.items ?? []) as OpenInvite[];
+            links = (linkList.items ?? []) as AccountLink[];
             loadFailed = false;
         } catch (e) {
             loadFailed = true;
@@ -223,9 +233,9 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
             await applyMode('open');
             return;
         }
-        if (current.kind === 'revoke-invite') {
-            const inviteId = current.invite.id;
-            await perform('revoke-invite', {invite_id: inviteId}, () => zodiosApi.revoke_invite_api_v1_users_invites__invite_id__delete(undefined, {params: {invite_id: inviteId}}), 'accounts.invite.revoked');
+        if (current.kind === 'revoke-link') {
+            const {id: linkId, purpose} = current.link;
+            await perform('revoke-link', {link_id: linkId, purpose}, () => zodiosApi.revoke_account_link_api_v1_users_account_links__link_id__delete(undefined, {params: {link_id: linkId}}), 'accounts.link.revoked');
             return;
         }
         const {account} = current;
@@ -351,11 +361,15 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
         </ul>
     </section>
 
-    <section class="rounded-lg border border-lf-subtle bg-lf-card p-4">
-        <h3 class="text-sm font-semibold text-lf-secondary">{$_('settings.usersTab.invites.title')}</h3>
-        <div class="mt-2" data-testid="users-invites">
-            <InvitationsList {invites} onRevoke={(invite) => (pending = {kind: 'revoke-invite', invite})} />
+    <section class="space-y-3 rounded-lg border border-lf-subtle bg-lf-card p-4" data-testid="users-links">
+        <div>
+            <h3 class="text-sm font-semibold text-lf-secondary">{$_('settings.usersTab.links.title')}</h3>
+            <p class="mt-1 text-xs text-lf-muted">{$_('settings.usersTab.links.hint')}</p>
         </div>
+        <AccountLinksTable isLoading={busy && links.length === 0} links={openLinks} onRevoke={(link) => (pending = {kind: 'revoke-link', link})} testId="users-links-open" variant="open" />
+        <FoldPanel testId="users-links-closed-fold" title={$_('settings.usersTab.links.closedTitle', {values: {count: closedLinks.length}})}>
+            <AccountLinksTable links={closedLinks} testId="users-links-closed" variant="closed" />
+        </FoldPanel>
     </section>
 
     <ConfirmModal confirmText={confirmCopy?.confirm} danger={confirmCopy?.danger ?? false} message={confirmCopy?.message ?? ''} onCancel={cancelPending} onConfirm={confirmPending} open={pending !== null} testId="users-confirm" title={confirmCopy?.title ?? ''} />
@@ -370,7 +384,14 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
 
     {#if resetFor}
         {@const target = resetFor}
-        <ResetLinkDialog account={{id: target.id, username: target.username}} onClose={() => (resetFor = null)} open />
+        <ResetLinkDialog
+            account={{id: target.id, username: target.username}}
+            onClose={() => {
+                resetFor = null;
+                void load();
+            }}
+            open
+        />
     {/if}
 
     {#if deleteFor}

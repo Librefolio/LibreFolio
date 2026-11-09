@@ -14,7 +14,7 @@ from functools import lru_cache
 from typing import Annotated, Literal, Optional
 
 import pycountry
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
 from backend.app.db.models import OnboardingFlow, OnboardingStatus
 from backend.app.schemas.common import BaseListResponse, IsoCurrencyCode
@@ -25,22 +25,64 @@ from backend.app.utils.datetime_utils import UTCDateTime
 # ============================================================================
 
 
+#: The themes the web app knows. ``auto`` is a value, not a source: the user's browser decides, from the system's light or
+#: dark preference.
+ThemePreference = Literal["light", "dark", "auto"]
+#: The shapes a chart line can take (FB-3): straight segments, steps, a smooth curve that never leaves its neighbours.
+ChartLineShape = Literal["segments", "steps", "spline"]
+
+#: The largest ``user_settings.ui_preferences`` a write may leave, as JSON text: a guard against a column grown by hand.
+UI_PREFERENCES_MAX_BYTES = 2048
+
+
+class UIPreferences(BaseModel):
+    """The user's own interface preferences, kept as JSON in ``user_settings.ui_preferences``.
+
+    Every key is optional, and an absent key follows the administrator's global default
+    (``UIPreferenceDefaults``). A response lists only the keys the user chose. In a ``PUT /settings/user`` it is a
+    partial write: only the keys it names change, and a key sent as ``null`` is removed, so it follows the global default
+    again. A new preference is one more field here, then ``./dev.py api sync``: no migration.
+    """
+
+    theme: Optional[ThemePreference] = Field(None, description="UI theme; auto lets the browser follow the system")
+    chart_line_shape: Optional[ChartLineShape] = Field(None, description="Shape of the chart lines that have none of their own")
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_serializer(mode="wrap")
+    def _own_keys_only(self, handler: SerializerFunctionWrapHandler):  # noqa: ANN202 — no return type: the schema stays the model's
+        """Only the keys the user chose: a key the response leaves out follows the global default."""
+        return {key: value for key, value in handler(self).items() if value is not None}
+
+
+class UIPreferenceDefaults(BaseModel):
+    """The value each interface preference takes when the user has not chosen it: the instance's global settings."""
+
+    theme: ThemePreference = Field(..., description="The global default_theme")
+    chart_line_shape: ChartLineShape = Field(..., description="The global default_chart_line_shape")
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class UserSettingsRead(BaseModel):
     """User settings response schema."""
 
     language: str = Field(..., description="Preferred language (en, it, fr, es)")
     base_currency: str = Field(..., description="Base currency for display (ISO 4217)")
-    theme: Literal["light", "dark", "auto"] = Field(..., description="UI theme")
     avatar_url: Optional[str] = Field(None, description="URL to user avatar image")
+    ui_preferences: UIPreferences = Field(default_factory=UIPreferences, description="The interface preferences the user chose; a key left out follows ui_preference_defaults")
+    ui_preference_defaults: UIPreferenceDefaults = Field(..., description="The global default of every interface preference")
 
 
 class UserSettingsUpdate(BaseModel):
-    """User settings update request. All fields optional."""
+    """User settings update request. All fields optional; ``ui_preferences`` merges key by key, ``null`` removes a key."""
 
     language: Optional[str] = Field(None, min_length=2, max_length=5)
     base_currency: Optional[IsoCurrencyCode] = Field(None, min_length=3, max_length=3)
-    theme: Optional[Literal["light", "dark", "auto"]] = None
     avatar_url: Optional[str] = Field(None, max_length=500, description="URL to user avatar image")
+    ui_preferences: Optional[UIPreferences] = Field(None, description="The interface preferences to change: a key sent with a value is set, a key sent as null is removed, a key left out is kept")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 # ============================================================================
@@ -384,7 +426,12 @@ GLOBAL_SETTINGS_DEFAULTS = {
     "default_theme": {
         "value": "auto",
         "type": "str",
-        "description": "Default theme for new users (light, dark, auto)",
+        "description": "Theme of every user who has not chosen one (light, dark, auto)",
+    },
+    "default_chart_line_shape": {
+        "value": "segments",
+        "type": "str",
+        "description": "Chart line shape of every user who has not chosen one (segments, steps, spline)",
     },
 }
 
@@ -420,6 +467,7 @@ GLOBAL_SETTINGS_CONSTRAINTS: dict[str, SettingConstraint] = {
     "default_currency": SettingConstraint(format="currency"),
     "default_language": SettingConstraint(choices=("en", "it", "fr", "es")),
     "default_theme": SettingConstraint(choices=("light", "dark", "auto")),
+    "default_chart_line_shape": SettingConstraint(choices=("segments", "steps", "spline")),
     "registration_mode": SettingConstraint(choices=("open", "invite", "disabled")),
 }
 
@@ -574,7 +622,7 @@ class SETTINGS_REGISTRY:
 
         BASE_CURRENCY = SettingSpec(key="base_currency", location="user", value_type="str", description="Base currency for display (ISO 4217)")
         LANGUAGE = SettingSpec(key="language", location="user", value_type="str", description="Preferred language (en, it, fr, es)")
-        THEME = SettingSpec(key="theme", location="user", value_type="str", description="UI theme (light, dark, auto)")
+        UI_PREFERENCES = SettingSpec(key="ui_preferences", location="user", value_type="json", description="Interface preferences the user chose (UIPreferences); an absent key follows its global default")
         AVATAR_URL = SettingSpec(key="avatar_url", location="user", value_type="str", description="URL to user avatar image")
 
         @classmethod
@@ -607,6 +655,7 @@ class SETTINGS_REGISTRY:
         DEFAULT_CURRENCY = _global_spec("default_currency")
         DEFAULT_LANGUAGE = _global_spec("default_language")
         DEFAULT_THEME = _global_spec("default_theme")
+        DEFAULT_CHART_LINE_SHAPE = _global_spec("default_chart_line_shape")
 
         @classmethod
         def all(cls) -> tuple[SettingSpec, ...]:

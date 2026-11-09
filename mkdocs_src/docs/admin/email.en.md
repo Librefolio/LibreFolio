@@ -16,8 +16,8 @@ What LibreFolio sends:
   from `LIBREFOLIO_ADMIN_EMAIL` and generates the link itself: [The Initial Administrator](configuration_accounts.md#initial-admin).
 - **A link to confirm the email address of a new account**, when **Require Email Verification** is
   on: [Email Verification](email_flows.md#verification).
-- **A notice to the old address** when someone changes the email address of their account:
-  [Email Address Changes](email_flows.md#email-change-notice).
+- **A notice to the old address and a confirmation to the new one** when someone changes the email
+  address of their account: [Email Address Changes](email_flows.md#email-change-notice).
 
 The emails with a link also need `LIBREFOLIO_PUBLIC_URL`: [Emails with a Link](email_flows.md#public-url).
 

@@ -92,7 +92,7 @@ vi.mock('$lib/api', () => ({
 import {render, setupI18n, waitFor} from '$test/component';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import LotComparisonChart from './LotComparisonChart.svelte';
-import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {chooseLineShape} from '$test/lineShape';
 import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 
 const value = (lot_id: number, date: string, through: string, open_value: number) => ({lot_id, date, through, open_value: String(open_value), proceeds: '0', total_value: String(open_value), original_cost: '100', pnl: String(open_value - 100)});
@@ -137,7 +137,7 @@ beforeAll(async () => {
 afterAll(() => restoreRects?.());
 beforeEach(() => {
     chartInstances.length = 0;
-    setGlobalLineShape('steps');
+    chooseLineShape('steps');
 });
 
 async function mountChart(): Promise<DrawnOption> {
@@ -236,14 +236,14 @@ describe('the line shape the user chose (Y2 FB-3)', () => {
     const linesOf = (option: DrawnOption) => option.series.filter((series) => series.type === 'line');
 
     it('joins the points by segments when the choice is segments', async () => {
-        setGlobalLineShape('segments');
+        chooseLineShape('segments');
         const option = await mountChart();
         expect(linesOf(option).length).toBeGreaterThan(0);
         expect(linesOf(option).every((series) => series.step === false)).toBe(true);
     });
 
     it('draws smooth lines when the choice is spline', async () => {
-        setGlobalLineShape('spline');
+        chooseLineShape('spline');
         const option = await mountChart();
         expect(linesOf(option).every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
     });

@@ -6,6 +6,7 @@
      */
     import {_} from '$lib/i18n';
     import SettingActions from './SettingActions.svelte';
+    import PreferenceSourceBadge from '$lib/components/ui/PreferenceSourceBadge.svelte';
 
     // Props
     export let value: 'light' | 'dark' | 'auto' = 'auto';
@@ -22,6 +23,12 @@
     export let onundo: (() => void) | undefined = undefined;
     export let onreset: (() => void) | undefined = undefined;
     export let onchange: ((value: 'light' | 'dark' | 'auto') => void) | undefined = undefined;
+    /** The value follows the administrator's default (lot UIP): a «Global» badge beside the label. */
+    export let followsGlobal: boolean = false;
+    /** The saved value is «Auto», the browser decides (lot UIP): an «Auto» badge beside the label. */
+    export let showAutoBadge: boolean = false;
+    /** Prefix of the badges' test ids: `<prefix>-badge-global`, `<prefix>-badge-auto`. */
+    export let badgeTestIdPrefix: string = 'setting-theme';
 
     const themeOptions: Array<{value: 'light' | 'dark' | 'auto'; labelKey: string}> = [
         {value: 'light', labelKey: 'settings.themeLight'},
@@ -39,11 +46,19 @@
 <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 text-lf-primary {embedded ? '' : 'py-4 border-b border-lf-subtle last:border-0'}">
     <!-- Left: Label and hint -->
     <div class="flex-1 min-w-0">
-        <div class="flex items-center text-sm font-medium text-lf-secondary">
-            {#if icon}
-                <svelte:component this={icon} size={16} class="mr-2 text-lf-muted" />
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-lf-secondary">
+            <span class="flex items-center">
+                {#if icon}
+                    <svelte:component this={icon} size={16} class="mr-2 text-lf-muted" />
+                {/if}
+                {label}
+            </span>
+            {#if followsGlobal}
+                <PreferenceSourceBadge kind="global" testId="{badgeTestIdPrefix}-badge-global" />
             {/if}
-            {label}
+            {#if showAutoBadge}
+                <PreferenceSourceBadge kind="auto" testId="{badgeTestIdPrefix}-badge-auto" />
+            {/if}
         </div>
         {#if hint}
             <p class="text-xs text-lf-muted mt-1">{hint}</p>

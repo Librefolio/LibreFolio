@@ -12,7 +12,7 @@ Un administrador cuida de las cuentas de la instancia — quién puede iniciar s
 
     Solo los administradores ven esta pestaña.
 
-La pestaña tiene tres partes: las **plazas** ocupadas, arriba; las **Cuentas**; las **Invitaciones abiertas**. Después de cada cambio recarga sus listas: siempre muestra lo que tiene el servidor.
+La pestaña tiene tres partes: las **plazas** ocupadas, arriba; las **Cuentas**; los **Enlaces de cuenta**. Después de cada cambio recarga sus listas: siempre muestra lo que tiene el servidor.
 
 !!! tip "💻 En un servidor sin navegador"
 
@@ -213,17 +213,11 @@ Una cuenta creada antes de la versión 1.3 puede tener uno, por ejemplo `anna@ex
 
 5. Haz clic en **Hecho**.
 
-    La invitación aparece en **Invitaciones abiertas**. La persona abre el enlace y crea la cuenta con el nombre de usuario, el correo electrónico y la contraseña que elija: [Primeros pasos](../user/getting-started.md) muestra lo que ve.
+    La invitación aparece en [Enlaces de cuenta](#account-links). La persona abre el enlace y crea la cuenta con el nombre de usuario, el correo electrónico y la contraseña que elija: [Primeros pasos](../user/getting-started.md) muestra lo que ve.
 
 - 🔗 El enlace se muestra una sola vez, cuando lo creas. Si se pierde, revoca la invitación y crea una nueva.
 - 📏 Una invitación ocupa una plaza desde que la creas hasta que se usa, se revoca o caduca; la cuenta que crea ocupa entonces esa plaza.
 - 🔤 Una dirección de correo electrónico pertenece a una sola cuenta, con cualquier combinación de mayúsculas (`Anna@example.com` es `anna@example.com`), pero solo las letras de la A a la Z se comparan así: `Émile@example.com` y `émile@example.com` son dos direcciones distintas.
-
-### 📋 Invitaciones abiertas {: #open-invitations }
-
-Las invitaciones que nadie ha usado todavía, empezando por la más antigua: el correo electrónico (o *Sin correo*), una insignia **Admin** cuando la invitación crea un administrador, fecha de creación y de caducidad. Una invitación sale de la lista cuando se usa, se revoca o caduca.
-
-**Revocar** retira una invitación en cualquier momento, tras una confirmación: el enlace deja de funcionar de inmediato y su plaza queda libre.
 
 ---
 
@@ -247,6 +241,26 @@ Cuando alguien ha olvidado su contraseña, envíale un enlace para que elija una
 - 🔒 También deja de funcionar en cuanto la persona cambia su contraseña o su dirección de correo electrónico, o cuando ejecutas `user reset` o `user set-email` en la [línea de comandos](cli_tools.md).
 - 🚪 Crear el enlace no cierra la sesión de nadie. Cuando la persona establece la nueva contraseña, se cierra la sesión de la cuenta en todos los dispositivos.
 - 🔗 El enlace se muestra una sola vez: si se pierde, crea uno nuevo.
+
+---
+
+## 📋 Enlaces de cuenta {: #account-links }
+
+Cada enlace de un solo uso de la instancia, y en qué punto está: invitaciones, enlaces de restablecimiento de contraseña, verificaciones del correo, el enlace de configuración del primer administrador, el cambio de correo del titular de una instancia gestionada. El enlace en sí nunca aparece aquí: se muestra una sola vez, al crearlo.
+
+**Dónde:** **Usuarios**, la sección **Enlaces de cuenta**, debajo de las cuentas.
+
+| Columna | Qué muestra |
+|---|---|
+| **Tipo** | *Invitación*, *Restablecimiento de contraseña*, *Verificación del correo*, *Configuración del administrador* o *Cambio de correo* |
+| **Para** | La cuenta sobre la que actúa el enlace; para una invitación, la dirección escrita en ella, o *Cualquiera con el enlace*; una insignia **Admin** cuando la invitación crea un administrador |
+| **Creado por** | El administrador que lo creó; *—* cuando lo pidió LibreFolio o la propia persona (una verificación, un restablecimiento desde la página de inicio de sesión) |
+| **Creado**, **Caduca** | Fecha y hora |
+| **Estado** | *Abierto*; *Usado*, con cuándo y por quién; *Caducado*; *Revocado*, con cuándo |
+
+Los enlaces abiertos están en la primera tabla. Los cerrados — usados, caducados o revocados — están en **Enlaces cerrados**, plegado: haz clic para abrirlo. Cada tabla ordena por columna (clic en el encabezado), filtra por columna (el embudo del encabezado), oculta o muestra columnas (el ojo) y pagina las listas largas.
+
+**Revocar**, en el menú (⋮) de un enlace abierto, lo retira tras una confirmación: el enlace deja de funcionar de inmediato, y una invitación libera su plaza. Aquí se revocan invitaciones, enlaces de restablecimiento de contraseña y verificaciones del correo. El enlace de configuración del administrador en espera se cancela desde su cuenta ([Cancelar su enlace de configuración](#cancel-setup)); el cambio de correo del titular sigue la dirección que fijó el proveedor, y no se revoca aquí.
 
 ---
 
@@ -291,7 +305,7 @@ Condición: correo electrónico **Listo** y `LIBREFOLIO_PUBLIC_URL` establecida 
 | **Idioma** | **Idioma del correo**: el **Idioma Predeterminado** de la instancia, salvo que elijas otro | El idioma de la cuenta |
 
 - 🌐 **El enlace del correo empieza con `LIBREFOLIO_PUBLIC_URL`**, sea lo que sea lo que muestre la **Dirección del servidor** de arriba: el diálogo lo dice.
-- 📨 **El resultado** está en el diálogo: *Enviado a …* con la dirección y el idioma del correo, o por qué el correo no salió ([Errores de envío](email_troubleshooting.md#sending-errors)).
+- 📨 **El resultado** está en el diálogo: *Enviado a …* con la dirección y el idioma del correo, y un recordatorio de que, si no llega, el destinatario debe revisar también la carpeta de spam; o por qué el correo no salió ([Errores de envío](email_troubleshooting.md#sending-errors)).
 
 Reglas y límites: [Enlaces enviados por un administrador](email_flows.md#admin-links).
 

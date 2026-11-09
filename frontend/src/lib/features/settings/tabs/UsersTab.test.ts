@@ -3,8 +3,9 @@
  * UsersTab — component test (Vitest + jsdom). Accounts lot A6b (plan-phase01Accounts «A6b.1»), cases UTAB-01…UTAB-54.
  *
  * The administrators' «Users» tab of Settings: every account of the instance with the actions an administrator may
- * take on it, the live invitations, and the places taken against the limit of the instance. It takes no props; what
- * decides its behaviour is the answer of `GET /users` and `GET /users/invites`, the registration mode of
+ * take on it, every account link (lot UA3: open ones in a table, closed ones in a folded panel), and the places taken
+ * against the limit of the instance. It takes no props; what decides its behaviour is the answer of `GET /users` and
+ * `GET /users/account-links`, the registration mode of
  * `GET /system/instance` (`instanceConfig`) and who is signed in (`currentUser`) — all controllable from here.
  *
  * RED TODAY, by construction: `./UsersTab.svelte` does not exist yet, so the import below fails and the whole file
@@ -17,9 +18,9 @@
  * server that refuses at the right moment. Here each one is a fixture line. `e2e/settings/admin-users.spec.ts` walks
  * the real flows on disposable accounts.
  *
- * The mocked server. `GET /users` and `GET /users/invites` answer from `server`, and the writes change it the way the
- * backend would: a PATCH merges its body, a DELETE removes, a call about an account that is gone answers 404 with the
- * backend's own body. So «the tab reloads after an action» is asserted twice: the list is asked again (a delta on its
+ * The mocked server. `GET /users` and `GET /users/account-links` answer from `server`, and the writes change it the way
+ * the backend would: a PATCH merges its body, a DELETE removes an account, a revocation marks the link revoked (it stays
+ * listed, closed), a call about an account or a link that is gone answers 404 with the backend's own body. So «the tab reloads after an action» is asserted twice: the list is asked again (a delta on its
  * calls, sampled before acting — rule 16), *and* the new answer is what the screen shows.
  *
  * Selectors are the contract's test ids and data attributes, never a translated string and never a class:
@@ -202,7 +203,25 @@ import es from '$lib/i18n/es.json';
 
 /** `pending_setup` as `GET /users` lists it since A7b: only A-43's fixtures carry it. */
 type Account = {id: number; username: string; email: string; is_active: boolean; is_superuser: boolean; created_at: string; protected: boolean; pending_setup?: boolean};
-type Invite = {id: number; grants_admin: boolean; email: string | null; created_at: string; expires_at: string; created_by_user_id: number | null};
+/** `AccountLinkRead`, as `GET /users/account-links` lists it (lot UA3): never a token. */
+type Link = {
+    id: number;
+    purpose: 'invite' | 'password_reset' | 'email_verification' | 'admin_setup' | 'email_change';
+    state: 'open' | 'used' | 'expired' | 'revoked';
+    revocable: boolean;
+    user_id: number | null;
+    username: string | null;
+    email: string | null;
+    grants_admin: boolean;
+    created_by_user_id: number | null;
+    created_by_username: string | null;
+    created_at: string;
+    expires_at: string;
+    used_at: string | null;
+    used_by_user_id: number | null;
+    used_by_username: string | null;
+    revoked_at: string | null;
+};
 type Usage = {used: number; max_users?: number | null; billing_url?: string | null};
 
 const CREATED = '2025-03-04T09:30:00Z';
@@ -220,9 +239,50 @@ const INACTIVE = makeAccount(4, 'dormant_user', {is_active: false});
 const PROTECTED = makeAccount(5, 'billing_owner', {is_superuser: true, protected: true});
 const ACCOUNTS: readonly Account[] = [ME, OTHER_ADMIN, REGULAR, INACTIVE, PROTECTED];
 
-const INVITE_FOR_FRIEND: Invite = {id: 31, grants_admin: false, email: 'friend@example.test', created_at: CREATED, expires_at: EXPIRES, created_by_user_id: ME.id};
-const INVITE_ADMIN_NO_EMAIL: Invite = {id: 32, grants_admin: true, email: null, created_at: CREATED, expires_at: EXPIRES, created_by_user_id: null};
-const INVITES: readonly Invite[] = [INVITE_FOR_FRIEND, INVITE_ADMIN_NO_EMAIL];
+const USED_AT = '2025-03-05T10:00:00Z';
+const REVOKED_AT = '2025-03-06T11:00:00Z';
+const EXPIRED_AT = '2025-03-11T09:30:00Z';
+
+const makeLink = (id: number, purpose: Link['purpose'], fields: Partial<Link> = {}): Link => ({
+    id,
+    purpose,
+    state: 'open',
+    revocable: purpose === 'invite' || purpose === 'password_reset' || purpose === 'email_verification',
+    user_id: null,
+    username: null,
+    email: null,
+    grants_admin: false,
+    created_by_user_id: ME.id,
+    created_by_username: ME.username,
+    created_at: CREATED,
+    expires_at: EXPIRES,
+    used_at: null,
+    used_by_user_id: null,
+    used_by_username: null,
+    revoked_at: null,
+    ...fields,
+});
+
+/** Open, revocable: an invitation naming an address. */
+const LINK_INVITE_FRIEND = makeLink(31, 'invite', {email: 'friend@example.test'});
+/** Open, revocable: an invitation that makes an administrator, for whoever holds it (no address). */
+const LINK_INVITE_ADMIN = makeLink(32, 'invite', {grants_admin: true, created_by_user_id: null, created_by_username: null});
+/** Open, revocable: a password reset of an existing account. */
+const LINK_RESET = makeLink(33, 'password_reset', {user_id: REGULAR.id, username: REGULAR.username});
+/** Open, NOT revocable here: the setup link of the initial administrator (cancelled from its account). */
+const LINK_SETUP = makeLink(34, 'admin_setup', {user_id: 8, username: 'f02_admin', revocable: false, created_by_user_id: null, created_by_username: null});
+/** Open, NOT revocable here: the owner's email change, driven by the host's variable. */
+const LINK_EMAIL_CHANGE = makeLink(35, 'email_change', {user_id: PROTECTED.id, username: PROTECTED.username, email: 'new-owner@example.test', revocable: false, created_by_user_id: null, created_by_username: null});
+/** Closed: an invitation used, by the account it created. */
+const LINK_USED = makeLink(41, 'invite', {email: 'joined@example.test', state: 'used', revocable: false, used_at: USED_AT, used_by_user_id: 77, used_by_username: 'joined_user'});
+/** Closed: an email verification that reached its expiry. */
+const LINK_EXPIRED = makeLink(42, 'email_verification', {user_id: INACTIVE.id, username: INACTIVE.username, email: INACTIVE.email, state: 'expired', revocable: false, expires_at: EXPIRED_AT});
+/** Closed: a password reset revoked. */
+const LINK_REVOKED = makeLink(43, 'password_reset', {user_id: OTHER_ADMIN.id, username: OTHER_ADMIN.username, state: 'revoked', revocable: false, revoked_at: REVOKED_AT});
+
+const OPEN_LINKS: readonly Link[] = [LINK_INVITE_FRIEND, LINK_INVITE_ADMIN, LINK_RESET, LINK_SETUP, LINK_EMAIL_CHANGE];
+const CLOSED_LINKS: readonly Link[] = [LINK_USED, LINK_EXPIRED, LINK_REVOKED];
+const LINKS: readonly Link[] = [...OPEN_LINKS, ...CLOSED_LINKS];
 
 /** Four active accounts plus two live invitations, against a limit of ten: room left. */
 const ROOM: Usage = {used: 6, max_users: 10, billing_url: null};
@@ -235,23 +295,26 @@ const sessionUser = (a: Account) => ({id: a.id, username: a.username, email: a.e
 // --- The mocked server ----------------------------------------------------
 
 /** What the server holds: the two lists answer from it, and the writes change it. Seeded fresh by every test. */
-const server = {accounts: [] as Account[], invites: [] as Invite[], usage: {...ROOM} as Usage, nextInviteId: 100};
+const server = {accounts: [] as Account[], links: [] as Link[], usage: {...ROOM} as Usage, nextLinkId: 100};
 
 interface Scene {
     accounts?: readonly Account[];
-    invites?: readonly Invite[];
+    links?: readonly Link[];
     usage?: Usage;
 }
 
 function seed(scene: Scene = {}): void {
     server.accounts = (scene.accounts ?? ACCOUNTS).map((a) => ({...a}));
-    server.invites = (scene.invites ?? INVITES).map((i) => ({...i}));
+    server.links = (scene.links ?? LINKS).map((l) => ({...l}));
     server.usage = {...(scene.usage ?? ROOM)};
-    server.nextInviteId = 100;
+    server.nextLinkId = 100;
 }
 
 const usersAnswer = () => ({items: server.accounts.map((a) => ({...a})), usage: {...server.usage}});
-const invitesAnswer = () => ({items: server.invites.map((i) => ({...i})), usage: {...server.usage}});
+/** Newest first, as the backend lists them. */
+const linksAnswer = () => ({items: [...server.links].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id).map((l) => ({...l}))});
+const openOnServer = () => server.links.filter((l) => l.state === 'open');
+const closedOnServer = () => server.links.filter((l) => l.state !== 'open');
 
 /** An axios-shaped refusal, with the body the backend sends: an object `detail` for a 409, a sentence for a 404. */
 function refusal(status: number, detail: unknown): Error {
@@ -277,7 +340,7 @@ type Mocked = ReturnType<typeof vi.fn>;
 const handle = (fn: unknown): Mocked => fn as Mocked;
 
 const listUsers = () => handle(zodiosApi.list_accounts_api_v1_users_get);
-const listInvites = () => handle(zodiosApi.list_invites_api_v1_users_invites_get);
+const listLinks = () => handle(zodiosApi.list_account_links_api_v1_users_account_links_get);
 const patchUser = () => handle(zodiosApi.update_account_api_v1_users__user_id__patch);
 const revokeSessions = () => handle(zodiosApi.revoke_account_sessions_api_v1_users__user_id__sessions_revoke_post);
 const resetGuides = () => handle(zodiosApi.reset_account_onboarding_api_v1_users__user_id__onboarding_reset_post);
@@ -287,7 +350,7 @@ const previewOwnDeletion = () => handle(zodiosApi.preview_own_account_deletion_a
 const deleteUser = () => handle(zodiosApi.delete_account_api_v1_users__user_id__delete);
 const deleteOwn = () => handle(zodiosApi.delete_own_account_api_v1_auth_users_me_delete);
 const createInvite = () => handle(zodiosApi.create_invite_api_v1_users_invites_post);
-const revokeInvite = () => handle(zodiosApi.revoke_invite_api_v1_users_invites__invite_id__delete);
+const revokeLink = () => handle(zodiosApi.revoke_account_link_api_v1_users_account_links__link_id__delete);
 const issueProbe = () => handle(zodiosApi.issue_address_probe_api_v1_users_address_probe_post);
 /** `PATCH /settings/global/bulk`, the registration mode's write: the mock client hands `axios` out as a bare spy, so its `patch` is given here (N69c). */
 const bulkPatch = (): Mocked => {
@@ -308,7 +371,7 @@ const WRITES: Record<string, () => Mocked> = {
     'DELETE /users/{id}': deleteUser,
     'DELETE /auth/users/me': deleteOwn,
     'POST /users/invites': createInvite,
-    'DELETE /users/invites/{id}': revokeInvite,
+    'DELETE /users/account-links/{id}': revokeLink,
     'PATCH /settings/global/bulk': bulkPatch,
 };
 
@@ -340,11 +403,15 @@ async function mount(scene: Scene = {}) {
     const utils = render(UsersTab);
     await waitFor(() => {
         expect(listUsers()).toHaveBeenCalled();
-        expect(listInvites()).toHaveBeenCalled();
+        expect(listLinks()).toHaveBeenCalled();
     });
     await settled();
     await waitFor(() => expect(screen.getAllByTestId('users-row')).toHaveLength(server.accounts.length));
-    if (server.invites.length > 0) await waitFor(() => expect(screen.getAllByTestId('users-invite-row')).toHaveLength(server.invites.length));
+    // Both link tables, the closed one too: FoldPanel keeps its body mounted while folded.
+    await waitFor(() => {
+        expect(linkRowIds('users-links-open')).toHaveLength(openOnServer().length);
+        expect(linkRowIds('users-links-closed')).toHaveLength(closedOnServer().length);
+    });
     return utils;
 }
 
@@ -410,12 +477,29 @@ async function oneNote(name: string): Promise<Note> {
     return notes(name)[0];
 }
 
-const inviteRowsOf = (inviteId: number) => screen.queryAllByTestId('users-invite-row').filter((el) => el.getAttribute('data-invite-id') === String(inviteId));
+type LinkTable = 'users-links-open' | 'users-links-closed';
 
-function inviteRowOf(inviteId: number): HTMLElement {
-    const found = inviteRowsOf(inviteId);
-    if (found.length !== 1) throw new Error(`expected one users-invite-row with data-invite-id="${inviteId}", found ${found.length}`);
+/** The ids of the rows a link table draws (DataTable's `tbody tr[data-row-id]`); every fixture fits one page of ten. */
+const linkRowIds = (table: LinkTable): string[] => Array.from(screen.getByTestId(table).querySelectorAll('tbody tr[data-row-id]')).map((tr) => tr.getAttribute('data-row-id') ?? '');
+
+const linkRowsOf = (table: LinkTable, linkId: number) => Array.from(screen.getByTestId(table).querySelectorAll<HTMLElement>(`tbody tr[data-row-id="${linkId}"]`));
+
+/** The row of one link in one table, found by its id — never by its position. */
+function linkRowOf(table: LinkTable, linkId: number): HTMLElement {
+    const found = linkRowsOf(table, linkId);
+    if (found.length !== 1) throw new Error(`expected one row data-row-id="${linkId}" in ${table}, found ${found.length} (it holds: ${linkRowIds(table).join(', ') || 'nothing'})`);
     return found[0];
+}
+
+/**
+ * Ask to revoke an open link from its row: the row's actions menu offers `account-link-revoke`. Opened by a right-click
+ * on the row, the path jsdom can measure — the `⋮` button anchors the same ContextMenu, which closes itself when its
+ * anchor measures zero, as every element does here (DataTable.test.ts, «row actions»).
+ */
+async function askToRevoke(linkId: number): Promise<void> {
+    await fireEvent.contextMenu(linkRowOf('users-links-open', linkId));
+    const menu = await screen.findByTestId('context-menu');
+    await fireEvent.click(within(menu).getByTestId('account-link-revoke'));
 }
 
 // --- Lifecycle --------------------------------------------------------------
@@ -431,7 +515,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     // `clearAllMocks` keeps implementations and queued `…Once` values: every alias this file drives is reset, then
     // given the behaviour of the mocked server.
-    for (const fn of [listUsers(), listInvites(), patchUser(), revokeSessions(), resetGuides(), createResetLink(), previewDeletion(), previewOwnDeletion(), deleteUser(), deleteOwn(), createInvite(), revokeInvite(), issueProbe()]) fn.mockReset();
+    for (const fn of [listUsers(), listLinks(), patchUser(), revokeSessions(), resetGuides(), createResetLink(), previewDeletion(), previewOwnDeletion(), deleteUser(), deleteOwn(), createInvite(), revokeLink(), issueProbe()]) fn.mockReset();
     seed();
     session.signIn(sessionUser(ME));
     instance.box.config = instance.OPEN;
@@ -439,7 +523,7 @@ beforeEach(() => {
     bulkPatch().mockReset().mockResolvedValue({data: null});
 
     listUsers().mockImplementation(async () => usersAnswer());
-    listInvites().mockImplementation(async () => invitesAnswer());
+    listLinks().mockImplementation(async () => linksAnswer());
     patchUser().mockImplementation(async (body: Partial<Account> | undefined, config: unknown) => {
         const target = onServer(userIdOf(config));
         // `cancel_setup` (A-51) says why `is_active: false` is asked; it is not a column, and the backend stores nothing under it
@@ -449,7 +533,10 @@ beforeEach(() => {
     revokeSessions().mockImplementation(async (_body: unknown, config: unknown) => void onServer(userIdOf(config)));
     resetGuides().mockImplementation(async (_body: unknown, config: unknown) => void onServer(userIdOf(config)));
     createResetLink().mockImplementation(async (_body: unknown, config: unknown) => {
-        onServer(userIdOf(config));
+        const account = onServer(userIdOf(config));
+        // As the backend: the reset links issued before for that account stop working, and the new one is listed open
+        for (const link of server.links) if (link.purpose === 'password_reset' && link.user_id === account.id && link.state === 'open') Object.assign(link, {state: 'revoked', revocable: false, revoked_at: REVOKED_AT});
+        server.links.push(makeLink(server.nextLinkId++, 'password_reset', {user_id: account.id, username: account.username, created_at: '2025-03-09T08:00:00Z'}));
         return {token: 'reset-token', path: '/reset-password#reset-token', url: null, expires_at: EXPIRES};
     });
     previewDeletion().mockImplementation(async (config: unknown) => previewOf(onServer(userIdOf(config))));
@@ -459,15 +546,18 @@ beforeEach(() => {
         server.accounts = server.accounts.filter((a) => a.id !== gone.id);
     });
     createInvite().mockImplementation(async (body?: {grants_admin?: boolean | null; email?: string | null}) => {
-        const invite: Invite = {id: server.nextInviteId++, grants_admin: body?.grants_admin ?? false, email: body?.email || null, created_at: CREATED, expires_at: EXPIRES, created_by_user_id: ME.id};
-        server.invites.push(invite);
-        return {invite: {...invite}, token: 'invite-token', path: '/invite#invite-token', url: null};
+        const link = makeLink(server.nextLinkId++, 'invite', {grants_admin: body?.grants_admin ?? false, email: body?.email || null});
+        server.links.push(link);
+        const invite = {id: link.id, grants_admin: link.grants_admin, email: link.email, created_at: link.created_at, expires_at: link.expires_at, created_by_user_id: link.created_by_user_id};
+        return {invite, token: 'invite-token', path: '/invite#invite-token', url: null};
     });
-    revokeInvite().mockImplementation(async (_body: unknown, config: unknown) => {
-        const inviteId = (config as {params?: {invite_id?: unknown}} | undefined)?.params?.invite_id;
-        const before = server.invites.length;
-        server.invites = server.invites.filter((i) => i.id !== inviteId);
-        if (server.invites.length === before) throw refusal(404, 'Invitation not found');
+    // As the backend: an open link is marked revoked (and stays listed, closed); 404 when it is not open, 409 for a purpose not revoked here
+    revokeLink().mockImplementation(async (_body: unknown, config: unknown) => {
+        const linkId = (config as {params?: {link_id?: unknown}} | undefined)?.params?.link_id;
+        const link = server.links.find((l) => l.id === linkId);
+        if (!link || link.state !== 'open') throw refusal(404, 'Account link not found');
+        if (!link.revocable) throw conflict('LINK_NOT_REVOCABLE');
+        Object.assign(link, {state: 'revoked', revocable: false, revoked_at: REVOKED_AT});
     });
     issueProbe().mockImplementation(async () => ({nonce: 'probe-nonce', expires_at: EXPIRES}));
 });
@@ -476,31 +566,31 @@ beforeEach(() => {
 describe('UsersTab — loading both lists (UTAB-01…02)', () => {
     it.each([
         {id: 'UTAB-01', first: 'users'},
-        {id: 'UTAB-02', first: 'invitations'},
+        {id: 'UTAB-02', first: 'links'},
     ] as const)('$id: busy while either list is pending, both asked at once — the $first answer first', async ({first}) => {
         seed();
         const users = deferred<unknown>();
-        const invitations = deferred<unknown>();
+        const links = deferred<unknown>();
         listUsers().mockImplementation(() => users.promise);
-        listInvites().mockImplementation(() => invitations.promise);
+        listLinks().mockImplementation(() => links.promise);
 
         render(UsersTab);
 
         // In parallel, not one after the other: both are asked before either has answered.
         await waitFor(() => {
             expect(listUsers()).toHaveBeenCalledTimes(1);
-            expect(listInvites()).toHaveBeenCalledTimes(1);
+            expect(listLinks()).toHaveBeenCalledTimes(1);
         });
         expect(tab()).toHaveAttribute('data-busy', 'true');
         expect(tab()).toHaveAttribute('aria-busy', 'true');
 
-        const answer = {users: () => users.resolve(usersAnswer()), invitations: () => invitations.resolve(invitesAnswer())};
-        const second = first === 'users' ? 'invitations' : 'users';
+        const answer = {users: () => users.resolve(usersAnswer()), links: () => links.resolve(linksAnswer())};
+        const second = first === 'users' ? 'links' : 'users';
         answer[first]();
         // Not a clock wait: a few microtask turns for the tab to handle that answer (its continuation on the promise was
         // registered before ours), then Svelte's flush. A tab that drops its busy flag on the first answer shows it by
         // now; a correct one stays busy whatever the timing, so this negative can only ever err towards green.
-        await (first === 'users' ? users.promise : invitations.promise);
+        await (first === 'users' ? users.promise : links.promise);
         await tick();
         await tick();
         expect(tab(), `the ${second} are still pending`).toHaveAttribute('data-busy', 'true');
@@ -511,7 +601,7 @@ describe('UsersTab — loading both lists (UTAB-01…02)', () => {
         await settled();
         expect(tab()).toHaveAttribute('aria-busy', 'false');
         await waitFor(() => expect(screen.getAllByTestId('users-row')).toHaveLength(ACCOUNTS.length));
-        expect(screen.getAllByTestId('users-invite-row')).toHaveLength(INVITES.length);
+        await waitFor(() => expect(linkRowIds('users-links-open')).toHaveLength(OPEN_LINKS.length));
     });
 });
 
@@ -949,16 +1039,17 @@ describe('UsersTab — the dialogs it opens, and what it does when they finish (
         await mount();
         await fireEvent.click(screen.getByTestId('users-invite-button'));
         await screen.findByTestId('users-invite-dialog');
-        const invitesBefore = listInvites().mock.calls.length;
+        const linksBefore = listLinks().mock.calls.length;
 
         await fireEvent.click(screen.getByTestId('users-invite-create'));
         await waitFor(() => expect(createInvite()).toHaveBeenCalledTimes(1));
-        const {invite} = (await createInvite().mock.results[0].value) as {invite: Invite};
+        const {invite} = (await createInvite().mock.results[0].value) as {invite: {id: number}};
         await fireEvent.click(await screen.findByTestId('users-invite-done'));
 
         await waitFor(() => expect(screen.queryByTestId('users-invite-dialog')).not.toBeInTheDocument());
-        await waitFor(() => expect(listInvites().mock.calls.length, 'the invitations are asked again').toBeGreaterThan(invitesBefore));
-        await waitFor(() => expect(inviteRowsOf(invite.id), 'the reloaded answer is on screen').toHaveLength(1));
+        await waitFor(() => expect(listLinks().mock.calls.length, 'the links are asked again').toBeGreaterThan(linksBefore));
+        await waitFor(() => expect(linkRowsOf('users-links-open', invite.id), 'the reloaded answer is on screen, among the open links').toHaveLength(1));
+        expect(within(linkRowOf('users-links-open', invite.id)).getByTestId('account-link-type')).toHaveAttribute('data-purpose', 'invite');
     });
 
     it('UTAB-50: delete on a regular row opens users-delete-dialog on the admin preview of that account', async () => {
@@ -1000,51 +1091,185 @@ describe('UsersTab — the dialogs it opens, and what it does when they finish (
 });
 
 // =========================================================================
-describe('UsersTab — the live invitations (UTAB-52…54)', () => {
-    it('UTAB-52: one users-invite-row per invitation, in users-invites, publishing what it grants', async () => {
+describe('UsersTab — the account links (UTAB-52…54, UTAB-76…82, lot UA3)', () => {
+    const idsOf = (links: readonly Link[]) => links.map((l) => String(l.id)).sort();
+
+    it('UTAB-52: the open links in users-links-open, the used, expired and revoked ones in users-links-closed, none in both', async () => {
         await mount();
 
-        const list = screen.getByTestId('users-invites');
-        expect(within(list).getAllByTestId('users-invite-row')).toHaveLength(INVITES.length);
-        for (const invite of INVITES) {
-            const row = inviteRowOf(invite.id);
-            expect(list).toContainElement(row);
-            expect(row, 'an empty data-email when the invitation names nobody').toHaveAttribute('data-email', invite.email ?? '');
-            expect(row).toHaveAttribute('data-admin', String(invite.grants_admin));
-        }
+        expect(linkRowIds('users-links-open').sort(), 'every open link, and only those').toEqual(idsOf(OPEN_LINKS));
+        expect(linkRowIds('users-links-closed').sort(), 'every closed link, and only those').toEqual(idsOf(CLOSED_LINKS));
+        expect(screen.getByTestId('users-links')).toContainElement(screen.getByTestId('users-links-open'));
+        expect(screen.getByTestId('users-links-closed-fold'), 'the closed table lives inside the fold').toContainElement(screen.getByTestId('users-links-closed'));
+        expect(screen.getByTestId('users-links-open')).toHaveAttribute('data-count', String(OPEN_LINKS.length));
+        expect(screen.getByTestId('users-links-closed')).toHaveAttribute('data-count', String(CLOSED_LINKS.length));
     });
 
-    it('UTAB-53: revoke asks first, deletes that invitation, reloads, and says so without a toast', async () => {
+    it('UTAB-76: the closed links are folded by default, and the toggle opens them', async () => {
         await mount();
-        const invitesBefore = listInvites().mock.calls.length;
+        const fold = screen.getByTestId('users-links-closed-fold');
 
-        await fireEvent.click(within(inviteRowOf(INVITE_FOR_FRIEND.id)).getByTestId('users-invite-revoke'));
+        expect(fold, 'folded when the tab loads').toHaveAttribute('data-open', 'false');
+        expect(fold).not.toHaveAttribute('open');
+        // The title names how many there are (the identity translator drops the value: read from its calls)
+        expect(translator()).toHaveBeenCalledWith('settings.usersTab.links.closedTitle', expect.objectContaining({values: {count: CLOSED_LINKS.length}}));
+
+        await fireEvent.click(screen.getByTestId('users-links-closed-fold-toggle'));
+
+        await waitFor(() => expect(fold, 'the toggle opens it').toHaveAttribute('data-open', 'true'));
+    });
+
+    it('UTAB-77: each row draws its type, its target, the admin badge and its state from the backend fields', async () => {
+        await mount();
+
+        for (const link of LINKS) {
+            const row = linkRowOf(link.state === 'open' ? 'users-links-open' : 'users-links-closed', link.id);
+            expect(within(row).getByTestId('account-link-type'), `link ${link.id}: its purpose`).toHaveAttribute('data-purpose', link.purpose);
+            expect(within(row).getByTestId('account-link-state'), `link ${link.id}: its state`).toHaveAttribute('data-state', link.state);
+            expect(within(row).queryByTestId('account-link-admin') !== null, `link ${link.id}: the admin badge only when it grants admin`).toBe(link.grants_admin);
+            expect(within(row).queryByTestId('account-link-state-detail') !== null, `link ${link.id}: when it closed, only for a closed link`).toBe(link.state !== 'open');
+        }
+        // Whom it is for: the address of an invitation, anyone for one without, the account it acts on, and both for an email change
+        const target = (table: LinkTable, link: Link) => within(linkRowOf(table, link.id)).getByTestId('account-link-target');
+        expect(target('users-links-open', LINK_INVITE_FRIEND)).toHaveTextContent(LINK_INVITE_FRIEND.email ?? '');
+        expect(target('users-links-open', LINK_INVITE_ADMIN)).toHaveTextContent('settings.usersTab.links.anyone');
+        expect(target('users-links-open', LINK_RESET)).toHaveTextContent(REGULAR.username);
+        expect(target('users-links-open', LINK_EMAIL_CHANGE)).toHaveTextContent(`${PROTECTED.username} → ${LINK_EMAIL_CHANGE.email}`);
+        // A used link names who used it
+        expect(translator()).toHaveBeenCalledWith('settings.usersTab.links.usedBy', expect.objectContaining({values: {username: LINK_USED.used_by_username}}));
+    });
+
+    it('UTAB-78: the revoke action only on the revocable open links; the closed table has no row action at all', async () => {
+        await mount();
+
+        for (const link of OPEN_LINKS) {
+            const kebab = within(linkRowOf('users-links-open', link.id)).queryByTestId(`row-actions-${link.id}`);
+            expect(kebab !== null, `link ${link.id} (${link.purpose}): actions offered only when the backend says revocable`).toBe(link.revocable);
+        }
+        expect(screen.getByTestId('users-links-closed').querySelectorAll('[data-testid^="row-actions-"]'), 'no action on a closed link').toHaveLength(0);
+
+        // The menu of a revocable row holds the revocation
+        await fireEvent.contextMenu(linkRowOf('users-links-open', LINK_RESET.id));
+        expect(within(await screen.findByTestId('context-menu')).getByTestId('account-link-revoke')).toBeInTheDocument();
+        // and a row whose link is not revoked here opens no menu at all
+        await fireEvent.keyDown(window, {key: 'Escape'});
+        await waitFor(() => expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument());
+        await fireEvent.contextMenu(linkRowOf('users-links-open', LINK_SETUP.id));
+        expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument();
+    });
+
+    it('UTAB-53: revoke asks first, revokes that link, reloads, and the link moves to the closed table as revoked, without a toast', async () => {
+        await mount();
+        const linksBefore = listLinks().mock.calls.length;
+
+        await askToRevoke(LINK_INVITE_FRIEND.id);
         await confirmation();
-        expect(revokeInvite(), 'nothing is sent before the confirmation').not.toHaveBeenCalled();
+        expect(revokeLink(), 'nothing is sent before the confirmation').not.toHaveBeenCalled();
+        // The confirmation names the link as its row does: its type and whom it is for
+        expect(translator()).toHaveBeenCalledWith('settings.usersTab.confirm.revokeLink.title', expect.objectContaining({values: {type: 'settings.usersTab.links.purpose.invite', target: LINK_INVITE_FRIEND.email}}));
         await acceptConfirmation();
 
-        await waitFor(() => expect(revokeInvite()).toHaveBeenCalledTimes(1));
-        expect(revokeInvite().mock.calls[0][1], 'the options come second: (body, {params})').toEqual(expect.objectContaining({params: {invite_id: INVITE_FOR_FRIEND.id}}));
-        await waitFor(() => expect(listInvites().mock.calls.length, 'the invitations are asked again').toBeGreaterThan(invitesBefore));
-        await waitFor(() => expect(inviteRowsOf(INVITE_FOR_FRIEND.id), 'the reloaded list no longer has it').toHaveLength(0));
-        expect(inviteRowsOf(INVITE_ADMIN_NO_EMAIL.id), 'the other one stays').toHaveLength(1);
-        const note = await oneNote('accounts.invite.revoked');
-        expect(note.detail).toEqual(expect.objectContaining({invite_id: INVITE_FOR_FRIEND.id}));
-        expect(note.toast, 'the list already shows it: no toast').toBeUndefined();
+        await waitFor(() => expect(revokeLink()).toHaveBeenCalledTimes(1));
+        expect(revokeLink().mock.calls[0][1], 'the options come second: (body, {params})').toEqual(expect.objectContaining({params: {link_id: LINK_INVITE_FRIEND.id}}));
+        await waitFor(() => expect(listLinks().mock.calls.length, 'the links are asked again').toBeGreaterThan(linksBefore));
+        await waitFor(() => expect(linkRowsOf('users-links-open', LINK_INVITE_FRIEND.id), 'no longer open').toHaveLength(0));
+        await waitFor(() => expect(within(linkRowOf('users-links-closed', LINK_INVITE_FRIEND.id)).getByTestId('account-link-state')).toHaveAttribute('data-state', 'revoked'));
+        expect(linkRowsOf('users-links-open', LINK_INVITE_ADMIN.id), 'the other one stays open').toHaveLength(1);
+        const note = await oneNote('accounts.link.revoked');
+        expect(note.detail).toEqual({link_id: LINK_INVITE_FRIEND.id, purpose: 'invite'});
+        expect(note.toast, 'the tables already show it: no toast').toBeUndefined();
+        expect(notes('accounts.action.failed')).toHaveLength(0);
     });
 
-    it('UTAB-54: cancelling the revocation sends nothing and keeps the invitation', async () => {
+    it('UTAB-54: cancelling the revocation sends nothing and keeps the link open', async () => {
         await mount();
-        const invitesBefore = listInvites().mock.calls.length;
+        const linksBefore = listLinks().mock.calls.length;
         const notesBefore = notify.mock.calls.length;
 
-        await fireEvent.click(within(inviteRowOf(INVITE_FOR_FRIEND.id)).getByTestId('users-invite-revoke'));
+        await askToRevoke(LINK_INVITE_FRIEND.id);
         await declineConfirmation();
 
         expectNothingWritten();
-        expect(listInvites().mock.calls.length, 'no reload').toBe(invitesBefore);
+        expect(listLinks().mock.calls.length, 'no reload').toBe(linksBefore);
         expect(notify.mock.calls.length, 'no event').toBe(notesBefore);
-        expect(inviteRowsOf(INVITE_FOR_FRIEND.id)).toHaveLength(1);
+        expect(linkRowsOf('users-links-open', LINK_INVITE_FRIEND.id)).toHaveLength(1);
+    });
+
+    it('UTAB-79: a link used meanwhile answers 404: the failure is told, and the reload shows it closed as used', async () => {
+        await mount();
+        await askToRevoke(LINK_RESET.id);
+        await confirmation();
+        // Spent by its account after the table was drawn: the server no longer has it open
+        Object.assign(server.links.find((l) => l.id === LINK_RESET.id) ?? {}, {state: 'used', revocable: false, used_at: USED_AT, used_by_user_id: REGULAR.id, used_by_username: REGULAR.username});
+        const linksBefore = listLinks().mock.calls.length;
+
+        await acceptConfirmation();
+
+        await waitFor(() => expect(revokeLink()).toHaveBeenCalledTimes(1));
+        const failure = await oneNote('accounts.action.failed');
+        expect(failure.detail).toEqual(expect.objectContaining({action: 'revoke-link', code: 'NOT_FOUND', link_id: LINK_RESET.id, purpose: 'password_reset'}));
+        expect(failure.toast).toEqual(expect.objectContaining({variant: 'error'}));
+        expect(notes('accounts.link.revoked'), 'nothing was revoked').toHaveLength(0);
+        await waitFor(() => expect(listLinks().mock.calls.length, 'a failure reloads too').toBeGreaterThan(linksBefore));
+        await waitFor(() => expect(within(linkRowOf('users-links-closed', LINK_RESET.id)).getByTestId('account-link-state')).toHaveAttribute('data-state', 'used'));
+    });
+
+    it('UTAB-80: closing the reset-link dialog reloads the links: the new reset link is open, the one before it closed', async () => {
+        await mount();
+        const row = await openPanel(REGULAR.id);
+        await fireEvent.click(actionIn(row, 'reset-link'));
+        await screen.findByTestId('users-reset-dialog');
+        await fireEvent.click(screen.getByTestId('users-reset-create'));
+        await waitFor(() => expect(createResetLink()).toHaveBeenCalledTimes(1));
+        const created = server.links.find((l) => l.purpose === 'password_reset' && l.user_id === REGULAR.id && l.state === 'open');
+        if (!created) throw new Error('the mocked server issued no open reset link for the account');
+        const linksBefore = listLinks().mock.calls.length;
+
+        await fireEvent.click(await screen.findByTestId('users-reset-close'));
+
+        await waitFor(() => expect(screen.queryByTestId('users-reset-dialog')).not.toBeInTheDocument());
+        await waitFor(() => expect(listLinks().mock.calls.length, 'closing the dialog asks the links again').toBeGreaterThan(linksBefore));
+        await waitFor(() => expect(linkRowsOf('users-links-open', created.id), 'the new link is listed open').toHaveLength(1));
+        expect(within(linkRowOf('users-links-open', created.id)).getByTestId('account-link-type')).toHaveAttribute('data-purpose', 'password_reset');
+        expect(within(linkRowOf('users-links-closed', LINK_RESET.id)).getByTestId('account-link-state'), 'the earlier one stopped working').toHaveAttribute('data-state', 'revoked');
+        await settled();
+    });
+
+    it('UTAB-81: an empty instance shows both tables empty, the fold still folded', async () => {
+        await mount({links: []});
+
+        expect(linkRowIds('users-links-open')).toHaveLength(0);
+        expect(linkRowIds('users-links-closed')).toHaveLength(0);
+        expect(screen.getByTestId('users-links-open')).toHaveAttribute('data-count', '0');
+        expect(screen.getByTestId('users-links-closed-fold')).toHaveAttribute('data-open', 'false');
+    });
+
+    it('UTAB-82: the keys of the link tables and of the revocation are sentences in the four catalogues, naming only the values the tab fills', () => {
+        const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+        const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+        const placeholdersOf = (message: string) => [...new Set([...message.matchAll(/\{\s*([A-Za-z_]\w*)\s*[,}]/g)].map((match) => match[1]))];
+        const keys: Record<string, string[]> = {
+            'settings.usersTab.confirm.revokeLink.title': ['type', 'target'],
+            'settings.usersTab.confirm.revokeLink.message': ['type', 'target'],
+            'settings.usersTab.confirm.revokeLink.confirm': [],
+            'settings.usersTab.links.title': [],
+            'settings.usersTab.links.closedTitle': ['count'],
+            'settings.usersTab.links.usedBy': ['username'],
+            'settings.usersTab.links.anyone': [],
+            'settings.usersTab.links.revoke': [],
+            ...Object.fromEntries(['invite', 'password_reset', 'email_verification', 'admin_setup', 'email_change'].map((purpose) => [`settings.usersTab.links.purpose.${purpose}`, []])),
+            ...Object.fromEntries(['open', 'used', 'expired', 'revoked'].map((state) => [`settings.usersTab.links.state.${state}`, []])),
+        };
+        const defects = Object.entries(keys).flatMap(([key, filled]) =>
+            Object.entries(CATALOGUES).flatMap(([language, catalogue]) => {
+                const message = leafOf(catalogue, key);
+                if (typeof message !== 'string' || message.trim() === '') return [`${language}: no sentence at ${key}`];
+                return placeholdersOf(message)
+                    .filter((name) => !filled.includes(name))
+                    .map((name) => `${language}: ${key} names {${name}}, which the tab does not fill`);
+            }),
+        );
+        expect(defects).toEqual([]);
     });
 });
 

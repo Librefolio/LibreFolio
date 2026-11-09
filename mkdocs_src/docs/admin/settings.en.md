@@ -75,7 +75,8 @@ Click the **lock icon** (🔒) in the header.
 | 🧠 Memory | **LibreFolio total space (MB)** | `0`, no limit | The most megabytes the instance may take: it is the line the space bar of **Files** is drawn against. `0` means no limit: the bar then shows the disk. The same field is under that bar, in **Advanced**. `LIBREFOLIO_STORAGE_LIMIT_MB`, when set, wins and locks it: the field is read-only and says that whoever hosts the instance sets it ([Environment Variables](configuration.md)). **Open the settings**, on a refusal of the limit, opens this tab with the row highlighted; the tab stays locked. See [The Space Bar](backup_restore.md#space-used). |
 | 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. Before the first save, `LIBREFOLIO_DEFAULT_CURRENCY` decides (below). |
 | 🌍 Defaults | **Default Language** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` or 🇪🇸 `es`. It is also the language of the emails sent to people who have no account yet. Before the first save, `LIBREFOLIO_DEFAULT_LANGUAGE` decides (below). |
-| 🌍 Defaults | **Default Theme** | `auto` | ☀️ `light`, 🌙 `dark` or 🖥️ `auto`, which follows the device. |
+| 🌍 Defaults | **Default Theme** | `auto` | ☀️ `light`, 🌙 `dark` or 🖥️ `auto`, which follows the device. Applies to every user who has not chosen a theme of their own, not only to new users; a change reaches them at their next sign-in. |
+| 🌍 Defaults | **Default Chart Line Shape** | `segments` | `segments`, `steps` or `spline` (smooth curve). Applies to every user who has not chosen a line shape of their own; a change reaches them at their next page load. |
 
 **In the `.env` file**, two variables decide, if set, only until you save the setting for the first time: from the first save, your value wins, even when it is the default again (`EUR`, `en`). See [Environment Variables](configuration_accounts.md#accounts).
 

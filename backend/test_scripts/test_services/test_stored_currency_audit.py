@@ -264,7 +264,7 @@ def _assignments(params: Sequence[Optional[str]]) -> list[dict[str, Any]]:
 
 def _user_settings(currencies: Sequence[str]) -> list[dict[str, Any]]:
     """One row per user, from user 1."""
-    return [{"user_id": user_id, "base_currency": currency, "language": "en", "theme": "auto", "created_at": STAMP, "updated_at": STAMP} for user_id, currency in enumerate(currencies, start=1)]
+    return [{"user_id": user_id, "base_currency": currency, "language": "en", "created_at": STAMP, "updated_at": STAMP} for user_id, currency in enumerate(currencies, start=1)]
 
 
 def _global_settings(values: Mapping[str, str]) -> list[dict[str, Any]]:

@@ -747,9 +747,9 @@ def api_registration(verbose: bool = False, test_names: list = None) -> bool:
 
 
 def api_users_admin(verbose: bool = False, test_names: list = None) -> bool:
-    """Run the users admin API tests: invitations, accounts and usage, PATCH with its guards, reset links, sessions, onboarding reset, logs."""
+    """Run the users admin API tests: invitations, account links, accounts and usage, PATCH with its guards, reset links, sessions, onboarding reset, logs."""
     print_section("Users Admin API Tests")
-    print_info("Testing GET/POST /users/invites, DELETE /users/invites/{id}, GET /users, PATCH /users/{id}, POST /users/{id}/password-reset-link, /sessions/revoke, /onboarding/reset")
+    print_info("Testing POST /users/invites, GET /users/account-links, DELETE /users/account-links/{id}, GET /users, PATCH /users/{id}, POST /users/{id}/password-reset-link, /sessions/revoke, /onboarding/reset")
     print_info("In-process on private databases where a mode, a variable, a limit or the last administrator is needed; on the lane's server only the case's own accounts and tokens")
     print_info("Note: Server will be automatically started and stopped by test")
 
@@ -1078,7 +1078,7 @@ def api_owner_email_change(verbose: bool = False, test_names: list[str] | None =
     """Run the API tests of the owner's email-change confirmation: POST /email/email-change/confirm, in-process."""
     print_section("Owner Email Change API Tests")
     print_info(
-        "Testing POST /email/email-change/confirm (anonymous: 200 {username}, the address moved and verified, sessions ended, notice to the old address scheduled; 400 TOKEN_INVALID with the token's status; revoked when the variable changed again, the address was taken, the profile is not managed or the account is not the owner; 422)"
+        "Testing POST /email/email-change/confirm (anonymous: 200 {username}, the address moved and verified, sessions ended, the emails to the old and the new address scheduled (by_host); 400 TOKEN_INVALID with the token's status; revoked when the variable changed again, the address was taken, the profile is not managed or the account is not the owner; 422)"
     )
     print_info("In-process: the real auth and email routers on a private SQLite, profile and variables by monkeypatch; the lane's backend is never called")
 
@@ -1558,7 +1558,7 @@ Tests for REST API endpoints (server auto-started):
     )
     # Write-scoped, no exclusive_because: a waiting administrator exists only in-process on private databases; on the
     # lane's server only refusals that write nothing.
-    add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")
+    add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, account links (list, states, revoke), accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
     add_test(api, "settings-currency-strict", api_settings_currency_strict, name="Settings Currency Strict API", desc="E-19a: base_currency strict on PUT /settings/user and the welcome flow; the 422 names the ISO code")
@@ -1765,7 +1765,7 @@ Tests for REST API endpoints (server auto-started):
         "owner-email-change",
         api_owner_email_change,
         name="Owner Email Change API",
-        desc="POST /email/email-change/confirm (anonymous, no cookie set: 200 {username}, the owner's address moved and verified, its sessions ended (the cookie of before refused), the old address no longer signs in and the new one does with the same password, its other change links and reset links revoked, the notice to the old address scheduled, the owner protected by flag and address; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, another purpose's token unknown and untouched, revoked when the host changed the variable again / another account took the address / not managed / not the owner / no address; 422 body); the whole flow from the startup sync's email to the click; no token or address in the logs; route name and models agreed with the web app",
+        desc="POST /email/email-change/confirm (anonymous, no cookie set: 200 {username}, the owner's address moved and verified, its sessions ended (the cookie of before refused), the old address no longer signs in and the new one does with the same password, its other change links and reset links revoked, the emails of the change scheduled once with both addresses and by_host, the owner protected by flag and address; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, another purpose's token unknown and untouched, revoked when the host changed the variable again / another account took the address / not managed / not the owner / no address; 422 body); the whole flow from the startup sync's email to the click; no token or address in the logs; route name and models agreed with the web app",
         # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path; profile and variables
         # set with monkeypatch; email_changed_work replaced by a recorder; the lane's backend is never called.
         isolation="pure",
@@ -1797,7 +1797,7 @@ Tests for REST API endpoints (server auto-started):
         "email-change-notice",
         api_email_change_notice,
         name="Email Change Notice API",
-        desc="PUT /auth/profile (lot E4b, on A6e): an email change with the right current password answers as before (200, the new address, a new session cookie that signs in), then emails the old address only, in the account's language, with nothing of the new address nor the username, one budget unit; the work queued once, after the complete answer, with the account's id, both addresses and the request's own engine; nothing for a username-only change, the stored address sent again, an empty body or the same mailbox in other letters; email off: the same answer and an info line; a refused change (no or wrong current password, the address taken) sends nothing; the old address refused by the SMTP server: the answer unchanged and a warning; past 3 notices in the hour for the account, the change still answers 200 with a new cookie and no notice goes; E's log lines name neither address",
+        desc="PUT /auth/profile (lot E4b, on A6e): an email change with the right current password answers as before (200, the new address, a new session cookie that signs in), then emails both addresses, the old one first (UA2), in the account's language: the notice with nothing of the new address nor the username, the confirmation with nothing of the old address nor the username, two budget units; the work queued once, after the complete answer, with the account's id, both addresses and the request's own engine; nothing for a username-only change, the stored address sent again, an empty body or the same mailbox in other letters; email off: the same answer and an info line; a refused change (no or wrong current password, the address taken) sends nothing; one address refused by the SMTP server (old or new): the answer unchanged, a warning naming the recipient side, the other email still sent; past 3 changes with emails in the hour for the account, the change still answers 200 with a new cookie and no email goes; E's log lines name neither address",
         # PURE: the real auth router runs in-process on a private SQLite file under tmp_path, the SMTP variables are set with
         # monkeypatch in this process, the hourly budget is private on a fake clock and the fake SMTP server listens on
         # 127.0.0.1: the lane's backend is never called.

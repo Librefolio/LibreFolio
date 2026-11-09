@@ -521,15 +521,46 @@
                     {/if}
                 </div>
                 <p class="text-xs text-lf-muted mt-1">{$_('settings.emailHint')}</p>
+            </div>
+
+            <!-- Right: Actions (desktop only) + Input, and under the input the password a change of address asks for (UA2) -->
+            <div class="flex flex-col w-full sm:w-auto sm:items-end gap-3">
+                <div class="flex items-center space-x-3 w-full sm:w-auto">
+                    <!-- Action buttons - desktop only -->
+                    {#if !isLocked}
+                        <div class="hidden sm:flex items-center space-x-1">
+                            {#if emailModified}
+                                <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
+                                    <Save size={14} />
+                                </button>
+                                <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
+                                    <Undo size={14} />
+                                </button>
+                            {/if}
+                        </div>
+                    {/if}
+
+                    <!-- Input -->
+                    <input
+                        bind:value={editedEmail}
+                        class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field
+                               text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
+                               focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all
+                               disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid="profile-email"
+                        disabled={saving || isLocked}
+                        type="email"
+                    />
+                </div>
                 {#if !isLocked && emailAsksPassword}
                     <!-- A6e: the current password, for a change of address only (P18: not for other capitals); the change signs the other devices out. -->
-                    <div class="mt-3 space-y-1">
+                    <div class="space-y-1 w-full sm:w-72">
                         <label class="sr-only" for="profile-current-password">{$_('settings.currentPassword')}</label>
                         <input
                             bind:value={emailPassword}
                             aria-describedby="profile-email-password-hint"
                             autocomplete="current-password"
-                            class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field text-lf-primary placeholder:text-lf-placeholder text-sm w-full sm:max-w-xs focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field text-lf-primary placeholder:text-lf-placeholder text-sm w-full focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             data-testid="profile-email-password"
                             disabled={saving}
                             id="profile-current-password"
@@ -540,35 +571,6 @@
                         <p class="text-xs text-lf-muted" data-testid="profile-email-password-hint" id="profile-email-password-hint">{$_('settings.emailPasswordHint')}</p>
                     </div>
                 {/if}
-            </div>
-
-            <!-- Right: Actions (desktop only) + Input -->
-            <div class="flex items-center space-x-3 w-full sm:w-auto">
-                <!-- Action buttons - desktop only -->
-                {#if !isLocked}
-                    <div class="hidden sm:flex items-center space-x-1">
-                        {#if emailModified}
-                            <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
-                                <Save size={14} />
-                            </button>
-                            <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
-                                <Undo size={14} />
-                            </button>
-                        {/if}
-                    </div>
-                {/if}
-
-                <!-- Input -->
-                <input
-                    bind:value={editedEmail}
-                    class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field
-                           text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
-                           focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all
-                           disabled:opacity-50 disabled:cursor-not-allowed"
-                    data-testid="profile-email"
-                    disabled={saving || isLocked}
-                    type="email"
-                />
             </div>
         </div>
 

@@ -282,7 +282,7 @@
     "analysis_model": "google/gemma-4-31b-it:free"
   },
   "index.en.md": {
-    "md5": "f58ae0fe95a3a3a72e11b672b3f46bf4",
+    "md5": "0df12c3aecdbcb4a6a82989e215b4639",
     "langs_done": [
       "es",
       "fr",
@@ -302,7 +302,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 352.8,
-        "stamped_at": "2026-11-06T14:26:09.180445+00:00",
+        "stamped_at": "2026-11-09T08:52:46.570704+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -315,7 +315,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 340.9,
-        "stamped_at": "2026-11-06T14:26:09.180445+00:00",
+        "stamped_at": "2026-11-09T08:52:46.570704+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -328,7 +328,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 387.4,
-        "stamped_at": "2026-11-06T14:26:09.180445+00:00",
+        "stamped_at": "2026-11-09T08:52:46.570704+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -383,11 +383,11 @@
     }
   },
   "user/getting-started.en.md": {
-    "md5": "f0847820625e1f7a89189fcf9196c96c",
+    "md5": "c27bbc80f3fa4ab74420756990b0ba24",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "analysis": "[{\"name\": \"LibreFolio\", \"keywords\": [\"LibreFolio product name brand self-hosted portfolio tracker do not translate\"]}, {\"name\": \"dashboard\", \"keywords\": [\"LibreFolio dashboard financial dashboard main portfolio overview UI term\"]}, {\"name\": \"fills up by itself\", \"keywords\": [\"dashboard fills up automatically populates idiom LibreFolio onboarding\"]}, {\"name\": \"broker statement / broker's report\", \"keywords\": [\"broker statement brokerage report financial statement import LibreFolio statement vs report\"]}, {\"name\": \"Register here / Register\", \"keywords\": [\"registration UI label create account sign up LibreFolio login page\"]}, {\"name\": \"sign-ups / closed sign-ups\", \"keywords\": [\"user registration sign-ups disabled registration LibreFolio administrator\"]}, {\"name\": \"invitation link\", \"keywords\": [\"LibreFolio invitation link invite registration token\"]}, {\"name\": \"instance / instance-wide\", \"keywords\": [\"LibreFolio instance self-hosted deployment instance-wide system-wide settings\"]}, {\"name\": \"administrator / admin\", \"keywords\": [\"LibreFolio administrator admin role first user global settings\"]}, {\"name\": \"Global Settings\", \"keywords\": [\"LibreFolio Global Settings admin instance-wide configuration UI\"]}, {\"name\": \"Create your account\", \"keywords\": [\"LibreFolio invitation email button create account registration CTA\"]}, {\"name\": \"withdrawn\", \"keywords\": [\"invitation link withdrawn revoked expired already used not valid\"]}, {\"name\": \"confirm your email address\", \"keywords\": [\"LibreFolio email confirmation activation email verify address confirm button\"]}, {\"name\": \"spam folder\", \"keywords\": [\"email deliverability spam folder junk folder confirmation email\"]}, {\"name\": \"login page / log in / sign in\", \"keywords\": [\"LibreFolio login page log in sign in sign-in authentication UI consistency\"]}, {\"name\": \"Too many login attempts\", \"keywords\": [\"rate limit login attempts brute force LibreFolio authentication error message\"]}, {\"name\": \"IP address\", \"keywords\": [\"IP address rate limiting login attempts network security LibreFolio\"]}, {\"name\": \"restarting LibreFolio\", \"keywords\": [\"restart LibreFolio administrator unlock login service restart\"]}, {\"name\": \"Forgot Password?\", \"keywords\": [\"LibreFolio forgot password login page reset password UI label\"]}, {\"name\": \"reset link\", \"keywords\": [\"password reset link LibreFolio email reset token\"]}, {\"name\": \"deactivated\", \"keywords\": [\"account deactivated disabled user account LibreFolio login\"]}, {\"name\": \"closed panel\", \"keywords\": [\"LibreFolio UI panel collapsed closed details disclosure\"]}, {\"name\": \"Set the new password\", \"keywords\": [\"LibreFolio password reset button set new password CTA\"]}, {\"name\": \"signs your account out on every device\", \"keywords\": [\"LibreFolio session invalidation sign out all devices password reset\"]}, {\"name\": \"account\", \"keywords\": [\"LibreFolio user account financial account brokerage account ambiguity\"]}, {\"name\": \"Welcome setup\", \"keywords\": [\"LibreFolio onboarding welcome setup first login setup screen\"]}, {\"name\": \"profile picture / initials\", \"keywords\": [\"LibreFolio avatar profile picture initials fallback onboarding\"]}, {\"name\": \"Default Currency\", \"keywords\": [\"LibreFolio default currency base currency settings onboarding\"]}, {\"name\": \"Skip setup permanently\", \"keywords\": [\"LibreFolio onboarding skip setup permanently save settings UI\"]}, {\"name\": \"legal notice\", \"keywords\": [\"LibreFolio legal notice imprint legal page settings about\"]}, {\"name\": \"Quick tour / guided tour\", \"keywords\": [\"LibreFolio quick tour guided tour onboarding walkthrough UI\"]}, {\"name\": \"menu button\", \"keywords\": [\"LibreFolio mobile menu button navigation UI onboarding tour\"]}, {\"name\": \"FX / FX Rates\", \"keywords\": [\"LibreFolio FX foreign exchange FX rates currency pair exchange rate\"]}, {\"name\": \"asset / Assets\", \"keywords\": [\"LibreFolio asset financial instrument asset class Assets navigation label\"]}, {\"name\": \"Transactions\", \"keywords\": [\"LibreFolio transactions financial movements transaction history navigation label\"]}, {\"name\": \"broker / Brokers\", \"keywords\": [\"LibreFolio broker brokerage account Brokers navigation label financial intermediary\"]}, {\"name\": \"Settings / Preferences\", \"keywords\": [\"LibreFolio settings preferences configuration UI navigation user preferences\"]}, {\"name\": \"Onboarding and guides\", \"keywords\": [\"LibreFolio settings preferences onboarding and guides UI path replay guides\"]}, {\"name\": \"contextual guides\", \"keywords\": [\"LibreFolio contextual guides onboarding in-app help page-specific guides\"]}, {\"name\": \"pulsing frame\", \"keywords\": [\"LibreFolio guide highlight pulsing frame UI overlay onboarding\"]}, {\"name\": \"message panel\", \"keywords\": [\"LibreFolio guide message panel tooltip-like panel onboarding UI\"]}, {\"name\": \"hover\", \"keywords\": [\"LibreFolio UI hover mouse over message panel translation\"]}, {\"name\": \"mid-guide / picks up at the same step\", \"keywords\": [\"LibreFolio guide resume progress mid-guide same step onboarding\"]}, {\"name\": \"Import Wizard\", \"keywords\": [\"LibreFolio import wizard broker statement import UI wizard\"]}, {\"name\": \"on-the-fly\", \"keywords\": [\"create on-the-fly LibreFolio import wizard asset creation idiom\"]}, {\"name\": \"transaction history\", \"keywords\": [\"LibreFolio transaction history import broker statement portfolio\"]}, {\"name\": \"drop your broker's report\", \"keywords\": [\"drag and drop file upload LibreFolio import wizard drop zone\"]}, {\"name\": \"Create new\", \"keywords\": [\"LibreFolio broker selection create new option import wizard UI\"]}, {\"name\": \"Files &amp; Uploads\", \"keywords\": [\"LibreFolio Files and Uploads broker reports UI section\"]}, {\"name\": \"tick / unticked\", \"keywords\": [\"LibreFolio checkbox select tick unticked British English import wizard\"]}, {\"name\": \"parser / Parse\", \"keywords\": [\"LibreFolio broker parser parse file import wizard CSV parser\"]}, {\"name\": \"Generic CSV\", \"keywords\": [\"LibreFolio Generic CSV parser unknown layout import wizard file format\"]}, {\"name\": \"sums up\", \"keywords\": [\"LibreFolio import parse summary sums up found data idiom\"]}, {\"name\": \"issues\", \"keywords\": [\"LibreFolio import wizard parse issues problems errors ambiguous financial issues\"]}, {\"name\": \"duplicates\", \"keywords\": [\"LibreFolio duplicate transactions likely duplicates import wizard\"]}, {\"name\": \"Review &amp; Import\", \"keywords\": [\"LibreFolio import wizard review and import step UI label\"]}, {\"name\": \"match each security to your asset library\", \"keywords\": [\"LibreFolio asset mapping security match asset library import wizard\"]}, {\"name\": \"Asset Mapping / Asset Resolution\", \"keywords\": [\"LibreFolio asset mapping asset resolution import wizard feature term\"]}, {\"name\": \"opening date\", \"keywords\": [\"LibreFolio broker opening date account opening date import transactions\"]}, {\"name\": \"left out\", \"keywords\": [\"LibreFolio rows excluded left out import wizard idiom\"]}, {\"name\": \"Bulk Editor / bulk workspace\", \"keywords\": [\"LibreFolio bulk editor bulk workspace import transactions UI\"]}, {\"name\": \"Import N transactions\", \"keywords\": [\"LibreFolio import button placeholder pluralization transactions UI label\"]}, {\"name\": \"last look\", \"keywords\": [\"LibreFolio review before saving last look idiom bulk editor\"]}, {\"name\": \"Unify assets\", \"keywords\": [\"LibreFolio import wizard unify assets merge duplicate securities step\"]}, {\"name\": \"Corrections\", \"keywords\": [\"LibreFolio import wizard corrections rows could not be read step\"]}, {\"name\": \"Align with the bank\", \"keywords\": [\"LibreFolio import wizard reconcile align bank figures report set\"]}, {\"name\": \"report set\", \"keywords\": [\"LibreFolio broker report set multiple statements Danske Bank import\"]}, {\"name\": \"Danske Bank\", \"keywords\": [\"Danske Bank brand bank report set LibreFolio do not translate\"]}, {\"name\": \"Guided First Import\", \"keywords\": [\"LibreFolio guided first import onboarding guide import wizard\"]}, {\"name\": \"walkthrough / walks you through\", \"keywords\": [\"LibreFolio walkthrough walks you through guide tutorial idiom\"]}, {\"name\": \"portfolio value\", \"keywords\": [\"LibreFolio portfolio value total value dashboard financial metric\"]}, {\"name\": \"allocation (by type, sector and geography)\", \"keywords\": [\"LibreFolio portfolio allocation asset type sector geography dashboard\"]}, {\"name\": \"performance history\", \"keywords\": [\"LibreFolio performance history portfolio performance chart dashboard\"]}, {\"name\": \"Share your broker\", \"keywords\": [\"LibreFolio broker sharing give access family advisor share broker\"]}, {\"name\": \"advisors\", \"keywords\": [\"LibreFolio financial advisors adviser family members broker sharing\"]}, {\"name\": \"Set up FX rates / currency conversion\", \"keywords\": [\"LibreFolio set up FX rates currency conversion exchange rates multi-currency\"]}, {\"name\": \"multi-currency portfolios\", \"keywords\": [\"LibreFolio multi-currency portfolio currency conversion FX rates\"]}, {\"name\": \"theme\", \"keywords\": [\"LibreFolio UI theme appearance preference dark mode\"]}, {\"name\": \"Replay\", \"keywords\": [\"LibreFolio replay onboarding guides tour setup settings\"]}, {\"name\": \"Install LibreFolio as an app\", \"keywords\": [\"LibreFolio install PWA app home screen desktop window\"]}, {\"name\": \"home screen\", \"keywords\": [\"LibreFolio mobile home screen install app PWA\"]}, {\"name\": \"desktop window\", \"keywords\": [\"LibreFolio installed app desktop window PWA standalone\"]}, {\"name\": \"security / securities\", \"keywords\": [\"LibreFolio security financial instrument securities asset import\"]}, {\"name\": \"movement\", \"keywords\": [\"LibreFolio movement transaction financial movement duplicate import\"]}, {\"name\": \"card\", \"keywords\": [\"LibreFolio login card UI card container not payment card\"]}, {\"name\": \"network\", \"keywords\": [\"LibreFolio network rate limit sign-ups IP network last hour\"]}, {\"name\": \"secret part of the link\", \"keywords\": [\"LibreFolio invitation link token secret URL fragment security\"]}, {\"name\": \"no free place left\", \"keywords\": [\"LibreFolio instance capacity limit no free place left idiom\"]}, {\"name\": \"on its way\", \"keywords\": [\"LibreFolio email on its way not sent activation email idiom\"]}, {\"name\": \"let you in at once\", \"keywords\": [\"LibreFolio administrator unlock login let you in at once idiom\"]}, {\"name\": \"right password\", \"keywords\": [\"LibreFolio correct password right password login attempts\"]}, {\"name\": \"too close together\", \"keywords\": [\"LibreFolio password reset requests too frequent too close together\"]}, {\"name\": \"all the same\", \"keywords\": [\"LibreFolio account created all the same nevertheless idiom\"]}, {\"name\": \"clean single-file report\", \"keywords\": [\"LibreFolio clean import report no issues single file idiom\"]}, {\"name\": \"call for it\", \"keywords\": [\"LibreFolio files call for extra step require idiom import wizard\"]}, {\"name\": \"as it goes\", \"keywords\": [\"LibreFolio import wizard creates assets as it goes idiom\"]}, {\"name\": \"file extensions .csv, .xlsx, .xls\", \"keywords\": [\"LibreFolio CSV XLSX XLS file formats do not translate broker report\"]}, {\"name\": \"http://localhost:6040\", \"keywords\": [\"LibreFolio example URL localhost port 6040 code identifier do not translate\"]}]",
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
@@ -401,7 +401,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Structural bold-marker mismatch (required).** The diff reports 79 bold markers in Italian versus 78 in English. Reconcile inline bold spans one-to-one with the source; the line-level differences around L11–L28 are mostly reflow, but the extra bold marker count must be corrected. Check the registration section in particular and ensure no translated label was accidentally bolded beyond the source.\n\n2. **Glossary: `welcome setup` → `configurazione iniziale`.** Replace “Configurazione di benvenuto” / “configurazione di benvenuto” in the section 3 heading, the “Usi già LibreFolio?” note, the warning, and section 6 with “configurazione iniziale”. Examples: “## 🎉 3. Configurazione iniziale e tour rapido”; “la configurazione iniziale risulta **Completata**”; “Se la tua configurazione iniziale è già completata”; “Ripeti la configurazione iniziale...”.\n\n3. **Glossary: `onboarding` → `primo utilizzo`.** Replace “Onboarding e guide” with “Primo utilizzo e guide” in both link labels, and replace “Impossibile caricare l'onboarding” with a phrase containing “primo utilizzo”, e.g. “Impossibile caricare il primo utilizzo”.\n\n4. **Glossary: `replay` → `ripetere`.** Replace “riprodurre” / “Riproduci” with “ripetere” / “Ripeti” in “Puoi comunque riprodurre qualsiasi guida”, “Puoi riprodurre qualsiasi guida”, and “Riproduci la configurazione di benvenuto...”. The glossary explicitly maps “replay (onboarding guide)” to “ripetere”.\n\n5. **Glossary: `bulk workspace` → `workspace bulk`; `bulk editor` → `editor bulk`.** In the contextual guides table, “area di lavoro in blocco” must be “workspace bulk”. In step 5, “editor in blocco” (twice) must be “editor bulk”: “Salva dall'editor bulk ... nell'editor bulk”.\n\n6. **Glossary: `currency conversion` → `conversione di valuta`; `exchange rate` → `tasso di cambio`.** In section 6, “Configura i tassi FX” should be “Configura i tassi di cambio”, and “Configura la conversione valutaria” should be “Configura la conversione di valuta”.\n\n7. **Glossary: `report set` → `set di report`.** In the extra-steps note, “per un insieme di report come Danske Bank” should be “per un set di report come Danske Bank”.\n\n8. **Meaning narrowed: “any of them” → “qualsiasi guida”.** In “You can still replay any of them”, “them” refers to the welcome setup, the tour, and the guides, not only to guides. “Puoi comunque riprodurre qualsiasi guida” is too narrow. Correct to e.g. “Puoi comunque ripetere ciascuno di essi” using the glossary term “ripetere”.\n\n9. **Grammar: “sia che un account corrisponda sia che no”.** This is ungrammatical. Correct to “sia che un account corrisponda sia che non corrisponda” or, more naturally, “indipendentemente dal fatto che un account corrisponda o meno”.\n\n10. **Grammar: “sia che tu ci arrivi direttamente sia dopo le schermate”.** The clauses are not parallel. Correct to e.g. “sia che tu ci arrivi direttamente sia che tu ci arrivi dopo le schermate di benvenuto qui sopra” or “che tu ci arrivi direttamente o dopo le schermate...”.\n\n11. **Naturalness/accuracy: “non è potuta partire ora”.** This is awkward for “could not leave now” referring to the activation email. Correct to “non è stato possibile inviarla ora” or “non può essere inviata al momento”.\n\n12. **Ambiguous pronoun: “il modulo lo rifiuta”.** The source means the form refuses a username containing `@`. Correct to “quindi il modulo rifiuta un nome utente che la contenga” or “quindi il modulo non lo accetta” to remove the ambiguity.\n\n13. **Accuracy: “l'email è *Hai ricevuto un invito a LibreFolio*”.** The source refers to the email’s subject line. Better: “l'oggetto dell'email è *Hai ricevuto un invito a LibreFolio*”.\n\n14. **Naturalness: “Nessuna email dopo qualche minuto?”.** Prefer “Non hai ricevuto l'email dopo qualche minuto?” for a more idiomatic Italian question.\n</improvements>\n</translation_critique>",
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=78, translated=79 (Δ+1)\n  L11: src=1 trn=0\n    EN: **Register here** to create an account.\n    TR: Apri l'indirizzo di LibreFolio (ad esempio `http://localhost:6040`): compare la pagina di accesso. Fai clic su\n  L12: src=0 trn=1\n    EN: \n    TR: **Registrati qui** per creare un account.\n  L13: src=1 trn=0\n    EN: If the login page shows no **Register here**, your administrator lets people in only with an\n    TR: \n  L14: src=0 trn=1\n    EN: invitation link, or has closed sign-ups: ask them for an invitation, or for an account. With an\n    TR: Se la pagina di accesso non mostra **Registrati qui**, il tuo amministratore consente l'accesso solo con un\n  L23: src=1 trn=0\n    EN: - 👤 **Username** — unique, 3 to 50 characters, without `@`: you log in with it. Spaces, accented\n    TR: \n  L24: src=0 trn=1\n    EN: letters and signs such as `.`, `_`, `-` or `+` are fine. When you log in, LibreFolio reads\n    TR: - 👤 **Nome utente** — univoco, da 3 a 50 caratteri, senza `@`: accedi con esso. Spazi, lettere accentate\n  L27: src=1 trn=0\n    EN: - 📧 **Email** — a valid address; it works for logging in too.\n    TR: per accedere, puoi sempre usare il tuo indirizzo email.*\n  L28: src=2 trn=1\n    EN: - 🔑 **Password** and **Confirm Password** — the strength indicator tells you when the password is\n    TR: - 📧 **Email** — un indirizzo valido; funziona anche per l'accesso.\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 🚀 Getting Started\n    ## 📝 1. Register Your Account\n      ### ✉️ If You Received an Invitation Link {: #invitation-link }\n      ### 📬 If LibreFolio Asks You to Confirm Your Email {: #verify-email }\n    ## 🔐 2. Log In\n      ### 📧 If You Forgot Your Password {: #forgot-password }\n      ### 🔑 If an Administrator Sent You a Password-Reset Link {: #password-reset-link }\n    ## 🎉 3. Welcome Setup & Quick Tour {: #welcome-setup }\n      ### 🧭 Contextual guides\n    ## 🏦 4. Import Your First Statement (Create Broker & Assets On-the-Fly)\n      ### 📋 Steps\n    ## 📈 5. Back to the Dashboard\n    ## 🔮 6. What's Next?",
         "structural_issues": 1,
-        "elapsed_s": 1141.1
+        "elapsed_s": 1141.1,
+        "stamped_at": "2026-11-09T11:37:10.113360+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-11-05T11:30:00.713325+00:00",
@@ -412,7 +414,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Glossary: “welcome setup” must be “configuration d’accueil”.** The translation uses “configuration de bienvenue”, which contradicts the mandatory glossary. Fix all occurrences:\n   - “## 🎉 3. Configuration de bienvenue et visite rapide” → “## 🎉 3. Configuration d’accueil et visite rapide”\n   - “la configuration de bienvenue est considérée comme **Terminée**” → “la configuration d’accueil est considérée comme **Terminée**”\n   - “Si votre configuration de bienvenue est déjà terminée” → “Si votre configuration d’accueil est déjà terminée”\n   - “Rejouer la configuration de bienvenue ou les visites guidées” → “Relancer la configuration d’accueil ou les visites guidées”\n   - “La configuration ne se charge pas — que faire” → “La configuration d’accueil ne se charge pas — que faire”\n   - For consistency, consider also “Ignorer définitivement la configuration” → “Ignorer définitivement la configuration d’accueil”.\n\n2. **Glossary: “replay (onboarding guide)” must be “relancer”, not “rejouer”.** Fix all occurrences:\n   - “Vous pouvez néanmoins les rejouer à tout moment depuis” → “Vous pouvez néanmoins les relancer à tout moment depuis”\n   - “Vous pouvez rejouer n’importe quel guide depuis” → “Vous pouvez relancer n’importe quel guide depuis”\n   - “[Rejouer la configuration de bienvenue ou les visites guidées]” → “[Relancer la configuration d’accueil ou les visites guidées]”\n\n3. **Glossary: “overview” must be “vue d’ensemble”.** In the contextual guides table, “Aperçu de la page” → “Vue d’ensemble de la page”.\n\n4. **Glossary: “report set” must be “lot de rapports”.** In the extra-steps note, “pour un ensemble de rapports tel que Danske Bank” → “pour un lot de rapports tel que Danske Bank”.\n\n5. **Glossary: “currency conversion” must be “conversion de devise”.** In section 6, “Configurez la conversion des devises pour les portefeuilles multidevises.” → “Configurez la conversion de devise pour les portefeuilles multidevises.”\n\n6. **Internal inconsistency around the “Review” step.** Step 4 is translated as “**Vérifiez et importez**”, but the cross-reference says “après **Vérifier**”. Make the cross-reference match the step label: “après **Vérifier**” → “après l’étape **Vérifiez et importez**”.\n\n7. **“Create new” loses “new”.** “choisissez **Créer** si le courtier n’existe pas encore” → “choisissez **Créer un nouveau** si le courtier n’existe pas encore” (or the exact French UI label for “Create new”).\n\n8. **Ambiguous pronoun in the username rule.** “le formulaire en refuse donc un” is unclear. Replace with: “c’est pourquoi le formulaire refuse un nom d’utilisateur contenant un `@`”.\n\n9. **Alt text grammar.** “ainsi que Ignorer définitivement la configuration et Continuer” reads poorly. Use: “ainsi que les boutons **Ignorer définitivement la configuration** et **Continuer**”.\n\n10. **Plural in alt text.** “un cadre autour des filtres de devise” → “un cadre autour des filtres de devises”.\n\n11. **Awkward phrasing.** “Le panneau de message s’estompe un peu après un moment” → “Le panneau de message s’estompe légèrement au bout d’un instant”.\n\n12. **Minor consistency for “FX rates”.** The alt text uses “Taux FX” while section 6 uses “taux de change” for “Set up FX rates”. Align to the same UI label throughout; for example, if the sidebar label is “Taux FX”, use “Configurer les taux FX” in section 6, otherwise use “taux de change” consistently.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1070.5
+        "elapsed_s": 1070.5,
+        "stamped_at": "2026-11-09T11:37:10.113360+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-11-05T11:30:00.713344+00:00",
@@ -425,7 +429,9 @@
         "structural_issues": 0,
         "elapsed_s": 949.9,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=78, translated=79 (Δ+1)\n  L9: src=0 trn=1\n    EN: \n    TR: Abre la dirección de LibreFolio (por ejemplo, `http://localhost:6040`): aparecerá la página de inicio de sesión. Haz cli\n  L13: src=1 trn=0\n    EN: If the login page shows no **Register here**, your administrator lets people in only with an\n    TR: <div class=\"screenshot-container\" style=\"max-width: 600px; margin: 1rem auto;\">\n  L19: src=0 trn=1\n    EN: </div>\n    TR: - 👤 **Nombre de usuario** — único, de 3 a 50 caracteres, sin `@`: con él inicias sesión. Los espacios, las letras acentu\n  L20: src=0 trn=1\n    EN: \n    TR: - 📧 **Correo electrónico** — una dirección válida; también sirve para iniciar sesión.\n  L21: src=0 trn=2\n    EN: Fill in your details:\n    TR: - 🔑 **Contraseña** y **Confirmar contraseña** — el indicador de seguridad te dice cuándo la contraseña es suficientement\n  L23: src=1 trn=0\n    EN: - 👤 **Username** — unique, 3 to 50 characters, without `@`: you log in with it. Spaces, accented\n    TR: <div class=\"screenshot-container\" style=\"max-width: 600px; margin: 1rem auto;\">\n  L27: src=1 trn=0\n    EN: - 📧 **Email** — a valid address; it works for logging in too.\n    TR: !!! info \"Primer usuario = Administrador\"\n  L28: src=2 trn=0\n    EN: - 🔑 **Password** and **Confirm Password** — the strength indicator tells you when the password is\n    TR: \n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 🚀 Getting Started\n    ## 📝 1. Register Your Account\n      ### ✉️ If You Received an Invitation Link {: #invitation-link }\n      ### 📬 If LibreFolio Asks You to Confirm Your Email {: #verify-email }\n    ## 🔐 2. Log In\n      ### 📧 If You Forgot Your Password {: #forgot-password }\n      ### 🔑 If an Administrator Sent You a Password-Reset Link {: #password-reset-link }\n    ## 🎉 3. Welcome Setup & Quick Tour {: #welcome-setup }\n      ### 🧭 Contextual guides\n    ## 🏦 4. Import Your First Statement (Create Broker & Assets On-the-Fly)\n      ### 📋 Steps\n    ## 📈 5. Back to the Dashboard\n    ## 🔮 6. What's Next?",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-11-09T11:37:10.113360+00:00",
+        "stamped_by": "translate-stamp"
       }
     },
     "last_translated": "2026-11-05T11:30:00.713344+00:00"
@@ -589,7 +595,7 @@
     "last_translated": "2026-10-10T00:07:20.711014+00:00"
   },
   "user/files/index.en.md": {
-    "md5": "b5ba3a734927263ce69b9b705b102010",
+    "md5": "5aec220496b567d33a23b59af2a0fd1e",
     "langs_done": [
       "es",
       "fr",
@@ -609,7 +615,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1172.7,
-        "stamped_at": "2026-11-06T09:53:28.672459+00:00",
+        "stamped_at": "2026-11-09T08:52:55.159776+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -622,7 +628,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 818.0,
-        "stamped_at": "2026-11-06T09:53:28.672459+00:00",
+        "stamped_at": "2026-11-09T08:52:55.159776+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -637,7 +643,7 @@
         "elapsed_s": 1164.4,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=83, translated=86 (Δ+3)\n  L95: src=5 trn=7\n    EN: Some banks split one account across several exports: [Danske Bank](../transactions/import/danske-bank.md), for example, \n    TR: Algunos bancos dividen una cuenta en varias exportaciones: [Danske Bank](../transactions/import/danske-bank.md), por eje\n  L119: src=0 trn=1\n    EN: - a file whose uploader was not recorded shows *Uploader not recorded*.\n    TR: - un archivo **del que no se registró quién lo subió** muestra *Autor de la subida no registrado*.\n\nSOURCE_OUTLINE (for reference):\n  # 📁 Files & Uploads\n    ## 🖼️ Static resources\n      ### ⬆️ Upload a file\n      ### 👥 Shared or personal {: #visibility }\n    ## 📊 Broker Reports {: #broker-reports }\n      ### 📤 Upload a broker report\n      ### ⚙️ Manage reports\n      ### 🧩 Report sets {: #report-sets }\n    ## 👤 Who uploaded each file {: #uploaded-by }\n    ## 🛠️ For Administrators {: #admin-files }\n      ### 📊 The space used {: #space-used }\n      ### 🗃️ The Backups tab {: #backups-tab }\n    ## 🔒 Access and limits",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-06T09:53:28.672459+00:00",
+        "stamped_at": "2026-11-09T08:52:55.159776+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -993,7 +999,7 @@
     "last_translated": "2026-11-05T11:20:06.273101+00:00"
   },
   "admin/cli_tools.en.md": {
-    "md5": "7889c1c9f541ef15ec2585a74e0fea07",
+    "md5": "32bed2444a663720c7b34622f67f3f50",
     "langs_done": [
       "es",
       "fr",
@@ -1013,7 +1019,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1138.8,
-        "stamped_at": "2026-11-07T22:39:59.597861+00:00",
+        "stamped_at": "2026-11-09T12:20:17.625920+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -1026,7 +1032,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1360.2,
-        "stamped_at": "2026-11-07T22:39:59.597861+00:00",
+        "stamped_at": "2026-11-09T12:20:17.625920+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -1039,13 +1045,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1178.4,
-        "stamped_at": "2026-11-07T22:39:59.597861+00:00",
+        "stamped_at": "2026-11-09T12:20:17.625920+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "admin/settings.en.md": {
-    "md5": "e7ec047201f996d748fb657724013bfa",
+    "md5": "5d74e51c92538db918d3adf3aca11257",
     "langs_done": [
       "es",
       "fr",
@@ -1067,7 +1073,7 @@
         "elapsed_s": 2022.6,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=156, translated=157 (Δ+1)\n  L27: src=3 trn=2\n    EN: **Settings** end with **About**, and a link to one of the group's tabs opens their **Profile**\n    TR: **Impostazioni** terminano con **Informazioni**, e un link a una delle schede del gruppo apre invece il suo\n  L28: src=0 trn=1\n    EN: instead.\n    TR: **Profilo**.\n  L57: src=1 trn=0\n    EN: Clicking the lock with unsaved changes asks whether to discard them. **Cancel** keeps your\n    TR: \n  L59: src=0 trn=1\n    EN: \n    TR: modifiche; **Scarta** ripristina i valori salvati e blocca la scheda.\n  L77: src=1 trn=0\n    EN: | ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices; a new value\n    TR: |---|---|---|---|\n  L78: src=6 trn=1\n    EN: | 🛡️ Security | **Registration** | By invitation | Who can create an account: **Open**, **By invitation** or **Closed** \n    TR: | ⏳ Sessione | **Durata sessione** | 24 ore | Per quanto tempo gli utenti restano connessi. Riducila sui dispositivi con\n  L79: src=1 trn=6\n    EN: | 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link emailed to their address before the\n    TR: | 🛡️ Sicurezza | **Registrazione** | Su invito | Chi può creare un account: **Aperta**, **Su invito** o **Chiusa** (vedi\n  L82: src=2 trn=1\n    EN: | — (not shown in this tab) | **Space limit (MB)** | `0`, no limit | The most megabytes the instance may take, shown as \n    TR: | 🧠 Memoria | **Dimensione massima file caricabile** | 10 MB | Il file più grande che gli utenti possono caricare, compr\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # ⚙️ Global Settings\n    ## 🗂️ Settings › Administration {: #administration }\n    ## ✏️ Change a Setting\n      ### 🔓 1. Unlock the tab\n      ### 💾 2. Edit and save\n    ## 📋 What Each Setting Does\n    ## 🚪 Who Can Sign Up {: #registration }\n      ### 📢 The Open-Registration Warning {: #open-registration-warning }\n    ## 🕐 Market Data Scheduler {: #market-data-scheduler }\n      ### ⚙️ Configure the schedule\n      ### 📜 Read the scheduler log\n    ## ⏸️ Provider Pauses {: #provider-pauses }\n      ### ⏱️ How Long a Pause Lasts {: #provider-pauses-length }\n      ### 👀 Who Waits, and What You See {: #provider-pauses-effects }\n      ### 💤 In Memory {: #provider-pauses-memory }\n      ### 📋 In the Log {: #provider-pauses-log }\n    ## 🗄️ Server Caches {: #server-caches }\n    ## 🛡️ Security {: #security-tab }\n      ### 🚦 What It Lists {: #security-findings }\n      ### 🔢 The Number on the Tab {: #security-badge }\n      ### 🔄 When It Checks {: #security-refresh }\n      ### ✅ Passed Checks {: #security-passed }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-08T20:19:59.720931+00:00",
+        "stamped_at": "2026-11-09T11:24:31.284160+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -1082,7 +1088,7 @@
         "elapsed_s": 1307.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=156, translated=161 (Δ+5)\n  L9: src=0 trn=5\n    EN: ---\n    TR: **Paramètres globaux** est le premier onglet d’**Administration**, le groupe d’onglets qui gère l’instance, à l’extrémit\n  L13: src=2 trn=1\n    EN: **Global Settings** is the first tab of **Administration**, the group of tabs that look after the\n    TR: | ⚙️ **Paramètres globaux** | Administrateurs | Les paramètres de cette page |\n  L15: src=2 trn=1\n    EN: the group. Click **Administration**: it opens **Global Settings** and a second row of tabs under the\n    TR: | 💾 **Sauvegarde** | Administrateurs | Toute l’instance dans une archive, et sa restauration : [Sauvegarde, restauration\n  L16: src=0 trn=1\n    EN: first one, with the tabs of the group.\n    TR: | ✉️ **E-mail** | Administrateurs | Si LibreFolio peut envoyer des e-mails, et un e-mail de test : [E-mail](email.md) |\n  L17: src=0 trn=1\n    EN: \n    TR: | 🛡️ **Sécurité** | Administrateurs | Comment l’instance est configurée, et ce qui demande votre attention : [Sécurité](\n  L19: src=0 trn=4\n    EN: |---|---|---|\n    TR: - 👤 Un utilisateur qui n’est pas administrateur n’a pas le groupe **Administration**, ni aucun de ses onglets : ses **Pa\n  L21: src=1 trn=2\n    EN: | 👥 **Users** | Administrators | The accounts, invitations and password-reset links: [Users & Invitations](users.md) |\n    TR: - 🔢 Un nombre sur **Sécurité**, répété sur **Administration**, compte les erreurs et les avertissements des [contrôles d\n  L22: src=1 trn=0\n    EN: | 💾 **Backup** | Administrators | The whole instance in one archive, and its restore: [Backup, Restore & Moving](backup_\n    TR: - 📱 Sur un téléphone, les onglets n’affichent que leurs icônes, et le titre de la page nomme l’onglet ouvert.\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # ⚙️ Global Settings\n    ## 🗂️ Settings › Administration {: #administration }\n    ## ✏️ Change a Setting\n      ### 🔓 1. Unlock the tab\n      ### 💾 2. Edit and save\n    ## 📋 What Each Setting Does\n    ## 🚪 Who Can Sign Up {: #registration }\n      ### 📢 The Open-Registration Warning {: #open-registration-warning }\n    ## 🕐 Market Data Scheduler {: #market-data-scheduler }\n      ### ⚙️ Configure the schedule\n      ### 📜 Read the scheduler log\n    ## ⏸️ Provider Pauses {: #provider-pauses }\n      ### ⏱️ How Long a Pause Lasts {: #provider-pauses-length }\n      ### 👀 Who Waits, and What You See {: #provider-pauses-effects }\n      ### 💤 In Memory {: #provider-pauses-memory }\n      ### 📋 In the Log {: #provider-pauses-log }\n    ## 🗄️ Server Caches {: #server-caches }\n    ## 🛡️ Security {: #security-tab }\n      ### 🚦 What It Lists {: #security-findings }\n      ### 🔢 The Number on the Tab {: #security-badge }\n      ### 🔄 When It Checks {: #security-refresh }\n      ### ✅ Passed Checks {: #security-passed }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-08T20:19:59.720931+00:00",
+        "stamped_at": "2026-11-09T11:24:31.284160+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -1095,7 +1101,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1292.7,
-        "stamped_at": "2026-11-08T20:19:59.720931+00:00",
+        "stamped_at": "2026-11-09T11:24:31.284160+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -5125,11 +5131,11 @@
     }
   },
   "user/settings/index.en.md": {
-    "md5": "5848864cbeee4ab01884a71ee1329c64",
+    "md5": "4976abb60bdc57b4aaf487d5421ab40e",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-11-05T11:14:58.986890+00:00",
     "analysis": "[{\"name\": \"Settings panel\", \"keywords\": [\"LibreFolio settings panel\", \"UI settings vs preferences\", \"\\\"Settings\\\" translation ambiguity\", \"application configuration panel\"]}, {\"name\": \"Preferences\", \"keywords\": [\"user preferences vs settings\", \"LibreFolio preferences tab\", \"\\\"Preferences\\\" vs \\\"Settings\\\" localization\", \"personalisation options\"]}, {\"name\": \"Global Settings\", \"keywords\": [\"LibreFolio Global Settings admin\", \"instance-wide configuration\", \"\\\"global\\\" meaning whole system not worldwide\", \"global vs general settings\"]}, {\"name\": \"Administration (group) / administrator / admin\", \"keywords\": [\"LibreFolio Administration tab group\", \"administrator role\", \"admin privileges\", \"\\\"Administration\\\" translation ambiguity with business administration\"]}, {\"name\": \"instance / instance-wide\", \"keywords\": [\"self-hosted instance definition\", \"LibreFolio deployment instance\", \"instance-wide configuration\", \"software instance vs installation\"]}, {\"name\": \"tabs / row of tabs / tab bar\", \"keywords\": [\"UI tabs localization\", \"MkDocs Material navigation tabs\", \"tab bar overflow\", \"browser tab vs settings tab terminology\"]}, {\"name\": \"Panel\", \"keywords\": [\"UI panel vs window vs dialog\", \"settings panel terminology\", \"interface container translation\"]}, {\"name\": \"Profile\", \"keywords\": [\"user profile tab\", \"LibreFolio profile settings\", \"account profile UI term\"]}, {\"name\": \"account deletion\", \"keywords\": [\"GDPR account deletion\", \"delete user account wording\", \"irreversible action localization\", \"\\\"deletion\\\" vs \\\"suppression\\\" vs \\\"cancellation\\\"\"]}, {\"name\": \"Base currency\", \"keywords\": [\"base currency portfolio definition\", \"reference currency\", \"devise de base\", \"moneda base\", \"portfolio accounting currency\"]}, {\"name\": \"price and exchange-rate sources\", \"keywords\": [\"market data provider\", \"price feed source\", \"exchange rate provider\", \"sourcing quotes Yahoo Finance\", \"\\\"source\\\" vs \\\"provider\\\" terminology\"]}, {\"name\": \"Plugins / installed plugins\", \"keywords\": [\"LibreFolio plugins\", \"software plugin localization\", \"extension modules\", \"loanword \\\"plugin\\\" retention\"]}, {\"name\": \"changelog / in-app changelog\", \"keywords\": [\"software changelog\", \"release notes\", \"\\\"in-app\\\" meaning within the application\", \"changelog translation conventions\"]}, {\"name\": \"Avatar\", \"keywords\": [\"user avatar UI term\", \"profile picture\", \"avatar localization\"]}, {\"name\": \"Theme\", \"keywords\": [\"UI theme light dark\", \"appearance theme localization\", \"\\\"theme\\\" not subject matter\"]}, {\"name\": \"Username\", \"keywords\": [\"username vs name vs login\", \"identifiant utilisateur\", \"nombre de usuario\", \"account identifier\"]}, {\"name\": \"password-reset links\", \"keywords\": [\"password reset link\", \"réinitialisation du mot de passe\", \"restablecer contraseña\", \"reset vs restart ambiguity\"]}, {\"name\": \"invitations\", \"keywords\": [\"user invitation email\", \"LibreFolio invite new user\", \"invitation vs registration\"]}, {\"name\": \"Backup / archive\", \"keywords\": [\"data backup vs file archive\", \"ZIP archive translation ambiguity \\\"archivo\\\"\", \"sauvegarde\", \"copia de seguridad\", \"LibreFolio CLI backup\"]}, {\"name\": \"test email\", \"keywords\": [\"send test email SMTP\", \"email configuration test button\", \"correo de prueba\", \"e-mail de test\"]}, {\"name\": \"Security / security checks\", \"keywords\": [\"security vs safety translation\", \"instance security checklist\", \"security audit checks\", \"Sécurité vs Sûreté\"]}, {\"name\": \"what needs attention first\", \"keywords\": [\"priority sorting of issues\", \"\\\"needs attention\\\" paraphrase\", \"actionable warnings localization\"]}, {\"name\": \"When the Tabs Do Not Fit / tabs overflow\", \"keywords\": [\"tab overflow UI\", \"responsive tabs\", \"heading translation\", \"\\\"fit\\\" meaning fit in width\"]}, {\"name\": \"scrolls sideways / fades out\", \"keywords\": [\"horizontal scrolling UI\", \"fade-out gradient affordance\", \"scroll edge hint\", \"overflow indicator\"]}, {\"name\": \"narrow window / resize the window / wide screen\", \"keywords\": [\"responsive breakpoints\", \"browser window width\", \"narrow viewport\", \"wide screen layout\", \"resize browser window\"]}, {\"name\": \"shows whole\", \"keywords\": [\"fully visible tab\", \"\\\"shows whole\\\" idiomatic English\", \"complete display of element\"]}, {\"name\": \"What the price and exchange-rate sources ask for\", \"keywords\": [\"\\\"what ... ask for\\\" meaning require\", \"provider configuration requirements\", \"idiomatic paraphrase\"]}, {\"name\": \"gathers the tabs\", \"keywords\": [\"\\\"gathers\\\" meaning groups/collects\", \"menu grouping terminology\", \"regroupe les onglets\"]}, {\"name\": \"keeps you on it\", \"keywords\": [\"clicking active tab keeps current view\", \"idiomatic English paraphrase\", \"no navigation change\"]}, {\"name\": \"your tabs end with About\", \"keywords\": [\"last tab in list\", \"tab order wording\", \"idiomatic paraphrase\"]}, {\"name\": \"a number on Security, repeated on Administration, counts what ... ask an administrator to look at\", \"keywords\": [\"badge counter UI\", \"notification count on tab\", \"security findings counter\", \"duplicate badge\"]}, {\"name\": \"a link to one of the administration tabs opens your Profile instead\", \"keywords\": [\"deep link redirect for non-admin\", \"access control UX\", \"permission-based redirect\"]}, {\"name\": \"The instance's settings still apply to you\", \"keywords\": [\"inherited configuration\", \"instance settings apply to all users\", \"\\\"apply to\\\" legal-like phrasing\"]}, {\"name\": \"the title above them names the open tab\", \"keywords\": [\"mobile header title\", \"\\\"names\\\" as verb meaning labels\", \"tab title on phone\"]}, {\"name\": \"On a phone\", \"keywords\": [\"mobile layout\", \"icon-only tabs\", \"responsive mobile view\", \"smartphone vs phone\"]}, {\"name\": \"Brokers\", \"keywords\": [\"brokerage account\", \"broker vs intermediary\", \"courtier\", \"corredor de bolsa\", \"LibreFolio brokers section\"]}, {\"name\": \"Multi-User &amp; Sharing / collaborators / manage access\", \"keywords\": [\"portfolio sharing\", \"collaborator permissions\", \"manage access rights\", \"multi-user feature naming\"]}, {\"name\": \"License info / version numbers\", \"keywords\": [\"open source license information\", \"AGPL\", \"software version numbering\", \"\\\"license\\\" spelling and legal meaning\"]}, {\"name\": \"Everyone\", \"keywords\": [\"all users regardless of role\", \"\\\"everyone\\\" scope wording\", \"non-admin users\"]}]",
@@ -5144,7 +5150,9 @@
         "critique": "<translation_critique>\n<improvements>\nNo structural or mandatory glossary violations were found: headings, anchors (`{: #administration }`, `{: #tabs-overflow }`), links, emoji, bold spans, and list indentation are preserved, and glossary mappings such as settings → impostazioni, tab → scheda, broker → broker, and exchange rate → tasso di cambio are respected. The following refinements target naturalness, clarity, and a few elliptical or ambiguous passages.\n\n1. Heading `## ↔️ Quando le schede non entrano` — “non entrano” is understandable but less idiomatic for “do not fit” in a UI layout context. Prefer `## ↔️ Quando le schede non ci stanno` or `## ↔️ Quando le schede non trovano spazio`. Example: `## ↔️ Quando le schede non ci stanno {: #tabs-overflow }`.\n\n2. `Un numero su Sicurezza` — “su” is ambiguous in Italian (it can mean “about” rather than “on the tab”). Make the badge location explicit while preserving the bold span: `**Un numero sulla scheda Sicurezza**, ripetuto su **Amministrazione**, ...`. Also consider `indica quanti elementi` instead of `conta gli elementi` for a more natural rendering of “counts what”.\n\n3. `con ciò che richiede attenzione per primo` — literal and heavy after the comma. Prefer `e cosa richiede attenzione per primo` (or `e ciò che va controllato per primo`). Corrected sentence: `Come è configurata l'istanza, e cosa richiede attenzione per primo: vedi «Sicurezza» in [Impostazioni globali](../../admin/settings.md).`\n\n4. `le tue schede terminano con **Informazioni** e un link a una delle schede di amministrazione apre invece il tuo **Profilo**.` — the coordination switches subject abruptly from “le tue schede” to “un link”. Split into two sentences: `le tue schede terminano con **Informazioni**. Un link a una delle schede di amministrazione apre invece il tuo **Profilo**.` This preserves the meaning and improves readability.\n\n5. `Se LibreFolio può inviare email e un'email di prova.` — the second element is an elliptical noun phrase and reads as a list of two things rather than a capability. Make the verb explicit: `Se LibreFolio può inviare email e consente di inviare un'email di prova.` (or `... e permette di inviare un'email di prova.`).\n\n6. `la scheda aperta venga mostrata per intero` — the passive construction is slightly unnatural. Prefer `la scheda aperta sia visibile per intero` or `la scheda aperta risulti interamente visibile`. Corrected: `la riga scorre in modo che la scheda aperta sia visibile per intero.`\n\n7. `mentre una di esse è aperta` — the antecedent (“una seconda riga di schede”) is a bit distant. Prefer `mentre una di queste schede è aperta` for clarity.\n\n8. `Tutti hanno quattro schede` — “Tutti” alone can be read as “all things”; make the subject explicit: `Tutti gli utenti hanno quattro schede`.\n\n9. `a destra della barra su uno schermo ampio` — acceptable, but clearer and more natural as `sulla destra della barra, su schermi ampi`. Corrected: `Le schede dell'istanza, solo per gli amministratori, sulla destra della barra, su schermi ampi:`.\n\n10. Optional stylistic note: `Correlati` is acceptable, but in Italian technical documentation the “Related” section is often rendered `Vedi anche`. If the project style guide does not mandate `Correlati`, consider `Vedi anche` for idiomaticity. This is not a required fix.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 792.5
+        "elapsed_s": 792.5,
+        "stamped_at": "2026-11-09T08:52:58.034003+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-11-05T11:14:58.986872+00:00",
@@ -5157,7 +5165,9 @@
         "structural_issues": 0,
         "elapsed_s": 787.6,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=28, translated=27 (Δ-1)\n  L22: src=8 trn=7\n    EN: Only administrators have this group. Click **Administration** to open its first tab, **Global Settings**: a second row o\n    TR: Seuls les administrateurs disposent de ce groupe. Cliquez sur **Administration** pour ouvrir son premier onglet, **Param\n\nSOURCE_OUTLINE (for reference):\n  # ⚙️ Settings\n    ## 🗂️ The Administration Group {: #administration }\n    ## ↔️ When the Tabs Do Not Fit {: #tabs-overflow }\n    ## 🔗 Related",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-11-09T08:52:58.034003+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-11-05T11:14:58.986890+00:00",
@@ -5168,7 +5178,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Mandatory terminology fix: `settings` must be translated as `configuración`, not `Ajustes/ajustes`.** This affects every occurrence:\n   - `# ⚙️ Ajustes` → `# ⚙️ Configuración`\n   - `El panel de Ajustes de LibreFolio` → `El panel de Configuración de LibreFolio`\n   - `los ajustes de la instancia` → `la configuración de la instancia`\n   - all instances of `**Ajustes globales**` and `[Ajustes globales]` → `**Configuración global**` / `[Configuración global]`\n   - `Los ajustes de la instancia siguen aplicándose a ti: los cambia tu administrador.` → `La configuración de la instancia sigue aplicándose a ti: la cambia tu administrador.`\n\n   Keep all link targets and heading anchors unchanged, e.g. `../../admin/settings.md`, `#administration`, `#tabs-overflow`.\n\n2. **Disambiguate the relative clause in the Plugins bullet.**  \n   `..., que solo cambian los administradores` can be read as “that administrators only change” rather than “that only administrators change.” A clearer rendering is:  \n   `..., que solo los administradores pueden cambiar.`  \n   Combined with the terminology fix:  \n   `..., la configuración de la instancia, que solo los administradores pueden cambiar.`\n\n3. **Rewrite the Security badge sentence for natural Spanish.**  \n   `Un número en Seguridad, repetido en Administración, cuenta lo que las comprobaciones de seguridad de la instancia piden a un administrador que revise.` is literal and awkward; `contar` does not clearly mean “indicate a count.” Better:  \n   `Un número en Seguridad, repetido en Administración, indica cuántos elementos de las comprobaciones de seguridad de la instancia requieren la revisión de un administrador.`\n\n4. **Minor register improvement.**  \n   `Todo el mundo tiene cuatro pestañas` is colloquial for technical documentation. A more neutral and precise option is:  \n   `Todos los usuarios disponen de cuatro pestañas.`\n\nNo structural issues were found: links, heading anchors, emoji, lists, and heading hierarchy are preserved.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 113.2
+        "elapsed_s": 113.2,
+        "stamped_at": "2026-11-09T08:52:58.034003+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -5797,7 +5809,7 @@
     }
   },
   "user/settings/preferences.en.md": {
-    "md5": "a4ee7eccfd7d481aaeb94ef7b12e6928",
+    "md5": "88b6ef07860917cd8ff83f878e280c7a",
     "langs_done": [
       "es",
       "fr",
@@ -5817,7 +5829,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 270.4,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T11:24:28.192570+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5830,7 +5842,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 255.8,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T11:24:28.192570+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5843,7 +5855,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 250.6,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T11:24:28.192570+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6439,11 +6451,11 @@
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash"
   },
   "user/dashboard/kpi-cards.en.md": {
-    "md5": "c7c85d6913dfc1e0d8ca4f7a90dc12d2",
+    "md5": "d1a9e9e7b5ca12899afba9e357ef9f71",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-11-05T11:22:08.755803+00:00",
     "analysis": "[{\"name\": \"KPI Cards\", \"keywords\": [\"KPI card dashboard UI design\", \"key performance indicator finance dashboard\", \"KPI acronym translation\"]}, {\"name\": \"Dashboard\", \"keywords\": [\"dashboard UI finance portfolio\", \"dashboard translation tableau de bord panel cruscotto\"]}, {\"name\": \"Broker\", \"keywords\": [\"broker definition finance\", \"brokerage account portfolio tracker\", \"broker vs brokerage vs custodian\"]}, {\"name\": \"Period P&L\", \"keywords\": [\"period P&L profit and loss\", \"P&L definition trading portfolio\", \"period P&L vs net flows\"]}, {\"name\": \"P&L (profit and loss)\", \"keywords\": [\"P&L abbreviation accounting vs trading\", \"profit and loss statement translation\", \"P&L vs income statement\"]}, {\"name\": \"Total P&L\", \"keywords\": [\"total profit and loss since inception portfolio\", \"cumulative P&L definition\"]}, {\"name\": \"Net flows\", \"keywords\": [\"net flows definition portfolio\", \"net cash flow investment\", \"capital flows in out\"]}, {\"name\": \"NAV / Net Worth\", \"keywords\": [\"NAV net asset value definition\", \"net worth vs NAV\", \"net asset value portfolio tracker\"]}, {\"name\": \"Returns\", \"keywords\": [\"returns definition investment\", \"return vs performance vs yield translation\", \"investment returns terminology\"]}, {\"name\": \"Timing effect\", \"keywords\": [\"timing effect MWRR TWRR\", \"timing effect investment definition\", \"investor timing performance\"]}, {\"name\": \"TWRR\", \"keywords\": [\"time-weighted rate of return definition\", \"TWRR formula portfolio\"]}, {\"name\": \"MWRR cumulative / MWRR annualized\", \"keywords\": [\"money-weighted rate of return IRR\", \"annualized MWRR definition\", \"MWRR vs IRR\"]}, {\"name\": \"ROI\", \"keywords\": [\"return on investment ROI definition\", \"simple ROI period calculation\"]}, {\"name\": \"Unrealized change\", \"keywords\": [\"unrealized gain loss definition\", \"latent gain translation\", \"unrealized vs realized P&L\"]}, {\"name\": \"unrealized gain or loss\", \"keywords\": [\"unrealized gain loss accounting\", \"mark-to-market unrealized\"]}, {\"name\": \"realized gain or loss\", \"keywords\": [\"realized gain definition tax\", \"realized profit on sale\"]}, {\"name\": \"Deposited Capital\", \"keywords\": [\"deposited capital definition\", \"net invested capital portfolio\", \"contributed capital\"]}, {\"name\": \"Capital put in since the start\", \"keywords\": [\"capital contributed since inception\", \"net deposits withdrawals definition\"]}, {\"name\": \"Market Value\", \"keywords\": [\"market value definition securities\", \"market value vs book value portfolio\"]}, {\"name\": \"Purchase Cost\", \"keywords\": [\"purchase cost vs cost basis\", \"acquisition cost securities\", \"purchase cost exchange rate date\"]}, {\"name\": \"Book Value\", \"keywords\": [\"book value definition accounting\", \"book value vs market value\", \"book value portfolio position\"]}, {\"name\": \"Cash pools / three-pool cash model\", \"keywords\": [\"cash pooling definition\", \"three pool cash model deposited capital returns\"]}, {\"name\": \"Weighted Average Cost\", \"keywords\": [\"weighted average cost method accounting\", \"average cost basis securities\", \"WAC vs FIFO\"]}, {\"name\": \"average cost of the units sold\", \"keywords\": [\"average cost basis sold units\", \"cost basis calculation sale\"]}, {\"name\": \"Adjustment / Outgoing Adjustments\", \"keywords\": [\"portfolio adjustment transaction type\", \"outgoing adjustment units removed\", \"adjustment vs regularization translation\"]}, {\"name\": \"Dividends &amp; interest\", \"keywords\": [\"dividend definition\", \"interest income definition\", \"dividend vs coupon\"]}, {\"name\": \"Coupons\", \"keywords\": [\"coupon bond definition\", \"bond coupon payment\"]}, {\"name\": \"P2P interest\", \"keywords\": [\"peer-to-peer lending interest\", \"P2P investing definition\"]}, {\"name\": \"Fees &amp; taxes\", \"keywords\": [\"fees and taxes brokerage\", \"transaction fees definition\", \"withholding tax investments\"]}, {\"name\": \"Commissions\", \"keywords\": [\"brokerage commission definition\", \"trading commission fees\"]}, {\"name\": \"Position / holdings\", \"keywords\": [\"position vs holding portfolio definition\", \"holdings meaning investments\", \"open position securities\"]}, {\"name\": \"Securities\", \"keywords\": [\"securities definition financial\", \"titres valeurs mobilières translation\", \"securities vs assets\"]}, {\"name\": \"Asset / Assets in USD\", \"keywords\": [\"asset financial instrument definition\", \"asset vs possession\", \"financial asset classification\"]}, {\"name\": \"Units\", \"keywords\": [\"units shares fund units definition\", \"units of a security\"]}, {\"name\": \"FX on cash\", \"keywords\": [\"FX foreign exchange abbreviation\", \"currency effect on cash holdings\", \"FX translation exposure\"]}, {\"name\": \"Transfers at market value\", \"keywords\": [\"in-kind transfer market value\", \"securities transfer between brokers valuation\", \"transfer in specie\"]}, {\"name\": \"Other / reconciliation residual\", \"keywords\": [\"reconciliation residual definition\", \"residual balance reconciliation accounting\"]}, {\"name\": \"exchange-rate effect / USD → EUR rate\", \"keywords\": [\"exchange rate effect on returns\", \"currency translation effect\", \"FX rate contribution\"]}, {\"name\": \"display currency\", \"keywords\": [\"display currency vs base currency\", \"reporting currency definition\"]}, {\"name\": \"in transit\", \"keywords\": [\"cash in transit definition\", \"assets in transit between accounts\", \"transfer pending\"]}, {\"name\": \"opening position\", \"keywords\": [\"opening position definition portfolio\", \"initial position without cash\", \"opening balance securities\"]}, {\"name\": \"Editor or Viewer\", \"keywords\": [\"sharing roles editor viewer permissions\", \"broker sharing access levels\"]}, {\"name\": \"own (brokers you own) / share above 0%\", \"keywords\": [\"broker ownership share percentage\", \"co-ownership quota portfolio\", \"share of ownership\"]}, {\"name\": \"hover (hover the row / hover it)\", \"keywords\": [\"hover UI interaction term translation\", \"mouse over tooltip interaction\"]}, {\"name\": \"tooltip\", \"keywords\": [\"tooltip UI definition\", \"tooltip vs popover translation\"]}, {\"name\": \"caret\", \"keywords\": [\"caret UI symbol meaning\", \"caret vs cursor vs chevron\", \"chart marker\"]}, {\"name\": \"bar (the longest bar)\", \"keywords\": [\"bar chart bar definition\", \"horizontal bar chart reading\", \"bar length meaning\"]}, {\"name\": \"the split\", \"keywords\": [\"split meaning breakdown\", \"cost breakdown tooltip\", \"split vs division translation\"]}, {\"name\": \"time range / broker filter\", \"keywords\": [\"time range filter UI\", \"date range selector dashboard\", \"broker filter dropdown\"]}, {\"name\": \"the big number\", \"keywords\": [\"big number UI design\", \"hero metric primary figure dashboard\"]}, {\"name\": \"at a glance\", \"keywords\": [\"at a glance idiom meaning\", \"at a glance translation equivalent\"]}, {\"name\": \"how well did my money work\", \"keywords\": [\"figurative money working for you\", \"investment performance phrasing\"]}, {\"name\": \"today's pulse\", \"keywords\": [\"pulse metaphor meaning\", \"today's pulse idiom\", \"daily snapshot finance\"]}, {\"name\": \"Green is a gain, red a loss\", \"keywords\": [\"stock market color convention green red\", \"red means gain in China\", \"color semantics finance\"]}, {\"name\": \"Favorable timing / Unfavorable timing / Neutral timing\", \"keywords\": [\"favorable timing investment label\", \"timing effect categories\", \"neutral timing meaning\"]}, {\"name\": \"a sale for nothing\", \"keywords\": [\"sale with zero proceeds\", \"dispose for no consideration\", \"figurative for nothing\"]}, {\"name\": \"your loss shrank\", \"keywords\": [\"loss narrowed meaning\", \"loss decreased phrasing finance\"]}, {\"name\": \"a day without a market\", \"keywords\": [\"non-trading day definition\", \"market closed day weekend prices\", \"market holiday\"]}, {\"name\": \"taken without its sign\", \"keywords\": [\"absolute value mathematical definition\", \"sign of a number\", \"unsigned value\"]}, {\"name\": \"pp (percentage points)\", \"keywords\": [\"percentage points vs percent\", \"pp abbreviation finance\", \"basis points difference\"]}, {\"name\": \"— (em dash placeholder for no value)\", \"keywords\": [\"em dash placeholder no data\", \"dash meaning not available UI\", \"missing value representation\"]}, {\"name\": \"grey `—`\", \"keywords\": [\"greyed out disabled UI\", \"muted color meaning unavailable\"]}, {\"name\": \"in brackets\", \"keywords\": [\"in brackets meaning parentheses\", \"bracketed figure convention\"]}, {\"name\": \"bank statement\", \"keywords\": [\"bank statement definition\", \"securities value on bank statement\", \"custody statement\"]}, {\"name\": \"as for a fund manager and an investor\", \"keywords\": [\"fund manager vs investor analogy\", \"TWRR MWRR analogy\", \"manager investor perspective\"]}, {\"name\": \"Growth chart / P&amp;L view\", \"keywords\": [\"growth chart portfolio tracker\", \"P&L view chart mode\", \"chart view naming consistency\"]}, {\"name\": \"period ends on your portfolio's first day\", \"keywords\": [\"first day of portfolio inception\", \"period start equals inception edge case\"]}, {\"name\": \"brokers outside your selection\", \"keywords\": [\"selection meaning selected subset filter\", \"selected brokers scope\"]}, {\"name\": \"portfolio engine\", \"keywords\": [\"portfolio engine architecture\", \"performance calculation engine\", \"portfolio accounting engine\"]}, {\"name\": \"performance metrics / technical analysis (doc section names)\", \"keywords\": [\"performance metrics documentation section\", \"technical analysis finance docs\", \"section title consistency\"]}, {\"name\": \"ETF, USD, EUR, NAV, ROI, TWRR, MWRR, P2P, FX\", \"keywords\": [\"financial acronyms keep in English\", \"standard finance abbreviations localization\"]}]",
@@ -6458,7 +6470,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Mandatory glossary mapping — card → scheda.** The translation consistently leaves “card” in human-readable text. Replace all visible occurrences: `KPI Cards` / `Card KPI` → `Schede KPI`; `Card 1/2/3` → `Scheda 1/2/3`; `le tre card` → `le tre schede`; `una card` → `una scheda`; `la card **P&L del periodo**` → `la scheda **P&L periodo**`; `nella Card 1` → `nella Scheda 1`; `delle card` → `delle schede`; alt texts likewise (`Panoramica delle schede KPI`, `Scheda P&L periodo`, `Scheda Rendimenti`, `Scheda Patrimonio netto`). Do **not** change CSS classes such as `kpi-card-crop-container` or anchor IDs such as `#card-1-period-pl`.\n\n- **Mandatory glossary mapping — period P&L → P&L periodo.** Replace `P&L del periodo` with `P&L periodo` in all visible labels, headings and link texts: `## 📉 Card 1 — P&L del periodo` → `## 📉 Scheda 1 — P&L periodo`; TOC link `[Card 1 — P&L del periodo]` → `[Scheda 1 — P&L periodo]`; bold metric `**P&L del periodo**` → `**P&L periodo**`; link label `[P&L del periodo]` → `[P&L periodo]`.\n\n- **Mandatory glossary mapping — deposited capital → capitale versato; deposit → deposito.** The translation uses `Capitale depositato` for the metric and `versamento/i` for ordinary deposits. Correct examples: `Capitale depositato (periodo)` → `Capitale versato (periodo)`; `Capitale depositato e P&L totale` → `Capitale versato e P&L totale`; `il Capitale depositato (periodo)` → `il capitale versato (periodo)`; `un versamento o un prelievo` → `un deposito o un prelievo`; `più i versamenti e meno i prelievi` → `più i depositi e meno i prelievi`; `primo versamento` → `primo deposito`; `timing dei tuoi versamenti` → `timing dei tuoi depositi`; `versamenti meno prelievi` → `depositi meno prelievi`; `ogni versamento meno ogni prelievo` → `ogni deposito meno ogni prelievo`; `tendevi a versare` → `tendevi a depositare`. This also avoids conflating “deposit” with “new contribution”, which the glossary maps to `nuovo versamento`.\n\n- **Mandatory glossary mapping — purchase cost → valore di acquisto.** Change `**Costo di acquisto**` → `**Valore di acquisto**`; `un costo di acquisto incompleto` → `un valore di acquisto incompleto`; `più il costo di acquisto dei titoli` → `più il valore di acquisto dei titoli`. The prose “quanto ti sono costate le posizioni” can remain, but the term label must be `Valore di acquisto`.\n\n- **Mandatory glossary mapping — FX on cash → effetto cambio sulla liquidità.** In `compare lì come **FX sulla liquidità**`, replace with `compare lì come **Effetto cambio sulla liquidità**`.\n\n- **Mandatory glossary mapping — weighted average cost → prezzo medio di carico (PMC).** The link text `[Costo medio ponderato](...)` should be `[Prezzo medio di carico (PMC)](...)`. The surrounding `costo medio delle unità vendute` can remain if it translates the generic “average cost”, but the glossary term link must use PMC.\n\n- **Mandatory glossary mapping — viewer → visualizzatore; editor → editor.** In `I broker in cui sei Editor o Viewer...`, use `I broker in cui sei editor o visualizzatore...` (capitalisation may follow UI style if needed, but the glossary term must be `visualizzatore`, not `Viewer`).\n\n- **Mandatory glossary mapping — asset → asset.** In `ad esempio attività che si spostano tra due tuoi broker`, replace `attività` with `asset`: `ad esempio asset che si spostano tra due tuoi broker`.\n\n- **Grammar correction.** `Lo risponde la card **Patrimonio netto**, liquidità inclusa.` is ungrammatical. Use `Risponde la scheda **Patrimonio netto**, liquidità inclusa.` or `A questa domanda risponde la scheda **Patrimonio netto**, liquidità inclusa.` Also apply the card→scheda fix here.\n\n- **Minor semantic clarification.** `Il piccolo cursore su una barra` renders “caret” as `cursore`, which can be confused with the mouse cursor. Prefer `Il piccolo indicatore sulla barra` or `Il piccolo marcatore sulla barra`. In the same sentence, `il Valore di mercato diventa rosso quando termina al di sotto di quel valore` is ambiguous; prefer `il valore di mercato diventa rosso quando il suo valore finale è inferiore a quello iniziale`.\n\n- **Minor style/readability.** `per il polso di oggi` is a literal rendering of “for today’s pulse” and sounds unnatural; prefer `per la situazione odierna` or `per la variazione odierna`. Repeated `passaci sopra il mouse` can be standardised to `passa il mouse sopra` / `passa il mouse su ...`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1211.8
+        "elapsed_s": 1211.8,
+        "stamped_at": "2026-11-09T08:52:49.360329+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-11-05T11:22:08.755783+00:00",
@@ -6469,7 +6483,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Terminologie obligatoire — Period P&amp;L** : remplacer toutes les occurrences de « P&amp;L de la période » par « P&amp;L période ». Exemples à corriger : « Carte 1 — P&amp;L de la période », « **P&amp;L de la période** — le grand chiffre », « La carte **P&amp;L de la période** répond », ainsi que les liens et le texte `alt` « Carte P&amp;L de la période ».\n\n2. **Terminologie obligatoire — Unrealized change** : le glossaire impose « variation non réalisée », pas « variation latente ». Corriger notamment : « Variation latente par devise » → « Variation non réalisée par devise » ; « Survolez **Variation latente** » → « Survolez **Variation non réalisée** » ; « totalisent exactement la variation latente » → « totalisent exactement la variation non réalisée » ; « Théorie : Variation latente par devise » → « Théorie : Variation non réalisée par devise ». Garder « plus ou moins-value latente » lorsqu’il s’agit de « unrealized gain or loss ».\n\n3. **Terminologie obligatoire — Weighted Average Cost** : remplacer « Coût moyen pondéré » par « Prix de revient unitaire (PRU) », conformément au glossaire.\n\n4. **Terminologie obligatoire — FX on cash** : remplacer « **FX sur les liquidités** » par « **Effet de change sur les liquidités** ».\n\n5. **Terminologie obligatoire — Timing effect** : remplacer « Effet de timing » / « effet de timing » par « Effet timing » / « effet timing ». Exemples : « **Effet de timing** — le grand chiffre », « L’effet de timing a besoin du TWRR », « Le pourcentage sous l’effet de timing ».\n\n6. **Terminologie obligatoire — Deposited Capital** : remplacer « Capital déposé » par « Capital versé ». Corriger : « Capital déposé (période) » → « Capital versé (période) » ; « Capital déposé et P&amp;L total » → « Capital versé et P&amp;L total » ; « le Capital déposé (période) » → « le Capital versé (période) ». Dans la puce « Liquidités », « le capital que vous avez déposé » devrait aussi devenir « le capital que vous avez versé ».\n\n7. **Terminologie obligatoire — Tax / taxes** : remplacer « taxes » par « impôts » lorsque le terme source est « tax/taxes ». Corriger : « **Frais et taxes** » → « **Frais et impôts** » ; « commissions et taxes enregistrées » → « commissions et impôts enregistrés » ; le lien « [Frais et taxes] » → « [Frais et impôt] ».\n\n8. **Libellés de formules restés en anglais** : les blocs mathématiques contiennent encore des libellés anglais. Traduire au minimum : `Net flows` → `Flux nets` ; `end`/`start` → `fin`/`début` ; `today`/`yesterday` → `aujourd’hui`/`hier` ; `percentage` → `pourcentage` ; `Net Worth` → `Valeur nette` ; `Capital put in since the start` → `Capital versé depuis le début` ; `cumulative` → `cumulé`. La formule de la Carte 3 doit par exemple devenir : `P&amp;L total = Valeur nette - Capital versé depuis le début`.\n\n9. **Formatage numérique français incohérent** : plusieurs exemples conservent le point décimal et le format anglais. Uniformiser en français : `+91.31 € (+16.36%)` → `+91,31 € (+16,36 %)` ; `-558.10 €` → `-558,10 €` ; `+12,450.30 (+24.85%)` → `+12 450,30 (+24,85 %)` ; `€0.75` → `0,75 €` ; `+€37.50` → `+37,50 €` ; `0.00%` → `0,00 %` ; `+0.35%` → `+0,35 %`.\n\n10. **Grammaire — coordination fautive** : « il n’a ni plus ni moins-value latente » est ambigu et incorrect. Écrire : « il ne présente ni plus-value ni moins-value latente et n’ajoute rien à aucune ligne. »\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1131.9
+        "elapsed_s": 1131.9,
+        "stamped_at": "2026-11-09T08:52:49.360329+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-11-05T11:22:08.755803+00:00",
@@ -6480,12 +6496,14 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Obligatorio — `dashboard` debe traducirse como `panel`.** La traducción deja “Dashboard” sin traducir en varios lugares: “del Dashboard”, “El Dashboard suma”, “en un dashboard en euros” y “del Dashboard” en el enlace final. Corregir a: “del panel”, “El panel suma”, “en un panel en euros” y “Volver al resumen del panel”. No modificar anclas como `#dashboard`.\n\n2. **Obligatorio — `overview` debe traducirse como `resumen`, no “descripción general”.** Ocurrencias:\n   - `alt=\"Descripción general de las tarjetas KPI\"` → `alt=\"Resumen de las tarjetas KPI\"`\n   - “Descripción general de las métricas de rendimiento” → “Resumen de métricas de rendimiento”\n   - “Volver a la descripción general del Dashboard” → “Volver al resumen del panel”\n\n3. **Obligatorio — `period P&L` debe ser `P&L período`.** Sustituir todas las apariciones de “P&L del período” por “P&L período”, incluidos el título de la tarjeta, el enlace superior, la etiqueta en negrita y los enlaces de métricas:\n   - “Tarjeta 1 — P&L del período” → “Tarjeta 1 — P&L período”\n   - “La tarjeta **P&L del período** responde…” → “La tarjeta **P&L período** responde…”\n   - “**P&L del período** — la cifra grande…” → “**P&L período** — la cifra grande…”\n   - “→ [P&L del período](…)” → “→ [P&L período](…)”\n\n4. **Obligatorio — `timing effect` debe ser `efecto timing`.** Corregir “Efecto del timing” y “efecto del timing”:\n   - “**Efecto del timing** — la cifra grande…” → “**Efecto timing** — la cifra grande…”\n   - “El efecto del timing necesita tanto TWRR como MWRR” → “El efecto timing necesita tanto TWRR como MWRR”\n   - “El porcentaje bajo el efecto del timing — cómo se calcula” → “El porcentaje bajo el efecto timing — cómo se calcula”\n\n5. **Obligatorio — `viewer` debe ser `lector`.** “Los brókeres en los que eres Editor o Visualizador…” debe ser “Los brókeres en los que eres Editor o Lector…”.\n\n6. **Obligatorio — `weighted average cost` debe ser `precio medio de compra (PMC)`.** El texto del enlace “Coste medio ponderado” debe cambiarse por “Precio medio de compra (PMC)”.\n\n7. **Obligatorio — `FX on cash` debe ser `efecto del tipo de cambio sobre el efectivo`.** La fila traducida como “**FX en efectivo**” debe ser “**Efecto del tipo de cambio sobre el efectivo**”.\n\n8. **Corrección gramatical — “siguen al cambio” no es idiomático aquí.** En “El signo y el color siguen al cambio” y “Su signo y color siguen al cambio”, usar “siguen el cambio” o “reflejan el cambio”.\n\n9. **Corrección de preposición — “termina el primer día” debe ser “termina en el primer día”.** Aparece dos veces: “cuando el período termina el primer día de tu cartera”. Debe leerse “cuando el período termina en el primer día de tu cartera”.\n\n10. **Mejora de claridad semántica.** “una venta por nada” es ambiguo; en el contexto de una venta sin ingresos, conviene “una venta a precio cero”. Asimismo, “el dinero que moviste tú mismo hacia dentro o hacia fuera” se entiende mejor como “el dinero que aportaste o retiraste tú mismo”.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 642.8
+        "elapsed_s": 642.8,
+        "stamped_at": "2026-11-09T08:52:49.360329+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
   "user/dashboard/charts.en.md": {
-    "md5": "d3d17aa532d4464ff78bb555ae896630",
+    "md5": "e880bf504141633e75585f56eac7d108",
     "langs_done": [
       "es",
       "fr",
@@ -6505,7 +6523,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1441.2,
-        "stamped_at": "2026-11-06T09:49:40.331447+00:00",
+        "stamped_at": "2026-11-09T11:24:34.470378+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6518,7 +6536,7 @@
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=162, translated=164 (Δ+2)\n  L3: src=2 trn=0\n    EN: Below the KPI cards, the **Portfolio Growth** chart and the **Asset Allocation** panel show where your portfolio has bee\n    TR: \n  L4: src=0 trn=2\n    EN: \n    TR: Sous les cartes KPI, le graphique **Croissance du portefeuille** et le panneau **Répartition des actifs** montrent l'his\n  L9: src=1 trn=0\n    EN: The growth chart shows how your portfolio evolved over the selected period: the **Abs / % / P&L** toggle in its top-righ\n    TR: \n  L10: src=0 trn=1\n    EN: \n    TR: Le graphique de croissance montre l'évolution de votre portefeuille sur la période sélectionnée : le sélecteur **Abs / %\n  L11: src=3 trn=0\n    EN: On a long period the chart groups the days to stay readable: into weeks, then months, and, for a history of many decades\n    TR: \n  L12: src=0 trn=3\n    EN: \n    TR: Sur une longue période, le graphique regroupe les jours pour rester lisible : en semaines, puis en mois et, pour un hist\n  L15: src=6 trn=0\n    EN: Every chart joins its points in one of three shapes: **Segments** (the default, a straight line between two points), **S\n    TR: \n  L16: src=0 trn=6\n    EN: \n    TR: Chaque graphique relie ses points selon l'une de trois formes : **Segments** (par défaut, une ligne droite entre deux po\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 📊 Charts\n    ## 📈 Portfolio Growth Chart {: #portfolio-growth-chart }\n      ### 〰️ How the lines are drawn {: #line-shape }\n      ### 💶 Abs — absolute values\n      ### 📉 % — rate of return\n      ### 💰 P&L — the money you made {: #pnl-mode }\n        #### Line — accumulated P&L {: #pnl-line }\n        #### Candles — the swing inside the period {: #pnl-candles }\n        #### Income — the cash that actually moved {: #pnl-income }\n        #### Candle width — 1D to 1Y {: #pnl-width }\n    ## 🥧 Allocation Panel {: #allocation-panel }\n      ### 🗂️ Three dimensions\n      ### 🕰️ Now and History\n      ### 🧩 By Asset {: #allocation-by-asset }\n      ### 🍩 Two rings by type {: #allocation-type-rings }\n      ### 💵 Cash as Liquidity\n      ### ➖ Negative cash {: #allocation-negative-cash }\n    ## 🔗 Related",
         "structural_issues": 1,
         "elapsed_s": 1550.9,
-        "stamped_at": "2026-11-06T09:49:40.331447+00:00",
+        "stamped_at": "2026-11-09T11:24:34.470378+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6533,7 +6551,7 @@
         "elapsed_s": 1590.2,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=162, translated=163 (Δ+1)\n  L46: src=2 trn=3\n    EN: **Assets valued at their purchase price**, such as P2P loans with no live market price, keep NAV close to Purchase Cost,\n    TR: **Los activos valorados a su precio de compra**, como los préstamos P2P sin precio de mercado en vivo, mantienen el NAV \n\nSOURCE_OUTLINE (for reference):\n  # 📊 Charts\n    ## 📈 Portfolio Growth Chart {: #portfolio-growth-chart }\n      ### 〰️ How the lines are drawn {: #line-shape }\n      ### 💶 Abs — absolute values\n      ### 📉 % — rate of return\n      ### 💰 P&L — the money you made {: #pnl-mode }\n        #### Line — accumulated P&L {: #pnl-line }\n        #### Candles — the swing inside the period {: #pnl-candles }\n        #### Income — the cash that actually moved {: #pnl-income }\n        #### Candle width — 1D to 1Y {: #pnl-width }\n    ## 🥧 Allocation Panel {: #allocation-panel }\n      ### 🗂️ Three dimensions\n      ### 🕰️ Now and History\n      ### 🧩 By Asset {: #allocation-by-asset }\n      ### 🍩 Two rings by type {: #allocation-type-rings }\n      ### 💵 Cash as Liquidity\n      ### ➖ Negative cash {: #allocation-negative-cash }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-06T09:49:40.331447+00:00",
+        "stamped_at": "2026-11-09T11:24:34.470378+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -9018,11 +9036,11 @@
     }
   },
   "user/settings/profile.en.md": {
-    "md5": "86a4e74c11cb4e1104a976e522cc6458",
+    "md5": "53f3dbc76b453ba6bbdf6321dbb21456",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-11-05T11:25:03.940471+00:00",
     "analysis": "[{\"name\": \"identity\", \"keywords\": [\"LibreFolio user identity account profile authentication login documentation\"]}, {\"name\": \"Display choices\", \"keywords\": [\"LibreFolio display preferences language currency theme UI settings\"]}, {\"name\": \"Preferences\", \"keywords\": [\"LibreFolio user preferences settings page UI label\"]}, {\"name\": \"instance-wide options / instance\", \"keywords\": [\"LibreFolio self-hosted instance deployment global settings administrator\"]}, {\"name\": \"Settings › Administration › Global Settings\", \"keywords\": [\"LibreFolio settings administration global settings navigation breadcrumb admin UI\"]}, {\"name\": \"Edit Lock\", \"keywords\": [\"LibreFolio edit lock profile tab read-only unlock UI security\"]}, {\"name\": \"read-only\", \"keywords\": [\"software UI read-only field disabled input form\"]}, {\"name\": \"confirmation dialog\", \"keywords\": [\"UI confirmation dialog discard changes modal prompt\"]}, {\"name\": \"discard them / discard changes\", \"keywords\": [\"UI discard unsaved changes confirmation dialog\"]}, {\"name\": \"save all / undo all\", \"keywords\": [\"UI bulk actions save all undo all form buttons\"]}, {\"name\": \"Hover\", \"keywords\": [\"UI hover mouse pointer interaction avatar overlay\"]}, {\"name\": \"camera overlay\", \"keywords\": [\"UI camera overlay avatar image upload hover control\"]}, {\"name\": \"image picker\", \"keywords\": [\"UI image picker file selection avatar upload dialog\"]}, {\"name\": \"Files library\", \"keywords\": [\"LibreFolio Files library file manager shared personal images\"]}, {\"name\": \"shared image / shared or personal\", \"keywords\": [\"LibreFolio file visibility shared personal image avatar permissions\"]}, {\"name\": \"Image Crop tool\", \"keywords\": [\"LibreFolio image crop tool avatar preset UI utility\"]}, {\"name\": \"avatar preset\", \"keywords\": [\"image crop preset avatar square crop circular preview\"]}, {\"name\": \"square crop, circular preview\", \"keywords\": [\"image editor crop preview avatar UI terminology\"]}, {\"name\": \"sidebar\", \"keywords\": [\"application sidebar navigation UI layout LibreFolio\"]}, {\"name\": \"broker sharing\", \"keywords\": [\"LibreFolio broker sharing access collaborators permissions financial\"]}, {\"name\": \"collaborator lists\", \"keywords\": [\"LibreFolio collaborators shared access user lists broker\"]}, {\"name\": \"Administrator(s)\", \"keywords\": [\"LibreFolio administrator admin user role permissions settings\"]}, {\"name\": \"Welcome page / first-login Welcome setup\", \"keywords\": [\"LibreFolio welcome setup onboarding first login UI\"]}, {\"name\": \"Username\", \"keywords\": [\"authentication username login identifier account UI field\"]}, {\"name\": \"login credentials\", \"keywords\": [\"authentication login credentials username password sign in\"]}, {\"name\": \"Account Created\", \"keywords\": [\"user account registration date profile field read-only UI label\"]}, {\"name\": \"Current Password\", \"keywords\": [\"authentication current password verification email change form field\"]}, {\"name\": \"signed out / sign in / log in\", \"keywords\": [\"authentication session logout login sign in consistency UI\"]}, {\"name\": \"password-reset link\", \"keywords\": [\"authentication password reset link account recovery email security\"]}, {\"name\": \"wrong password / Current password is incorrect\", \"keywords\": [\"authentication error message wrong password validation UI\"]}, {\"name\": \"Too many wrong passwords: wait a few minutes and try again.\", \"keywords\": [\"authentication rate limit lockout error message wrong password UI\"]}, {\"name\": \"disabled\", \"keywords\": [\"UI disabled button form field state save all\"]}, {\"name\": \"verified\", \"keywords\": [\"email verification account status verified authentication UI\"]}, {\"name\": \"capitals (Only the capitals changed / even with other capitals)\", \"keywords\": [\"uppercase letters email case-insensitive comparison capitals authentication\"]}, {\"name\": \"accented letters\", \"keywords\": [\"Unicode letters accents email address matching internationalization\"]}, {\"name\": \"Only the letters A to Z are matched this way\", \"keywords\": [\"case-insensitive matching ASCII email normalization uppercase lowercase\"]}, {\"name\": \"session cookie\", \"keywords\": [\"web security session cookie authentication stolen session\"]}, {\"name\": \"open session\", \"keywords\": [\"authentication open session logged-in browser security\"]}, {\"name\": \"with a moment inside your open session\", \"keywords\": [\"idiom account security open session stolen cookie unauthorized access\"]}, {\"name\": \"keep the account for good\", \"keywords\": [\"idiom permanent account takeover security email change\"]}, {\"name\": \"account can be recovered\", \"keywords\": [\"account recovery password reset email authentication security\"]}, {\"name\": \"Why your password\", \"keywords\": [\"LibreFolio info box title password verification security explanation\"]}, {\"name\": \"Change Password\", \"keywords\": [\"LibreFolio change password UI button security modal\"]}, {\"name\": \"modal\", \"keywords\": [\"UI modal dialog change password delete account\"]}, {\"name\": \"checklist\", \"keywords\": [\"password checklist validation rules UI dynamic feedback\"]}, {\"name\": \"uppercase letter / lowercase letter\", \"keywords\": [\"password policy uppercase lowercase Unicode letters\"]}, {\"name\": \"number / digit\", \"keywords\": [\"password policy number digit validation rule\"]}, {\"name\": \"special character\", \"keywords\": [\"password policy special character symbol punctuation\"]}, {\"name\": \"alphabet\", \"keywords\": [\"Unicode alphabet letters digits password validation internationalization\"]}, {\"name\": \"server\", \"keywords\": [\"server-side validation backend password rules LibreFolio\"]}, {\"name\": \"Password does not meet security requirements\", \"keywords\": [\"password validation error message security requirements UI\"]}, {\"name\": \"Email refused for another reason\", \"keywords\": [\"email change error message rejected address account conflict UI\"]}, {\"name\": \"The username cannot contain @: to sign in, you can always use your email address.\", \"keywords\": [\"username validation error message at sign email login UI\"]}, {\"name\": \"signs such as . _ - +\", \"keywords\": [\"username allowed symbols punctuation special characters signs translation\"]}, {\"name\": \"reads anything with an @ as an email address\", \"keywords\": [\"login identifier parsing at sign email address username authentication\"]}, {\"name\": \"old mailbox / waiting in your old mailbox\", \"keywords\": [\"email inbox old address password reset notification\"]}, {\"name\": \"It shows nothing of the new address\", \"keywords\": [\"email change notification privacy old address security message\"]}, {\"name\": \"Nothing goes to the new address.\", \"keywords\": [\"email notification new address privacy security message\"]}, {\"name\": \"your current email comes back\", \"keywords\": [\"UI form revert previous email value error message\"]}, {\"name\": \"Delete Account\", \"keywords\": [\"LibreFolio delete account UI button irreversible security\"]}, {\"name\": \"Delete Permanently\", \"keywords\": [\"LibreFolio delete account confirmation button permanent action\"]}, {\"name\": \"what your deletion would take with it\", \"keywords\": [\"idiom account deletion consequences brokers transactions files warning\"]}, {\"name\": \"Owner (only Owner)\", \"keywords\": [\"LibreFolio broker role owner permissions sharing\"]}, {\"name\": \"broker\", \"keywords\": [\"financial broker brokerage account LibreFolio portfolio tracker domain term\"]}, {\"name\": \"transactions\", \"keywords\": [\"financial transactions portfolio broker operations accounting\"]}, {\"name\": \"imported report files\", \"keywords\": [\"broker report import files transactions financial statements\"]}, {\"name\": \"leaving a shared broker\", \"keywords\": [\"LibreFolio shared broker leave revoke access collaborator permissions\"]}, {\"name\": \"shared brokers\", \"keywords\": [\"LibreFolio shared broker access collaborators permissions others\"]}, {\"name\": \"access (only the access goes / only your access is removed)\", \"keywords\": [\"permissions access removal shared broker user access rights\"]}, {\"name\": \"role (your role on it)\", \"keywords\": [\"broker role permissions owner collaborator LibreFolio\"]}, {\"name\": \"halves of transfers\", \"keywords\": [\"financial transfer paired transactions double-entry broker transfer halves\"]}, {\"name\": \"received transfer / transfer sent\", \"keywords\": [\"financial transfer received sent broker transaction pair\"]}, {\"name\": \"adjustment at its cost\", \"keywords\": [\"financial adjustment cost basis broker transfer accounting\"]}, {\"name\": \"assets (takes the assets out)\", \"keywords\": [\"financial assets securities portfolio broker holdings domain term\"]}, {\"name\": \"without a value\", \"keywords\": [\"financial transaction value missing cost basis accounting adjustment\"]}, {\"name\": \"cost counts as a realized loss\", \"keywords\": [\"realized loss cost basis financial accounting broker adjustment\"]}, {\"name\": \"No broker is deleted\", \"keywords\": [\"LibreFolio delete account dialog message broker deletion none\"]}, {\"name\": \"active administrator\", \"keywords\": [\"LibreFolio administrator role active status instance user management\"]}, {\"name\": \"Users tab\", \"keywords\": [\"LibreFolio administration users tab user management UI\"]}, {\"name\": \"base currency\", \"keywords\": [\"LibreFolio financial base currency reporting currency preferences\"]}, {\"name\": \"theme\", \"keywords\": [\"LibreFolio UI theme appearance preferences\"]}, {\"name\": \"plugins\", \"keywords\": [\"LibreFolio software plugins extensions about page\"]}, {\"name\": \"changelog\", \"keywords\": [\"LibreFolio software changelog release notes version history\"]}, {\"name\": \"LibreFolio\", \"keywords\": [\"LibreFolio open-source self-hosted financial portfolio tracker brand name\"]}]",
@@ -9037,7 +9055,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n**1. [STRUCTURAL + SEMANTIC — critical] The entire «Cambiare la propria email» bullet list was rewritten and no longer matches the source.**\nThe source contains six bullets after the intro paragraph, in this order: *Wrong password*, *Wrong password, again and again*, *Email refused for another reason*, *Email saved*, *A notice to your old address*, *Only the capitals changed*. The translation keeps only a mutilated version of the last three and replaces the first three with invented items. This causes the reported `BULLET_LIST` Δ-1 and `BOLD_MARKERS` Δ-2.\n\nMissing content (must be restored):\n- the whole *Wrong password* bullet (*Secondo la password errata…*)\n- the whole *Wrong password, again and again* bullet (the 10-in-15-minutes lockout)\n- the whole *Email refused for another reason* bullet (duplicate email/username, capitals)\n\nInvented content (must be removed or replaced with the source content):\n- «**La modifica viene salvata subito**: la scheda resta sbloccata, non serve un clic aggiuntivo.» — no such sentence in the source.\n- «**Se la riporti all'indirizzo precedente** prima di uscire dalla sessione, il vecchio indirizzo riceve un altro avviso.» — not in the source.\n- «conserva quel messaggio, è la prova che la modifica non è stata richiesta da te» — not in the source.\n\n**2. [SEMANTIC — factual contradiction] The notice bullet says the opposite of the source.**\nTranslation: «**Viene inviato un avviso al tuo vecchio indirizzo**… **Ti comunica anche il nuovo indirizzo**…»\nSource: «**A notice to your old address**: … **It shows nothing of the new address**, and says what to do if you did not make the change. Nothing goes to the new address.»\nThis is a security-relevant factual error. Correct to something like:\n«**Un avviso al tuo vecchio indirizzo**: quando la tua istanza può inviare email, LibreFolio scrive all'indirizzo che avevi prima, per informarti della modifica. **Non mostra nulla del nuovo indirizzo** e dice cosa fare se non hai effettuato tu la modifica. Al nuovo indirizzo non viene inviato nulla.»\n\n**3. [SEMANTIC] The «Email saved» bullet lost two of its three facts.**\nTranslation: «**Ogni altro dispositivo viene disconnesso** e resta disconnesso.»\nSource: «**Email saved**: **you stay signed in on this device**. Every other device signed in to your account is signed out, **and needs to sign in again**. Any password-reset link sent to you before the change stops working, even one still waiting in your old mailbox.»\n\"resta disconnesso\" also shifts the meaning from «deve accedere di nuovo». Correct to:\n«**Email salvata**: resti connesso su questo dispositivo. Ogni altro dispositivo connesso al tuo account viene disconnesso e deve accedere di nuovo. Qualsiasi link per reimpostare la password ricevuto prima della modifica smette di funzionare, anche uno ancora in attesa nella tua vecchia casella di posta.»\n\n**4. [STRUCTURAL — missing text] The italic reminder after the «Current Password» field is missing.**\nSource: «…a **Current Password** field appears under the email's description, **with a reminder: *To change your email, enter your current password. Your other devices will be signed out.*** The email's save button, and **save all**, stay disabled until you type it.»\nThe translation drops the whole italic reminder. Restore it, e.g.:\n«Non appena l'email nel campo è diversa da quella attuale, sotto la descrizione dell'email compare un campo **Password attuale**, con un promemoria: *Per cambiare la tua email, inserisci la password attuale. Gli altri tuoi dispositivi verranno disconnessi.* Il pulsante di salvataggio dell'email, e **salva tutto**, restano disabilitati finché non la digiti.»\nAlso note the bold markers: in the source only **save all** is bold; in the translation both **Salva** and **Salva tutto** are bold.\n\n**5. [STRUCTURAL — LINK_URLS] The added link `#why-your-password` does not exist in the source.**\nTranslation: «come protezione: vedi [perché la tua password](#why-your-password)».\nThe source admonition `!!! info \"Why your password\"` has no explicit `{: #why-your-password }` anchor, and the link itself is not present in the source. Remove the link (and the sentence fragment that introduces it), restoring the plain source sentence. This also resolves the reported `LINK_URLS` and `LINK_COUNT` Δ+1.\n\n**6. [TERMINOLOGY — glossary, mandatory] «welcome setup» must be «configurazione iniziale».**\nTranslation: «durante la **[procedura di benvenuto al primo accesso](../getting-started.md#welcome-setup)**».\nGlossary mapping: `welcome setup → configurazione iniziale`. Correct to:\n«durante la **[configurazione iniziale al primo accesso](../getting-started.md#welcome-setup)**».\n(The admonition title «Impostabile anche dalla pagina di benvenuto» is fine, since it translates *Welcome page*, not the glossary term.)\n\n**7. [GRAMMAR/STYLE] Small accuracy fixes.**\n- «Poiché gli altri utenti vedono il tuo avatar, la sua immagine è condivisa» → source is «its picture is **shared**»; keep the bold: «la sua immagine è **condivisa**».\n- «un'immagine che carichi qui viene memorizzata come condivisa» — acceptable, but «viene memorizzata come condivisa» is slightly loose for «is stored shared»; consider «viene salvata come condivisa» for consistency with the rest of the page (*salvato*, *salva*).\n- «scegli un'immagine esistente dalla [libreria File]» → «dalla [libreria dei file]» reads more naturally in Italian (not a glossary term, but a stylistic improvement).\n- Heading «## ✏️ Nome utente, email, account creato» correctly mirrors the source; only verify that the corresponding bold labels in the bullets («**Nome utente**», «**Email**», «**Account creato**») stay capitalised exactly as they appear in the UI.\n\n**8. [CONSISTENCY] Verify that the restored bullets use the same UI strings as the rest of the page.**\nThe deleted bullets quote UI messages in italics (*Current password is incorrect*, *Too many wrong passwords: wait a few minutes and try again.*). When restoring them, reuse the exact Italian wording already used in the «Cambia password» section (*Troppe password errate: attendi qualche minuto e riprova.*, etc.) so the same quote does not appear in two different translations on the same page.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 4\n\n1. LINK_URLS: URL set differs.\n  Added in translation:   ['#why-your-password']\n2. LINK_COUNT: source=16, translated=17 (Δ+1)\n  L7: src=2 trn=0\n    EN: The **Profile** tab manages your **identity** in LibreFolio — who you are and how you log in. Display choices (language,\n    TR: \n  L8: src=0 trn=2\n    EN: \n    TR: La scheda **Profilo** gestisce la tua **identità** in LibreFolio — chi sei e come accedi. Le scelte di visualizzazione (\n  L17: src=2 trn=0\n    EN: Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image fro\n    TR: \n  L18: src=0 trn=2\n    EN: \n    TR: Passa il mouse sul tuo avatar (mentre la scheda è sbloccata) e fai clic sull'icona a forma di fotocamera 📷 sovrapposta p\n  L19: src=1 trn=0\n    EN: The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, an\n    TR: \n  L20: src=0 trn=1\n    EN: \n    TR: L'avatar viene salvato immediatamente ed è usato in tutta l'app ovunque venga mostrata la tua identità — barra laterale,\n  L21: src=1 trn=0\n    EN: Since the other users see your avatar, its picture is **shared**: an image you upload here is stored shared, and one of \n    TR: \n  L22: src=0 trn=1\n    EN: \n    TR: Poiché gli altri utenti vedono il tuo avatar, la sua immagine è condivisa: un'immagine che carichi qui viene memorizzata\n  … and more (showing first 8 mismatches)\n3. BULLET_LIST: source=15, translated=14 (Δ-1)\n  L30: src=0 trn=1\n    EN: ## ✏️ Username, Email, Account Created\n    TR: - **Nome utente** ed **Email** sono modificabili (è richiesta una scheda sbloccata). Le modifiche si applicano immediata\n  L31: src=0 trn=1\n    EN: \n    TR: - **Account creato** è un campo di sola lettura che mostra la data di registrazione.\n  L32: src=1 trn=0\n    EN: - **Username** and **Email** are editable (unlocked tab required). Changes apply to your login credentials straight away\n    TR: \n  L33: src=1 trn=0\n    EN: - **Account Created** is a read-only field showing your registration date.\n    TR: ### 📧 Cambiare la propria email {: #email-change }\n  L37: src=0 trn=1\n    EN: As soon as the email in the field is another address than your current one, a **Current Password** field appears under t\n    TR: - **Viene inviato un avviso al tuo vecchio indirizzo**, quello con cui accedi al tuo account, per informarti della modif\n  L38: src=0 trn=1\n    EN: \n    TR: - **Ogni altro dispositivo viene disconnesso** e resta disconnesso.\n  L42: src=1 trn=0\n    EN: - **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and ne\n    TR: \n  L43: src=1 trn=0\n    EN: - **A notice to your old address**: when your instance can send emails, LibreFolio writes to the address you had before,\n    TR: Cambiare solo il nome utente non richiede la password e non disconnette alcun dispositivo. Il nuovo nome utente non può \n  … and more (showing first 8 mismatches)\n4. BOLD_MARKERS: source=40, translated=38 (Δ-2)\n  L7: src=4 trn=0\n    EN: The **Profile** tab manages your **identity** in LibreFolio — who you are and how you log in. Display choices (language,\n    TR: \n  L8: src=0 trn=4\n    EN: \n    TR: La scheda **Profilo** gestisce la tua **identità** in LibreFolio — chi sei e come accedi. Le scelte di visualizzazione (\n  L11: src=2 trn=0\n    EN: The tab opens **locked**: fields are read-only until you click the ✏️ **pencil button** in the header. This prevents acc\n    TR: \n  L12: src=0 trn=2\n    EN: \n    TR: La scheda si apre **bloccata**: i campi sono di sola lettura finché non fai clic sul ✏️ **pulsante matita** nell'intesta\n  L13: src=4 trn=0\n    EN: While unlocked, every modified field shows its own **save** / **undo** buttons, and the header offers **save all** and *\n    TR: \n  L14: src=0 trn=4\n    EN: \n    TR: Mentre la scheda è sbloccata, ogni campo modificato mostra i propri pulsanti **salva** / **annulla**, e l'intestazione o\n  L17: src=1 trn=0\n    EN: Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image fro\n    TR: \n  L19: src=1 trn=0\n    EN: The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, an\n    TR: \n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 👤 Profile\n    ## 🔒 Edit Lock\n    ## 🖼️ Avatar\n    ## ✏️ Username, Email, Account Created\n      ### 📧 Changing Your Email {: #email-change }\n    ## 🔐 Security\n      ### 🔑 Change Password\n      ### 🗑️ Delete Account\n    ## 🔗 Related",
         "structural_issues": 4,
-        "elapsed_s": 883.4
+        "elapsed_s": 883.4,
+        "stamped_at": "2026-11-09T12:36:24.216527+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-11-05T11:25:03.940449+00:00",
@@ -9048,7 +9068,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminologie obligatoire — `welcome setup`** : le glossaire impose `configuration d'accueil`. Remplacer `[configuration de bienvenue à la première connexion](../getting-started.md#welcome-setup)` par `[configuration d'accueil à la première connexion](../getting-started.md#welcome-setup)`.\n- **Terminologie obligatoire — `overview`** : le glossaire impose `vue d'ensemble`. Remplacer `Aperçu des paramètres` par `Vue d'ensemble des paramètres` dans la section « Voir aussi ».\n- **Terminologie obligatoire — `modal`** : le glossaire impose `modale`. La traduction l'omet dans `la fenêtre indique` / `La fenêtre indique alors` et utilise `fenêtre modale` ailleurs. Utiliser `la modale indique` / `La modale indique alors`, et pour rester cohérent, `ouvre une modale qui exige :` plutôt que `ouvre une fenêtre modale exigeant :`.\n- **Exactitude sémantique — seuil de blocage** : `Après 10 en 15 minutes` (deux occurrences) est un calque ambigu de “After 10 in 15 minutes”. Remplacer par `Après 10 échecs en 15 minutes` ou `Au bout de 10 tentatives échouées en 15 minutes`.\n- **Exactitude sémantique — collision de casse** : `même avec d'autres majuscules` rend mal “even with other capitals” dans ce contexte. Utiliser `même avec une casse différente` ou `même si les majuscules diffèrent`.\n- **Clarté — déverrouillage de l'avatar** : `Survolez votre avatar (une fois déverrouillé)` peut laisser croire que l'avatar est déverrouillé. Écrire `Survolez votre avatar (une fois l'onglet déverrouillé)` ou `(tant que l'onglet est déverrouillé)`.\n- **Idiomaticité — note de bienvenue** : `c'est le même sélecteur, simplement atteint depuis un autre écran` est peu naturel. Utiliser `c'est le même sélecteur, auquel on accède simplement depuis un autre écran`. Remplacer aussi `plus tard depuis ici` par `plus tard depuis cet onglet` ou `plus tard d'ici`.\n- **Clarté — accès à la session** : `quelqu'un disposant d'un instant dans votre session ouverte` est ambigu. Utiliser `quelqu'un qui aurait un instant accès à votre session ouverte` ou `quelqu'un ayant brièvement accès à votre session ouverte`.\n- **Grammaire — introduction sur les courtiers** : `Vos courtiers suivent la même règle que [quitter un courtier partagé]` est bancal. Utiliser `la même règle que pour quitter un courtier partagé` ou `la même règle que lorsque vous quittez un courtier partagé`.\n- **Clarté — moitiés de transferts** : `sont les moitiés de transferts` est awkward. Utiliser `constituent l'une des moitiés de transferts` ou `sont l'une des moitiés de transferts`.\n- **Terminologie financière — perte réalisée** : `perte réalisée` est compréhensible mais moins précis que `moins-value réalisée`. Préférer `une moins-value réalisée` pour “a realized loss”.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 879.3
+        "elapsed_s": 879.3,
+        "stamped_at": "2026-11-09T12:36:24.216527+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-11-05T11:25:03.940471+00:00",
@@ -9061,7 +9083,9 @@
         "structural_issues": 0,
         "elapsed_s": 283.8,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 2\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['../brokers/sharing.md']\n2. LINK_COUNT: source=16, translated=15 (Δ-1)\n  L76: src=1 trn=0\n    EN: Your brokers follow the same rule as [leaving a shared broker](../brokers/sharing.md), and the dialog lists them before \n    TR: Tus brókers siguen la misma regla que la de salir de un bróker compartido, y el diálogo los enumera antes de que confirm\n\nSOURCE_OUTLINE (for reference):\n  # 👤 Profile\n    ## 🔒 Edit Lock\n    ## 🖼️ Avatar\n    ## ✏️ Username, Email, Account Created\n      ### 📧 Changing Your Email {: #email-change }\n    ## 🔐 Security\n      ### 🔑 Change Password\n      ### 🗑️ Delete Account\n    ## 🔗 Related",
-        "final_structural_issues": 2
+        "final_structural_issues": 2,
+        "stamped_at": "2026-11-09T12:36:24.216527+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -9112,7 +9136,7 @@
     }
   },
   "financial-theory/technical-analysis/risk-metrics/concentration.en.md": {
-    "md5": "2780625665edac2fb48486c74df40def",
+    "md5": "823b7f21898a6688e6a1a4ef9b520792",
     "langs_done": [
       "es",
       "fr",
@@ -9132,7 +9156,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.0,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T08:53:01.043989+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -9145,7 +9169,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 255.1,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T08:53:01.043989+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -9158,7 +9182,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 349.0,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T08:53:01.043989+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -9984,7 +10008,7 @@
     }
   },
   "user/dashboard/risk.en.md": {
-    "md5": "57746609bf65460954db1eba53f7a23d",
+    "md5": "8fd2483a927f8881aa52ff9da4a88dfa",
     "langs_done": [
       "es",
       "fr",
@@ -10004,7 +10028,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 121.4,
-        "stamped_at": "2026-11-06T09:37:01.452246+00:00",
+        "stamped_at": "2026-11-09T08:52:52.256058+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -10017,7 +10041,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 263.1,
-        "stamped_at": "2026-11-06T09:37:01.452246+00:00",
+        "stamped_at": "2026-11-09T08:52:52.256058+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -10030,7 +10054,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 147.7,
-        "stamped_at": "2026-11-06T09:37:01.452246+00:00",
+        "stamped_at": "2026-11-09T08:52:52.256058+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -11685,7 +11709,7 @@
     }
   },
   "admin/users.en.md": {
-    "md5": "1aa423c408f9ad27470a71d8282d4037",
+    "md5": "653a8c75100c40ed52486083363dbf45",
     "langs_done": [
       "es",
       "fr",
@@ -11705,7 +11729,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1653.8,
-        "stamped_at": "2026-11-07T22:40:58.890442+00:00",
+        "stamped_at": "2026-11-09T12:36:34.656668+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -11718,7 +11742,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 2368.8,
-        "stamped_at": "2026-11-07T22:40:58.890442+00:00",
+        "stamped_at": "2026-11-09T12:36:34.656668+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -11731,13 +11755,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1845.1,
-        "stamped_at": "2026-11-07T22:40:58.890442+00:00",
+        "stamped_at": "2026-11-09T12:36:34.656668+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "admin/email.en.md": {
-    "md5": "d754bd2716a0ab3818b9c0bb68be459b",
+    "md5": "ceda6379d6a98474b33ffd43abc627ff",
     "langs_done": [
       "es",
       "fr",
@@ -11757,7 +11781,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1054.0,
-        "stamped_at": "2026-11-07T22:40:27.815559+00:00",
+        "stamped_at": "2026-11-09T12:36:26.820759+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -11770,7 +11794,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1146.5,
-        "stamped_at": "2026-11-07T22:40:27.815559+00:00",
+        "stamped_at": "2026-11-09T12:36:26.820759+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -11783,7 +11807,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1162.7,
-        "stamped_at": "2026-11-07T22:40:27.815559+00:00",
+        "stamped_at": "2026-11-09T12:36:26.820759+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -11941,7 +11965,7 @@
     }
   },
   "admin/email_troubleshooting.en.md": {
-    "md5": "e2f2686194cfde112988c9a75cf9a461",
+    "md5": "2d9a4723f99fb4eb579e3dea5e39da06",
     "langs_done": [
       "es",
       "fr",
@@ -11961,7 +11985,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1248.2,
-        "stamped_at": "2026-11-07T22:40:34.865195+00:00",
+        "stamped_at": "2026-11-09T12:36:32.121392+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -11974,7 +11998,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 881.0,
-        "stamped_at": "2026-11-07T22:40:34.865195+00:00",
+        "stamped_at": "2026-11-09T12:36:32.121392+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -11987,7 +12011,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1071.9,
-        "stamped_at": "2026-11-07T22:40:34.865195+00:00",
+        "stamped_at": "2026-11-09T12:36:32.121392+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -12203,7 +12227,7 @@
     }
   },
   "admin/connection_proxy.en.md": {
-    "md5": "94f3a9b354a474e034eaa6e0a8612a7b",
+    "md5": "4cd6041399889101449bd0508ed0c180",
     "langs_done": [
       "es",
       "fr",
@@ -12223,7 +12247,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1043.0,
-        "stamped_at": "2026-11-07T22:40:21.318246+00:00",
+        "stamped_at": "2026-11-09T11:40:20.203946+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -12236,7 +12260,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1201.7,
-        "stamped_at": "2026-11-07T22:40:21.318246+00:00",
+        "stamped_at": "2026-11-09T11:40:20.203946+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -12249,13 +12273,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1170.3,
-        "stamped_at": "2026-11-07T22:40:21.318246+00:00",
+        "stamped_at": "2026-11-09T11:40:20.203946+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "admin/email_flows.en.md": {
-    "md5": "ee02eedc1eebcd08f298b161d1327b3a",
+    "md5": "d6cfdfb18a8261817471f94b34ca6f3f",
     "langs_done": [
       "es",
       "fr",
@@ -12275,7 +12299,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1416.7,
-        "stamped_at": "2026-11-07T22:40:31.432648+00:00",
+        "stamped_at": "2026-11-09T12:36:29.484760+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -12288,7 +12312,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 992.4,
-        "stamped_at": "2026-11-07T22:40:31.432648+00:00",
+        "stamped_at": "2026-11-09T12:36:29.484760+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -12301,7 +12325,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 898.2,
-        "stamped_at": "2026-11-07T22:40:31.432648+00:00",
+        "stamped_at": "2026-11-09T12:36:29.484760+00:00",
         "stamped_by": "translate-stamp"
       }
     }

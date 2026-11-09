@@ -101,7 +101,7 @@ vi.mock('$lib/api', () => ({
 import {render, screen, setupI18n, waitFor} from '$test/component';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {addDays} from '$lib/utils/dateOnly';
-import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {chooseLineShape} from '$test/lineShape';
 import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 
 const GENERATED_TS = join(process.cwd(), 'src', 'lib', 'api', 'generated.ts');
@@ -129,7 +129,7 @@ beforeAll(async () => {
 afterAll(() => restoreLayout?.());
 beforeEach(() => {
     chartInstances.length = 0;
-    setGlobalLineShape('steps');
+    chooseLineShape('steps');
 });
 
 const component = (name: string, value: number) => ({name, value: String(value), amount: String(value * 100)});
@@ -284,14 +284,14 @@ describe('the edges of the plot (Y2-I63, issue #63)', () => {
 
 describe('the line shape the user chose (Y2 FB-3)', () => {
     it('joins the areas by segments when the choice is segments', async () => {
-        setGlobalLineShape('segments');
+        chooseLineShape('segments');
         const option = await mountChart(STEPS);
         expect(option.series.length).toBeGreaterThan(0);
         expect(option.series.every((series) => series.step === false)).toBe(true);
     });
 
     it('draws smooth areas when the choice is spline', async () => {
-        setGlobalLineShape('spline');
+        chooseLineShape('spline');
         const option = await mountChart(STEPS);
         expect(option.series.every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
     });

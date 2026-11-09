@@ -12,7 +12,7 @@ Un administrateur s'occupe des comptes de l'instance — qui peut se connecter, 
 
     Seuls les administrateurs voient cet onglet.
 
-L'onglet comporte trois parties : les **places** occupées, en haut ; les **Comptes** ; les **Invitations ouvertes**. Après chaque modification, il recharge ses listes : il affiche toujours ce que contient le serveur.
+L'onglet comporte trois parties : les **places** occupées, en haut ; les **Comptes** ; les **Liens de compte**. Après chaque modification, il recharge ses listes : il affiche toujours ce que contient le serveur.
 
 !!! tip "💻 Sur un serveur sans navigateur"
 
@@ -213,17 +213,11 @@ Un compte créé avant la version 1.3 peut en avoir un, par exemple `anna@exampl
 
 5. Cliquez sur **Terminé**.
 
-    L'invitation apparaît dans **Invitations ouvertes**. La personne ouvre le lien et crée le compte avec le nom d'utilisateur, l'adresse e-mail et le mot de passe de son choix : [Premiers pas](../user/getting-started.md) montre ce qu'elle voit.
+    L'invitation apparaît dans [Liens de compte](#account-links). La personne ouvre le lien et crée le compte avec le nom d'utilisateur, l'adresse e-mail et le mot de passe de son choix : [Premiers pas](../user/getting-started.md) montre ce qu'elle voit.
 
 - 🔗 Le lien n'est affiché qu'une fois, au moment où vous le créez. S'il est perdu, révoquez l'invitation et créez-en une nouvelle.
 - 📏 Une invitation occupe une place à partir du moment où vous la créez et jusqu'à ce qu'elle soit utilisée, révoquée ou expirée ; le compte qu'elle crée prend ensuite cette place.
 - 🔤 Une adresse e-mail n'appartient qu'à un seul compte, quelle que soit la casse (`Anna@example.com` est `anna@example.com`), mais seules les lettres A à Z sont comparées ainsi : `Émile@example.com` et `émile@example.com` sont deux adresses différentes.
-
-### 📋 Invitations ouvertes {: #open-invitations }
-
-Les invitations que personne n'a encore utilisées, de la plus ancienne à la plus récente : l'adresse e-mail (ou *Sans e-mail*), un badge **Admin** lorsque l'invitation crée un administrateur, la date de création et d'expiration. Une invitation quitte la liste dès qu'elle est utilisée, révoquée ou expirée.
-
-**Révoquer** retire une invitation à tout moment, après une confirmation : le lien cesse immédiatement de fonctionner et sa place est libérée.
 
 ---
 
@@ -247,6 +241,26 @@ Lorsque quelqu'un a oublié son mot de passe, envoyez-lui un lien pour qu'il en 
 - 🔒 Il cesse aussi de fonctionner dès que la personne change son mot de passe ou son adresse e-mail, ou que vous exécutez `user reset` ou `user set-email` sur la [ligne de commande](cli_tools.md).
 - 🚪 La création du lien ne déconnecte personne. Une fois que la personne définit le nouveau mot de passe, le compte est déconnecté de tous les appareils.
 - 🔗 Le lien n'est affiché qu'une fois : s'il est perdu, créez-en un nouveau.
+
+---
+
+## 📋 Liens de compte {: #account-links }
+
+Chaque lien à usage unique de l'instance, et où il en est : invitations, liens de réinitialisation du mot de passe, vérifications de l'e-mail, le lien de configuration du premier administrateur, le changement d'e-mail du titulaire d'une instance gérée. Le lien lui-même n'apparaît jamais ici : il ne s'affiche qu'une fois, à sa création.
+
+**Où :** **Utilisateurs**, la section **Liens de compte**, sous les comptes.
+
+| Colonne | Ce qu'elle affiche |
+|---|---|
+| **Type** | *Invitation*, *Réinitialisation du mot de passe*, *Vérification de l'e-mail*, *Configuration de l'administrateur* ou *Changement d'e-mail* |
+| **Pour** | Le compte sur lequel agit le lien ; pour une invitation, l'adresse qui y est écrite, ou *Toute personne ayant le lien* ; un badge **Admin** lorsque l'invitation crée un administrateur |
+| **Créé par** | L'administrateur qui l'a créé ; *—* lorsque LibreFolio ou la personne l'a demandé (une vérification, une réinitialisation depuis la page de connexion) |
+| **Créé**, **Expire** | Date et heure |
+| **État** | *Ouvert* ; *Utilisé*, avec quand et par qui ; *Expiré* ; *Révoqué*, avec quand |
+
+Les liens ouverts sont dans le premier tableau. Les liens fermés — utilisés, expirés ou révoqués — sont dans **Liens fermés**, replié : cliquez dessus pour l'ouvrir. Chaque tableau trie par colonne (clic sur l'en-tête), filtre par colonne (l'entonnoir dans l'en-tête), masque ou affiche des colonnes (l'œil) et pagine les longues listes.
+
+**Révoquer**, dans le menu (⋮) d'un lien ouvert, le retire après une confirmation : le lien cesse immédiatement de fonctionner, et une invitation libère sa place. Les invitations, les liens de réinitialisation du mot de passe et les vérifications de l'e-mail se révoquent ici. Le lien de configuration de l'administrateur en attente s'annule depuis son compte ([Annuler son lien de configuration](#cancel-setup)) ; le changement d'e-mail du titulaire suit l'adresse fixée par l'hébergeur, et ne se révoque pas ici.
 
 ---
 
@@ -291,7 +305,7 @@ Condition : e-mail **Prêt** et `LIBREFOLIO_PUBLIC_URL` défini sur une adresse 
 | **Langue** | **Langue de l'e-mail** : la **Langue par Défaut** de l'instance, sauf si vous en choisissez une autre | La langue du compte |
 
 - 🌐 **Le lien contenu dans l'e-mail commence par `LIBREFOLIO_PUBLIC_URL`**, quelle que soit l'**Adresse du serveur** affichée ci-dessus : la boîte de dialogue le précise.
-- 📨 **Le résultat** s'affiche dans la boîte de dialogue : *Envoyé à …* avec l'adresse et la langue de l'e-mail, ou la raison pour laquelle l'e-mail n'est pas parti ([Erreurs d'envoi](email_troubleshooting.md#sending-errors)).
+- 📨 **Le résultat** s'affiche dans la boîte de dialogue : *Envoyé à …* avec l'adresse et la langue de l'e-mail, et un rappel : s'il n'arrive pas, le destinataire doit aussi vérifier les spams ; ou la raison pour laquelle l'e-mail n'est pas parti ([Erreurs d'envoi](email_troubleshooting.md#sending-errors)).
 
 Règles et limites : [Liens envoyés par un administrateur](email_flows.md#admin-links).
 

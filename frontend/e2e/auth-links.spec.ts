@@ -33,8 +33,8 @@
  *
  * Ownership. Each test creates its own invitations and accounts, and records each one the moment it exists, or, for an
  * account registered through the page, just before. The `links` fixture removes them after the test, red or green:
- * every invitation still pending is revoked (`DELETE /users/invites/{id}`; a 404 is an invitation already spent or
- * revoked), every account deletes itself (`DELETE /auth/users/me`, signed in as that very account, its identity
+ * every invitation still pending is revoked (`DELETE /users/account-links/{id}`, an invitation's id being its link's; a
+ * 404 is an invitation already spent or revoked), every account deletes itself (`DELETE /auth/users/me`, signed in as that very account, its identity
  * checked first). Nothing reads a list it did not fill, and nothing changes the lane's registration mode, which is open
  * there. The `/setup` tests create nothing: every token they open is one nobody issued. Parallel by default: no test
  * depends on another.
@@ -116,8 +116,8 @@ function linksOf(admin: APIRequestContext, open: () => Promise<APIRequestContext
         },
 
         async revoke(invite) {
-            const response = await admin.delete(`${API}/users/invites/${invite.id}`);
-            expect(response.status(), `DELETE /users/invites/${invite.id}: the invitation must still be pending (a 404 is one already spent or revoked)`).toBe(204);
+            const response = await admin.delete(`${API}/users/account-links/${invite.id}`);
+            expect(response.status(), `DELETE /users/account-links/${invite.id}: the invitation must still be pending (a 404 is one already spent or revoked)`).toBe(204);
         },
 
         async registerAccount(tag, password) {
@@ -168,7 +168,7 @@ async function cleanUp(admin: APIRequestContext, open: () => Promise<APIRequestC
     const failures: string[] = [];
     for (const invite of owned.invites) {
         try {
-            const response = await admin.delete(`${API}/users/invites/${invite.id}`);
+            const response = await admin.delete(`${API}/users/account-links/${invite.id}`);
             // 204: it was still pending, and is revoked now. 404: it no longer was — spent, or revoked by the test itself.
             if (response.status() !== 204 && response.status() !== 404) failures.push(`invitation ${invite.id}: DELETE answered ${response.status()}`);
         } catch (error) {

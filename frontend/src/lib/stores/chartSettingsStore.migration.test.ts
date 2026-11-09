@@ -9,6 +9,14 @@ vi.mock('$lib/api', () => ({
     axiosInstance: new Proxy({}, {get: () => apiTransportCall}),
 }));
 
+// The line shape is read from the user settings store (lot UIP). The real one pulls `globalSettings`, which reads
+// localStorage at module init, before this file provides one: this file pins the chart settings, not that store.
+vi.mock('$lib/stores/app/settings', async () => {
+    const {writable} = await import('svelte/store');
+    const {subscribe} = writable(null);
+    return {userSettings: {subscribe, updateUiPreference: async () => true}, isFallbackUserSettings: () => false};
+});
+
 import type {SignalConfig, SignalStyle} from '$lib/charts/signals';
 import {signalCodeToType} from '$lib/charts/signals/catalogMapper';
 import {transitionClientSession} from '$lib/stores/app/clientSession';

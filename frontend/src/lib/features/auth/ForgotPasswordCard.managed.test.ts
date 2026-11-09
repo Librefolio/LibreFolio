@@ -18,10 +18,10 @@
  *   - FPM-03: before the answer, the request in flight (`loaded: false`, `failed: false`) — neither the commands nor
  *     `forgot-ask-admin`, no command anywhere, no heading. It is also the guard that FPM-08's fix leaves this state
  *     alone: a fix showing `forgot-ask-admin` whenever `loaded` is false turns it red;
- *   - FPM-04: managed with email links — E's form, unchanged; `forgot-ask-admin` in place of the closed panel of
- *     commands (in the document: whether on view or folded is not part of the contract); no command, no heading;
- *   - FPM-05 (positive control, green today): self-hosted with email links — E's form and the panel of commands, as
- *     today (`ForgotPasswordCard.email.test.ts` owns the rest of that branch);
+ *   - FPM-04: managed with email links — E's form, unchanged; `forgot-ask-admin` under it; no command, no heading;
+ *   - FPM-05: self-hosted with email links — E's form alone: no command box, no panel (`forgot-commands-panel`), no
+ *     heading, no `forgot-ask-admin` — the reset link comes by email and the administrator's guide keeps the commands
+ *     (developer's decision, 09/11/2026, lot UA1; `ForgotPasswordCard.email.test.ts` owns the rest of that branch);
  *   - FPM-06/07: drawn before the answer, the card — a legacy component — follows it in place: `forgot-ask-admin`
  *     appears once the answer says managed, the commands once it says self-hosted, never before;
  *   - FPM-08 (A9 fix-forward): the request failed before any answer (`loaded: false`, `failed: true`, the defaults in
@@ -31,8 +31,9 @@
  *     the answer that lands next, which sets `failed: false` as the store does: `forgot-ask-admin` for managed, the
  *     commands and no `forgot-ask-admin` for self-hosted;
  *   - FPM-11 (guard, green before the fix too): answered self-hosted, then a later request failed (`loaded` and `failed`
- *     both true, the answer still in force) — the commands, no `forgot-ask-admin`, with or without email links. FPM-08's
- *     rule is about a failure *before any answer*: a fix keyed on `failed` alone would pass FPM-08 and break this.
+ *     both true, the answer still in force) — what that answer says, and no `forgot-ask-admin`: the commands without
+ *     email links, the form and no command with them. FPM-08's rule is about a failure *before any answer*: a fix keyed
+ *     on `failed` alone would pass FPM-08 and break this.
  * And the key itself (CAT-01/02): `auth.askAdminToResetPassword` is a sentence in the four generated catalogues
  * (`src/lib/i18n/{en,it,fr,es}.json`), and names no docker or CLI command.
  *
@@ -259,14 +260,16 @@ describe('ForgotPasswordCard — E’s email form does not depend on the profile
         expect(askAdmin()).toHaveTextContent(`⟦${ASK_ADMIN_KEY}⟧`);
     });
 
-    it('FPM-05: answered self-hosted with email links — E’s form and the panel of commands, as today (positive control)', async () => {
+    it('FPM-05: answered self-hosted with email links — E’s form alone: no command, no panel, no heading, no forgot-ask-admin', async () => {
         await serverAnswers({...SELFHOSTED, email: WITH_LINKS});
 
         await mount();
 
         expect(screen.getByTestId('forgot-email-form')).toBeInTheDocument();
         expect(screen.getByTestId('forgot-email-identifier')).toBeEnabled();
-        expect(screen.getByTestId('forgot-commands-panel')).toContainElement(commands());
+        expectNoServerHint();
+        expect(screen.queryByTestId('forgot-commands-panel'), 'no panel of commands').toBeNull();
+        expect(screen.queryByTestId('forgot-commands-toggle')).toBeNull();
         expect(askAdmin()).toBeNull();
     });
 });
@@ -337,21 +340,26 @@ describe('ForgotPasswordCard — the request failed before any answer: no dead e
 });
 
 describe('ForgotPasswordCard — a request failed after an answer: the answer in force decides', () => {
-    const ANSWERED_SELFHOSTED: Array<{label: string; config: InstanceConfig}> = [
-        {label: 'no email links', config: SELFHOSTED},
-        {label: 'email links', config: {...SELFHOSTED, email: WITH_LINKS}},
-    ];
-
     // A guard, green before the fix too: `loaded` stays true when a later request fails, and the store keeps the last
-    // answer in force — so the card keeps what that answer says. With email links the box sits in the closed panel:
-    // in the document, not on view.
-    it.each(ANSWERED_SELFHOSTED)('FPM-11: answered self-hosted ($label), then a later request failed — the command box, no forgot-ask-admin', async ({config}) => {
-        await serverAnswers(config);
+    // answer in force — so the card keeps what that answer says.
+    it('FPM-11: answered self-hosted (no email links), then a later request failed — the command box, no forgot-ask-admin', async () => {
+        await serverAnswers(SELFHOSTED);
         aLaterRequestFailed();
 
         await mount();
 
-        expect(commands(), 'the commands of the answer in force').toBeInTheDocument();
+        expect(commands(), 'the commands of the answer in force').toBeVisible();
+        expect(askAdmin(), 'FPM-08’s advice is for a failure before any answer').toBeNull();
+    });
+
+    it('FPM-11: answered self-hosted (email links), then a later request failed — the form of the answer in force, no command, no forgot-ask-admin', async () => {
+        await serverAnswers({...SELFHOSTED, email: WITH_LINKS});
+        aLaterRequestFailed();
+
+        await mount();
+
+        expect(screen.getByTestId('forgot-email-form'), 'the form of the answer in force').toBeInTheDocument();
+        expectNoServerHint();
         expect(askAdmin(), 'FPM-08’s advice is for a failure before any answer').toBeNull();
     });
 });

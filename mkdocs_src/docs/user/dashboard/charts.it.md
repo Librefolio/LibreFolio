@@ -12,7 +12,7 @@ Su un periodo lungo il grafico raggruppa i giorni per restare leggibile: in sett
 
 ### 〰️ Come vengono disegnate le linee {: #line-shape }
 
-Ogni grafico unisce i suoi punti secondo una di tre forme: **Segmenti** (l'impostazione predefinita, una linea retta tra due punti), **A gradini** (ogni valore resta fino al successivo) o **Curva morbida** (una linea dolce che non supera mai né scende mai sotto i due punti vicini, così non disegna valori che non sono mai esistiti). Scegli la forma nella prima pagina del tour di benvenuto e successivamente in **Impostazioni → Preferenze**; si applica a ogni grafico in questo browser. Nelle pagine di dettaglio di asset e FX, le impostazioni grafico hanno anche una riga **Forma della linea**, per dare a quel singolo grafico una forma propria. La forma cambia solo il modo in cui i punti vengono uniti: il valore di un giorno nel tooltip è sempre quello che il report conserva per quel giorno. Dove un grafico mostra settimane o mesi, i punti non sono gradini, quindi **A gradini** disegna segmenti.
+Ogni grafico unisce i suoi punti secondo una di tre forme: **Segmenti** (l'impostazione predefinita, una linea retta tra due punti), **A gradini** (ogni valore resta fino al successivo) o **Curva morbida** (una linea dolce che non supera mai né scende mai sotto i due punti vicini, così non disegna valori che non sono mai esistiti). Scegli la forma nella prima pagina del tour di benvenuto e successivamente in **Impostazioni → Preferenze**; viene conservata con il tuo account e si applica a ogni grafico, in ogni browser da cui accedi, finché non dai a un grafico una forma propria. Finché non ne scegli una segue il predefinito dell'amministratore. Nelle pagine di dettaglio di asset e FX, le impostazioni grafico hanno anche una riga **Forma della linea**, per dare a quel singolo grafico una forma propria. La forma cambia solo il modo in cui i punti vengono uniti: il valore di un giorno nel tooltip è sempre quello che il report conserva per quel giorno. Dove un grafico mostra settimane o mesi, i punti non sono gradini, quindi **A gradini** disegna segmenti.
 
 Il grafico ricorda la tua ultima visualizzazione, inclusa la sotto-visualizzazione P&L, in questo browser e per ciascun utente, e la condivide con le pagine dei broker. Parte da **Assoluto**. Senza dati sui tassi di rendimento, **%** è in grigio e il grafico mostra **Assoluto**, ma conserva la tua scelta: **%** ricompare non appena ci sono dati da disegnare — dopo che cambi il periodo o il broker, o la prossima volta che apri il grafico — a meno che tu non scelga nel frattempo un'altra visualizzazione.
 
@@ -193,7 +193,7 @@ Il pannello **Allocazione degli asset** mostra come è suddiviso il tuo portafog
 
 ### 🕰️ Ora e Storico
 
-- **Ora** — l'allocazione nell'ultimo giorno dell'intervallo selezionato: un grafico ad anello per **Per tipo** e **Per settore**, una mappa mondiale per **Geografica**. Passa sopra una fetta o un paese per vedere percentuale e importo. Per tipo, il grafico ad anello può avere [due anelli](#allocation-type-rings).
+- **Ora** — l'allocazione nell'ultimo giorno dell'intervallo selezionato: un grafico ad anello per **Per tipo** e **Per settore**, una mappa mondiale per **Geografica**. Passa sopra una fetta o un paese per vedere percentuale e importo; per tipo, il riquadro mostra anche il tipo di asset come badge (la Liquidità, il tuo contante, non ne ha). Per tipo, il grafico ad anello può avere [due anelli](#allocation-type-rings).
 - **Storico** — un grafico ad area in pila al 100% di come l'allocazione è cambiata nel tempo, utile per vedere il ribilanciamento. Per tipo, ogni famiglia è un'area; passando sopra una data vengono elencati i suoi sottotipi, come *ETF generico* e *ETF azionario*.
 
 Il pannello ricorda la visualizzazione e la scheda in questo browser, per ciascun utente, e le condivide con le pagine dei broker.
@@ -202,7 +202,7 @@ Il pannello ricorda la visualizzazione e la scheda in questo browser, per ciascu
 
 Quali singoli asset pesano di più? **Per asset** suddivide il portafoglio asset per asset anziché per categoria.
 
-- **Ora** — un grafico a torta con il peso di ogni asset nell'ultimo giorno dell'intervallo selezionato. Ogni spicchio mostra l'icona del suo asset — la sua, o quella del tipo se non ne ha una o non si carica; la liquidità mostra quella di Liquidità. Non c'è legenda: passa sopra uno spicchio per leggere nome, quota e importo.
+- **Ora** — un grafico a torta con il peso di ogni asset nell'ultimo giorno dell'intervallo selezionato. Ogni spicchio mostra l'icona del suo asset — la sua, o quella del tipo se non ne ha una o non si carica; la liquidità mostra quella di Liquidità. Non c'è legenda: passa sopra uno spicchio per leggere il tipo di asset, come badge, poi nome, quota e importo.
 - **Storico** — come è cambiata nel tempo la distribuzione per asset. **Le posizioni chiuse sono incluse**, quindi un asset che hai venduto compare ancora nei giorni in cui lo detenevi.
 - **I colori** seguono il peso di oggi: l'asset più pesante riceve il primo colore, poi gli altri per peso, quindi gli asset chiusi, quelli chiusi più di recente per primi. Il grafico a torta, lo storico e le linee di [Rendimento delle posizioni](positions.md#return-of-the-positions) usano lo stesso colore per lo stesso asset.
 

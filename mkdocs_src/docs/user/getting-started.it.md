@@ -122,7 +122,7 @@ Nella pagina di accesso, fai clic su **Password dimenticata?**. Quando la tua is
 modulo in alto:
 
 1. Digita il tuo nome utente o il tuo indirizzo email, poi fai clic su **Inviami un link per reimpostare la password**.
-2. La pagina risponde allo stesso modo indipendentemente dal fatto che un account corrisponda o meno: controlla la posta in arrivo e la
+2. La pagina risponde *Email inviata: controlla anche lo spam.*, allo stesso modo indipendentemente dal fatto che un account corrisponda o meno: controlla la posta in arrivo e la
    cartella spam.
 3. Apri l'email *Reimposta la password di LibreFolio* e fai clic su **Scegli una nuova password**. La pagina
    che si apre è quella di un link inviato da un amministratore: segui
@@ -131,8 +131,10 @@ modulo in alto:
 - ⏱️ Il link funziona una sola volta, per 30 minuti.
 - 📭 Non hai ricevuto l'email dopo qualche minuto? L'account potrebbe essere disattivato o registrato con un altro
   indirizzo, oppure le richieste sono arrivate troppo ravvicinate: riprova più tardi o chiedi al tuo amministratore.
-- 💻 Sotto il modulo, un pannello chiuso contiene il comando che il tuo amministratore esegue sul server per reimpostare
-  una password; quando la tua istanza non può inviare email, la pagina lo mostra aperto. In ogni caso: chiedi al tuo amministratore.
+- ⏳ Dopo una richiesta, il pulsante conta alla rovescia 5 minuti prima che tu possa chiedere di nuovo: il server invia
+  al massimo un'email ogni 5 minuti per lo stesso account. Ricaricare la pagina mantiene il conto alla rovescia.
+- 💻 Quando la tua istanza non può inviare email, la pagina mostra invece il comando che il tuo amministratore esegue
+  sul server per reimpostare una password: chiedi a lui.
 
 ### 🔑 Se un amministratore ti ha inviato un link per reimpostare la password {: #password-reset-link }
 

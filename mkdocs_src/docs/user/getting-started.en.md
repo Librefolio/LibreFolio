@@ -123,8 +123,8 @@ On the login page, click **Forgot Password?**. When your instance can send email
 form at the top:
 
 1. Type your username or your email address, then click **Email me a reset link**.
-2. The page answers the same way whether an account matches or not: look in your inbox, and in the
-   spam folder.
+2. The page answers *Email sent: check your spam folder too.*, the same whether an account matches
+   or not: look in your inbox, and in the spam folder.
 3. Open the email *Reset your LibreFolio password* and click **Choose a new password**. The page
    that opens is the one of a link sent by an administrator: follow
    [If an Administrator Sent You a Password-Reset Link](#password-reset-link) from step 2.
@@ -132,8 +132,10 @@ form at the top:
 - ⏱️ The link works once, for 30 minutes.
 - 📭 No email after a few minutes? The account may be deactivated or registered with another
   address, or the requests came too close together: try again later, or ask your administrator.
-- 💻 Under the form, a closed panel holds the command your administrator runs on the server to reset
-  a password; when your instance cannot send emails, the page shows it open. Either way: ask them.
+- ⏳ After a request, the button counts down 5 minutes before you can ask again: the server sends at
+  most one email every 5 minutes for the same account. Reloading the page keeps the countdown.
+- 💻 When your instance cannot send emails, the page shows instead the command your administrator runs
+  on the server to reset a password: ask them.
 
 ### 🔑 If an Administrator Sent You a Password-Reset Link {: #password-reset-link }
 

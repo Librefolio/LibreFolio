@@ -37,10 +37,15 @@ test message — is built by one typed builder from the texts of ``templates/{en
    nor its domain, nor any mask of it — is in its subject, its text or its HTML: a domain is a host name its new owner
    chose freely, which mail clients make a link. ``masked_address``, whose only use was the notice, no longer exists
    (the delivery masks an address an SMTP server quotes in its own way, ``delivery._redacted``, pinned in
-   ``test_email_delivery.py``).
+   ``test_email_delivery.py``). Since UA2 a completed change also writes to the NEW address:
+   ``build_email_changed_new_address(*, language, instance, by_host=False)``, of the same kind (``email_changed``), under
+   ``email_changed.new_subject``: the anonymous greeting, ``new_intro`` and ``new_advice`` (``new_intro_host`` and
+   ``new_advice_host`` for a change the host decided), then the footer — no link, no button, no ``href`` —; it cannot
+   receive a username, the old address nor the new one, and every ``new_*`` text names ``$instance`` at most.
 9. No email an untrusted party can address carries text they chose (decision N62, E-9 b and c):
    ``build_password_reset(*, language, link, ttl, instance)``, ``build_verification(*, language, link, ttl,
-   instance)`` and ``build_email_changed(*, language, instance)`` take no ``username`` — a crafted one, with markup, a
+   instance)``, ``build_email_changed(*, language, instance)`` and ``build_email_changed_new_address(*, language,
+   instance)`` take no ``username`` — a crafted one, with markup, a
    link to a site of its writer's, a CR LF, cannot even be passed: a ``TypeError`` — and open with
    ``common.greeting_anonymous`` («Hello,», «Ciao,», «Bonjour,», «Hola:»), as the invitation does; no text of those
    three sections holds ``$username``, and ``email_changed.intro`` holds ``$instance`` and no ``$address``.
@@ -83,6 +88,7 @@ from backend.app.services.email.messages import (
     build_admin_setup,
     build_email_change_confirmation,
     build_email_changed,
+    build_email_changed_new_address,
     build_invite,
     build_password_reset,
     build_test_message,
@@ -109,6 +115,10 @@ INVITER = "zq-O'Brien <admin>"
 NEW_ADDRESS = "zq.new-alice.secret@Example.ORG"
 NEW_LOCAL_PART = "zq.new-alice.secret"
 NEW_DOMAIN = "Example.ORG"
+#: UA2 — The keys of ``email_changed`` the email to the new address reads: its subject, and its two bodies.
+NEW_ADDRESS_KEYS = ("new_subject", "new_intro", "new_advice", "new_intro_host", "new_advice_host")
+#: An old address on a domain of its own: found in the email to the new address, it could only be the old address's.
+OLD_ADDRESS = "zq.old-alice.secret@zq-old-home.example.net"
 #: What may never reach a subject, in any case: the cores of the user's values, and any trace of the link.
 NOT_IN_A_SUBJECT = ("zq-alice", "zq family", "brien", "://", "folio.example.com", TOKEN.lower(), "example.org")
 
@@ -155,6 +165,7 @@ SIGNATURES = {
     "build_admin_setup": ({"language", "username", "link", "ttl", "instance"}, {}),
     "build_test_message": ({"language", "username", "instance"}, {}),
     "build_email_changed": ({"language", "instance", "by_host"}, {"by_host": False}),
+    "build_email_changed_new_address": ({"language", "instance", "by_host"}, {"by_host": False}),
     "build_email_change_confirmation": ({"language", "username", "link", "ttl", "instance"}, {}),
 }
 #: The arguments of each builder that an e-mail shows to its reader (the three kinds an untrusted party can address
@@ -858,7 +869,8 @@ def test_each_catalogue_has_a_section_per_kind_and_nothing_else(language: str) -
 
     assert set(catalogue) == {kind.value for kind in EmailKind} | {"common"}
     section = catalogue["email_changed"]
-    assert set(section) == {"subject", "intro", "advice", "intro_host", "advice_host"}  # the last two: the change the host decided (A-64 (c), EMM-042)
+    # intro_host/advice_host: the change the host decided (A-64 (c), EMM-042); new_*: the email to the new address (UA2, EMM-043)
+    assert set(section) == {"subject", "intro", "advice", "intro_host", "advice_host", *NEW_ADDRESS_KEYS}
     assert (set(string.Template(section["intro"]).get_identifiers()), set(string.Template(section["advice"]).get_identifiers())) == ({"instance"}, {"instance"})
     print_success(f"{len(EmailKind)} kinds and common; email_changed without an action")
 
@@ -1006,3 +1018,70 @@ def test_the_notice_of_a_change_the_host_decided_says_to_ask_the_host(language: 
         names = set(string.Template(catalogue[key]).get_identifiers())
         assert names <= {"instance"}, f"{key} holds only $instance: {sorted(names)}"
     print_success("its own text")
+
+
+# =============================================================================
+# 10. THE EMAIL TO THE NEW ADDRESS (UA2)
+# =============================================================================
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+@pytest.mark.parametrize("by_host", [False, True], ids=["own-change", "host-change"])
+def test_the_email_to_the_new_address_is_the_greeting_its_intro_its_advice_and_the_footer(language: str, by_host: bool) -> None:
+    """EMM-043 — contract 8 (UA2): ``build_email_changed_new_address`` in each language: kind ``email_changed``, its language, the subject ``new_subject`` (another than the notice's); the text is the anonymous greeting, ``new_intro`` (``new_intro_host`` for a change the host decided), ``new_advice`` (``new_advice_host``) with the instance, then the footer — nothing else, no link —; the HTML holds each block escaped and no ``href``, no button, not the button's fallback line."""
+    print_section(f"EMM-043: the email to the new address in {language}, by_host={by_host}")
+    catalogue = _catalogue(language)
+    section, common = catalogue["email_changed"], catalogue["common"]
+    intro, advice = ("new_intro_host", "new_advice_host") if by_host else ("new_intro", "new_advice")
+
+    content = build_email_changed_new_address(language=language, instance=INSTANCE, by_host=by_host)
+
+    values = {"instance": INSTANCE}
+    blocks = [string.Template(text).substitute(values) for text in (common["greeting_anonymous"], section[intro], section[advice])]
+    footer = string.Template(common["footer"]).substitute(values)
+    assert (content.kind, content.language, content.subject) == (EMAIL_CHANGED, language, section["new_subject"])
+    assert content.subject != section["subject"], "the new address gets its own subject, not the notice's"
+    assert content.text == "\n\n".join(blocks) + f"\n\n-- \n{footer}\n"
+    assert all(html.escape(block) in content.html for block in blocks), "each block, escaped, in the HTML"
+    assert _hrefs(content.html) == [] and "<a " not in content.html, "no link and no button in the HTML"
+    assert common["button_fallback"] not in content.text and html.escape(common["button_fallback"]) not in content.html
+    assert "://" not in content.text
+    print_success("anonymous greeting, its intro, its advice, footer; no link")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_email_to_the_new_address_differs_from_the_notice_and_for_the_host(language: str) -> None:
+    """EMM-044 — contract 8 (UA2): the email to the new address is not the notice to the old one (another subject, another body), and a change the host decided has its own body under the same subject; the language goes through ``email_language`` (an unknown tag is English)."""
+    print_section(f"EMM-044: the email to the new address, its own text in {language}")
+    notice = build_email_changed(language=language, instance=INSTANCE)
+    own = build_email_changed_new_address(language=language, instance=INSTANCE)
+    by_host = build_email_changed_new_address(language=language, instance=INSTANCE, by_host=True)
+
+    assert (own.subject != notice.subject, own.text != notice.text) == (True, True), "the new address gets its own email"
+    assert by_host.subject == own.subject and by_host.text != own.text, "the host's change: its own body under the same subject"
+    assert INSTANCE in own.text and INSTANCE in by_host.text, "both name the instance"
+    assert build_email_changed_new_address(language="de-DE", instance=INSTANCE) == build_email_changed_new_address(language="en", instance=INSTANCE)
+    print_success("its own subject and body; the host's variant")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_email_to_the_new_address_carries_no_username_and_no_address(language: str) -> None:
+    """EMM-045 — contract 9 (UA2): whoever changes the address chooses the recipient, so a stranger may read it: ``build_email_changed_new_address`` takes no ``username``, no ``old_address`` and no ``new_address`` — a ``TypeError`` naming each —; it opens with ``common.greeting_anonymous``; no part of the old address (its local part, its domain) nor of the new one is in its subject, its text or its HTML; and every ``new_*`` text of the catalogue names ``$instance`` at most."""
+    print_section(f"EMM-045: no username and no address in the email to the new address, {language}")
+    for name, value in (("username", CRAFTED_USERNAME), ("old_address", OLD_ADDRESS), ("new_address", NEW_ADDRESS)):
+        with pytest.raises(TypeError, match=name):
+            build_email_changed_new_address(language=language, instance=INSTANCE, **{name: value})
+    anonymous = _catalogue(language)["common"]["greeting_anonymous"]
+
+    for by_host in (False, True):
+        content = build_email_changed_new_address(language=language, instance=INSTANCE, by_host=by_host)
+        assert content.text.split("\n\n", 1)[0] == anonymous, f"the text does not open with {anonymous!r}"
+        assert _PARAGRAPH_HTML.search(content.html).group(1) == html.escape(anonymous), "the HTML does not open with the anonymous greeting"
+        for name, part in (("subject", content.subject), ("text", content.text), ("html", content.html)):
+            pieces = (OLD_ADDRESS, "zq.old-alice.secret", "zq-old-home.example.net", NEW_LOCAL_PART, NEW_DOMAIN, "***")
+            shown = [piece for piece in pieces if piece.casefold() in part.casefold()]
+            assert shown == [], f"the {name} of the email to the new address shows {shown}"
+    section = _catalogue(language)["email_changed"]
+    names = {key: set(string.Template(section[key]).get_identifiers()) for key in NEW_ADDRESS_KEYS}
+    assert {key: found for key, found in names.items() if not found <= {"instance"}} == {}, "a new_* text has a place for something else than the instance"
+    print_success("no username, no address can be passed; anonymous greeting; $instance alone")

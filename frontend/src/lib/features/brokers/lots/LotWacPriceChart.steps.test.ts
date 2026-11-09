@@ -94,7 +94,7 @@ import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {addDays} from '$lib/utils/dateOnly';
 import LotWacPriceChart from './LotWacPriceChart.svelte';
 import {valueOnDrawnLine} from './lotWacPriceChartHelpers';
-import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {chooseLineShape} from '$test/lineShape';
 import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 
 const wac = (broker_id: number, date: string, through: string, value: number) => ({broker_id, date, through, wac: String(value), pool_qty: '10'});
@@ -137,7 +137,7 @@ beforeAll(async () => {
 afterAll(() => restoreRects?.());
 beforeEach(() => {
     chartInstances.length = 0;
-    setGlobalLineShape('steps');
+    chooseLineShape('steps');
 });
 
 async function mountChart(props: Record<string, unknown> = {}): Promise<DrawnOption> {
@@ -301,14 +301,14 @@ describe('the tooltip of a step line', () => {
 
 describe('the line shape the user chose (Y2 FB-3)', () => {
     it('joins the points by segments when the choice is segments', async () => {
-        setGlobalLineShape('segments');
+        chooseLineShape('segments');
         const option = await mountChart();
         expect(lines(option).length).toBeGreaterThanOrEqual(2);
         expect(lines(option).every((series) => series.step === false)).toBe(true);
     });
 
     it('draws smooth lines when the choice is spline', async () => {
-        setGlobalLineShape('spline');
+        chooseLineShape('spline');
         const option = await mountChart();
         expect(lines(option).every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
     });

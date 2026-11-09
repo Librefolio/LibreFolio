@@ -1,18 +1,21 @@
-"""The notice of an email change, scheduled by ``PUT /auth/profile`` (lot E4b, on workstream A's A6e), over HTTP, in-process.
+"""The emails of an email change, scheduled by ``PUT /auth/profile`` (lot E4b, on workstream A's A6e; two since UA2), over HTTP, in-process.
 
 A6e made an email change ask for the current password, end every other session of the account and give this one a new
 session cookie. E4a wrote the notice, ``flows.email_changed_work`` (its own rules are EMF-043…052 and EMF-059, its limits
 EMF-054…058, in ``test_services/test_email_flows.py``); E4b schedules it from A's route. Since decision P18 (lot E4c on
 E's side), A's route and the notice tell two addresses apart with one rule, ``user_service.same_email``: A–Z in any
-case, every other character as written, nothing stripped. This module pins the hook. The contract:
+case, every other character as written, nothing stripped. Since UA2 the work writes to both addresses once the change is
+complete: the notice to the old one, then the confirmation to the new one. This module pins the hook. The contract:
 
 1. An email change accepted — the right current password, email ready —: the answer is A's, 200 ``{user: {email: <the
    new address>}, message: "Profile updated successfully"}`` with a new ``session`` cookie that signs in as the new
-   address; after it, exactly one email, to the old address only (envelope and ``To``, no ``Cc``/``Bcc``), exactly what
-   ``build_email_changed`` writes in the account's language — its own, else the instance's — with «LibreFolio» as the
-   instance (no ``LIBREFOLIO_PUBLIC_URL``: the notice carries no link), greeting nobody by name and carrying no part of
-   the new address — neither its local part nor its domain, in its text, its HTML or a header (decision N62) —; one
-   unit of the hourly budget; the work's ``info`` line «Email change notice sent to the previous address» with the
+   address; after it, exactly two emails, the old address first, each to its address only (envelope and ``To``, no
+   ``Cc``/``Bcc``), in the account's language — its own, else the instance's — with «LibreFolio» as the instance (no
+   ``LIBREFOLIO_PUBLIC_URL``: neither carries a link), both greeting nobody by name. To the old address exactly what
+   ``build_email_changed`` writes, carrying no part of the new address — neither its local part nor its domain, in its
+   text, its HTML or a header (decision N62) —; to the new address exactly what ``build_email_changed_new_address``
+   writes, carrying no part of the old address and no username (UA2). Two units of the hourly budget; the work's
+   ``info`` lines «Email change notice sent to the previous address» then «… to the new address», each with the
    account's id and the language.
 2. The work starts after the answer is complete, never before — the user does not wait on an SMTP server —, queued once
    with the account's id, the address it had, the address it has now and the engine of the request's own session, never
@@ -29,19 +32,22 @@ case, every other character as written, nothing stripped. This module pins the h
 6. A refused change — no current password (400 ``CURRENT_PASSWORD_REQUIRED``), a wrong one (400
    ``CURRENT_PASSWORD_INVALID``), an address another account has (400 «Email already registered») —: the stored address
    unchanged, no SMTP conversation, no event of E.
-7. The old address refused by the SMTP server: A's answer as in 1 — 200, the new address stored, the new cookie signs
-   in —; the work's warning «Email change notice: not sent» with ``EmailDeliveryError`` and ``RECIPIENT_REFUSED``.
-8. The notice's limits (E4b): an account that had 3 notices in the hour gets no fourth, but its email change is never
-   limited. The fourth change in the hour, with the right current password, answers as in 1 — 200, the new address
-   stored, a new cookie that signs in —, and sends nothing: no SMTP conversation, no budget unit; E logs one ``info``
-   line, «Email change notice: past its limits, nothing sent», with the account's id — no warning. (The limit per old
-   mailbox, and the window, are EMF-054…058.)
+7. One address refused by the SMTP server — the old one, or the new one —: A's answer as in 1 — 200, the new address
+   stored, the new cookie signs in —; the work's warning «Email change notice: not sent» with ``recipient``
+   (``previous`` or ``new``), ``EmailDeliveryError`` and ``RECIPIENT_REFUSED``, and the other address still gets its
+   email, with its ``info`` line (UA2).
+8. The limits of a change's emails (E4b; per recipient since UA2): an account that had 3 changes with emails in the hour
+   gets no emails for a fourth, but its email change is never limited. The fourth change in the hour, with the right
+   current password, answers as in 1 — 200, the new address stored, a new cookie that signs in —, and sends nothing: no
+   SMTP conversation, no budget unit; E logs one ``info`` line, «Email change notice: past its limits, nothing sent»,
+   with the account's id — no warning. (The limit per recipient mailbox, and the window, are EMF-054…058 and
+   EMF-061…066.)
 9. A letter beyond A–Z in another case (``zq-vÉra@example.com`` → ``zq-véra@example.com``) makes another address, for
    A as for E: ``same_email`` compares it as written (P18's documented limit). With the right current password the
    change answers as in 1 — 200 with the new address and A's message, a new session cookie that signs in as it, the
-   new address stored —, and the notice goes as in 1: exactly one email, to the old address exactly as stored (the
-   envelope's recipient: the fake server advertises ``SMTPUTF8`` and takes an address beyond ASCII), one unit of the
-   budget, the work's ``info`` line with the account's id.
+   new address stored —, and the emails go as in 1: exactly two, to the old address then the new one exactly as stored
+   (the envelope's recipient: the fake server advertises ``SMTPUTF8`` and takes an address beyond ASCII), two units of
+   the budget, the work's ``info`` lines with the account's id.
 
 E's events are the notice's lines («Email change notice…») and the delivery's («Email sent», «Email not sent…», «Email
 configuration…»). Wherever a case has them (1, 5, 7, 8, 9), they name neither the old address nor the new one, nor
@@ -51,7 +57,7 @@ refusal. The lines of A's route and of ``user_service.update_profile`` are A's, 
 Pure: the real auth router runs in-process on a private SQLite file under ``tmp_path`` (NullPool, disposed at teardown);
 accounts are rows with a real bcrypt hash at cost 4, signed in through ``POST /auth/login`` by a client that keeps the
 cookie. An autouse fixture removes every inherited ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL`` and
-``LIBREFOLIO_BLOCKED``; each test sets its own with ``monkeypatch``. The hourly budget and the notice's two limiters
+``LIBREFOLIO_BLOCKED``; each test sets its own with ``monkeypatch``. The hourly budget and the two limiters of a change's emails
 (``flows.EMAIL_CHANGE_NOTICES_BY_ACCOUNT``, ``flows.EMAIL_CHANGE_NOTICES_BY_MAILBOX``, with the shipped limits) are
 private, on a fake clock: every database here is new, so its accounts repeat their ids and addresses from test to test,
 which the process's limiters would count across tests. ``socket.getaddrinfo`` resolves the loopback only; every SMTP
@@ -85,7 +91,7 @@ from backend.app.db.session import get_session_generator
 from backend.app.services.accounts import auth_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.email import delivery, flows, smtp
-from backend.app.services.email.messages import build_email_changed
+from backend.app.services.email.messages import build_email_changed, build_email_changed_new_address
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.fixtures.email.fake_smtp import FakeSmtpServer
 from backend.test_scripts.test_utils import print_section, print_success
@@ -127,8 +133,13 @@ UPDATED = "Profile updated successfully"
 NO_CHANGES = "No changes requested"
 #: How E's log events begin: the notice's lines and the delivery's. A's own lines are A's, not looked at here.
 E_EVENTS = ("Email change notice", "Email sent", "Email not sent", "Email configuration")
-#: The notice's line when the account or the old mailbox already had its notices of the hour (E4b).
+#: The work's line when the account already had its 3 changes with emails in the hour (E4b).
 PAST_ITS_LIMITS = "Email change notice: past its limits, nothing sent"
+#: The work's lines of each email that went (UA2): the old address's, then the new one's.
+NOTICE_SENT = "Email change notice sent to the previous address"
+NEW_SENT = "Email change notice sent to the new address"
+#: What E logs, in order, for a change whose two emails went: each email's delivery line, then the work's.
+BOTH_SENT = [("Email sent", "info"), (NOTICE_SENT, "info"), ("Email sent", "info"), (NEW_SENT, "info")]
 START = 1_000.0
 #: The notice's limiters as the module ships them (E4b), read before the fixture below replaces them.
 SHIPPED_NOTICES_BY_ACCOUNT = flows.EMAIL_CHANGE_NOTICES_BY_ACCOUNT
@@ -178,7 +189,7 @@ def budget(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLi
 
 @dataclass(frozen=True)
 class NoticeLimits:
-    """The two limiters of the email-change notice of a test: per account, per old mailbox."""
+    """The two limiters of the emails of an email change of a test: per account, per recipient mailbox."""
 
     by_account: SlidingWindowLimiter
     by_mailbox: SlidingWindowLimiter
@@ -186,7 +197,7 @@ class NoticeLimits:
 
 @pytest.fixture(autouse=True)
 def notice_limits(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> NoticeLimits:
-    """Private limiters of the notice with the shipped limits, on the fake clock: every database here is new, so its accounts repeat their ids and addresses from test to test, and the process's limiters would count them across tests."""
+    """Private limiters of a change's emails with the shipped limits, on the fake clock: every database here is new, so its accounts repeat their ids and addresses from test to test, and the process's limiters would count them across tests."""
     limits = NoticeLimits(
         by_account=SlidingWindowLimiter(SHIPPED_NOTICES_BY_ACCOUNT.limit, SHIPPED_NOTICES_BY_ACCOUNT.window_seconds, clock=clock),
         by_mailbox=SlidingWindowLimiter(SHIPPED_NOTICES_BY_MAILBOX.limit, SHIPPED_NOTICES_BY_MAILBOX.window_seconds, clock=clock),
@@ -275,7 +286,7 @@ async def _stored_email(engine: AsyncEngine, user_id: int) -> str:
 
 
 def _ready(monkeypatch: pytest.MonkeyPatch, fake: FakeSmtpServer) -> None:
-    """Email ready towards ``fake``; no ``LIBREFOLIO_PUBLIC_URL``: the notice carries no link."""
+    """Email ready towards ``fake``; no ``LIBREFOLIO_PUBLIC_URL``: neither email of a change carries a link."""
     for name, value in {"HOST": fake.host, "PORT": str(fake.port), "TLS": "none", "FROM": SENDER_HEADER}.items():
         monkeypatch.setenv(SMTP_PREFIX + name, value)
 
@@ -378,15 +389,15 @@ def _naming(events: list[dict[str, Any]], *needles: str) -> list[dict[str, Any]]
 
 
 # =============================================================================
-# 1–2. AN EMAIL CHANGE: THE ANSWER, THEN THE NOTICE TO THE OLD ADDRESS
+# 1–2. AN EMAIL CHANGE: THE ANSWER, THEN THE EMAILS TO BOTH ADDRESSES
 # =============================================================================
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("own", "language"), [pytest.param(None, "en", id="the-instances-language"), pytest.param("it", "it", id="its-own-language")])
-async def test_an_email_change_answers_as_before_then_emails_the_old_address(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, own: str | None, language: str) -> None:
-    """ECN-001 — contract 1: the right current password, email ready. The answer: 200 with the new address and A's message, a new session cookie, and ``GET /auth/me`` with it says the new address. Then one email, to the old address only, exactly ``build_email_changed`` in the account's language with «LibreFolio» as the instance; no part of the new address — neither its local part nor its domain — and no username in its text, its HTML or a header (decision N62); one budget unit; the notice's ``info`` line with the account's id and the language. E's events name neither address."""
-    print_section(f"ECN-001: an email change, the notice in {language}")
+async def test_an_email_change_answers_as_before_then_emails_both_addresses(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, own: str | None, language: str) -> None:
+    """ECN-001 — contract 1: the right current password, email ready. The answer: 200 with the new address and A's message, a new session cookie, and ``GET /auth/me`` with it says the new address. Then two emails, the old address first, each to its address only, in the account's language with «LibreFolio» as the instance: to the old address exactly ``build_email_changed``, with no part of the new address — neither its local part nor its domain — and no username in its text, its HTML or a header (decision N62); to the new address exactly ``build_email_changed_new_address``, with no part of the old address and no username (UA2). Two budget units; the work's two ``info`` lines with the account's id and the language. E's events name neither address."""
+    print_section(f"ECN-001: an email change, both emails in {language}")
     vera = await _add_user(private.engine, VERA, OLD, language=own)
 
     with FakeSmtpServer() as fake:
@@ -402,20 +413,27 @@ async def test_an_email_change_answers_as_before_then_emails_the_old_address(pri
     assert (me.status_code, me.json()["user"]["email"]) == (200, NEW), f"the new cookie signs in as the new address: {me.status_code} {me.text}"
     assert await _stored_email(private.engine, vera.id) == NEW
 
-    assert [message.rcpt_tos for message in fake.messages] == [[OLD]], "exactly one email, to the old address only"
-    received = fake.messages[0]
-    assert _mailboxes(received.message["To"]) == [("", OLD)]
-    assert (received.message["Cc"], received.message["Bcc"]) == (None, None)
-    shown = _text(received) + _html(received) + " ".join(str(value) for value in received.message.values())
+    assert [message.rcpt_tos for message in fake.messages] == [[OLD], [NEW]], "exactly two emails, the old address first, each to its address only"
+    notice, confirmation = fake.messages
+    for received, address in ((notice, OLD), (confirmation, NEW)):
+        assert _mailboxes(received.message["To"]) == [("", address)]
+        assert (received.message["Cc"], received.message["Bcc"]) == (None, None)
+    shown = _text(notice) + _html(notice) + " ".join(str(value) for value in notice.message.values())
     assert [part for part in (NEW, NEW_LOCAL_PART, NEW_DOMAIN) if part.casefold() in shown.casefold()] == [], "the notice carries no part of the new address, neither its local part nor its domain: its new owner chose them (N62)"
     assert VERA not in shown, "the notice greets nobody by name: the username is its owner's text (N62)"
-    _assert_is(received, build_email_changed(language=language, instance=flows.INSTANCE_FALLBACK))
-    assert budget.count() == 1
+    body = _text(confirmation) + _html(confirmation)
+    headers = " ".join(str(value) for value in confirmation.message.values())
+    # The old domain is the sender's too (``From``, ``Message-ID``): looked for in the body only.
+    assert [part for part in (OLD, OLD_LOCAL_PART, "example.com") if part.casefold() in body.casefold()] + [part for part in (OLD, OLD_LOCAL_PART) if part.casefold() in headers.casefold()] == [], "the email to the new address carries no part of the old one: a stranger may read it"
+    assert VERA not in body + headers, "the email to the new address greets nobody by name"
+    _assert_is(notice, build_email_changed(language=language, instance=flows.INSTANCE_FALLBACK))
+    _assert_is(confirmation, build_email_changed_new_address(language=language, instance=flows.INSTANCE_FALLBACK))
+    assert budget.count() == 2
 
-    assert [(event["event"], event["log_level"]) for event in _e_events(events)] == [("Email sent", "info"), ("Email change notice sent to the previous address", "info")]
-    assert [(event.get("user_id"), event.get("language")) for event in _notices(events)] == [(vera.id, language)]
+    assert [(event["event"], event["log_level"]) for event in _e_events(events)] == BOTH_SENT
+    assert [(event.get("user_id"), event.get("language")) for event in _notices(events)] == [(vera.id, language)] * 2
     assert _naming(_e_events(events), OLD, OLD_LOCAL_PART, NEW, NEW_LOCAL_PART) == [], "E's events name neither address: the delivery logs the recipient's domain alone"
-    print_success(f"200 and a new cookie; one notice to {OLD} in {language}, no part of {NEW} shown")
+    print_success(f"200 and a new cookie; the notice to {OLD}, the confirmation to {NEW}, in {language}")
 
 
 @pytest.mark.asyncio
@@ -502,7 +520,7 @@ async def test_the_same_address_in_other_capitals_is_no_change_and_no_notice(pri
 
 
 # =============================================================================
-# 5–7. EMAIL OFF, A REFUSED CHANGE, A REFUSED NOTICE
+# 5–7. EMAIL OFF, A REFUSED CHANGE, A REFUSED ADDRESS
 # =============================================================================
 
 
@@ -560,12 +578,14 @@ async def test_a_refused_change_sends_nothing(private: _Private, monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_the_old_address_refused_by_the_server_leaves_the_answer_as_it_was(private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-    """ECN-007 — contract 7: the SMTP server refuses the old address. A's answer as in ECN-001 — 200, the new address stored, a new cookie that signs in —, nothing delivered, and the notice's warning «Email change notice: not sent» with the account's id, ``EmailDeliveryError`` and ``RECIPIENT_REFUSED``. The server's refusal quotes the old address: E's events still name neither address."""
-    print_section("ECN-007: the old address refused by the SMTP server")
+@pytest.mark.parametrize("refused", ["previous", "new"])
+async def test_one_address_refused_by_the_server_leaves_the_answer_and_the_other_email(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, refused: str) -> None:
+    """ECN-007 — contract 7: the SMTP server refuses one address — the old one, or the new one (UA2) —. A's answer as in ECN-001 — 200, the new address stored, a new cookie that signs in —; the work's warning «Email change notice: not sent» with the account's id, ``recipient`` naming the side, ``EmailDeliveryError`` and ``RECIPIENT_REFUSED``; and the other address still gets its email, exactly as its builder writes it, with its ``info`` line. The server's refusal quotes the refused address: E's events still name neither address."""
+    print_section(f"ECN-007: the {refused} address refused by the SMTP server")
     vera = await _add_user(private.engine, VERA, OLD)
+    refused_address, other = (OLD, NEW) if refused == "previous" else (NEW, OLD)
 
-    with FakeSmtpServer(refuse_recipients={OLD}) as fake:
+    with FakeSmtpServer(refuse_recipients={refused_address}) as fake:
         _ready(monkeypatch, fake)
         async with _signed_in(private.app) as browser:
             before = _cookie(browser)
@@ -576,24 +596,30 @@ async def test_the_old_address_refused_by_the_server_leaves_the_answer_as_it_was
     assert (response.json()["user"]["email"], response.json()["message"]) == (NEW, UPDATED)
     _assert_renewed(response, before)
     assert (me.status_code, me.json()["user"]["email"]) == (200, NEW)
-    assert await _stored_email(private.engine, vera.id) == NEW
-    assert fake.messages == []
-    assert [event["event"] for event in _e_events(events)] == ["Email not sent", "Email change notice: not sent"], "the delivery's line, then the notice's"
-    notice = [(event["log_level"], event.get("user_id"), event.get("reason"), event.get("code")) for event in _notices(events)]
-    assert notice == [("warning", vera.id, "EmailDeliveryError", "RECIPIENT_REFUSED")]
-    assert _naming(_e_events(events), OLD, OLD_LOCAL_PART, NEW, NEW_LOCAL_PART) == [], "the refusal quoted the old address: E's lines keep its domain at most"
-    print_success("200 and a new cookie; the notice refused, a warning without an address")
+    assert await _stored_email(private.engine, vera.id) == NEW, "the change stays done"
+    assert [message.rcpt_tos for message in fake.messages] == [[other]], "the other address still got its email"
+    builder = build_email_changed_new_address if refused == "previous" else build_email_changed
+    _assert_is(fake.messages[0], builder(language="en", instance=flows.INSTANCE_FALLBACK))
+    went = [("Email sent", None), (NEW_SENT if refused == "previous" else NOTICE_SENT, None)]
+    failed = [("Email not sent", None), ("Email change notice: not sent", refused)]
+    expected = failed + went if refused == "previous" else went + failed
+    assert [(event["event"], event.get("recipient")) for event in _e_events(events)] == expected, "each email: the delivery's line, then the work's"
+    warning = [(event["log_level"], event.get("user_id"), event.get("recipient"), event.get("reason"), event.get("code")) for event in _notices(events) if event["log_level"] == "warning"]
+    assert warning == [("warning", vera.id, refused, "EmailDeliveryError", "RECIPIENT_REFUSED")]
+    assert budget.count() == 2, "one unit per attempt: the delivery's rule"
+    assert _naming(_e_events(events), OLD, OLD_LOCAL_PART, NEW, NEW_LOCAL_PART) == [], "the refusal quoted the address: E's lines keep its domain at most"
+    print_success(f"200 and a new cookie; the {refused} address refused with a warning, the other email sent")
 
 
 # =============================================================================
-# 8. PAST THE NOTICE'S LIMITS, THE CHANGE STILL GOES THROUGH
+# 8. PAST THE LIMITS OF A CHANGE'S EMAILS, THE CHANGE STILL GOES THROUGH
 # =============================================================================
 
 
 @pytest.mark.asyncio
 async def test_past_three_notices_an_hour_the_change_goes_through_without_one(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, budget: SlidingWindowLimiter, notice_limits: NoticeLimits) -> None:
-    """ECN-008 — contract 8: email ready; Vera changes her email four times in the hour, a minute apart, each time with the right current password and from the address the change before gave her, so no old mailbox counts twice. Every change answers as in ECN-001 — 200 with the new address and A's message, a new session cookie —; the first three each send their notice, to the address they left. The fourth sends none — no fourth email, no SMTP conversation, no budget unit; of E only the ``info`` line «Email change notice: past its limits, nothing sent» with her id —, and still goes through: the new address stored, ``GET /auth/me`` with the new cookie says it. E's events name none of the five addresses."""
-    print_section("ECN-008: the fourth change in the hour goes through, without a notice")
+    """ECN-008 — contract 8: email ready; Vera changes her email four times in the hour, a minute apart, each time with the right current password and from the address the change before gave her, so no mailbox gets more than two emails. Every change answers as in ECN-001 — 200 with the new address and A's message, a new session cookie —; the first three each send both emails, the notice to the address they left and the confirmation to the one they reached. The fourth sends none — no SMTP conversation, no budget unit; of E only the ``info`` line «Email change notice: past its limits, nothing sent» with her id —, and still goes through: the new address stored, ``GET /auth/me`` with the new cookie says it. E's events name none of the five addresses."""
+    print_section("ECN-008: the fourth change in the hour goes through, without its emails")
     vera = await _add_user(private.engine, VERA, MOVES[0])
     changes: list[tuple[httpx.Response, str | None, list[dict[str, Any]]]] = []
 
@@ -614,26 +640,27 @@ async def test_past_three_notices_an_hour_the_change_goes_through_without_one(pr
     assert (me.status_code, me.json()["user"]["email"]) == (200, MOVES[-1]), f"the fourth change's cookie signs in as its address: {me.status_code} {me.text}"
     assert await _stored_email(private.engine, vera.id) == MOVES[-1]
 
-    assert [message.rcpt_tos for message in fake.messages] == [[old] for old in MOVES[:3]], "three notices, each to the address its change left; none for the fourth"
-    assert (fake.connections, budget.count()) == (3, 3), "the fourth: no SMTP conversation, no budget unit"
+    assert [message.rcpt_tos for message in fake.messages] == [[address] for index in range(3) for address in (MOVES[index], MOVES[index + 1])], "three changes, each its notice and its confirmation; none for the fourth"
+    assert (fake.connections, budget.count()) == (6, 6), "one per email of the first three changes; the fourth: no SMTP conversation, no budget unit"
     sent = [[(event["event"], event["log_level"]) for event in _e_events(events)] for _response, _before, events in changes[:3]]
-    assert sent == [[("Email sent", "info"), ("Email change notice sent to the previous address", "info")]] * 3, f"barrier: the first three changes each sent their notice: {sent}"
+    assert sent == [BOTH_SENT] * 3, f"barrier: the first three changes each sent both emails: {sent}"
     fourth = [(event["event"], event["log_level"], event.get("user_id")) for event in _e_events(changes[3][2])]
     assert fourth == [(PAST_ITS_LIMITS, "info", vera.id)], fourth
-    assert (notice_limits.by_account.count(vera.id), notice_limits.by_mailbox.count(MOVES[3])) == (3, 0), "her three notices; nothing counted for the skipped one"
+    assert notice_limits.by_account.count(vera.id) == 3, "her three changes; nothing counted for the skipped one"
+    assert [notice_limits.by_mailbox.count(address) for address in MOVES] == [1, 2, 2, 1, 0], "each email once under its mailbox; nothing for the fourth change's"
     every_event = [event for _response, _before, events in changes for event in events]
     assert _naming(_e_events(every_event), *MOVES, *(address.partition("@")[0] for address in MOVES)) == [], "E's events name none of the addresses"
-    print_success("four changes, each 200 with a new cookie; three notices, the fourth skipped")
+    print_success("four changes, each 200 with a new cookie; three with both emails, the fourth without")
 
 
 # =============================================================================
-# 9. A LETTER BEYOND A–Z IN ANOTHER CASE: ANOTHER ADDRESS, AND ITS NOTICE
+# 9. A LETTER BEYOND A–Z IN ANOTHER CASE: ANOTHER ADDRESS, AND ITS EMAILS
 # =============================================================================
 
 
 @pytest.mark.asyncio
-async def test_another_case_beyond_a_to_z_is_a_change_and_the_old_address_gets_the_notice(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter) -> None:
-    """ECN-009 — contract 9: stored ``zq-vÉra@example.com``, asked ``zq-véra@example.com`` with the right current password. The two are apart in the case of ``é`` alone, a letter beyond A–Z, which ``user_service.same_email`` compares as written (decision P18's documented limit): two addresses, for A as for E. A's answer as in ECN-001 — 200 with the new address and A's message, a new session cookie that signs in as it, the new address stored —; then the notice as in ECN-001: exactly one email, to the old address exactly as stored (the envelope's recipient: the fake server takes an address beyond ASCII with ``SMTPUTF8``), one budget unit, the delivery's and the notice's ``info`` lines, the notice's with the account's id and its language. E's events name neither address."""
+async def test_another_case_beyond_a_to_z_is_a_change_and_both_addresses_get_their_email(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter) -> None:
+    """ECN-009 — contract 9: stored ``zq-vÉra@example.com``, asked ``zq-véra@example.com`` with the right current password. The two are apart in the case of ``é`` alone, a letter beyond A–Z, which ``user_service.same_email`` compares as written (decision P18's documented limit): two addresses, for A as for E. A's answer as in ECN-001 — 200 with the new address and A's message, a new session cookie that signs in as it, the new address stored —; then the emails as in ECN-001: exactly two, to the old address then the new one exactly as stored (the envelope's recipient: the fake server takes an address beyond ASCII with ``SMTPUTF8``), two budget units, the delivery's and the work's ``info`` lines, the work's with the account's id and its language. E's events name neither address."""
     print_section("ECN-009: another case beyond A–Z")
     assert ACCENTED_OLD.casefold() == ACCENTED_NEW.casefold() and not user_service.same_email(ACCENTED_OLD, ACCENTED_NEW), "precondition: one mailbox for casefold, two addresses for P18's rule"
     vera = await _add_user(private.engine, VERA, ACCENTED_OLD)
@@ -651,10 +678,10 @@ async def test_another_case_beyond_a_to_z_is_a_change_and_the_old_address_gets_t
     assert (me.status_code, me.json()["user"]["email"]) == (200, ACCENTED_NEW), f"the new cookie signs in as the new address: {me.status_code} {me.text}"
     assert await _stored_email(private.engine, vera.id) == ACCENTED_NEW
 
-    assert [message.rcpt_tos for message in fake.messages] == [[ACCENTED_OLD]], "exactly one email, to the old address exactly as stored"
-    assert budget.count() == 1
-    assert [(event["event"], event["log_level"]) for event in _e_events(events)] == [("Email sent", "info"), ("Email change notice sent to the previous address", "info")]
-    assert [(event.get("user_id"), event.get("language")) for event in _notices(events)] == [(vera.id, "en")]
+    assert [message.rcpt_tos for message in fake.messages] == [[ACCENTED_OLD], [ACCENTED_NEW]], "exactly two emails, to the old address then the new one, exactly as stored"
+    assert budget.count() == 2
+    assert [(event["event"], event["log_level"]) for event in _e_events(events)] == BOTH_SENT
+    assert [(event.get("user_id"), event.get("language")) for event in _notices(events)] == [(vera.id, "en")] * 2
     local_parts = [address.partition("@")[0] for address in (ACCENTED_OLD, ACCENTED_NEW)]
     assert _naming(_e_events(events), ACCENTED_OLD, ACCENTED_NEW, *local_parts) == [], "E's events name neither address: the delivery logs the recipient's domain alone"
-    print_success(f"{ACCENTED_OLD} → {ACCENTED_NEW}: a change, a new cookie, the notice to the old address")
+    print_success(f"{ACCENTED_OLD} → {ACCENTED_NEW}: a change, a new cookie, both emails")

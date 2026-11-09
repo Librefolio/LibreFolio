@@ -51,7 +51,7 @@ const LINKS_PATH = `${API}/email/links`;
 const isLinks = (url: URL): boolean => url.pathname === LINKS_PATH;
 
 // Budgets: deadlines, never delays.
-/** From a navigation to a settled tab: the SPA's load, the auth check, then GET /users and GET /users/invites. */
+/** From a navigation to a settled tab: the SPA's load, the auth check, then GET /users and GET /users/account-links. */
 const LOAD_MS = 20_000;
 /** An action's round trip, and the reload of the tab that follows it. */
 const ACTION_MS = 15_000;
@@ -106,15 +106,15 @@ async function cleanUp(admin: APIRequestContext, open: () => Promise<APIRequestC
     const failures: string[] = [];
     if (created.inviteEmails.length > 0) {
         try {
-            const response = await admin.get(`${API}/users/invites`);
+            const response = await admin.get(`${API}/users/account-links`);
             if (response.status() !== 200) {
-                failures.push(`GET /users/invites answered ${response.status()}`);
+                failures.push(`GET /users/account-links answered ${response.status()}`);
             } else {
                 const mine = new Set(created.inviteEmails);
-                const {items} = (await response.json()) as {items: Array<{id: number; email: string | null}>};
+                const {items} = (await response.json()) as {items: Array<{id: number; purpose: string; state: string; email?: string | null}>};
                 for (const invite of items) {
-                    if (invite.email === null || !mine.has(invite.email.toLowerCase())) continue;
-                    const revoked = await admin.delete(`${API}/users/invites/${invite.id}`);
+                    if (invite.purpose !== 'invite' || invite.state !== 'open' || !invite.email || !mine.has(invite.email.toLowerCase())) continue;
+                    const revoked = await admin.delete(`${API}/users/account-links/${invite.id}`);
                     // 204: it was still pending, and is revoked now. 404: it no longer was.
                     if (revoked.status() !== 204 && revoked.status() !== 404) failures.push(`invitation ${invite.id} (${invite.email}): DELETE answered ${revoked.status()}`);
                 }
@@ -241,7 +241,7 @@ async function openUsersTab(page: Page): Promise<void> {
     await login(page, TEST_ADMIN);
     await navigateTo(page, '/settings?tab=users');
     await expect(page.getByTestId('settings-tab-users'), '?tab=users opens it').toHaveAttribute('aria-selected', 'true', {timeout: LOAD_MS});
-    await expect(page.getByTestId('users-tab'), 'The tab settles: GET /users and GET /users/invites are in').toHaveAttribute('data-busy', 'false', {timeout: LOAD_MS});
+    await expect(page.getByTestId('users-tab'), 'The tab settles: GET /users and GET /users/account-links are in').toHaveAttribute('data-busy', 'false', {timeout: LOAD_MS});
 }
 
 /** Invite `email` through the tab's dialog; ends on the link step, the link shown. */

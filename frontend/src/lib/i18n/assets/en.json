@@ -416,8 +416,7 @@
       "pricesSkipped": "{count, plural, one {# row skipped (invalid)} other {# rows skipped (invalid)}}",
       "eventsSaved": "{count, plural, one {# event saved} other {# events saved}}",
       "pricesRefused": "{count, plural, one {# price refused} other {# prices refused}}"
-    },
-    "customIconBadge": "Custom icon"
+    }
   },
   "events": {
     "deleteSuccess": "{n, plural, one {# event deleted} other {# events deleted}}",

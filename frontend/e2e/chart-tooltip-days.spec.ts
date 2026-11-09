@@ -6,6 +6,7 @@ import {goToAssetsPage} from './assets/assets-helpers';
 import {navigateTo} from './fixtures/auth-helpers';
 import {goToFxDetailPage} from './fx/fx-helpers';
 import {waitForSettled} from './fixtures/app-events';
+import {installLocalUiPreferences} from './fixtures/local-ui-preferences';
 
 /**
  * Which day does a chart open on? (Y2-I63, GitHub issue #63.)
@@ -33,8 +34,13 @@ async function recordReports(page: Page): Promise<Array<Record<string, any>>> {
     return served;
 }
 
-/** Choose the line shape for every chart, the way the user does: Settings → Preferences. */
+/**
+ * Choose the line shape for every chart, the way the user does: Settings → Preferences. The shape is a server-side preference
+ * of the user, and TEST_USER is shared by every parallel worker: the choice is kept inside this page's browser context (the
+ * settings reads carry it, the PUT never reaches the server and is answered with the merged preferences, which the store takes).
+ */
 async function chooseLineShape(page: Page, shape: 'segments' | 'steps' | 'spline'): Promise<void> {
+    await installLocalUiPreferences(page.context());
     await page.goto('/settings');
     await page.getByTestId('settings-tab-preferences').click();
     await expect(page.getByTestId('preference-line-shape')).toBeVisible({timeout: 15_000});

@@ -150,15 +150,18 @@ Every reset link also leaves a `Password reset link created` line, with `user_id
 | The log says | Level | When |
 | --- | --- | --- |
 | `Email change notice sent to the previous address` | `info` | The notice went to the old address. The line has `user_id` and `language`, neither address. |
+| `Email change notice sent to the new address` | `info` | The confirmation went to the new address. The line has `user_id` and `language`, neither address. |
 | `Email change notice: email is off, nothing sent` | `info` | Email is off: nothing to send, nothing wrong. |
-| `Email change notice: past its limits, nothing sent` | `info` | The account, or the old mailbox, already had 3 notices in the hour: the change went through, the notice did not. With `user_id`. |
+| `Email change notice: past its limits, nothing sent` | `info` | The account already had 3 changes with emails in the hour: the change went through, its two emails did not. With `user_id`. |
+| `Email change notice: the previous mailbox is past its limit, not sent there` | `info` | The old mailbox already had 3 of these emails in the hour: the notice did not go, the confirmation to the new address still can. With `user_id`. |
+| `Email change notice: the new mailbox is past its limit, not sent there` | `info` | The same, for the new mailbox and its confirmation. With `user_id`. |
 | `Email change notice: the account no longer exists, nothing sent` | `info` | The account was deleted before the email went out. |
-| `Email change notice: not sent` | `warning` | Email is configured but cannot be used now, the hourly limit is reached, the old address is not one plain address, or sending failed: `reason` and `code` say which. |
+| `Email change notice: not sent` | `warning` | Email is configured but cannot be used now, the hourly limit is reached, an address is not one plain address, or sending failed: `reason` and `code` say which, and `recipient` (`previous` or `new`) which of the two emails, when it is one of them. |
 | `Email change notice: the request failed` | `error` | An unexpected error, with its type in `error` and the `user_id`, nothing more. |
 
 None of these lines holds the SMTP password, the content of an email, a link or its secret part, what someone typed to ask for a reset or verification link, or the recipient's full address: only its domain, in `recipient_domain`.
 The server's reply is masked too, because it often quotes the refused address: `550 5.1.1 <***@example.com>: Recipient address rejected`.
-The notice of an email change names neither the old address nor the new one.
+The lines of an email change name neither the old address nor the new one.
 
 ---
 
@@ -171,9 +174,9 @@ The notice of an email change names neither the old address nor the new one.
 - **Links come only from `LIBREFOLIO_PUBLIC_URL`**, never from a request: nobody can make LibreFolio send one of your users a link to a third-party site ([Emails with a Link](email_flows.md#public-url)).
 - **A verification link goes only to the account's own address**, and nobody sees it, administrator included. **Send the link again** asks for the account's password, like the login, and a new link disables the previous ones.
 - **Names stay on one line.** Username, inviter's name and instance name go into an email on one line: control characters and line breaks become spaces, bidirectional controls are removed. A crafted username can neither add lines to an email nor disguise its text.
-- **No stranger's words in an email.** Password reset, email verification and the address-change notice can be sent, by someone who is not an administrator, to an address of their choice. These emails open with a plain «Hello,», without the username, and the notice shows no part of the new address: LibreFolio does not resolve domains, so even the end of an address is chosen freely. A reset link you send by email is written the same way; the username appears once the link is opened. Only the test email and the setup link of the initial administrator greet by name: you, or whoever runs the server, send them.
+- **No stranger's words in an email.** Password reset, email verification and the two emails of an address change can be sent, by someone who is not an administrator, to an address of their choice. These emails open with a plain «Hello,», without the username, the notice shows no part of the new address and the confirmation to the new address none of the old one: LibreFolio does not resolve domains, so even the end of an address is chosen freely. A reset link you send by email is written the same way; the username appears once the link is opened. Only the test email and the setup link of the initial administrator greet by name: you, or whoever runs the server, send them.
 - **Forgotten passwords tell nobody which accounts exist**: the same answer for everyone, the search after the answer, and limits per address, per username or email address, per mailbox and per account ([Forgotten Passwords](email_flows.md#forgot-password)).
-- **Changing an account's email address requires its current password.** Without it, a moment inside someone's session (a stolen session cookie, a computer left unlocked) would be enough to put one's own address on the account and then reset its password: reset by email exists only together with this rule. When email works, the old address also gets a notice ([Email Address Changes](email_flows.md#email-change-notice)).
+- **Changing an account's email address requires its current password.** Without it, a moment inside someone's session (a stolen session cookie, a computer left unlocked) would be enough to put one's own address on the account and then reset its password: reset by email exists only together with this rule. When email works, the old address also gets a notice, and the new one a confirmation ([Email Address Changes](email_flows.md#email-change-notice)).
 - **The hourly limit** caps what the instance can send, whatever happens: raise it only as far as you need.
 
 ??? info "🏠 What counts as your local network — when the warning appears"

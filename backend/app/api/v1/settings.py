@@ -44,6 +44,7 @@ from backend.app.services.accounts.settings_service import (
     GlobalSettingNotFoundError,
     GlobalSettingUnavailableError,
     GlobalSettingValueError,
+    UIPreferencesTooLargeError,
     get_all_global_settings,
     get_or_create_user_settings,
     update_global_settings,
@@ -97,14 +98,19 @@ async def update_user_settings_endpoint(
     """
     Update current user's settings.
 
-    All fields are optional. Only provided fields will be updated.
+    All fields are optional. Only provided fields will be updated. ``ui_preferences`` merges key by key: a key with a
+    value is set, a key sent as ``null`` is removed (it follows its global default again), a key left out is kept. An
+    unknown field or preference key answers 422, and so does a write that would leave the preferences over their size cap.
     """
     logger.info(
         "Updating user settings",
         user_id=current_user.id,
         updates=updates.model_dump(exclude_none=True),
     )
-    return await update_user_settings(current_user.id, updates, session)
+    try:
+        return await update_user_settings(current_user.id, updates, session)
+    except UIPreferencesTooLargeError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from None
 
 
 @router.get(

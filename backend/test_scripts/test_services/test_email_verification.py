@@ -307,7 +307,7 @@ async def _option(engine: AsyncEngine, value: str) -> None:
 
 async def _set_account_language(engine: AsyncEngine, user_id: int, language: str) -> None:
     async with AsyncSession(engine) as session:
-        session.add(UserSettings(user_id=user_id, language=language, theme="light"))
+        session.add(UserSettings(user_id=user_id, language=language))
         await session.commit()
 
 

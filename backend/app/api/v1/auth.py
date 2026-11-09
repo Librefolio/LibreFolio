@@ -448,8 +448,8 @@ async def update_profile(
     Changing the email needs the current password (A6e): with a «forgot password» link, a new address is a way to take
     the account over. It is checked before anything else, so whoever lacks it cannot probe which addresses are taken.
     The change ends every other session of the account; this one receives a new session cookie and carries on. When
-    email works, the address the account had before gets a notice after the answer (workstream E), which shows nothing
-    of the new one (N62). The protected account (the paying administrator of a managed instance) cannot change its
+    email works, after the answer the address the account had before gets a notice (workstream E), which shows nothing
+    of the new one (N62), and the new address a confirmation that it is the account's now (UA2). The protected account (the paying administrator of a managed instance) cannot change its
     email: 409 ``ACCOUNT_PROTECTED`` before the password is asked or anything is validated, and nothing of the request
     is applied; its username and other fields stay free.
     """
@@ -495,7 +495,8 @@ async def update_profile(
         # update_profile ended every session of the account with the change: this one gets a new cookie.
         _issue_session_cookie(response, http_request, updated_user, await _session_ttl_hours(session))
         logger.info("Email changed, other sessions ended", user_id=updated_user.id)
-        # The notice to the old address (workstream E): after the answer, with a session of its own; never raises.
+        # The notice to the old address and the confirmation to the new one (workstream E, UA2): after the answer, with a
+        # session of its own; never raises.
         background.add_task(email_flows.email_changed_work, updated_user.id, old_email, updated_user.email, engine=session.bind)
 
     # Never the address in the log (workstream E's rule): whether it changed is enough.

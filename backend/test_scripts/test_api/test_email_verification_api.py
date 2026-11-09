@@ -590,7 +590,7 @@ async def test_resend_answers_200_with_the_language_and_emails_the_link(private:
     alice, _hold = await _waiting(private.engine)
     if own is not None:
         async with AsyncSession(private.engine) as session:
-            session.add(UserSettings(user_id=alice.id, language=own, theme="light"))
+            session.add(UserSettings(user_id=alice.id, language=own))
             await session.commit()
 
     with FakeSmtpServer() as fake:

@@ -89,7 +89,8 @@
       "scheduler_history_sync_days": "Giorni Sincronizzazione Storico",
       "scheduler_history_sync_horizon_days": "Orizzonte di Recupero",
       "scheduler_enabled": "Scheduler Abilitato",
-      "registration_mode": "Registrazione"
+      "registration_mode": "Registrazione",
+      "default_chart_line_shape": "Forma Predefinita delle Linee"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Per quanto tempo una sessione utente rimane valida prima di richiedere un nuovo login",
@@ -97,13 +98,14 @@
       "max_file_upload_mb": "Dimensione massima file consentita per gli upload",
       "default_currency": "Valuta predefinita per i nuovi utenti",
       "default_language": "Lingua predefinita per i nuovi utenti",
-      "default_theme": "Tema predefinito per i nuovi utenti",
+      "default_theme": "Tema di ogni utente che non ne ha scelto uno",
       "scheduler_enabled": "Abilita o disabilita lo scheduler automatico dei dati di mercato",
       "scheduler_current_price_frequency_minutes": "Ogni quanti minuti vengono aggiornati i prezzi correnti",
       "scheduler_history_sync_times": "Orari giornalieri in cui vengono sincronizzati i dati storici (nel fuso orario dello scheduler)",
       "scheduler_history_sync_days": "Giorni della settimana in cui vengono sincronizzati i dati storici",
       "scheduler_history_sync_horizon_days": "Quanti giorni indietro cercare dati storici mancanti",
-      "registration_mode": "Chi può creare un account: chiunque (aperta), solo chi ha un link d'invito (su invito) o nessuno (chiusa)."
+      "registration_mode": "Chi può creare un account: chiunque (aperta), solo chi ha un link d'invito (su invito) o nessuno (chiusa).",
+      "default_chart_line_shape": "Forma delle linee dei grafici per ogni utente che non ne ha scelta una"
     },
     "globalSettingUnits": {
       "session_ttl_hours": "ore",
@@ -293,15 +295,15 @@
           "message": "L'introduzione e le guide delle pagine ricompaiono, come per un account nuovo.",
           "confirm": "Riavvia"
         },
-        "revokeInvite": {
-          "title": "Revocare l'invito per {email}?",
-          "message": "Il link smette subito di funzionare.",
-          "confirm": "Revoca"
-        },
         "cancelSetup": {
           "title": "Annullare il link di setup di {username}?",
           "message": "Il link già consegnato smette di funzionare. L'account resta in attesa del suo setup: un link nuovo arriva da «dev.py user setup-link» sul server, o dal tuo fornitore.",
           "confirm": "Annulla il link"
+        },
+        "revokeLink": {
+          "title": "Revocare il link «{type}» per {target}?",
+          "message": "Il link smette subito di funzionare.",
+          "confirm": "Revoca"
         }
       },
       "errors": {
@@ -332,13 +334,6 @@
         "create": "Crea il link",
         "ready": "Condividi questo link: funziona una volta sola, per 7 giorni."
       },
-      "invites": {
-        "title": "Inviti aperti",
-        "empty": "Nessun invito aperto.",
-        "noEmail": "Senza email",
-        "dates": "Creato il {created} · scade il {expires}",
-        "revoke": "Revoca"
-      },
       "reset": {
         "title": "Link per reimpostare la password di {username}",
         "message": "Un link monouso per impostare una nuova password, valido 30 minuti. I link creati prima per questo account smettono di funzionare.",
@@ -361,6 +356,37 @@
           "confirm": "Apri le iscrizioni"
         },
         "saveFailed": "Non è stato possibile salvare chi può iscriversi."
+      },
+      "links": {
+        "title": "Link degli account",
+        "hint": "Ogni link monouso dell'istanza e a che punto è. Un link si vede una volta sola, quando nasce: qui vedi per chi è, mai il link stesso.",
+        "empty": "Nessun link aperto.",
+        "closedTitle": "Link chiusi ({count})",
+        "closedEmpty": "Nessun link chiuso.",
+        "columns": {
+          "type": "Tipo",
+          "target": "Per",
+          "createdBy": "Creato da",
+          "created": "Creato",
+          "expires": "Scade",
+          "state": "Stato"
+        },
+        "purpose": {
+          "invite": "Invito",
+          "password_reset": "Reimpostazione password",
+          "email_verification": "Verifica email",
+          "admin_setup": "Configurazione amministratore",
+          "email_change": "Cambio email"
+        },
+        "state": {
+          "open": "Aperto",
+          "used": "Usato",
+          "expired": "Scaduto",
+          "revoked": "Revocato"
+        },
+        "usedBy": "da {username}",
+        "anyone": "Chiunque abbia il link",
+        "revoke": "Revoca"
       }
     },
     "linkShare": {
@@ -427,6 +453,12 @@
       "message": "È l'indirizzo email del titolare dell'abbonamento, quindi non si può cambiare da LibreFolio. Chiedi di cambiarlo a chi ospita questa istanza.",
       "support": "Contatta l'assistenza"
     },
-    "lineShapeHint": "Vale per tutti i grafici, in questo browser. Un singolo grafico può avere una forma sua nelle impostazioni del grafico."
+    "lineShapeHint": "Vale per tutti i grafici, in ogni browser in cui accedi. Un singolo grafico può avere una forma sua nelle impostazioni del grafico.",
+    "preferenceSource": {
+      "global": "Globale",
+      "globalHint": "Non hai scelto questa preferenza: segue il valore predefinito impostato dall'amministratore",
+      "auto": "Auto",
+      "autoHint": "Decide il browser: chiaro o scuro, come è impostato il sistema"
+    }
   }
 }

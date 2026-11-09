@@ -375,7 +375,7 @@ flowchart TD
 | `./dev.py user create`, `./dev.py user invite`, `./dev.py user activate` of an inactive account | The warning `The instance is at its limit (LIBREFOLIO_MAX_USERS: <used> of <max> places taken): the command line <action> anyway`, `<action>` being `creates the account`, `creates the invitation` or `reactivates the account`; then the command goes ahead. `user activate` prints none for an account that already holds its place: one waiting for its email verification whose link is live (`holds_place()`), or, since lot A-40, the initial administrator waiting for its setup (`registration_service.is_pending_admin()`, the filter `user_usage()` counts it with; IMG-030f of `./dev.py test utils dev-cli-image`) |
 
 `billing_link()` returns `LIBREFOLIO_BILLING_URL` to administrators only: in `usage.billing_url` of
-`GET /users` and `GET /users/invites`, in the `409` `USER_LIMIT_REACHED` of the administrator
+`GET /users`, in the `409` `USER_LIMIT_REACHED` of the administrator
 routes, and in `billing_url` of `GET /system/block`, the block page of a blocked instance
 ([Security → Instance Block](security.md#instance-block)). An invalid `LIBREFOLIO_BILLING_URL` or `LIBREFOLIO_PUBLIC_URL` is treated as unset and logged
 like an invalid mode, with its own `consequence`: *the billing link stays hidden until it is fixed*,
@@ -386,7 +386,7 @@ or *links show the bare path until it is fixed*.
 `backend/app/api/v1/users.py`, every route behind `require_admin` (`401` without a valid session,
 `403` *Admin access required* for a regular account); the last row, the public half of the
 [address probe](security.md#address-probe), is in `auth.py`. The static paths are declared before
-`/users/{user_id}`, so `/users/invites` and `/users/address-probe` are never read as a user id.
+`/users/{user_id}`, so `/users/invites`, `/users/account-links` and `/users/address-probe` are never read as a user id.
 
 | Route | Body | Does | Answers |
 |-------|------|------|---------|
@@ -397,9 +397,9 @@ or *links show the bare path until it is fixed*.
 | `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404`, also for an account deleted since the route's first read ([under the write lock](#decided-under-the-lock), lot A-54) |
 | `POST /users/{user_id}/sessions/revoke` | — | `end_sessions()`: every device of the account is signed out at its next request | `204`; `404`, as above |
 | `POST /users/{user_id}/onboarding/reset` | optional `{flow}` | `reset_onboarding_progress()`: that flow, or every flow, back to `pending`, steps included, with `completed_at` and `skipped_at` cleared (backlog item 21-5) | `204`; `404`, as above; `422` for a flow that does not exist |
-| `GET /users/invites` | — | The live invitations, oldest first (`id`, `grants_admin`, `email`, `created_at`, `expires_at`, `created_by_user_id`), with `usage` | `200` |
+| `GET /users/account-links` | — | `account_links.list_links()`: every [account token](security.md#account-tokens), of every purpose, newest first (lot UA3): `id`, `purpose`, `state` (`revoked`, `used`, `expired` or `open`, read in that order, as `inspect_token()` does: a retired link reads `revoked`), `revocable`, `user_id` and `username`, `email`, `grants_admin`, `created_by_user_id` and `created_by_username`, `created_at`, `expires_at`, `used_at` with `used_by_user_id` and `used_by_username` (the account that spent it: `consumed_by_user_id`, or the link's own account for a purpose other than `invite`), `revoked_at`. Never the token nor its hash | `200` |
 | `POST /users/invites` | `{grants_admin=false, email?}` | `create_invite()`; the link is shown once | `201` `{invite, token, path, url}`; `409` `REGISTRATION_DISABLED`; `409` `USER_LIMIT_REACHED` |
-| `DELETE /users/invites/{invite_id}` | — | `revoke_invite()`: the link stops working and its place is freed | `204`; `404` when it is not a live invitation |
+| `DELETE /users/account-links/{link_id}` | — | `account_links.revoke_link()`: an open link of a purpose in `REVOCABLE_PURPOSES` (`invite`, `password_reset`, `email_verification`) stops working at once; an invitation frees its place. One conditional `UPDATE`: a link spent meanwhile is not revoked | `204`; `404` when no such link is open; `409` `LINK_NOT_REVOCABLE` for an open `admin_setup` link ([cancelled from its account](#setup-cancel)) or `email_change` link (the host's address drives it, and the next start issues it again) |
 | `POST /users/address-probe` | — | `issue_probe_nonce()`: a signed nonce for the [address probe](security.md#address-probe), valid 120 s and stored nowhere; a new one at every call | `200` `{nonce, expires_at}`; `503` `INSTANCE_KEY_UNAVAILABLE` when the [instance key](security.md#instance-key) cannot be used |
 | `GET /auth/address-probe?nonce=…` | — | Public, the same answer with or without a session: `verify_probe_nonce()`, whether this instance issued the nonce. Readable from any origin (`Access-Control-Allow-Origin: *`) | `200` `{match}`: `false` for anything not issued here or expired, never `422` |
 

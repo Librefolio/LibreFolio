@@ -15,6 +15,8 @@ export interface GlobalSettings {
     default_language: string;
     default_currency: string;
     default_theme: string;
+    /** The chart line shape of every user who has not chosen one (lot UIP). */
+    default_chart_line_shape: string;
     session_ttl_hours: number;
     max_file_upload_mb: number;
     // Scheduler
@@ -29,6 +31,7 @@ const defaultGlobalSettings: GlobalSettings = {
     default_language: 'en',
     default_currency: 'EUR',
     default_theme: 'auto',
+    default_chart_line_shape: 'segments',
     session_ttl_hours: 24,
     max_file_upload_mb: 10,
     scheduler_enabled: true,

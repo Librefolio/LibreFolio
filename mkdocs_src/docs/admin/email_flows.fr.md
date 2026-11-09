@@ -215,7 +215,7 @@ C'est sûr parce que changer l'adresse e-mail d'un compte demande le mot de pass
 
 | État de l'instance | Ce que la page affiche |
 | --- | --- |
-| E-mail **Prêt** et `LIBREFOLIO_PUBLIC_URL` utilisable | **Mot de passe oublié ?** ouvre le formulaire correspondant. En dessous, un panneau fermé jusqu'au clic conserve la commande qu'un administrateur peut exécuter sur le serveur. |
+| E-mail **Prêt** et `LIBREFOLIO_PUBLIC_URL` utilisable | **Mot de passe oublié ?** ouvre le formulaire correspondant, sans les commandes du serveur (elles restent dans les [Outils en ligne de commande](cli_tools.md#reset-a-password-or-lock-an-account)). Après une demande, le formulaire indique *E-mail envoyé : vérifiez aussi vos spams.*, identique pour tous, et son bouton affiche un compte à rebours de 5 minutes, l'intervalle pour un compte, avant la demande suivante ; recharger la page conserve le compte à rebours. |
 | Sinon | Cette commande, ouverte, sous l'avertissement : *La récupération par email n'est pas disponible sur cette instance. Réinitialisez votre mot de passe depuis le terminal du serveur, ou demandez à votre administrateur un lien de réinitialisation.* |
 | La page ne peut pas lire la configuration de l'instance depuis le serveur | Seulement le conseil : *Demandez à votre administrateur un lien de réinitialisation du mot de passe : il peut en créer un pour votre compte.* |
 
@@ -602,7 +602,7 @@ En outre :
 
 ## 🔔 Changements d'adresse e-mail {: #email-change-notice }
 
-Lorsqu'une personne change l'adresse e-mail de son compte, dans [Profil](../user/settings/profile.md), LibreFolio écrit à l'adresse que le compte avait **avant**.
+Lorsque l'adresse e-mail d'un compte a changé, dans [Profil](../user/settings/profile.md), LibreFolio écrit deux courts e-mails, dans la langue du compte : un **avis** à l'adresse que le compte avait **avant**, et une **confirmation** à la **nouvelle** adresse, qui est désormais celle du compte.
 
 ```mermaid
 ---
@@ -613,24 +613,26 @@ flowchart TD
     CH["Changement d'adresse e-mail<br>dans Profil"] --> OK["Le changement passe :<br>la réponse n'attend jamais l'e-mail"]
     OK --> CASE{"Seules les majuscules des<br>lettres A à Z ont changé ?"}
     CASE -->|"oui : pas un changement"| SKIP["Pas d'avis"]
-    CASE -->|"non"| LIM{"3 par heure pour le compte ou<br>pour la boîte e-mail dépassés ?"}
+    CASE -->|"non"| LIM{"3 changements par heure<br>pour le compte dépassés ?"}
     LIM -->|"oui"| SKIP
     LIM -->|"non"| EN{"E-mail activé ?"}
     EN -->|"non"| LOG["Rien : une ligne d'information<br>dans le journal, pas un avertissement"]
     EN -->|"oui"| SEND["Avis à l'ancienne adresse,<br>dans la langue du compte"]
+    SEND --> NEW["Confirmation à la nouvelle adresse,<br>dans la langue du compte"]
     classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
-    class SEND ok
+    class SEND,NEW ok
 ```
 
-| | L'avis |
+| | L'avis et la confirmation |
 | --- | --- |
-| **Destinataire** | Seulement l'ancienne adresse : la nouvelle ne reçoit rien. |
-| **Ce qu'il ne dit pas** | Rien de la nouvelle adresse, pas même le domaine, et aucun nom d'utilisateur : il commence par un simple « Bonjour, » ([Notes de sécurité](email_troubleshooting.md#security)). |
-| **Ce qu'il dit** | Que l'adresse a changé. Si le propriétaire n'est pas à l'origine du changement, quelqu'un utilise peut-être son compte : il doit changer le mot de passe tout de suite s'il le peut encore, et vous prévenir. Pas de lien. |
+| **Destinataires** | L'avis à l'ancienne adresse, puis la confirmation à la nouvelle. Chaque e-mail part de son côté : si l'un ne peut pas partir, l'autre part quand même, et aucun des deux n'annule le changement. |
+| **Ce qu'ils ne disent pas** | L'avis ne montre rien de la nouvelle adresse, pas même le domaine ; la confirmation rien de l'ancienne. Aucun des deux ne contient le nom d'utilisateur : tous deux commencent par un simple « Bonjour, » ([Notes de sécurité](email_troubleshooting.md#security)). |
+| **Ce que dit l'avis** | Que l'adresse a changé. Si le propriétaire n'est pas à l'origine du changement, quelqu'un utilise peut-être son compte : il doit changer le mot de passe tout de suite s'il le peut encore, et vous prévenir. Pas de lien. |
+| **Ce que dit la confirmation** | Que cette adresse est désormais celle du compte : il se connecte avec elle et y reçoit ses e-mails. À qui n'a pas de compte sur l'instance, elle dit que quelqu'un a saisi l'adresse par erreur, et de vous prévenir. Pas de lien. |
 | **Nom de l'instance** | L'hôte de `LIBREFOLIO_PUBLIC_URL`, avec son port s'il en a un, ou « LibreFolio » lorsque la variable n'est pas définie ou ne peut pas être utilisée : sans lien, l'avis n'en a pas besoin. |
 | **Limite horaire** | Compte comme n'importe quel e-mail. |
-| **3 par heure par compte et par boîte e-mail** | La boîte e-mail est comptée quelle que soit la façon d'écrire son adresse ([Mots de passe oubliés](#forgot-password)). Sans ces limites, un compte pourrait pointer son e-mail vers n'importe quelle adresse puis le changer à nouveau, pour faire écrire votre instance à cette adresse. |
-| **Majuscules** | `Anna@example.com` pour `anna@example.com` n'est pas un changement d'adresse : aucun avis ne part. Les lettres accentuées comptent comme différentes : `Émile@example.com` pour `émile@example.com` est un changement, avec son avis. |
+| **3 par heure par compte et par boîte e-mail** | 3 changements avec e-mails par heure par compte, et 3 e-mails par heure par boîte e-mail, quelle que soit la façon d'écrire son adresse ([Mots de passe oubliés](#forgot-password)). Une boîte e-mail au-delà de sa limite ne reçoit rien, l'autre adresse reçoit quand même son e-mail. Sans ces limites, un compte pourrait pointer son e-mail vers n'importe quelle adresse puis le changer à nouveau, pour faire écrire votre instance à cette adresse. |
+| **Majuscules** | `Anna@example.com` pour `anna@example.com` n'est pas un changement d'adresse : aucun e-mail ne part. Les lettres accentuées comptent comme différentes : `Émile@example.com` pour `émile@example.com` est un changement, avec son avis. |
 
 ---
 

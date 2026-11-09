@@ -19,13 +19,14 @@ from backend.app.db.session import begin_writes, get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.users import (
     AccountDeletionPreviewRead,
+    AccountLinkListResponse,
+    AccountLinkRead,
     AddressProbeIssued,
     AdminUserListResponse,
     AdminUserRead,
     AdminUserUpdateRequest,
     InviteCreateRequest,
     InviteCreateResponse,
-    InviteListResponse,
     InviteRead,
     LinkTokenResponse,
     OnboardingResetRequest,
@@ -37,7 +38,7 @@ from backend.app.schemas.users import (
     UserSearchResponse,
     UserUsageRead,
 )
-from backend.app.services.accounts import address_probe, registration_service, token_service, user_limit_service, user_service
+from backend.app.services.accounts import account_links, address_probe, registration_service, token_service, user_limit_service, user_service
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.user_service import search_users
@@ -73,7 +74,7 @@ async def search_users_endpoint(
 
 # =============================================================================
 # Administration (admin only)
-# Static paths first: /users/invites must not be read as /users/{user_id}.
+# Static paths first: /users/invites and /users/account-links must not be read as /users/{user_id}.
 # =============================================================================
 
 
@@ -127,13 +128,6 @@ async def _user_or_404(session: AsyncSession, user_id: int) -> User:
     return user
 
 
-@router.get("/invites", response_model=InviteListResponse, summary="List the live invitations (admin)")
-async def list_invites(admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> InviteListResponse:
-    """The invitations still waiting to be used, oldest first, with the usage of the instance."""
-    invites = await registration_service.list_pending_invites(session)
-    return InviteListResponse(items=[_invite_read(invite) for invite in invites], usage=_usage_read(await registration_service.user_usage(session)))
-
-
 @router.post("/invites", response_model=InviteCreateResponse, status_code=status.HTTP_201_CREATED, summary="Create an invitation (admin)")
 async def create_invite(request: InviteCreateRequest, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> InviteCreateResponse:
     """Create an invitation and return its link, once. Refused when registration is disabled or no place is left."""
@@ -149,13 +143,53 @@ async def create_invite(request: InviteCreateRequest, admin: Annotated[User, Dep
     return InviteCreateResponse(invite=_invite_read(issued.record), token=issued.token, path=path, url=registration_service.public_link(path))
 
 
-@router.delete("/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Revoke an invitation (admin)")
-async def revoke_invite(invite_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> Response:
-    """Revoke a live invitation: its link stops working and its place is freed."""
-    if not await registration_service.revoke_invite(session, invite_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+def _account_link_read(view: account_links.AccountLinkView) -> AccountLinkRead:
+    record = view.record
+    used = view.state == account_links.LinkState.USED
+    revoked = view.state == account_links.LinkState.REVOKED
+    return AccountLinkRead(
+        id=record.id,
+        purpose=AccountTokenPurpose(record.purpose).value,
+        state=view.state.value,
+        revocable=view.revocable,
+        user_id=record.user_id,
+        username=view.username,
+        email=record.email,
+        grants_admin=record.grants_admin,
+        created_by_user_id=record.created_by_user_id,
+        created_by_username=view.created_by_username,
+        created_at=record.created_at,
+        expires_at=record.expires_at,
+        used_at=record.consumed_at if used else None,
+        used_by_user_id=view.used_by_user_id,
+        used_by_username=view.used_by_username,
+        revoked_at=record.revoked_at if revoked else None,
+    )
+
+
+@router.get("/account-links", response_model=AccountLinkListResponse, summary="List every account link with its state (admin)")
+async def list_account_links(admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> AccountLinkListResponse:
+    """Every account link — invitations, password resets, email verifications, the setup link, the owner's email
+    change —, newest first, each with its state: ``open``, ``used``, ``expired`` or ``revoked``. Never a token."""
+    return AccountLinkListResponse(items=[_account_link_read(view) for view in await account_links.list_links(session)])
+
+
+@router.delete("/account-links/{link_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Revoke an open account link (admin)")
+async def revoke_account_link(link_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> Response:
+    """Revoke an open link: it stops working at once; an invitation frees its place.
+
+    404 when no such link is open (unknown, used, expired or revoked); 409 ``LINK_NOT_REVOCABLE`` for the setup link of
+    the initial administrator (cancelled from its account) and the owner's email change (driven by the host).
+    """
+    outcome = await account_links.revoke_link(session, link_id)
+    if outcome == "not_found":
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account link not found")
+    if outcome == "not_revocable":
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "LINK_NOT_REVOCABLE", "message": "This link is not revoked here"})
     await session.commit()
-    logger.info("Invitation revoked by an administrator", invite_id=invite_id, admin_id=admin.id)
+    logger.info("Account link revoked by an administrator", link_id=link_id, admin_id=admin.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

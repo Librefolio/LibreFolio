@@ -7,8 +7,9 @@ The startup sync (``test_services/test_owner_email_change.py``) emails a link to
 2. 200 ``{"username"}``. In ONE transaction: the token consumed; the owner's address becomes the token's address; the
    address is verified (``email_verified_at``); every session of the owner ends (``session_version`` raised: the cookie
    issued before is refused); the owner's other ``email_change`` links and its password-reset links (a mailbox that is
-   no longer its own) are revoked. After the commit, the notice to the OLD address is scheduled (``email_changed_work``)
-   as ``PUT /auth/profile`` does. The password is unchanged: the new address signs in, the old one does not. The owner
+   no longer its own) are revoked. After the commit, the emails of the change are scheduled (``email_changed_work`` with
+   ``by_host=True``: the notice to the OLD address and, since UA2, the confirmation to the new one; their content and
+   limits are EMF-044…066 in ``test_services/test_email_flows.py``) as ``PUT /auth/profile`` does. The password is unchanged: the new address signs in, the old one does not. The owner
    stays protected: by its flag, and now by its address too.
 3. 400 ``{"detail": {"error_code": "TOKEN_INVALID", "status", "message"}}`` exactly as the verification confirm:
    ``expired``, ``consumed``, ``revoked``, ``unknown``; a token of another purpose is ``unknown`` and left untouched.
@@ -258,7 +259,7 @@ def test_the_route_and_its_models_have_the_agreed_names() -> None:
 
 @pytest.mark.asyncio
 async def test_the_click_changes_the_address_and_ends_the_sessions(private: _Private, notices: Notices) -> None:
-    """OWNAPI-010: a live link: 200 ``{username}``; the owner's address is the token's; verified; ``session_version`` raised and the cookie issued before refused; the password unchanged — the new address signs in, the old one does not —; the link consumed; the owner's other change links and its reset links revoked; the notice to the OLD address scheduled; no session needed or set."""
+    """OWNAPI-010: a live link: 200 ``{username}``; the owner's address is the token's; verified; ``session_version`` raised and the cookie issued before refused; the password unchanged — the new address signs in, the old one does not —; the link consumed; the owner's other change links and its reset links revoked; the emails of the change scheduled once, with both addresses and ``by_host``; no session needed or set."""
     print_section("OWNAPI-010: the click")
     owner = await _owner(private.engine)
     issued = await _link(private.engine, owner)
@@ -283,7 +284,7 @@ async def test_the_click_changes_the_address_and_ends_the_sessions(private: _Pri
     assert await _status(private.engine, older.token) == TokenStatus.REVOKED, "the owner's other change links are revoked"
     assert await _status(private.engine, reset.token, AccountTokenPurpose.PASSWORD_RESET) == TokenStatus.REVOKED, "a reset link asked to the old mailbox no longer works"
     assert notices.calls == [(owner.id, OLD_EMAIL, NEW_EMAIL)]
-    assert notices.by_host == [True], "A-64 (c): the notice to the old address is the one of a change the host decided"
+    assert notices.by_host == [True], "A-64 (c): the emails to both addresses are those of a change the host decided"
     async with _browser(private) as fresh:
         assert (await fresh.post(LOGIN, json={"username": OLD_EMAIL, "password": PASSWORD})).status_code == 401, "the old address no longer signs in"
         assert (await fresh.post(LOGIN, json={"username": NEW_EMAIL, "password": PASSWORD})).status_code == 200, "the new one does, with the same password"

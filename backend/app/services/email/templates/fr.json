@@ -50,7 +50,12 @@
     "intro": "L'adresse e-mail de votre compte sur $instance a été modifiée. Ce message part vers l'adresse qu'il avait avant.",
     "advice": "Si vous avez fait ce changement, vous n'avez rien à faire. Sinon, quelqu'un utilise peut-être votre compte : changez tout de suite votre mot de passe si vous pouvez encore vous connecter, et prévenez l'administrateur de $instance.",
     "intro_host": "L'adresse e-mail de votre compte sur $instance a été changée par l'hébergeur de cette instance. Ce message est envoyé à l'adresse qu'elle avait auparavant.",
-    "advice_host": "Si l'hébergeur vous a prévenu de ce changement, vous n'avez rien à faire. Sinon, demandez à l'hébergeur de $instance si ce changement vient de lui."
+    "advice_host": "Si l'hébergeur vous a prévenu de ce changement, vous n'avez rien à faire. Sinon, demandez à l'hébergeur de $instance si ce changement vient de lui.",
+    "new_subject": "Votre compte LibreFolio utilise désormais cette adresse e-mail",
+    "new_intro": "C'est désormais l'adresse e-mail de votre compte sur $instance : le compte se connecte avec elle et reçoit ses e-mails ici.",
+    "new_advice": "Si vous avez fait ce changement, vous n'avez rien à faire. Si vous n'avez pas de compte sur $instance, quelqu'un a saisi cette adresse par erreur : prévenez l'administrateur de $instance.",
+    "new_intro_host": "Le changement d'adresse demandé par l'hébergeur de $instance est terminé : c'est désormais l'adresse e-mail de votre compte, qui se connecte avec elle et reçoit ses e-mails ici.",
+    "new_advice_host": "Si vous ne vous y attendiez pas, demandez à l'hébergeur de $instance."
   },
   "email_change_confirmation": {
     "subject": "Confirmez la nouvelle adresse e-mail de votre compte administrateur LibreFolio",

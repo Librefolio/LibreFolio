@@ -727,6 +727,16 @@ def services_registration(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Registration service tests", verbose=verbose)
 
 
+def services_account_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the account links administrators see (lot UA3): their state, the names they refer to, their revocation."""
+    print_section("Services: Account Links")
+    print_info("Testing: backend/app/services/accounts/account_links.py")
+    print_info("Tests: link_state order (revoked, used, expired, open; retired reads revoked), list_links newest first with usernames, revoke_link revoked/not_found/not_revocable, flush without commit")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_links.py", test_names)
+    return run_command(cmd, "Account links service tests", verbose=verbose)
+
+
 def services_admin_bootstrap(verbose: bool = False, test_names: list = None) -> bool:
     """Test F02, the initial administrator: its variables, the startup bootstrap, the setup link, setup-link."""
     print_section("Services: Initial Administrator (F02)")
@@ -2847,6 +2857,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "account-links",
+        services_account_links,
+        name="Account Links",
+        desc="UA3: link_state reads revoked, used, expired, open in that order (a retired link reads revoked, expired at expires_at); list_links lists every link newest first with its account, issuer and user names; revoke_link revokes open invitations, reset and verification links once, answers not_found for what is not open and not_revocable for an open setup link or email change, flushes without committing",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server; every moment passed as now.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "admin-bootstrap",
         services_admin_bootstrap,
         name="Initial Administrator (F02)",
@@ -2994,7 +3014,7 @@ Note: No backend server required.
         "email-flows",
         services_email_flows,
         name="E-mail Flows",
-        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, an inactive account's reset link refused, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: open as shipped (no hold since lot E4), per address keyed by H's client_rate_key, its one home (IPv6 by its /64, a mapped IPv4 as the IPv4, none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, an administrator's live link, per mailbox, the configuration read again before the link is made, a link made meanwhile rolled back, the new link revoked whatever stops the email, never raises, an unexpected error logged as its type alone; a blocked instance is refused first by every flow and makes no link",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, an inactive account's reset link refused, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: open as shipped (no hold since lot E4), per address keyed by H's client_rate_key, its one home (IPv6 by its /64, a mapped IPv4 as the IPv4, none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, an administrator's live link, per mailbox, the configuration read again before the link is made, a link made meanwhile rolled back, the new link revoked whatever stops the email, never raises, an unexpected error logged as its type alone; a blocked instance is refused first by every flow and makes no link; email_changed_work (UA2): the notice to the old address then the confirmation to the new one, each without the other address or the username, by_host variants, one refused never stops the other (warning with recipient), 3 changes/h per account, 3 emails/h per recipient mailbox (aliases folded), a held mailbox gets nothing while the other still does",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",

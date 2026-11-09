@@ -215,7 +215,7 @@ It is safe because changing an account's email address asks for the current pass
 
 | State of the instance | What the page shows |
 | --- | --- |
-| Email **Ready** and a usable `LIBREFOLIO_PUBLIC_URL` | **Forgot Password?** opens the form for it. Below, a panel closed until clicked keeps the command an administrator can run on the server. |
+| Email **Ready** and a usable `LIBREFOLIO_PUBLIC_URL` | **Forgot Password?** opens the form for it, without the server commands (they stay in [Command-Line Tools](cli_tools.md#reset-a-password-or-lock-an-account)). After a request the form says *Email sent: check your spam folder too.*, the same for everyone, and its button counts down 5 minutes, the interval for one account, before the next request; a reload of the page keeps the countdown. |
 | Otherwise | That command, open, under the warning: *Email recovery is not available on this instance. Reset your password from the server terminal, or ask your administrator for a password-reset link.* |
 | The page cannot read the instance's configuration from the server | Only the advice: *Ask your administrator for a password-reset link: they can create one for your account.* |
 
@@ -602,7 +602,7 @@ Besides:
 
 ## 🔔 Email Address Changes {: #email-change-notice }
 
-When someone changes the email address of their account, in [Profile](../user/settings/profile.md), LibreFolio writes to the address the account had **before**.
+When the email address of an account has changed, in [Profile](../user/settings/profile.md), LibreFolio writes two short emails, in the account's language: a **notice** to the address the account had **before**, and a **confirmation** to the **new** address, which is now the account's.
 
 ```mermaid
 ---
@@ -613,24 +613,26 @@ flowchart TD
     CH["Email address change<br>in Profile"] --> OK["The change goes through:<br>the answer never waits for the email"]
     OK --> CASE{"Only the capitals of the<br>letters A to Z changed?"}
     CASE -->|"yes: not a change"| SKIP["No notice"]
-    CASE -->|"no"| LIM{"3 an hour for the account or<br>for the mailbox past?"}
+    CASE -->|"no"| LIM{"3 changes an hour<br>for the account past?"}
     LIM -->|"yes"| SKIP
     LIM -->|"no"| EN{"Email on?"}
     EN -->|"no"| LOG["Nothing: an information line<br>in the log, not a warning"]
     EN -->|"yes"| SEND["Notice to the old address,<br>in the account's language"]
+    SEND --> NEW["Confirmation to the new address,<br>in the account's language"]
     classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
-    class SEND ok
+    class SEND,NEW ok
 ```
 
-| | The notice |
+| | The notice and the confirmation |
 | --- | --- |
-| **Recipient** | Only the old address: the new one gets nothing. |
-| **What it does not say** | Nothing of the new address, not even the domain, and no username: it opens with a plain «Hello,» ([Security Notes](email_troubleshooting.md#security)). |
-| **What it says** | That the address changed. If the owner did not make the change, someone may be using their account: they must change the password at once if they still can, and tell you. No link. |
+| **Recipients** | The notice to the old address, then the confirmation to the new one. Each goes on its own: if one cannot leave, the other still does, and neither undoes the change. |
+| **What they do not say** | The notice shows nothing of the new address, not even the domain; the confirmation nothing of the old one. Neither has the username: both open with a plain «Hello,» ([Security Notes](email_troubleshooting.md#security)). |
+| **What the notice says** | That the address changed. If the owner did not make the change, someone may be using their account: they must change the password at once if they still can, and tell you. No link. |
+| **What the confirmation says** | That this address is now the account's: it signs in with it and gets its emails there. Whoever has no account on the instance is told that someone typed the address by mistake, and to tell you. No link. |
 | **Instance name** | The host of `LIBREFOLIO_PUBLIC_URL`, with its port if it has one, or «LibreFolio» when the variable is not set or cannot be used: with no link, the notice does not need it. |
 | **Hourly limit** | Counts like any email. |
-| **3 an hour per account and per mailbox** | The mailbox is counted however its address is written ([Forgotten Passwords](#forgot-password)). Without these limits, an account could point its email at any address and change it again, to make your instance write there. |
-| **Capitals** | `Anna@example.com` for `anna@example.com` is no change of address: no notice goes. Accented letters count as different: `Émile@example.com` for `émile@example.com` is a change, with its notice. |
+| **3 an hour per account and per mailbox** | 3 changes with emails an hour per account, and 3 emails an hour per mailbox, however its address is written ([Forgotten Passwords](#forgot-password)). A mailbox past its limit gets nothing, the other address still gets its email. Without these limits, an account could point its email at any address and change it again, to make your instance write there. |
+| **Capitals** | `Anna@example.com` for `anna@example.com` is no change of address: no email goes. Accented letters count as different: `Émile@example.com` for `émile@example.com` is a change, with its notice. |
 
 ---
 

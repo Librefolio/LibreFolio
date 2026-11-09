@@ -15,6 +15,7 @@ import type {AuthError, AuthErrorKey, AuthState, AuthUser} from '$lib/types';
 import {isAxiosError} from 'axios';
 import {currentLanguage} from '$lib/stores/app/language';
 import {userSettings} from '$lib/stores/app/settings';
+import {effectiveUiPreference} from '$lib/stores/app/uiPreferences';
 import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 
@@ -129,11 +130,9 @@ function createAuthStore() {
                         currentLanguage.set(settings.language as 'en' | 'it' | 'fr' | 'es');
                     }
 
-                    // Apply theme preference
-                    if (settings.theme) {
-                        const {applyTheme} = await import('$lib/stores/app/themeStore');
-                        applyTheme(settings.theme as 'light' | 'dark' | 'auto');
-                    }
+                    // Apply the theme in force: the user's own, else the instance's default_theme (lot UIP)
+                    const {applyTheme} = await import('$lib/stores/app/themeStore');
+                    applyTheme(effectiveUiPreference(settings, 'theme'));
 
                     // Cache settings to localStorage for userSettings store
                     // Bug 2 fix: Also update the store directly so it's available immediately

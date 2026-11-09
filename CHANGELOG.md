@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Data-quality warnings on the broker page:** old prices, missing or old exchange rates and their sync buttons appear there too, for every role.
 - **Positions chart: choose the window of the Rolling view.** One week, one month, three months, one year or a custom window; it starts from the automatic one.
 - The allocation pie by asset shows the asset's icon in its tooltip too, as the pie by type does.
-- Asset allocation pie: the tooltip shows the asset type as a badge next to the icon, and marks a custom icon.
+- Asset allocation pies: the By Asset and By Type tooltips show the asset type as a badge next to the icon.
 
 #### 📈 Charts
 
@@ -40,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Chart Settings: the preview opens in the saved view**, with a Rolling Return preview and its window: automatic until you choose one, the largest preset that fits the period shown, as on the cards and on the asset detail page.
 - **Lots: every marker on the Lot Life chart explains itself.** Hover, tap or focus a marker (▲ purchase, ▼ sale, ◆ transfer, + / × adjustment, │ split) on the Lot Life & Custody chart to see what happened, when, how many units (hidden in privacy mode) and at which broker: From and To for a transfer between your brokers. When several events fall on the same day, the tooltip lists them all.
 - **Compare an asset with an exchange rate, and back.** A comparison chosen in a card's or a chart's signals now draws on the Assets and FX list cards and on both detail pages, also when the page is opened fresh.
-- **Choose the shape of your chart lines** in your settings: segments (the default), steps or a smooth spline, for every chart.
+- **Choose the shape of your chart lines** in your settings: segments (the default), steps or a smooth spline, for every chart. An administrator sets the default for everyone in Global Settings (**Default Chart Line Shape**).
+- **Preferences says where the theme and the line shape come from**: a **Global** badge when they follow the administrator's default, a button that removes your own choice to follow it again, and an **Auto** badge when the theme is left to your browser.
 - **Chart tooltips show the day of the week** after the date, and the pointer stops on days, never between two.
 
 #### 📉 Risk Analysis
@@ -111,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 👥 Accounts, sign-up and administrators
 
+- **Every account link in Settings › Administration › Users.** Invitations, password-reset links, email verifications, the setup link of the first administrator and the owner's email change are all listed, each with its type, whom it is for, who created it, its dates and its state. Open links are in one table; used, expired and revoked ones are in a folded **Closed links** panel. Both tables sort, filter, hide columns and page through long lists. Password-reset and email-verification links can now be revoked too.
 - **Managed instances: `./dev.py user reassign-owner <username>`** gives the administrator account back to the owner's address after a wrong confirmation: a new password link, the old password and the sessions revoked. `user set-email` also cancels an address-change link still waiting.
 - **More users than the plan allows** (a smaller plan, or a restored backup): at the first sign-in the administrator chooses who keeps access, before any other page, and can download the full backup first. The others are deactivated, never deleted, and wait with a clear message. A restore says so in its report instead of refusing.
 - `./dev.py user create … --role user` creates a regular account; without `--role`, the command still creates an administrator.
@@ -134,6 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### ✉️ Email
 
+- **When an account's email address changes, the new address gets a short confirmation** that it is now the account's address, in the account's language, alongside the notice to the old address, which still shows nothing of the new one. The limits are 3 changes an hour per account and 3 emails an hour per mailbox.
 - **Email, optional**: LibreFolio can send emails through your own SMTP server, named only by the `LIBREFOLIO_SMTP_*` variables, the password also from a file (`LIBREFOLIO_SMTP_PASSWORD_FILE`). Nothing of it is stored, shown in the app or put in a backup, and without a server nothing changes. **Settings › Administration › Email**, for administrators, says whether email works, which variable to fix when it does not, and sends a test email to your own address in your language. `LIBREFOLIO_SMTP_MAX_PER_HOUR` caps the emails of the instance (50 an hour by default); the startup checks report an unusable configuration and a server reached without encryption. Documented in the new admin page "Email".
 - **Email links**: every link an email carries is built from `LIBREFOLIO_PUBLIC_URL` alone. While email works, the start log and Settings › Administration › Email say when that variable is missing or cannot be used, and `GET /api/v1/system/instance` tells whether emails with a link can go out.
 - Settings › Administration › Email checks, from the administrator's browser, that `LIBREFOLIO_PUBLIC_URL` reaches this very instance, and warns, for this device only, when another server answers there or nothing does; the startup warning about `LIBREFOLIO_PUBLIC_URL` now lists every rule the address must follow.
@@ -334,12 +337,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 🖥️ Interface and accessibility
 
+- **The theme and the chart line shape are kept with your account** and follow you to every browser and device; the administrator's defaults now apply to every user who has not chosen their own, not only to new users. Existing themes are kept as each user's own choice. The sun and moon button in the header still changes the theme in that browser only.
 - **Date ranges always span two different days.** In every date-range picker the day clicked first shows the not-allowed cursor and a second click on it is ignored; a typed date equal to the other end turns red; the arrow keys skip it. A date typed while the other end is empty leaves that end open: in a table's date filter, **From** alone keeps the rows from that day on (it used to keep that day only). Ranges of one day saved earlier still work.
 - Notifications are announced by screen readers (errors at once, the others politely), and their close button is named in your language.
 - **A back arrow on Brokers, Transactions, Assets and FX** when you reach them from a link in the app: it brings you back with your filters and period. It does not appear from the sidebar or a typed address.
 
 #### 👥 Accounts and sign-in
 
+- Users › Send by email: the «Sent to …» message now reminds you that the recipient should check the spam folder too if the email does not arrive.
+- **«Forgot password?» answers with a short message**, the same whether an account matches or not, and its button counts down 5 minutes before the next request (the server's own interval), across a page reload. When the instance can email a reset link, the card no longer shows the server's reset commands: the administrator's guide keeps them.
 - **Settings › Administration is now for administrators only.** Other users no longer see a read-only copy of Global Settings; an old link to it opens their Profile.
 - After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
 - `./dev.py user deactivate` on the administrator still waiting for its setup cancels its setup link; `./dev.py user demote` refuses it.
@@ -626,6 +632,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 👥 Accounts and sign-in
 
+- Profile › Email: on desktop the current-password field of an email change now sits on the right, under the email field.
 - **Signing in, and opening or saving your settings, no longer fail when your account's saved theme is one this version doesn't know** (a hand-edited database, or a downgrade): the app shows the instance's default theme, or Auto.
 - **When the last active administrator tries to delete their own account, the dialog now says in your language what to do first** — make another account an administrator — instead of an English server message.
 - Two administrators acting on the same accounts at the same moment can no longer leave the instance without an active administrator, or one place over its user limit; an account deleted in the meantime now answers "not found" instead of a server error.
@@ -778,6 +785,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/system/ready` says `behind` or `ahead` instead of `mismatch`** for a database whose migration is not this version's (`checks.migrations`), and adds `database_revision` and `app_version`. `GET /api/v1/panel/status` adds `instance_key` and `users_over_limit`: a client that checks its exact keys must accept them.
 - **Removed unused or superseded API routes, with no deprecation period:** `POST /transactions/transfers/promote` (use `POST /transactions/commit` with `promotes[]`), `POST /transactions/events/suggest` (use `GET /transactions/event-reconciliation`), `DELETE /assets/events` (use `POST /assets/events` with `delete_ids`), `GET /assets/all` (use `GET /assets/query?active=true`), `POST /assets/provider/refresh` (use `POST /assets/provider/probe`), `POST /assets/{id}/market-data/wipe` (the currency `PATCH /assets` does it), `POST /portfolio/wac` (use `POST /portfolio/lots/analysis`), `GET /settings/global/{key}` (use `GET /settings/global`), `POST /settings/global/initialize` (done at startup), `GET /uploads/{file_id}` (use `GET /uploads`), `GET /brokers/import/files/{file_id}` and `…/last-parse` (use `GET /brokers/import/files`), `GET /utilities/currencies/normalize` (use `GET /utilities/currencies/suggest`), `GET /brokers/{id}/summary` (read the broker with `GET /brokers/{id}`, its cash and positions with `POST /portfolio/report`).
 - `PATCH /api/v1/assets`: an explicit `null` on `icon_url`, `user_url` or a single identifier (`identifier_isin`, `_ticker`, `_cusip`, `_sedol`, `_figi`, `_uuid`) now clears it, as the schema always stated, and an explicit empty list on `identifier_other` clears the other identifiers (`null` there still leaves them unchanged). Send only the fields you change: a client that sends the whole object with `null` or `[]` in untouched fields clears them.
+- `GET` and `PUT /api/v1/settings/user` no longer have `theme`: it is `ui_preferences.theme`, next to `ui_preferences.chart_line_shape`; `ui_preference_defaults` gives the global defaults. A `PUT` merges `ui_preferences` key by key (`null` removes a key, so it follows the default again) and refuses unknown fields with 422. The login response's `user_settings` carries both.
+- `GET /api/v1/users/invites` and `DELETE /api/v1/users/invites/{invite_id}` are removed. Use `GET /api/v1/users/account-links` (every account link with its state) and `DELETE /api/v1/users/account-links/{link_id}` (revokes an open invitation, password-reset or email-verification link). `POST /api/v1/users/invites` is unchanged.
 
 ---
 - **`POST /api/v1/portfolio/report`: `summary.pnl_change_1d_vs_total_pnl_percent` is removed**, with no deprecation period: the day's change as a share of the total P&L blew up near zero. Use `pnl_change_1d_vs_nav_percent`, the share of yesterday's portfolio value.

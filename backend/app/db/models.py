@@ -442,11 +442,14 @@ class UserSettings(SQLModel, table=True):
 
     base_currency: str = Field(default="EUR", max_length=3)  # ISO 4217
     language: str = Field(default="en", max_length=5)  # e.g., "en", "it", "fr", "es"
-    theme: str = Field(default="light", max_length=20)  # e.g., "light", "dark"
     avatar_url: Optional[str] = Field(default=None, max_length=500)  # URL to user avatar image
 
     created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
     updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    # The interface preferences the user chose, as JSON (schemas.settings.UIPreferences: theme, chart_line_shape); NULL or an
+    # absent key follows the key's global default. Added last by migration 005 (step 8), which moved ``theme`` into it.
+    # Read and written only through settings_service, which tolerates a value it cannot read.
+    ui_preferences: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
 
     @field_validator("base_currency", mode="before")
     @classmethod

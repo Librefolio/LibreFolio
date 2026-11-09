@@ -445,7 +445,7 @@ class TestLogin:
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test-only local import
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test-only local import
-        from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test-only local import
+        from backend.app.schemas.settings import UIPreferences, UserSettingsUpdate  # noqa: PLC0415 — test-only local import
         from backend.app.services.accounts import settings_service, user_service  # noqa: PLC0415 — test-only local import
 
         async with httpx.AsyncClient() as client:
@@ -471,7 +471,7 @@ class TestLogin:
                     UserSettingsUpdate(
                         language="fr",
                         base_currency="USD",
-                        theme="dark",
+                        ui_preferences=UIPreferences(theme="dark"),
                         avatar_url="https://example.com/avatar.png",
                     ),
                     session,
@@ -486,12 +486,15 @@ class TestLogin:
             assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
             data = response.json()
             assert data["user"]["username"] == username
-            assert data["user_settings"] == {
+            user_settings = data["user_settings"]
+            assert {key: user_settings[key] for key in ("language", "base_currency", "avatar_url", "ui_preferences")} == {
                 "language": "fr",
                 "base_currency": "USD",
-                "theme": "dark",
                 "avatar_url": "https://example.com/avatar.png",
+                "ui_preferences": {"theme": "dark"},
             }
+            assert set(user_settings["ui_preference_defaults"]) == {"theme", "chart_line_shape"}
+            assert "theme" not in user_settings, "theme lives in ui_preferences"
 
             client.cookies.update(response.cookies)
             me_resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)

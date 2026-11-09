@@ -1,5 +1,5 @@
-"""Release 1.3.0 schema: accounts, registration mode, plugin settings, email addresses unique regardless of case, and
-only the indexes a query uses
+"""Release 1.3.0 schema: accounts, registration mode, plugin settings, email addresses unique regardless of case,
+only the indexes a query uses, and the interface preferences as JSON
 
 Revision ID: 005_release_1_3_0_schema
 Revises: 004_release_1_2_0_schema
@@ -93,6 +93,16 @@ downgrade changes the table in place and fires none.
    Removing all thirteen changed no query plan for the worse. The models no longer declare them, and
    ``db validate`` refuses an index equal to, or a left prefix of, another. The rule: ``patterns/alembic.md``.
 
+8. **The interface preferences as JSON** (lot UIP, the developer's decision of 09/11/2026): ``user_settings`` gets
+   ``ui_preferences TEXT DEFAULT NULL``, the JSON object of the interface preferences the user chose
+   (``schemas.settings.UIPreferences``: ``theme``, ``chart_line_shape``); a key that is absent, or a NULL column, follows
+   its global default (``default_theme``, ``default_chart_line_shape``). Each row's ``theme`` is copied into it as it is,
+   ``light`` included, as ``{"theme": <value>}`` (``json_object``), then the ``theme`` column is dropped. A user who never
+   chose the copied value goes back to the global default from the Preferences page. A new preference later is one more
+   key in the JSON, never a migration. In place, like the rest of this file: ``ADD COLUMN``, an ``UPDATE`` of the rows
+   whose ``ui_preferences`` is still NULL, then ``DROP COLUMN`` (``theme`` has no index, no foreign key, no CHECK), each
+   guarded, so a run stopped between two of them completes. No index: the column is read with its row, by ``user_id``.
+
 **Not a step: the decimals of C-97** (quantities keep 10 decimal places and prices 12, issue #43; carried over from the
 retired 009): no DDL, no data step.
 
@@ -127,10 +137,15 @@ keeps the digits it had, up to the fifteen significant digits of a double. The Â
 by the migration (the developer's decision, 22/10/2026): a real database that holds one is corrected with an external
 script.
 
-The downgrade goes back step by step: the thirteen indexes again with their ``001`` definitions, then
-``ux_users_email_lower``, the plugin tables, ``enable_registration`` from ``registration_mode`` (``open`` is ``true``,
-``invite`` and ``disabled`` are ``false``: the old setting had no middle ground), ``account_tokens``, the owner's index
-and the four columns. Tokens, plugin settings and the values of the columns are lost.
+The downgrade goes back step by step: ``user_settings`` with its ``theme`` column again, then the thirteen indexes
+again with their ``001`` definitions, ``ux_users_email_lower``, the plugin tables, ``enable_registration`` from
+``registration_mode`` (``open`` is ``true``, ``invite`` and ``disabled`` are ``false``: the old setting had no middle
+ground), ``account_tokens``, the owner's index and the four columns. Tokens, plugin settings and the values of the
+columns are lost. ``user_settings`` cannot go back in place: ``ADD COLUMN`` would put ``theme`` last, where 1.2 has it
+before ``avatar_url``. Nothing points at ``user_settings``, so it is rebuilt with its ``001`` statement: the table is
+renamed aside, created again, its rows copied with ``theme`` read from the JSON (``light`` when the user had none, or
+when the column does not hold a JSON object with a text ``theme``), and the old one dropped. The other preferences are
+lost.
 """
 
 import string
@@ -166,6 +181,23 @@ _OLD_REGISTRATION_KEY = "enable_registration"
 _REGISTRATION_KEY = "registration_mode"
 _REGISTRATION_DESCRIPTION = "Who may create an account: open, invite or disabled"
 _OLD_REGISTRATION_DESCRIPTION = "Allow new user registration"
+_SETTINGS_TABLE = "user_settings"
+_SETTINGS_ASIDE = "user_settings_005"
+_UI_PREFERENCES_COLUMN = "ui_preferences"
+#: ``user_settings`` as ``001_initial`` creates it, the statement copied as it is: what the downgrade rebuilds.
+_SETTINGS_TABLE_1_2 = """CREATE TABLE user_settings
+               (
+                   id            INTEGER PRIMARY KEY,
+                   user_id       INTEGER     NOT NULL UNIQUE,
+                   base_currency VARCHAR(3)  NOT NULL DEFAULT 'EUR',
+                   language      VARCHAR(5)  NOT NULL DEFAULT 'en',
+                   theme         VARCHAR(20) NOT NULL DEFAULT 'light',
+                   avatar_url    VARCHAR(500)         DEFAULT NULL,
+                   created_at    DATETIME    NOT NULL,
+                   updated_at    DATETIME    NOT NULL,
+                   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                   CONSTRAINT uq_user_settings_user_id UNIQUE (user_id)
+               )"""
 _PLUGIN_SYSTEM_TABLE = "plugin_system_settings"
 _PLUGIN_USER_TABLE = "plugin_user_settings"
 #: The indexes of ``001_initial`` no query needs (step 7), with their ``001`` definitions for the downgrade.
@@ -341,6 +373,41 @@ def _upgrade_registration_default(conn: sa.engine.Connection) -> None:
     )
 
 
+def _upgrade_ui_preferences(conn: sa.engine.Connection) -> None:
+    """Step 8: add ``user_settings.ui_preferences``, copy each row's ``theme`` into it, drop ``theme``; each part guarded."""
+    if _UI_PREFERENCES_COLUMN not in _columns(conn, _SETTINGS_TABLE):
+        conn.execute(sa.text(f"ALTER TABLE {_SETTINGS_TABLE} ADD COLUMN {_UI_PREFERENCES_COLUMN} TEXT DEFAULT NULL"))
+    if "theme" in _columns(conn, _SETTINGS_TABLE):
+        conn.execute(sa.text(f"UPDATE {_SETTINGS_TABLE} SET {_UI_PREFERENCES_COLUMN} = json_object('theme', theme) WHERE {_UI_PREFERENCES_COLUMN} IS NULL AND theme IS NOT NULL"))
+        conn.execute(sa.text(f"ALTER TABLE {_SETTINGS_TABLE} DROP COLUMN theme"))
+
+
+def _downgrade_ui_preferences(conn: sa.engine.Connection) -> None:
+    """Back from step 8: ``user_settings`` rebuilt with its ``001`` statement, ``theme`` read from the JSON, ``light`` without one.
+
+    The JSON functions run only on text ``json_valid`` accepts: the outer ``CASE`` picks its branch first, so malformed text never
+    reaches ``json_type``, which would raise on it (a ``CASE`` evaluates only the branch it takes; an ``AND`` gives no such promise).
+    """
+    if _UI_PREFERENCES_COLUMN not in _columns(conn, _SETTINGS_TABLE):
+        return
+    conn.execute(sa.text(f"DROP TABLE IF EXISTS {_SETTINGS_ASIDE}"))
+    conn.execute(sa.text(f"ALTER TABLE {_SETTINGS_TABLE} RENAME TO {_SETTINGS_ASIDE}"))
+    conn.execute(sa.text(_SETTINGS_TABLE_1_2))
+    conn.execute(sa.text(f"""
+            INSERT INTO {_SETTINGS_TABLE} (id, user_id, base_currency, language, theme, avatar_url, created_at, updated_at)
+            SELECT id, user_id, base_currency, language,
+                   CASE WHEN json_valid({_UI_PREFERENCES_COLUMN}) THEN
+                            CASE WHEN json_type({_UI_PREFERENCES_COLUMN}) = 'object'
+                                  AND json_type({_UI_PREFERENCES_COLUMN}, '$.theme') = 'text'
+                                 THEN json_extract({_UI_PREFERENCES_COLUMN}, '$.theme')
+                                 ELSE 'light' END
+                        ELSE 'light' END,
+                   avatar_url, created_at, updated_at
+            FROM {_SETTINGS_ASIDE}
+            """))
+    conn.execute(sa.text(f"DROP TABLE {_SETTINGS_ASIDE}"))
+
+
 def upgrade() -> None:
     """The steps of the docstring, in their order."""
     conn = op.get_bind()
@@ -353,11 +420,13 @@ def upgrade() -> None:
     conn.execute(sa.text(f"CREATE UNIQUE INDEX IF NOT EXISTS {_EMAIL_INDEX} ON users (lower(email))"))
     for name, _definition in _REDUNDANT_INDEXES:
         conn.execute(sa.text(f"DROP INDEX IF EXISTS {name}"))
+    _upgrade_ui_preferences(conn)
 
 
 def downgrade() -> None:
-    """Back to 1.2, step by step: tokens, plugin settings and the values of the new columns are lost."""
+    """Back to 1.2, step by step: tokens, plugin settings, the values of the new columns and every preference but the theme are lost."""
     conn = op.get_bind()
+    _downgrade_ui_preferences(conn)
     conn.execute(sa.text(f"DROP INDEX IF EXISTS {_OWNER_INDEX}"))
     present = _indexes(conn)
     for name, definition in _REDUNDANT_INDEXES:

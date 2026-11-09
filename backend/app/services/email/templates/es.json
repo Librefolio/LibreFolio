@@ -50,7 +50,12 @@
     "intro": "La dirección de correo de tu cuenta en $instance se ha cambiado. Este mensaje va a la dirección que tenía antes.",
     "advice": "Si hiciste tú el cambio, no tienes que hacer nada. Si no, puede que alguien esté usando tu cuenta: cambia tu contraseña enseguida si aún puedes iniciar sesión y avisa al administrador de $instance.",
     "intro_host": "La dirección de correo de tu cuenta en $instance fue cambiada por quien aloja esta instancia. Este mensaje llega a la dirección que tenía antes.",
-    "advice_host": "Si quien aloja la instancia te avisó de este cambio, no tienes que hacer nada. Si no, pregunta a quien aloja $instance si el cambio es suyo."
+    "advice_host": "Si quien aloja la instancia te avisó de este cambio, no tienes que hacer nada. Si no, pregunta a quien aloja $instance si el cambio es suyo.",
+    "new_subject": "Tu cuenta de LibreFolio usa ahora esta dirección de correo",
+    "new_intro": "Esta es ahora la dirección de correo de tu cuenta en $instance: la cuenta inicia sesión con ella y recibe aquí sus correos.",
+    "new_advice": "Si hiciste tú el cambio, no tienes que hacer nada. Si no tienes una cuenta en $instance, alguien escribió esta dirección por error: avisa al administrador de $instance.",
+    "new_intro_host": "El cambio de dirección que pidió quien aloja $instance se ha completado: esta es ahora la dirección de correo de tu cuenta, que inicia sesión con ella y recibe aquí sus correos.",
+    "new_advice_host": "Si no lo esperabas, pregunta a quien aloja $instance."
   },
   "email_change_confirmation": {
     "subject": "Confirma la nueva dirección de correo de tu cuenta de administrador de LibreFolio",

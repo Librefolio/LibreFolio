@@ -117,7 +117,8 @@ class TestGetOrCreateUserSettings:
 
                 assert result.language == "it"
                 assert result.base_currency == "CHF"
-                assert result.theme == "dark"
+                assert result.ui_preference_defaults.theme == "dark", "the global default_theme reaches the defaults"
+                assert result.ui_preferences.theme is None, "a new row owns no theme: it follows the global default"
             finally:
                 current_language = await session.get(GlobalSetting, "default_language")
                 current_currency = await session.get(GlobalSetting, "default_currency")
@@ -218,7 +219,8 @@ class TestGetOrCreateUserSettings:
 
                 assert result.language == "en"
                 assert result.base_currency == "EUR"
-                assert result.theme == "auto"
+                assert result.ui_preference_defaults.theme == "auto", "no default_theme row: the built-in auto"
+                assert result.ui_preferences.theme is None, "a new row owns no theme"
             finally:
                 if original_language:
                     session.add(
@@ -262,7 +264,7 @@ class TestUpdateUserSettings:
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after db config
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.schemas.settings import UIPreferences, UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.services.accounts.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
 
@@ -282,16 +284,16 @@ class TestUpdateUserSettings:
                 UserSettingsUpdate(
                     language="es",
                     base_currency="CHF",
-                    theme="dark",
+                    ui_preferences=UIPreferences(theme="dark"),
                     avatar_url="https://example.com/create-avatar.png",
                 ),
                 session,
             )
 
-            assert result.model_dump() == {
+            assert result.model_dump(exclude={"ui_preference_defaults"}) == {
                 "language": "es",
                 "base_currency": "CHF",
-                "theme": "dark",
+                "ui_preferences": {"theme": "dark"},
                 "avatar_url": "https://example.com/create-avatar.png",
             }
 
@@ -301,7 +303,7 @@ class TestUpdateUserSettings:
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after db config
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.schemas.settings import UIPreferences, UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.services.accounts.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
 
@@ -319,20 +321,20 @@ class TestUpdateUserSettings:
 
             await update_user_settings(
                 user_id,
-                UserSettingsUpdate(language="it", base_currency="GBP", theme="light"),
+                UserSettingsUpdate(language="it", base_currency="GBP", ui_preferences=UIPreferences(theme="light")),
                 session,
             )
 
             result = await update_user_settings(
                 user_id,
-                UserSettingsUpdate(theme="auto", avatar_url="https://example.com/update-avatar.png"),
+                UserSettingsUpdate(ui_preferences=UIPreferences(theme="auto"), avatar_url="https://example.com/update-avatar.png"),
                 session,
             )
 
-            assert result.model_dump() == {
+            assert result.model_dump(exclude={"ui_preference_defaults"}) == {
                 "language": "it",
                 "base_currency": "GBP",
-                "theme": "auto",
+                "ui_preferences": {"theme": "auto"},
                 "avatar_url": "https://example.com/update-avatar.png",
             }
 
@@ -347,7 +349,7 @@ class TestUpdateUserSettings:
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415 — test setup — imports after db config
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.schemas.settings import UIPreferences, UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.services.accounts import user_service  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.services.accounts.settings_service import update_user_settings  # noqa: PLC0415 — test setup — imports after db config
 
@@ -372,7 +374,7 @@ class TestUpdateUserSettings:
             # An update that omits avatar_url entirely must preserve the existing value.
             preserved = await update_user_settings(
                 user_id,
-                UserSettingsUpdate(theme="dark"),
+                UserSettingsUpdate(ui_preferences=UIPreferences(theme="dark")),
                 session,
             )
             assert preserved.avatar_url == "https://example.com/original-avatar.png"
@@ -1155,16 +1157,16 @@ class TestOnboardingServiceCompleteWelcome:
             assert settings.avatar_url == "https://example.com/atomic-avatar.png"
 
     @pytest.mark.asyncio
-    async def test_atomic_welcome_updates_existing_settings_without_touching_theme(self):
+    async def test_atomic_welcome_updates_existing_settings_without_touching_ui_preferences(self):
         """When a settings row already exists (e.g. via PUT /settings/user before welcome
         finishes), the atomic path must update language/currency/avatar and must not
-        clobber a field it does not own (theme)."""
+        clobber a field it does not own (ui_preferences)."""
         from sqlalchemy import select  # noqa: PLC0415
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
 
         from backend.app.db.models import OnboardingFlow, UserSettings  # noqa: PLC0415
         from backend.app.db.session import get_async_engine  # noqa: PLC0415
-        from backend.app.schemas.settings import OnboardingWelcomeSettings, UserSettingsUpdate  # noqa: PLC0415
+        from backend.app.schemas.settings import OnboardingWelcomeSettings, UIPreferences, UserSettingsUpdate  # noqa: PLC0415
         from backend.app.services.accounts.onboarding_service import (  # noqa: PLC0415
             ONBOARDING_FLOW_VERSIONS,
             complete_welcome_onboarding,
@@ -1176,7 +1178,7 @@ class TestOnboardingServiceCompleteWelcome:
             user_id = await self._make_user(session, "existing")
             await update_user_settings(
                 user_id,
-                UserSettingsUpdate(language="en", base_currency="EUR", theme="dark", avatar_url=None),
+                UserSettingsUpdate(language="en", base_currency="EUR", ui_preferences=UIPreferences(theme="dark"), avatar_url=None),
                 session,
             )
             version = ONBOARDING_FLOW_VERSIONS[OnboardingFlow.WELCOME]
@@ -1194,7 +1196,7 @@ class TestOnboardingServiceCompleteWelcome:
             assert settings.language == "it"
             assert settings.base_currency == "USD"
             assert settings.avatar_url == "https://example.com/existing-avatar.png"
-            assert settings.theme == "dark", "theme is not part of welcome_settings and must survive untouched"
+            assert settings.ui_preferences == '{"theme":"dark"}', "theme is not part of welcome_settings and must survive untouched"
 
     @pytest.mark.asyncio
     async def test_terminal_replay_remains_explicit_settings_reapplied_progress_untouched(self):
@@ -1285,3 +1287,145 @@ class TestOnboardingServiceCompleteWelcome:
 
             progress_result = await verify_session.execute(select(UserOnboardingProgress).where(UserOnboardingProgress.user_id == user_id))
             assert progress_result.scalars().all() == [], "a commit failure must roll back the tentative progress insert too — not even a pending row survives"
+
+
+class TestMergedUiPreferences:
+    """Lot UIP: ``merged_ui_preferences`` — the key-by-key merge of ``user_settings.ui_preferences`` (pure, no database)."""
+
+    @staticmethod
+    def _merge(raw, **changes):
+        from backend.app.schemas.settings import UIPreferences  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import merged_ui_preferences  # noqa: PLC0415 — test setup — imports after db config
+
+        return merged_ui_preferences(1, raw, UIPreferences(**changes))
+
+    def test_sets_a_key_compact_and_sorted(self):
+        """A value sets its key; the text is compact JSON with sorted keys; the other stored key is kept."""
+        assert self._merge('{"theme":"dark"}', chart_line_shape="steps") == '{"chart_line_shape":"steps","theme":"dark"}'
+        assert self._merge(None, theme="light") == '{"theme":"light"}'
+
+    def test_null_removes_only_its_key_and_a_key_left_out_is_kept(self):
+        """``None`` named in the change removes that key; a key the change does not name is kept."""
+        raw = '{"chart_line_shape":"steps","theme":"dark"}'
+        assert self._merge(raw, theme=None) == '{"chart_line_shape":"steps"}'
+        assert self._merge(raw) == raw, "a change naming no key leaves the text as it is"
+
+    def test_an_empty_result_is_none(self):
+        """Removing the last key — or removing from NULL — gives ``None`` (stored NULL), never ``{}``."""
+        assert self._merge('{"theme":"dark"}', theme=None) is None
+        assert self._merge(None, theme=None) is None
+
+    def test_an_unknown_stored_key_and_value_are_kept(self):
+        """A key this version does not know, and a known key's value it does not know, stay as written when another key is merged."""
+        import json  # noqa: PLC0415
+
+        merged = json.loads(self._merge('{"zoom":{"level":3},"chart_line_shape":"wavy"}', theme="dark"))
+        assert merged == {"zoom": {"level": 3}, "chart_line_shape": "wavy", "theme": "dark"}
+
+    @pytest.mark.parametrize("raw", ["not json", "[1, 2]", '"dark"', "", "   "])
+    def test_unreadable_stored_text_is_replaced_by_the_change(self, raw):
+        """Text that is not a JSON object counts as no stored key: the merge starts from nothing."""
+        assert self._merge(raw, theme="auto") == '{"theme":"auto"}'
+
+    def test_a_result_over_the_cap_raises_and_the_cap_itself_is_fine(self):
+        """A merged text over ``UI_PREFERENCES_MAX_BYTES`` raises ``UIPreferencesTooLargeError``; one exactly at the cap is returned."""
+        import json  # noqa: PLC0415
+
+        from backend.app.schemas.settings import UI_PREFERENCES_MAX_BYTES  # noqa: PLC0415 — test setup — imports after db config
+        from backend.app.services.accounts.settings_service import UIPreferencesTooLargeError  # noqa: PLC0415 — test setup — imports after db config
+
+        overhead = len(json.dumps({"blob": "", "theme": "dark"}, separators=(",", ":"), sort_keys=True))
+        at_cap = json.dumps({"blob": "x" * (UI_PREFERENCES_MAX_BYTES - overhead)}, separators=(",", ":"), sort_keys=True)
+        fits = self._merge(at_cap)
+        assert len(fits.encode("utf-8")) == len(at_cap.encode("utf-8")) <= UI_PREFERENCES_MAX_BYTES
+        over = json.dumps({"blob": "x" * (UI_PREFERENCES_MAX_BYTES - overhead + 1)}, separators=(",", ":"), sort_keys=True)
+        with pytest.raises(UIPreferencesTooLargeError):
+            self._merge(over, theme="dark")
+
+
+class TestLenientUiPreferencesRead:
+    """Lot UIP (A-11 per key): ``get_user_settings`` leaves out a stored preference it cannot show, writes nothing, and
+    ``ui_preference_defaults`` falls back to the built-in values for a global default it does not know. A private database."""
+
+    @pytest_asyncio.fixture
+    async def session(self, tmp_path):
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: PLC0415
+        from sqlalchemy.pool import NullPool  # noqa: PLC0415
+
+        from backend.app.db.base import SQLModel  # noqa: PLC0415 — imports every model
+        from backend.app.services.accounts.settings_service import initialize_global_settings  # noqa: PLC0415
+
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'lenient.db'}", poolclass=NullPool)
+        try:
+            async with engine.begin() as connection:
+                await connection.run_sync(SQLModel.metadata.create_all)
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                await initialize_global_settings(session)
+                yield session
+        finally:
+            await engine.dispose()
+
+    @staticmethod
+    async def _user_with(session, raw):
+        from sqlalchemy import text  # noqa: PLC0415
+
+        from backend.app.db.models import User, UserSettings  # noqa: PLC0415
+
+        user = User(username=f"lenient_{uuid.uuid4().hex[:10]}", email=f"{uuid.uuid4().hex[:10]}@example.com", hashed_password="x", is_active=True)
+        session.add(user)
+        await session.flush()
+        session.add(UserSettings(user_id=user.id, language="en", base_currency="EUR", ui_preferences=raw))
+        await session.commit()
+        stored = (await session.execute(text("SELECT ui_preferences FROM user_settings WHERE user_id = :u"), {"u": user.id})).scalar_one()
+        assert stored == raw, "Setup: the row holds what was written"
+        return user.id
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            pytest.param(None, {}, id="null"),
+            pytest.param("not json", {}, id="not-json"),
+            pytest.param('["dark"]', {}, id="json-array"),
+            pytest.param('{"theme":"sepia"}', {}, id="unknown-theme"),
+            pytest.param('{"theme":1}', {}, id="theme-not-a-string"),
+            pytest.param('{"theme":null,"chart_line_shape":"spline"}', {"chart_line_shape": "spline"}, id="null-theme-kept-shape"),
+            pytest.param('{"theme":"sepia","chart_line_shape":"steps"}', {"chart_line_shape": "steps"}, id="per-key"),
+            pytest.param('{"theme":"dark","zoom":3}', {"theme": "dark"}, id="unknown-key-ignored"),
+            pytest.param('{"theme":"light","chart_line_shape":"segments"}', {"theme": "light", "chart_line_shape": "segments"}, id="both-known"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_reads_what_it_can_and_writes_nothing(self, session, raw, expected):
+        """Only readable own keys are answered; the row is untouched by the read."""
+        from sqlalchemy import text  # noqa: PLC0415
+
+        from backend.app.services.accounts.settings_service import get_user_settings  # noqa: PLC0415
+
+        user_id = await self._user_with(session, raw)
+
+        read = await get_user_settings(user_id, session)
+
+        assert read is not None and read.ui_preferences.model_dump() == expected
+        after = (await session.execute(text("SELECT ui_preferences FROM user_settings WHERE user_id = :u"), {"u": user_id})).scalar_one()
+        assert after == raw, "reading writes nothing"
+
+    @pytest.mark.asyncio
+    async def test_defaults_follow_the_global_rows_and_fall_back_when_unknown(self, session):
+        """``ui_preference_defaults`` mirrors ``default_theme`` / ``default_chart_line_shape``; a value the app does not know falls back to auto / segments, nothing written."""
+        from sqlalchemy import text  # noqa: PLC0415
+
+        from backend.app.services.accounts.settings_service import ui_preference_defaults  # noqa: PLC0415
+
+        for key, value in (("default_theme", "dark"), ("default_chart_line_shape", "spline")):
+            await session.execute(text("UPDATE global_settings SET value = :v WHERE key = :k"), {"v": value, "k": key})
+        await session.commit()
+        known = await ui_preference_defaults(session)
+        assert (known.theme, known.chart_line_shape) == ("dark", "spline")
+
+        for key, value in (("default_theme", "neon"), ("default_chart_line_shape", "curvy")):
+            await session.execute(text("UPDATE global_settings SET value = :v WHERE key = :k"), {"v": value, "k": key})
+        await session.commit()
+        unknown = await ui_preference_defaults(session)
+        assert (unknown.theme, unknown.chart_line_shape) == ("auto", "segments")
+        stored = {key: (await session.execute(text("SELECT value FROM global_settings WHERE key = :k"), {"k": key})).scalar_one() for key in ("default_theme", "default_chart_line_shape")}
+        assert stored == {"default_theme": "neon", "default_chart_line_shape": "curvy"}, "the read writes nothing"

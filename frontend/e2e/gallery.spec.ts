@@ -2438,7 +2438,7 @@ test.describe('Gallery Screenshots', () => {
         });
 
         // The Users tab (lot A6b, administrators only), one account's actions open. Both lists are fixed bodies, answered on
-        // this page only: the lane's accounts and invitations change with every test that registers its own (the gallery's
+        // this page only: the lane's accounts and account links change with every test that registers its own (the gallery's
         // too, registerGalleryAccount in galleryReportSets.ts), so the real lists would draw another picture on every run.
         // The admin's row keeps the admin's real account, read from
         // /auth/me: the tab tells the signed-in account's row («You», no actions) by its id. Another account is open, so the
@@ -2449,7 +2449,8 @@ test.describe('Gallery Screenshots', () => {
 
             // A read, nothing written: the signed-in admin, through the page's own session (its cookies, the config's baseURL).
             const admin = schemas.AuthMeResponse.parse(await (await page.request.get('/api/v1/auth/me')).json()).user;
-            // 5 places taken: the 3 active accounts and the 2 open invitations. `/billing` is a path of the app, never opened:
+            // 5 places taken: the 3 active accounts and the 2 open invitations (lot UA3: the open links table shows them, with a
+            // password reset; the used and the expired one wait folded in the closed links). `/billing` is a path of the app, never opened:
             // it draws the «Manage subscription» link.
             const usage = {used: 5, max_users: 10, billing_url: '/billing'};
             const accountRows = [
@@ -2458,14 +2459,33 @@ test.describe('Gallery Screenshots', () => {
                 {id: 9102, username: 'marco', email: 'marco@example.com', is_active: true, is_superuser: false, created_at: '2026-03-21T07:45:00Z', protected: false},
                 {id: 9103, username: 'giulia.b', email: 'giulia.b@example.com', is_active: false, is_superuser: false, created_at: '2026-04-09T12:00:00Z', protected: false},
             ];
-            const inviteRows = [
-                {id: 7201, grants_admin: false, email: 'luca@example.com', created_at: '2026-10-10T08:15:00Z', expires_at: '2026-10-17T08:15:00Z', created_by_user_id: admin.id},
-                {id: 7202, grants_admin: true, email: null, created_at: '2026-10-12T16:40:00Z', expires_at: '2026-10-19T16:40:00Z', created_by_user_id: admin.id},
+            // `AccountLinkRead`: never a token. Newest first, as the backend lists them.
+            const link = (fields: Record<string, unknown>) => ({
+                user_id: null,
+                username: null,
+                email: null,
+                grants_admin: false,
+                created_by_user_id: admin.id,
+                created_by_username: admin.username,
+                used_at: null,
+                used_by_user_id: null,
+                used_by_username: null,
+                revoked_at: null,
+                ...fields,
+            });
+            const openLinkRows = [
+                link({id: 7203, purpose: 'password_reset', state: 'open', revocable: true, user_id: 9102, username: 'marco', created_at: '2026-10-13T10:05:00Z', expires_at: '2026-10-14T10:05:00Z'}),
+                link({id: 7202, purpose: 'invite', state: 'open', revocable: true, grants_admin: true, created_at: '2026-10-12T16:40:00Z', expires_at: '2026-10-19T16:40:00Z'}),
+                link({id: 7201, purpose: 'invite', state: 'open', revocable: true, email: 'luca@example.com', created_at: '2026-10-10T08:15:00Z', expires_at: '2026-10-17T08:15:00Z'}),
+            ];
+            const closedLinkRows = [
+                link({id: 7104, purpose: 'invite', state: 'used', revocable: false, email: 'marco@example.com', created_at: '2026-03-20T09:00:00Z', expires_at: '2026-03-27T09:00:00Z', used_at: '2026-03-21T07:45:00Z', used_by_user_id: 9102, used_by_username: 'marco'}),
+                link({id: 7103, purpose: 'password_reset', state: 'expired', revocable: false, user_id: 9103, username: 'giulia.b', created_at: '2026-03-02T14:20:00Z', expires_at: '2026-03-03T14:20:00Z'}),
             ];
             // Checked here against the generated schemas the client validates with: a body Zodios refuses leaves the tab empty,
             // without an error — this fails now, with Zod's message.
             const accounts = schemas.AdminUserListResponse.parse({items: accountRows, usage});
-            const invites = schemas.InviteListResponse.parse({items: inviteRows, usage});
+            const links = schemas.AccountLinkListResponse.parse({items: [...openLinkRows, ...closedLinkRows]});
             // Before the tab's first load (the sign-in lands on the dashboard, which asks neither path). Each answers its own
             // path for GET only; anything else falls back — to the gallery's guard and filters, then the backend.
             await page.route(
@@ -2473,8 +2493,8 @@ test.describe('Gallery Screenshots', () => {
                 (route) => (route.request().method() === 'GET' ? route.fulfill({json: accounts}) : route.fallback()),
             );
             await page.route(
-                (url) => url.pathname === '/api/v1/users/invites',
-                (route) => (route.request().method() === 'GET' ? route.fulfill({json: invites}) : route.fallback()),
+                (url) => url.pathname === '/api/v1/users/account-links',
+                (route) => (route.request().method() === 'GET' ? route.fulfill({json: links}) : route.fallback()),
             );
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
@@ -2486,7 +2506,9 @@ test.describe('Gallery Screenshots', () => {
                 await waitForSettled(usersTab, 15_000);
                 // The fixed lists, not the lane's: a route that missed would leave the real ones on screen, and the shot green.
                 await expect(usersTab.getByTestId('users-row'), 'the Users tab does not show the fixed accounts').toHaveCount(accountRows.length, {timeout: 5_000});
-                await expect(usersTab.getByTestId('users-invite-row'), 'the Users tab does not show the fixed invitations').toHaveCount(inviteRows.length, {timeout: 5_000});
+                await expect(usersTab.getByTestId('users-links-open').locator('tbody tr[data-row-id]'), 'the Users tab does not show the fixed open links').toHaveCount(openLinkRows.length, {timeout: 5_000});
+                await expect(usersTab.getByTestId('users-links-closed').locator('tbody tr[data-row-id]'), 'the Users tab does not show the fixed closed links').toHaveCount(closedLinkRows.length, {timeout: 5_000});
+                await expect(usersTab.getByTestId('users-links-closed-fold'), 'the closed links are folded, as the tab opens').toHaveAttribute('data-open', 'false', {timeout: 5_000});
                 await freezeAnimations(page);
                 // One account open, so the picture shows its actions. Every load draws the rows closed (UserRow, `expanded`).
                 const marcoRow = usersTab.locator('[data-testid="users-row"][data-username="marco"]');
@@ -2943,7 +2965,7 @@ test.describe('Gallery Screenshots', () => {
                 }
                 const body = (await response.json()) as {show_donation_popup?: boolean; user_settings?: Record<string, unknown> | null};
                 body.show_donation_popup = true;
-                if (body.user_settings) body.user_settings = {...body.user_settings, language: combo.lang, theme: combo.theme};
+                if (body.user_settings) body.user_settings = {...body.user_settings, language: combo.lang, ui_preferences: {...((body.user_settings.ui_preferences as Record<string, unknown> | undefined) ?? {}), theme: combo.theme}};
                 signalledLogins += 1;
                 await route.fulfill({response, json: body});
             });

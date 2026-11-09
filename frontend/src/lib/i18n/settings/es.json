@@ -89,7 +89,8 @@
       "scheduler_history_sync_days": "Días de Sincronización Histórica",
       "scheduler_history_sync_horizon_days": "Horizonte de Recuperación",
       "scheduler_enabled": "Planificador Activado",
-      "registration_mode": "Registro"
+      "registration_mode": "Registro",
+      "default_chart_line_shape": "Forma de Línea Predeterminada"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Tiempo de validez de una sesión de usuario antes de requerir nuevo login",
@@ -97,13 +98,14 @@
       "max_file_upload_mb": "Tamaño máximo de archivo permitido para subidas",
       "default_currency": "Divisa predeterminada para nuevos usuarios",
       "default_language": "Idioma predeterminado para nuevos usuarios",
-      "default_theme": "Tema predeterminado para los nuevos usuarios",
+      "default_theme": "Tema de cada usuario que no haya elegido uno",
       "scheduler_enabled": "Activar o desactivar el planificador automático de datos de mercado",
       "scheduler_current_price_frequency_minutes": "Frecuencia de actualización de precios actuales (en minutos)",
       "scheduler_history_sync_times": "Horas del día en que se sincronizan los datos históricos (en la zona horaria del planificador)",
       "scheduler_history_sync_days": "Días de la semana en que se sincronizan los datos históricos",
       "scheduler_history_sync_horizon_days": "Cuántos días atrás buscar datos históricos faltantes",
-      "registration_mode": "Quién puede crear una cuenta: cualquiera (abierto), solo quien tenga un enlace de invitación (por invitación) o nadie (cerrado)."
+      "registration_mode": "Quién puede crear una cuenta: cualquiera (abierto), solo quien tenga un enlace de invitación (por invitación) o nadie (cerrado).",
+      "default_chart_line_shape": "Forma de las líneas de los gráficos para cada usuario que no haya elegido una"
     },
     "globalSettingUnits": {
       "session_ttl_hours": "horas",
@@ -293,15 +295,15 @@
           "message": "La introducción y las guías de las páginas vuelven a mostrarse, como para una cuenta nueva.",
           "confirm": "Reiniciar"
         },
-        "revokeInvite": {
-          "title": "¿Revocar la invitación para {email}?",
-          "message": "El enlace deja de funcionar de inmediato.",
-          "confirm": "Revocar"
-        },
         "cancelSetup": {
           "title": "¿Cancelar el enlace de configuración de {username}?",
           "message": "El enlace ya entregado deja de funcionar. La cuenta sigue esperando su configuración: un enlace nuevo se obtiene con «dev.py user setup-link» en el servidor o de tu proveedor.",
           "confirm": "Cancelar el enlace"
+        },
+        "revokeLink": {
+          "title": "¿Revocar el enlace «{type}» para {target}?",
+          "message": "El enlace deja de funcionar de inmediato.",
+          "confirm": "Revocar"
         }
       },
       "errors": {
@@ -332,13 +334,6 @@
         "create": "Crear el enlace",
         "ready": "Comparte este enlace: funciona una sola vez, durante 7 días."
       },
-      "invites": {
-        "title": "Invitaciones abiertas",
-        "empty": "No hay invitaciones abiertas.",
-        "noEmail": "Sin correo",
-        "dates": "Creada el {created} · caduca el {expires}",
-        "revoke": "Revocar"
-      },
       "reset": {
         "title": "Enlace para restablecer la contraseña de {username}",
         "message": "Un enlace de un solo uso para establecer una nueva contraseña, válido 30 minutos. Los enlaces creados antes para esta cuenta dejan de funcionar.",
@@ -361,6 +356,37 @@
           "confirm": "Abrir los registros"
         },
         "saveFailed": "No se pudo guardar quién puede registrarse."
+      },
+      "links": {
+        "title": "Enlaces de cuenta",
+        "hint": "Cada enlace de un solo uso de la instancia y en qué punto está. Un enlace se muestra una sola vez, al crearlo: aquí ves para quién es, nunca el enlace.",
+        "empty": "No hay enlaces abiertos.",
+        "closedTitle": "Enlaces cerrados ({count})",
+        "closedEmpty": "No hay enlaces cerrados.",
+        "columns": {
+          "type": "Tipo",
+          "target": "Para",
+          "createdBy": "Creado por",
+          "created": "Creado",
+          "expires": "Caduca",
+          "state": "Estado"
+        },
+        "purpose": {
+          "invite": "Invitación",
+          "password_reset": "Restablecimiento de contraseña",
+          "email_verification": "Verificación del correo",
+          "admin_setup": "Configuración del administrador",
+          "email_change": "Cambio de correo"
+        },
+        "state": {
+          "open": "Abierto",
+          "used": "Usado",
+          "expired": "Caducado",
+          "revoked": "Revocado"
+        },
+        "usedBy": "por {username}",
+        "anyone": "Cualquiera con el enlace",
+        "revoke": "Revocar"
       }
     },
     "linkShare": {
@@ -427,6 +453,12 @@
       "message": "Es la dirección de correo del titular de la suscripción, así que no se puede cambiar desde LibreFolio. Pide a quien aloja esta instancia que la cambie.",
       "support": "Contactar con soporte"
     },
-    "lineShapeHint": "Se aplica a todos los gráficos, en este navegador. Un gráfico puede tener su propia forma en sus ajustes."
+    "lineShapeHint": "Se aplica a todos los gráficos, en cada navegador en el que inicies sesión. Un gráfico puede tener su propia forma en sus ajustes.",
+    "preferenceSource": {
+      "global": "Global",
+      "globalHint": "No has elegido esta preferencia: sigue el valor predeterminado fijado por el administrador",
+      "auto": "Auto",
+      "autoHint": "Decide tu navegador: claro u oscuro, según el ajuste del sistema"
+    }
   }
 }

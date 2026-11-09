@@ -98,10 +98,29 @@ class InviteRead(StrictModel):
     created_by_user_id: Optional[int] = Field(None, description="Who created it; null for the command line or a deleted account")
 
 
-class InviteListResponse(BaseListResponse[InviteRead]):
-    """The live invitations, oldest first, with the usage of the instance."""
+class AccountLinkRead(StrictModel):
+    """One account link of the instance (lot UA3), as administrators see it: never its token nor its hash."""
 
-    usage: UserUsageRead
+    id: int
+    purpose: Literal["invite", "password_reset", "email_verification", "admin_setup", "email_change"] = Field(..., description="What the link is for")
+    state: Literal["open", "used", "expired", "revoked"] = Field(..., description="Revoked, used, expired or open, read in that order (a retired link reads as revoked)")
+    revocable: bool = Field(..., description="Open, and of a purpose an administrator revokes from the Users tab (invitation, password reset, email verification)")
+    user_id: Optional[int] = Field(None, description="The account the link acts on; null for an invitation")
+    username: Optional[str] = Field(None, description="That account's username")
+    email: Optional[str] = Field(None, description="The address the link carries, if any: an invitation's, the new address of an email change or of a verification")
+    grants_admin: bool = Field(..., description="An invitation that creates an administrator")
+    created_by_user_id: Optional[int] = Field(None, description="The administrator who issued it; null when the instance or the account itself did, or for a deleted account")
+    created_by_username: Optional[str] = None
+    created_at: UTCDateTime
+    expires_at: UTCDateTime
+    used_at: Optional[UTCDateTime] = Field(None, description="When it was used; null unless the state is used")
+    used_by_user_id: Optional[int] = Field(None, description="Who used it: the account an invitation created, or the link's own account")
+    used_by_username: Optional[str] = None
+    revoked_at: Optional[UTCDateTime] = Field(None, description="When it was revoked; null unless the state is revoked")
+
+
+class AccountLinkListResponse(BaseListResponse[AccountLinkRead]):
+    """Every account link, newest first."""
 
 
 class InviteCreateRequest(StrictModel):

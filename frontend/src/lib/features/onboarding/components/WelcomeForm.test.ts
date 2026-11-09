@@ -8,19 +8,30 @@
  * unrelated stores instead of a unit test of WelcomeForm's own wiring. The probe
  * keeps the same bindable-`value` contract WelcomeForm actually depends on.
  */
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 vi.mock('$lib/features/settings/SettingCurrency.svelte', async () => ({
     default: (await import('$test/harness/SettingCurrencyProbe.svelte')).default,
+}));
+// The shape is an interface preference kept by the server (lot UIP): the PUT is answered with what the server would
+// hold, built from the one `ui_preferences` the request names (null removes the key), so the store reads back its write.
+const serverOwn = vi.hoisted(() => ({value: {} as Record<string, unknown>}));
+const putUserSettings = vi.hoisted(() => vi.fn());
+vi.mock('$lib/api', () => ({
+    zodiosApi: new Proxy({}, {get: (_t, key) => (key === 'update_user_settings_endpoint_api_v1_settings_user_put' ? putUserSettings : vi.fn(async () => Promise.reject(new Error('no network in this test'))))}),
+    axiosInstance: new Proxy({}, {get: () => vi.fn()}),
+    ApiError: class ApiError extends Error {},
 }));
 vi.mock('$lib/components/charts/LineShapePreview.svelte', async () => ({
     default: (await import('$test/harness/LineShapePreviewProbe.svelte')).default,
 }));
 
 import {fireEvent, render, screen, setupI18n} from '$test/component';
+import {waitFor} from '@testing-library/svelte';
 import {availableLanguages} from '$lib/stores/app/language';
 import type {WelcomeCopy} from '$lib/features/onboarding/welcome';
-import {getGlobalLineShape, setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {userSettings, type UserSettings} from '$lib/stores/app/settings';
 import WelcomeForm from './WelcomeForm.svelte';
 
 const COPY: WelcomeCopy = {
@@ -221,18 +232,61 @@ describe('WelcomeForm — no theme control', () => {
     });
 });
 
-describe('WelcomeForm — the shape of the lines (Y2 FB-3)', () => {
-    it('shows the example in the shape that is in force, and changes it as the user picks, live', async () => {
-        setGlobalLineShape('segments');
+/** Server settings for a user with these own preferences and these administrator defaults. */
+function seedSettings(own: UserSettings['ui_preferences'], shapeDefault: 'segments' | 'steps' | 'spline' = 'segments'): void {
+    serverOwn.value = {...own};
+    userSettings.setDirect({language: 'en', base_currency: 'EUR', avatar_url: null, ui_preferences: own, ui_preference_defaults: {theme: 'auto', chart_line_shape: shapeDefault}});
+}
+
+beforeEach(() => {
+    putUserSettings.mockReset();
+    putUserSettings.mockImplementation(async (body: {ui_preferences: Record<string, unknown>}) => {
+        for (const [key, value] of Object.entries(body.ui_preferences)) {
+            if (value === null) delete serverOwn.value[key];
+            else serverOwn.value[key] = value;
+        }
+        return {language: 'en', base_currency: 'EUR', avatar_url: null, ui_preferences: {...serverOwn.value}, ui_preference_defaults: {theme: 'auto', chart_line_shape: 'segments'}};
+    });
+    seedSettings({});
+});
+
+afterEach(() => {
+    userSettings.reset();
+});
+
+describe('WelcomeForm — the shape of the lines (Y2 FB-3, lot UIP)', () => {
+    it('preselects the shape in force: the global default for a user who chose none', () => {
+        seedSettings({}, 'steps');
+        mount();
+        expect(screen.getByTestId('line-shape-preview')).toHaveAttribute('data-shape', 'steps');
+        expect(putUserSettings, 'showing a shape writes nothing').not.toHaveBeenCalled();
+    });
+
+    it('preselects the own shape over the default', () => {
+        seedSettings({chart_line_shape: 'spline'}, 'steps');
+        mount();
+        expect(screen.getByTestId('line-shape-preview')).toHaveAttribute('data-shape', 'spline');
+    });
+
+    it('writes chart_line_shape when the user clicks, and changes the example live', async () => {
         mount();
         expect(screen.getByTestId('line-shape-preview')).toHaveAttribute('data-shape', 'segments');
 
         await fireEvent.click(screen.getByTestId('welcome-line-shape-picker-spline'));
+        await waitFor(() => expect(getGlobalLineShape()).toBe('spline'));
         expect(screen.getByTestId('line-shape-preview')).toHaveAttribute('data-shape', 'spline');
-        expect(getGlobalLineShape()).toBe('spline');
+        expect(putUserSettings).toHaveBeenLastCalledWith({ui_preferences: {chart_line_shape: 'spline'}});
 
         await fireEvent.click(screen.getByTestId('welcome-line-shape-picker-steps'));
-        expect(screen.getByTestId('line-shape-preview')).toHaveAttribute('data-shape', 'steps');
+        await waitFor(() => expect(screen.getByTestId('line-shape-preview')).toHaveAttribute('data-shape', 'steps'));
+        expect(putUserSettings).toHaveBeenLastCalledWith({ui_preferences: {chart_line_shape: 'steps'}});
+    });
+
+    it('writes nothing without a click, not even when the form is submitted', async () => {
+        const {onsubmit} = mount();
+        await fireEvent.submit(screen.getByTestId('welcome-form'));
+        expect(onsubmit).toHaveBeenCalledTimes(1);
+        expect(putUserSettings).not.toHaveBeenCalled();
     });
 
     it('does not submit the form by picking a shape', async () => {

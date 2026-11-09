@@ -34,8 +34,8 @@ in ``schemas/email.py``. The contract pinned here:
      ``user_settings.language`` when it names one of the four (a regional form: ``it-IT`` is ``it``), else the
      instance's ``default_language`` (an own ``de`` counts as unset) —, naming the administrator and the instance: the
      host the request was sent to, as written (``request.url.netloc``, port included);
-   - a settings row whose theme this version does not know (outside light/dark/auto), which the schema
-     ``UserSettingsRead`` refuses, still gives its language: 200, not 422;
+   - a settings row whose ``ui_preferences`` holds a theme this version does not know (outside light/dark/auto), which
+     the settings read leaves out, still gives its language: 200, not 422;
    - off or unusable: 409 ``{error_code: EMAIL_UNAVAILABLE, problem}`` (``EMAIL_NOT_CONFIGURED`` or the problem of the
      configuration); no connection, nothing spent;
    - the hourly budget spent: 429 ``{error_code: EMAIL_RATE_LIMITED, retry_after}``, a whole number of seconds ≥ 1, the
@@ -158,10 +158,10 @@ from backend.app.db.base import SQLModel  # imports every model: SQLModel.metada
 from backend.app.db.models import AccountToken, AccountTokenPurpose, GlobalSetting, User, UserSettings
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
-from backend.app.schemas.settings import SETTINGS_REGISTRY, UserSettingsRead
+from backend.app.schemas.settings import SETTINGS_REGISTRY, UIPreferences
 from backend.app.schemas.system import InstanceConfigResponse
 from backend.app.services.accounts import auth_service, token_service
-from backend.app.services.accounts.settings_service import initialize_global_settings
+from backend.app.services.accounts.settings_service import get_user_settings, initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus
 from backend.app.services.email import delivery, flows, smtp
 from backend.app.services.email.messages import EmailRecipientError, build_invite, build_password_reset, build_test_message
@@ -189,8 +189,10 @@ ACCOUNT_PASSWORD = "Email-Api-Pass-2026"
 ADMIN = "zq_admin"
 MEMBER = "zq_member"
 DEFAULT_LANGUAGE_KEY = SETTINGS_REGISTRY.global_.DEFAULT_LANGUAGE.key
-#: A theme outside light/dark/auto, as an older or newer release could leave in a row: ``UserSettingsRead`` refuses it.
+#: A theme outside light/dark/auto, as an older or newer release could leave in a row's ``ui_preferences``: the settings read leaves it out.
 STALE_THEME = "sepia"
+#: The stored ``ui_preferences`` text holding it.
+STALE_UI_PREFERENCES = f'{{"theme":"{STALE_THEME}"}}'
 
 SMTP_PREFIX = "LIBREFOLIO_SMTP_"
 TLS_VARIABLE = "LIBREFOLIO_SMTP_TLS"
@@ -513,27 +515,35 @@ async def _status_as_admin(private: _Private) -> httpx.Response:
     return response
 
 
-async def _set_account_language(engine: AsyncEngine, user_id: int, language: str, *, theme: str = "light") -> None:
-    """The account's ``user_settings`` row, its language ``language`` and its theme ``theme`` — written as a row: a table model does not validate —, the other columns at their defaults."""
+async def _set_account_language(engine: AsyncEngine, user_id: int, language: str, *, ui_preferences: str | None = None) -> None:
+    """The account's ``user_settings`` row, its language ``language`` and its ``ui_preferences`` text as given — written as a row: a table model does not validate —, the other columns at their defaults."""
     async with AsyncSession(engine) as session:
-        session.add(UserSettings(user_id=user_id, language=language, theme=theme))
+        session.add(UserSettings(user_id=user_id, language=language, ui_preferences=ui_preferences))
         await session.commit()
 
 
-async def _settings_row(engine: AsyncEngine, user_id: int) -> tuple[str, str] | None:
-    """``(language, theme)`` of the account's ``user_settings`` row, read fresh; ``None`` without a row."""
+async def _settings_row(engine: AsyncEngine, user_id: int) -> tuple[str, str | None] | None:
+    """``(language, ui_preferences)`` of the account's ``user_settings`` row, read fresh; ``None`` without a row."""
     async with AsyncSession(engine) as session:
-        row = (await session.execute(select(UserSettings.language, UserSettings.theme).where(UserSettings.user_id == user_id))).one_or_none()
+        row = (await session.execute(select(UserSettings.language, UserSettings.ui_preferences).where(UserSettings.user_id == user_id))).one_or_none()
     return None if row is None else tuple(row)
 
 
 def _read_model_refusal() -> ValidationError:
-    """The ``ValidationError`` the read model raises for a settings row with a theme outside light/dark/auto: a ``ValueError`` that is not a recipient error."""
+    """A pydantic ``ValidationError`` of the settings schemas (a theme outside light/dark/auto): a ``ValueError`` that is not a recipient error."""
     try:
-        UserSettingsRead(language="it", base_currency="EUR", theme=STALE_THEME)
+        UIPreferences(theme=STALE_THEME)
     except ValidationError as refusal:
         return refusal
-    raise AssertionError(f"setup: UserSettingsRead accepted the theme {STALE_THEME!r}")
+    raise AssertionError(f"setup: UIPreferences accepted the theme {STALE_THEME!r}")
+
+
+async def _read_omits_the_stale_theme(engine: AsyncEngine, user_id: int) -> None:
+    """Barrier: the settings read of the account's row — which holds ``STALE_UI_PREFERENCES`` — leaves the theme out, and the row still holds it."""
+    async with AsyncSession(engine) as session:
+        read = await get_user_settings(user_id, session)
+    assert read is not None and read.ui_preferences.theme is None, f"barrier: the read must leave the unknown theme out: {read}"
+    assert (await _settings_row(engine, user_id))[1] == STALE_UI_PREFERENCES, "barrier: the row must hold the stale preferences"
 
 
 async def _set_default_language(engine: AsyncEngine, value: str) -> None:
@@ -1040,13 +1050,11 @@ async def test_the_instance_is_the_host_the_request_was_sent_to(private: _Privat
 
 @pytest.mark.asyncio
 async def test_a_theme_this_version_does_not_know_still_gives_the_test_email_its_language(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter) -> None:
-    """EMA-017 — contract 3: the instance says ``es``; once the administrator has signed in, their ``user_settings`` row says ``it`` with a theme this version does not know (``sepia``, written as a row). ``POST /email/test``: 200 ``{language: "it"}`` — not 422 —, one message, its subject and text the Italian test email; one unit spent; the row left as it was.
+    """EMA-017 — contract 3: the instance says ``es``; once the administrator has signed in, their ``user_settings`` row says ``it`` with ``ui_preferences`` holding a theme this version does not know (``sepia``, written as a row). ``POST /email/test``: 200 ``{language: "it"}`` — not 422 —, one message, its subject and text the Italian test email; one unit spent; the row left as it was.
 
-    Barrier first: the schema ``UserSettingsRead`` refuses that theme with a ``ValidationError`` naming it.
+    Barrier: once the row is written, the settings read leaves that theme out (it still sits in the row).
     """
     print_section("EMA-017: a theme this version does not know")
-    refusal = str(_read_model_refusal())
-    assert "theme" in refusal, f"barrier: the schema must refuse the theme: {refusal}"
     await _set_default_language(private.engine, "es")
     expected = build_test_message(language="it", username=ADMIN, instance=INSTANCE_LABEL)
 
@@ -1054,7 +1062,8 @@ async def test_a_theme_this_version_does_not_know_still_gives_the_test_email_its
         _point_at(monkeypatch, fake)
         async with _browser(private) as client:
             await _sign_in(client, private.admin)
-            await _set_account_language(private.engine, private.admin.id, "it", theme=STALE_THEME)
+            await _set_account_language(private.engine, private.admin.id, "it", ui_preferences=STALE_UI_PREFERENCES)
+            await _read_omits_the_stale_theme(private.engine, private.admin.id)
             response = await client.post(SEND_TEST)
 
     assert response.status_code == 200, f"a theme this version does not know must not stop the test email: {response.status_code} {response.text}"
@@ -1062,7 +1071,7 @@ async def test_a_theme_this_version_does_not_know_still_gives_the_test_email_its
     assert [received.message["Subject"] for received in fake.messages] == [expected.subject]
     assert _lines(fake.messages[0].message.get_body(preferencelist=("plain",)).get_content()) == _lines(expected.text)
     assert budget.count() == 1
-    assert await _settings_row(private.engine, private.admin.id) == ("it", STALE_THEME), "the test email must leave the row as it was"
+    assert await _settings_row(private.engine, private.admin.id) == ("it", STALE_UI_PREFERENCES), "the test email must leave the row as it was"
     print_success("200 in Italian from a row with a theme this version does not know; the row untouched")
 
 

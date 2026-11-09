@@ -1,6 +1,6 @@
 <script lang="ts">
     import {createEventDispatcher, onMount} from 'svelte';
-    import {AlertTriangle, ArrowLeft, ChevronDown, Terminal, UserCog} from 'lucide-svelte';
+    import {AlertTriangle, ArrowLeft, Terminal, UserCog} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import ForgotPasswordEmailForm from '$lib/features/email/ForgotPasswordEmailForm.svelte';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
@@ -11,9 +11,9 @@
     };
     const dispatch = createEventDispatcher();
 
-    // Workstream E: with an email with a link able to go out, the reset link comes by email, and the commands, for
-    // whoever runs the server, stay in a panel closed by default (developer's decision P1, 16/10). The sign-in page
-    // loads the configuration already: this shares its request.
+    // Workstream E: with an email with a link able to go out, the reset link comes by email and the card shows no server
+    // commands — the administrator's guide keeps them (developer's decision, 09/11/2026, lot UA1; it replaces the closed
+    // panel of decision P1, 16/10). The sign-in page loads the configuration already: this shares its request.
     onMount(() => {
         void instanceConfig.load();
     });
@@ -22,10 +22,10 @@
     // user and not to root; the same line `./dev.py docker exec` runs (admin docs, «docker exec»).
     const DOCKER_RESET_COMMAND = 'docker compose exec librefolio sh -c \'exec gosu "${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}" python dev.py "$@"\' sh user reset <username> <new_password>';
 
-    let commandsOpen = false;
-    // The server commands are for whoever runs the server: shown once the server said self-hosted. A managed instance's
-    // users have no terminal: they ask their administrator for a reset link (F05). Before the answer, neither; when the
-    // request failed before any answer, the advice that holds for both profiles: ask the administrator (FPM-08).
+    // The server commands are for whoever runs the server, when no reset link can go by email: shown once the server
+    // said self-hosted. A managed instance's users have no terminal: they ask their administrator for a reset link
+    // (F05). Before the answer, neither; when the request failed before any answer, the advice that holds for both
+    // profiles: ask the administrator (FPM-08).
 </script>
 
 <div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden flex flex-col font-sans" data-testid="forgot-modal">
@@ -67,20 +67,6 @@
 
             {#if managedConfirmed()}
                 {@render askAdmin()}
-            {:else if instanceConfig.loaded}
-                <!-- The server commands, in a panel closed by default (developer's decision P1) -->
-                <details bind:open={commandsOpen} class="bg-lf-panel rounded-lg" data-testid="forgot-commands-panel">
-                    <summary class="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg p-4 text-lf-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" data-testid="forgot-commands-toggle">
-                        <span class="flex items-center space-x-2">
-                            <Terminal size={18} />
-                            <span class="font-medium text-sm">{$_('auth.serverTerminalInstructions')}</span>
-                        </span>
-                        <ChevronDown aria-hidden="true" class="shrink-0 transition-transform {commandsOpen ? 'rotate-180' : ''}" size={16} />
-                    </summary>
-                    <div class="px-4 pb-4 space-y-3">
-                        {@render commands()}
-                    </div>
-                </details>
             {/if}
         {:else if managedConfirmed() || (!instanceConfig.loaded && instanceConfig.failed)}
             {@render askAdmin()}

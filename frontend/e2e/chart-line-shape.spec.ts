@@ -4,13 +4,17 @@ import {completeWelcome, deleteDisposableUser, registerDisposableUser, type Disp
 import {TEST_USER} from './fixtures/test-users';
 import {waitForSettled} from './fixtures/app-events';
 import {goToAssetsPage} from './assets/assets-helpers';
+import {installLocalUiPreferences} from './fixtures/local-ui-preferences';
 
 /**
  * The shape of the lines of the charts (Y2 FB-3): segments (the default), steps, a smooth curve.
  *
  * The welcome page offers it with a live example; Settings → Preferences changes it for every chart; the chart settings of an
  * asset detail page give that one chart its own. Nothing here reads a translated word: the pickers' `data-value` and the charts'
- * `data-line-shape` are the contract. Every case runs in its own browser context, and the choice lives in that context's storage.
+ * `data-line-shape` are the contract. The global shape is a server-side preference of the user (lot UIP): the cases that write it
+ * either own a disposable user, or (the asset-page case, which needs the seeded Apple asset of TEST_USER) keep the choice inside
+ * their browser context (`fixtures/local-ui-preferences.ts`: the settings reads carry it, the PUT never reaches the server), so
+ * the shared user's preference is never written by a parallel worker.
  */
 
 test.setTimeout(90_000);
@@ -51,12 +55,31 @@ test.describe('Line shape of the charts (FB-3)', () => {
             await page.getByTestId('onboarding-intro-close').click();
             await openPreferences(page);
             await expect(page.getByTestId('preference-line-shape-picker')).toHaveAttribute('data-value', 'steps');
+            // a shape picked is the user's own: the row no longer says it follows the global default
+            await expect(page.getByTestId('preference-line-shape-badge-global')).toHaveCount(0);
         } finally {
             await deleteDisposableUser(request, user);
         }
     });
 
-    test('Preferences changes every chart; an asset page can give its chart a shape of its own', async ({page}) => {
+    test('a user who never picks a shape follows the global default, and the Preferences row says so', async ({page, request}) => {
+        const user: DisposableUser = await registerDisposableUser(request, 'lineshape');
+        try {
+            await login(page, user);
+            await completeWelcome(page); // the defaults: the picker is never clicked
+            await page.getByTestId('onboarding-intro-close').click();
+            await openPreferences(page);
+            await expect(page.getByTestId('preference-line-shape-picker')).toHaveAttribute('data-value', 'segments');
+            await expect(page.getByTestId('preference-line-shape-badge-global')).toBeVisible();
+        } finally {
+            await deleteDisposableUser(request, user);
+        }
+    });
+
+    test('Preferences changes every chart; an asset page can give its chart a shape of its own', async ({page, context}) => {
+        // Why not a disposable user: the seeded Apple asset (with its prices) belongs to TEST_USER's data, and the shape is now
+        // stored on the server per user. The context keeps its own preferences instead, so nothing shared is written.
+        await installLocalUiPreferences(context);
         await login(page, TEST_USER);
         await openPreferences(page);
         await page.getByTestId('preference-line-shape-picker-spline').click();

@@ -55,6 +55,13 @@ The contract pinned here:
     ``BOOLEAN NOT NULL DEFAULT 0`` with its partial unique index (at most one owner, used by the owner query), ``email_change``
     among the purposes of ``account_tokens``; a 1.2 install gets 0 for everyone. The frozen snapshot is the retired chain's
     and is never regenerated: the ``frozen`` fixture lays these additions over it.
+12. The interface preferences as JSON (lot UIP, step 8, the developer's decision of 09/11/2026): ``user_settings``
+    loses ``theme`` and gets ``ui_preferences TEXT DEFAULT NULL`` after ``updated_at`` (``_with_ui_preferences`` lays it
+    over the frozen snapshot); every row of a 1.2 install — ``light``, ``dark`` and ``auto`` alike — holds
+    ``{"theme":<its old value>}``, written by ``json_object``; an upgrade stopped after the ``ADD COLUMN``, or after the
+    ``UPDATE`` but before the ``DROP COLUMN``, completes with the same rows; the downgrade rebuilds the ``001`` table,
+    ``theme`` read from the JSON when it is an object with a text ``theme``, ``light`` otherwise, every other preference
+    lost; a downgrade that finds ``user_settings`` already at 1.2 leaves it as it is.
 
 Safety and fidelity: ``alembic_harness``. Every database is a file under ``tmp_path``; Alembic runs in this process on
 that file alone — a connect listener refuses any other — with ``PRAGMA foreign_keys`` asserted 1 at every step, as
@@ -188,6 +195,45 @@ OWNER_INDEX = "ux_users_instance_owner"
 OWNER_INDEX_SQL = "CREATE UNIQUE INDEX ux_users_instance_owner ON users (is_instance_owner) WHERE is_instance_owner = 1"
 OWNER_QUERY = "SELECT id FROM users WHERE is_instance_owner = 1"
 OLD_PURPOSES = ("invite", "password_reset", "email_verification", "admin_setup")
+#: Step 8 (lot UIP): ``user_settings.theme`` becomes the JSON object ``ui_preferences``. The snapshot is never
+#: regenerated, so the ``frozen`` fixture rewrites ``user_settings`` as the upgrade leaves it (``_with_ui_preferences``).
+SETTINGS_TABLE = "user_settings"
+UI_PREFERENCES_COLUMN = "ui_preferences"
+#: The clause of ``theme`` in the frozen ``CREATE TABLE user_settings`` (whitespace collapsed), which ``DROP COLUMN`` removes.
+THEME_CLAUSE = "theme VARCHAR(20) NOT NULL DEFAULT 'light', "
+#: The last column of the table: ``ADD COLUMN`` writes the new one right after it, before the FOREIGN KEY.
+UI_PREFERENCES_ANCHOR = "updated_at DATETIME NOT NULL, "
+UI_PREFERENCES_CLAUSE = "ui_preferences TEXT DEFAULT NULL, "
+#: The three statements of step 8, as the revision runs them.
+ADD_UI_PREFERENCES = "ALTER TABLE user_settings ADD COLUMN ui_preferences TEXT DEFAULT NULL"
+FILL_UI_PREFERENCES = "UPDATE user_settings SET ui_preferences = json_object('theme', theme) WHERE ui_preferences IS NULL AND theme IS NOT NULL"
+#: The columns of ``user_settings`` both revisions keep: rows are compared on them, the theme against its JSON apart.
+SETTINGS_KEPT_COLUMNS = ("id", "user_id", "base_currency", "language", "avatar_url", "created_at", "updated_at")
+#: The values of ``theme`` the populated 1.2 install holds, each for a user of its own.
+THEMES_1_2 = frozenset({"light", "dark", "auto"})
+#: What a 1.3 server writes for alice (user 1, ``dark`` in 1.2): the service's compact form, keys sorted.
+ALICE_UI_PREFERENCES = '{"chart_line_shape":"steps","theme":"dark"}'
+#: ``ui_preferences`` as a 1.3 row may hold it, and the ``theme`` the downgrade gives it: the JSON's when it is an
+#: object with a text ``theme``, ``light`` for anything else.
+DOWNGRADED_THEMES = [
+    pytest.param(None, "light", id="null"),
+    pytest.param("not json", "light", id="not-json"),
+    pytest.param("", "light", id="empty-text"),
+    pytest.param('["dark"]', "light", id="json-array"),
+    pytest.param('"dark"', "light", id="json-string"),
+    pytest.param("{}", "light", id="empty-object"),
+    pytest.param('{"theme":1}', "light", id="theme-a-number"),
+    pytest.param('{"theme":null}', "light", id="theme-null"),
+    pytest.param('{"theme":{"x":1}}', "light", id="theme-an-object"),
+    pytest.param('{"chart_line_shape":"steps"}', "light", id="no-theme"),
+    pytest.param('{"theme":"dark","chart_line_shape":"steps"}', "dark", id="dark-beside-another-key"),
+    pytest.param('{"theme":"auto"}', "auto", id="auto"),
+]
+#: The two places an upgrade can stop inside step 8 (the ``DROP COLUMN`` is one statement, the last).
+STOPPED_IN_STEP_8 = {
+    "after-the-ui-preferences-column": (ADD_UI_PREFERENCES,),
+    "ui-preferences-filled-theme-not-dropped": (ADD_UI_PREFERENCES, FILL_UI_PREFERENCES),
+}
 #: column: (target table, target column, ON DELETE)
 TOKEN_FOREIGN_KEYS = {
     "user_id": ("users", "id", "CASCADE"),
@@ -314,6 +360,7 @@ STOPPED_UPGRADES: dict[str, tuple[tuple[str, str], ...]] = {
         ("sql", "DROP INDEX ix_transactions_date"),
         ("sql", "DROP INDEX idx_route_base_quote"),
     ),
+    **{state: tuple(("sql", statement) for statement in statements) for state, statements in STOPPED_IN_STEP_8.items()},
 }
 
 #: The 1.3 tables the models and the migration must build alike, each with the reader that compares them:
@@ -335,6 +382,7 @@ CHILDREN_OF_USERS = frozenset({"user_settings", "broker_user_access", "global_se
 
 # Rows only a 1.2 server writes, on top of the 1.1 install it upgraded and converted. Erin signed up after the upgrade:
 # AUTOINCREMENT gives her an id above every id ever used. Her onboarding rows are created lazily, as the service does.
+# She chose the theme ``auto``: with alice and dave (``dark``) and carol (``light``), the install holds all three.
 ROWS_1_2 = """
 PRAGMA foreign_keys = ON;
 BEGIN;
@@ -344,7 +392,7 @@ INSERT INTO users (username, email, hashed_password, is_active, is_superuser, lo
     ('erin', 'erin@example.test', '$argon2id$erin', 1, 0, 2, NULL, 2, '2026-09-25 08:00:00.000000', '2026-09-25 08:00:00.000000');
 
 INSERT INTO user_settings (user_id, base_currency, language, theme, avatar_url, created_at, updated_at)
-    SELECT id, 'EUR', 'it', 'dark', NULL, '2026-09-25 08:00:00.000000', '2026-09-25 08:00:00.000000' FROM users WHERE username = 'erin';
+    SELECT id, 'EUR', 'it', 'auto', NULL, '2026-09-25 08:00:00.000000', '2026-09-25 08:00:00.000000' FROM users WHERE username = 'erin';
 
 INSERT INTO user_onboarding_progress (user_id, flow, status, version, created_at, updated_at, completed_at, skipped_at)
     SELECT id, 'welcome', 'completed', 1, '2026-09-25 08:00:01.000000', '2026-09-25 08:05:00.000000', '2026-09-25 08:05:00.000000', NULL FROM users WHERE username = 'erin';
@@ -382,6 +430,9 @@ BEGIN;
 UPDATE users SET session_version = 3, email_verified_at = '2026-10-02 08:00:00.000000', last_seen_version = '1.3.0' WHERE username = 'alice';
 UPDATE users SET session_version = 1, last_seen_version = '1.2.0' WHERE username = 'carol';
 UPDATE users SET email_verified_at = '2026-10-03 09:30:00.000000' WHERE username = 'erin';
+
+-- alice chose a line shape: one more key beside the theme the upgrade copied, lost by the downgrade
+UPDATE user_settings SET ui_preferences = '{ALICE_UI_PREFERENCES}' WHERE user_id = 1;
 
 INSERT INTO account_tokens (purpose, token_hash, user_id, email, grants_admin, created_by_user_id, created_at, expires_at, consumed_at, revoked_at, consumed_by_user_id) VALUES
     -- alice's reset, asked for by carol, used by dave: the three foreign keys at once
@@ -556,6 +607,28 @@ def _without_registration_rows(rows: Rows) -> Rows:
         else:
             kept[table] = (columns, content)
     return kept
+
+
+def _comparable(rows: Rows) -> Rows:
+    """``_without_registration_rows``, with ``user_settings`` read on the columns both revisions keep: ``theme`` (1.2) and ``ui_preferences`` (1.3) are compared apart, one against the other."""
+    kept = _without_registration_rows(rows)
+    if SETTINGS_TABLE in kept:
+        columns, content = kept[SETTINGS_TABLE]
+        positions = [columns.index(column) for column in SETTINGS_KEPT_COLUMNS]
+        kept[SETTINGS_TABLE] = (list(SETTINGS_KEPT_COLUMNS), sorted((tuple(row[position] for position in positions) for row in content), key=repr))
+    return kept
+
+
+def _settings_column(rows: Rows, column: str) -> dict[int, Any]:
+    """``{user_settings.id: <column>}``, as ``rows`` holds it."""
+    columns, content = rows[SETTINGS_TABLE]
+    assert column in columns, f"barrier: user_settings has no {column} column here: {columns}"
+    return {row[columns.index("id")]: row[columns.index(column)] for row in content}
+
+
+def _theme_as_json(theme: str) -> str:
+    """What ``json_object('theme', <theme>)`` writes: no space."""
+    return json.dumps({"theme": theme}, separators=(",", ":"))
 
 
 def _insert_user(conn: sqlite3.Connection, username: str, *, email: Optional[str] = None) -> int:
@@ -944,10 +1017,20 @@ def _with_owner(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {**snapshot, "objects": objects}
 
 
+def _with_ui_preferences(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """The snapshot with ``user_settings`` as step 8 leaves it: the ``theme`` clause removed (``DROP COLUMN``), ``ui_preferences TEXT DEFAULT NULL`` right after ``updated_at``, the last column, as ``ALTER TABLE ADD COLUMN`` writes it."""
+    objects = [list(entry) for entry in snapshot["objects"]]
+    for entry in objects:
+        if entry[1] == SETTINGS_TABLE and entry[0] == "table":
+            assert entry[3].count(THEME_CLAUSE) == 1 and entry[3].count(UI_PREFERENCES_ANCHOR) == 1 and UI_PREFERENCES_COLUMN not in entry[3], entry[3]
+            entry[3] = entry[3].replace(THEME_CLAUSE, "").replace(UI_PREFERENCES_ANCHOR, f"{UI_PREFERENCES_ANCHOR}{UI_PREFERENCES_CLAUSE}")
+    return {**snapshot, "objects": objects}
+
+
 @pytest.fixture(scope="module")
 def frozen() -> dict[str, Any]:
-    """The frozen snapshot of the retired chain with the owner of the instance laid over it (``_with_owner``): ``about``, ``objects``, ``rows``."""
-    return _with_owner(json.loads(SNAPSHOT.read_text(encoding="utf-8")))
+    """The frozen snapshot of the retired chain with the owner of the instance (``_with_owner``) and the interface preferences (``_with_ui_preferences``) laid over it: ``about``, ``objects``, ``rows``."""
+    return _with_ui_preferences(_with_owner(json.loads(SNAPSHOT.read_text(encoding="utf-8"))))
 
 
 @pytest.fixture(scope="module")
@@ -999,6 +1082,9 @@ def install_1_2(tmp_path_factory: pytest.TempPathFactory) -> Path:
     assert _violations(db) == [], "setup: the 1.2 rows must be consistent"
     assert _registration(_settings(db)) == {OLD_KEY: V110_ROW}, f"setup: the 1.1 rows hold enable_registration = 'false', by user 1: {_settings(db)}"
     assert CHILDREN_OF_USERS <= _tables_pointing_at_users(db), f"setup: every table that points at users must have rows pointing at one; found {sorted(_tables_pointing_at_users(db))}"
+    with _connect(db) as conn:
+        themes = conn.execute(f"SELECT theme, count(DISTINCT user_id) FROM {SETTINGS_TABLE} GROUP BY theme").fetchall()
+    assert {theme for theme, _users in themes} == THEMES_1_2, f"setup: the 1.2 install holds the themes {sorted(THEMES_1_2)}, each for a user of its own: {themes}"
     return db
 
 
@@ -1030,6 +1116,7 @@ class RoundTrip:
     """A copy of the 1.2 install taken to the revision, given ``ROWS_1_3``, downgraded to 004, then upgraded again."""
 
     schema_at_004: list[Any]
+    rows_at_004: Rows
     schema_at_005: list[Any]
     rows_with_1_3: Rows
     revision_down: str
@@ -1053,7 +1140,7 @@ def round_trip(install_1_2: Path, tmp_path_factory: pytest.TempPathFactory) -> R
     if missing is not None:
         return missing
     db = _copy(install_1_2, tmp_path_factory.mktemp("round-trip") / "app.db")
-    schema_at_004 = _snapshot(db)["objects"]
+    schema_at_004, rows_at_004 = _snapshot(db)["objects"], _rows(db)
     _migrate(db, "upgrade", REV_005)
     schema_at_005 = _snapshot(db)["objects"]
     with _foreign_keys_on(db) as conn:
@@ -1067,7 +1154,7 @@ def round_trip(install_1_2: Path, tmp_path_factory: pytest.TempPathFactory) -> R
 
     _migrate(db, "upgrade", REV_005)
     again = {"revision_again": _revision(db), "schema_again": _snapshot(db)["objects"], "rows_again": _rows(db), "settings_again": _settings(db), "new_columns_again": _new_user_columns(db), "violations_again": _violations(db)}
-    return RoundTrip(schema_at_004=schema_at_004, schema_at_005=schema_at_005, rows_with_1_3=rows_with_1_3, **down, **again)
+    return RoundTrip(schema_at_004=schema_at_004, rows_at_004=rows_at_004, schema_at_005=schema_at_005, rows_with_1_3=rows_with_1_3, **down, **again)
 
 
 # =============================================================================
@@ -1677,10 +1764,10 @@ def test_up_down_and_up_again_gives_the_settings_of_the_first_upgrade(at_004: Pa
 
 
 def test_a_1_2_install_keeps_every_row_of_every_table(upgraded_1_2: Upgrade | str) -> None:
-    """Every table of the 1.2 install, ids included and ``sqlite_sequence`` too, read on the columns it had: as it was, but for the registration row, which becomes a mode (below); the tables added are the three of 1.3, and no table is lost."""
+    """Every table of the 1.2 install, ids included and ``sqlite_sequence`` too, read on the columns it had: as it was, but for the registration row, which becomes a mode (below), and the ``theme`` of ``user_settings``, which becomes its JSON (section 12); the tables added are the three of 1.3, and no table is lost."""
     print_section("A populated 1.2 install, upgraded")
     up = _ran(upgraded_1_2)
-    before, after = _without_registration_rows(up.rows_before), _without_registration_rows(up.rows_after)
+    before, after = _comparable(up.rows_before), _comparable(up.rows_after)
 
     assert set(after) - set(before) == NEW_TABLES and set(before) <= set(after), f"the upgrade must add the three 1.3 tables and lose none: added {sorted(set(after) - set(before))}, lost {sorted(set(before) - set(after))}"
     changes = _row_changes(before, after, set(before), columns_of=before)
@@ -1723,7 +1810,7 @@ def test_a_1_2_install_gets_the_new_tables_empty_the_email_index_and_no_violatio
 
 
 def test_a_1_2_install_without_its_registration_row_gets_open(install_1_2: Path, tmp_path: Path) -> None:
-    """A 1.2 install with accounts and no ``enable_registration`` — deleted with plain SQL; 1.1 and 1.2 read the missing row as their default, true —: the upgrade writes ``registration_mode = 'open'``, nobody's, at the time of the upgrade; nothing brings ``enable_registration`` back; every other row of every table as it was."""
+    """A 1.2 install with accounts and no ``enable_registration`` — deleted with plain SQL; 1.1 and 1.2 read the missing row as their default, true —: the upgrade writes ``registration_mode = 'open'``, nobody's, at the time of the upgrade; nothing brings ``enable_registration`` back; every other row of every table as it was (``user_settings`` on the columns both revisions keep)."""
     _require_005()
     db = _copy(install_1_2, tmp_path / "sqlite" / "app.db")
     with _foreign_keys_on(db) as conn:
@@ -1739,7 +1826,7 @@ def test_a_1_2_install_without_its_registration_row_gets_open(install_1_2: Path,
 
     _assert_written_by_the_upgrade(settings.get(NEW_KEY), started, finished)
     assert OLD_KEY not in settings, f"nothing may bring {OLD_KEY} back: {settings}"
-    before, after = _without_registration_rows(rows_before), _without_registration_rows(_rows(db))
+    before, after = _comparable(rows_before), _comparable(_rows(db))
     changes = _row_changes(before, after, set(before), columns_of=before)
     assert not changes, f"the upgrade changed rows it had no reason to touch: {changes}"
 
@@ -1972,13 +2059,13 @@ def test_the_downgrade_of_a_1_2_install_gives_back_its_1_2_schema(round_trip: Ro
 
 
 def test_the_downgrade_of_a_1_2_install_touches_no_other_row(round_trip: RoundTrip | str) -> None:
-    """Every row of every table the downgrade keeps is the row it had at the revision, read on the columns the table keeps: no user lost, nothing cascaded into ``user_settings``, ``broker_user_access`` or the onboarding tables, nothing unlinked in ``global_settings``. The registration row is ``enable_registration = 'false'`` again, a bool with its old description, by its 1.1 author at its 1.1 time.
+    """Every row of every table the downgrade keeps is the row it had at the revision, read on the columns the table keeps (``user_settings`` on those both revisions have, its ``theme`` in section 12): no user lost, nothing cascaded into ``user_settings``, ``broker_user_access`` or the onboarding tables, nothing unlinked in ``global_settings``. The registration row is ``enable_registration = 'false'`` again, a bool with its old description, by its 1.1 author at its 1.1 time.
 
     The downgrade ran with foreign keys on (asserted by ``_migrate``), and before it every one of those tables had rows
     pointing at users (asserted by the fixture): a rebuild of ``users`` would show here.
     """
     trip = _ran(round_trip)
-    expected, actual = _without_registration_rows(trip.rows_with_1_3), _without_registration_rows(trip.rows_down)
+    expected, actual = _comparable(trip.rows_with_1_3), _comparable(trip.rows_down)
 
     changes = _row_changes(expected, actual, set(actual), columns_of=actual)
     assert not changes, f"the downgrade changed rows it had no reason to touch: {changes}"
@@ -1991,7 +2078,7 @@ def test_upgrading_the_1_2_install_again_brings_the_1_3_schema_back_empty(round_
     trip = _ran(round_trip)
     columns, rows = trip.rows_down["users"]
     users = {row[columns.index("id")] for row in rows}
-    expected, actual = _without_registration_rows(trip.rows_down), _without_registration_rows(trip.rows_again)
+    expected, actual = _comparable(trip.rows_down), _comparable(trip.rows_again)
 
     assert trip.revision_again == REV_005
     assert not _schema_differences(trip.schema_at_005, trip.schema_again), f"upgrading again must give the schema of the first upgrade: {_schema_differences(trip.schema_at_005, trip.schema_again)}"
@@ -2001,3 +2088,111 @@ def test_upgrading_the_1_2_install_again_brings_the_1_3_schema_back_empty(round_
     changes = _row_changes(expected, actual, set(expected), columns_of=expected)
     assert not changes, f"upgrading again changed rows: {changes}"
     assert trip.violations_again == []
+
+
+# =============================================================================
+# 12. THE INTERFACE PREFERENCES AS JSON (step 8, lot UIP)
+# =============================================================================
+
+
+def test_a_1_2_install_holds_each_theme_as_its_ui_preferences(upgraded_1_2: Upgrade | str) -> None:
+    """After the upgrade ``user_settings`` has ``ui_preferences`` and no ``theme``; every row holds ``{"theme":<its old value>}`` exactly as ``json_object`` writes it — ``light`` included, copied as it is —, and it parses to that object and nothing more."""
+    print_section("user_settings.theme becomes ui_preferences")
+    up = _ran(upgraded_1_2)
+    themes = _settings_column(up.rows_before, "theme")
+    assert set(themes.values()) == THEMES_1_2, f"barrier: the install holds the themes {sorted(THEMES_1_2)}: {themes}"
+
+    columns = _table_info(up.db, SETTINGS_TABLE)
+    assert UI_PREFERENCES_COLUMN in columns and "theme" not in columns, f"user_settings must hold ui_preferences and no theme: {sorted(columns)}"
+    stored = _settings_column(up.rows_after, UI_PREFERENCES_COLUMN)
+    assert stored == {row_id: _theme_as_json(theme) for row_id, theme in themes.items()}, f"every row must hold its theme as json_object writes it: {stored}"
+    assert {row_id: json.loads(text) for row_id, text in stored.items()} == {row_id: {"theme": theme} for row_id, theme in themes.items()}
+    print_success(f"{len(stored)} rows, each theme ({', '.join(sorted(THEMES_1_2))}) in its JSON")
+
+
+def test_the_downgrade_of_a_1_2_install_gives_every_user_its_theme_back(round_trip: RoundTrip | str) -> None:
+    """Down to 004, every ``user_settings`` row has the ``theme`` it had at 004 — ``light``, ``dark``, ``auto`` —, alice's read from a JSON that also held a line shape, which is lost. Barrier: before the downgrade alice's row held that other key."""
+    trip = _ran(round_trip)
+    at_004 = _settings_column(trip.rows_at_004, "theme")
+    assert _settings_column(trip.rows_with_1_3, UI_PREFERENCES_COLUMN).get(1) == ALICE_UI_PREFERENCES and at_004.get(1) == "dark", "barrier: at the revision alice (dark in 1.2) held a line shape beside her theme"
+
+    assert _settings_column(trip.rows_down, "theme") == at_004, f"the downgrade must give every row the theme it had at 004: {_settings_column(trip.rows_down, 'theme')} instead of {at_004}"
+    assert UI_PREFERENCES_COLUMN not in trip.rows_down[SETTINGS_TABLE][0], "the 1.2 table has no ui_preferences"
+
+
+def test_upgrading_the_1_2_install_again_copies_each_theme_again(round_trip: RoundTrip | str) -> None:
+    """Up again after the downgrade: every row holds ``{"theme":<its 1.2 value>}`` again, alice's line shape gone with the downgrade."""
+    trip = _ran(round_trip)
+    at_004 = _settings_column(trip.rows_at_004, "theme")
+
+    assert _settings_column(trip.rows_again, UI_PREFERENCES_COLUMN) == {row_id: _theme_as_json(theme) for row_id, theme in at_004.items()}
+
+
+@pytest.mark.parametrize(("ui_preferences", "theme"), DOWNGRADED_THEMES)
+def test_the_downgrade_reads_the_theme_from_the_json_or_gives_light(fresh_005: Path | str, tmp_path: Path, ui_preferences: Optional[str], theme: str) -> None:
+    """A ``user_settings`` row written on the 1.3 columns: down to 004 its ``theme`` is the JSON's when ``ui_preferences`` is an object with a text ``theme``, ``light`` when it is NULL, not JSON, another JSON value, or an object without a text ``theme``; every other column as it was, the id included; no violation."""
+    db = _copy(_ran(fresh_005), tmp_path / "app.db")
+    with _foreign_keys_on(db) as conn:
+        user = _insert_user(conn, "chooser")
+        row = conn.execute(
+            f"INSERT INTO {SETTINGS_TABLE} (id, user_id, base_currency, language, avatar_url, created_at, updated_at, {UI_PREFERENCES_COLUMN}) VALUES (7, ?, 'CHF', 'fr', '/api/v1/uploads/a.png', ?, ?, ?)",
+            (user, STAMP, LATER, ui_preferences),
+        ).lastrowid
+        conn.commit()
+
+    _migrate(db, "downgrade", REV_004)
+
+    with _connect(db) as conn:
+        stored = conn.execute(f"SELECT id, user_id, base_currency, language, theme, avatar_url, created_at, updated_at FROM {SETTINGS_TABLE}").fetchall()
+    assert stored == [(row, user, "CHF", "fr", theme, "/api/v1/uploads/a.png", STAMP, LATER)], f"ui_preferences {ui_preferences!r} must go down as theme {theme!r}, the rest as it was: {stored}"
+    assert _violations(db) == []
+
+
+@pytest.mark.parametrize("state", sorted(STOPPED_IN_STEP_8))
+def test_an_upgrade_stopped_inside_step_8_completes_with_every_theme_copied(install_1_2: Path, upgraded_1_2: Upgrade | str, frozen: dict[str, Any], tmp_path: Path, state: str) -> None:
+    """The populated 1.2 install, the revision still 004, holding what an upgrade stopped inside step 8 left — ``ui_preferences`` added only, or added and filled with ``theme`` still there —: ``upgrade`` goes through to exactly the database an uninterrupted upgrade gives, every object and every row, each theme in its JSON; ``user_settings`` declared as the frozen schema declares it."""
+    up = _ran(upgraded_1_2)
+    db = _copy(install_1_2, tmp_path / "sqlite" / "app.db")
+    with _foreign_keys_on(db) as conn:
+        for statement in STOPPED_IN_STEP_8[state]:
+            conn.execute(statement)
+        conn.commit()
+    columns = _table_info(db, SETTINGS_TABLE)
+    assert _revision(db) == REV_004 and {"theme", UI_PREFERENCES_COLUMN} <= set(columns), f"setup: the stopped state, at 004 with theme and ui_preferences: {sorted(columns)}"
+
+    _migrate(db, "upgrade", REV_005)
+
+    assert _revision(db) == REV_005, f"the upgrade must go through: {_revision(db)}"
+    differences = _schema_differences(_snapshot(up.db)["objects"], _snapshot(db)["objects"])
+    assert not differences, f"the stopped upgrade must end with the schema of an uninterrupted one: {differences}"
+    assert _declared(_snapshot(db)["objects"], [SETTINGS_TABLE]) == _declared(frozen["objects"], [SETTINGS_TABLE])
+    rows = _rows(db)
+    changes = _row_changes(up.rows_after, rows, set(up.rows_after) - BOOKKEEPING, columns_of=up.rows_after)
+    assert not changes, f"the stopped upgrade must end with the rows of an uninterrupted one: {changes}"
+    themes = _settings_column(up.rows_before, "theme")
+    assert _settings_column(rows, UI_PREFERENCES_COLUMN) == {row_id: _theme_as_json(theme) for row_id, theme in themes.items()}
+
+
+def test_a_downgrade_that_finds_user_settings_at_1_2_leaves_it_as_it_is(upgraded_1_2: Upgrade | str, install_1_2: Path, tmp_path: Path) -> None:
+    """A downgrade that rebuilt ``user_settings`` with its ``001`` statement and stopped — the table at 1.2, the revision still the new one —: ``downgrade`` does not rebuild it again — its SQL as written and its rows, ``theme`` included, as they were — and ends with the 1.2 schema of the install."""
+    print_section("A downgrade run again over a user_settings already at 1.2")
+    db = _copy(_ran(upgraded_1_2).db, tmp_path / "sqlite" / "app.db")
+    table_1_2 = next(sql for kind, name, _table, sql in _raw_schema(install_1_2) if kind == "table" and name == SETTINGS_TABLE)
+    with _foreign_keys_on(db) as conn:
+        conn.execute(f"ALTER TABLE {SETTINGS_TABLE} RENAME TO user_settings_aside")
+        conn.execute(table_1_2)
+        conn.execute(f"INSERT INTO {SETTINGS_TABLE} (id, user_id, base_currency, language, theme, avatar_url, created_at, updated_at) SELECT id, user_id, base_currency, language, json_extract({UI_PREFERENCES_COLUMN}, '$.theme'), avatar_url, created_at, updated_at FROM user_settings_aside")
+        conn.execute("DROP TABLE user_settings_aside")
+        conn.commit()
+    before = _rows(db)[SETTINGS_TABLE]
+    raw_before = [entry for entry in _raw_schema(db) if entry[1] == SETTINGS_TABLE]
+    assert _revision(db) == REV_005 and set(_settings_column(_rows(db), "theme").values()) == THEMES_1_2, "setup: user_settings at 1.2 with the install's themes, the revision still the new one"
+
+    _migrate(db, "downgrade", REV_004)
+
+    assert _revision(db) == REV_004
+    assert [entry for entry in _raw_schema(db) if entry[1] == SETTINGS_TABLE] == raw_before, "a user_settings already at 1.2 must not be rebuilt again"
+    assert _rows(db)[SETTINGS_TABLE] == before, "its rows, theme included, must stay as they were"
+    differences = _schema_differences(_snapshot(install_1_2)["objects"], _snapshot(db)["objects"])
+    assert not differences, f"the downgrade must end with the install's 1.2 schema: {differences}"
+    print_success("user_settings left as it was, the rest of the downgrade done")
