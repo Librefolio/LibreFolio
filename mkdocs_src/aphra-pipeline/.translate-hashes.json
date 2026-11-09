@@ -12215,7 +12215,7 @@
     }
   },
   "admin/connection_proxy.en.md": {
-    "md5": "94f3a9b354a474e034eaa6e0a8612a7b",
+    "md5": "9a2cab97f072367843a4a809c913cc12",
     "langs_done": [
       "es",
       "fr",
@@ -12235,7 +12235,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1043.0,
-        "stamped_at": "2026-11-07T22:40:21.318246+00:00",
+        "stamped_at": "2026-11-09T10:54:55.405472+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -12248,7 +12248,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1201.7,
-        "stamped_at": "2026-11-07T22:40:21.318246+00:00",
+        "stamped_at": "2026-11-09T10:54:55.405472+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -12261,7 +12261,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1170.3,
-        "stamped_at": "2026-11-07T22:40:21.318246+00:00",
+        "stamped_at": "2026-11-09T10:54:55.405472+00:00",
         "stamped_by": "translate-stamp"
       }
     }
