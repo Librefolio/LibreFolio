@@ -89,7 +89,8 @@
       "scheduler_history_sync_days": "History Sync Days",
       "scheduler_history_sync_horizon_days": "Lookback Horizon",
       "scheduler_enabled": "Scheduler Enabled",
-      "registration_mode": "Registration"
+      "registration_mode": "Registration",
+      "default_chart_line_shape": "Default Chart Line Shape"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "How long a user session remains valid before requiring re-login",
@@ -97,13 +98,14 @@
       "max_file_upload_mb": "Maximum file size allowed for uploads",
       "default_currency": "Default currency for new users",
       "default_language": "Default language for new users",
-      "default_theme": "Default theme for new users",
+      "default_theme": "Theme of every user who has not chosen one",
       "scheduler_enabled": "Enable or disable the automatic market data scheduler",
       "scheduler_current_price_frequency_minutes": "How often current prices are refreshed (in minutes)",
       "scheduler_history_sync_times": "Times of day when historical data is synced (in the scheduler timezone)",
       "scheduler_history_sync_days": "Days of the week when historical data is synced",
       "scheduler_history_sync_horizon_days": "How many days back to look for missing historical data",
-      "registration_mode": "Who can create an account: anyone (open), only people with an invitation link (by invitation), or nobody (closed)."
+      "registration_mode": "Who can create an account: anyone (open), only people with an invitation link (by invitation), or nobody (closed).",
+      "default_chart_line_shape": "Chart line shape of every user who has not chosen one"
     },
     "globalSettingUnits": {
       "session_ttl_hours": "hours",
@@ -427,6 +429,12 @@
       "message": "This is the email address of the owner of the subscription, so it can't be changed from LibreFolio. Ask the host of this instance to change it.",
       "support": "Contact support"
     },
-    "lineShapeHint": "Applies to every chart, in this browser. A single chart can have its own shape in its chart settings."
+    "lineShapeHint": "Applies to every chart, in every browser you sign in to. A single chart can have its own shape in its chart settings.",
+    "preferenceSource": {
+      "global": "Global",
+      "globalHint": "You have not chosen this preference: it follows the default set by the administrator",
+      "auto": "Auto",
+      "autoHint": "Your browser decides: light or dark, as your system is set"
+    }
   }
 }

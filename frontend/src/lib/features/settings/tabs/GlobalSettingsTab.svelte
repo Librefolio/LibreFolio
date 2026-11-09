@@ -9,6 +9,7 @@
     import {debug} from '$lib/debug';
     import {BarChart3, ChevronDown, ChevronRight, CircleEllipsis, Clock, Database, Lock, RefreshCw, Settings, Shield, ShieldOff, Unlock, Users} from 'lucide-svelte';
     import {type SelectOption} from '$lib/components/ui/select';
+    import {LINE_SHAPES} from '$lib/components/charts/lineShape';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
@@ -53,6 +54,7 @@
         default_currency: 'EUR',
         default_language: 'en',
         default_theme: 'auto',
+        default_chart_line_shape: 'segments',
         storage_limit_mb: '0',
     };
 
@@ -71,7 +73,7 @@
         {id: 'security', icon: Shield, keys: ['registration_mode', 'require_email_verification']},
         {id: 'sync', icon: RefreshCw, keys: ['scheduler_enabled']},
         {id: 'memory', icon: Database, keys: ['max_file_upload_mb', STORAGE_LIMIT_KEY]},
-        {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language', 'default_theme']},
+        {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language', 'default_theme', 'default_chart_line_shape']},
     ];
     const otherCategory: Category = {id: 'other', icon: CircleEllipsis, keys: []};
 
@@ -134,6 +136,9 @@
     let serverTz = $state('');
 
     // Language options for dropdown
+    // The line shape every user who has not chosen one sees (lot UIP): the labels of the shape picker.
+    const lineShapeOptions: SelectOption[] = $derived(LINE_SHAPES.map((shape) => ({value: shape, label: $_(shape === 'segments' ? 'chartSettings.lineShapeSegments' : shape === 'steps' ? 'chartSettings.lineShapeSteps' : 'chartSettings.lineShapeSpline')})));
+
     const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map((l) => ({
         value: l.code,
         label: l.name,
@@ -336,6 +341,7 @@
             default_language: editedValues['default_language'] || 'en',
             default_currency: editedValues['default_currency'] || 'EUR',
             default_theme: editedValues['default_theme'] || 'auto',
+            default_chart_line_shape: editedValues['default_chart_line_shape'] || 'segments',
             session_ttl_hours: parseInt(editedValues['session_ttl_hours'] || '24', 10),
             max_file_upload_mb: parseInt(editedValues['max_file_upload_mb'] || '10', 10),
             scheduler_enabled: editedValues['scheduler_enabled'] === 'true',
@@ -712,6 +718,26 @@
                                 <SettingSelect
                                     value={editedValues[setting.key]}
                                     options={languageOptions}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    {isLocked}
+                                    {isSaving}
+                                    embedded
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                                />
+                            {:else if setting.key === 'default_chart_line_shape'}
+                                <SettingSelect
+                                    value={editedValues[setting.key]}
+                                    options={lineShapeOptions}
                                     label={getSettingLabel(setting.key)}
                                     hint={getSettingHint(setting.key)}
                                     icon={category?.icon ?? null}

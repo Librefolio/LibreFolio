@@ -89,7 +89,8 @@
       "scheduler_history_sync_days": "Jours de Synchronisation Historique",
       "scheduler_history_sync_horizon_days": "Horizon de Récupération",
       "scheduler_enabled": "Planificateur Activé",
-      "registration_mode": "Inscription"
+      "registration_mode": "Inscription",
+      "default_chart_line_shape": "Forme de Ligne par Défaut"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Durée de validité d'une session utilisateur avant reconnexion",
@@ -97,13 +98,14 @@
       "max_file_upload_mb": "Taille maximale des fichiers autorisée pour les téléversements",
       "default_currency": "Devise par défaut pour les nouveaux utilisateurs",
       "default_language": "Langue par défaut pour les nouveaux utilisateurs",
-      "default_theme": "Thème par défaut pour les nouveaux utilisateurs",
+      "default_theme": "Thème de chaque utilisateur qui n'en a pas choisi",
       "scheduler_enabled": "Activer ou désactiver le planificateur automatique de données de marché",
       "scheduler_current_price_frequency_minutes": "Fréquence de mise à jour des prix actuels (en minutes)",
       "scheduler_history_sync_times": "Heures auxquelles les données historiques sont synchronisées (dans le fuseau horaire du planificateur)",
       "scheduler_history_sync_days": "Jours de la semaine pendant lesquels les données historiques sont synchronisées",
       "scheduler_history_sync_horizon_days": "Nombre de jours en arrière pour chercher les données historiques manquantes",
-      "registration_mode": "Qui peut créer un compte : tout le monde (ouverte), seulement les personnes qui ont un lien d'invitation (sur invitation), ou personne (fermée)."
+      "registration_mode": "Qui peut créer un compte : tout le monde (ouverte), seulement les personnes qui ont un lien d'invitation (sur invitation), ou personne (fermée).",
+      "default_chart_line_shape": "Forme des lignes des graphiques pour chaque utilisateur qui n'en a pas choisi"
     },
     "globalSettingUnits": {
       "session_ttl_hours": "heures",
@@ -427,6 +429,12 @@
       "message": "C'est l'adresse e-mail du titulaire de l'abonnement : elle ne peut pas être changée depuis LibreFolio. Demandez à l'hébergeur de cette instance de la changer.",
       "support": "Contacter l'assistance"
     },
-    "lineShapeHint": "S'applique à tous les graphiques, dans ce navigateur. Un graphique peut avoir sa propre forme dans ses paramètres."
+    "lineShapeHint": "S'applique à tous les graphiques, dans chaque navigateur où vous vous connectez. Un graphique peut avoir sa propre forme dans ses paramètres.",
+    "preferenceSource": {
+      "global": "Global",
+      "globalHint": "Vous n'avez pas choisi cette préférence : elle suit la valeur par défaut définie par l'administrateur",
+      "auto": "Auto",
+      "autoHint": "Votre navigateur décide : clair ou sombre, selon le réglage du système"
+    }
   }
 }
