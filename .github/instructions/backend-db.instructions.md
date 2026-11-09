@@ -17,7 +17,7 @@ exactly. **Table names are plural** — a lookup for `asset` or `transaction` fi
 | Model | Table | Key Fields |
 |-------|-------|------------|
 | `User` | `users` | username, email, hashed_password, **is_superuser**, is_active, login_count, donation_popup_last_shown_at, donation_popup_logins_since_shown |
-| `UserSettings` | `user_settings` | user_id (FK), base_currency, language, theme, avatar_url |
+| `UserSettings` | `user_settings` | user_id (FK), base_currency, language, avatar_url, ui_preferences (JSON text: theme, chart_line_shape; an absent key follows its global default) |
 | `UserOnboardingProgress` | `user_onboarding_progress` | user_id, flow, status, version, completed_at, skipped_at |
 | `UserOnboardingStepProgress` | `user_onboarding_step_progress` | user_id, flow, step_id, status, version, completed_at, skipped_at |
 | `GlobalSetting` | `global_settings` | key, value, value_type, description, updated_by_user_id |
