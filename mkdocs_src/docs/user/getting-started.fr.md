@@ -122,7 +122,7 @@ Sur la page de connexion, cliquez sur **Mot de passe oublié ?**. Lorsque votre 
 formulaire en haut :
 
 1. Saisissez votre nom d'utilisateur ou votre adresse e-mail, puis cliquez sur **Envoyez-moi un lien de réinitialisation**.
-2. La page répond de la même manière, qu'un compte corresponde ou non : regardez dans votre boîte de réception et dans le
+2. La page répond *E-mail envoyé : vérifiez aussi vos spams.*, de la même manière, qu'un compte corresponde ou non : regardez dans votre boîte de réception et dans le
    dossier des spams.
 3. Ouvrez l'e-mail *Réinitialisez votre mot de passe LibreFolio* et cliquez sur **Choisir un nouveau mot de passe**. La page
    qui s'ouvre est celle d'un lien envoyé par un administrateur : suivez
@@ -131,8 +131,10 @@ formulaire en haut :
 - ⏱️ Le lien fonctionne une seule fois, pendant 30 minutes.
 - 📭 Pas d'e-mail après quelques minutes ? Le compte est peut-être désactivé ou enregistré avec une autre
   adresse, ou les demandes ont été faites trop rapprochées : réessayez plus tard ou demandez à votre administrateur.
-- 💻 Sous le formulaire, un panneau fermé contient la commande que votre administrateur exécute sur le serveur pour réinitialiser
-  un mot de passe ; lorsque votre instance ne peut pas envoyer d'e-mails, la page l'affiche ouvert. Dans tous les cas : demandez-lui.
+- ⏳ Après une demande, le bouton affiche un compte à rebours de 5 minutes avant que vous puissiez redemander : le serveur
+  envoie au plus un e-mail toutes les 5 minutes pour le même compte. Recharger la page conserve le compte à rebours.
+- 💻 Lorsque votre instance ne peut pas envoyer d'e-mails, la page affiche à la place la commande que votre administrateur
+  exécute sur le serveur pour réinitialiser un mot de passe : demandez-lui.
 
 ### 🔑 Si un administrateur vous a envoyé un lien de réinitialisation du mot de passe {: #password-reset-link }
 

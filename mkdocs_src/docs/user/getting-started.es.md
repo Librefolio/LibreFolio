@@ -80,12 +80,13 @@ Debajo de la tarjeta, como en todas las páginas de inicio de sesión, una líne
 En la página de inicio de sesión, haz clic en **¿Olvidaste tu contraseña?**. Cuando tu instancia puede enviar correos electrónicos, la página tiene un formulario en la parte superior:
 
 1. Escribe tu nombre de usuario o tu dirección de correo electrónico y haz clic en **Envíame un enlace de restablecimiento**.
-2. La página responde de la misma manera tanto si hay una cuenta coincidente como si no: revisa tu bandeja de entrada y la carpeta de spam.
+2. La página responde *Correo enviado: revisa también la carpeta de spam.*, de la misma manera tanto si hay una cuenta coincidente como si no: revisa tu bandeja de entrada y la carpeta de spam.
 3. Abre el correo *Restablece tu contraseña de LibreFolio* y haz clic en **Elige una nueva contraseña**. La página que se abre es la de un enlace enviado por un administrador: sigue [Si un administrador te ha enviado un enlace para restablecer la contraseña](#password-reset-link) a partir del paso 2.
 
 - ⏱️ El enlace funciona una sola vez, durante 30 minutos.
 - 📭 ¿No recibiste el correo tras unos minutos? Puede que la cuenta esté desactivada o registrada con otra dirección, o que las solicitudes se hayan hecho demasiado seguidas: inténtalo más tarde o pregunta a tu administrador.
-- 💻 Debajo del formulario, un panel cerrado contiene el comando que tu administrador ejecuta en el servidor para restablecer una contraseña; cuando tu instancia no puede enviar correos, la página lo muestra abierto. En cualquier caso: pregúntale.
+- ⏳ Tras una solicitud, el botón muestra una cuenta atrás de 5 minutos antes de que puedas pedirlo de nuevo: el servidor envía como máximo un correo cada 5 minutos para la misma cuenta. Recargar la página mantiene la cuenta atrás.
+- 💻 Cuando tu instancia no puede enviar correos, la página muestra en su lugar el comando que tu administrador ejecuta en el servidor para restablecer una contraseña: pregúntale.
 
 ### 🔑 Si un administrador te ha enviado un enlace para restablecer la contraseña {: #password-reset-link }
 
