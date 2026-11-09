@@ -302,6 +302,12 @@ a través de Docker, así que sus solicitudes proceden de la puerta de enlace de
     Si `.env` ya establece la variable, para otro proxy, añade la puerta de enlace al final de su lista, tras una
     coma.
 
+    Por ejemplo, con otro proxy en la red `172.18.0.0/16` y la puerta de enlace de Tailscale:
+
+    ```bash
+    FORWARDED_ALLOW_IPS=172.18.0.0/16,172.28.0.1
+    ```
+
 4. **Reinicia LibreFolio**, para que su contenedor reciba el nuevo entorno:
 
     ```bash

@@ -302,6 +302,12 @@ through Docker, so their requests come from the gateway of the container's Docke
     If `.env` already sets the variable, for another proxy, add the gateway at the end of its list, after a
     comma.
 
+    For example, with another proxy on the network `172.18.0.0/16` and the Tailscale gateway:
+
+    ```bash
+    FORWARDED_ALLOW_IPS=172.18.0.0/16,172.28.0.1
+    ```
+
 4. **Restart LibreFolio**, so that its container gets the new environment:
 
     ```bash
