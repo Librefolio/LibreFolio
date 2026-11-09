@@ -16,7 +16,7 @@ Cosa invia LibreFolio:
   da `LIBREFOLIO_ADMIN_EMAIL` e genera il link da solo: [L'amministratore iniziale](configuration_accounts.md#initial-admin).
 - **Un link per confermare l'indirizzo email di un nuovo account**, quando **Richiedi verifica email** è
   attivo: [Verifica dell'email](email_flows.md#verification).
-- **Un avviso al vecchio indirizzo** quando qualcuno cambia l'indirizzo email del proprio account:
+- **Un avviso al vecchio indirizzo e una conferma al nuovo** quando qualcuno cambia l'indirizzo email del proprio account:
   [Cambi di indirizzo email](email_flows.md#email-change-notice).
 
 Le email con un link richiedono anche `LIBREFOLIO_PUBLIC_URL`: [Email con un link](email_flows.md#public-url).
