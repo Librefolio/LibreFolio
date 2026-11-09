@@ -1256,7 +1256,8 @@ describe('AssetModal provider lifecycle', () => {
                 identifier_sedol: null,
                 identifier_figi: null,
                 identifier_uuid: null,
-                identifier_other: null,
+                // The OTHER identifiers always go as the whole list: `null` would mean "leave unchanged".
+                identifier_other: [],
             },
         ];
         const patchResult: PatchResponse = {results: [{asset_id: 8101, success: true, message: 'Synthetic patch accepted'}], success_count: 1, errors: []};
@@ -1325,7 +1326,8 @@ describe('AssetModal provider lifecycle', () => {
                 identifier_sedol: null,
                 identifier_figi: null,
                 identifier_uuid: null,
-                identifier_other: null,
+                // The OTHER identifiers always go as the whole list: `null` would mean "leave unchanged".
+                identifier_other: [],
             },
         ]);
         await assignment.finish();
@@ -2076,7 +2078,8 @@ function scheduledPatch(): PatchItem[] {
             identifier_sedol: null,
             identifier_figi: null,
             identifier_uuid: null,
-            identifier_other: null,
+            // The OTHER identifiers always go as the whole list: `null` would mean "leave unchanged".
+            identifier_other: [],
         },
     ];
 }
@@ -2386,7 +2389,8 @@ function atlasPatch(): PatchItem[] {
             identifier_sedol: null,
             identifier_figi: null,
             identifier_uuid: null,
-            identifier_other: null,
+            // The OTHER identifiers always go as the whole list: `null` would mean "leave unchanged".
+            identifier_other: [],
         },
     ];
 }
