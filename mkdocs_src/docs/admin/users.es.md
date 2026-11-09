@@ -305,7 +305,7 @@ Condición: correo electrónico **Listo** y `LIBREFOLIO_PUBLIC_URL` establecida 
 | **Idioma** | **Idioma del correo**: el **Idioma Predeterminado** de la instancia, salvo que elijas otro | El idioma de la cuenta |
 
 - 🌐 **El enlace del correo empieza con `LIBREFOLIO_PUBLIC_URL`**, sea lo que sea lo que muestre la **Dirección del servidor** de arriba: el diálogo lo dice.
-- 📨 **El resultado** está en el diálogo: *Enviado a …* con la dirección y el idioma del correo, o por qué el correo no salió ([Errores de envío](email_troubleshooting.md#sending-errors)).
+- 📨 **El resultado** está en el diálogo: *Enviado a …* con la dirección y el idioma del correo, y un recordatorio de que, si no llega, el destinatario debe revisar también la carpeta de spam; o por qué el correo no salió ([Errores de envío](email_troubleshooting.md#sending-errors)).
 
 Reglas y límites: [Enlaces enviados por un administrador](email_flows.md#admin-links).
 

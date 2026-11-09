@@ -305,7 +305,7 @@ Condizione: email **Pronta** e `LIBREFOLIO_PUBLIC_URL` impostato su un indirizzo
 | **Lingua** | **Lingua dell'email**: la **Lingua predefinita** dell'istanza, a meno che tu non ne scelga un'altra | La lingua dell'account |
 
 - 🌐 **Il link nell'email inizia con `LIBREFOLIO_PUBLIC_URL`**, qualunque cosa mostri l'**Indirizzo del server** sopra: la finestra lo dice.
-- 📨 **Il risultato** è nella finestra: *Inviato a …* con indirizzo e lingua dell'email, oppure il motivo per cui l'email non è partita ([Errori di invio](email_troubleshooting.md#sending-errors)).
+- 📨 **Il risultato** è nella finestra: *Inviato a …* con indirizzo e lingua dell'email, e un promemoria: se non arriva, il destinatario controlli anche lo spam; oppure il motivo per cui l'email non è partita ([Errori di invio](email_troubleshooting.md#sending-errors)).
 
 Regole e limiti: [Link inviati da un amministratore](email_flows.md#admin-links).
 

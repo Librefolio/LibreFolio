@@ -305,7 +305,7 @@ Condition : e-mail **Prêt** et `LIBREFOLIO_PUBLIC_URL` défini sur une adresse 
 | **Langue** | **Langue de l'e-mail** : la **Langue par Défaut** de l'instance, sauf si vous en choisissez une autre | La langue du compte |
 
 - 🌐 **Le lien contenu dans l'e-mail commence par `LIBREFOLIO_PUBLIC_URL`**, quelle que soit l'**Adresse du serveur** affichée ci-dessus : la boîte de dialogue le précise.
-- 📨 **Le résultat** s'affiche dans la boîte de dialogue : *Envoyé à …* avec l'adresse et la langue de l'e-mail, ou la raison pour laquelle l'e-mail n'est pas parti ([Erreurs d'envoi](email_troubleshooting.md#sending-errors)).
+- 📨 **Le résultat** s'affiche dans la boîte de dialogue : *Envoyé à …* avec l'adresse et la langue de l'e-mail, et un rappel : s'il n'arrive pas, le destinataire doit aussi vérifier les spams ; ou la raison pour laquelle l'e-mail n'est pas parti ([Erreurs d'envoi](email_troubleshooting.md#sending-errors)).
 
 Règles et limites : [Liens envoyés par un administrateur](email_flows.md#admin-links).
 

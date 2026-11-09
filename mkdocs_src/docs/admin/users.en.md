@@ -305,7 +305,7 @@ Condition: email **Ready** and `LIBREFOLIO_PUBLIC_URL` set to an address LibreFo
 | **Language** | **Language of the email**: the instance's **Default Language**, unless you pick another | The account's language |
 
 - 🌐 **The link in the email starts with `LIBREFOLIO_PUBLIC_URL`**, whatever the **Server address** above shows: the dialog says so.
-- 📨 **The result** is in the dialog: *Sent to …* with the address and the language of the email, or why the email did not go out ([Sending Errors](email_troubleshooting.md#sending-errors)).
+- 📨 **The result** is in the dialog: *Sent to …* with the address and the language of the email, and a reminder that the recipient should check the spam folder too if it does not arrive; or why the email did not go out ([Sending Errors](email_troubleshooting.md#sending-errors)).
 
 Rules and limits: [Links Sent by an Administrator](email_flows.md#admin-links).
 
