@@ -1045,7 +1045,7 @@
     }
   },
   "admin/settings.en.md": {
-    "md5": "e7ec047201f996d748fb657724013bfa",
+    "md5": "5d74e51c92538db918d3adf3aca11257",
     "langs_done": [
       "es",
       "fr",
@@ -1067,7 +1067,7 @@
         "elapsed_s": 2022.6,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=156, translated=157 (Δ+1)\n  L27: src=3 trn=2\n    EN: **Settings** end with **About**, and a link to one of the group's tabs opens their **Profile**\n    TR: **Impostazioni** terminano con **Informazioni**, e un link a una delle schede del gruppo apre invece il suo\n  L28: src=0 trn=1\n    EN: instead.\n    TR: **Profilo**.\n  L57: src=1 trn=0\n    EN: Clicking the lock with unsaved changes asks whether to discard them. **Cancel** keeps your\n    TR: \n  L59: src=0 trn=1\n    EN: \n    TR: modifiche; **Scarta** ripristina i valori salvati e blocca la scheda.\n  L77: src=1 trn=0\n    EN: | ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices; a new value\n    TR: |---|---|---|---|\n  L78: src=6 trn=1\n    EN: | 🛡️ Security | **Registration** | By invitation | Who can create an account: **Open**, **By invitation** or **Closed** \n    TR: | ⏳ Sessione | **Durata sessione** | 24 ore | Per quanto tempo gli utenti restano connessi. Riducila sui dispositivi con\n  L79: src=1 trn=6\n    EN: | 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link emailed to their address before the\n    TR: | 🛡️ Sicurezza | **Registrazione** | Su invito | Chi può creare un account: **Aperta**, **Su invito** o **Chiusa** (vedi\n  L82: src=2 trn=1\n    EN: | — (not shown in this tab) | **Space limit (MB)** | `0`, no limit | The most megabytes the instance may take, shown as \n    TR: | 🧠 Memoria | **Dimensione massima file caricabile** | 10 MB | Il file più grande che gli utenti possono caricare, compr\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # ⚙️ Global Settings\n    ## 🗂️ Settings › Administration {: #administration }\n    ## ✏️ Change a Setting\n      ### 🔓 1. Unlock the tab\n      ### 💾 2. Edit and save\n    ## 📋 What Each Setting Does\n    ## 🚪 Who Can Sign Up {: #registration }\n      ### 📢 The Open-Registration Warning {: #open-registration-warning }\n    ## 🕐 Market Data Scheduler {: #market-data-scheduler }\n      ### ⚙️ Configure the schedule\n      ### 📜 Read the scheduler log\n    ## ⏸️ Provider Pauses {: #provider-pauses }\n      ### ⏱️ How Long a Pause Lasts {: #provider-pauses-length }\n      ### 👀 Who Waits, and What You See {: #provider-pauses-effects }\n      ### 💤 In Memory {: #provider-pauses-memory }\n      ### 📋 In the Log {: #provider-pauses-log }\n    ## 🗄️ Server Caches {: #server-caches }\n    ## 🛡️ Security {: #security-tab }\n      ### 🚦 What It Lists {: #security-findings }\n      ### 🔢 The Number on the Tab {: #security-badge }\n      ### 🔄 When It Checks {: #security-refresh }\n      ### ✅ Passed Checks {: #security-passed }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-08T20:19:59.720931+00:00",
+        "stamped_at": "2026-11-09T11:24:31.284160+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -1082,7 +1082,7 @@
         "elapsed_s": 1307.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=156, translated=161 (Δ+5)\n  L9: src=0 trn=5\n    EN: ---\n    TR: **Paramètres globaux** est le premier onglet d’**Administration**, le groupe d’onglets qui gère l’instance, à l’extrémit\n  L13: src=2 trn=1\n    EN: **Global Settings** is the first tab of **Administration**, the group of tabs that look after the\n    TR: | ⚙️ **Paramètres globaux** | Administrateurs | Les paramètres de cette page |\n  L15: src=2 trn=1\n    EN: the group. Click **Administration**: it opens **Global Settings** and a second row of tabs under the\n    TR: | 💾 **Sauvegarde** | Administrateurs | Toute l’instance dans une archive, et sa restauration : [Sauvegarde, restauration\n  L16: src=0 trn=1\n    EN: first one, with the tabs of the group.\n    TR: | ✉️ **E-mail** | Administrateurs | Si LibreFolio peut envoyer des e-mails, et un e-mail de test : [E-mail](email.md) |\n  L17: src=0 trn=1\n    EN: \n    TR: | 🛡️ **Sécurité** | Administrateurs | Comment l’instance est configurée, et ce qui demande votre attention : [Sécurité](\n  L19: src=0 trn=4\n    EN: |---|---|---|\n    TR: - 👤 Un utilisateur qui n’est pas administrateur n’a pas le groupe **Administration**, ni aucun de ses onglets : ses **Pa\n  L21: src=1 trn=2\n    EN: | 👥 **Users** | Administrators | The accounts, invitations and password-reset links: [Users & Invitations](users.md) |\n    TR: - 🔢 Un nombre sur **Sécurité**, répété sur **Administration**, compte les erreurs et les avertissements des [contrôles d\n  L22: src=1 trn=0\n    EN: | 💾 **Backup** | Administrators | The whole instance in one archive, and its restore: [Backup, Restore & Moving](backup_\n    TR: - 📱 Sur un téléphone, les onglets n’affichent que leurs icônes, et le titre de la page nomme l’onglet ouvert.\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # ⚙️ Global Settings\n    ## 🗂️ Settings › Administration {: #administration }\n    ## ✏️ Change a Setting\n      ### 🔓 1. Unlock the tab\n      ### 💾 2. Edit and save\n    ## 📋 What Each Setting Does\n    ## 🚪 Who Can Sign Up {: #registration }\n      ### 📢 The Open-Registration Warning {: #open-registration-warning }\n    ## 🕐 Market Data Scheduler {: #market-data-scheduler }\n      ### ⚙️ Configure the schedule\n      ### 📜 Read the scheduler log\n    ## ⏸️ Provider Pauses {: #provider-pauses }\n      ### ⏱️ How Long a Pause Lasts {: #provider-pauses-length }\n      ### 👀 Who Waits, and What You See {: #provider-pauses-effects }\n      ### 💤 In Memory {: #provider-pauses-memory }\n      ### 📋 In the Log {: #provider-pauses-log }\n    ## 🗄️ Server Caches {: #server-caches }\n    ## 🛡️ Security {: #security-tab }\n      ### 🚦 What It Lists {: #security-findings }\n      ### 🔢 The Number on the Tab {: #security-badge }\n      ### 🔄 When It Checks {: #security-refresh }\n      ### ✅ Passed Checks {: #security-passed }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-08T20:19:59.720931+00:00",
+        "stamped_at": "2026-11-09T11:24:31.284160+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -1095,7 +1095,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1292.7,
-        "stamped_at": "2026-11-08T20:19:59.720931+00:00",
+        "stamped_at": "2026-11-09T11:24:31.284160+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -5803,7 +5803,7 @@
     }
   },
   "user/settings/preferences.en.md": {
-    "md5": "a4ee7eccfd7d481aaeb94ef7b12e6928",
+    "md5": "88b6ef07860917cd8ff83f878e280c7a",
     "langs_done": [
       "es",
       "fr",
@@ -5823,7 +5823,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 270.4,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T11:24:28.192570+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5836,7 +5836,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 255.8,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T11:24:28.192570+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5849,7 +5849,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 250.6,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T11:24:28.192570+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6497,7 +6497,7 @@
     }
   },
   "user/dashboard/charts.en.md": {
-    "md5": "509756e79d704bd984ba3bf076895903",
+    "md5": "e880bf504141633e75585f56eac7d108",
     "langs_done": [
       "es",
       "fr",
@@ -6517,7 +6517,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1441.2,
-        "stamped_at": "2026-11-09T10:38:09.430301+00:00",
+        "stamped_at": "2026-11-09T11:24:34.470378+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6530,7 +6530,7 @@
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=162, translated=164 (Δ+2)\n  L3: src=2 trn=0\n    EN: Below the KPI cards, the **Portfolio Growth** chart and the **Asset Allocation** panel show where your portfolio has bee\n    TR: \n  L4: src=0 trn=2\n    EN: \n    TR: Sous les cartes KPI, le graphique **Croissance du portefeuille** et le panneau **Répartition des actifs** montrent l'his\n  L9: src=1 trn=0\n    EN: The growth chart shows how your portfolio evolved over the selected period: the **Abs / % / P&L** toggle in its top-righ\n    TR: \n  L10: src=0 trn=1\n    EN: \n    TR: Le graphique de croissance montre l'évolution de votre portefeuille sur la période sélectionnée : le sélecteur **Abs / %\n  L11: src=3 trn=0\n    EN: On a long period the chart groups the days to stay readable: into weeks, then months, and, for a history of many decades\n    TR: \n  L12: src=0 trn=3\n    EN: \n    TR: Sur une longue période, le graphique regroupe les jours pour rester lisible : en semaines, puis en mois et, pour un hist\n  L15: src=6 trn=0\n    EN: Every chart joins its points in one of three shapes: **Segments** (the default, a straight line between two points), **S\n    TR: \n  L16: src=0 trn=6\n    EN: \n    TR: Chaque graphique relie ses points selon l'une de trois formes : **Segments** (par défaut, une ligne droite entre deux po\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 📊 Charts\n    ## 📈 Portfolio Growth Chart {: #portfolio-growth-chart }\n      ### 〰️ How the lines are drawn {: #line-shape }\n      ### 💶 Abs — absolute values\n      ### 📉 % — rate of return\n      ### 💰 P&L — the money you made {: #pnl-mode }\n        #### Line — accumulated P&L {: #pnl-line }\n        #### Candles — the swing inside the period {: #pnl-candles }\n        #### Income — the cash that actually moved {: #pnl-income }\n        #### Candle width — 1D to 1Y {: #pnl-width }\n    ## 🥧 Allocation Panel {: #allocation-panel }\n      ### 🗂️ Three dimensions\n      ### 🕰️ Now and History\n      ### 🧩 By Asset {: #allocation-by-asset }\n      ### 🍩 Two rings by type {: #allocation-type-rings }\n      ### 💵 Cash as Liquidity\n      ### ➖ Negative cash {: #allocation-negative-cash }\n    ## 🔗 Related",
         "structural_issues": 1,
         "elapsed_s": 1550.9,
-        "stamped_at": "2026-11-09T10:38:09.430301+00:00",
+        "stamped_at": "2026-11-09T11:24:34.470378+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6545,7 +6545,7 @@
         "elapsed_s": 1590.2,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=162, translated=163 (Δ+1)\n  L46: src=2 trn=3\n    EN: **Assets valued at their purchase price**, such as P2P loans with no live market price, keep NAV close to Purchase Cost,\n    TR: **Los activos valorados a su precio de compra**, como los préstamos P2P sin precio de mercado en vivo, mantienen el NAV \n\nSOURCE_OUTLINE (for reference):\n  # 📊 Charts\n    ## 📈 Portfolio Growth Chart {: #portfolio-growth-chart }\n      ### 〰️ How the lines are drawn {: #line-shape }\n      ### 💶 Abs — absolute values\n      ### 📉 % — rate of return\n      ### 💰 P&L — the money you made {: #pnl-mode }\n        #### Line — accumulated P&L {: #pnl-line }\n        #### Candles — the swing inside the period {: #pnl-candles }\n        #### Income — the cash that actually moved {: #pnl-income }\n        #### Candle width — 1D to 1Y {: #pnl-width }\n    ## 🥧 Allocation Panel {: #allocation-panel }\n      ### 🗂️ Three dimensions\n      ### 🕰️ Now and History\n      ### 🧩 By Asset {: #allocation-by-asset }\n      ### 🍩 Two rings by type {: #allocation-type-rings }\n      ### 💵 Cash as Liquidity\n      ### ➖ Negative cash {: #allocation-negative-cash }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-09T10:38:09.430301+00:00",
+        "stamped_at": "2026-11-09T11:24:34.470378+00:00",
         "stamped_by": "translate-stamp"
       }
     }
