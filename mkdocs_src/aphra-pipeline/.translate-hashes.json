@@ -9036,11 +9036,11 @@
     }
   },
   "user/settings/profile.en.md": {
-    "md5": "86a4e74c11cb4e1104a976e522cc6458",
+    "md5": "53f3dbc76b453ba6bbdf6321dbb21456",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-11-05T11:25:03.940471+00:00",
     "analysis": "[{\"name\": \"identity\", \"keywords\": [\"LibreFolio user identity account profile authentication login documentation\"]}, {\"name\": \"Display choices\", \"keywords\": [\"LibreFolio display preferences language currency theme UI settings\"]}, {\"name\": \"Preferences\", \"keywords\": [\"LibreFolio user preferences settings page UI label\"]}, {\"name\": \"instance-wide options / instance\", \"keywords\": [\"LibreFolio self-hosted instance deployment global settings administrator\"]}, {\"name\": \"Settings › Administration › Global Settings\", \"keywords\": [\"LibreFolio settings administration global settings navigation breadcrumb admin UI\"]}, {\"name\": \"Edit Lock\", \"keywords\": [\"LibreFolio edit lock profile tab read-only unlock UI security\"]}, {\"name\": \"read-only\", \"keywords\": [\"software UI read-only field disabled input form\"]}, {\"name\": \"confirmation dialog\", \"keywords\": [\"UI confirmation dialog discard changes modal prompt\"]}, {\"name\": \"discard them / discard changes\", \"keywords\": [\"UI discard unsaved changes confirmation dialog\"]}, {\"name\": \"save all / undo all\", \"keywords\": [\"UI bulk actions save all undo all form buttons\"]}, {\"name\": \"Hover\", \"keywords\": [\"UI hover mouse pointer interaction avatar overlay\"]}, {\"name\": \"camera overlay\", \"keywords\": [\"UI camera overlay avatar image upload hover control\"]}, {\"name\": \"image picker\", \"keywords\": [\"UI image picker file selection avatar upload dialog\"]}, {\"name\": \"Files library\", \"keywords\": [\"LibreFolio Files library file manager shared personal images\"]}, {\"name\": \"shared image / shared or personal\", \"keywords\": [\"LibreFolio file visibility shared personal image avatar permissions\"]}, {\"name\": \"Image Crop tool\", \"keywords\": [\"LibreFolio image crop tool avatar preset UI utility\"]}, {\"name\": \"avatar preset\", \"keywords\": [\"image crop preset avatar square crop circular preview\"]}, {\"name\": \"square crop, circular preview\", \"keywords\": [\"image editor crop preview avatar UI terminology\"]}, {\"name\": \"sidebar\", \"keywords\": [\"application sidebar navigation UI layout LibreFolio\"]}, {\"name\": \"broker sharing\", \"keywords\": [\"LibreFolio broker sharing access collaborators permissions financial\"]}, {\"name\": \"collaborator lists\", \"keywords\": [\"LibreFolio collaborators shared access user lists broker\"]}, {\"name\": \"Administrator(s)\", \"keywords\": [\"LibreFolio administrator admin user role permissions settings\"]}, {\"name\": \"Welcome page / first-login Welcome setup\", \"keywords\": [\"LibreFolio welcome setup onboarding first login UI\"]}, {\"name\": \"Username\", \"keywords\": [\"authentication username login identifier account UI field\"]}, {\"name\": \"login credentials\", \"keywords\": [\"authentication login credentials username password sign in\"]}, {\"name\": \"Account Created\", \"keywords\": [\"user account registration date profile field read-only UI label\"]}, {\"name\": \"Current Password\", \"keywords\": [\"authentication current password verification email change form field\"]}, {\"name\": \"signed out / sign in / log in\", \"keywords\": [\"authentication session logout login sign in consistency UI\"]}, {\"name\": \"password-reset link\", \"keywords\": [\"authentication password reset link account recovery email security\"]}, {\"name\": \"wrong password / Current password is incorrect\", \"keywords\": [\"authentication error message wrong password validation UI\"]}, {\"name\": \"Too many wrong passwords: wait a few minutes and try again.\", \"keywords\": [\"authentication rate limit lockout error message wrong password UI\"]}, {\"name\": \"disabled\", \"keywords\": [\"UI disabled button form field state save all\"]}, {\"name\": \"verified\", \"keywords\": [\"email verification account status verified authentication UI\"]}, {\"name\": \"capitals (Only the capitals changed / even with other capitals)\", \"keywords\": [\"uppercase letters email case-insensitive comparison capitals authentication\"]}, {\"name\": \"accented letters\", \"keywords\": [\"Unicode letters accents email address matching internationalization\"]}, {\"name\": \"Only the letters A to Z are matched this way\", \"keywords\": [\"case-insensitive matching ASCII email normalization uppercase lowercase\"]}, {\"name\": \"session cookie\", \"keywords\": [\"web security session cookie authentication stolen session\"]}, {\"name\": \"open session\", \"keywords\": [\"authentication open session logged-in browser security\"]}, {\"name\": \"with a moment inside your open session\", \"keywords\": [\"idiom account security open session stolen cookie unauthorized access\"]}, {\"name\": \"keep the account for good\", \"keywords\": [\"idiom permanent account takeover security email change\"]}, {\"name\": \"account can be recovered\", \"keywords\": [\"account recovery password reset email authentication security\"]}, {\"name\": \"Why your password\", \"keywords\": [\"LibreFolio info box title password verification security explanation\"]}, {\"name\": \"Change Password\", \"keywords\": [\"LibreFolio change password UI button security modal\"]}, {\"name\": \"modal\", \"keywords\": [\"UI modal dialog change password delete account\"]}, {\"name\": \"checklist\", \"keywords\": [\"password checklist validation rules UI dynamic feedback\"]}, {\"name\": \"uppercase letter / lowercase letter\", \"keywords\": [\"password policy uppercase lowercase Unicode letters\"]}, {\"name\": \"number / digit\", \"keywords\": [\"password policy number digit validation rule\"]}, {\"name\": \"special character\", \"keywords\": [\"password policy special character symbol punctuation\"]}, {\"name\": \"alphabet\", \"keywords\": [\"Unicode alphabet letters digits password validation internationalization\"]}, {\"name\": \"server\", \"keywords\": [\"server-side validation backend password rules LibreFolio\"]}, {\"name\": \"Password does not meet security requirements\", \"keywords\": [\"password validation error message security requirements UI\"]}, {\"name\": \"Email refused for another reason\", \"keywords\": [\"email change error message rejected address account conflict UI\"]}, {\"name\": \"The username cannot contain @: to sign in, you can always use your email address.\", \"keywords\": [\"username validation error message at sign email login UI\"]}, {\"name\": \"signs such as . _ - +\", \"keywords\": [\"username allowed symbols punctuation special characters signs translation\"]}, {\"name\": \"reads anything with an @ as an email address\", \"keywords\": [\"login identifier parsing at sign email address username authentication\"]}, {\"name\": \"old mailbox / waiting in your old mailbox\", \"keywords\": [\"email inbox old address password reset notification\"]}, {\"name\": \"It shows nothing of the new address\", \"keywords\": [\"email change notification privacy old address security message\"]}, {\"name\": \"Nothing goes to the new address.\", \"keywords\": [\"email notification new address privacy security message\"]}, {\"name\": \"your current email comes back\", \"keywords\": [\"UI form revert previous email value error message\"]}, {\"name\": \"Delete Account\", \"keywords\": [\"LibreFolio delete account UI button irreversible security\"]}, {\"name\": \"Delete Permanently\", \"keywords\": [\"LibreFolio delete account confirmation button permanent action\"]}, {\"name\": \"what your deletion would take with it\", \"keywords\": [\"idiom account deletion consequences brokers transactions files warning\"]}, {\"name\": \"Owner (only Owner)\", \"keywords\": [\"LibreFolio broker role owner permissions sharing\"]}, {\"name\": \"broker\", \"keywords\": [\"financial broker brokerage account LibreFolio portfolio tracker domain term\"]}, {\"name\": \"transactions\", \"keywords\": [\"financial transactions portfolio broker operations accounting\"]}, {\"name\": \"imported report files\", \"keywords\": [\"broker report import files transactions financial statements\"]}, {\"name\": \"leaving a shared broker\", \"keywords\": [\"LibreFolio shared broker leave revoke access collaborator permissions\"]}, {\"name\": \"shared brokers\", \"keywords\": [\"LibreFolio shared broker access collaborators permissions others\"]}, {\"name\": \"access (only the access goes / only your access is removed)\", \"keywords\": [\"permissions access removal shared broker user access rights\"]}, {\"name\": \"role (your role on it)\", \"keywords\": [\"broker role permissions owner collaborator LibreFolio\"]}, {\"name\": \"halves of transfers\", \"keywords\": [\"financial transfer paired transactions double-entry broker transfer halves\"]}, {\"name\": \"received transfer / transfer sent\", \"keywords\": [\"financial transfer received sent broker transaction pair\"]}, {\"name\": \"adjustment at its cost\", \"keywords\": [\"financial adjustment cost basis broker transfer accounting\"]}, {\"name\": \"assets (takes the assets out)\", \"keywords\": [\"financial assets securities portfolio broker holdings domain term\"]}, {\"name\": \"without a value\", \"keywords\": [\"financial transaction value missing cost basis accounting adjustment\"]}, {\"name\": \"cost counts as a realized loss\", \"keywords\": [\"realized loss cost basis financial accounting broker adjustment\"]}, {\"name\": \"No broker is deleted\", \"keywords\": [\"LibreFolio delete account dialog message broker deletion none\"]}, {\"name\": \"active administrator\", \"keywords\": [\"LibreFolio administrator role active status instance user management\"]}, {\"name\": \"Users tab\", \"keywords\": [\"LibreFolio administration users tab user management UI\"]}, {\"name\": \"base currency\", \"keywords\": [\"LibreFolio financial base currency reporting currency preferences\"]}, {\"name\": \"theme\", \"keywords\": [\"LibreFolio UI theme appearance preferences\"]}, {\"name\": \"plugins\", \"keywords\": [\"LibreFolio software plugins extensions about page\"]}, {\"name\": \"changelog\", \"keywords\": [\"LibreFolio software changelog release notes version history\"]}, {\"name\": \"LibreFolio\", \"keywords\": [\"LibreFolio open-source self-hosted financial portfolio tracker brand name\"]}]",
@@ -9055,7 +9055,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n**1. [STRUCTURAL + SEMANTIC — critical] The entire «Cambiare la propria email» bullet list was rewritten and no longer matches the source.**\nThe source contains six bullets after the intro paragraph, in this order: *Wrong password*, *Wrong password, again and again*, *Email refused for another reason*, *Email saved*, *A notice to your old address*, *Only the capitals changed*. The translation keeps only a mutilated version of the last three and replaces the first three with invented items. This causes the reported `BULLET_LIST` Δ-1 and `BOLD_MARKERS` Δ-2.\n\nMissing content (must be restored):\n- the whole *Wrong password* bullet (*Secondo la password errata…*)\n- the whole *Wrong password, again and again* bullet (the 10-in-15-minutes lockout)\n- the whole *Email refused for another reason* bullet (duplicate email/username, capitals)\n\nInvented content (must be removed or replaced with the source content):\n- «**La modifica viene salvata subito**: la scheda resta sbloccata, non serve un clic aggiuntivo.» — no such sentence in the source.\n- «**Se la riporti all'indirizzo precedente** prima di uscire dalla sessione, il vecchio indirizzo riceve un altro avviso.» — not in the source.\n- «conserva quel messaggio, è la prova che la modifica non è stata richiesta da te» — not in the source.\n\n**2. [SEMANTIC — factual contradiction] The notice bullet says the opposite of the source.**\nTranslation: «**Viene inviato un avviso al tuo vecchio indirizzo**… **Ti comunica anche il nuovo indirizzo**…»\nSource: «**A notice to your old address**: … **It shows nothing of the new address**, and says what to do if you did not make the change. Nothing goes to the new address.»\nThis is a security-relevant factual error. Correct to something like:\n«**Un avviso al tuo vecchio indirizzo**: quando la tua istanza può inviare email, LibreFolio scrive all'indirizzo che avevi prima, per informarti della modifica. **Non mostra nulla del nuovo indirizzo** e dice cosa fare se non hai effettuato tu la modifica. Al nuovo indirizzo non viene inviato nulla.»\n\n**3. [SEMANTIC] The «Email saved» bullet lost two of its three facts.**\nTranslation: «**Ogni altro dispositivo viene disconnesso** e resta disconnesso.»\nSource: «**Email saved**: **you stay signed in on this device**. Every other device signed in to your account is signed out, **and needs to sign in again**. Any password-reset link sent to you before the change stops working, even one still waiting in your old mailbox.»\n\"resta disconnesso\" also shifts the meaning from «deve accedere di nuovo». Correct to:\n«**Email salvata**: resti connesso su questo dispositivo. Ogni altro dispositivo connesso al tuo account viene disconnesso e deve accedere di nuovo. Qualsiasi link per reimpostare la password ricevuto prima della modifica smette di funzionare, anche uno ancora in attesa nella tua vecchia casella di posta.»\n\n**4. [STRUCTURAL — missing text] The italic reminder after the «Current Password» field is missing.**\nSource: «…a **Current Password** field appears under the email's description, **with a reminder: *To change your email, enter your current password. Your other devices will be signed out.*** The email's save button, and **save all**, stay disabled until you type it.»\nThe translation drops the whole italic reminder. Restore it, e.g.:\n«Non appena l'email nel campo è diversa da quella attuale, sotto la descrizione dell'email compare un campo **Password attuale**, con un promemoria: *Per cambiare la tua email, inserisci la password attuale. Gli altri tuoi dispositivi verranno disconnessi.* Il pulsante di salvataggio dell'email, e **salva tutto**, restano disabilitati finché non la digiti.»\nAlso note the bold markers: in the source only **save all** is bold; in the translation both **Salva** and **Salva tutto** are bold.\n\n**5. [STRUCTURAL — LINK_URLS] The added link `#why-your-password` does not exist in the source.**\nTranslation: «come protezione: vedi [perché la tua password](#why-your-password)».\nThe source admonition `!!! info \"Why your password\"` has no explicit `{: #why-your-password }` anchor, and the link itself is not present in the source. Remove the link (and the sentence fragment that introduces it), restoring the plain source sentence. This also resolves the reported `LINK_URLS` and `LINK_COUNT` Δ+1.\n\n**6. [TERMINOLOGY — glossary, mandatory] «welcome setup» must be «configurazione iniziale».**\nTranslation: «durante la **[procedura di benvenuto al primo accesso](../getting-started.md#welcome-setup)**».\nGlossary mapping: `welcome setup → configurazione iniziale`. Correct to:\n«durante la **[configurazione iniziale al primo accesso](../getting-started.md#welcome-setup)**».\n(The admonition title «Impostabile anche dalla pagina di benvenuto» is fine, since it translates *Welcome page*, not the glossary term.)\n\n**7. [GRAMMAR/STYLE] Small accuracy fixes.**\n- «Poiché gli altri utenti vedono il tuo avatar, la sua immagine è condivisa» → source is «its picture is **shared**»; keep the bold: «la sua immagine è **condivisa**».\n- «un'immagine che carichi qui viene memorizzata come condivisa» — acceptable, but «viene memorizzata come condivisa» is slightly loose for «is stored shared»; consider «viene salvata come condivisa» for consistency with the rest of the page (*salvato*, *salva*).\n- «scegli un'immagine esistente dalla [libreria File]» → «dalla [libreria dei file]» reads more naturally in Italian (not a glossary term, but a stylistic improvement).\n- Heading «## ✏️ Nome utente, email, account creato» correctly mirrors the source; only verify that the corresponding bold labels in the bullets («**Nome utente**», «**Email**», «**Account creato**») stay capitalised exactly as they appear in the UI.\n\n**8. [CONSISTENCY] Verify that the restored bullets use the same UI strings as the rest of the page.**\nThe deleted bullets quote UI messages in italics (*Current password is incorrect*, *Too many wrong passwords: wait a few minutes and try again.*). When restoring them, reuse the exact Italian wording already used in the «Cambia password» section (*Troppe password errate: attendi qualche minuto e riprova.*, etc.) so the same quote does not appear in two different translations on the same page.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 4\n\n1. LINK_URLS: URL set differs.\n  Added in translation:   ['#why-your-password']\n2. LINK_COUNT: source=16, translated=17 (Δ+1)\n  L7: src=2 trn=0\n    EN: The **Profile** tab manages your **identity** in LibreFolio — who you are and how you log in. Display choices (language,\n    TR: \n  L8: src=0 trn=2\n    EN: \n    TR: La scheda **Profilo** gestisce la tua **identità** in LibreFolio — chi sei e come accedi. Le scelte di visualizzazione (\n  L17: src=2 trn=0\n    EN: Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image fro\n    TR: \n  L18: src=0 trn=2\n    EN: \n    TR: Passa il mouse sul tuo avatar (mentre la scheda è sbloccata) e fai clic sull'icona a forma di fotocamera 📷 sovrapposta p\n  L19: src=1 trn=0\n    EN: The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, an\n    TR: \n  L20: src=0 trn=1\n    EN: \n    TR: L'avatar viene salvato immediatamente ed è usato in tutta l'app ovunque venga mostrata la tua identità — barra laterale,\n  L21: src=1 trn=0\n    EN: Since the other users see your avatar, its picture is **shared**: an image you upload here is stored shared, and one of \n    TR: \n  L22: src=0 trn=1\n    EN: \n    TR: Poiché gli altri utenti vedono il tuo avatar, la sua immagine è condivisa: un'immagine che carichi qui viene memorizzata\n  … and more (showing first 8 mismatches)\n3. BULLET_LIST: source=15, translated=14 (Δ-1)\n  L30: src=0 trn=1\n    EN: ## ✏️ Username, Email, Account Created\n    TR: - **Nome utente** ed **Email** sono modificabili (è richiesta una scheda sbloccata). Le modifiche si applicano immediata\n  L31: src=0 trn=1\n    EN: \n    TR: - **Account creato** è un campo di sola lettura che mostra la data di registrazione.\n  L32: src=1 trn=0\n    EN: - **Username** and **Email** are editable (unlocked tab required). Changes apply to your login credentials straight away\n    TR: \n  L33: src=1 trn=0\n    EN: - **Account Created** is a read-only field showing your registration date.\n    TR: ### 📧 Cambiare la propria email {: #email-change }\n  L37: src=0 trn=1\n    EN: As soon as the email in the field is another address than your current one, a **Current Password** field appears under t\n    TR: - **Viene inviato un avviso al tuo vecchio indirizzo**, quello con cui accedi al tuo account, per informarti della modif\n  L38: src=0 trn=1\n    EN: \n    TR: - **Ogni altro dispositivo viene disconnesso** e resta disconnesso.\n  L42: src=1 trn=0\n    EN: - **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and ne\n    TR: \n  L43: src=1 trn=0\n    EN: - **A notice to your old address**: when your instance can send emails, LibreFolio writes to the address you had before,\n    TR: Cambiare solo il nome utente non richiede la password e non disconnette alcun dispositivo. Il nuovo nome utente non può \n  … and more (showing first 8 mismatches)\n4. BOLD_MARKERS: source=40, translated=38 (Δ-2)\n  L7: src=4 trn=0\n    EN: The **Profile** tab manages your **identity** in LibreFolio — who you are and how you log in. Display choices (language,\n    TR: \n  L8: src=0 trn=4\n    EN: \n    TR: La scheda **Profilo** gestisce la tua **identità** in LibreFolio — chi sei e come accedi. Le scelte di visualizzazione (\n  L11: src=2 trn=0\n    EN: The tab opens **locked**: fields are read-only until you click the ✏️ **pencil button** in the header. This prevents acc\n    TR: \n  L12: src=0 trn=2\n    EN: \n    TR: La scheda si apre **bloccata**: i campi sono di sola lettura finché non fai clic sul ✏️ **pulsante matita** nell'intesta\n  L13: src=4 trn=0\n    EN: While unlocked, every modified field shows its own **save** / **undo** buttons, and the header offers **save all** and *\n    TR: \n  L14: src=0 trn=4\n    EN: \n    TR: Mentre la scheda è sbloccata, ogni campo modificato mostra i propri pulsanti **salva** / **annulla**, e l'intestazione o\n  L17: src=1 trn=0\n    EN: Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image fro\n    TR: \n  L19: src=1 trn=0\n    EN: The avatar is saved immediately and is used across the app wherever your identity is shown — sidebar, broker sharing, an\n    TR: \n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 👤 Profile\n    ## 🔒 Edit Lock\n    ## 🖼️ Avatar\n    ## ✏️ Username, Email, Account Created\n      ### 📧 Changing Your Email {: #email-change }\n    ## 🔐 Security\n      ### 🔑 Change Password\n      ### 🗑️ Delete Account\n    ## 🔗 Related",
         "structural_issues": 4,
-        "elapsed_s": 883.4
+        "elapsed_s": 883.4,
+        "stamped_at": "2026-11-09T12:36:24.216527+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-11-05T11:25:03.940449+00:00",
@@ -9066,7 +9068,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminologie obligatoire — `welcome setup`** : le glossaire impose `configuration d'accueil`. Remplacer `[configuration de bienvenue à la première connexion](../getting-started.md#welcome-setup)` par `[configuration d'accueil à la première connexion](../getting-started.md#welcome-setup)`.\n- **Terminologie obligatoire — `overview`** : le glossaire impose `vue d'ensemble`. Remplacer `Aperçu des paramètres` par `Vue d'ensemble des paramètres` dans la section « Voir aussi ».\n- **Terminologie obligatoire — `modal`** : le glossaire impose `modale`. La traduction l'omet dans `la fenêtre indique` / `La fenêtre indique alors` et utilise `fenêtre modale` ailleurs. Utiliser `la modale indique` / `La modale indique alors`, et pour rester cohérent, `ouvre une modale qui exige :` plutôt que `ouvre une fenêtre modale exigeant :`.\n- **Exactitude sémantique — seuil de blocage** : `Après 10 en 15 minutes` (deux occurrences) est un calque ambigu de “After 10 in 15 minutes”. Remplacer par `Après 10 échecs en 15 minutes` ou `Au bout de 10 tentatives échouées en 15 minutes`.\n- **Exactitude sémantique — collision de casse** : `même avec d'autres majuscules` rend mal “even with other capitals” dans ce contexte. Utiliser `même avec une casse différente` ou `même si les majuscules diffèrent`.\n- **Clarté — déverrouillage de l'avatar** : `Survolez votre avatar (une fois déverrouillé)` peut laisser croire que l'avatar est déverrouillé. Écrire `Survolez votre avatar (une fois l'onglet déverrouillé)` ou `(tant que l'onglet est déverrouillé)`.\n- **Idiomaticité — note de bienvenue** : `c'est le même sélecteur, simplement atteint depuis un autre écran` est peu naturel. Utiliser `c'est le même sélecteur, auquel on accède simplement depuis un autre écran`. Remplacer aussi `plus tard depuis ici` par `plus tard depuis cet onglet` ou `plus tard d'ici`.\n- **Clarté — accès à la session** : `quelqu'un disposant d'un instant dans votre session ouverte` est ambigu. Utiliser `quelqu'un qui aurait un instant accès à votre session ouverte` ou `quelqu'un ayant brièvement accès à votre session ouverte`.\n- **Grammaire — introduction sur les courtiers** : `Vos courtiers suivent la même règle que [quitter un courtier partagé]` est bancal. Utiliser `la même règle que pour quitter un courtier partagé` ou `la même règle que lorsque vous quittez un courtier partagé`.\n- **Clarté — moitiés de transferts** : `sont les moitiés de transferts` est awkward. Utiliser `constituent l'une des moitiés de transferts` ou `sont l'une des moitiés de transferts`.\n- **Terminologie financière — perte réalisée** : `perte réalisée` est compréhensible mais moins précis que `moins-value réalisée`. Préférer `une moins-value réalisée` pour “a realized loss”.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 879.3
+        "elapsed_s": 879.3,
+        "stamped_at": "2026-11-09T12:36:24.216527+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-11-05T11:25:03.940471+00:00",
@@ -9079,7 +9083,9 @@
         "structural_issues": 0,
         "elapsed_s": 283.8,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 2\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['../brokers/sharing.md']\n2. LINK_COUNT: source=16, translated=15 (Δ-1)\n  L76: src=1 trn=0\n    EN: Your brokers follow the same rule as [leaving a shared broker](../brokers/sharing.md), and the dialog lists them before \n    TR: Tus brókers siguen la misma regla que la de salir de un bróker compartido, y el diálogo los enumera antes de que confirm\n\nSOURCE_OUTLINE (for reference):\n  # 👤 Profile\n    ## 🔒 Edit Lock\n    ## 🖼️ Avatar\n    ## ✏️ Username, Email, Account Created\n      ### 📧 Changing Your Email {: #email-change }\n    ## 🔐 Security\n      ### 🔑 Change Password\n      ### 🗑️ Delete Account\n    ## 🔗 Related",
-        "final_structural_issues": 2
+        "final_structural_issues": 2,
+        "stamped_at": "2026-11-09T12:36:24.216527+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -11703,7 +11709,7 @@
     }
   },
   "admin/users.en.md": {
-    "md5": "a8882480f07faf67db01c3989aec1ba1",
+    "md5": "653a8c75100c40ed52486083363dbf45",
     "langs_done": [
       "es",
       "fr",
@@ -11723,7 +11729,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1653.8,
-        "stamped_at": "2026-11-09T12:20:15.010251+00:00",
+        "stamped_at": "2026-11-09T12:36:34.656668+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -11736,7 +11742,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 2368.8,
-        "stamped_at": "2026-11-09T12:20:15.010251+00:00",
+        "stamped_at": "2026-11-09T12:36:34.656668+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -11749,13 +11755,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1845.1,
-        "stamped_at": "2026-11-09T12:20:15.010251+00:00",
+        "stamped_at": "2026-11-09T12:36:34.656668+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "admin/email.en.md": {
-    "md5": "d754bd2716a0ab3818b9c0bb68be459b",
+    "md5": "ceda6379d6a98474b33ffd43abc627ff",
     "langs_done": [
       "es",
       "fr",
@@ -11775,7 +11781,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1054.0,
-        "stamped_at": "2026-11-07T22:40:27.815559+00:00",
+        "stamped_at": "2026-11-09T12:36:26.820759+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -11788,7 +11794,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1146.5,
-        "stamped_at": "2026-11-07T22:40:27.815559+00:00",
+        "stamped_at": "2026-11-09T12:36:26.820759+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -11801,7 +11807,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1162.7,
-        "stamped_at": "2026-11-07T22:40:27.815559+00:00",
+        "stamped_at": "2026-11-09T12:36:26.820759+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -11959,7 +11965,7 @@
     }
   },
   "admin/email_troubleshooting.en.md": {
-    "md5": "e2f2686194cfde112988c9a75cf9a461",
+    "md5": "2d9a4723f99fb4eb579e3dea5e39da06",
     "langs_done": [
       "es",
       "fr",
@@ -11979,7 +11985,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1248.2,
-        "stamped_at": "2026-11-07T22:40:34.865195+00:00",
+        "stamped_at": "2026-11-09T12:36:32.121392+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -11992,7 +11998,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 881.0,
-        "stamped_at": "2026-11-07T22:40:34.865195+00:00",
+        "stamped_at": "2026-11-09T12:36:32.121392+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -12005,7 +12011,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1071.9,
-        "stamped_at": "2026-11-07T22:40:34.865195+00:00",
+        "stamped_at": "2026-11-09T12:36:32.121392+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -12273,7 +12279,7 @@
     }
   },
   "admin/email_flows.en.md": {
-    "md5": "3933cc992092e5b0319e710500725d56",
+    "md5": "d6cfdfb18a8261817471f94b34ca6f3f",
     "langs_done": [
       "es",
       "fr",
@@ -12293,7 +12299,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1416.7,
-        "stamped_at": "2026-11-09T11:37:14.015534+00:00",
+        "stamped_at": "2026-11-09T12:36:29.484760+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -12306,7 +12312,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 992.4,
-        "stamped_at": "2026-11-09T11:37:14.015534+00:00",
+        "stamped_at": "2026-11-09T12:36:29.484760+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -12319,7 +12325,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 898.2,
-        "stamped_at": "2026-11-09T11:37:14.015534+00:00",
+        "stamped_at": "2026-11-09T12:36:29.484760+00:00",
         "stamped_by": "translate-stamp"
       }
     }
