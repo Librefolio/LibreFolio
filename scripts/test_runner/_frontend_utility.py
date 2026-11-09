@@ -591,6 +591,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/email/VerificationNotice.test.ts",
             "src/lib/features/email/SendLinkByEmail.test.ts",
             "src/lib/features/email/ForgotPasswordEmailForm.test.ts",
+            "src/lib/features/email/forgotCooldown.test.ts",
             "src/lib/features/email/linkShareRegistration.test.ts",
             "src/lib/features/auth/ForgotPasswordCard.email.test.ts",
             "src/lib/features/auth/ForgotPasswordCard.managed.test.ts",
@@ -1744,7 +1745,7 @@ def populate_registry(registry: dict) -> None:
         "forgot-password-email",
         front_forgot_password_email,
         name="Forgot Password by Email E2E",
-        desc="«Forgot password» on the sign-in page (workstream E, lot E4b), signed out: GET /system/instance answered with the real response and email.links true or false, POST /email/password-reset on a simulated server; with links the card shows E's form in the warning's place beside the commands, two identifiers get the same accepted notice and go once each, trimmed, a 429 is «failed» with its wait in email.forgot.refused; without links the warning (forgot-email-unavailable) instead of the form, the card and its commands there; nothing written",
+        desc="«Forgot password» on the sign-in page (workstream E, lot E4b), signed out: GET /system/instance answered with the real response and email.links true or false, POST /email/password-reset on a simulated server; with links the card shows E's form in the warning's place and no server command (no forgot-commands-panel, no forgot-reset-commands; lot UA1), an accepted request disables the submit with a countdown (forgot-email-countdown, data-seconds in (0, 300]) that a reload keeps (sessionStorage), two identifiers get the same accepted notice and go once each, trimmed, a 429 is «failed» with its wait in email.forgot.refused and starts no countdown; without links the warning (forgot-email-unavailable) instead of the form, the card and its commands there; nothing written",
         prereq="Test users created; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
         tests="auth-forgot-password-email.spec.ts",
     )
