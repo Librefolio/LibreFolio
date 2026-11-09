@@ -7,15 +7,15 @@
  *   - without `email.links` — no email part, `links` false or absent —: the warning (`forgot-email-unavailable`, saying
  *     `auth.emailRecoveryNotAvailable`) and no form (`forgot-email-form`);
  *   - with `email.links` true: the form, its identifier field included, and no warning;
- *   - the command box (`forgot-reset-commands`) is there in both cases, for whoever runs the server: under the warning
- *     open, as before, no panel around it; under the form inside a native `<details>` closed by default
- *     (`forgot-commands-panel`), hidden until a click on its `<summary>` (`forgot-commands-toggle`) opens it — the
- *     developer's decision P1, 16/10;
+ *   - the command box (`forgot-reset-commands`), for whoever runs the server, only without email links: under the warning,
+ *     open, as before. With email links the reset link comes by email and the card shows no server command at all — no
+ *     box, no panel (`forgot-commands-panel`, `forgot-commands-toggle`), no heading, no docker or CLI text: the
+ *     administrator's guide keeps them (developer's decision, 09/11/2026, lot UA1; it replaces the closed panel of P1);
  *   - on mount the card calls `instanceConfig.load()` once, not forced: the sign-in page's request already answered, it
  *     asks the server nothing of its own;
- *   - the page's request still in flight when the card is drawn: the warning first, then the form in its place once the
- *     answer says `email.links: true` — the card is a legacy component, and its `{#if}` must still follow the store —,
- *     the request shared, none of the card's own;
+ *   - the page's request still in flight when the card is drawn: the warning and the commands first, then the form in
+ *     their place, the commands gone, once the answer says `email.links: true` — the card is a legacy component, and its
+ *     `{#if}` must still follow the store —, the request shared, none of the card's own;
  *   - no request yet (or the last one failed): the card's `load()` asks `GET /system/instance` itself, once, and shows the
  *     form when the answer says `email.links: true`;
  *   - «back to login» (`forgot-back-to-login`) dispatches `gotoLogin`, with the form shown or not.
@@ -72,6 +72,25 @@ const warning = () => screen.queryByTestId('forgot-email-unavailable');
 const emailForm = () => screen.queryByTestId('forgot-email-form');
 const commands = () => screen.queryByTestId('forgot-reset-commands');
 const commandsPanel = () => screen.queryByTestId('forgot-commands-panel');
+const commandsToggle = () => screen.queryByTestId('forgot-commands-toggle');
+/** The heading over the commands («Run this command on the server:»). */
+const TERMINAL_HEADING_KEY = 'auth.serverTerminalInstructions';
+/** The commands of the box, as literal text: neither is translated. */
+const COMMAND_TOKENS = [/docker/i, /dev\.py/i];
+
+function cardText(): string {
+    return screen.getByTestId('forgot-modal').textContent ?? '';
+}
+
+/** No server command anywhere in the card: no box, no panel or its summary, no heading, no docker or CLI text. */
+function expectNoServerCommands(): void {
+    expect(commands(), 'no forgot-reset-commands').toBeNull();
+    expect(commandsPanel(), 'no forgot-commands-panel').toBeNull();
+    expect(commandsToggle(), 'no forgot-commands-toggle').toBeNull();
+    const text = cardText();
+    for (const token of COMMAND_TOKENS) expect(text, `no ${token} anywhere in the card`).not.toMatch(token);
+    expect(text, 'no «run this command on the server» heading').not.toContain(TERMINAL_HEADING_KEY);
+}
 
 /** The configuration in force, as if the sign-in page's own request had answered `config`. */
 async function answered(config: InstanceConfig): Promise<void> {
@@ -125,23 +144,21 @@ describe('ForgotPasswordCard — what it offers', () => {
         expect(warning()).toHaveTextContent(say('auth.emailRecoveryNotAvailable'));
         expect(commands(), 'the commands stay, for whoever runs the server, open as before').toBeVisible();
         expect(commandsPanel(), 'no panel to open: without email nothing changes').toBeNull();
+        for (const token of COMMAND_TOKENS) expect(cardText(), `positive control: the scan sees ${token}`).toMatch(token);
+        expect(cardText(), 'positive control: the scan sees the heading').toContain(TERMINAL_HEADING_KEY);
         expect(emailForm()).toBeNull();
     });
 
-    it('FCE-02: email.links true — the form, its field included, and the command box in a panel closed by default; no warning', async () => {
+    it('FCE-02: email.links true — the form, its field included; no server command, no panel, no warning', async () => {
         await answered(WITH_LINKS);
 
         mount();
 
-        expect(emailForm()).not.toBeNull();
+        // Presence first — the form and a sibling control on view —, so every absence below is of a drawn card.
+        expect(emailForm()).toBeVisible();
         expect(screen.getByTestId('forgot-email-identifier')).toBeEnabled();
-        expect(commandsPanel(), 'the commands stay below the form, in a panel').not.toBeNull();
-        expect(commandsPanel(), 'closed by default: the developer’s decision P1').not.toHaveAttribute('open');
-        // jest-dom's `toBeVisible` reads a closed <details> as a browser draws its content — the <summary> on view, the rest
-        // hidden — but, unlike a browser, counts the closed <details> itself as hidden too: the barrier is the summary.
-        expect(screen.getByTestId('forgot-commands-toggle'), 'the panel’s summary, on view').toBeVisible();
-        expect(commandsPanel()).toContainElement(commands());
-        expect(commands(), 'in the panel, hidden while it is closed').not.toBeVisible();
+        expect(screen.getByTestId('forgot-back-to-login')).toBeVisible();
+        expectNoServerCommands();
         expect(warning()).toBeNull();
     });
 });
@@ -165,13 +182,14 @@ describe('ForgotPasswordCard — the instance configuration', () => {
         const {load} = mount();
         await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
         expect(warning(), 'before the answer: the defaults, no email part').not.toBeNull();
+        expect(commands(), 'with the warning, the commands').not.toBeNull();
         expect(emailForm()).toBeNull();
 
         answer.resolve(WITH_LINKS);
 
         await waitFor(() => expect(emailForm()).not.toBeNull());
         expect(warning()).toBeNull();
-        expect(commandsPanel(), 'the command box follows the form, into its panel').toContainElement(commands());
+        expectNoServerCommands();
         expect(forced(load)).toEqual([false]);
         expect(instanceRequest, 'the card shares the page’s request').not.toHaveBeenCalled();
     });
@@ -203,28 +221,5 @@ describe('ForgotPasswordCard — back to the sign-in', () => {
         await fireEvent.click(screen.getByTestId('forgot-back-to-login'));
 
         expect(gotoLogin).toHaveBeenCalledTimes(1);
-    });
-});
-
-describe('ForgotPasswordCard — the panel of server commands', () => {
-    it('FCE-07: email.links true — a click on the panel’s summary opens it and shows the command box, still open once the card has heard toggle', async () => {
-        await answered(WITH_LINKS);
-        mount();
-        const panel = screen.getByTestId('forgot-commands-panel');
-        expect(panel, 'premise: closed by default').not.toHaveAttribute('open');
-        expect(commands(), 'premise: the box hidden while the panel is closed').not.toBeVisible();
-        const toggles = vi.fn();
-        panel.addEventListener('toggle', toggles);
-
-        // Opened by a click, as the user opens it: no `open` set by hand, no `toggle` dispatched by the test. jsdom 30 gives
-        // <summary> its activation behaviour, so a click on the first <summary> of a <details> adds or removes `open` there
-        // and then (`HTMLElement-impl.js`), and the <details> fires `toggle` — what `bind:open` listens to — one task later
-        // (`HTMLDetailsElement-impl.js`, a `setTimeout` of 0).
-        await fireEvent.click(screen.getByTestId('forgot-commands-toggle'));
-        expect(panel, 'the click opened it').toHaveAttribute('open');
-
-        await waitFor(() => expect(toggles, 'the toggle that follows the click').toHaveBeenCalledTimes(1));
-        expect(panel, 'still open once the card has heard toggle').toHaveAttribute('open');
-        expect(commands(), 'the commands, on view').toBeVisible();
     });
 });
