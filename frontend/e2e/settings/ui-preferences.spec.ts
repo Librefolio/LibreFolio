@@ -5,9 +5,10 @@
  * ONE disposable user, two browser contexts (two «browsers»), signed in one after the other:
  *   - A sees both Preferences rows following the global default (`preference-line-shape-badge-global`,
  *     `preference-theme-badge-global`, and `preference-theme-badge-auto`: the instance's default theme is auto), picks the
- *     shape `steps` (applied at once) and saves the theme `dark`;
+ *     shape `steps` and the theme `dark`: both are drafts (the row shows Save) and only reach the server on each row's Save (UIP-2);
  *   - B, a fresh sign-in, finds the same account preferences: the picker on `steps`, dark pressed, no global badge, `<html>`
- *     dark from the login on; B resets the line shape (`setting-reset` of its row): the badge is back, the picker `segments`;
+ *     dark from the login on; B resets the line shape (`setting-reset` of its row, a draft: the badge is back, the picker
+ *     `segments`) and saves the row;
  *   - A reloads Preferences and finds the reset (picker `segments`, badge) while its theme is still its own dark: the reset
  *     removed one key only.
  * Nothing reads a translated word. The user is created and deleted here; no global setting is touched, so the spec runs in
@@ -22,6 +23,9 @@ import {completeWelcome, deleteDisposableUser, registerDisposableUser, skipDueFl
 test.setTimeout(120_000);
 
 const DARK_CLASS = /(^|\s)dark(\s|$)/;
+
+/** The write of the user's preferences: PUT /api/v1/settings/user. */
+const isPreferencesPut = (r: {url(): string; request(): {method(): string}}) => r.url().includes('/api/v1/settings/user') && r.request().method() === 'PUT';
 
 async function openPreferences(page: Page): Promise<void> {
     await page.goto('/settings/preferences');
@@ -50,9 +54,16 @@ test('theme and line shape follow the account into another browser, and a reset 
         await page.getByTestId('preference-line-shape-picker-steps').click();
         await expect(page.getByTestId('preference-line-shape-picker')).toHaveAttribute('data-value', 'steps');
         await expect(shapeRow.getByTestId('preference-line-shape-badge-global')).toHaveCount(0);
+        await expect(shapeRow.getByTestId('setting-save')).toBeVisible();
+        const shapePut = page.waitForResponse(isPreferencesPut);
+        await shapeRow.getByTestId('setting-save').click();
+        expect((await shapePut).request().postDataJSON()).toEqual({ui_preferences: {chart_line_shape: 'steps'}});
+        await expect(shapeRow.getByTestId('setting-save')).toBeHidden();
 
         await themeRow.getByTestId('setting-theme-option-dark').click();
+        const themePut = page.waitForResponse(isPreferencesPut);
         await themeRow.getByTestId('setting-save').click();
+        expect((await themePut).request().postDataJSON()).toEqual({ui_preferences: {theme: 'dark'}});
         await expect(themeRow.getByTestId('setting-save')).toBeHidden();
         await expect(page.locator('html')).toHaveClass(DARK_CLASS);
         await expect(themeRow.getByTestId('preference-theme-badge-global')).toHaveCount(0);
@@ -73,6 +84,10 @@ test('theme and line shape follow the account into another browser, and a reset 
         await shapeRowB.getByTestId('setting-reset').click();
         await expect(pageB.getByTestId('preference-line-shape-picker')).toHaveAttribute('data-value', 'segments');
         await expect(shapeRowB.getByTestId('preference-line-shape-badge-global')).toBeVisible();
+        const resetPut = pageB.waitForResponse(isPreferencesPut);
+        await shapeRowB.getByTestId('setting-save').click();
+        expect((await resetPut).request().postDataJSON()).toEqual({ui_preferences: {chart_line_shape: null}});
+        await expect(shapeRowB.getByTestId('setting-save')).toBeHidden();
 
         // ---- A again: the reset reached the server, and only that key
         await openPreferences(page);

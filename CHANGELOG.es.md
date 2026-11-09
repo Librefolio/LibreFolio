@@ -32,6 +32,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Avisos de calidad de datos en la página del bróker:** los precios obsoletos, los tipos de cambio ausentes u obsoletos y sus botones de sincronización también aparecen allí, para todos los roles.
 - **Gráfico de posiciones: elige la ventana de la vista Móvil.** Una semana, un mes, tres meses, un año o una ventana personalizada; parte de la automática.
 - La tarta de distribución por activo muestra también el icono del activo en su información emergente, como la tarta por tipo.
+- Tartas de distribución de activos: las informaciones emergentes Por activo y Por Tipo muestran el tipo del activo como insignia junto al icono; la porción de Liquidez muestra una insignia Liquidez, en el color de la barra de liquidez.
 
 #### 📈 Gráficos
 
@@ -39,7 +40,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Ajustes del gráfico: la vista previa se abre en la vista guardada**, con una vista previa de Rentabilidad móvil y su ventana: automática hasta que elija una, el mayor preajuste que encaje en el periodo mostrado, como en las tarjetas y en la página de detalle del activo.
 - **Lotes: cada marcador del gráfico de Vida del lote se explica por sí mismo.** Pase el cursor, toque o enfoque un marcador (▲ compra, ▼ venta, ◆ transferencia, + / × ajuste, │ desdoblamiento) en el gráfico de Vida del lote y custodia para ver qué ocurrió, cuándo, cuántas unidades (ocultas en modo privacidad) y en qué bróker: Desde y Hasta para una transferencia entre sus brókers. Cuando varios eventos caen el mismo día, la información emergente los enumera todos.
 - **Comparar un activo con un tipo de cambio, y viceversa.** Una comparación elegida en las señales de una tarjeta o de un gráfico ahora se dibuja en las tarjetas de las listas de Activos y FX y en ambas páginas de detalle, también cuando la página se abre desde cero.
-- **Elija la forma de las líneas de sus gráficos en su configuración**: segmentos (lo predeterminado), escalones o una spline suave, para todos los gráficos.
+- **Elija la forma de las líneas de sus gráficos en su configuración**: segmentos (lo predeterminado), escalones o una spline suave, para todos los gráficos. Un administrador fija el valor predeterminado para todos en Configuración global (**Forma de Línea Predeterminada**).
+- **Preferencias indica de dónde vienen el tema y la forma de las líneas**: una insignia **Global** cuando siguen el valor predeterminado del administrador, un botón para volver a seguirlo, y una insignia **Auto** cuando el tema se deja a tu navegador. Como con el idioma y la moneda, un cambio en el tema o en la forma de las líneas, incluida la vuelta al valor predeterminado, se aplica solo cuando pulsas **Guardar**.
 - **La información emergente de los gráficos muestra el día de la semana** después de la fecha, y el puntero se detiene en los días, nunca entre dos.
 
 #### 📉 Análisis de riesgos
@@ -82,6 +84,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Página Archivos: una columna Visibilidad** muestra si cada archivo se comparte con todos los usuarios o es personal. Desde el menú de la fila o una tarjeta de la cuadrícula puede compartir un archivo con todos o volver a hacerlo personal, con una confirmación, ya que los demás lo pierden.
 - **Una barra en la página Archivos muestra a los administradores el espacio que ocupa la instancia** (base de datos, archivos subidos, informes del bróker, copias de seguridad), frente al disco o frente a un límite que pueden establecer; un proveedor de alojamiento puede fijar el límite con `LIBREFOLIO_STORAGE_LIMIT_MB`.
 - **La barra de espacio y su leyenda se resaltan juntas** al pasar por una u otra.
+- El límite de espacio también está en **Configuración › Administración › Configuración global**, categoría Memoria, de solo lectura cuando quien aloja la instancia lo establece. *Abrir la configuración*, ante un rechazo del límite, lleva allí con la fila del límite resaltada.
 
 #### 💾 Copia de seguridad y restauración
 
@@ -104,9 +107,12 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Comprueba una contraseña antes de restaurar**: en el informe de la restauración, elige un administrador de la copia y escribe una contraseña para saber si podrás entrar con ella después. La contraseña nunca se guarda, se registra ni se devuelve.
 - **Una restauración puede esperar**: *Decidir después* conserva el archivo comprobado, y Ajustes › Copia de seguridad permite reanudarlo o descartarlo desde cualquier pestaña o dispositivo. El informe muestra los administradores de la copia con su imagen y una barra de lo que contiene; una restauración que no puede seguir no pide confirmación, y una rechazada por el límite de espacio libera el espacio al momento.
 - *Actualizar* en la lista de copias guardadas, para las copias hechas desde la línea de comandos.
+- **Restaurar desde la lista**: *Restaurar* en una copia guardada abre su informe en una ventana, justo donde está la lista. Toda restauración, también la de un archivo de tu ordenador, continúa en una ventana; cerrarla guarda la comprobación para más tarde, para reanudarla o descartarla desde la tarjeta de restauración.
+- La lista de copias guardadas tiene una columna **Una vez restaurada**: el espacio que ocupa el contenido de la copia una vez restaurado, con la base de datos, los archivos subidos y los informes del bróker en su información emergente («—» para las copias hechas antes de esta versión).
 
 #### 👥 Cuentas, registro y administradores
 
+- **Todos los enlaces de cuenta en Configuración › Administración › Usuarios.** Invitaciones, enlaces de restablecimiento de contraseña, verificaciones de correo, el enlace de configuración del primer administrador y el cambio de correo del propietario aparecen todos, cada uno con su tipo, para quién es, quién lo creó, sus fechas y su estado. Los enlaces abiertos están en una tabla; los usados, caducados y revocados, en un panel plegado **Enlaces cerrados**. Ambas tablas permiten ordenar, filtrar, ocultar columnas y paginar las listas largas. Ahora también se pueden revocar los enlaces de restablecimiento de contraseña y de verificación de correo.
 - **Instancias gestionadas: `./dev.py user reassign-owner <username>`** devuelve la cuenta de administrador a la dirección del propietario tras una confirmación errónea: se emite un enlace de nueva contraseña y se revocan la contraseña anterior y las sesiones. `user set-email` también cancela un enlace de cambio de dirección que siga pendiente.
 - **Más usuarios de los que permite el plan** (un plan menor, o una copia de seguridad restaurada): en el primer inicio de sesión el administrador elige quién conserva el acceso, antes de cualquier otra página, y puede descargar primero la copia de seguridad completa. Los demás se desactivan, nunca se eliminan, y esperan con un mensaje claro. Una restauración lo indica en su informe en lugar de rechazar la operación.
 - `./dev.py user create … --role user` crea una cuenta normal; sin `--role`, el comando sigue creando un administrador.
@@ -130,6 +136,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 #### ✉️ Correo electrónico
 
+- **Cuando cambia la dirección de correo de una cuenta, la nueva dirección recibe una breve confirmación** de que ahora es la dirección de la cuenta, en el idioma de la cuenta, junto al aviso a la dirección anterior, que sigue sin mostrar nada de la nueva. Los límites son 3 cambios por hora por cuenta y 3 correos por hora por buzón.
 - **Correo, opcional**: LibreFolio puede enviar correos a través de su propio servidor SMTP, configurado únicamente mediante las variables `LIBREFOLIO_SMTP_*`, con la contraseña también desde un archivo (`LIBREFOLIO_SMTP_PASSWORD_FILE`). Nada de ello se almacena, se muestra en la aplicación ni se incluye en una copia de seguridad, y sin un servidor nada cambia. **Configuración › Administración › Correo**, para administradores, indica si el correo funciona, qué variable corregir cuando no lo hace, y envía un correo de prueba a su propia dirección en su idioma. `LIBREFOLIO_SMTP_MAX_PER_HOUR` limita los correos de la instancia (50 por hora de forma predeterminada); las comprobaciones de inicio informan de una configuración inutilizable y de un servidor alcanzado sin cifrado. Documentado en la nueva página de administración «Correo».
 - **Enlaces de correo**: cada enlace que lleva un correo se construye solo a partir de `LIBREFOLIO_PUBLIC_URL`. Mientras el correo funciona, el registro de inicio y Configuración › Administración › Correo indican cuándo falta esa variable o no se puede usar, y `GET /api/v1/system/instance` dice si pueden salir correos con enlace.
 - Configuración › Administración › Correo comprueba, desde el navegador del administrador, que `LIBREFOLIO_PUBLIC_URL` llega a esta misma instancia, y advierte, solo para este dispositivo, cuando allí responde otro servidor o no responde nada; la advertencia de inicio sobre `LIBREFOLIO_PUBLIC_URL` ahora enumera todas las reglas que debe cumplir la dirección.
@@ -190,6 +197,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Tras una actualización, cada usuario ve una vez qué cambió desde su última versión: los nuevos capítulos del registro de cambios, en su idioma cuando estén traducidos. Las cuentas nuevas nunca lo ven, y nunca se abre sobre una guía ni sobre otra ventana. Lo mismo en instancias autoalojadas y gestionadas.
 - **Un aviso legal**: un breve descargo de responsabilidad bajo cada página de inicio de sesión, al pie de la barra lateral, en Configuración › Acerca de, en la página de bienvenida y al final de cada exportación IA (antes de la línea del idioma de respuesta), en su idioma. Una instancia puede enlazar sus propios términos de servicio y política de privacidad con `LIBREFOLIO_TOS_URL` y `LIBREFOLIO_PRIVACY_URL`.
 - Mientras el servidor se pone al día con los precios —al iniciar, en la primera visita tras una pausa o en un despertar programado—, la aplicación muestra «Actualizando precios…» sobre las páginas.
+- **Cada pestaña de Configuración tiene su propia dirección**, como `/settings/preferences` o, para administradores, `/settings/admin/backup`: un enlace abre la pestaña, elegir una pestaña actualiza la dirección, y Atrás vuelve a la pestaña anterior. Los enlaces antiguos `/settings?tab=…` siguen funcionando.
 
 #### 📚 Documentación
 
@@ -329,12 +337,15 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 #### 🖥️ Interfaz y accesibilidad
 
+- **El tema y la forma de las líneas de los gráficos se guardan con tu cuenta** y te siguen en cada navegador y dispositivo; los valores predeterminados del administrador ahora se aplican a todo usuario que no haya elegido los suyos, no solo a los usuarios nuevos. Los temas existentes se conservan como elección propia de cada usuario. El botón de sol y luna de la cabecera sigue cambiando el tema solo en ese navegador.
 - **Los rangos de fechas siempre abarcan dos días diferentes.** En todos los selectores de rango de fechas, el día pulsado primero muestra el cursor de no permitido y un segundo clic sobre él se ignora; una fecha escrita igual al otro extremo se vuelve roja; las teclas de flecha la saltan. Una fecha escrita mientras el otro extremo está vacío deja ese extremo abierto: en el filtro de fechas de una tabla, solo **Desde** mantiene las filas desde ese día en adelante (antes solo mantenía ese día). Los rangos de un solo día guardados anteriormente siguen funcionando.
 - Los lectores de pantalla anuncian las notificaciones (los errores de inmediato, las demás con cortesía), y su botón de cerrar tiene nombre en tu idioma.
 - **Una flecha atrás en Brókers, Transacciones, Activos y Forex** cuando llegas desde un enlace de la app: te devuelve con tus filtros y tu periodo. No aparece desde la barra lateral ni con una dirección escrita.
 
 #### 👥 Cuentas e inicio de sesión
 
+- Usuarios › Enviar por correo: el mensaje «Enviado a …» ahora recuerda que el destinatario debe revisar también la carpeta de spam si el correo no llega.
+- **«¿Olvidaste tu contraseña?» responde con un mensaje breve**, el mismo tanto si una cuenta coincide como si no, y su botón hace una cuenta atrás de 5 minutos antes de la siguiente solicitud (el intervalo del propio servidor), incluso tras recargar la página. Cuando la instancia puede enviar por correo un enlace de restablecimiento, la tarjeta ya no muestra los comandos de restablecimiento del servidor: los conserva la guía del administrador.
 - **Configuración › Administración ahora es solo para administradores.** Los demás usuarios ya no ven una copia de solo lectura de Configuración global; un enlace antiguo a ella abre su Perfil.
 - Tras cancelar un enlace de configuración, el registro de inicio dice que el enlace se retiró, no que caducó.
 - `./dev.py user deactivate` sobre el administrador que aún espera su configuración cancela su enlace de configuración; `./dev.py user demote` lo rechaza.
@@ -553,6 +564,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - API: convertir un importe de 0 (`POST /api/v1/fx/currencies/convert`) responde 0 con el tipo del día en lugar de un error del servidor.
 - Un proveedor que entrega un día con un precio de 0 o menos ya no hace fallar toda la descarga de precios del activo: ese día se omite y la sincronización lo dice. Un precio actual de 0 o menos de un proveedor se rechaza como inutilizable: queda el último precio almacenado.
 - **Un nuevo par FX justo después de un reinicio**: EUR/RON y los demás pares que solo cubre el BCE ya no indican «ninguna ruta de conversión» cuando el BCE tarda en responder. Si la lista de un proveedor sigue ilegible, el diálogo pide reintentar en breve; el segundo aviso amarillo ya no está.
+- Quitar el icono de un activo ahora se mantiene: el modal de edición lo borraba, pero el servidor conservaba la dirección anterior. Lo mismo vale para borrar la URL de usuario, un identificador (ISIN, ticker, CUSIP, SEDOL, FIGI, UUID) o el último identificador *otro*.
 
 #### 🗓️ Eventos de activos e Inversiones programadas
 
@@ -589,6 +601,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Riesgo: las fechas de la repetición histórica siguen el idioma de la aplicación**, y un grupo geográfico definido por el host muestra su nombre en la tabla de choques en lugar de su id.
 - Riesgo: optimizar más de 100 activos informa un límite de tamaño en lugar de un error de parámetro inválido.
 - **«¿Estoy tan diversificado como creo?» en pantallas estrechas**: las filas ya no se salen de la pantalla. Primero el nombre, luego la barra, después el peso y la contribución al riesgo, y un nombre largo se desplaza.
+- Simulación de riesgo en teléfonos: cada parámetro es una fila, con la etiqueta a la izquierda y el campo a la derecha, y la línea de días del horizonte ya no se superpone al campo siguiente.
 
 #### 🤖 Exportación IA
 
@@ -619,6 +632,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 #### 👥 Cuentas e inicio de sesión
 
+- Perfil › Correo electrónico: en escritorio, el campo de la contraseña actual de un cambio de correo ahora se sitúa a la derecha, bajo el campo de correo.
 - **Iniciar sesión, y abrir o guardar tu configuración, ya no falla cuando el tema guardado de tu cuenta es uno que esta versión no conoce** (una base de datos editada a mano, o una degradación): la aplicación muestra el tema predeterminado de la instancia, o Auto.
 - **Cuando el último administrador activo intenta eliminar su propia cuenta, el diálogo ahora dice en tu idioma qué hacer primero** —convertir otra cuenta en administrador— en lugar de un mensaje del servidor en inglés.
 - Dos administradores que actúan sobre las mismas cuentas en el mismo momento ya no pueden dejar la instancia sin administrador activo, ni un puesto por encima de su límite de usuarios; una cuenta eliminada mientras tanto ahora responde "no encontrada" en lugar de un error del servidor.
@@ -770,6 +784,9 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
   - Ya no hay un límite inferior del 1 de enero de 1900. Se acepta una transacción fechada antes de 1900 (el formulario, el editor masivo y la importación piden primero una confirmación, ya que esa fecha suele ser un error tipográfico), y la cartera, los lotes y las posiciones comienzan a partir de ella. Se elimina la advertencia `TRANSACTIONS_BEFORE_FLOOR`. Un historial que comienza en el año 1 cuesta lo mismo que sus cambios, no lo que sus 740 000 días. Para una cartera que ya contenía filas con fecha anterior a 1900, sus cifras de «Todo» (MWRR, TWRR, ROI) ahora se calculan a partir de ellas.
 - **`/system/ready` dice `behind` o `ahead` en lugar de `mismatch`** para una base de datos cuya migración no es la de esta versión (`checks.migrations`), y añade `database_revision` y `app_version`. `GET /api/v1/panel/status` añade `instance_key` y `users_over_limit`: un cliente que comprueba sus claves exactas debe aceptarlas.
 - **Se eliminaron rutas de API no utilizadas o sustituidas, sin periodo de deprecación:** `POST /transactions/transfers/promote` (utilice `POST /transactions/commit` con `promotes[]`), `POST /transactions/events/suggest` (utilice `GET /transactions/event-reconciliation`), `DELETE /assets/events` (utilice `POST /assets/events` con `delete_ids`), `GET /assets/all` (utilice `GET /assets/query?active=true`), `POST /assets/provider/refresh` (utilice `POST /assets/provider/probe`), `POST /assets/{id}/market-data/wipe` (para la moneda, lo hace `PATCH /assets`), `POST /portfolio/wac` (utilice `POST /portfolio/lots/analysis`), `GET /settings/global/{key}` (utilice `GET /settings/global`), `POST /settings/global/initialize` (se hace al iniciar), `GET /uploads/{file_id}` (utilice `GET /uploads`), `GET /brokers/import/files/{file_id}` y `…/last-parse` (utilice `GET /brokers/import/files`), `GET /utilities/currencies/normalize` (utilice `GET /utilities/currencies/suggest`), `GET /brokers/{id}/summary` (consulte el bróker con `GET /brokers/{id}`, su efectivo y sus posiciones con `POST /portfolio/report`).
+- `PATCH /api/v1/assets`: un `null` explícito en `icon_url`, `user_url` o un identificador individual (`identifier_isin`, `_ticker`, `_cusip`, `_sedol`, `_figi`, `_uuid`) ahora lo borra, como el esquema siempre indicó, y una lista vacía explícita en `identifier_other` borra los demás identificadores (`null` ahí sigue dejándolos sin cambios). Envíe solo los campos que cambie: un cliente que envía el objeto entero con `null` o `[]` en campos no tocados los borra.
+- `GET` y `PUT /api/v1/settings/user` ya no tienen `theme`: es `ui_preferences.theme`, junto a `ui_preferences.chart_line_shape`; `ui_preference_defaults` da los valores predeterminados globales. Un `PUT` fusiona `ui_preferences` clave por clave (`null` elimina una clave, que así vuelve a seguir el valor predeterminado) y rechaza los campos desconocidos con 422. El `user_settings` de la respuesta de inicio de sesión lleva ambos.
+- Se eliminan `GET /api/v1/users/invites` y `DELETE /api/v1/users/invites/{invite_id}`. Utilice `GET /api/v1/users/account-links` (cada enlace de cuenta con su estado) y `DELETE /api/v1/users/account-links/{link_id}` (revoca un enlace abierto de invitación, de restablecimiento de contraseña o de verificación de correo). `POST /api/v1/users/invites` no cambia.
 
 ---
 - **`POST /api/v1/portfolio/report`: se elimina `summary.pnl_change_1d_vs_total_pnl_percent`**, sin periodo de obsolescencia: la variación del día como parte del P&L total se disparaba cerca de cero. Usa `pnl_change_1d_vs_nav_percent`, la parte del valor de la cartera de ayer.

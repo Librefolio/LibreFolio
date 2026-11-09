@@ -67,16 +67,16 @@ Para definirla:
 1. Genera una clave. **Desde una terminal**, en el host:
 
     ```bash
-    python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+    python3 -c "import secrets; k = secrets.token_urlsafe(64); print(f'JWT_SECRET={k}'); print(k)"
     ```
 
-    Obtienes una cadena aleatoria para copiar. Sin Python en el host, ejecuta el comando **en el contenedor**:
+    Obtienes dos líneas: la primera, `JWT_SECRET=…`, está lista para pegar en `.env`; la segunda es solo la clave, para cuando la guardas en un archivo (`JWT_SECRET_FILE`, más abajo). Sin Python en el host, ejecuta el comando **en el contenedor**:
 
     ```bash
-    docker exec librefolio python -c "import secrets; print(secrets.token_urlsafe(64))"
+    docker exec librefolio python -c "import secrets; k = secrets.token_urlsafe(64); print(f'JWT_SECRET={k}'); print(k)"
     ```
 
-2. Añádela **al archivo `.env` de LibreFolio**:
+2. Pega la primera línea **en el archivo `.env` de LibreFolio**:
 
     ```bash
     JWT_SECRET=paste-the-generated-value-here

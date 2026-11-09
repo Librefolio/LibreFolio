@@ -46,6 +46,11 @@ async function chooseLineShape(page: Page, shape: 'segments' | 'steps' | 'spline
     await expect(page.getByTestId('preference-line-shape')).toBeVisible({timeout: 15_000});
     await page.getByTestId(`preference-line-shape-picker-${shape}`).click();
     await expect(page.getByTestId('preference-line-shape-picker')).toHaveAttribute('data-value', shape);
+    // The pick is a draft until the row's Save (UIP-2). The context starts with no own shape (null), so any pick, 'segments'
+    // included, differs from it and the row always offers Save.
+    const save = page.getByTestId('preference-line-shape').getByTestId('setting-save');
+    await save.click();
+    await expect(save).toBeHidden();
 }
 
 /**

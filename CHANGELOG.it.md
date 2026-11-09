@@ -32,6 +32,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Avvisi sulla qualità dei dati nella pagina del broker:** prezzi obsoleti, tassi di cambio mancanti o obsoleti e i relativi pulsanti di sincronizzazione compaiono anche lì, per ogni ruolo.
 - **Grafico delle posizioni: scegli la finestra della vista Mobile.** Una settimana, un mese, tre mesi, un anno o una finestra personalizzata; si parte da quella automatica.
 - La torta dell'allocazione per asset mostra l'icona dell'asset anche nel tooltip, come la torta per tipo.
+- Torte dell'allocazione degli asset: i tooltip Per Asset e Per Tipo mostrano il tipo dell'asset come badge accanto all'icona; la fetta della Liquidità mostra un badge Liquidità, nel colore della barra della liquidità.
 
 #### 📈 Grafici
 
@@ -39,7 +40,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Impostazioni grafico: l'anteprima si apre nella vista salvata**, con un'anteprima di Rendimento rolling e la sua finestra mobile: automatica finché non ne scegli una, il preset più ampio che si adatta al periodo mostrato, come sulle schede e sulla pagina di dettaglio dell'asset.
 - **Lotti: ogni marcatore sul grafico Ciclo del lotto si spiega.** Passa il mouse, tocca o porta il focus su un marcatore (▲ acquisto, ▼ vendita, ◆ trasferimento, + / × rettifica, │ split) sul grafico Ciclo del lotto e custodia per vedere cosa è successo, quando, quante unità (nascoste in modalità privacy) e presso quale broker: Da e A per un trasferimento tra i tuoi broker. Quando più eventi cadono nello stesso giorno, il tooltip li elenca tutti.
 - **Confronta un asset con un tasso di cambio, e viceversa.** Un confronto scelto nei segnali di una scheda o di un grafico ora viene disegnato sulle schede degli elenchi Asset e FX e su entrambe le pagine di dettaglio, anche quando la pagina viene aperta da zero.
-- **Scegli la forma delle linee dei tuoi grafici** nelle tue impostazioni: segmenti (predefinito), gradini o una spline morbida, per ogni grafico.
+- **Scegli la forma delle linee dei tuoi grafici** nelle tue impostazioni: segmenti (predefinito), gradini o una spline morbida, per ogni grafico. Un amministratore imposta il valore predefinito per tutti in Impostazioni globali (**Forma Predefinita delle Linee**).
+- **Preferenze dice da dove vengono il tema e la forma delle linee**: un badge **Globale** quando seguono il valore predefinito dell'amministratore, un pulsante per tornare a seguirlo, e un badge **Auto** quando il tema è lasciato al tuo browser. Come per la lingua e la valuta, una modifica al tema o alla forma delle linee, compreso il ritorno al predefinito, si applica solo quando premi **Salva**.
 - **I tooltip dei grafici mostrano il giorno della settimana** dopo la data, e il puntatore si ferma sui giorni, mai tra due.
 
 #### 📉 Analisi del rischio
@@ -82,6 +84,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Pagina File: una colonna Visibilità** mostra se ogni file è condiviso con tutti gli utenti o personale. Dal menu della riga o da una scheda della griglia puoi condividere un file con tutti o renderlo di nuovo personale, con una conferma, poiché gli altri lo perdono.
 - **Una barra nella pagina File mostra agli amministratori lo spazio occupato dall'istanza** (database, file caricati, report dei broker, backup), rispetto al disco o a un limite che possono impostare; un provider di hosting può fissare il limite con `LIBREFOLIO_STORAGE_LIMIT_MB`.
 - **La barra dello spazio e la sua legenda si evidenziano insieme** quando passi sull'una o sull'altra.
+- Il limite di spazio si trova anche in **Impostazioni › Amministrazione › Impostazioni globali**, categoria Memoria, in sola lettura quando chi ospita l'istanza lo imposta. *Apri le impostazioni*, quando il limite rifiuta un'operazione, porta lì con la riga del limite evidenziata.
 
 #### 💾 Backup e ripristino
 
@@ -104,9 +107,12 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Verifica una password prima di ripristinare**: nel rapporto del ripristino scegli un amministratore del backup e scrivi una password, per sapere se dopo potrai accedere con quella. La password non viene mai salvata, registrata nei log o rimandata indietro.
 - **Un ripristino può aspettare**: *Ci penso dopo* tiene l'archivio controllato, e Impostazioni › Backup permette di riprenderlo o scartarlo da qualsiasi scheda o dispositivo. Il rapporto mostra gli amministratori del backup con la loro immagine e una barra di cosa contiene; un ripristino che non può proseguire non chiede conferma, e uno rifiutato dal limite di spazio libera subito lo spazio.
 - *Aggiorna* sulla lista dei backup conservati, per i backup fatti da riga di comando.
+- **Ripristina dalla lista**: *Ripristina* su un backup conservato apre il suo rapporto in una finestra, proprio dove si trova la lista. Ogni ripristino, anche quello di un archivio dal tuo computer, prosegue in una finestra; chiuderla conserva il controllo per dopo, da riprendere o scartare dalla scheda del ripristino.
+- La lista dei backup conservati ha una colonna **Una volta ripristinato**: lo spazio che i contenuti del backup occupano una volta ripristinati, con database, file caricati e report dei broker nel suo tooltip («—» per i backup creati prima di questa versione).
 
 #### 👥 Account, registrazione e amministratori
 
+- **Ogni link degli account in Impostazioni › Amministrazione › Utenti.** Inviti, link di reimpostazione password, verifiche email, il link di configurazione del primo amministratore e il cambio email del proprietario sono tutti elencati, ciascuno con il suo tipo, per chi è, chi l'ha creato, le sue date e il suo stato. I link aperti sono in una tabella; quelli usati, scaduti e revocati sono in un pannello chiuso **Link chiusi**. Entrambe le tabelle permettono di ordinare, filtrare, nascondere colonne e sfogliare per pagine le liste lunghe. Ora si possono revocare anche i link di reimpostazione password e di verifica email.
 - **Istanze gestite: `./dev.py user reassign-owner <username>`** restituisce l'account amministratore all'indirizzo del proprietario dopo una conferma errata: un nuovo link per la password; la vecchia password e le sessioni vengono revocate. `user set-email` annulla anche un link di cambio indirizzo ancora in attesa.
 - **Più utenti di quanti ne consenta il piano** (un piano più piccolo o un backup ripristinato): al primo accesso l'amministratore sceglie chi mantiene l'accesso, prima di qualsiasi altra pagina, e può prima scaricare il backup completo. Gli altri vengono disattivati, mai eliminati, e restano in attesa con un messaggio chiaro. Un ripristino lo indica nel proprio rapporto invece di rifiutare.
 - `./dev.py user create … --role user` crea un account normale; senza `--role`, il comando crea comunque un amministratore.
@@ -130,6 +136,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 #### ✉️ Email
 
+- **Quando cambia l'indirizzo email di un account, il nuovo indirizzo riceve una breve conferma** che ora è l'indirizzo dell'account, nella lingua dell'account, accanto all'avviso al vecchio indirizzo, che continua a non mostrare nulla del nuovo. I limiti sono 3 cambi all'ora per account e 3 email all'ora per casella.
 - **Email, facoltativa**: LibreFolio può inviare email tramite il tuo server SMTP, indicato solo dalle variabili `LIBREFOLIO_SMTP_*`, con la password anche da file (`LIBREFOLIO_SMTP_PASSWORD_FILE`). Nulla di ciò viene memorizzato, mostrato nell'app o inserito in un backup, e senza un server nulla cambia. **Impostazioni › Amministrazione › Email**, per gli amministratori, indica se la posta funziona, quale variabile correggere quando non funziona, e invia un'email di prova al tuo indirizzo nella tua lingua. `LIBREFOLIO_SMTP_MAX_PER_HOUR` limita le email dell'istanza (50 all'ora per impostazione predefinita); i controlli all'avvio segnalano una configurazione inutilizzabile e un server raggiunto senza crittografia. Documentato nella nuova pagina di amministrazione «Email».
 - **Link nelle email**: ogni link contenuto in un'email viene costruito solo da `LIBREFOLIO_PUBLIC_URL`. Finché la posta funziona, il log di avvio e Impostazioni › Amministrazione › Email indicano quando quella variabile manca o non può essere usata, e `GET /api/v1/system/instance` dice se possono partire email con un link.
 - Impostazioni › Amministrazione › Email verifica, dal browser dell'amministratore, che `LIBREFOLIO_PUBLIC_URL` raggiunga proprio questa istanza, e avvisa, solo per questo dispositivo, quando lì risponde un altro server o non risponde nulla; l'avviso all'avvio su `LIBREFOLIO_PUBLIC_URL` ora elenca ogni regola che l'indirizzo deve rispettare.
@@ -190,6 +197,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Dopo un aggiornamento, ogni utente vede una volta ciò che è cambiato rispetto alla propria ultima versione: i nuovi capitoli del changelog, nella propria lingua dove tradotti. I nuovi account non lo vedono mai, e non si apre mai sopra una guida o un'altra finestra. Lo stesso sulle istanze self-hosted e gestite.
 - **Un avviso legale**: una breve nota di esclusione di responsabilità sotto ogni pagina di accesso, in fondo alla barra laterale, in Impostazioni › Informazioni, nella pagina di benvenuto e alla fine di ogni AI Export (prima della riga della lingua della risposta), nella tua lingua. Un'istanza può collegare i propri termini di servizio e l'informativa sulla privacy con `LIBREFOLIO_TOS_URL` e `LIBREFOLIO_PRIVACY_URL`.
 - Mentre il server recupera i prezzi — all'avvio, alla prima visita dopo una pausa o a una riattivazione pianificata — l'app mostra "Aggiornamento prezzi…" sopra le pagine.
+- **Ogni scheda delle Impostazioni ha un proprio indirizzo**, come `/settings/preferences` o, per gli amministratori, `/settings/admin/backup`: un link apre la scheda, scegliere una scheda aggiorna l'indirizzo, e Indietro riporta alla scheda precedente. I vecchi link `/settings?tab=…` funzionano ancora.
 
 #### 📚 Documentazione
 
@@ -329,12 +337,15 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 #### 🖥️ Interfaccia e accessibilità
 
+- **Il tema e la forma delle linee dei grafici restano con il tuo account** e ti seguono in ogni browser e dispositivo; i valori predefiniti dell'amministratore ora valgono per ogni utente che non ha scelto i propri, non solo per i nuovi utenti. I temi esistenti vengono mantenuti come scelta propria di ciascun utente. Il pulsante sole e luna nell'intestazione cambia ancora il tema solo in quel browser.
 - **Gli intervalli di date coprono sempre due giorni diversi.** In ogni selettore di intervallo di date, il giorno cliccato per primo mostra il cursore di divieto e un secondo clic su di esso viene ignorato; una data digitata uguale all'altro estremo diventa rossa; i tasti freccia la saltano. Una data digitata mentre l'altro estremo è vuoto lascia quell'estremo aperto: nel filtro data di una tabella, il solo **Da** mantiene le righe da quel giorno in poi (prima manteneva solo quel giorno). Gli intervalli di un solo giorno salvati in precedenza funzionano ancora.
 - Le notifiche vengono annunciate dai lettori di schermo (gli errori subito, le altre in modo cortese), e il loro pulsante di chiusura ha un nome nella tua lingua.
 - **Una freccia indietro su Broker, Transazioni, Asset e Forex** quando ci arrivi da un link dell'app: ti riporta indietro con filtri e periodo. Non compare dalla barra laterale o da un indirizzo digitato.
 
 #### 👥 Account e accesso
 
+- Utenti › Invia per email: il messaggio «Inviato a …» ora ricorda che, se l'email non arriva, il destinatario deve controllare anche la cartella dello spam.
+- **«Password dimenticata?» risponde con un breve messaggio**, lo stesso sia che un account corrisponda sia che no, e il suo pulsante fa un conto alla rovescia di 5 minuti prima della richiesta successiva (l'intervallo del server stesso), anche dopo un ricaricamento della pagina. Quando l'istanza può inviare via email un link di reimpostazione, la scheda non mostra più i comandi di reimpostazione del server: li conserva la guida dell'amministratore.
 - **Impostazioni › Amministrazione ora è riservata agli amministratori.** Gli altri utenti non vedono più una copia in sola lettura di Impostazioni globali; un vecchio link ad essa apre il loro Profilo.
 - Dopo l'annullamento di un link di configurazione, il log di avvio dice che il link è stato ritirato, non che è scaduto.
 - `./dev.py user deactivate` sull'amministratore ancora in attesa della propria configurazione annulla il suo link di configurazione; `./dev.py user demote` lo rifiuta.
@@ -553,6 +564,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - API: convertire un importo di 0 (`POST /api/v1/fx/currencies/convert`) risponde 0 con il tasso del giorno invece di un errore del server.
 - Un provider che consegna un giorno con un prezzo di 0 o inferiore non fa più fallire l'intero download dei prezzi dell'asset: quel giorno viene saltato e la sincronizzazione lo dice. Un prezzo corrente di 0 o inferiore da un provider viene rifiutato come inutilizzabile: resta l'ultimo prezzo memorizzato.
 - **Una nuova coppia FX subito dopo un riavvio**: EUR/RON e le altre coppie coperte solo da ECB non dicono più «nessun percorso di conversione» quando ECB risponde lentamente. Se la lista di un provider resta illeggibile, il modale chiede di riprovare fra poco; il secondo banner giallo non c'è più.
+- Rimuovere l'icona di un asset ora ha effetto: il modale di modifica la svuotava, ma il server teneva il vecchio indirizzo. Lo stesso vale per svuotare l'URL utente, un identificatore (ISIN, ticker, CUSIP, SEDOL, FIGI, UUID) o l'ultimo identificatore *altro*.
 
 #### 🗓️ Eventi degli asset e Investimenti programmati
 
@@ -589,6 +601,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Rischio: le date del replay storico seguono la lingua dell'app**, e un gruppo geografico definito dall'host mostra il suo nome nella tabella degli shock invece del suo id.
 - Rischio: ottimizzare più di 100 asset riporta un limite di dimensione invece di un errore di parametro non valido.
 - **«Sono diversificato come credo?» sugli schermi stretti**: le righe non escono più dallo schermo. Prima il nome, poi la barra, poi peso e contributo al rischio, e un nome lungo scorre.
+- Simulazione del rischio sui telefoni: ogni parametro è una riga, etichetta a sinistra e campo a destra, e la riga dei giorni dell'orizzonte non si sovrappone più al campo successivo.
 
 #### 🤖 AI Export
 
@@ -619,6 +632,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 #### 👥 Account e accesso
 
+- Profilo › Email: su desktop il campo della password attuale di un cambio email ora sta a destra, sotto il campo email.
 - **Accedere e aprire o salvare le impostazioni non falliscono più quando il tema salvato del tuo account è uno che questa versione non conosce** (un database modificato a mano, o un downgrade): l'app mostra il tema predefinito dell'istanza, o Auto.
 - **Quando l'ultimo amministratore attivo prova a eliminare il proprio account, la finestra di dialogo ora dice nella tua lingua cosa fare prima** — rendere amministratore un altro account — invece di un messaggio del server in inglese.
 - Due amministratori che agiscono sugli stessi account nello stesso momento non possono più lasciare l'istanza senza un amministratore attivo, o un posto oltre il limite utenti; un account eliminato nel frattempo ora risponde "non trovato" invece di un errore del server.
@@ -770,6 +784,9 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
   - Non esiste più un limite minimo al 1º gennaio 1900. Una transazione datata prima del 1900 viene accettata (il modulo, l'editor bulk e l'importazione chiedono prima una conferma, poiché una data del genere è di solito un errore di battitura), e il portafoglio, i lotti e le posizioni partono da essa. L'avviso `TRANSACTIONS_BEFORE_FLOOR` è stato rimosso. Una cronologia che inizia nell'anno 1 ha un costo pari a quello delle sue variazioni, non a quello dei suoi 740 000 giorni. Per un portafoglio che conteneva già righe datate prima del 1900, le sue cifre «Tutto» (MWRR, TWRR, ROI) ora vengono calcolate a partire da esse.
 - **`/system/ready` restituisce `behind` o `ahead` invece di `mismatch`** per un database la cui migrazione non è quella di questa versione (`checks.migrations`), e aggiunge `database_revision` e `app_version`. `GET /api/v1/panel/status` aggiunge `instance_key` e `users_over_limit`: un client che verifica l'insieme esatto delle chiavi deve accettarle.
 - **Rimosse le route API inutilizzate o superate, senza periodo di deprecazione:** `POST /transactions/transfers/promote` (usare `POST /transactions/commit` con `promotes[]`), `POST /transactions/events/suggest` (usare `GET /transactions/event-reconciliation`), `DELETE /assets/events` (usare `POST /assets/events` con `delete_ids`), `GET /assets/all` (usare `GET /assets/query?active=true`), `POST /assets/provider/refresh` (usare `POST /assets/provider/probe`), `POST /assets/{id}/market-data/wipe` (lo esegue il `PATCH /assets` della valuta), `POST /portfolio/wac` (usare `POST /portfolio/lots/analysis`), `GET /settings/global/{key}` (usare `GET /settings/global`), `POST /settings/global/initialize` (eseguita all'avvio), `GET /uploads/{file_id}` (usare `GET /uploads`), `GET /brokers/import/files/{file_id}` e `…/last-parse` (usare `GET /brokers/import/files`), `GET /utilities/currencies/normalize` (usare `GET /utilities/currencies/suggest`), `GET /brokers/{id}/summary` (leggere il broker con `GET /brokers/{id}`, la sua liquidità e le sue posizioni con `POST /portfolio/report`).
+- `PATCH /api/v1/assets`: un `null` esplicito su `icon_url`, `user_url` o un singolo identificatore (`identifier_isin`, `_ticker`, `_cusip`, `_sedol`, `_figi`, `_uuid`) ora lo svuota, come lo schema ha sempre dichiarato, e una lista vuota esplicita su `identifier_other` svuota gli altri identificatori (`null` lì li lascia ancora invariati). Inviare solo i campi che si modificano: un client che invia l'intero oggetto con `null` o `[]` nei campi non toccati li svuota.
+- `GET` e `PUT /api/v1/settings/user` non hanno più `theme`: è `ui_preferences.theme`, accanto a `ui_preferences.chart_line_shape`; `ui_preference_defaults` fornisce i valori predefiniti globali. Un `PUT` unisce `ui_preferences` chiave per chiave (`null` rimuove una chiave, che così torna a seguire il valore predefinito) e rifiuta i campi sconosciuti con 422. Il `user_settings` della risposta di login li contiene entrambi.
+- `GET /api/v1/users/invites` e `DELETE /api/v1/users/invites/{invite_id}` sono stati rimossi. Usare `GET /api/v1/users/account-links` (ogni link degli account con il suo stato) e `DELETE /api/v1/users/account-links/{link_id}` (revoca un link aperto di invito, di reimpostazione password o di verifica email). `POST /api/v1/users/invites` è invariato.
 
 ---
 - **`POST /api/v1/portfolio/report`: `summary.pnl_change_1d_vs_total_pnl_percent` è tolto**, senza periodo di deprecazione: la variazione del giorno in quota del P&L totale esplodeva vicino allo zero. Usa `pnl_change_1d_vs_nav_percent`, la quota del valore del portafoglio di ieri.

@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Data-quality warnings on the broker page:** old prices, missing or old exchange rates and their sync buttons appear there too, for every role.
 - **Positions chart: choose the window of the Rolling view.** One week, one month, three months, one year or a custom window; it starts from the automatic one.
 - The allocation pie by asset shows the asset's icon in its tooltip too, as the pie by type does.
-- Asset allocation pies: the By Asset and By Type tooltips show the asset type as a badge next to the icon.
+- Asset allocation pies: the By Asset and By Type tooltips show the asset type as a badge next to the icon; the Liquidity slice shows a Liquidity badge, in the colour of the cash bar.
 
 #### 📈 Charts
 
@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lots: every marker on the Lot Life chart explains itself.** Hover, tap or focus a marker (▲ purchase, ▼ sale, ◆ transfer, + / × adjustment, │ split) on the Lot Life & Custody chart to see what happened, when, how many units (hidden in privacy mode) and at which broker: From and To for a transfer between your brokers. When several events fall on the same day, the tooltip lists them all.
 - **Compare an asset with an exchange rate, and back.** A comparison chosen in a card's or a chart's signals now draws on the Assets and FX list cards and on both detail pages, also when the page is opened fresh.
 - **Choose the shape of your chart lines** in your settings: segments (the default), steps or a smooth spline, for every chart. An administrator sets the default for everyone in Global Settings (**Default Chart Line Shape**).
-- **Preferences says where the theme and the line shape come from**: a **Global** badge when they follow the administrator's default, a button that removes your own choice to follow it again, and an **Auto** badge when the theme is left to your browser.
+- **Preferences says where the theme and the line shape come from**: a **Global** badge when they follow the administrator's default, a button to follow it again, and an **Auto** badge when the theme is left to your browser. Like the language and the currency, a change to the theme or the line shape, the way back to the default included, applies only when you **Save**.
 - **Chart tooltips show the day of the week** after the date, and the pointer stops on days, never between two.
 
 #### 📉 Risk Analysis

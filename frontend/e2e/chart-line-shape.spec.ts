@@ -25,6 +25,13 @@ async function openPreferences(page: Page): Promise<void> {
     await expect(page.getByTestId('preference-line-shape')).toBeVisible({timeout: 15_000});
 }
 
+/** Save the line shape row of Preferences (a draft until then) and wait until the row has nothing left to save. */
+async function saveLineShapeRow(page: Page): Promise<void> {
+    const row = page.getByTestId('preference-line-shape');
+    await row.getByTestId('setting-save').click();
+    await expect(row.getByTestId('setting-save')).toBeHidden();
+}
+
 async function openSeededAssetDetail(page: Page): Promise<void> {
     await goToAssetsPage(page);
     const card = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
@@ -84,6 +91,8 @@ test.describe('Line shape of the charts (FB-3)', () => {
         await openPreferences(page);
         await page.getByTestId('preference-line-shape-picker-spline').click();
         await expect(page.getByTestId('preference-line-shape-picker')).toHaveAttribute('data-value', 'spline');
+        // a draft until the row's Save (UIP-2); the context answers the PUT, nothing shared is written
+        await saveLineShapeRow(page);
 
         await openSeededAssetDetail(page);
         const chart = page.getByTestId('asset-detail-chart').locator('[data-line-shape]');

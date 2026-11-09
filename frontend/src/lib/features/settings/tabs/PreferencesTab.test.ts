@@ -236,6 +236,7 @@ async function mount() {
 const languageRow = () => screen.getByTestId('preference-language');
 const currencyRow = () => screen.getByTestId('preference-currency');
 const themeRow = () => screen.getByTestId('preference-theme');
+const lineShapeRow = () => screen.getByTestId('preference-line-shape');
 
 /**
  * Pick a language through the `SimpleSelect` combobox. The option label is one
@@ -409,20 +410,26 @@ describe('PreferencesTab — a modified row offers save and undo', () => {
         expect(userPut()).not.toHaveBeenCalled();
     });
 
-    it('removes the own theme at once on reset (lot UIP): PUT null, nothing left to save', async () => {
-        // The user has their own 'dark': Reset is offered, and it is no edit to save but the removal of the key.
+    it('reset is a draft (UIP-2): no call, the row falls back to the global default and offers save and undo', async () => {
         userGet().mockResolvedValue(userRead({own: {theme: 'dark'}}) as never);
-        userPut().mockResolvedValue(userRead() as never);
         await mount();
 
         await fireEvent.click(rowButton(themeRow(), 'reset')!);
 
-        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
-        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: null}});
-        await waitFor(() => expect(applyTheme).toHaveBeenCalledWith('auto'));
-        expect(rowButton(themeRow(), 'save')).toBeNull();
-        await waitFor(() => expect(rowButton(themeRow(), 'reset')).toBeNull());
+        await waitFor(() => expect(rowButton(themeRow(), 'save')).not.toBeNull());
+        expect(rowButton(themeRow(), 'undo')).not.toBeNull();
         expect(within(themeRow()).getByTestId('preference-theme-badge-global')).toBeInTheDocument();
+        expect(userPut()).not.toHaveBeenCalled();
+        expect(applyTheme).not.toHaveBeenCalled();
+    });
+
+    it('picking a theme calls neither the server nor applyTheme before Save', async () => {
+        await mount();
+        await chooseTheme('dark');
+
+        expect(rowButton(themeRow(), 'save')).not.toBeNull();
+        expect(userPut()).not.toHaveBeenCalled();
+        expect(applyTheme).not.toHaveBeenCalled();
     });
 });
 
@@ -836,22 +843,74 @@ describe('PreferencesTab — save all', () => {
         expect(bulk('saveAll')).toBeNull();
     });
 
-    it('moves every row to the house defaults on reset all', async () => {
-        // Every value differs from the global default, so resetting all of them
-        // makes language and currency modified at once, and drops the own theme.
+    it('moves every row to its default on reset all, as drafts: nothing reaches the server', async () => {
+        // Language and currency differ from the globals; the own theme and line shape go back to following the default.
         globalGet().mockResolvedValue(globalItems({default_language: 'it', default_currency: 'USD'}) as never);
-        userGet().mockResolvedValue(userRead({language: 'en', base_currency: 'EUR', own: {theme: 'dark'}, defaults: {theme: 'light'}}) as never);
-        userPut().mockResolvedValue(userRead({defaults: {theme: 'light'}}) as never);
+        userGet().mockResolvedValue(userRead({language: 'en', base_currency: 'EUR', own: {theme: 'dark', chart_line_shape: 'steps'}, defaults: {theme: 'light'}}) as never);
         await mount();
 
         expect(bulk('resetAll')).not.toBeNull();
         await fireEvent.click(bulk('resetAll')!);
 
-        // Language and currency become edits to save; the own theme is removed at once (lot UIP).
-        await waitFor(() => expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: null}}));
-        expect(rowButton(themeRow(), 'save')).toBeNull();
+        await waitFor(() => expect(rowButton(themeRow(), 'save')).not.toBeNull());
         expect(rowButton(languageRow(), 'save')).not.toBeNull();
         expect(rowButton(currencyRow(), 'save')).not.toBeNull();
+        expect(rowButton(lineShapeRow(), 'save')).not.toBeNull();
+        expect(within(themeRow()).getByTestId('preference-theme-badge-global')).toBeInTheDocument();
+        expect(within(lineShapeRow()).getByTestId('preference-line-shape-badge-global')).toBeInTheDocument();
+        expect(userPut()).not.toHaveBeenCalled();
+        expect(applyTheme).not.toHaveBeenCalled();
+    });
+
+    it('save all after reset all sends the language, the currency and ONE PUT with both interface keys as null', async () => {
+        globalGet().mockResolvedValue(globalItems({default_language: 'it', default_currency: 'USD'}) as never);
+        userGet().mockResolvedValue(userRead({language: 'en', base_currency: 'EUR', own: {theme: 'dark', chart_line_shape: 'steps'}, defaults: {theme: 'light'}}) as never);
+        userPut().mockResolvedValue(userRead({language: 'it', base_currency: 'USD', defaults: {theme: 'light'}}) as never);
+        await mount();
+
+        await fireEvent.click(bulk('resetAll')!);
+        await fireEvent.click(bulk('saveAll')!);
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(3));
+        expect(userPut().mock.calls.map((c) => c[0])).toEqual([{language: 'it'}, {base_currency: 'USD'}, {ui_preferences: {theme: null, chart_line_shape: null}}]);
+        await waitFor(() => expect(applyTheme).toHaveBeenCalledWith('light'));
+    });
+
+    it('save all with theme and line shape modified sends them together in one PUT, only the modified keys', async () => {
+        await mount();
+        await chooseTheme('dark');
+        await fireEvent.click(within(lineShapeRow()).getByTestId('preference-line-shape-picker-spline'));
+
+        await fireEvent.click(bulk('saveAll')!);
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
+        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: 'dark', chart_line_shape: 'spline'}});
+        const event = notify.mock.calls.map((c) => c[0]).find((e) => e.name === 'settings.preferences.saved');
+        expect(event.detail).toMatchObject({fields: 2, saved: ['theme', 'chart_line_shape'], failed: [], theme: 'dark', chart_line_shape: 'spline'});
+    });
+
+    it('save all with only the line shape modified sends only chart_line_shape', async () => {
+        await mount();
+        await fireEvent.click(within(lineShapeRow()).getByTestId('preference-line-shape-picker-steps'));
+
+        await fireEvent.click(bulk('saveAll')!);
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
+        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {chart_line_shape: 'steps'}});
+        expect(applyTheme).not.toHaveBeenCalled();
+    });
+
+    it('save all with language, currency, theme and line shape: separate language and currency PUTs, then one for the interface keys', async () => {
+        await mount();
+        await chooseLanguage('Italiano');
+        await chooseCurrency('USD');
+        await chooseTheme('light');
+        await fireEvent.click(within(lineShapeRow()).getByTestId('preference-line-shape-picker-steps'));
+
+        await fireEvent.click(bulk('saveAll')!);
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(3));
+        expect(userPut().mock.calls.map((c) => c[0])).toEqual([{language: 'it'}, {base_currency: 'USD'}, {ui_preferences: {theme: 'light', chart_line_shape: 'steps'}}]);
     });
 });
 
@@ -1057,7 +1116,6 @@ describe('PreferencesTab — Runes read boundaries', () => {
 // =========================================================================
 describe('PreferencesTab — where a preference comes from (lot UIP)', () => {
     const themeBadge = (kind: 'global' | 'auto') => within(themeRow()).queryByTestId(`preference-theme-badge-${kind}`);
-    const lineShapeRow = () => screen.getByTestId('preference-line-shape');
 
     it('badges the theme Global while the user has no own theme', async () => {
         userGet().mockResolvedValue(userRead() as never);
@@ -1106,16 +1164,103 @@ describe('PreferencesTab — where a preference comes from (lot UIP)', () => {
         expect(within(themeRow()).getByTestId('setting-reset')).toBeInTheDocument();
     });
 
-    it('the theme reset sends {ui_preferences: {theme: null}}', async () => {
-        userGet().mockResolvedValue(userRead({own: {theme: 'dark'}}) as never);
-        userPut().mockResolvedValue(userRead() as never);
+    it('the theme reset is a draft; its Save sends {ui_preferences: {theme: null}} once, then applies the default', async () => {
+        userGet().mockResolvedValue(userRead({own: {theme: 'dark'}, defaults: {theme: 'light'}}) as never);
+        userPut().mockResolvedValue(userRead({defaults: {theme: 'light'}}) as never);
         await mount();
 
         await fireEvent.click(within(themeRow()).getByTestId('setting-reset'));
+        expect(userPut()).not.toHaveBeenCalled();
+        expect(themeBadge('global')).not.toBeNull();
+
+        await fireEvent.click(within(themeRow()).getByTestId('setting-save'));
 
         await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
         expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: null}});
-        await waitFor(() => expect(within(themeRow()).queryByTestId('setting-reset')).toBeNull());
+        await waitFor(() => expect(applyTheme).toHaveBeenCalledWith('light'));
+        await waitFor(() => expect(within(themeRow()).queryByTestId('setting-save')).toBeNull());
+        const event = notify.mock.calls.map((c) => c[0]).find((e) => e.name === 'settings.preferences.saved');
+        expect(event.detail).toEqual({fields: 1, field: 'theme', value: null});
+    });
+
+    it('the Global badge follows the theme draft: it appears on reset and goes away when a theme is picked', async () => {
+        userGet().mockResolvedValue(userRead({own: {theme: 'dark'}}) as never);
+        await mount();
+        expect(themeBadge('global')).toBeNull();
+
+        await fireEvent.click(within(themeRow()).getByTestId('setting-reset'));
+        await waitFor(() => expect(themeBadge('global')).not.toBeNull());
+
+        await chooseTheme('light');
+        await waitFor(() => expect(themeBadge('global')).toBeNull());
+        expect(userPut()).not.toHaveBeenCalled();
+    });
+
+    it('the Auto badge follows the theme draft, including the inherited default', async () => {
+        userGet().mockResolvedValue(userRead({own: {theme: 'light'}, defaults: {theme: 'auto'}}) as never);
+        await mount();
+        expect(themeBadge('auto')).toBeNull();
+
+        await chooseTheme('auto');
+        await waitFor(() => expect(themeBadge('auto')).not.toBeNull());
+
+        await fireEvent.click(within(themeRow()).getByTestId('setting-undo'));
+        await waitFor(() => expect(themeBadge('auto')).toBeNull());
+        await fireEvent.click(within(themeRow()).getByTestId('setting-reset'));
+        await waitFor(() => expect(themeBadge('global')).not.toBeNull());
+        expect(themeBadge('auto'), 'null follows the default, which is auto').not.toBeNull();
+    });
+
+    it('a failed theme PUT does not apply the theme and keeps the draft', async () => {
+        userPut().mockRejectedValue(axiosError('nope'));
+        await mount();
+        await chooseTheme('dark');
+
+        await fireEvent.click(within(themeRow()).getByTestId('setting-save'));
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(banner()).not.toBeNull());
+        expect(applyTheme).not.toHaveBeenCalled();
+        expect(within(themeRow()).getByTestId('setting-save')).toBeInTheDocument();
+    });
+
+    it('picking a line shape is a draft: no PUT, save and undo appear, the picker shows the pick', async () => {
+        await mount();
+
+        await fireEvent.click(within(lineShapeRow()).getByTestId('preference-line-shape-picker-steps'));
+
+        await waitFor(() => expect(within(lineShapeRow()).queryByTestId('setting-save')).not.toBeNull());
+        expect(within(lineShapeRow()).queryByTestId('setting-undo')).not.toBeNull();
+        expect(within(lineShapeRow()).getByTestId('preference-line-shape-picker')).toHaveAttribute('data-value', 'steps');
+        expect(within(lineShapeRow()).queryByTestId('preference-line-shape-badge-global')).toBeNull();
+        expect(userPut()).not.toHaveBeenCalled();
+    });
+
+    it('the line shape row Save sends exactly {ui_preferences: {chart_line_shape}} once', async () => {
+        userPut().mockResolvedValue(userRead({own: {chart_line_shape: 'spline'}}) as never);
+        await mount();
+        await fireEvent.click(within(lineShapeRow()).getByTestId('preference-line-shape-picker-spline'));
+
+        await fireEvent.click(within(lineShapeRow()).getByTestId('setting-save'));
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
+        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {chart_line_shape: 'spline'}});
+        await waitFor(() => expect(within(lineShapeRow()).queryByTestId('setting-save')).toBeNull());
+        const event = notify.mock.calls.map((c) => c[0]).find((e) => e.name === 'settings.preferences.saved');
+        expect(event.detail).toEqual({fields: 1, field: 'chart_line_shape', value: 'spline'});
+        expect(applyTheme).not.toHaveBeenCalled();
+    });
+
+    it('undo on the line shape row restores the saved value without a call', async () => {
+        userGet().mockResolvedValue(userRead({own: {chart_line_shape: 'steps'}}) as never);
+        await mount();
+        await fireEvent.click(within(lineShapeRow()).getByTestId('preference-line-shape-picker-spline'));
+
+        await fireEvent.click(within(lineShapeRow()).getByTestId('setting-undo'));
+
+        await waitFor(() => expect(within(lineShapeRow()).queryByTestId('setting-save')).toBeNull());
+        expect(within(lineShapeRow()).getByTestId('preference-line-shape-picker')).toHaveAttribute('data-value', 'steps');
+        expect(userPut()).not.toHaveBeenCalled();
     });
 
     it('badges the line shape Global while the user has none of their own, and offers no reset', async () => {
@@ -1134,16 +1279,21 @@ describe('PreferencesTab — where a preference comes from (lot UIP)', () => {
         expect(within(lineShapeRow()).getByTestId('setting-reset')).toBeInTheDocument();
     });
 
-    it('the line shape reset sends {ui_preferences: {chart_line_shape: null}}, and the badge comes back', async () => {
-        userGet().mockResolvedValue(userRead({own: {chart_line_shape: 'steps'}}) as never);
-        userPut().mockResolvedValue(userRead() as never);
+    it('the line shape reset is a draft: no call, the badge comes back, Save then sends chart_line_shape null', async () => {
+        userGet().mockResolvedValue(userRead({own: {chart_line_shape: 'steps'}, defaults: {chart_line_shape: 'spline'}}) as never);
+        userPut().mockResolvedValue(userRead({defaults: {chart_line_shape: 'spline'}}) as never);
         await mount();
 
         await fireEvent.click(within(lineShapeRow()).getByTestId('setting-reset'));
 
+        await waitFor(() => expect(within(lineShapeRow()).getByTestId('preference-line-shape-badge-global')).toBeInTheDocument());
+        expect(within(lineShapeRow()).getByTestId('preference-line-shape-picker')).toHaveAttribute('data-value', 'spline');
+        expect(userPut()).not.toHaveBeenCalled();
+
+        await fireEvent.click(within(lineShapeRow()).getByTestId('setting-save'));
+
         await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
         expect(userPut()).toHaveBeenCalledWith({ui_preferences: {chart_line_shape: null}});
-        await waitFor(() => expect(within(lineShapeRow()).getByTestId('preference-line-shape-badge-global')).toBeInTheDocument());
-        expect(within(lineShapeRow()).queryByTestId('setting-reset')).toBeNull();
+        await waitFor(() => expect(within(lineShapeRow()).queryByTestId('setting-reset')).toBeNull());
     });
 });

@@ -531,14 +531,25 @@ export function setPairSettings(slug: string, settings: ChartSettings): void {
 }
 
 /**
- * The shape of the lines of every chart (FB-3): the welcome tour's choice and the user settings'. Every chart follows it, the
- * ones that had chosen a shape of their own included; nothing else they saved is touched. Written to the user's interface
- * preferences (lot UIP): applied at once, kept by the server, so it follows the user to another browser.
+ * The shape of the lines of every chart (FB-3): the welcome tour's choice. Every chart follows it, the ones that had chosen
+ * a shape of their own included; nothing else they saved is touched. Written to the user's interface preferences (lot UIP):
+ * applied at once, kept by the server, so it follows the user to another browser.
  */
 export function setGlobalLineShape(shape: LineShape): Promise<boolean> {
     loadFromStorage();
     if (!isLineShape(shape)) return Promise.resolve(false);
     const written = userSettings.updateUiPreference('chart_line_shape', shape);
+    applySavedGlobalLineShape();
+    return written;
+}
+
+/**
+ * A line shape for every chart, already written to the server (UIP-2): the Preferences tab saves it with its own PUT and
+ * hands the answer to `userSettings`, which this store follows. Here every chart drops the shape of its own, so they all
+ * draw the new one at once, without a reload; nothing else they saved is touched.
+ */
+export function applySavedGlobalLineShape(): void {
+    loadFromStorage();
     const {lineShape: _own, ...baseSettings} = globalSettings;
     globalSettings = baseSettings as ChartSettings;
     for (const [key, settings] of pairOverrides) {
@@ -547,12 +558,6 @@ export function setGlobalLineShape(shape: LineShape): Promise<boolean> {
     }
     bump();
     schedulePersist();
-    return written;
-}
-
-/** Forget the user's own line shape (lot UIP): every chart without a shape of its own follows the administrator's default again. */
-export function clearGlobalLineShape(): Promise<boolean> {
-    return userSettings.updateUiPreference('chart_line_shape', null);
 }
 
 /**
