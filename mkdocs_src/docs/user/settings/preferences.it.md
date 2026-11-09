@@ -10,7 +10,7 @@ La scheda **Preferenze** controlla **come l'app appare e si comporta per te** �
 |---------|----------|-------------|
 | **Lingua** | 🌍 Visualizzazione | Lingua dell'interfaccia — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Si applica non appena la salvi, e decide anche come si scrivono numeri e date |
 | **Valuta Predefinita** | 💰 Valuta | La tua valuta di base. La Dashboard, la pagina Broker e la pagina di ogni broker, e la scheda **Correlazione** della pagina Asset si aprono in questa valuta, e anche l'AI Export di una coppia FX la utilizza; una valuta che scegli nella Dashboard rimane per la sessione. Viene inoltre proposta quando crei qualcosa di nuovo — un asset, il primo saldo di cassa di un nuovo broker, un piano PAC. Questo menu elenca tutte le valute |
-| **Tema** | 🎨 Aspetto | ☀️ Chiaro / 🌙 Scuro / 🖥️ Auto (segue il tuo sistema operativo) |
+| **Tema** | 🎨 Aspetto | ☀️ Chiaro / 🌙 Scuro / 🖥️ Auto (segue il tuo sistema operativo). Viene conservato con il tuo account, quindi ti segue in ogni browser e dispositivo. Finché non ne scegli uno, segue il predefinito dell'amministratore e accanto compare il badge **Globale**; il pulsante **↺** accanto a un tema che hai scelto rimuove la tua scelta subito, senza **Salva**. Il pulsante sole/luna nell'intestazione cambia ancora solo questo browser |
 
 <style>
 /* Keep the first two columns on one line (long setting names would wrap otherwise) */
@@ -31,7 +31,7 @@ article table:first-of-type td:nth-child(-n + 2) {
 
 !!! tip "Forma delle linee dei grafici"
 
-    **Preferenze** contiene anche la **Forma delle linee** di ogni grafico — segmenti, gradini o curva morbida. Viene conservata in questo browser e si applica appena la scegli, senza **Salva**. Come appaiono le forme: **[Grafici della Dashboard](../dashboard/charts.md#line-shape)**.
+    **Preferenze** contiene anche la **Forma delle linee** di ogni grafico — segmenti, gradini o curva morbida. Viene conservata con il tuo account e si applica appena la scegli, senza **Salva**. Finché non ne scegli una segue il predefinito dell'amministratore (accanto compare il badge **Globale**); **↺** torna a quel predefinito. Come appaiono le forme: **[Grafici della Dashboard](../dashboard/charts.md#line-shape)**.
 
 Scegli una categoria nella barra laterale — su un telefono, nel menu **Categoria** — per mostrare solo le sue impostazioni;
 **Tutte le Impostazioni** mostra tutto.

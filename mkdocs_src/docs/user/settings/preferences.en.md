@@ -10,7 +10,7 @@ The **Preferences** tab controls **how the app looks and behaves for you** — c
 |---------|----------|-------------|
 | **Language** | 🌍 Display | Interface language — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Applies as soon as you save it, and also decides how numbers and dates are written |
 | **Default Currency** | 💰 Currency | Your own base currency. The Dashboard, the Brokers page and each broker's page, and the **Correlation** tab of the Assets page open in it, and the AI Export of a currency pair uses it too; a currency you pick on the Dashboard stays for the session. It is also proposed when you create something new — an asset, a new broker's first cash balance, a PAC plan. This menu lists every currency |
-| **Theme** | 🎨 Appearance | ☀️ Light / 🌙 Dark / 🖥️ Auto (follows your operating system) |
+| **Theme** | 🎨 Appearance | ☀️ Light / 🌙 Dark / 🖥️ Auto (follows your operating system). Kept with your account, so it follows you to every browser and device. Until you choose one, it follows the administrator's default and a **Global** badge shows beside it; the **↺** button beside a theme you chose removes your choice at once, without **Save**. The sun/moon button in the header still switches only this browser |
 
 <style>
 /* Keep the first two columns on one line (long setting names would wrap otherwise) */
@@ -31,7 +31,7 @@ article table:first-of-type td:nth-child(-n + 2) {
 
 !!! tip "Line shape of the charts"
 
-    **Preferences** also holds the **Line shape** of every chart — segments, steps or a smooth curve. It is kept in this browser and applies as soon as you pick it, without **Save**. How the shapes look: **[Dashboard charts](../dashboard/charts.md#line-shape)**.
+    **Preferences** also holds the **Line shape** of every chart — segments, steps or a smooth curve. It is kept with your account and applies as soon as you pick it, without **Save**. Until you pick one it follows the administrator's default (a **Global** badge shows beside it); **↺** goes back to that default. How the shapes look: **[Dashboard charts](../dashboard/charts.md#line-shape)**.
 
 Pick a category in the sidebar — on a phone, in the **Category** menu — to show only its settings;
 **All Settings** shows everything.
