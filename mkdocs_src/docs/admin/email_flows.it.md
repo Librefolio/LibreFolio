@@ -602,7 +602,7 @@ Inoltre:
 
 ## 🔔 Cambi di indirizzo email {: #email-change-notice }
 
-Quando qualcuno cambia l'indirizzo email del proprio account, in [Profilo](../user/settings/profile.md), LibreFolio scrive all'indirizzo che l'account aveva **prima**.
+Quando l'indirizzo email di un account è cambiato, in [Profilo](../user/settings/profile.md), LibreFolio scrive due brevi email, nella lingua dell'account: un **avviso** all'indirizzo che l'account aveva **prima**, e una **conferma** al **nuovo** indirizzo, che ora è quello dell'account.
 
 ```mermaid
 ---
@@ -613,24 +613,26 @@ flowchart TD
     CH["Cambio dell'indirizzo email<br>in Profilo"] --> OK["Il cambio va a buon fine:<br>la risposta non attende mai l'email"]
     OK --> CASE{"Cambiate solo le maiuscole<br>delle lettere dalla A alla Z?"}
     CASE -->|"sì: non è un cambio"| SKIP["Nessun avviso"]
-    CASE -->|"no"| LIM{"3 all'ora per l'account o<br>per la casella superati?"}
+    CASE -->|"no"| LIM{"3 cambi all'ora<br>per l'account superati?"}
     LIM -->|"sì"| SKIP
     LIM -->|"no"| EN{"Email attiva?"}
     EN -->|"no"| LOG["Nulla: una riga informativa<br>nel log, non un avviso"]
     EN -->|"sì"| SEND["Avviso al vecchio indirizzo,<br>nella lingua dell'account"]
+    SEND --> NEW["Conferma al nuovo indirizzo,<br>nella lingua dell'account"]
     classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
-    class SEND ok
+    class SEND,NEW ok
 ```
 
-| | L'avviso |
+| | L'avviso e la conferma |
 | --- | --- |
-| **Destinatario** | Solo il vecchio indirizzo: il nuovo non riceve nulla. |
-| **Cosa non dice** | Nulla del nuovo indirizzo, nemmeno il dominio, e nessun nome utente: si apre con un semplice «Ciao,» ([Note di sicurezza](email_troubleshooting.md#security)). |
-| **Cosa dice** | Che l'indirizzo è cambiato. Se non è stato il proprietario a fare il cambio, qualcuno potrebbe stare usando il suo account: deve cambiare subito la password se può ancora e segnalartelo. Nessun link. |
+| **Destinatari** | L'avviso al vecchio indirizzo, poi la conferma al nuovo. Ciascuna email parte per conto suo: se una non può partire, l'altra parte comunque, e nessuna delle due annulla il cambio. |
+| **Cosa non dicono** | L'avviso non mostra nulla del nuovo indirizzo, nemmeno il dominio; la conferma nulla del vecchio. Nessuna delle due contiene il nome utente: entrambe si aprono con un semplice «Ciao,» ([Note di sicurezza](email_troubleshooting.md#security)). |
+| **Cosa dice l'avviso** | Che l'indirizzo è cambiato. Se non è stato il proprietario a fare il cambio, qualcuno potrebbe stare usando il suo account: deve cambiare subito la password se può ancora e segnalartelo. Nessun link. |
+| **Cosa dice la conferma** | Che questo indirizzo è ora quello dell'account: l'account accede con questo indirizzo e riceve qui le sue email. A chi non ha un account sull'istanza dice che qualcuno ha digitato l'indirizzo per errore, e di segnalartelo. Nessun link. |
 | **Nome dell'istanza** | L'host di `LIBREFOLIO_PUBLIC_URL`, con la sua porta se ne ha una, oppure «LibreFolio» quando la variabile non è impostata o non può essere usata: senza link, l'avviso non ne ha bisogno. |
 | **Limite orario** | Conta come qualsiasi email. |
-| **3 all'ora per account e per casella** | La casella è contata comunque sia scritto il suo indirizzo ([Password dimenticate](#forgot-password)). Senza questi limiti, un account potrebbe puntare la propria email a un indirizzo qualsiasi e cambiarlo di nuovo, per far scrivere la tua istanza lì. |
-| **Maiuscole** | `Anna@example.com` per `anna@example.com` non è un cambio di indirizzo: nessun avviso parte. Le lettere accentate contano come diverse: `Émile@example.com` per `émile@example.com` è un cambio, con il suo avviso. |
+| **3 all'ora per account e per casella** | 3 cambi con email all'ora per account, e 3 email all'ora per casella, comunque sia scritto il suo indirizzo ([Password dimenticate](#forgot-password)). Una casella oltre il suo limite non riceve nulla, l'altro indirizzo riceve comunque la sua email. Senza questi limiti, un account potrebbe puntare la propria email a un indirizzo qualsiasi e cambiarlo di nuovo, per far scrivere la tua istanza lì. |
+| **Maiuscole** | `Anna@example.com` per `anna@example.com` non è un cambio di indirizzo: nessuna email parte. Le lettere accentate contano come diverse: `Émile@example.com` per `émile@example.com` è un cambio, con il suo avviso. |
 
 ---
 

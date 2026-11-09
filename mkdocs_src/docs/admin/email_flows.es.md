@@ -602,7 +602,7 @@ Además:
 
 ## 🔔 Cambios de dirección de correo {: #email-change-notice }
 
-Cuando alguien cambia la dirección de correo de su cuenta, en [Perfil](../user/settings/profile.md), LibreFolio escribe a la dirección que la cuenta tenía **antes**.
+Cuando la dirección de correo de una cuenta ha cambiado, en [Perfil](../user/settings/profile.md), LibreFolio escribe dos correos breves, en el idioma de la cuenta: un **aviso** a la dirección que la cuenta tenía **antes**, y una **confirmación** a la dirección **nueva**, que ahora es la de la cuenta.
 
 ```mermaid
 ---
@@ -613,24 +613,26 @@ flowchart TD
     CH["Cambio de dirección de correo<br>en Perfil"] --> OK["El cambio se realiza:<br>la respuesta nunca espera al correo"]
     OK --> CASE{"¿Solo cambiaron las mayúsculas<br>de las letras A a Z?"}
     CASE -->|"sí: no es un cambio"| SKIP["Sin aviso"]
-    CASE -->|"no"| LIM{"¿3 por hora para la cuenta o<br>para el buzón superados?"}
+    CASE -->|"no"| LIM{"¿3 cambios por hora<br>para la cuenta superados?"}
     LIM -->|"sí"| SKIP
     LIM -->|"no"| EN{"¿Correo activado?"}
     EN -->|"no"| LOG["Nada: una línea informativa<br>en el registro, no una advertencia"]
     EN -->|"sí"| SEND["Aviso a la dirección anterior,<br>en el idioma de la cuenta"]
+    SEND --> NEW["Confirmación a la dirección nueva,<br>en el idioma de la cuenta"]
     classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
-    class SEND ok
+    class SEND,NEW ok
 ```
 
-| | El aviso |
+| | El aviso y la confirmación |
 | --- | --- |
-| **Destinatario** | Solo la dirección anterior: la nueva no recibe nada. |
-| **Lo que no dice** | Nada de la dirección nueva, ni siquiera el dominio, ni nombre de usuario: empieza con un simple «Hola:» ([Notas de seguridad](email_troubleshooting.md#security)). |
-| **Lo que dice** | Que la dirección cambió. Si el titular no hizo el cambio, alguien puede estar usando su cuenta: debe cambiar la contraseña de inmediato si aún puede, y avisarte. Sin enlace. |
+| **Destinatarios** | El aviso a la dirección anterior, luego la confirmación a la nueva. Cada correo sale por su cuenta: si uno no puede salir, el otro sale igualmente, y ninguno deshace el cambio. |
+| **Lo que no dicen** | El aviso no muestra nada de la dirección nueva, ni siquiera el dominio; la confirmación nada de la anterior. Ninguno lleva el nombre de usuario: ambos empiezan con un simple «Hola:» ([Notas de seguridad](email_troubleshooting.md#security)). |
+| **Lo que dice el aviso** | Que la dirección cambió. Si el titular no hizo el cambio, alguien puede estar usando su cuenta: debe cambiar la contraseña de inmediato si aún puede, y avisarte. Sin enlace. |
+| **Lo que dice la confirmación** | Que esta dirección es ahora la de la cuenta: inicia sesión con ella y recibe ahí sus correos. A quien no tiene cuenta en la instancia le dice que alguien escribió la dirección por error, y que te avise. Sin enlace. |
 | **Nombre de la instancia** | El host de `LIBREFOLIO_PUBLIC_URL`, con su puerto si lo tiene, o «LibreFolio» cuando la variable no está definida o no se puede usar: sin enlace, el aviso no la necesita. |
 | **Límite por hora** | Cuenta como cualquier correo. |
-| **3 por hora por cuenta y por buzón** | El buzón se cuenta se escriba como se escriba su dirección ([Contraseñas olvidadas](#forgot-password)). Sin estos límites, una cuenta podría apuntar su correo a cualquier dirección y volver a cambiarlo, para que tu instancia escriba ahí. |
-| **Mayúsculas** | `Anna@example.com` por `anna@example.com` no es un cambio de dirección: no sale ningún aviso. Las letras con acento cuentan como distintas: `Émile@example.com` por `émile@example.com` es un cambio, con su aviso. |
+| **3 por hora por cuenta y por buzón** | 3 cambios con correos por hora por cuenta, y 3 correos por hora por buzón, se escriba como se escriba su dirección ([Contraseñas olvidadas](#forgot-password)). Un buzón que supera su límite no recibe nada; la otra dirección recibe igualmente su correo. Sin estos límites, una cuenta podría apuntar su correo a cualquier dirección y volver a cambiarlo, para que tu instancia escriba ahí. |
+| **Mayúsculas** | `Anna@example.com` por `anna@example.com` no es un cambio de dirección: no sale ningún correo. Las letras con acento cuentan como distintas: `Émile@example.com` por `émile@example.com` es un cambio, con su aviso. |
 
 ---
 
