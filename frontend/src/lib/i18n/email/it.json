@@ -145,12 +145,13 @@
       "label": "Nome utente o indirizzo email",
       "submit": "Mandami un link per il reset",
       "sending": "Invio…",
-      "accepted": "Se un account attivo corrisponde, il suo proprietario riceve un'email con un link per scegliere una nuova password. Controlla la posta, anche nello spam: il link funziona per 30 minuti.",
+      "accepted": "Email inviata: controlla anche lo spam.",
       "errors": {
         "unavailable": "Ora questa istanza non può spedire email: chiedi al suo amministratore.",
         "EMAIL_RATE_LIMITED": "Troppe richieste per ora: riprova tra {minutes} min.",
         "generic": "Non è stato possibile inviare la richiesta: riprova."
-      }
+      },
+      "wait": "Richiedi di nuovo tra {time}"
     },
     "emailChange": {
       "page": {

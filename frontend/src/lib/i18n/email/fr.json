@@ -145,12 +145,13 @@
       "label": "Nom d'utilisateur ou adresse e-mail",
       "submit": "M'envoyer un lien de réinitialisation",
       "sending": "Envoi…",
-      "accepted": "Si un compte actif correspond, son propriétaire reçoit un e-mail avec un lien pour choisir un nouveau mot de passe. Vérifiez la boîte de réception et les spams : le lien fonctionne pendant 30 minutes.",
+      "accepted": "E-mail envoyé : vérifiez aussi vos spams.",
       "errors": {
         "unavailable": "Cette instance ne peut pas envoyer d'e-mails pour le moment : demandez à son administrateur.",
         "EMAIL_RATE_LIMITED": "Trop de demandes pour le moment : réessayez dans {minutes} min.",
         "generic": "La demande n'a pas pu être envoyée : réessayez."
-      }
+      },
+      "wait": "Nouvelle demande dans {time}"
     },
     "emailChange": {
       "page": {
