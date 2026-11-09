@@ -1,13 +1,13 @@
 """The emails LibreFolio sends: their texts in the four languages of the interface, and the message with its headers.
 
 Each kind of email has a builder (``build_password_reset``, ``build_password_reset_after_restore``, ``build_invite``, ``build_verification``,
-``build_admin_setup``, ``build_test_message``, ``build_email_changed``, ``build_email_change_confirmation``) that returns an ``EmailContent``: a subject, a plain-text part and an
+``build_admin_setup``, ``build_test_message``, ``build_email_changed``, ``build_email_changed_new_address``, ``build_email_change_confirmation``) that returns an ``EmailContent``: a subject, a plain-text part and an
 HTML part, in the language asked for (``email_language``: an unknown one is English). The texts live in
 ``templates/<language>.json``, one file per language with the same keys and the same ``$placeholders``; the HTML layout
 in ``templates/layout.html``, whose green header shows the logo (``templates/logo.png``, attached inline by ``compose_message``). Every value that comes from a person — a user name, the name of the instance, who sent an
 invitation — is escaped in the HTML part, and none goes into a subject. The emails a stranger can have sent to an
-address of their choice (a password reset, an email verification, the notice of an email change) carry no text of
-theirs: their builders take no user name and nothing of a new address (night decision N62). ``compose_message`` adds
+address of their choice (a password reset, an email verification, the notice and the confirmation of an email change) carry no text of
+theirs: their builders take no user name and nothing of the other address (night decision N62). ``compose_message`` adds
 the headers.
 
 Nothing here sends anything, reads the configuration or logs: ``delivery.send_email`` does.
@@ -232,6 +232,20 @@ def build_email_changed(*, language: str | None, instance: str, by_host: bool = 
     if by_host:
         return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting_anonymous", before=["intro_host"], after=["advice_host"], values=values)
     return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting_anonymous", before=["intro"], after=["advice"], values=values)
+
+
+def build_email_changed_new_address(*, language: str | None, instance: str, by_host: bool = False) -> EmailContent:
+    """The confirmation to the address an account has now, once its email address changed (UA2): this address is the
+    account's now. No link, no user name and nothing of the old address: whoever changes the address chooses this
+    recipient, so a stranger may receive it (N62).
+
+    ``by_host``: the host of a managed instance asked for the change and the owner confirmed it from this address.
+    """
+    lang = email_language(language)
+    values = {"instance": instance}
+    if by_host:
+        return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting_anonymous", before=["new_intro_host"], after=["new_advice_host"], values=values, subject_key="new_subject")
+    return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting_anonymous", before=["new_intro"], after=["new_advice"], values=values, subject_key="new_subject")
 
 
 def build_email_change_confirmation(*, language: str | None, username: str, link: str, ttl: timedelta, instance: str) -> EmailContent:

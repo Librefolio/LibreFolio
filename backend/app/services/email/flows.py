@@ -26,7 +26,7 @@ from backend.app.services.accounts.global_settings_service import get_setting_va
 from backend.app.services.email import delivery
 from backend.app.services.email.delivery import EmailError, EmailRateLimitedError, EmailUnavailableError, send_email
 from backend.app.services.email.links import email_link, links_state, require_links
-from backend.app.services.email.messages import build_email_changed, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
+from backend.app.services.email.messages import EmailContent, build_email_changed, build_email_changed_new_address, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 
@@ -50,9 +50,10 @@ FORGOT_BY_MAILBOX = SlidingWindowLimiter(3, 60 * 60)
 #: Per account, counted on its reset links: at most one email every 5 minutes, and 3 an hour; past them, in silence.
 RESET_EMAIL_MIN_INTERVAL = timedelta(minutes=5)
 RESET_EMAILS_PER_HOUR = 3
-#: Email-change notices: 3 an hour per account, and 3 an hour per recipient mailbox (``delivery.mailbox_budget_key()``).
-#: Without them, an account could point its email at any address, change it again, and so have the instance write to
-#: that address as often as the hourly budget allows. Counted on the notices that went out.
+#: The emails of an email change (the notice to the old address, the confirmation to the new one, UA2): 3 changes an hour
+#: per account, and 3 emails an hour per recipient mailbox (``delivery.mailbox_budget_key()``). Without them, an account
+#: could point its email at any address, change it again, and so have the instance write to that address as often as the
+#: hourly budget allows. Counted on what went out: a change with at least one email sent, an email sent to that mailbox.
 EMAIL_CHANGE_NOTICES_BY_ACCOUNT = SlidingWindowLimiter(3, 60 * 60)
 EMAIL_CHANGE_NOTICES_BY_MAILBOX = SlidingWindowLimiter(3, 60 * 60)
 
@@ -335,14 +336,24 @@ INSTANCE_FALLBACK = "LibreFolio"
 
 
 async def email_changed_work(user_id: int, old_address: str, new_address: str, *, engine: AsyncEngine | None = None, by_host: bool = False) -> None:
-    """The notice to the address an account had before its email changed, after the answer, with a session of its own.
+    """The two emails of a completed change of address, after the answer, with a session of its own (UA2).
 
-    It goes only to the old address, in the account's language, and shows nothing of the new one (N62). It carries
-    no link, so ``LIBREFOLIO_PUBLIC_URL`` is not needed: the instance is named by it when set, else «LibreFolio». Nothing
-    goes when the addresses are the same (``user_service.same_email()``, the one rule of decision P18: A–Z in any case),
-    email is off (an ``info`` line, not a warning: the self-hosted default), the account is gone, email cannot be used
-    now, or the account or the old mailbox had 3 notices in the hour (``EMAIL_CHANGE_NOTICES_BY_ACCOUNT``,
-    ``EMAIL_CHANGE_NOTICES_BY_MAILBOX``); a refusal or a failure is logged without either address. Never raises.
+    The change is complete when this runs: at once for a change made in Profile, at the click on the link for the
+    owner of a managed instance (``by_host``). Two short emails go out in the account's language, the old address first:
+
+    - to the address the account had: the notice that it changed (``build_email_changed``), with nothing of the new
+      address (N62);
+    - to the address it has now: the confirmation that it is the account's address now
+      (``build_email_changed_new_address``), with nothing of the old one.
+
+    Neither carries a link, so ``LIBREFOLIO_PUBLIC_URL`` is not needed: the instance is named by it when set, else
+    «LibreFolio». Nothing goes when the addresses are the same (``user_service.same_email()``, the one rule of decision
+    P18: A–Z in any case), email is off (an ``info`` line, not a warning: the self-hosted default), the account is gone,
+    email cannot be used now, or the account had 3 changes with emails in the hour (``EMAIL_CHANGE_NOTICES_BY_ACCOUNT``,
+    one unit per change that sent at least one email). Each recipient mailbox has its own 3 an hour
+    (``EMAIL_CHANGE_NOTICES_BY_MAILBOX``, one unit per email sent there): a mailbox past it gets nothing, the other still
+    does. Each email is sent and logged on its own, so the failure of one never stops the other, and neither undoes the
+    change; a refusal or a failure is logged without either address. Never raises.
     """
     if user_service.same_email(old_address, new_address):
         return
@@ -357,20 +368,47 @@ async def email_changed_work(user_id: int, old_address: str, new_address: str, *
                 logger.info("Email change notice: the account no longer exists, nothing sent", user_id=user_id)
                 return
             await require_email()
-            mailbox = delivery.mailbox_budget_key(old_address)
-            if not (EMAIL_CHANGE_NOTICES_BY_ACCOUNT.peek(user_id).allowed and EMAIL_CHANGE_NOTICES_BY_MAILBOX.peek(mailbox).allowed):
+            if not EMAIL_CHANGE_NOTICES_BY_ACCOUNT.peek(user_id).allowed:
                 logger.info("Email change notice: past its limits, nothing sent", user_id=user_id)
                 return
             language = await account_language(session, user_id)
-            links = links_state()
-            instance = links.instance if links.ready else INSTANCE_FALLBACK
-            content = build_email_changed(language=language, instance=instance, by_host=by_host)
-            await send_email(content, to=old_address, user_id=user_id)
+        links = links_state()
+        instance = links.instance if links.ready else INSTANCE_FALLBACK
+        emails = (
+            ("previous", old_address, build_email_changed(language=language, instance=instance, by_host=by_host)),
+            ("new", new_address, build_email_changed_new_address(language=language, instance=instance, by_host=by_host)),
+        )
+        sent = [await _send_change_email(user_id, side, address, content) for side, address, content in emails]
+        if any(sent):
             EMAIL_CHANGE_NOTICES_BY_ACCOUNT.hit(user_id)
-            EMAIL_CHANGE_NOTICES_BY_MAILBOX.hit(mailbox)
-            logger.info("Email change notice sent to the previous address", user_id=user_id, language=language)
     except (EmailError, ValueError) as exc:
         logger.warning("Email change notice: not sent", user_id=user_id, reason=type(exc).__name__, code=getattr(exc, "code", None))
     except Exception as exc:  # noqa: BLE001 — a background task has nobody to raise to: log and end
         # No traceback: a database error would print its SQL parameters.
         logger.error("Email change notice: the request failed", user_id=user_id, error=type(exc).__name__)
+
+
+#: The log lines of the two emails of a change, by recipient: never the address itself.
+_CHANGE_LOG: dict[str, dict[str, str]] = {
+    "previous": {"sent": "Email change notice sent to the previous address", "held": "Email change notice: the previous mailbox is past its limit, not sent there"},
+    "new": {"sent": "Email change notice sent to the new address", "held": "Email change notice: the new mailbox is past its limit, not sent there"},
+}
+
+
+async def _send_change_email(user_id: int, side: Literal["previous", "new"], address: str, content: EmailContent) -> bool:
+    """One email of a completed change, to ``address`` (``side`` names it in the log, never the address): whether it went.
+
+    The mailbox's own limit is checked first; a refusal of email is logged and swallowed, so the other email still goes.
+    """
+    mailbox = delivery.mailbox_budget_key(address)
+    if not EMAIL_CHANGE_NOTICES_BY_MAILBOX.peek(mailbox).allowed:
+        logger.info(_CHANGE_LOG[side]["held"], user_id=user_id)
+        return False
+    try:
+        await send_email(content, to=address, user_id=user_id)
+    except (EmailError, ValueError) as exc:
+        logger.warning("Email change notice: not sent", user_id=user_id, recipient=side, reason=type(exc).__name__, code=getattr(exc, "code", None))
+        return False
+    EMAIL_CHANGE_NOTICES_BY_MAILBOX.hit(mailbox)
+    logger.info(_CHANGE_LOG[side]["sent"], user_id=user_id, language=content.language)
+    return True

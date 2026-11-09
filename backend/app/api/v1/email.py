@@ -196,7 +196,8 @@ async def confirm_owner_email_change(body: EmailChangeConfirmRequest, background
     """No session needed: the link proves that its reader received the email at the new address, which the host put in
     ``LIBREFOLIO_ADMIN_EMAIL`` of a managed instance. The owner's address becomes the link's, verified; every session of
     the owner ends (it signs in again, same password); its other change links and its password-reset links stop
-    working. When email works, the address it had before gets a notice after the answer, as for a change of the profile.
+    working. When email works, after the answer the address it had before gets a notice and the new one a confirmation
+    that the change is complete (UA2), as for a change of the profile.
 
     400 ``TOKEN_INVALID`` with the token's ``status`` (``expired``, ``consumed``, ``revoked``, ``unknown``): ``revoked``
     also when the link no longer matches the instance (the host changed the variable again, the instance is no longer
@@ -207,7 +208,8 @@ async def confirm_owner_email_change(body: EmailChangeConfirmRequest, background
         changed = await instance_owner.confirm_email_change(session, body.token)
     except instance_owner.OwnerEmailChangeLinkInvalidError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": "TOKEN_INVALID", "status": exc.code, "message": "This confirmation link is not valid"}) from None
-    # The notice to the old address (workstream E): after the answer, with a session of its own; never raises.
+    # The notice to the old address and the confirmation to the new one (workstream E, UA2): after the answer, with a
+    # session of its own; never raises.
     background.add_task(flows.email_changed_work, changed.user.id, changed.old_email, changed.user.email, engine=session.bind, by_host=True)
     return EmailChangeConfirmResponse(username=changed.user.username)
 
