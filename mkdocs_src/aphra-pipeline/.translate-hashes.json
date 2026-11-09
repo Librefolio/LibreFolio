@@ -282,7 +282,7 @@
     "analysis_model": "google/gemma-4-31b-it:free"
   },
   "index.en.md": {
-    "md5": "f58ae0fe95a3a3a72e11b672b3f46bf4",
+    "md5": "0df12c3aecdbcb4a6a82989e215b4639",
     "langs_done": [
       "es",
       "fr",
@@ -302,7 +302,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 352.8,
-        "stamped_at": "2026-11-06T14:26:09.180445+00:00",
+        "stamped_at": "2026-11-09T08:52:46.570704+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -315,7 +315,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 340.9,
-        "stamped_at": "2026-11-06T14:26:09.180445+00:00",
+        "stamped_at": "2026-11-09T08:52:46.570704+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -328,7 +328,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 387.4,
-        "stamped_at": "2026-11-06T14:26:09.180445+00:00",
+        "stamped_at": "2026-11-09T08:52:46.570704+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -589,7 +589,7 @@
     "last_translated": "2026-10-10T00:07:20.711014+00:00"
   },
   "user/files/index.en.md": {
-    "md5": "b5ba3a734927263ce69b9b705b102010",
+    "md5": "5aec220496b567d33a23b59af2a0fd1e",
     "langs_done": [
       "es",
       "fr",
@@ -609,7 +609,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1172.7,
-        "stamped_at": "2026-11-06T09:53:28.672459+00:00",
+        "stamped_at": "2026-11-09T08:52:55.159776+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -622,7 +622,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 818.0,
-        "stamped_at": "2026-11-06T09:53:28.672459+00:00",
+        "stamped_at": "2026-11-09T08:52:55.159776+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -637,7 +637,7 @@
         "elapsed_s": 1164.4,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=83, translated=86 (Δ+3)\n  L95: src=5 trn=7\n    EN: Some banks split one account across several exports: [Danske Bank](../transactions/import/danske-bank.md), for example, \n    TR: Algunos bancos dividen una cuenta en varias exportaciones: [Danske Bank](../transactions/import/danske-bank.md), por eje\n  L119: src=0 trn=1\n    EN: - a file whose uploader was not recorded shows *Uploader not recorded*.\n    TR: - un archivo **del que no se registró quién lo subió** muestra *Autor de la subida no registrado*.\n\nSOURCE_OUTLINE (for reference):\n  # 📁 Files & Uploads\n    ## 🖼️ Static resources\n      ### ⬆️ Upload a file\n      ### 👥 Shared or personal {: #visibility }\n    ## 📊 Broker Reports {: #broker-reports }\n      ### 📤 Upload a broker report\n      ### ⚙️ Manage reports\n      ### 🧩 Report sets {: #report-sets }\n    ## 👤 Who uploaded each file {: #uploaded-by }\n    ## 🛠️ For Administrators {: #admin-files }\n      ### 📊 The space used {: #space-used }\n      ### 🗃️ The Backups tab {: #backups-tab }\n    ## 🔒 Access and limits",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-06T09:53:28.672459+00:00",
+        "stamped_at": "2026-11-09T08:52:55.159776+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -5125,11 +5125,11 @@
     }
   },
   "user/settings/index.en.md": {
-    "md5": "5848864cbeee4ab01884a71ee1329c64",
+    "md5": "4976abb60bdc57b4aaf487d5421ab40e",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-11-05T11:14:58.986890+00:00",
     "analysis": "[{\"name\": \"Settings panel\", \"keywords\": [\"LibreFolio settings panel\", \"UI settings vs preferences\", \"\\\"Settings\\\" translation ambiguity\", \"application configuration panel\"]}, {\"name\": \"Preferences\", \"keywords\": [\"user preferences vs settings\", \"LibreFolio preferences tab\", \"\\\"Preferences\\\" vs \\\"Settings\\\" localization\", \"personalisation options\"]}, {\"name\": \"Global Settings\", \"keywords\": [\"LibreFolio Global Settings admin\", \"instance-wide configuration\", \"\\\"global\\\" meaning whole system not worldwide\", \"global vs general settings\"]}, {\"name\": \"Administration (group) / administrator / admin\", \"keywords\": [\"LibreFolio Administration tab group\", \"administrator role\", \"admin privileges\", \"\\\"Administration\\\" translation ambiguity with business administration\"]}, {\"name\": \"instance / instance-wide\", \"keywords\": [\"self-hosted instance definition\", \"LibreFolio deployment instance\", \"instance-wide configuration\", \"software instance vs installation\"]}, {\"name\": \"tabs / row of tabs / tab bar\", \"keywords\": [\"UI tabs localization\", \"MkDocs Material navigation tabs\", \"tab bar overflow\", \"browser tab vs settings tab terminology\"]}, {\"name\": \"Panel\", \"keywords\": [\"UI panel vs window vs dialog\", \"settings panel terminology\", \"interface container translation\"]}, {\"name\": \"Profile\", \"keywords\": [\"user profile tab\", \"LibreFolio profile settings\", \"account profile UI term\"]}, {\"name\": \"account deletion\", \"keywords\": [\"GDPR account deletion\", \"delete user account wording\", \"irreversible action localization\", \"\\\"deletion\\\" vs \\\"suppression\\\" vs \\\"cancellation\\\"\"]}, {\"name\": \"Base currency\", \"keywords\": [\"base currency portfolio definition\", \"reference currency\", \"devise de base\", \"moneda base\", \"portfolio accounting currency\"]}, {\"name\": \"price and exchange-rate sources\", \"keywords\": [\"market data provider\", \"price feed source\", \"exchange rate provider\", \"sourcing quotes Yahoo Finance\", \"\\\"source\\\" vs \\\"provider\\\" terminology\"]}, {\"name\": \"Plugins / installed plugins\", \"keywords\": [\"LibreFolio plugins\", \"software plugin localization\", \"extension modules\", \"loanword \\\"plugin\\\" retention\"]}, {\"name\": \"changelog / in-app changelog\", \"keywords\": [\"software changelog\", \"release notes\", \"\\\"in-app\\\" meaning within the application\", \"changelog translation conventions\"]}, {\"name\": \"Avatar\", \"keywords\": [\"user avatar UI term\", \"profile picture\", \"avatar localization\"]}, {\"name\": \"Theme\", \"keywords\": [\"UI theme light dark\", \"appearance theme localization\", \"\\\"theme\\\" not subject matter\"]}, {\"name\": \"Username\", \"keywords\": [\"username vs name vs login\", \"identifiant utilisateur\", \"nombre de usuario\", \"account identifier\"]}, {\"name\": \"password-reset links\", \"keywords\": [\"password reset link\", \"réinitialisation du mot de passe\", \"restablecer contraseña\", \"reset vs restart ambiguity\"]}, {\"name\": \"invitations\", \"keywords\": [\"user invitation email\", \"LibreFolio invite new user\", \"invitation vs registration\"]}, {\"name\": \"Backup / archive\", \"keywords\": [\"data backup vs file archive\", \"ZIP archive translation ambiguity \\\"archivo\\\"\", \"sauvegarde\", \"copia de seguridad\", \"LibreFolio CLI backup\"]}, {\"name\": \"test email\", \"keywords\": [\"send test email SMTP\", \"email configuration test button\", \"correo de prueba\", \"e-mail de test\"]}, {\"name\": \"Security / security checks\", \"keywords\": [\"security vs safety translation\", \"instance security checklist\", \"security audit checks\", \"Sécurité vs Sûreté\"]}, {\"name\": \"what needs attention first\", \"keywords\": [\"priority sorting of issues\", \"\\\"needs attention\\\" paraphrase\", \"actionable warnings localization\"]}, {\"name\": \"When the Tabs Do Not Fit / tabs overflow\", \"keywords\": [\"tab overflow UI\", \"responsive tabs\", \"heading translation\", \"\\\"fit\\\" meaning fit in width\"]}, {\"name\": \"scrolls sideways / fades out\", \"keywords\": [\"horizontal scrolling UI\", \"fade-out gradient affordance\", \"scroll edge hint\", \"overflow indicator\"]}, {\"name\": \"narrow window / resize the window / wide screen\", \"keywords\": [\"responsive breakpoints\", \"browser window width\", \"narrow viewport\", \"wide screen layout\", \"resize browser window\"]}, {\"name\": \"shows whole\", \"keywords\": [\"fully visible tab\", \"\\\"shows whole\\\" idiomatic English\", \"complete display of element\"]}, {\"name\": \"What the price and exchange-rate sources ask for\", \"keywords\": [\"\\\"what ... ask for\\\" meaning require\", \"provider configuration requirements\", \"idiomatic paraphrase\"]}, {\"name\": \"gathers the tabs\", \"keywords\": [\"\\\"gathers\\\" meaning groups/collects\", \"menu grouping terminology\", \"regroupe les onglets\"]}, {\"name\": \"keeps you on it\", \"keywords\": [\"clicking active tab keeps current view\", \"idiomatic English paraphrase\", \"no navigation change\"]}, {\"name\": \"your tabs end with About\", \"keywords\": [\"last tab in list\", \"tab order wording\", \"idiomatic paraphrase\"]}, {\"name\": \"a number on Security, repeated on Administration, counts what ... ask an administrator to look at\", \"keywords\": [\"badge counter UI\", \"notification count on tab\", \"security findings counter\", \"duplicate badge\"]}, {\"name\": \"a link to one of the administration tabs opens your Profile instead\", \"keywords\": [\"deep link redirect for non-admin\", \"access control UX\", \"permission-based redirect\"]}, {\"name\": \"The instance's settings still apply to you\", \"keywords\": [\"inherited configuration\", \"instance settings apply to all users\", \"\\\"apply to\\\" legal-like phrasing\"]}, {\"name\": \"the title above them names the open tab\", \"keywords\": [\"mobile header title\", \"\\\"names\\\" as verb meaning labels\", \"tab title on phone\"]}, {\"name\": \"On a phone\", \"keywords\": [\"mobile layout\", \"icon-only tabs\", \"responsive mobile view\", \"smartphone vs phone\"]}, {\"name\": \"Brokers\", \"keywords\": [\"brokerage account\", \"broker vs intermediary\", \"courtier\", \"corredor de bolsa\", \"LibreFolio brokers section\"]}, {\"name\": \"Multi-User &amp; Sharing / collaborators / manage access\", \"keywords\": [\"portfolio sharing\", \"collaborator permissions\", \"manage access rights\", \"multi-user feature naming\"]}, {\"name\": \"License info / version numbers\", \"keywords\": [\"open source license information\", \"AGPL\", \"software version numbering\", \"\\\"license\\\" spelling and legal meaning\"]}, {\"name\": \"Everyone\", \"keywords\": [\"all users regardless of role\", \"\\\"everyone\\\" scope wording\", \"non-admin users\"]}]",
@@ -5144,7 +5144,9 @@
         "critique": "<translation_critique>\n<improvements>\nNo structural or mandatory glossary violations were found: headings, anchors (`{: #administration }`, `{: #tabs-overflow }`), links, emoji, bold spans, and list indentation are preserved, and glossary mappings such as settings → impostazioni, tab → scheda, broker → broker, and exchange rate → tasso di cambio are respected. The following refinements target naturalness, clarity, and a few elliptical or ambiguous passages.\n\n1. Heading `## ↔️ Quando le schede non entrano` — “non entrano” is understandable but less idiomatic for “do not fit” in a UI layout context. Prefer `## ↔️ Quando le schede non ci stanno` or `## ↔️ Quando le schede non trovano spazio`. Example: `## ↔️ Quando le schede non ci stanno {: #tabs-overflow }`.\n\n2. `Un numero su Sicurezza` — “su” is ambiguous in Italian (it can mean “about” rather than “on the tab”). Make the badge location explicit while preserving the bold span: `**Un numero sulla scheda Sicurezza**, ripetuto su **Amministrazione**, ...`. Also consider `indica quanti elementi` instead of `conta gli elementi` for a more natural rendering of “counts what”.\n\n3. `con ciò che richiede attenzione per primo` — literal and heavy after the comma. Prefer `e cosa richiede attenzione per primo` (or `e ciò che va controllato per primo`). Corrected sentence: `Come è configurata l'istanza, e cosa richiede attenzione per primo: vedi «Sicurezza» in [Impostazioni globali](../../admin/settings.md).`\n\n4. `le tue schede terminano con **Informazioni** e un link a una delle schede di amministrazione apre invece il tuo **Profilo**.` — the coordination switches subject abruptly from “le tue schede” to “un link”. Split into two sentences: `le tue schede terminano con **Informazioni**. Un link a una delle schede di amministrazione apre invece il tuo **Profilo**.` This preserves the meaning and improves readability.\n\n5. `Se LibreFolio può inviare email e un'email di prova.` — the second element is an elliptical noun phrase and reads as a list of two things rather than a capability. Make the verb explicit: `Se LibreFolio può inviare email e consente di inviare un'email di prova.` (or `... e permette di inviare un'email di prova.`).\n\n6. `la scheda aperta venga mostrata per intero` — the passive construction is slightly unnatural. Prefer `la scheda aperta sia visibile per intero` or `la scheda aperta risulti interamente visibile`. Corrected: `la riga scorre in modo che la scheda aperta sia visibile per intero.`\n\n7. `mentre una di esse è aperta` — the antecedent (“una seconda riga di schede”) is a bit distant. Prefer `mentre una di queste schede è aperta` for clarity.\n\n8. `Tutti hanno quattro schede` — “Tutti” alone can be read as “all things”; make the subject explicit: `Tutti gli utenti hanno quattro schede`.\n\n9. `a destra della barra su uno schermo ampio` — acceptable, but clearer and more natural as `sulla destra della barra, su schermi ampi`. Corrected: `Le schede dell'istanza, solo per gli amministratori, sulla destra della barra, su schermi ampi:`.\n\n10. Optional stylistic note: `Correlati` is acceptable, but in Italian technical documentation the “Related” section is often rendered `Vedi anche`. If the project style guide does not mandate `Correlati`, consider `Vedi anche` for idiomaticity. This is not a required fix.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 792.5
+        "elapsed_s": 792.5,
+        "stamped_at": "2026-11-09T08:52:58.034003+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-11-05T11:14:58.986872+00:00",
@@ -5157,7 +5159,9 @@
         "structural_issues": 0,
         "elapsed_s": 787.6,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=28, translated=27 (Δ-1)\n  L22: src=8 trn=7\n    EN: Only administrators have this group. Click **Administration** to open its first tab, **Global Settings**: a second row o\n    TR: Seuls les administrateurs disposent de ce groupe. Cliquez sur **Administration** pour ouvrir son premier onglet, **Param\n\nSOURCE_OUTLINE (for reference):\n  # ⚙️ Settings\n    ## 🗂️ The Administration Group {: #administration }\n    ## ↔️ When the Tabs Do Not Fit {: #tabs-overflow }\n    ## 🔗 Related",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-11-09T08:52:58.034003+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-11-05T11:14:58.986890+00:00",
@@ -5168,7 +5172,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Mandatory terminology fix: `settings` must be translated as `configuración`, not `Ajustes/ajustes`.** This affects every occurrence:\n   - `# ⚙️ Ajustes` → `# ⚙️ Configuración`\n   - `El panel de Ajustes de LibreFolio` → `El panel de Configuración de LibreFolio`\n   - `los ajustes de la instancia` → `la configuración de la instancia`\n   - all instances of `**Ajustes globales**` and `[Ajustes globales]` → `**Configuración global**` / `[Configuración global]`\n   - `Los ajustes de la instancia siguen aplicándose a ti: los cambia tu administrador.` → `La configuración de la instancia sigue aplicándose a ti: la cambia tu administrador.`\n\n   Keep all link targets and heading anchors unchanged, e.g. `../../admin/settings.md`, `#administration`, `#tabs-overflow`.\n\n2. **Disambiguate the relative clause in the Plugins bullet.**  \n   `..., que solo cambian los administradores` can be read as “that administrators only change” rather than “that only administrators change.” A clearer rendering is:  \n   `..., que solo los administradores pueden cambiar.`  \n   Combined with the terminology fix:  \n   `..., la configuración de la instancia, que solo los administradores pueden cambiar.`\n\n3. **Rewrite the Security badge sentence for natural Spanish.**  \n   `Un número en Seguridad, repetido en Administración, cuenta lo que las comprobaciones de seguridad de la instancia piden a un administrador que revise.` is literal and awkward; `contar` does not clearly mean “indicate a count.” Better:  \n   `Un número en Seguridad, repetido en Administración, indica cuántos elementos de las comprobaciones de seguridad de la instancia requieren la revisión de un administrador.`\n\n4. **Minor register improvement.**  \n   `Todo el mundo tiene cuatro pestañas` is colloquial for technical documentation. A more neutral and precise option is:  \n   `Todos los usuarios disponen de cuatro pestañas.`\n\nNo structural issues were found: links, heading anchors, emoji, lists, and heading hierarchy are preserved.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 113.2
+        "elapsed_s": 113.2,
+        "stamped_at": "2026-11-09T08:52:58.034003+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -6439,11 +6445,11 @@
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash"
   },
   "user/dashboard/kpi-cards.en.md": {
-    "md5": "c7c85d6913dfc1e0d8ca4f7a90dc12d2",
+    "md5": "d1a9e9e7b5ca12899afba9e357ef9f71",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-11-05T11:22:08.755803+00:00",
     "analysis": "[{\"name\": \"KPI Cards\", \"keywords\": [\"KPI card dashboard UI design\", \"key performance indicator finance dashboard\", \"KPI acronym translation\"]}, {\"name\": \"Dashboard\", \"keywords\": [\"dashboard UI finance portfolio\", \"dashboard translation tableau de bord panel cruscotto\"]}, {\"name\": \"Broker\", \"keywords\": [\"broker definition finance\", \"brokerage account portfolio tracker\", \"broker vs brokerage vs custodian\"]}, {\"name\": \"Period P&L\", \"keywords\": [\"period P&L profit and loss\", \"P&L definition trading portfolio\", \"period P&L vs net flows\"]}, {\"name\": \"P&L (profit and loss)\", \"keywords\": [\"P&L abbreviation accounting vs trading\", \"profit and loss statement translation\", \"P&L vs income statement\"]}, {\"name\": \"Total P&L\", \"keywords\": [\"total profit and loss since inception portfolio\", \"cumulative P&L definition\"]}, {\"name\": \"Net flows\", \"keywords\": [\"net flows definition portfolio\", \"net cash flow investment\", \"capital flows in out\"]}, {\"name\": \"NAV / Net Worth\", \"keywords\": [\"NAV net asset value definition\", \"net worth vs NAV\", \"net asset value portfolio tracker\"]}, {\"name\": \"Returns\", \"keywords\": [\"returns definition investment\", \"return vs performance vs yield translation\", \"investment returns terminology\"]}, {\"name\": \"Timing effect\", \"keywords\": [\"timing effect MWRR TWRR\", \"timing effect investment definition\", \"investor timing performance\"]}, {\"name\": \"TWRR\", \"keywords\": [\"time-weighted rate of return definition\", \"TWRR formula portfolio\"]}, {\"name\": \"MWRR cumulative / MWRR annualized\", \"keywords\": [\"money-weighted rate of return IRR\", \"annualized MWRR definition\", \"MWRR vs IRR\"]}, {\"name\": \"ROI\", \"keywords\": [\"return on investment ROI definition\", \"simple ROI period calculation\"]}, {\"name\": \"Unrealized change\", \"keywords\": [\"unrealized gain loss definition\", \"latent gain translation\", \"unrealized vs realized P&L\"]}, {\"name\": \"unrealized gain or loss\", \"keywords\": [\"unrealized gain loss accounting\", \"mark-to-market unrealized\"]}, {\"name\": \"realized gain or loss\", \"keywords\": [\"realized gain definition tax\", \"realized profit on sale\"]}, {\"name\": \"Deposited Capital\", \"keywords\": [\"deposited capital definition\", \"net invested capital portfolio\", \"contributed capital\"]}, {\"name\": \"Capital put in since the start\", \"keywords\": [\"capital contributed since inception\", \"net deposits withdrawals definition\"]}, {\"name\": \"Market Value\", \"keywords\": [\"market value definition securities\", \"market value vs book value portfolio\"]}, {\"name\": \"Purchase Cost\", \"keywords\": [\"purchase cost vs cost basis\", \"acquisition cost securities\", \"purchase cost exchange rate date\"]}, {\"name\": \"Book Value\", \"keywords\": [\"book value definition accounting\", \"book value vs market value\", \"book value portfolio position\"]}, {\"name\": \"Cash pools / three-pool cash model\", \"keywords\": [\"cash pooling definition\", \"three pool cash model deposited capital returns\"]}, {\"name\": \"Weighted Average Cost\", \"keywords\": [\"weighted average cost method accounting\", \"average cost basis securities\", \"WAC vs FIFO\"]}, {\"name\": \"average cost of the units sold\", \"keywords\": [\"average cost basis sold units\", \"cost basis calculation sale\"]}, {\"name\": \"Adjustment / Outgoing Adjustments\", \"keywords\": [\"portfolio adjustment transaction type\", \"outgoing adjustment units removed\", \"adjustment vs regularization translation\"]}, {\"name\": \"Dividends &amp; interest\", \"keywords\": [\"dividend definition\", \"interest income definition\", \"dividend vs coupon\"]}, {\"name\": \"Coupons\", \"keywords\": [\"coupon bond definition\", \"bond coupon payment\"]}, {\"name\": \"P2P interest\", \"keywords\": [\"peer-to-peer lending interest\", \"P2P investing definition\"]}, {\"name\": \"Fees &amp; taxes\", \"keywords\": [\"fees and taxes brokerage\", \"transaction fees definition\", \"withholding tax investments\"]}, {\"name\": \"Commissions\", \"keywords\": [\"brokerage commission definition\", \"trading commission fees\"]}, {\"name\": \"Position / holdings\", \"keywords\": [\"position vs holding portfolio definition\", \"holdings meaning investments\", \"open position securities\"]}, {\"name\": \"Securities\", \"keywords\": [\"securities definition financial\", \"titres valeurs mobilières translation\", \"securities vs assets\"]}, {\"name\": \"Asset / Assets in USD\", \"keywords\": [\"asset financial instrument definition\", \"asset vs possession\", \"financial asset classification\"]}, {\"name\": \"Units\", \"keywords\": [\"units shares fund units definition\", \"units of a security\"]}, {\"name\": \"FX on cash\", \"keywords\": [\"FX foreign exchange abbreviation\", \"currency effect on cash holdings\", \"FX translation exposure\"]}, {\"name\": \"Transfers at market value\", \"keywords\": [\"in-kind transfer market value\", \"securities transfer between brokers valuation\", \"transfer in specie\"]}, {\"name\": \"Other / reconciliation residual\", \"keywords\": [\"reconciliation residual definition\", \"residual balance reconciliation accounting\"]}, {\"name\": \"exchange-rate effect / USD → EUR rate\", \"keywords\": [\"exchange rate effect on returns\", \"currency translation effect\", \"FX rate contribution\"]}, {\"name\": \"display currency\", \"keywords\": [\"display currency vs base currency\", \"reporting currency definition\"]}, {\"name\": \"in transit\", \"keywords\": [\"cash in transit definition\", \"assets in transit between accounts\", \"transfer pending\"]}, {\"name\": \"opening position\", \"keywords\": [\"opening position definition portfolio\", \"initial position without cash\", \"opening balance securities\"]}, {\"name\": \"Editor or Viewer\", \"keywords\": [\"sharing roles editor viewer permissions\", \"broker sharing access levels\"]}, {\"name\": \"own (brokers you own) / share above 0%\", \"keywords\": [\"broker ownership share percentage\", \"co-ownership quota portfolio\", \"share of ownership\"]}, {\"name\": \"hover (hover the row / hover it)\", \"keywords\": [\"hover UI interaction term translation\", \"mouse over tooltip interaction\"]}, {\"name\": \"tooltip\", \"keywords\": [\"tooltip UI definition\", \"tooltip vs popover translation\"]}, {\"name\": \"caret\", \"keywords\": [\"caret UI symbol meaning\", \"caret vs cursor vs chevron\", \"chart marker\"]}, {\"name\": \"bar (the longest bar)\", \"keywords\": [\"bar chart bar definition\", \"horizontal bar chart reading\", \"bar length meaning\"]}, {\"name\": \"the split\", \"keywords\": [\"split meaning breakdown\", \"cost breakdown tooltip\", \"split vs division translation\"]}, {\"name\": \"time range / broker filter\", \"keywords\": [\"time range filter UI\", \"date range selector dashboard\", \"broker filter dropdown\"]}, {\"name\": \"the big number\", \"keywords\": [\"big number UI design\", \"hero metric primary figure dashboard\"]}, {\"name\": \"at a glance\", \"keywords\": [\"at a glance idiom meaning\", \"at a glance translation equivalent\"]}, {\"name\": \"how well did my money work\", \"keywords\": [\"figurative money working for you\", \"investment performance phrasing\"]}, {\"name\": \"today's pulse\", \"keywords\": [\"pulse metaphor meaning\", \"today's pulse idiom\", \"daily snapshot finance\"]}, {\"name\": \"Green is a gain, red a loss\", \"keywords\": [\"stock market color convention green red\", \"red means gain in China\", \"color semantics finance\"]}, {\"name\": \"Favorable timing / Unfavorable timing / Neutral timing\", \"keywords\": [\"favorable timing investment label\", \"timing effect categories\", \"neutral timing meaning\"]}, {\"name\": \"a sale for nothing\", \"keywords\": [\"sale with zero proceeds\", \"dispose for no consideration\", \"figurative for nothing\"]}, {\"name\": \"your loss shrank\", \"keywords\": [\"loss narrowed meaning\", \"loss decreased phrasing finance\"]}, {\"name\": \"a day without a market\", \"keywords\": [\"non-trading day definition\", \"market closed day weekend prices\", \"market holiday\"]}, {\"name\": \"taken without its sign\", \"keywords\": [\"absolute value mathematical definition\", \"sign of a number\", \"unsigned value\"]}, {\"name\": \"pp (percentage points)\", \"keywords\": [\"percentage points vs percent\", \"pp abbreviation finance\", \"basis points difference\"]}, {\"name\": \"— (em dash placeholder for no value)\", \"keywords\": [\"em dash placeholder no data\", \"dash meaning not available UI\", \"missing value representation\"]}, {\"name\": \"grey `—`\", \"keywords\": [\"greyed out disabled UI\", \"muted color meaning unavailable\"]}, {\"name\": \"in brackets\", \"keywords\": [\"in brackets meaning parentheses\", \"bracketed figure convention\"]}, {\"name\": \"bank statement\", \"keywords\": [\"bank statement definition\", \"securities value on bank statement\", \"custody statement\"]}, {\"name\": \"as for a fund manager and an investor\", \"keywords\": [\"fund manager vs investor analogy\", \"TWRR MWRR analogy\", \"manager investor perspective\"]}, {\"name\": \"Growth chart / P&amp;L view\", \"keywords\": [\"growth chart portfolio tracker\", \"P&L view chart mode\", \"chart view naming consistency\"]}, {\"name\": \"period ends on your portfolio's first day\", \"keywords\": [\"first day of portfolio inception\", \"period start equals inception edge case\"]}, {\"name\": \"brokers outside your selection\", \"keywords\": [\"selection meaning selected subset filter\", \"selected brokers scope\"]}, {\"name\": \"portfolio engine\", \"keywords\": [\"portfolio engine architecture\", \"performance calculation engine\", \"portfolio accounting engine\"]}, {\"name\": \"performance metrics / technical analysis (doc section names)\", \"keywords\": [\"performance metrics documentation section\", \"technical analysis finance docs\", \"section title consistency\"]}, {\"name\": \"ETF, USD, EUR, NAV, ROI, TWRR, MWRR, P2P, FX\", \"keywords\": [\"financial acronyms keep in English\", \"standard finance abbreviations localization\"]}]",
@@ -6458,7 +6464,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Mandatory glossary mapping — card → scheda.** The translation consistently leaves “card” in human-readable text. Replace all visible occurrences: `KPI Cards` / `Card KPI` → `Schede KPI`; `Card 1/2/3` → `Scheda 1/2/3`; `le tre card` → `le tre schede`; `una card` → `una scheda`; `la card **P&L del periodo**` → `la scheda **P&L periodo**`; `nella Card 1` → `nella Scheda 1`; `delle card` → `delle schede`; alt texts likewise (`Panoramica delle schede KPI`, `Scheda P&L periodo`, `Scheda Rendimenti`, `Scheda Patrimonio netto`). Do **not** change CSS classes such as `kpi-card-crop-container` or anchor IDs such as `#card-1-period-pl`.\n\n- **Mandatory glossary mapping — period P&L → P&L periodo.** Replace `P&L del periodo` with `P&L periodo` in all visible labels, headings and link texts: `## 📉 Card 1 — P&L del periodo` → `## 📉 Scheda 1 — P&L periodo`; TOC link `[Card 1 — P&L del periodo]` → `[Scheda 1 — P&L periodo]`; bold metric `**P&L del periodo**` → `**P&L periodo**`; link label `[P&L del periodo]` → `[P&L periodo]`.\n\n- **Mandatory glossary mapping — deposited capital → capitale versato; deposit → deposito.** The translation uses `Capitale depositato` for the metric and `versamento/i` for ordinary deposits. Correct examples: `Capitale depositato (periodo)` → `Capitale versato (periodo)`; `Capitale depositato e P&L totale` → `Capitale versato e P&L totale`; `il Capitale depositato (periodo)` → `il capitale versato (periodo)`; `un versamento o un prelievo` → `un deposito o un prelievo`; `più i versamenti e meno i prelievi` → `più i depositi e meno i prelievi`; `primo versamento` → `primo deposito`; `timing dei tuoi versamenti` → `timing dei tuoi depositi`; `versamenti meno prelievi` → `depositi meno prelievi`; `ogni versamento meno ogni prelievo` → `ogni deposito meno ogni prelievo`; `tendevi a versare` → `tendevi a depositare`. This also avoids conflating “deposit” with “new contribution”, which the glossary maps to `nuovo versamento`.\n\n- **Mandatory glossary mapping — purchase cost → valore di acquisto.** Change `**Costo di acquisto**` → `**Valore di acquisto**`; `un costo di acquisto incompleto` → `un valore di acquisto incompleto`; `più il costo di acquisto dei titoli` → `più il valore di acquisto dei titoli`. The prose “quanto ti sono costate le posizioni” can remain, but the term label must be `Valore di acquisto`.\n\n- **Mandatory glossary mapping — FX on cash → effetto cambio sulla liquidità.** In `compare lì come **FX sulla liquidità**`, replace with `compare lì come **Effetto cambio sulla liquidità**`.\n\n- **Mandatory glossary mapping — weighted average cost → prezzo medio di carico (PMC).** The link text `[Costo medio ponderato](...)` should be `[Prezzo medio di carico (PMC)](...)`. The surrounding `costo medio delle unità vendute` can remain if it translates the generic “average cost”, but the glossary term link must use PMC.\n\n- **Mandatory glossary mapping — viewer → visualizzatore; editor → editor.** In `I broker in cui sei Editor o Viewer...`, use `I broker in cui sei editor o visualizzatore...` (capitalisation may follow UI style if needed, but the glossary term must be `visualizzatore`, not `Viewer`).\n\n- **Mandatory glossary mapping — asset → asset.** In `ad esempio attività che si spostano tra due tuoi broker`, replace `attività` with `asset`: `ad esempio asset che si spostano tra due tuoi broker`.\n\n- **Grammar correction.** `Lo risponde la card **Patrimonio netto**, liquidità inclusa.` is ungrammatical. Use `Risponde la scheda **Patrimonio netto**, liquidità inclusa.` or `A questa domanda risponde la scheda **Patrimonio netto**, liquidità inclusa.` Also apply the card→scheda fix here.\n\n- **Minor semantic clarification.** `Il piccolo cursore su una barra` renders “caret” as `cursore`, which can be confused with the mouse cursor. Prefer `Il piccolo indicatore sulla barra` or `Il piccolo marcatore sulla barra`. In the same sentence, `il Valore di mercato diventa rosso quando termina al di sotto di quel valore` is ambiguous; prefer `il valore di mercato diventa rosso quando il suo valore finale è inferiore a quello iniziale`.\n\n- **Minor style/readability.** `per il polso di oggi` is a literal rendering of “for today’s pulse” and sounds unnatural; prefer `per la situazione odierna` or `per la variazione odierna`. Repeated `passaci sopra il mouse` can be standardised to `passa il mouse sopra` / `passa il mouse su ...`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1211.8
+        "elapsed_s": 1211.8,
+        "stamped_at": "2026-11-09T08:52:49.360329+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-11-05T11:22:08.755783+00:00",
@@ -6469,7 +6477,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Terminologie obligatoire — Period P&amp;L** : remplacer toutes les occurrences de « P&amp;L de la période » par « P&amp;L période ». Exemples à corriger : « Carte 1 — P&amp;L de la période », « **P&amp;L de la période** — le grand chiffre », « La carte **P&amp;L de la période** répond », ainsi que les liens et le texte `alt` « Carte P&amp;L de la période ».\n\n2. **Terminologie obligatoire — Unrealized change** : le glossaire impose « variation non réalisée », pas « variation latente ». Corriger notamment : « Variation latente par devise » → « Variation non réalisée par devise » ; « Survolez **Variation latente** » → « Survolez **Variation non réalisée** » ; « totalisent exactement la variation latente » → « totalisent exactement la variation non réalisée » ; « Théorie : Variation latente par devise » → « Théorie : Variation non réalisée par devise ». Garder « plus ou moins-value latente » lorsqu’il s’agit de « unrealized gain or loss ».\n\n3. **Terminologie obligatoire — Weighted Average Cost** : remplacer « Coût moyen pondéré » par « Prix de revient unitaire (PRU) », conformément au glossaire.\n\n4. **Terminologie obligatoire — FX on cash** : remplacer « **FX sur les liquidités** » par « **Effet de change sur les liquidités** ».\n\n5. **Terminologie obligatoire — Timing effect** : remplacer « Effet de timing » / « effet de timing » par « Effet timing » / « effet timing ». Exemples : « **Effet de timing** — le grand chiffre », « L’effet de timing a besoin du TWRR », « Le pourcentage sous l’effet de timing ».\n\n6. **Terminologie obligatoire — Deposited Capital** : remplacer « Capital déposé » par « Capital versé ». Corriger : « Capital déposé (période) » → « Capital versé (période) » ; « Capital déposé et P&amp;L total » → « Capital versé et P&amp;L total » ; « le Capital déposé (période) » → « le Capital versé (période) ». Dans la puce « Liquidités », « le capital que vous avez déposé » devrait aussi devenir « le capital que vous avez versé ».\n\n7. **Terminologie obligatoire — Tax / taxes** : remplacer « taxes » par « impôts » lorsque le terme source est « tax/taxes ». Corriger : « **Frais et taxes** » → « **Frais et impôts** » ; « commissions et taxes enregistrées » → « commissions et impôts enregistrés » ; le lien « [Frais et taxes] » → « [Frais et impôt] ».\n\n8. **Libellés de formules restés en anglais** : les blocs mathématiques contiennent encore des libellés anglais. Traduire au minimum : `Net flows` → `Flux nets` ; `end`/`start` → `fin`/`début` ; `today`/`yesterday` → `aujourd’hui`/`hier` ; `percentage` → `pourcentage` ; `Net Worth` → `Valeur nette` ; `Capital put in since the start` → `Capital versé depuis le début` ; `cumulative` → `cumulé`. La formule de la Carte 3 doit par exemple devenir : `P&amp;L total = Valeur nette - Capital versé depuis le début`.\n\n9. **Formatage numérique français incohérent** : plusieurs exemples conservent le point décimal et le format anglais. Uniformiser en français : `+91.31 € (+16.36%)` → `+91,31 € (+16,36 %)` ; `-558.10 €` → `-558,10 €` ; `+12,450.30 (+24.85%)` → `+12 450,30 (+24,85 %)` ; `€0.75` → `0,75 €` ; `+€37.50` → `+37,50 €` ; `0.00%` → `0,00 %` ; `+0.35%` → `+0,35 %`.\n\n10. **Grammaire — coordination fautive** : « il n’a ni plus ni moins-value latente » est ambigu et incorrect. Écrire : « il ne présente ni plus-value ni moins-value latente et n’ajoute rien à aucune ligne. »\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 1131.9
+        "elapsed_s": 1131.9,
+        "stamped_at": "2026-11-09T08:52:49.360329+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-11-05T11:22:08.755803+00:00",
@@ -6480,7 +6490,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Obligatorio — `dashboard` debe traducirse como `panel`.** La traducción deja “Dashboard” sin traducir en varios lugares: “del Dashboard”, “El Dashboard suma”, “en un dashboard en euros” y “del Dashboard” en el enlace final. Corregir a: “del panel”, “El panel suma”, “en un panel en euros” y “Volver al resumen del panel”. No modificar anclas como `#dashboard`.\n\n2. **Obligatorio — `overview` debe traducirse como `resumen`, no “descripción general”.** Ocurrencias:\n   - `alt=\"Descripción general de las tarjetas KPI\"` → `alt=\"Resumen de las tarjetas KPI\"`\n   - “Descripción general de las métricas de rendimiento” → “Resumen de métricas de rendimiento”\n   - “Volver a la descripción general del Dashboard” → “Volver al resumen del panel”\n\n3. **Obligatorio — `period P&L` debe ser `P&L período`.** Sustituir todas las apariciones de “P&L del período” por “P&L período”, incluidos el título de la tarjeta, el enlace superior, la etiqueta en negrita y los enlaces de métricas:\n   - “Tarjeta 1 — P&L del período” → “Tarjeta 1 — P&L período”\n   - “La tarjeta **P&L del período** responde…” → “La tarjeta **P&L período** responde…”\n   - “**P&L del período** — la cifra grande…” → “**P&L período** — la cifra grande…”\n   - “→ [P&L del período](…)” → “→ [P&L período](…)”\n\n4. **Obligatorio — `timing effect` debe ser `efecto timing`.** Corregir “Efecto del timing” y “efecto del timing”:\n   - “**Efecto del timing** — la cifra grande…” → “**Efecto timing** — la cifra grande…”\n   - “El efecto del timing necesita tanto TWRR como MWRR” → “El efecto timing necesita tanto TWRR como MWRR”\n   - “El porcentaje bajo el efecto del timing — cómo se calcula” → “El porcentaje bajo el efecto timing — cómo se calcula”\n\n5. **Obligatorio — `viewer` debe ser `lector`.** “Los brókeres en los que eres Editor o Visualizador…” debe ser “Los brókeres en los que eres Editor o Lector…”.\n\n6. **Obligatorio — `weighted average cost` debe ser `precio medio de compra (PMC)`.** El texto del enlace “Coste medio ponderado” debe cambiarse por “Precio medio de compra (PMC)”.\n\n7. **Obligatorio — `FX on cash` debe ser `efecto del tipo de cambio sobre el efectivo`.** La fila traducida como “**FX en efectivo**” debe ser “**Efecto del tipo de cambio sobre el efectivo**”.\n\n8. **Corrección gramatical — “siguen al cambio” no es idiomático aquí.** En “El signo y el color siguen al cambio” y “Su signo y color siguen al cambio”, usar “siguen el cambio” o “reflejan el cambio”.\n\n9. **Corrección de preposición — “termina el primer día” debe ser “termina en el primer día”.** Aparece dos veces: “cuando el período termina el primer día de tu cartera”. Debe leerse “cuando el período termina en el primer día de tu cartera”.\n\n10. **Mejora de claridad semántica.** “una venta por nada” es ambiguo; en el contexto de una venta sin ingresos, conviene “una venta a precio cero”. Asimismo, “el dinero que moviste tú mismo hacia dentro o hacia fuera” se entiende mejor como “el dinero que aportaste o retiraste tú mismo”.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 642.8
+        "elapsed_s": 642.8,
+        "stamped_at": "2026-11-09T08:52:49.360329+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -9112,7 +9124,7 @@
     }
   },
   "financial-theory/technical-analysis/risk-metrics/concentration.en.md": {
-    "md5": "2780625665edac2fb48486c74df40def",
+    "md5": "823b7f21898a6688e6a1a4ef9b520792",
     "langs_done": [
       "es",
       "fr",
@@ -9132,7 +9144,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.0,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T08:53:01.043989+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -9145,7 +9157,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 255.1,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T08:53:01.043989+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -9158,7 +9170,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 349.0,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-09T08:53:01.043989+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -9984,7 +9996,7 @@
     }
   },
   "user/dashboard/risk.en.md": {
-    "md5": "57746609bf65460954db1eba53f7a23d",
+    "md5": "8fd2483a927f8881aa52ff9da4a88dfa",
     "langs_done": [
       "es",
       "fr",
@@ -10004,7 +10016,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 121.4,
-        "stamped_at": "2026-11-06T09:37:01.452246+00:00",
+        "stamped_at": "2026-11-09T08:52:52.256058+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -10017,7 +10029,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 263.1,
-        "stamped_at": "2026-11-06T09:37:01.452246+00:00",
+        "stamped_at": "2026-11-09T08:52:52.256058+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -10030,7 +10042,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 147.7,
-        "stamped_at": "2026-11-06T09:37:01.452246+00:00",
+        "stamped_at": "2026-11-09T08:52:52.256058+00:00",
         "stamped_by": "translate-stamp"
       }
     }
