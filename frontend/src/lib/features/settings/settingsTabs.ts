@@ -85,7 +85,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     // Administrators only (N69-2): a user has no Administration group at all. The props keep the read-only branch of the
     // tab, no longer reached from the UI, until a cleanup.
     {id: 'admin', labelKey: 'settings.globalSettings', icon: Settings2, path: SETTINGS_TAB_PATHS.admin, order: 100, component: GlobalSettingsTab, props: (ctx) => ({canEdit: ctx.isSuperuser}), visible: (ctx) => ctx.isSuperuser, group: 'administration'},
-    // Administrators only: the accounts and the open invitations (decision D-A10).
+    // Administrators only: the accounts (decision D-A10) and every account link (lot UA3).
     {id: 'users', labelKey: 'settings.users', icon: Users, path: SETTINGS_TAB_PATHS.users, order: 110, component: UsersTab, visible: (ctx) => ctx.isSuperuser, group: 'administration'},
     // Administrators only: the archive holds every user's data.
     {id: 'backup', labelKey: 'backup.tab', icon: DatabaseBackup, path: SETTINGS_TAB_PATHS.backup, order: 120, component: BackupTab, visible: (ctx) => ctx.isSuperuser, group: 'administration'},
