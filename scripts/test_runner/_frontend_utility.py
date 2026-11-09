@@ -756,6 +756,16 @@ def front_security_tab(verbose: bool = False, ui: bool = False, headed: bool = F
     return _run_playwright("settings/security-tab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_ui_preferences(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the server-side UI preferences (lot UIP): theme and chart line shape follow the account into another browser."""
+    print_section("Frontend UI Preferences Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/ui-preferences.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_settings_addresses(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the addresses of the Settings tabs (lot B10) and «Open the settings» to the space limit in Global Settings."""
     print_section("Frontend Settings Addresses Tests")
@@ -1361,6 +1371,15 @@ def populate_registry(registry: dict) -> None:
         desc="Settings › Security (accounts lot A8b) inside the «Administration» group (decision P13 b), read-only on the lane: e2e_test_admin sees a badge of at least 1 on settings-tab-administration before anything of the group is opened (the checks read by the page's prefetch, accounts.login_limit a warning with LIBREFOLIO_LOGIN_LIMIT=off, read first from GET /security/checks as a precondition); Security opened through the group settles data-status ready, lists accounts.login_limit as a warning and folds the passed checks (security-passed), its badge counting exactly the errors and warnings it lists and the group's including it; ?tab=security opens it inside the group, and «check again» re-reads (the request held: loading, busy, the refresh disabled, the last findings still listed; then ready with the warning); e2e_test_user, a member: no «Administration» group at all (N69-2), no settings-subtabs, no settings-tab-security, no badge, no read of the checks, and ?tab=security opens Profile without mounting the tab",
         prereq="Test users created (e2e_test_admin an administrator, e2e_test_user an ordinary member); the lane's server started with LIBREFOLIO_LOGIN_LIMIT=off (dev.py server --test's default)",
         tests="settings/security-tab.spec.ts",
+    )
+    add_test(
+        cat,
+        "ui-preferences",
+        front_ui_preferences,
+        name="UI Preferences E2E",
+        desc="Lot UIP, one disposable user in two browser contexts: A sees preference-line-shape-badge-global, preference-theme-badge-global and preference-theme-badge-auto, picks the line shape steps and saves the theme dark; B, a fresh sign-in, finds the picker on steps, dark pressed, no global badge and html dark from the login, resets the line-shape row (setting-reset: badge back, picker segments); A reloads Preferences and finds segments with the badge while its own dark theme is kept (the reset removed one key only); the user is deleted in a finally",
+        prereq="Test users created; registration open on the lane (disposable account); global defaults theme auto and line shape segments",
+        tests="settings/ui-preferences.spec.ts",
     )
     add_test(
         cat,
