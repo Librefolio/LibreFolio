@@ -50,7 +50,12 @@
     "intro": "L'indirizzo email del tuo account su $instance è stato cambiato. Questo messaggio va all'indirizzo che aveva prima.",
     "advice": "Se il cambio l'hai fatto tu, non devi fare niente. Se no, qualcuno potrebbe usare il tuo account: cambia subito la password, se riesci ancora ad accedere, e avvisa l'amministratore di $instance.",
     "intro_host": "L'indirizzo email del tuo account su $instance è stato cambiato da chi gestisce questa istanza. Questo messaggio arriva all'indirizzo che aveva prima.",
-    "advice_host": "Se chi gestisce l'istanza ti ha avvisato di questo cambio, non devi fare nulla. Altrimenti chiedi a chi gestisce $instance se il cambio è suo."
+    "advice_host": "Se chi gestisce l'istanza ti ha avvisato di questo cambio, non devi fare nulla. Altrimenti chiedi a chi gestisce $instance se il cambio è suo.",
+    "new_subject": "Il tuo account LibreFolio ora usa questo indirizzo email",
+    "new_intro": "Questo è ora l'indirizzo email del tuo account su $instance: l'account accede con questo indirizzo e riceve qui le sue email.",
+    "new_advice": "Se il cambio l'hai fatto tu, non devi fare niente. Se non hai un account su $instance, qualcuno ha inserito questo indirizzo per errore: avvisa l'amministratore di $instance.",
+    "new_intro_host": "Il cambio di indirizzo chiesto da chi gestisce $instance è completato: questo è ora l'indirizzo email del tuo account, che accede con questo indirizzo e riceve qui le sue email.",
+    "new_advice_host": "Se non te lo aspettavi, chiedi a chi gestisce $instance."
   },
   "email_change_confirmation": {
     "subject": "Conferma il nuovo indirizzo email del tuo account amministratore di LibreFolio",
