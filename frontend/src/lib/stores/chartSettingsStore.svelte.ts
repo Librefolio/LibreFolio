@@ -6,7 +6,10 @@
  * - **Pair overrides**: per-pair customizations stored in localStorage and cleared
  *   when matching global settings are saved.
  *
- * NOT persisted to backend — settings live in user-scoped localStorage and survive refresh.
+ * NOT persisted to backend — settings live in user-scoped localStorage and survive refresh. One exception, the shape of the
+ * lines of every chart (FB-3): an interface preference of the user (lot UIP), kept by the server in the user settings with
+ * the administrator's default for a user who did not choose it, and read here from the user settings store. A chart's own
+ * shape stays in this browser.
  *
  * @module stores/chartSettingsStore
  */
@@ -16,6 +19,9 @@ import type {SignalConfig} from '$lib/charts/signals';
 import {DEFAULT_CALENDAR_RETURN_WINDOW, largestCalendarReturnPresetFor, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
 import {DEFAULT_LINE_SHAPE, isLineShape, type LineShape} from '$lib/components/charts/lineShape';
 import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {isFallbackUserSettings, userSettings} from '$lib/stores/app/settings';
+import {effectiveUiPreference, ownUiPreference} from '$lib/stores/app/uiPreferences';
+import type {UserSettings} from '$lib/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -111,7 +117,10 @@ const STORAGE_WRITE_DELAY_MS = 250;
 
 interface PersistedChartSettings {
     version: typeof STORAGE_VERSION;
-    /** The shape of the lines of every chart that has none of its own (FB-3). */
+    /**
+     * The shape of the lines of every chart as this browser kept it before lot UIP moved it to the user settings: read once,
+     * adopted by the server when it holds none (`adoptLegacyLineShape`), then dropped. Never written again.
+     */
     lineShape?: LineShape;
     globalSettings: ChartSettings;
     pairOverrides: Array<[string, ChartSettings]>;
@@ -310,7 +319,7 @@ function parsePersistedSettings(raw: string | null): PersistedChartSettings | nu
 
         return {
             version: STORAGE_VERSION,
-            lineShape: isLineShape(parsed.lineShape) ? parsed.lineShape : DEFAULT_LINE_SHAPE,
+            ...(isLineShape(parsed.lineShape) ? {lineShape: parsed.lineShape} : {}),
             globalSettings: sanitizeStoredSettings(parsed.globalSettings),
             pairOverrides: [...overrides.entries()],
         };
@@ -325,7 +334,10 @@ function parsePersistedSettings(raw: string | null): PersistedChartSettings | nu
 
 let globalSettings: ChartSettings = deepClone(DEFAULT_CHART_SETTINGS);
 let pairOverrides = new Map<string, ChartSettings>();
-let globalLineShape: LineShape = DEFAULT_LINE_SHAPE;
+/** The user settings the line shape of every chart is read from (lot UIP). */
+let lineShapeSettings: UserSettings | null = null;
+/** The line shape this browser kept before lot UIP, until the server adopts it or holds one of its own. */
+let legacyLineShape: LineShape | undefined;
 let hydratedStorageKey: string | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -352,7 +364,7 @@ function loadFromStorage(): void {
     const persisted = parsePersistedSettings(raw);
     globalSettings = persisted ? deepClone(persisted.globalSettings) : deepClone(DEFAULT_CHART_SETTINGS);
     pairOverrides = new Map(persisted?.pairOverrides ?? []);
-    globalLineShape = persisted?.lineShape ?? DEFAULT_LINE_SHAPE;
+    legacyLineShape = persisted?.lineShape;
     hydratedStorageKey = storageKey;
     if (persisted) {
         const sanitizedRaw = JSON.stringify(persisted);
@@ -372,7 +384,7 @@ function persistNow(): void {
     const storageKey = getStorageKey();
     const payload: PersistedChartSettings = {
         version: STORAGE_VERSION,
-        lineShape: globalLineShape,
+        ...(legacyLineShape ? {lineShape: legacyLineShape} : {}),
         globalSettings: sanitizeStoredSettings(globalSettings),
         pairOverrides: [...pairOverrides.entries()].map(([key, settings]) => [key, sanitizeStoredSettings(settings)] as [string, ChartSettings]),
     };
@@ -448,12 +460,18 @@ export function getSettingsForPair(slug: string, scope?: string): ChartSettings 
     return forScope(deepClone(globalSettings), scope);
 }
 
-/** The shape of the lines of every chart that has none of its own (FB-3). */
+/** The shape of the lines of every chart that has none of its own (FB-3): the user's own, else the administrator's default (lot UIP). */
 export function getGlobalLineShape(): LineShape {
-    loadFromStorage();
     // Access _version to register reactive dependency
     void _version;
-    return globalLineShape;
+    const shape = effectiveUiPreference(lineShapeSettings, 'chart_line_shape');
+    return isLineShape(shape) ? shape : DEFAULT_LINE_SHAPE;
+}
+
+/** Whether the shape of every chart follows the administrator's default: the user has not chosen one (lot UIP). */
+export function lineShapeFollowsGlobal(): boolean {
+    void _version;
+    return ownUiPreference(lineShapeSettings, 'chart_line_shape') === undefined;
 }
 
 /** The shape a chart draws its lines in: the one in its settings, else the global one (FB-3). */
@@ -514,12 +532,13 @@ export function setPairSettings(slug: string, settings: ChartSettings): void {
 
 /**
  * The shape of the lines of every chart (FB-3): the welcome tour's choice and the user settings'. Every chart follows it, the
- * ones that had chosen a shape of their own included; nothing else they saved is touched.
+ * ones that had chosen a shape of their own included; nothing else they saved is touched. Written to the user's interface
+ * preferences (lot UIP): applied at once, kept by the server, so it follows the user to another browser.
  */
-export function setGlobalLineShape(shape: LineShape): void {
+export function setGlobalLineShape(shape: LineShape): Promise<boolean> {
     loadFromStorage();
-    if (!isLineShape(shape)) return;
-    globalLineShape = shape;
+    if (!isLineShape(shape)) return Promise.resolve(false);
+    const written = userSettings.updateUiPreference('chart_line_shape', shape);
     const {lineShape: _own, ...baseSettings} = globalSettings;
     globalSettings = baseSettings as ChartSettings;
     for (const [key, settings] of pairOverrides) {
@@ -528,7 +547,37 @@ export function setGlobalLineShape(shape: LineShape): void {
     }
     bump();
     schedulePersist();
+    return written;
 }
+
+/** Forget the user's own line shape (lot UIP): every chart without a shape of its own follows the administrator's default again. */
+export function clearGlobalLineShape(): Promise<boolean> {
+    return userSettings.updateUiPreference('chart_line_shape', null);
+}
+
+/**
+ * The line shape this browser kept before lot UIP, handed to the server once (lot UIP): only when the server holds none for
+ * the user, and only a shape other than the old default — a browser wrote `segments` whether the user chose it or not, and
+ * pinning it would stop the administrator's default from reaching a user who never chose. Then it is dropped from storage.
+ * Never from the built-in settings the store falls back to when the server could not be read.
+ */
+function adoptLegacyLineShape(settings: UserSettings | null): void {
+    if (!browser || !settings || isFallbackUserSettings(settings)) return;
+    loadFromStorage();
+    if (!legacyLineShape) return;
+    const legacy = legacyLineShape;
+    legacyLineShape = undefined;
+    schedulePersist();
+    if (ownUiPreference(settings, 'chart_line_shape') === undefined && legacy !== DEFAULT_LINE_SHAPE) {
+        void userSettings.updateUiPreference('chart_line_shape', legacy);
+    }
+}
+
+userSettings.subscribe((settings) => {
+    lineShapeSettings = settings;
+    adoptLegacyLineShape(settings);
+    bump();
+});
 
 function scopeKey(scope: string): string {
     return `__global_${scope}__`;
