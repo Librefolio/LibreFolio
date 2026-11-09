@@ -32,7 +32,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Avertissements de qualité des données sur la page du courtier** : les prix anciens, les taux de change manquants ou anciens et leurs boutons de synchronisation y apparaissent aussi, pour chaque rôle.
 - **Graphique des positions : choisissez la fenêtre de la vue Glissant.** Une semaine, un mois, trois mois, un an ou une fenêtre personnalisée ; elle part de la fenêtre automatique.
 - Le camembert de répartition par actif montre aussi l'icône de l'actif dans son infobulle, comme celui par type.
-- Camemberts de répartition des actifs : les infobulles Par actif et Par Type affichent le type de l'actif sous forme de badge à côté de l'icône.
+- Camemberts de répartition des actifs : les infobulles Par actif et Par Type affichent le type de l'actif sous forme de badge à côté de l'icône ; la part des Liquidités affiche un badge Liquidités, dans la couleur de la barre des liquidités.
 
 #### 📈 Graphiques
 
@@ -41,7 +41,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Lots : chaque marqueur du graphique de vie des lots s'explique.** Survolez, touchez ou mettez le focus sur un marqueur (▲ achat, ▼ vente, ◆ transfert, + / × ajustement, │ division) du graphique Vie des lots et conservation pour voir ce qui s'est passé, quand, combien d'unités (masquées en mode confidentialité) et chez quel courtier : De et Vers pour un transfert entre vos courtiers. Lorsque plusieurs événements tombent le même jour, l'infobulle les liste tous.
 - **Comparer un actif à un taux de change, et inversement.** Une comparaison choisie dans les signaux d'une carte ou d'un graphique s'affiche désormais sur les cartes des listes d'actifs et FX et sur les deux pages de détail, même lorsque la page est ouverte pour la première fois.
 - **Choisissez la forme de vos lignes de graphique** dans vos paramètres : segments (par défaut), escaliers ou spline lisse, pour chaque graphique. Un administrateur fixe la valeur par défaut pour tous dans Paramètres globaux (**Forme de Ligne par Défaut**).
-- **Préférences indique d'où viennent le thème et la forme des lignes** : un badge **Global** lorsqu'ils suivent la valeur par défaut de l'administrateur, un bouton qui retire votre propre choix pour la suivre de nouveau, et un badge **Auto** lorsque le thème est laissé à votre navigateur.
+- **Préférences indique d'où viennent le thème et la forme des lignes** : un badge **Global** lorsqu'ils suivent la valeur par défaut de l'administrateur, un bouton pour la suivre de nouveau, et un badge **Auto** lorsque le thème est laissé à votre navigateur. Comme pour la langue et la devise, une modification du thème ou de la forme des lignes, retour à la valeur par défaut compris, ne s'applique qu'au moment où vous **Enregistrez**.
 - **Les infobulles des graphiques affichent le jour de la semaine après la date**, et le pointeur s'arrête sur les jours, jamais entre deux.
 
 #### 📉 Analyse des risques

@@ -32,7 +32,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Avisos de calidad de datos en la página del bróker:** los precios obsoletos, los tipos de cambio ausentes u obsoletos y sus botones de sincronización también aparecen allí, para todos los roles.
 - **Gráfico de posiciones: elige la ventana de la vista Móvil.** Una semana, un mes, tres meses, un año o una ventana personalizada; parte de la automática.
 - La tarta de distribución por activo muestra también el icono del activo en su información emergente, como la tarta por tipo.
-- Tartas de distribución de activos: las informaciones emergentes Por activo y Por Tipo muestran el tipo del activo como insignia junto al icono.
+- Tartas de distribución de activos: las informaciones emergentes Por activo y Por Tipo muestran el tipo del activo como insignia junto al icono; la porción de Liquidez muestra una insignia Liquidez, en el color de la barra de liquidez.
 
 #### 📈 Gráficos
 
@@ -41,7 +41,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Lotes: cada marcador del gráfico de Vida del lote se explica por sí mismo.** Pase el cursor, toque o enfoque un marcador (▲ compra, ▼ venta, ◆ transferencia, + / × ajuste, │ desdoblamiento) en el gráfico de Vida del lote y custodia para ver qué ocurrió, cuándo, cuántas unidades (ocultas en modo privacidad) y en qué bróker: Desde y Hasta para una transferencia entre sus brókers. Cuando varios eventos caen el mismo día, la información emergente los enumera todos.
 - **Comparar un activo con un tipo de cambio, y viceversa.** Una comparación elegida en las señales de una tarjeta o de un gráfico ahora se dibuja en las tarjetas de las listas de Activos y FX y en ambas páginas de detalle, también cuando la página se abre desde cero.
 - **Elija la forma de las líneas de sus gráficos en su configuración**: segmentos (lo predeterminado), escalones o una spline suave, para todos los gráficos. Un administrador fija el valor predeterminado para todos en Configuración global (**Forma de Línea Predeterminada**).
-- **Preferencias indica de dónde vienen el tema y la forma de las líneas**: una insignia **Global** cuando siguen el valor predeterminado del administrador, un botón que quita tu propia elección para volver a seguirlo, y una insignia **Auto** cuando el tema se deja a tu navegador.
+- **Preferencias indica de dónde vienen el tema y la forma de las líneas**: una insignia **Global** cuando siguen el valor predeterminado del administrador, un botón para volver a seguirlo, y una insignia **Auto** cuando el tema se deja a tu navegador. Como con el idioma y la moneda, un cambio en el tema o en la forma de las líneas, incluida la vuelta al valor predeterminado, se aplica solo cuando pulsas **Guardar**.
 - **La información emergente de los gráficos muestra el día de la semana** después de la fecha, y el puntero se detiene en los días, nunca entre dos.
 
 #### 📉 Análisis de riesgos
