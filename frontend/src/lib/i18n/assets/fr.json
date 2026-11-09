@@ -416,8 +416,7 @@
       "pricesSkipped": "{count, plural, one {# ligne ignorée (non valide)} many {# lignes ignorées (non valides)} other {# lignes ignorées (non valides)}}",
       "eventsSaved": "{count, plural, one {# événement enregistré} many {# événements enregistrés} other {# événements enregistrés}}",
       "pricesRefused": "{count, plural, one {# prix refusé} many {# prix refusés} other {# prix refusés}}"
-    },
-    "customIconBadge": "Icône personnalisée"
+    }
   },
   "events": {
     "deleteSuccess": "{n, plural, one {# événement supprimé} many {# événements supprimés} other {# événements supprimés}}",
