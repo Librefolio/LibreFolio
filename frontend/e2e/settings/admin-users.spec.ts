@@ -14,12 +14,15 @@
  *   AUSR-E-03  deactivate (confirmed), then reactivate;
  *   AUSR-E-04  promote and demote (confirmed), and no deletion of an administrator before its demotion;
  *   AUSR-E-05  a password-reset link, live for that very account;
- *   AUSR-E-06  an invitation: created with an address, listed, revoked (confirmed);
+ *   AUSR-E-06  an invitation: created with an address, listed among the open links, revoked (confirmed), then listed
+ *              among the closed ones as revoked;
  *   AUSR-E-07  the address check: the lane's other loopback origin (`match`: the image drawn 1×1, its size readable across origins), a closed port
  *              (`unverifiable`), not http (`invalid`, no copy), a stubbed stranger (`mismatch`), the prefill (`idle`);
  *   AUSR-E-08  a deletion: the preview of the broker that goes, the username typed, the broker gone with the account;
  *   AUSR-E-09  signed out everywhere (confirmed): the account's open session is refused, the account stays active;
- *   AUSR-E-10  guides restarted (confirmed): every flow the account had skipped is pending again.
+ *   AUSR-E-10  guides restarted (confirmed): every flow the account had skipped is pending again;
+ *   AUSR-E-11  a password-reset link in the account links (lot UA3): open, of type password_reset, for that account; revoked
+ *              (confirmed) from its row, it moves to the closed links (folded by default) as revoked, and stops working.
  * Every action is asserted on what the page publishes — `data-*` attributes and the app events of `notify` — then read
  * back on the server: through the administrator's own API session, or the account's for its session and its guides.
  * Not here, left to the Vitest of plan A6b.1: the usage line, the limit banner and the billing link, an invitation
@@ -34,11 +37,11 @@
  * Ownership. `e2e_test_admin` only acts: no test changes its role or state, nor those of any other fixture user. Each
  * test registers its own disposable accounts anonymously (the lane registers openly: checked first; the one spec that changes
  * it, registration-mode.spec.ts, runs alone and puts it back) and writes its own unique invitation addresses, each recorded before the request that creates it goes. The `users`
- * fixture removes them after the test, red or green: every pending invitation carrying one of its addresses is revoked
- * (found through `GET /users/invites`); every account still alive deletes itself (`DELETE /auth/users/me`, signed in as
+ * fixture removes them after the test, red or green: every open link carrying one of its addresses, or acting on one of
+ * its accounts, is revoked (found through `GET /users/account-links`); every account still alive deletes itself (`DELETE /auth/users/me`, signed in as
  * that very account, its identity checked), reactivated first when the test left it deactivated, since a deactivated
  * account cannot sign in. The broker AUSR-E-08 creates goes with its account, its last owner. Rows are found by id or by
- * address, never by position, and nothing counts a list it did not fill. Parallel by default: no test depends on another.
+ * address — a link by its id, walking the pages of its table —, never by position, and nothing counts a list it did not fill. Parallel by default: no test depends on another.
  *
  * Registered in scripts/test_runner/_frontend_utility.py, action `admin-users` of front-utility.
  */
@@ -56,7 +59,7 @@ const API = '/api/v1';
 const PROBE_PATH = `${API}/auth/address-probe.png`;
 
 // Budgets: deadlines, never delays.
-/** From a navigation to a settled tab: the SPA's load, the auth check and the bootstrap, then GET /users and GET /users/invites. */
+/** From a navigation to a settled tab: the SPA's load, the auth check and the bootstrap, then GET /users and GET /users/account-links. */
 const LOAD_MS = 20_000;
 /** An action's round trip, and the reload of the tab that follows every action. */
 const ACTION_MS = 15_000;
@@ -114,6 +117,8 @@ type AdminUser = {id: number; username: string; email: string; is_active: boolea
 type DeletionPreview = {user_id: number; username: string; brokers_deleted: Array<{id: number; name: string; transactions: number}>; brokers_left: Array<{id: number; name: string; role: string}>; transfers_unpaired: number};
 type FlowProgress = {flow: string; status: string; version: number; current_version: number};
 type TokenInspection = {status: string; purpose: string; email?: string | null; grants_admin?: boolean | null; username?: string | null};
+/** `AccountLinkRead`, as `GET /users/account-links` lists it: never a token. */
+type AccountLink = {id: number; purpose: string; state: 'open' | 'used' | 'expired' | 'revoked'; revocable: boolean; user_id?: number | null; username?: string | null; email?: string | null; grants_admin: boolean};
 /** What a test created, recorded the moment it exists — or just before: the clean-up never guesses. */
 type Owned = {accounts: Account[]; inviteEmails: string[]};
 
@@ -211,23 +216,26 @@ async function deleteItself(session: APIRequestContext, account: Account): Promi
 /** Remove what the test created. Never throws, so it never masks the test's own failure: it returns what it could not remove. */
 async function cleanUp(admin: APIRequestContext, open: () => Promise<APIRequestContext>, owned: Owned): Promise<string[]> {
     const failures: string[] = [];
-    if (owned.inviteEmails.length > 0) {
+    const myAccountIds = new Set(owned.accounts.flatMap((account) => (account.id === null ? [] : [account.id])));
+    if (owned.inviteEmails.length > 0 || myAccountIds.size > 0) {
         try {
-            const response = await admin.get(`${API}/users/invites`);
+            const response = await admin.get(`${API}/users/account-links`);
             if (response.status() !== 200) {
-                failures.push(`GET /users/invites answered ${response.status()}`);
+                failures.push(`GET /users/account-links answered ${response.status()}`);
             } else {
-                const mine = new Set(owned.inviteEmails);
-                const {items} = (await response.json()) as {items: Array<{id: number; email: string | null}>};
-                for (const invite of items) {
-                    if (invite.email === null || !mine.has(invite.email.toLowerCase())) continue;
-                    const revoked = await admin.delete(`${API}/users/invites/${invite.id}`);
-                    // 204: it was still pending, and is revoked now. 404: it no longer was.
-                    if (revoked.status() !== 204 && revoked.status() !== 404) failures.push(`invitation ${invite.id} (${invite.email}): DELETE answered ${revoked.status()}`);
+                const myEmails = new Set(owned.inviteEmails);
+                const {items} = (await response.json()) as {items: AccountLink[]};
+                for (const link of items) {
+                    if (link.state !== 'open' || !link.revocable) continue;
+                    const mine = (typeof link.email === 'string' && myEmails.has(link.email.toLowerCase())) || (typeof link.user_id === 'number' && myAccountIds.has(link.user_id));
+                    if (!mine) continue;
+                    const revoked = await admin.delete(`${API}/users/account-links/${link.id}`);
+                    // 204: it was still open, and is revoked now. 404: it no longer was.
+                    if (revoked.status() !== 204 && revoked.status() !== 404) failures.push(`link ${link.id} (${link.purpose}): DELETE answered ${revoked.status()}`);
                 }
             }
         } catch (error) {
-            failures.push(`invitations: ${String(error)}`);
+            failures.push(`account links: ${String(error)}`);
         }
     }
     if (owned.accounts.length === 0) return failures;
@@ -279,7 +287,7 @@ const test = base.extend<{users: Users}>({
             if (admin) failures = await cleanUp(admin, open, owned);
             await Promise.all(contexts.map((context) => context.dispose()));
         }
-        expect(failures, 'The clean-up must revoke every invitation carrying an address of this test and remove every account it registered').toEqual([]);
+        expect(failures, 'The clean-up must revoke every open link carrying an address or an account of this test and remove every account it registered').toEqual([]);
     },
 });
 
@@ -354,7 +362,7 @@ async function openUsersTab(page: Page): Promise<void> {
     const button = page.getByTestId('settings-tab-users');
     await expect(button, `${TEST_ADMIN.username} sees the Users tab: SETTINGS_TABS holds an entry 'users', visible to administrators`).toBeVisible({timeout: LOAD_MS});
     await expect(button, '?tab=users opens it').toHaveAttribute('aria-selected', 'true', {timeout: UI_MS});
-    await expect(page.getByTestId('users-tab'), 'The tab settles: GET /users and GET /users/invites are in').toHaveAttribute('data-busy', 'false', {timeout: LOAD_MS});
+    await expect(page.getByTestId('users-tab'), 'The tab settles: GET /users and GET /users/account-links are in').toHaveAttribute('data-busy', 'false', {timeout: LOAD_MS});
 }
 
 /** The row of account `id`, by its id: never by position. */
@@ -422,6 +430,66 @@ async function immediateAction(page: Page, button: Locator, name: string): Promi
     const since = await eventSeq(page);
     await button.click();
     return expectAccountEvent(page, name, since);
+}
+
+type LinkTable = 'users-links-open' | 'users-links-closed';
+/** How many pages of a link table are walked before giving up (ten rows each): the lane's links pile up across specs. */
+const MAX_LINK_PAGES = 50;
+
+/**
+ * The row of link `linkId` in `table`, walking the table's pages (ten rows each, newest first): the lane's links come
+ * from every spec, so a link is never assumed to be on the first page. Starts on the settled tab; fails naming how many
+ * pages it walked. The closed table must be unfolded first — its rows are in the DOM while folded, but not usable.
+ */
+async function linkRow(page: Page, table: LinkTable, linkId: number): Promise<Locator> {
+    await expect(page.getByTestId('users-tab'), 'No reload in flight, which could redraw the table while it is walked').toHaveAttribute('data-busy', 'false', {timeout: ACTION_MS});
+    const root = page.getByTestId(table);
+    const rows = root.locator('tbody tr[data-row-id]');
+    const row = root.locator(`tbody tr[data-row-id="${linkId}"]`);
+    for (let walked = 1; walked <= MAX_LINK_PAGES; walked += 1) {
+        if ((await row.count()) > 0) return row;
+        const next = root.getByTestId('pagination-next');
+        if ((await next.count()) === 0 || (await next.isDisabled())) throw new Error(`Link ${linkId} is not in ${table}: not found in ${walked} page(s)`);
+        // Barrier: the page has turned once its first row is another one (rows within this table, already filtered)
+        const firstBefore = await rows.first().getAttribute('data-row-id');
+        await next.click();
+        await expect(rows.first(), `${table}: the next page is drawn`).not.toHaveAttribute('data-row-id', firstBefore ?? '', {timeout: UI_MS});
+    }
+    throw new Error(`Link ${linkId} is not in ${table}: not found in ${MAX_LINK_PAGES} pages`);
+}
+
+/** Every account link as the server lists it to an administrator. */
+async function accountLinks(admin: APIRequestContext): Promise<AccountLink[]> {
+    const response = await admin.get(`${API}/users/account-links`);
+    expect(response.status(), `GET /users/account-links: ${await response.text()}`).toBe(200);
+    return ((await response.json()) as {items: AccountLink[]}).items;
+}
+
+/** Link `linkId` as the server has it now. */
+async function linkOnServer(admin: APIRequestContext, linkId: number): Promise<AccountLink | undefined> {
+    return (await accountLinks(admin)).find((link) => link.id === linkId);
+}
+
+/**
+ * Revoke open link `linkId` from its row: the row's actions menu (`row-actions-<id>`), then `account-link-revoke`, then
+ * the tab's confirmation. Ends on the event, the confirmation closed and the tab settled after its reload.
+ */
+async function revokeFromRow(page: Page, linkId: number): Promise<AppEvent> {
+    const row = await linkRow(page, 'users-links-open', linkId);
+    const menu = row.getByTestId(`row-actions-${linkId}`);
+    await expect(menu, `Link ${linkId} is revocable: its row offers actions`).toBeVisible({timeout: UI_MS});
+    await menu.click();
+    const event = await confirmedAction(page, page.getByTestId('account-link-revoke'), 'accounts.link.revoked');
+    await expect(page.getByTestId('users-tab'), 'The revocation reloads the tab').toHaveAttribute('data-busy', 'false', {timeout: ACTION_MS});
+    return event;
+}
+
+/** Unfold the closed links, asking first (rule 14): a blind click on a folded-open panel would fold it. Ends on it open. */
+async function openClosedLinks(page: Page): Promise<void> {
+    const fold = page.getByTestId('users-links-closed-fold');
+    await expect(fold).toBeVisible({timeout: UI_MS});
+    if ((await fold.getAttribute('data-open')) !== 'true') await page.getByTestId('users-links-closed-fold-toggle').click();
+    await expect(fold, 'The closed links are unfolded').toHaveAttribute('data-open', 'true', {timeout: UI_MS});
 }
 
 /**
@@ -500,7 +568,7 @@ test.describe('Who has the Users tab', () => {
             await expect(button, `${TEST_ADMIN.username} sees the Users tab, in the second bar of «Administration»: SETTINGS_TABS holds an entry 'users', visible to administrators`).toHaveAttribute('aria-selected', 'true', {timeout: UI_MS});
             const tab = page.getByTestId('users-tab');
             await expect(tab).toBeVisible({timeout: UI_MS});
-            await expect(tab, 'The tab settles: GET /users and GET /users/invites are in').toHaveAttribute('data-busy', 'false', {timeout: LOAD_MS});
+            await expect(tab, 'The tab settles: GET /users and GET /users/account-links are in').toHaveAttribute('data-busy', 'false', {timeout: LOAD_MS});
             // Settled, and not merely not started yet: the list holds the accounts, the administrator's own among them.
             await expect(page.locator(`[data-testid="users-row"][data-username="${TEST_ADMIN.username}"]`), 'The tab lists the accounts of the instance').toBeVisible({timeout: LOAD_MS});
         });
@@ -643,19 +711,25 @@ test.describe('Links: a password reset, an invitation, and the address they carr
         const token = tokenOf(await link.inputValue());
         expect(await inspectToken(users.admin, token, 'invite'), 'The link carries a live invitation, with the address written, making no administrator').toMatchObject({status: 'valid', email, grants_admin: false});
 
-        const invitation = page.locator(`[data-testid="users-invite-row"][data-email="${email}"]`);
-        await test.step('done: the tab lists the invitation, by its address', async () => {
+        await test.step('done: the tab lists the invitation among the open links, by its id', async () => {
             await dialog.getByTestId('users-invite-done').click();
             await expect(dialog).toBeHidden({timeout: UI_MS});
-            await expect(invitation, 'Done reloads the list, which now holds the invitation').toBeVisible({timeout: ACTION_MS});
-            await expect(invitation, 'the very invitation created').toHaveAttribute('data-invite-id', String(inviteId), {timeout: UI_MS});
-            await expect(invitation, 'making no administrator').toHaveAttribute('data-admin', 'false', {timeout: UI_MS});
+            await expect(page.getByTestId('users-tab'), 'Done reloads the tab').toHaveAttribute('data-busy', 'false', {timeout: ACTION_MS});
+            const invitation = await linkRow(page, 'users-links-open', inviteId);
+            await expect(invitation, 'Done reloads the list, which now holds the invitation').toBeVisible({timeout: UI_MS});
+            await expect(invitation.getByTestId('account-link-type'), 'an invitation').toHaveAttribute('data-purpose', 'invite', {timeout: UI_MS});
+            await expect(invitation.getByTestId('account-link-state'), 'open').toHaveAttribute('data-state', 'open', {timeout: UI_MS});
+            await expect(invitation.getByTestId('account-link-target'), 'for the address written').toHaveText(email, {timeout: UI_MS});
+            await expect(invitation.getByTestId('account-link-admin'), 'making no administrator').toHaveCount(0);
         });
 
-        await test.step('revoke, confirmed', async () => {
-            const event = await confirmedAction(page, invitation.getByTestId('users-invite-revoke'), 'accounts.invite.revoked');
-            expect(event.detail?.invite_id, 'The event names the invitation').toBe(inviteId);
-            await expect(invitation, 'A revoked invitation leaves the list').toHaveCount(0, {timeout: ACTION_MS});
+        await test.step('revoke, confirmed: the invitation moves to the closed links, revoked', async () => {
+            const event = await revokeFromRow(page, inviteId);
+            expect(event.detail, 'The event names the link and its purpose').toEqual({link_id: inviteId, purpose: 'invite'});
+            await expect(page.getByTestId('users-links-open').locator(`tbody tr[data-row-id="${inviteId}"]`), 'A revoked invitation leaves the open links').toHaveCount(0, {timeout: ACTION_MS});
+            await openClosedLinks(page);
+            const closed = await linkRow(page, 'users-links-closed', inviteId);
+            await expect(closed.getByTestId('account-link-state'), 'listed as revoked').toHaveAttribute('data-state', 'revoked', {timeout: UI_MS});
             expect(await inspectToken(users.admin, token, 'invite'), 'and its link no longer opens a registration').toMatchObject({status: 'revoked'});
         });
     });
@@ -848,5 +922,59 @@ test.describe('Sessions and guides, on disposable accounts', () => {
             'Every guide starts again, as for a new account',
         ).toEqual([]);
         expect(after.map((flow) => flow.flow).sort(), 'the same guides as before').toEqual(before.map((flow) => flow.flow).sort());
+    });
+});
+
+test.describe('Account links: open and closed (lot UA3)', () => {
+    test('AUSR-E-11: a password-reset link is listed open for its account; revoked from its row, it moves to the folded closed links as revoked', async ({page, users}) => {
+        const account = await users.register('lnk');
+        await openUsersTab(page);
+        const row = await memberRow(page, account);
+        await openActions(page, row);
+        await row.getByTestId('users-action-reset-link').click();
+        const dialog = page.getByTestId('users-reset-dialog');
+        await expect(dialog).toBeVisible({timeout: UI_MS});
+        const since = await eventSeq(page);
+        await dialog.getByTestId('users-reset-create').click();
+        await expectAccountEvent(page, 'accounts.reset-link.created', since);
+        const link = dialog.getByTestId('link-share-link');
+        await expect(link, 'The link step follows').not.toHaveValue('', {timeout: UI_MS});
+        const token = tokenOf(await link.inputValue());
+
+        // The link's id, from the server: the account is this test's own and a new reset link retires the earlier ones, so
+        // exactly one open reset link acts on it.
+        const open = (await accountLinks(users.admin)).filter((item) => item.purpose === 'password_reset' && item.user_id === account.id && item.state === 'open');
+        expect(open, `One open password-reset link for ${account.username}`).toHaveLength(1);
+        const linkId = open[0].id;
+        expect(open[0].revocable, 'An open reset link can be revoked from the tab').toBe(true);
+
+        await test.step('closing the dialog reloads the tab: the link is listed open, as a password reset for that account', async () => {
+            await dialog.getByTestId('users-reset-close').click();
+            await expect(dialog).toBeHidden({timeout: UI_MS});
+            const listed = await linkRow(page, 'users-links-open', linkId);
+            await expect(listed, 'Closing the dialog reloads the links').toBeVisible({timeout: ACTION_MS});
+            await expect(listed.getByTestId('account-link-type')).toHaveAttribute('data-purpose', 'password_reset', {timeout: UI_MS});
+            await expect(listed.getByTestId('account-link-state')).toHaveAttribute('data-state', 'open', {timeout: UI_MS});
+            await expect(listed.getByTestId('account-link-target'), 'for the account it resets').toHaveText(account.username, {timeout: UI_MS});
+        });
+
+        await test.step('revoked from its row, confirmed: it leaves the open links and is closed as revoked', async () => {
+            const event = await revokeFromRow(page, linkId);
+            expect(event.detail, 'The event names the link and its purpose').toEqual({link_id: linkId, purpose: 'password_reset'});
+            await expect(page.getByTestId('users-links-open').locator(`tbody tr[data-row-id="${linkId}"]`), 'No longer open').toHaveCount(0, {timeout: ACTION_MS});
+
+            const fold = page.getByTestId('users-links-closed-fold');
+            await expect(fold, 'The closed links are folded by default').toHaveAttribute('data-open', 'false', {timeout: UI_MS});
+            await openClosedLinks(page);
+            const closed = await linkRow(page, 'users-links-closed', linkId);
+            await expect(closed, 'The revoked link is shown once the closed links are unfolded').toBeVisible({timeout: UI_MS});
+            await expect(closed.getByTestId('account-link-type')).toHaveAttribute('data-purpose', 'password_reset', {timeout: UI_MS});
+            await expect(closed.getByTestId('account-link-state'), 'revoked').toHaveAttribute('data-state', 'revoked', {timeout: UI_MS});
+            await expect(closed.getByTestId('account-link-state-detail'), 'with when it was revoked').toBeVisible({timeout: UI_MS});
+            await expect(closed.getByTestId(`row-actions-${linkId}`), 'a closed link offers no action').toHaveCount(0);
+        });
+
+        expect(await linkOnServer(users.admin, linkId), 'The server has it revoked').toMatchObject({state: 'revoked', revocable: false});
+        expect(await inspectToken(users.admin, token, 'password_reset'), 'and the link no longer resets the password').toMatchObject({status: 'revoked'});
     });
 });
