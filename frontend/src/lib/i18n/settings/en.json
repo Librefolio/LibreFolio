@@ -295,15 +295,15 @@
           "message": "The introduction and the page guides show again, as for a new account.",
           "confirm": "Restart"
         },
-        "revokeInvite": {
-          "title": "Revoke the invitation for {email}?",
-          "message": "The link stops working at once.",
-          "confirm": "Revoke"
-        },
         "cancelSetup": {
           "title": "Cancel the setup link of {username}?",
           "message": "The link already handed over stops working. The account keeps waiting for its setup: a new link comes from «dev.py user setup-link» on the server, or from your hosting provider.",
           "confirm": "Cancel the link"
+        },
+        "revokeLink": {
+          "title": "Revoke the “{type}” link for {target}?",
+          "message": "The link stops working at once.",
+          "confirm": "Revoke"
         }
       },
       "errors": {
@@ -334,13 +334,6 @@
         "create": "Create the link",
         "ready": "Share this link: it works once, for 7 days."
       },
-      "invites": {
-        "title": "Open invitations",
-        "empty": "No open invitation.",
-        "noEmail": "No e-mail",
-        "dates": "Created {created} · expires {expires}",
-        "revoke": "Revoke"
-      },
       "reset": {
         "title": "Password-reset link for {username}",
         "message": "A single-use link to set a new password, valid 30 minutes. The links created before for this account stop working.",
@@ -363,6 +356,37 @@
           "confirm": "Open registration"
         },
         "saveFailed": "The registration mode could not be saved."
+      },
+      "links": {
+        "title": "Account links",
+        "hint": "Every single-use link of the instance and where it stands. A link is shown only once, when it is created: here you see whom it is for, never the link itself.",
+        "empty": "No open link.",
+        "closedTitle": "Closed links ({count})",
+        "closedEmpty": "No closed link.",
+        "columns": {
+          "type": "Type",
+          "target": "For",
+          "createdBy": "Created by",
+          "created": "Created",
+          "expires": "Expires",
+          "state": "State"
+        },
+        "purpose": {
+          "invite": "Invitation",
+          "password_reset": "Password reset",
+          "email_verification": "Email verification",
+          "admin_setup": "Administrator setup",
+          "email_change": "Email change"
+        },
+        "state": {
+          "open": "Open",
+          "used": "Used",
+          "expired": "Expired",
+          "revoked": "Revoked"
+        },
+        "usedBy": "by {username}",
+        "anyone": "Anyone with the link",
+        "revoke": "Revoke"
       }
     },
     "linkShare": {

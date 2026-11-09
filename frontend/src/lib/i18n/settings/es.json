@@ -295,15 +295,15 @@
           "message": "La introducción y las guías de las páginas vuelven a mostrarse, como para una cuenta nueva.",
           "confirm": "Reiniciar"
         },
-        "revokeInvite": {
-          "title": "¿Revocar la invitación para {email}?",
-          "message": "El enlace deja de funcionar de inmediato.",
-          "confirm": "Revocar"
-        },
         "cancelSetup": {
           "title": "¿Cancelar el enlace de configuración de {username}?",
           "message": "El enlace ya entregado deja de funcionar. La cuenta sigue esperando su configuración: un enlace nuevo se obtiene con «dev.py user setup-link» en el servidor o de tu proveedor.",
           "confirm": "Cancelar el enlace"
+        },
+        "revokeLink": {
+          "title": "¿Revocar el enlace «{type}» para {target}?",
+          "message": "El enlace deja de funcionar de inmediato.",
+          "confirm": "Revocar"
         }
       },
       "errors": {
@@ -334,13 +334,6 @@
         "create": "Crear el enlace",
         "ready": "Comparte este enlace: funciona una sola vez, durante 7 días."
       },
-      "invites": {
-        "title": "Invitaciones abiertas",
-        "empty": "No hay invitaciones abiertas.",
-        "noEmail": "Sin correo",
-        "dates": "Creada el {created} · caduca el {expires}",
-        "revoke": "Revocar"
-      },
       "reset": {
         "title": "Enlace para restablecer la contraseña de {username}",
         "message": "Un enlace de un solo uso para establecer una nueva contraseña, válido 30 minutos. Los enlaces creados antes para esta cuenta dejan de funcionar.",
@@ -363,6 +356,37 @@
           "confirm": "Abrir los registros"
         },
         "saveFailed": "No se pudo guardar quién puede registrarse."
+      },
+      "links": {
+        "title": "Enlaces de cuenta",
+        "hint": "Cada enlace de un solo uso de la instancia y en qué punto está. Un enlace se muestra una sola vez, al crearlo: aquí ves para quién es, nunca el enlace.",
+        "empty": "No hay enlaces abiertos.",
+        "closedTitle": "Enlaces cerrados ({count})",
+        "closedEmpty": "No hay enlaces cerrados.",
+        "columns": {
+          "type": "Tipo",
+          "target": "Para",
+          "createdBy": "Creado por",
+          "created": "Creado",
+          "expires": "Caduca",
+          "state": "Estado"
+        },
+        "purpose": {
+          "invite": "Invitación",
+          "password_reset": "Restablecimiento de contraseña",
+          "email_verification": "Verificación del correo",
+          "admin_setup": "Configuración del administrador",
+          "email_change": "Cambio de correo"
+        },
+        "state": {
+          "open": "Abierto",
+          "used": "Usado",
+          "expired": "Caducado",
+          "revoked": "Revocado"
+        },
+        "usedBy": "por {username}",
+        "anyone": "Cualquiera con el enlace",
+        "revoke": "Revocar"
       }
     },
     "linkShare": {

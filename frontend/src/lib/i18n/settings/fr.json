@@ -295,15 +295,15 @@
           "message": "L'introduction et les guides des pages s'affichent à nouveau, comme pour un nouveau compte.",
           "confirm": "Relancer"
         },
-        "revokeInvite": {
-          "title": "Révoquer l'invitation pour {email} ?",
-          "message": "Le lien cesse de fonctionner immédiatement.",
-          "confirm": "Révoquer"
-        },
         "cancelSetup": {
           "title": "Annuler le lien de configuration de {username} ?",
           "message": "Le lien déjà remis cesse de fonctionner. Le compte reste en attente de sa configuration : un nouveau lien s'obtient avec « dev.py user setup-link » sur le serveur, ou auprès de votre hébergeur.",
           "confirm": "Annuler le lien"
+        },
+        "revokeLink": {
+          "title": "Révoquer le lien « {type} » pour {target} ?",
+          "message": "Le lien cesse de fonctionner immédiatement.",
+          "confirm": "Révoquer"
         }
       },
       "errors": {
@@ -334,13 +334,6 @@
         "create": "Créer le lien",
         "ready": "Partagez ce lien : il fonctionne une seule fois, pendant 7 jours."
       },
-      "invites": {
-        "title": "Invitations ouvertes",
-        "empty": "Aucune invitation ouverte.",
-        "noEmail": "Sans e-mail",
-        "dates": "Créée le {created} · expire le {expires}",
-        "revoke": "Révoquer"
-      },
       "reset": {
         "title": "Lien de réinitialisation du mot de passe pour {username}",
         "message": "Un lien à usage unique pour définir un nouveau mot de passe, valable 30 minutes. Les liens créés auparavant pour ce compte cessent de fonctionner.",
@@ -363,6 +356,37 @@
           "confirm": "Ouvrir les inscriptions"
         },
         "saveFailed": "Impossible d'enregistrer qui peut s'inscrire."
+      },
+      "links": {
+        "title": "Liens de compte",
+        "hint": "Chaque lien à usage unique de l'instance et où il en est. Un lien ne s'affiche qu'une fois, à sa création : ici, vous voyez à qui il est destiné, jamais le lien lui-même.",
+        "empty": "Aucun lien ouvert.",
+        "closedTitle": "Liens fermés ({count})",
+        "closedEmpty": "Aucun lien fermé.",
+        "columns": {
+          "type": "Type",
+          "target": "Pour",
+          "createdBy": "Créé par",
+          "created": "Créé",
+          "expires": "Expire",
+          "state": "État"
+        },
+        "purpose": {
+          "invite": "Invitation",
+          "password_reset": "Réinitialisation du mot de passe",
+          "email_verification": "Vérification de l'e-mail",
+          "admin_setup": "Configuration de l'administrateur",
+          "email_change": "Changement d'e-mail"
+        },
+        "state": {
+          "open": "Ouvert",
+          "used": "Utilisé",
+          "expired": "Expiré",
+          "revoked": "Révoqué"
+        },
+        "usedBy": "par {username}",
+        "anyone": "Toute personne ayant le lien",
+        "revoke": "Révoquer"
       }
     },
     "linkShare": {

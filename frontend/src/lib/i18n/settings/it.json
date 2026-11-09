@@ -295,15 +295,15 @@
           "message": "L'introduzione e le guide delle pagine ricompaiono, come per un account nuovo.",
           "confirm": "Riavvia"
         },
-        "revokeInvite": {
-          "title": "Revocare l'invito per {email}?",
-          "message": "Il link smette subito di funzionare.",
-          "confirm": "Revoca"
-        },
         "cancelSetup": {
           "title": "Annullare il link di setup di {username}?",
           "message": "Il link già consegnato smette di funzionare. L'account resta in attesa del suo setup: un link nuovo arriva da «dev.py user setup-link» sul server, o dal tuo fornitore.",
           "confirm": "Annulla il link"
+        },
+        "revokeLink": {
+          "title": "Revocare il link «{type}» per {target}?",
+          "message": "Il link smette subito di funzionare.",
+          "confirm": "Revoca"
         }
       },
       "errors": {
@@ -334,13 +334,6 @@
         "create": "Crea il link",
         "ready": "Condividi questo link: funziona una volta sola, per 7 giorni."
       },
-      "invites": {
-        "title": "Inviti aperti",
-        "empty": "Nessun invito aperto.",
-        "noEmail": "Senza email",
-        "dates": "Creato il {created} · scade il {expires}",
-        "revoke": "Revoca"
-      },
       "reset": {
         "title": "Link per reimpostare la password di {username}",
         "message": "Un link monouso per impostare una nuova password, valido 30 minuti. I link creati prima per questo account smettono di funzionare.",
@@ -363,6 +356,37 @@
           "confirm": "Apri le iscrizioni"
         },
         "saveFailed": "Non è stato possibile salvare chi può iscriversi."
+      },
+      "links": {
+        "title": "Link degli account",
+        "hint": "Ogni link monouso dell'istanza e a che punto è. Un link si vede una volta sola, quando nasce: qui vedi per chi è, mai il link stesso.",
+        "empty": "Nessun link aperto.",
+        "closedTitle": "Link chiusi ({count})",
+        "closedEmpty": "Nessun link chiuso.",
+        "columns": {
+          "type": "Tipo",
+          "target": "Per",
+          "createdBy": "Creato da",
+          "created": "Creato",
+          "expires": "Scade",
+          "state": "Stato"
+        },
+        "purpose": {
+          "invite": "Invito",
+          "password_reset": "Reimpostazione password",
+          "email_verification": "Verifica email",
+          "admin_setup": "Configurazione amministratore",
+          "email_change": "Cambio email"
+        },
+        "state": {
+          "open": "Aperto",
+          "used": "Usato",
+          "expired": "Scaduto",
+          "revoked": "Revocato"
+        },
+        "usedBy": "da {username}",
+        "anyone": "Chiunque abbia il link",
+        "revoke": "Revoca"
       }
     },
     "linkShare": {
