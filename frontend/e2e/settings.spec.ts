@@ -804,16 +804,18 @@ test.describe('Settings', () => {
             const loggedIn = await request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
             expect(loggedIn.ok(), 'The seed must authenticate as the account it owns').toBe(true);
             expect(((await loggedIn.json()) as {user: {id: number}}).user.id).toBe(user.id);
-            const seeded = await request.put('/api/v1/settings/user', {data: seed});
+            // The theme is an interface preference (lot UIP): it travels in `ui_preferences`, one key per preference.
+            const seeded = await request.put('/api/v1/settings/user', {data: {language: seed.language, ui_preferences: {theme: seed.theme}}});
             expect(seeded.ok(), `Seeding the preferences failed (HTTP ${seeded.status()})`).toBe(true);
-            expect(await seeded.json()).toMatchObject(seed);
+            expect(await seeded.json()).toMatchObject({language: seed.language, ui_preferences: {theme: seed.theme}});
         }
 
         /** What the server holds for the account `request` is signed in as. */
         async function readStoredPreferences(request: APIRequestContext): Promise<StoredPreferences> {
             const response = await request.get('/api/v1/settings/user');
             expect(response.ok(), `GET /api/v1/settings/user returned ${response.status()}`).toBe(true);
-            return (await response.json()) as StoredPreferences;
+            const body = (await response.json()) as {language: string; ui_preferences?: {theme?: string}};
+            return {language: body.language, theme: body.ui_preferences?.theme ?? ''};
         }
 
         /** Open the tab; its rows render only once it has read the account's values. */
@@ -868,7 +870,7 @@ test.describe('Settings', () => {
                 await row.getByTestId('setting-save').click();
                 const saved = await put;
                 expect(saved.ok(), `PUT /api/v1/settings/user returned ${saved.status()}`).toBe(true);
-                expect(saved.request().postDataJSON()).toEqual({theme: 'dark'});
+                expect(saved.request().postDataJSON()).toEqual({ui_preferences: {theme: 'dark'}});
                 expect((await waitForEvent(page, 'settings.preferences.saved', {since})).detail).toMatchObject({field: 'theme', value: 'dark'});
                 await expect(row.getByTestId('setting-save')).toBeHidden();
                 await expect(html).toHaveClass(DARK_CLASS);
