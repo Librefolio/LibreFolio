@@ -6497,7 +6497,7 @@
     }
   },
   "user/dashboard/charts.en.md": {
-    "md5": "d3d17aa532d4464ff78bb555ae896630",
+    "md5": "509756e79d704bd984ba3bf076895903",
     "langs_done": [
       "es",
       "fr",
@@ -6517,7 +6517,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1441.2,
-        "stamped_at": "2026-11-06T09:49:40.331447+00:00",
+        "stamped_at": "2026-11-09T10:38:09.430301+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6530,7 +6530,7 @@
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=162, translated=164 (Δ+2)\n  L3: src=2 trn=0\n    EN: Below the KPI cards, the **Portfolio Growth** chart and the **Asset Allocation** panel show where your portfolio has bee\n    TR: \n  L4: src=0 trn=2\n    EN: \n    TR: Sous les cartes KPI, le graphique **Croissance du portefeuille** et le panneau **Répartition des actifs** montrent l'his\n  L9: src=1 trn=0\n    EN: The growth chart shows how your portfolio evolved over the selected period: the **Abs / % / P&L** toggle in its top-righ\n    TR: \n  L10: src=0 trn=1\n    EN: \n    TR: Le graphique de croissance montre l'évolution de votre portefeuille sur la période sélectionnée : le sélecteur **Abs / %\n  L11: src=3 trn=0\n    EN: On a long period the chart groups the days to stay readable: into weeks, then months, and, for a history of many decades\n    TR: \n  L12: src=0 trn=3\n    EN: \n    TR: Sur une longue période, le graphique regroupe les jours pour rester lisible : en semaines, puis en mois et, pour un hist\n  L15: src=6 trn=0\n    EN: Every chart joins its points in one of three shapes: **Segments** (the default, a straight line between two points), **S\n    TR: \n  L16: src=0 trn=6\n    EN: \n    TR: Chaque graphique relie ses points selon l'une de trois formes : **Segments** (par défaut, une ligne droite entre deux po\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 📊 Charts\n    ## 📈 Portfolio Growth Chart {: #portfolio-growth-chart }\n      ### 〰️ How the lines are drawn {: #line-shape }\n      ### 💶 Abs — absolute values\n      ### 📉 % — rate of return\n      ### 💰 P&L — the money you made {: #pnl-mode }\n        #### Line — accumulated P&L {: #pnl-line }\n        #### Candles — the swing inside the period {: #pnl-candles }\n        #### Income — the cash that actually moved {: #pnl-income }\n        #### Candle width — 1D to 1Y {: #pnl-width }\n    ## 🥧 Allocation Panel {: #allocation-panel }\n      ### 🗂️ Three dimensions\n      ### 🕰️ Now and History\n      ### 🧩 By Asset {: #allocation-by-asset }\n      ### 🍩 Two rings by type {: #allocation-type-rings }\n      ### 💵 Cash as Liquidity\n      ### ➖ Negative cash {: #allocation-negative-cash }\n    ## 🔗 Related",
         "structural_issues": 1,
         "elapsed_s": 1550.9,
-        "stamped_at": "2026-11-06T09:49:40.331447+00:00",
+        "stamped_at": "2026-11-09T10:38:09.430301+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6545,7 +6545,7 @@
         "elapsed_s": 1590.2,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=162, translated=163 (Δ+1)\n  L46: src=2 trn=3\n    EN: **Assets valued at their purchase price**, such as P2P loans with no live market price, keep NAV close to Purchase Cost,\n    TR: **Los activos valorados a su precio de compra**, como los préstamos P2P sin precio de mercado en vivo, mantienen el NAV \n\nSOURCE_OUTLINE (for reference):\n  # 📊 Charts\n    ## 📈 Portfolio Growth Chart {: #portfolio-growth-chart }\n      ### 〰️ How the lines are drawn {: #line-shape }\n      ### 💶 Abs — absolute values\n      ### 📉 % — rate of return\n      ### 💰 P&L — the money you made {: #pnl-mode }\n        #### Line — accumulated P&L {: #pnl-line }\n        #### Candles — the swing inside the period {: #pnl-candles }\n        #### Income — the cash that actually moved {: #pnl-income }\n        #### Candle width — 1D to 1Y {: #pnl-width }\n    ## 🥧 Allocation Panel {: #allocation-panel }\n      ### 🗂️ Three dimensions\n      ### 🕰️ Now and History\n      ### 🧩 By Asset {: #allocation-by-asset }\n      ### 🍩 Two rings by type {: #allocation-type-rings }\n      ### 💵 Cash as Liquidity\n      ### ➖ Negative cash {: #allocation-negative-cash }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-06T09:49:40.331447+00:00",
+        "stamped_at": "2026-11-09T10:38:09.430301+00:00",
         "stamped_by": "translate-stamp"
       }
     }
