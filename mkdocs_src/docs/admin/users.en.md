@@ -12,7 +12,7 @@ An administrator looks after the accounts of the instance — who can sign in, w
 
     Only administrators see this tab.
 
-The tab has three parts: the **places** taken, at the top; the **Accounts**; the **Open invitations**. After each change it reloads its lists: it always shows what the server holds.
+The tab has three parts: the **places** taken, at the top; the **Accounts**; the **Account links**. After each change it reloads its lists: it always shows what the server holds.
 
 !!! tip "💻 On a server without a browser"
 
@@ -213,17 +213,11 @@ An account created before version 1.3 may have one, for example `anna@example.co
 
 5. Click **Done**.
 
-    The invitation appears in **Open invitations**. The person opens the link and creates the account with the username, email and password they choose: [Getting Started](../user/getting-started.md) shows what they see.
+    The invitation appears in [Account links](#account-links). The person opens the link and creates the account with the username, email and password they choose: [Getting Started](../user/getting-started.md) shows what they see.
 
 - 🔗 The link is shown only once, when you create it. If it gets lost, revoke the invitation and create a new one.
 - 📏 An invitation takes a place from when you create it until it is used, revoked or expires; the account it creates then takes that place.
 - 🔤 An email address belongs to one account only, whatever its capitals (`Anna@example.com` is `anna@example.com`), but only the letters A to Z are compared this way: `Émile@example.com` and `émile@example.com` are two different addresses.
-
-### 📋 Open Invitations {: #open-invitations }
-
-The invitations nobody has used yet, oldest first: the email (or *No e-mail*), an **Admin** badge when the invitation creates an administrator, creation and expiry date. An invitation leaves the list once used, revoked or expired.
-
-**Revoke** withdraws an invitation at any time, after a confirmation: the link stops working at once and its place is freed.
 
 ---
 
@@ -247,6 +241,26 @@ When someone has forgotten their password, send them a link to choose a new one 
 - 🔒 It also stops working as soon as the person changes their password or email address, or when you run `user reset` or `user set-email` on the [command line](cli_tools.md).
 - 🚪 Creating the link signs nobody out. When the person sets the new password, the account is signed out of every device.
 - 🔗 The link is shown only once: if it gets lost, create a new one.
+
+---
+
+## 📋 Account Links {: #account-links }
+
+Every single-use link of the instance, and where it stands: invitations, password-reset links, email verifications, the setup link of the first administrator, the email change of a managed instance's owner. The link itself never shows here: it shows only once, when it is created.
+
+**Where:** **Users**, the **Account links** section, under the accounts.
+
+| Column | What it shows |
+|---|---|
+| **Type** | *Invitation*, *Password reset*, *Email verification*, *Administrator setup* or *Email change* |
+| **For** | The account the link acts on; for an invitation, the address written in it, or *Anyone with the link*; an **Admin** badge when the invitation creates an administrator |
+| **Created by** | The administrator who created it; *—* when LibreFolio or the person asked for it (a verification, a reset from the login page) |
+| **Created**, **Expires** | Date and time |
+| **State** | *Open*; *Used*, with when and by whom; *Expired*; *Revoked*, with when |
+
+The open links are in the first table. The closed ones — used, expired or revoked — are in **Closed links**, folded: click it to open it. Each table sorts by a column (click its header), filters by a column (the funnel in its header), hides or shows columns (the eye) and pages through long lists.
+
+**Revoke**, in the menu (⋮) of an open link, withdraws it after a confirmation: the link stops working at once, and an invitation frees its place. Invitations, password-reset links and email verifications can be revoked here. The setup link of the waiting administrator is cancelled from its account ([Cancel Its Setup Link](#cancel-setup)); the owner's email change follows the address the host set, and is not revoked here.
 
 ---
 

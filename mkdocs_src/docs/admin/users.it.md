@@ -12,7 +12,7 @@ Un amministratore gestisce gli account dell'istanza — chi può accedere, chi �
 
     Solo gli amministratori vedono questa scheda.
 
-La scheda ha tre parti: i **posti** occupati, in alto; gli **Account**; gli **Inviti aperti**. Dopo ogni modifica ricarica i suoi elenchi: mostra sempre ciò che il server contiene.
+La scheda ha tre parti: i **posti** occupati, in alto; gli **Account**; i **Link degli account**. Dopo ogni modifica ricarica i suoi elenchi: mostra sempre ciò che il server contiene.
 
 !!! tip "💻 Su un server senza browser"
 
@@ -213,17 +213,11 @@ Un account creato prima della versione 1.3 può averne uno, per esempio `anna@ex
 
 5. Fai clic su **Fatto**.
 
-    L'invito compare negli **Inviti aperti**. La persona apre il link e crea l'account con nome utente, email e password che sceglie: [Per iniziare](../user/getting-started.md) mostra ciò che vede.
+    L'invito compare nei [Link degli account](#account-links). La persona apre il link e crea l'account con nome utente, email e password che sceglie: [Per iniziare](../user/getting-started.md) mostra ciò che vede.
 
 - 🔗 Il link viene mostrato una sola volta, quando lo crei. Se va perso, revoca l'invito e creane uno nuovo.
 - 📏 Un invito occupa un posto da quando lo crei finché non viene usato, revocato o scade; l'account che crea occupa poi quel posto.
 - 🔤 Un indirizzo email appartiene a un solo account, indipendentemente dalle maiuscole (`Anna@example.com` è `anna@example.com`), ma solo le lettere dalla A alla Z sono confrontate così: `Émile@example.com` e `émile@example.com` sono due indirizzi diversi.
-
-### 📋 Inviti aperti {: #open-invitations }
-
-Gli inviti che nessuno ha ancora usato, dal più vecchio al più recente: l'email (oppure *Nessuna email*), un badge **Admin** quando l'invito crea un amministratore, data di creazione e di scadenza. Un invito esce dall'elenco una volta usato, revocato o scaduto.
-
-**Revoca** ritira un invito in qualsiasi momento, dopo una conferma: il link smette subito di funzionare e il suo posto si libera.
 
 ---
 
@@ -247,6 +241,26 @@ Quando qualcuno ha dimenticato la password, inviagli un link per sceglierne una 
 - 🔒 Smette di funzionare anche appena la persona cambia password o indirizzo email, o quando esegui `user reset` o `user set-email` sulla [riga di comando](cli_tools.md).
 - 🚪 Creare il link non disconnette nessuno. Quando la persona imposta la nuova password, l'account è disconnesso da ogni dispositivo.
 - 🔗 Il link viene mostrato una sola volta: se va perso, creane uno nuovo.
+
+---
+
+## 📋 Link degli account {: #account-links }
+
+Ogni link monouso dell'istanza, e a che punto è: inviti, link di reimpostazione della password, verifiche dell'email, il link di configurazione del primo amministratore, il cambio email del titolare di un'istanza gestita. Il link stesso qui non compare mai: si vede una volta sola, quando viene creato.
+
+**Dove:** **Utenti**, la sezione **Link degli account**, sotto gli account.
+
+| Colonna | Cosa mostra |
+|---|---|
+| **Tipo** | *Invito*, *Reimpostazione password*, *Verifica email*, *Configurazione amministratore* o *Cambio email* |
+| **Per** | L'account su cui agisce il link; per un invito, l'indirizzo scritto nell'invito, oppure *Chiunque abbia il link*; un badge **Admin** quando l'invito crea un amministratore |
+| **Creato da** | L'amministratore che l'ha creato; *—* quando l'ha chiesto LibreFolio o la persona stessa (una verifica, una reimpostazione dalla pagina di accesso) |
+| **Creato**, **Scade** | Data e ora |
+| **Stato** | *Aperto*; *Usato*, con quando e da chi; *Scaduto*; *Revocato*, con quando |
+
+I link aperti sono nella prima tabella. Quelli chiusi — usati, scaduti o revocati — sono in **Link chiusi**, ripiegato: cliccalo per aprirlo. Ogni tabella ordina per colonna (clic sull'intestazione), filtra per colonna (l'imbuto nell'intestazione), nasconde o mostra colonne (l'occhio) e divide in pagine gli elenchi lunghi.
+
+**Revoca**, nel menu (⋮) di un link aperto, lo ritira dopo una conferma: il link smette subito di funzionare, e un invito libera il suo posto. Qui si revocano inviti, link di reimpostazione della password e verifiche dell'email. Il link di configurazione dell'amministratore in attesa si annulla dal suo account ([Annulla il suo link di configurazione](#cancel-setup)); il cambio email del titolare segue l'indirizzo impostato da chi ospita l'istanza, e qui non si revoca.
 
 ---
 
