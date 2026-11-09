@@ -42,7 +42,7 @@ from sqlalchemy.pool import NullPool
 from backend.app.config import accounts
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import GlobalSetting, User
-from backend.app.schemas.settings import SETTINGS_REGISTRY
+from backend.app.schemas.settings import SETTINGS_REGISTRY, UIPreferences
 from backend.app.services.accounts import settings_service
 from backend.app.services.accounts.global_settings_service import get_setting_value
 from backend.app.services.platform.scheduler import settings as scheduler_settings
@@ -465,7 +465,7 @@ async def test_the_effective_base_currency_and_a_first_profile_update_follow_the
 
     async with AsyncSession(engine) as session:
         effective = await settings_service.get_effective_base_currency(session, reader.id)
-        created = await settings_service.update_user_settings(updater.id, settings_service.UserSettingsUpdate(theme="dark"), session)
+        created = await settings_service.update_user_settings(updater.id, settings_service.UserSettingsUpdate(ui_preferences=UIPreferences(theme="dark")), session)
 
     assert effective == "CHF", f"no settings row: the variable's currency, got {effective!r}"
     assert created.base_currency == "CHF", f"the row created by a profile update starts in the variable's currency, got {created.base_currency!r}"
