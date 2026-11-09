@@ -10,7 +10,7 @@ La pestaña **Preferencias** controla **cómo se ve y se comporta la aplicación
 |---------|----------|-------------|
 | **Idioma** | 🌍 Visualización | Idioma de la interfaz — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Se aplica en cuanto lo guardas, y también decide cómo se escriben los números y las fechas |
 | **Divisa predeterminada** | 💰 Divisa | Tu propia divisa base. El Panel, la página de Brókeres y la página de cada bróker, y la pestaña **Correlación** de la página de Activos se abren en ella, y la Exportación IA de un par de divisas también la usa; una divisa que elijas en el Panel se mantiene durante la sesión. También se propone cuando creas algo nuevo — un activo, el primer saldo de efectivo de un bróker nuevo, un plan PAC. Este menú enumera todas las divisas |
-| **Tema** | 🎨 Apariencia | ☀️ Claro / 🌙 Oscuro / 🖥️ Auto (sigue tu sistema operativo). Se guarda con tu cuenta, así que te acompaña en cada navegador y dispositivo. Mientras no elijas uno, sigue el valor predeterminado del administrador y al lado aparece la insignia **Global**; el botón **↺** junto a un tema que elegiste elimina tu elección al instante, sin **Guardar**. El botón sol/luna del encabezado sigue cambiando solo este navegador |
+| **Tema** | 🎨 Apariencia | ☀️ Claro / 🌙 Oscuro / 🖥️ Auto (sigue tu sistema operativo). Se guarda con tu cuenta, así que te acompaña en cada navegador y dispositivo. Mientras no elijas uno, sigue el valor predeterminado del administrador y al lado aparece la insignia **Global**; el botón **↺** junto a un tema que elegiste vuelve a ese valor, como cualquier cambio, cuando pulsas **Guardar**. El botón sol/luna del encabezado sigue cambiando solo este navegador |
 
 <style>
 /* Keep the first two columns on one line (long setting names would wrap otherwise) */
@@ -31,7 +31,7 @@ article table:first-of-type td:nth-child(-n + 2) {
 
 !!! tip "Forma de las líneas de los gráficos"
 
-    **Preferencias** también contiene la **Forma de las líneas** de cada gráfico — segmentos, escalones o curva suave. Se guarda con tu cuenta y se aplica en cuanto la eliges, sin **Guardar**. Mientras no elijas una, sigue el valor predeterminado del administrador (al lado aparece la insignia **Global**); **↺** vuelve a ese valor. Cómo se ven las formas: **[Gráficos del Panel](../dashboard/charts.md#line-shape)**.
+    **Preferencias** también contiene la **Forma de las líneas** de cada gráfico — segmentos, escalones o curva suave. Se guarda con tu cuenta y se aplica cuando pulsas **Guardar**, como los demás campos. Mientras no elijas una, sigue el valor predeterminado del administrador (al lado aparece la insignia **Global**); **↺** vuelve a ese valor, una vez guardado. Cómo se ven las formas: **[Gráficos del Panel](../dashboard/charts.md#line-shape)**.
 
 Elige una categoría en la barra lateral — en un teléfono, en el menú **Categoría** — para mostrar solo su configuración;
 **Toda la configuración** muestra todo.
