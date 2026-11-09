@@ -36,7 +36,7 @@ const BULK_PATH = `${SETTINGS_PATH}/bulk`;
 const KEY = 'registration_mode';
 
 // Budgets: deadlines, never delays.
-/** From a navigation to a settled tab: the SPA's load, the auth check and the bootstrap, then GET /users and GET /users/invites. */
+/** From a navigation to a settled tab: the SPA's load, the auth check and the bootstrap, then GET /users and GET /users/account-links. */
 const LOAD_MS = 20_000;
 /** A save's round trip, and the configuration read that follows it. */
 const ACTION_MS = 15_000;
