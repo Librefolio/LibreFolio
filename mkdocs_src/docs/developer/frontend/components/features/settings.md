@@ -152,7 +152,7 @@ import UsersTab from '$lib/features/settings/tabs/UsersTab.svelte';
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
     // profile (10), preferences (20), plugins (25), about (30), admin (100, administration)
-    // Administrators only: the accounts and the open invitations (decision D-A10).
+    // Administrators only: the accounts (decision D-A10) and every account link (lot UA3).
     {id: 'users', labelKey: 'settings.users', icon: Users, order: 110, component: UsersTab, visible: (ctx) => ctx.isSuperuser, group: 'administration'},
 ];
 ```
@@ -472,19 +472,20 @@ contract: [Cache Registry & Admin](../../../architecture/settings_cache.md).
 ### 👥 UsersTab {: #userstab }
 
 `lib/features/settings/tabs/UsersTab.svelte`, the registry's `users` entry: administrators only,
-no props. The accounts of the instance, the open invitations and the places taken. User side:
+no props. The accounts of the instance, every account link (lot UA3) and the places taken. User side:
 [Users & Invitations](../../../../admin/users.md); backend:
 [Administrator API](../../../architecture/access_control.md#admin-user-api).
 
-- **Load**: on mount, `GET /users` and `GET /users/invites` in parallel
-  (`list_accounts_api_v1_users_get`, `list_invites_api_v1_users_invites_get`); the accounts and
-  `usage` come from the first, the invitations from the second. The root, `users-tab`, carries
+- **Load**: on mount, `GET /users` and `GET /users/account-links` in parallel
+  (`list_accounts_api_v1_users_get`, `list_account_links_api_v1_users_account_links_get`); the
+  accounts and `usage` come from the first, the links from the second, split by their `state`:
+  `open`, or closed (`used`, `expired`, `revoked`). The root, `users-tab`, carries
   `data-busy` (`'true'` while the lists load, at mount and after every action; `aria-busy` too). A
   failed load shows `settings.usersTab.errors.load` above the list, with an error toast.
 - **Every action reloads**: `perform()` runs the call, notifies its outcome, then calls `load()`
   whether it succeeded or not. The tab never updates a row by itself: it shows the backend's
-  answer. The invitation dialog reloads when it closes, the deletion dialog after a deletion; the
-  reset-link dialog changes nothing in the lists.
+  answer. The invitation and reset-link dialogs reload when they close (the new link is an open
+  row), the deletion dialog after a deletion.
 - **Header**: `users-usage` with `data-used` and `data-max` (empty without a limit), drawn with
   `settings.usersTab.usage` (*{used} / {max} accounts*) or `usageUnlimited`.
   `users-billing-link` (`target="_blank"`, `rel="noopener noreferrer"`) only when
@@ -500,15 +501,17 @@ no props. The accounts of the instance, the open invitations and the places take
 - **Accounts** (`users-accounts`): one [`UserRow`](#userrow) per account, in the backend's order.
   `isSelf` compares the account with `$currentUser.id`; `isOnlyActiveAdmin` is true for the account
   that is the only one with `is_superuser` and `is_active`.
-- **Invitations** (`users-invites`): `InvitationsList`, see
-  [Invitations and reset links](#invite-dialogs).
+- **Account links** (`users-links`): two [`AccountLinksTable`](#account-links-table), the open
+  links (`users-links-open`) and, inside a `FoldPanel` folded by default
+  (`users-links-closed-fold`, its title *Closed links ({count})*), the closed ones
+  (`users-links-closed`).
 - **Confirmations**: one `ConfirmModal`, `testId="users-confirm"` (on its header; its buttons are
   `confirm-modal-confirm` and `confirm-modal-cancel`), for deactivate, cancel the setup link,
-  promote, demote, sign out everywhere, restart the guides and revoke an invitation; `danger` for
+  promote, demote, sign out everywhere, restart the guides and revoke a link; `danger` for
   deactivate, cancel the setup link, demote and revoke. Title and message come from
-  `settings.usersTab.confirm.<kind>.*`, the kind in camelCase (`cancelSetup`, `signOut`…), with
-  `{username}`, or `{email}` for an invitation (`settings.usersTab.invites.noEmail` when it has
-  none). Reactivate runs at once; the reset link and the deletion open their own dialogs.
+  `settings.usersTab.confirm.<kind>.*`, the kind in camelCase (`cancelSetup`, `signOut`,
+  `revokeLink`…), with `{username}`, or `{type}` and `{target}` for a link (its account, else its
+  address, else `settings.usersTab.links.anyone`). Reactivate runs at once; the reset link and the deletion open their own dialogs.
 - **Cancel the setup link** (`cancel-setup`, lot A-43), for the
   [initial administrator](../../../architecture/access_control.md#initial-admin) waiting for its
   setup: once confirmed, `PATCH /users/{id}` `{is_active: false, cancel_setup: true}`, which revokes
@@ -532,7 +535,7 @@ no props. The accounts of the instance, the open invitations and the places take
 | demote | `PATCH /users/{id}` `{is_superuser: false}` | `accounts.user.demoted` | — |
 | sign out everywhere | `POST /users/{id}/sessions/revoke` | `accounts.user.sessions-revoked` | success |
 | restart the guides | `POST /users/{id}/onboarding/reset`, body `null`: every flow | `accounts.user.onboarding-reset` | success |
-| revoke an invitation | `DELETE /users/invites/{invite_id}` | `accounts.invite.revoked` | — |
+| revoke a link | `DELETE /users/account-links/{link_id}` | `accounts.link.revoked` | — |
 | invite | `InviteDialog`: `POST /users/invites` | `accounts.invite.created` | — |
 | reset link | `ResetLinkDialog`: `POST /users/{id}/password-reset-link` | `accounts.reset-link.created` | success |
 | delete | `AccountDeletionDialog`: `DELETE /users/{id}` | `accounts.user.deleted` | success |
@@ -544,13 +547,13 @@ toast, when there is one, is a field of the same call.
 | Event | `detail` |
 |---|---|
 | `accounts.user.deactivated`, `setup-cancelled`, `reactivated`, `promoted`, `demoted`, `sessions-revoked`, `onboarding-reset` | `{user_id}` |
-| `accounts.invite.revoked` | `{invite_id}` |
+| `accounts.link.revoked` | `{link_id, purpose}` |
 | `accounts.invite.created` | `{invite_id, grants_admin}` |
 | `accounts.reset-link.created` | `{user_id}` |
 | `accounts.user.deleted` | `{user_id, brokers_deleted, mode}` |
 | `accounts.address.checked` | `{state, purpose}`, without a toast ([LinkShare](#linkshare)) |
 | `accounts.link.copied` | `{purpose}`, with a success toast ([LinkShare](#linkshare)) |
-| `accounts.action.failed` | `{action, code}`, plus `user_id` or `invite_id` when there is one, always with an error toast. `action` is `load`, `deactivate`, `cancel-setup`, `reactivate`, `promote`, `demote`, `sign-out`, `restart-guides`, `revoke-invite`, `invite`, `reset-link` or `delete`; `code` comes from [`accountErrors.ts`](#account-errors) |
+| `accounts.action.failed` | `{action, code}`, plus `user_id`, or `link_id` and `purpose`, when there is one, always with an error toast. `action` is `load`, `deactivate`, `cancel-setup`, `reactivate`, `promote`, `demote`, `sign-out`, `restart-guides`, `revoke-link`, `invite`, `reset-link` or `delete`; `code` comes from [`accountErrors.ts`](#account-errors) |
 
 #### UserRow {: #userrow }
 
@@ -638,13 +641,29 @@ authority: `last-admin` never shows in a live session, as whoever reads the tab 
 administrator and their own row has no actions, so the `409` `LAST_ADMIN` of the server covers what
 the row cannot see.
 
+#### AccountLinksTable {: #account-links-table }
+
+`lib/features/settings/users/AccountLinksTable.svelte` (lot UA3). Props: `links` (`AccountLink[]`,
+the `GET /users/account-links` items, `users/types.ts`), `variant` (`open` or `closed`), `testId`,
+`isLoading?`, `onRevoke?(link)`. A [`DataTable`](../core-ui/data-table.md) with its own
+`ColumnVisibilityToggle`: sorting, Excel-style column filters, column visibility, widths and order
+kept per table (`storageKey` `settings.users.accountLinks.<variant>`), pagination by 10; no selection.
+The root carries `testId` and `data-count`; each row `data-row-id` (the link's id).
+
+| Column | Cell | Filter |
+|---|---|---|
+| Type | `AccountLinkTypeBadge`: a neutral pill, one lucide icon per purpose (`account-link-type`, `data-purpose`), `settings.usersTab.links.purpose.<purpose>` | enum of the five purposes |
+| For | the account's username (`→ new address` for an `email_change`), else the address, else `settings.usersTab.links.anyone`; the Admin badge (`account-link-admin`) for an invitation that grants it | text |
+| Created by | `created_by_username`, `—` without one | text |
+| Created, Expires | date and time | date range |
+| State | `AccountLinkStateCell` (`account-link-state`, `data-state`): the state pill on the state roles (open `info`, used `success`, expired `warning`, revoked neutral), then, closed, its date (`account-link-state-detail`) and, used, `settings.usersTab.links.usedBy` | enum of the variant's states |
+
+The open table's row menu has **Revoke** (`account-link-revoke`) on the rows whose `revocable` the
+backend set; the tab confirms it. The tables decide nothing: the state and `revocable` are the
+backend's.
+
 #### Invitations and Reset Links {: #invite-dialogs }
 
-- **`InvitationsList.svelte`**: props `invites` and `onRevoke(invite)`. `users-invites-empty` when
-  there is none; otherwise one `users-invite-row` per invitation, with `data-invite-id`,
-  `data-email` (empty without one) and `data-admin`: the email or
-  `settings.usersTab.invites.noEmail`, the Admin badge, the dates of creation and expiry, and
-  `users-invite-revoke`, which the tab confirms.
 - **`InviteDialog.svelte`**: props `open`, `onClose`, `onCreated?(response)`. A `ModalBase`
   (`testId="users-invite-dialog"`, `trapFocus`) whose form starts empty at every opening:
   `users-invite-email` (sent trimmed, and only when not blank), `users-invite-admin`
