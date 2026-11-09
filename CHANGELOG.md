@@ -136,6 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### ✉️ Email
 
+- **When an account's email address changes, the new address gets a short confirmation** that it is now the account's address, in the account's language, alongside the notice to the old address, which still shows nothing of the new one. The limits are 3 changes an hour per account and 3 emails an hour per mailbox.
 - **Email, optional**: LibreFolio can send emails through your own SMTP server, named only by the `LIBREFOLIO_SMTP_*` variables, the password also from a file (`LIBREFOLIO_SMTP_PASSWORD_FILE`). Nothing of it is stored, shown in the app or put in a backup, and without a server nothing changes. **Settings › Administration › Email**, for administrators, says whether email works, which variable to fix when it does not, and sends a test email to your own address in your language. `LIBREFOLIO_SMTP_MAX_PER_HOUR` caps the emails of the instance (50 an hour by default); the startup checks report an unusable configuration and a server reached without encryption. Documented in the new admin page "Email".
 - **Email links**: every link an email carries is built from `LIBREFOLIO_PUBLIC_URL` alone. While email works, the start log and Settings › Administration › Email say when that variable is missing or cannot be used, and `GET /api/v1/system/instance` tells whether emails with a link can go out.
 - Settings › Administration › Email checks, from the administrator's browser, that `LIBREFOLIO_PUBLIC_URL` reaches this very instance, and warns, for this device only, when another server answers there or nothing does; the startup warning about `LIBREFOLIO_PUBLIC_URL` now lists every rule the address must follow.
@@ -343,6 +344,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 👥 Accounts and sign-in
 
+- Users › Send by email: the «Sent to …» message now reminds you that the recipient should check the spam folder too if the email does not arrive.
 - **«Forgot password?» answers with a short message**, the same whether an account matches or not, and its button counts down 5 minutes before the next request (the server's own interval), across a page reload. When the instance can email a reset link, the card no longer shows the server's reset commands: the administrator's guide keeps them.
 - **Settings › Administration is now for administrators only.** Other users no longer see a read-only copy of Global Settings; an old link to it opens their Profile.
 - After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
@@ -630,6 +632,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 👥 Accounts and sign-in
 
+- Profile › Email: on desktop the current-password field of an email change now sits on the right, under the email field.
 - **Signing in, and opening or saving your settings, no longer fail when your account's saved theme is one this version doesn't know** (a hand-edited database, or a downgrade): the app shows the instance's default theme, or Auto.
 - **When the last active administrator tries to delete their own account, the dialog now says in your language what to do first** — make another account an administrator — instead of an English server message.
 - Two administrators acting on the same accounts at the same moment can no longer leave the instance without an active administrator, or one place over its user limit; an account deleted in the meantime now answers "not found" instead of a server error.
