@@ -2943,7 +2943,7 @@ test.describe('Gallery Screenshots', () => {
                 }
                 const body = (await response.json()) as {show_donation_popup?: boolean; user_settings?: Record<string, unknown> | null};
                 body.show_donation_popup = true;
-                if (body.user_settings) body.user_settings = {...body.user_settings, language: combo.lang, theme: combo.theme};
+                if (body.user_settings) body.user_settings = {...body.user_settings, language: combo.lang, ui_preferences: {...((body.user_settings.ui_preferences as Record<string, unknown> | undefined) ?? {}), theme: combo.theme}};
                 signalledLogins += 1;
                 await route.fulfill({response, json: body});
             });
