@@ -150,15 +150,18 @@ Ogni link di reimpostazione lascia anche una riga `Password reset link created`,
 | Il log dice | Livello | Quando |
 | --- | --- | --- |
 | `Email change notice sent to the previous address` | `info` | L'avviso è andato al vecchio indirizzo. La riga ha `user_id` e `language`, nessuno dei due indirizzi. |
+| `Email change notice sent to the new address` | `info` | La conferma è andata al nuovo indirizzo. La riga ha `user_id` e `language`, nessuno dei due indirizzi. |
 | `Email change notice: email is off, nothing sent` | `info` | L'email è disattivata: niente da inviare, nulla di sbagliato. |
-| `Email change notice: past its limits, nothing sent` | `info` | L'account, o la vecchia casella, aveva già 3 avvisi nell'ora: il cambio è riuscito, l'avviso no. Con `user_id`. |
+| `Email change notice: past its limits, nothing sent` | `info` | L'account aveva già 3 cambi con email nell'ora: il cambio è riuscito, le sue due email no. Con `user_id`. |
+| `Email change notice: the previous mailbox is past its limit, not sent there` | `info` | La vecchia casella aveva già ricevuto 3 di queste email nell'ora: l'avviso non è partito, la conferma al nuovo indirizzo può ancora partire. Con `user_id`. |
+| `Email change notice: the new mailbox is past its limit, not sent there` | `info` | Lo stesso, per la nuova casella e la sua conferma. Con `user_id`. |
 | `Email change notice: the account no longer exists, nothing sent` | `info` | L'account è stato eliminato prima che l'email partisse. |
-| `Email change notice: not sent` | `warning` | L'email è configurata ma non usabile ora, il limite orario è raggiunto, il vecchio indirizzo non è un singolo indirizzo semplice, oppure l'invio è fallito: `reason` e `code` dicono quale. |
+| `Email change notice: not sent` | `warning` | L'email è configurata ma non usabile ora, il limite orario è raggiunto, un indirizzo non è un singolo indirizzo semplice, oppure l'invio è fallito: `reason` e `code` dicono quale, e `recipient` (`previous` o `new`) quale delle due email, quando è una delle due. |
 | `Email change notice: the request failed` | `error` | Un errore imprevisto, con il suo tipo in `error` e lo `user_id`, nulla di più. |
 
 Nessuna di queste righe contiene la password SMTP, il contenuto di un'email, un link o la sua parte segreta, ciò che qualcuno ha digitato per chiedere un link di reimpostazione o di verifica, o l'indirizzo completo del destinatario: solo il suo dominio, in `recipient_domain`.
 Anche la risposta del server viene mascherata, perché spesso cita l'indirizzo rifiutato: `550 5.1.1 <***@example.com>: Recipient address rejected`.
-L'avviso di un cambio di email non nomina né il vecchio indirizzo né quello nuovo.
+Le righe di un cambio di email non nominano né il vecchio indirizzo né quello nuovo.
 
 ---
 
@@ -171,9 +174,9 @@ L'avviso di un cambio di email non nomina né il vecchio indirizzo né quello nu
 - **I link provengono solo da `LIBREFOLIO_PUBLIC_URL`**, mai da una richiesta: nessuno può far inviare da LibreFolio a un tuo utente un link a un sito di terzi ([Email con un link](email_flows.md#public-url)).
 - **Un link di verifica va solo all'indirizzo dell'account stesso**, e nessuno lo vede, amministratore compreso. **Invia di nuovo il link** chiede la password dell'account, come il login, e un nuovo link disattiva i precedenti.
 - **I nomi restano su una riga.** Nome utente, nome di chi invita e nome dell'istanza vanno in un'email su una riga: caratteri di controllo e interruzioni di riga diventano spazi, i controlli bidirezionali vengono rimossi. Un nome utente creato ad arte non può aggiungere righe a un'email né camuffarne il testo.
-- **Nessuna parola di estranei in un'email.** Reimpostazione della password, verifica email e avviso di cambio indirizzo possono essere inviati, da chi non è amministratore, a un indirizzo di sua scelta. Queste email iniziano con un semplice «Ciao,», senza nome utente, e l'avviso non mostra alcuna parte del nuovo indirizzo: LibreFolio non risolve i domini, quindi anche la parte finale di un indirizzo è scelta liberamente. Un link di reimpostazione che invii per email è scritto allo stesso modo; il nome utente appare una volta aperto il link. Solo l'email di test e il link di configurazione dell'amministratore iniziale salutano per nome: li invii tu, o chi gestisce il server.
+- **Nessuna parola di estranei in un'email.** Reimpostazione della password, verifica email e le due email di un cambio di indirizzo possono essere inviati, da chi non è amministratore, a un indirizzo di sua scelta. Queste email iniziano con un semplice «Ciao,», senza nome utente, l'avviso non mostra alcuna parte del nuovo indirizzo e la conferma al nuovo indirizzo nessuna del vecchio: LibreFolio non risolve i domini, quindi anche la parte finale di un indirizzo è scelta liberamente. Un link di reimpostazione che invii per email è scritto allo stesso modo; il nome utente appare una volta aperto il link. Solo l'email di test e il link di configurazione dell'amministratore iniziale salutano per nome: li invii tu, o chi gestisce il server.
 - **Le password dimenticate non dicono a nessuno quali account esistono**: la stessa risposta per tutti, la ricerca dopo la risposta, e limiti per indirizzo, per nome utente o indirizzo email, per casella di posta e per account ([Password dimenticate](email_flows.md#forgot-password)).
-- **Cambiare l'indirizzo email di un account richiede la sua password attuale.** Senza, basterebbe un momento dentro la sessione di qualcuno (un cookie di sessione rubato, un computer lasciato sbloccato) per mettere il proprio indirizzo sull'account e poi reimpostarne la password: la reimpostazione via email esiste solo insieme a questa regola. Quando l'email funziona, anche il vecchio indirizzo riceve un avviso ([Cambi di indirizzo email](email_flows.md#email-change-notice)).
+- **Cambiare l'indirizzo email di un account richiede la sua password attuale.** Senza, basterebbe un momento dentro la sessione di qualcuno (un cookie di sessione rubato, un computer lasciato sbloccato) per mettere il proprio indirizzo sull'account e poi reimpostarne la password: la reimpostazione via email esiste solo insieme a questa regola. Quando l'email funziona, anche il vecchio indirizzo riceve un avviso, e il nuovo una conferma ([Cambi di indirizzo email](email_flows.md#email-change-notice)).
 - **Il limite orario** limita ciò che l'istanza può inviare, qualunque cosa accada: aumentalo solo quanto serve.
 
 ??? info "🏠 Cosa conta come la tua rete locale — quando compare l'avviso"
