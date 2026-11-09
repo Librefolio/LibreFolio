@@ -120,7 +120,39 @@ const setDirect = vi.fn();
 // What the store already holds when the tab writes to it. Null (the store before its
 // first load) unless a test says otherwise: see `beforeEach`.
 const storedSettings = vi.fn<() => Record<string, unknown> | null>();
-vi.mock('$lib/stores/app/settings', () => ({userSettings: {setDirect: (...a: unknown[]) => setDirect(...a), get: () => storedSettings()}}));
+// A writable-based fake of the user settings store (lot UIP): the tab reads `$userSettings` for «follows the global
+// default», and `updateUiPreference` is the optimistic write the real store makes: it applies the key, sends the PUT
+// through the mocked client (so the body is observable as `userPut()`), takes the answer, and puts the key back on failure.
+vi.mock('$lib/stores/app/settings', async () => {
+    const {writable, get: storeGet} = await import('svelte/store');
+    const {withUiPreference} = await import('$lib/stores/app/uiPreferences');
+    const {zodiosApi} = await import('$lib/api');
+    const store = writable<any>(null);
+    const userSettings = {
+        subscribe: store.subscribe,
+        setDirect: (value: unknown) => {
+            setDirect(value);
+            store.set(value);
+        },
+        get: () => storedSettings() ?? storeGet(store),
+        updateUiPreference: async (key: string, value: unknown) => {
+            const before = storeGet(store);
+            const previous = before?.ui_preferences?.[key] ?? null;
+            if (before) store.set(withUiPreference(before, key as never, value as never));
+            try {
+                const response = await (zodiosApi as any).update_user_settings_endpoint_api_v1_settings_user_put({ui_preferences: {[key]: value}});
+                store.set(response);
+                return true;
+            } catch {
+                const current = storeGet(store);
+                if (current) store.set(withUiPreference(current, key as never, previous as never));
+                return false;
+            }
+        },
+        reset: () => store.set(null),
+    };
+    return {userSettings, isFallbackUserSettings: () => false};
+});
 
 // The currency dropdown fetches its own catalogue; stub it with two entries so
 // the row is drivable without any network, and inert everywhere else.
@@ -167,6 +199,15 @@ function globalItems(over: Record<string, string> = {}) {
     return {items: Object.entries({default_language: 'en', default_currency: 'EUR', default_theme: 'auto', ...over}).map(([key, value]) => ({key, value}))};
 }
 
+/**
+ * `GET /settings/user` as it answers after lot UIP: the user's own preference keys (only the ones they chose) and the
+ * administrator's default of each. No `theme` at the top level.
+ */
+function userRead(over: {language?: string | null; base_currency?: string | null; own?: {theme?: string; chart_line_shape?: string}; defaults?: {theme?: string; chart_line_shape?: string}} = {}) {
+    const {own = {}, defaults = {}, ...rest} = over;
+    return {language: 'en', base_currency: 'EUR', avatar_url: null, ...rest, ui_preferences: own, ui_preference_defaults: {theme: 'auto', chart_line_shape: 'segments', ...defaults}};
+}
+
 /** An axios-shaped rejection, recognised by `isAxiosError`. */
 function axiosError(message: string): Error {
     return Object.assign(new Error(message), {isAxiosError: true, response: {status: 500, data: {}}});
@@ -187,6 +228,8 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void; rejec
 async function mount() {
     const utils = render(PreferencesTab);
     await waitFor(() => expect(screen.queryByTestId('preference-language')).not.toBeNull());
+    // Loading hands the answer to the store once (lot UIP: the tab reads `$userSettings`); the cases below look at writes.
+    setDirect.mockClear();
     return utils;
 }
 
@@ -240,7 +283,7 @@ beforeEach(() => {
     // clearAllMocks keeps implementations, so a stored record one test programmed would leak.
     storedSettings.mockReturnValue(null);
     globalGet().mockResolvedValue(globalItems() as never);
-    userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: 'auto'} as never);
+    userGet().mockResolvedValue(userRead({language: 'en', base_currency: 'EUR'}) as never);
     userPut().mockResolvedValue({} as never);
 });
 
@@ -254,7 +297,7 @@ describe('PreferencesTab — loading', () => {
         // isLoading gates the whole body: no row exists yet to be edited.
         expect(screen.queryByTestId('preference-language')).toBeNull();
 
-        pending.resolve({language: 'en', base_currency: 'EUR', theme: 'auto'});
+        pending.resolve(userRead());
         await waitFor(() => expect(screen.queryByTestId('preference-language')).not.toBeNull());
     });
 
@@ -281,7 +324,7 @@ describe('PreferencesTab — loading', () => {
         // FALLBACK_DEFAULTS is language=en, currency=EUR, theme=auto. The user's own
         // values are 'it'/'USD'/'dark', so every row is non-default and offers Reset.
         globalGet().mockRejectedValue(new Error('offline'));
-        userGet().mockResolvedValue({language: 'it', base_currency: 'USD', theme: 'dark'} as never);
+        userGet().mockResolvedValue(userRead({language: 'it', base_currency: 'USD', own: {theme: 'dark'}}) as never);
         await mount();
 
         expect(rowButton(languageRow(), 'reset')).not.toBeNull();
@@ -293,26 +336,34 @@ describe('PreferencesTab — loading', () => {
         // `items: []` leaves every lookup undefined, so the `||` fallbacks decide —
         // the same outcome as a failed request, reached by a different branch.
         globalGet().mockResolvedValue({items: []} as never);
-        userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: 'auto'} as never);
+        userGet().mockResolvedValue(userRead({language: 'en', base_currency: 'EUR'}) as never);
         await mount();
 
         expect(rowButton(themeRow(), 'reset')).toBeNull();
     });
 
-    it('uses the server global defaults when they disagree with the hardcoded ones', async () => {
-        // Server says the house default theme is 'dark' and the user is on 'dark':
-        // nothing is non-default, so no Reset is offered anywhere.
-        globalGet().mockResolvedValue(globalItems({default_theme: 'dark'}) as never);
-        userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: 'dark'} as never);
+    it('follows the default theme that comes with the user settings when the user has none of their own', async () => {
+        // The default theme is `ui_preference_defaults.theme` of the user GET (lot UIP): no own key, so the row follows it,
+        // offers no Reset, and the saved effective theme is the default.
+        userGet().mockResolvedValue(userRead({defaults: {theme: 'dark'}}) as never);
         await mount();
 
         expect(rowButton(themeRow(), 'reset')).toBeNull();
+        expect(rowButton(themeRow(), 'save')).toBeNull();
+        expect(within(themeRow()).getByTestId('preference-theme-badge-global')).toBeInTheDocument();
+        expect(within(themeRow()).queryByTestId('preference-theme-badge-auto')).toBeNull();
     });
 
-    it('falls back to the stored theme preference when the server sends none', async () => {
-        // `response.theme || getStoredThemePreference()` — the mocked store says 'auto',
-        // which equals the global default, so the row is neither modified nor non-default.
-        userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: null} as never);
+    it('an own theme equal to the default is still own: Reset is offered', async () => {
+        userGet().mockResolvedValue(userRead({own: {theme: 'dark'}, defaults: {theme: 'dark'}}) as never);
+        await mount();
+
+        expect(rowButton(themeRow(), 'reset')).not.toBeNull();
+    });
+
+    it('shows the row neither modified nor non-default when the user has no own theme', async () => {
+        // No own key: the effective theme is the default, nothing to save, nothing to reset.
+        userGet().mockResolvedValue(userRead({language: 'en', base_currency: 'EUR'}) as never);
         await mount();
 
         expect(rowButton(themeRow(), 'save')).toBeNull();
@@ -323,7 +374,7 @@ describe('PreferencesTab — loading', () => {
         // The other two `||` fallbacks in `loadSettings`: `$currentLanguage` (mocked
         // to 'en') and the literal 'EUR'. Both land on the house defaults, so no row
         // reports itself as non-default.
-        userGet().mockResolvedValue({language: null, base_currency: null, theme: 'auto'} as never);
+        userGet().mockResolvedValue(userRead({language: null, base_currency: null}) as never);
         await mount();
 
         expect(rowButton(languageRow(), 'reset')).toBeNull();
@@ -358,16 +409,20 @@ describe('PreferencesTab — a modified row offers save and undo', () => {
         expect(userPut()).not.toHaveBeenCalled();
     });
 
-    it('moves the row to the house default on reset, and that becomes a change to save', async () => {
-        // User is on 'dark', the house default is 'auto': the row starts non-default
-        // (Reset offered) and after Reset it is modified (Save offered).
-        userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: 'dark'} as never);
+    it('removes the own theme at once on reset (lot UIP): PUT null, nothing left to save', async () => {
+        // The user has their own 'dark': Reset is offered, and it is no edit to save but the removal of the key.
+        userGet().mockResolvedValue(userRead({own: {theme: 'dark'}}) as never);
+        userPut().mockResolvedValue(userRead() as never);
         await mount();
 
         await fireEvent.click(rowButton(themeRow(), 'reset')!);
 
-        await waitFor(() => expect(rowButton(themeRow(), 'save')).not.toBeNull());
-        expect(userPut()).not.toHaveBeenCalled();
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
+        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: null}});
+        await waitFor(() => expect(applyTheme).toHaveBeenCalledWith('auto'));
+        expect(rowButton(themeRow(), 'save')).toBeNull();
+        await waitFor(() => expect(rowButton(themeRow(), 'reset')).toBeNull());
+        expect(within(themeRow()).getByTestId('preference-theme-badge-global')).toBeInTheDocument();
     });
 });
 
@@ -384,7 +439,7 @@ describe('PreferencesTab — what a single-field save puts on the wire', () => {
         await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
         // One key, not the whole settings object: a per-field save must not
         // resubmit the two fields the user did not touch.
-        expect(userPut()).toHaveBeenCalledWith({theme: 'dark'});
+        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: 'dark'}});
         expect(applyTheme).not.toHaveBeenCalled();
 
         pending.resolve({});
@@ -440,19 +495,19 @@ describe('PreferencesTab — what a single-field save puts on the wire', () => {
         expect(userPut()).toHaveBeenCalledWith({base_currency: 'USD'});
         // The base-currency change is the one the app caches from login, so the
         // store copy is what stops the rest of the UI showing the old currency.
-        expect(setDirect).toHaveBeenCalledWith({language: 'en', base_currency: 'USD', theme: 'auto'});
+        expect(setDirect).toHaveBeenCalledWith({...userRead(), language: 'en', base_currency: 'USD'});
         expect(applyTheme).not.toHaveBeenCalled();
     });
 
-    it('mirrors the whole triple into the settings store, so the rest of the app sees it', async () => {
+    it('mirrors what the server answered into the settings store, so the rest of the app sees the theme it now holds', async () => {
+        // The PUT carries `{ui_preferences: {theme}}`; the answer carries every preference the server holds, and the store takes it.
+        userPut().mockResolvedValue(userRead({own: {theme: 'dark'}}) as never);
         await mount();
         await chooseTheme('dark');
         await fireEvent.click(rowButton(themeRow(), 'save')!);
 
         await waitFor(() => expect(setDirect).toHaveBeenCalledTimes(1));
-        // The PUT carries one field; the store carries all three, because a
-        // sidebar reading a stale base currency is the bug this exists to avoid.
-        expect(setDirect).toHaveBeenCalledWith({language: 'en', base_currency: 'EUR', theme: 'dark'});
+        expect(setDirect).toHaveBeenCalledWith({...userRead({own: {theme: 'dark'}}), language: 'en', base_currency: 'EUR'});
     });
 
     it('publishes a saved event naming the field, and a success toast', async () => {
@@ -484,16 +539,18 @@ describe('PreferencesTab — the settings store keeps what a save does not own',
     // from it. A preference save owns three of its fields: handing `setDirect` those three
     // alone replaces the record, and the avatar is gone from the sidebar until the next
     // reload. `future_field` stands for any field this tab has never heard of.
-    const STORED = {language: 'en', base_currency: 'EUR', theme: 'auto', avatar_url: 'https://example.test/me.png', future_field: 'kept'};
+    const STORED = {...userRead(), avatar_url: 'https://example.test/me.png', future_field: 'kept'};
 
-    const cases: [string, () => Promise<void>, () => HTMLElement, Record<string, string>][] = [
-        ['theme', () => chooseTheme('dark'), themeRow, {theme: 'dark'}],
+    const cases: [string, () => Promise<void>, () => HTMLElement, Record<string, unknown>][] = [
+        ['theme', () => chooseTheme('dark'), themeRow, {ui_preferences: {theme: 'dark'}}],
         ['language', () => chooseLanguage('Italiano'), languageRow, {language: 'it'}],
         ['base currency', () => chooseCurrency('USD'), currencyRow, {base_currency: 'USD'}],
     ];
 
     it.each(cases)('saving the %s keeps the avatar and every other stored field', async (_field, choose, row, saved) => {
         storedSettings.mockReturnValue({...STORED});
+        // The answer of the write carries what the server now holds: for the theme, the own key.
+        userPut().mockResolvedValue(saved as never);
         await mount();
         await choose();
 
@@ -509,6 +566,7 @@ describe('PreferencesTab — the settings store keeps what a save does not own',
     it('keeps them through save all too', async () => {
         // The bulk path writes the store from its own call site, once, after the loop.
         storedSettings.mockReturnValue({...STORED});
+        userPut().mockResolvedValue({ui_preferences: {theme: 'dark'}} as never);
         await mount();
         await chooseTheme('dark');
         await chooseLanguage('Italiano');
@@ -519,7 +577,7 @@ describe('PreferencesTab — the settings store keeps what a save does not own',
         await waitFor(() => expect(setDirect).toHaveBeenCalledTimes(1));
         const handed = setDirect.mock.calls[0][0];
         expect(handed, 'the avatar the sidebar reads is still in the store').toHaveProperty('avatar_url', STORED.avatar_url);
-        expect(handed, 'the store carries the three values just saved, and the rest as it was').toEqual({...STORED, language: 'it', base_currency: 'USD', theme: 'dark'});
+        expect(handed, 'the store carries the three values just saved, and the rest as it was').toEqual({...STORED, language: 'it', base_currency: 'USD', ui_preferences: {theme: 'dark'}});
     });
 });
 
@@ -634,7 +692,7 @@ describe('PreferencesTab — save all', () => {
     });
 
     it('offers reset all when at least one persisted value differs from the global default', async () => {
-        userGet().mockResolvedValue({language: 'it', base_currency: 'EUR', theme: 'auto'} as never);
+        userGet().mockResolvedValue(userRead({language: 'it', base_currency: 'EUR'}) as never);
         await mount();
 
         expect(rowButton(languageRow(), 'reset')).not.toBeNull();
@@ -657,7 +715,7 @@ describe('PreferencesTab — save all', () => {
         await fireEvent.click(bulk('saveAll')!);
 
         await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
-        expect(userPut()).toHaveBeenCalledWith({theme: 'dark'});
+        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: 'dark'}});
     });
 
     it('sends both when two fields changed, one request each', async () => {
@@ -669,7 +727,7 @@ describe('PreferencesTab — save all', () => {
 
         await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(2));
         expect(userPut()).toHaveBeenCalledWith({language: 'it'});
-        expect(userPut()).toHaveBeenCalledWith({theme: 'dark'});
+        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: 'dark'}});
     });
 
     it('sends only the currency when only the currency changed', async () => {
@@ -696,7 +754,7 @@ describe('PreferencesTab — save all', () => {
         await fireEvent.click(bulk('saveAll')!);
 
         await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(3));
-        expect(userPut().mock.calls.map((c) => c[0])).toEqual([{language: 'it'}, {base_currency: 'USD'}, {theme: 'dark'}]);
+        expect(userPut().mock.calls.map((c) => c[0])).toEqual([{language: 'it'}, {base_currency: 'USD'}, {ui_preferences: {theme: 'dark'}}]);
         const event = notify.mock.calls[0][0];
         expect(event.detail).toMatchObject({fields: 3, saved: ['language', 'default_currency', 'theme'], failed: [], language: 'it', currency: 'USD', theme: 'dark'});
     });
@@ -757,7 +815,7 @@ describe('PreferencesTab — save all', () => {
 
         await waitFor(() => expect(banner()).not.toBeNull());
         expect(userPut()).toHaveBeenCalledTimes(2);
-        expect(userPut().mock.calls.map((c) => c[0])).toEqual([{language: 'it'}, {theme: 'dark'}]);
+        expect(userPut().mock.calls.map((c) => c[0])).toEqual([{language: 'it'}, {ui_preferences: {theme: 'dark'}}]);
         expect(setLanguage).not.toHaveBeenCalled();
         expect(applyTheme).toHaveBeenCalledWith('dark');
         expect(rowButton(languageRow(), 'save')).not.toBeNull();
@@ -780,15 +838,18 @@ describe('PreferencesTab — save all', () => {
 
     it('moves every row to the house defaults on reset all', async () => {
         // Every value differs from the global default, so resetting all of them
-        // makes all three modified at once.
-        globalGet().mockResolvedValue(globalItems({default_theme: 'light', default_language: 'it', default_currency: 'USD'}) as never);
-        userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: 'dark'} as never);
+        // makes language and currency modified at once, and drops the own theme.
+        globalGet().mockResolvedValue(globalItems({default_language: 'it', default_currency: 'USD'}) as never);
+        userGet().mockResolvedValue(userRead({language: 'en', base_currency: 'EUR', own: {theme: 'dark'}, defaults: {theme: 'light'}}) as never);
+        userPut().mockResolvedValue(userRead({defaults: {theme: 'light'}}) as never);
         await mount();
 
         expect(bulk('resetAll')).not.toBeNull();
         await fireEvent.click(bulk('resetAll')!);
 
-        await waitFor(() => expect(rowButton(themeRow(), 'save')).not.toBeNull());
+        // Language and currency become edits to save; the own theme is removed at once (lot UIP).
+        await waitFor(() => expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: null}}));
+        expect(rowButton(themeRow(), 'save')).toBeNull();
         expect(rowButton(languageRow(), 'save')).not.toBeNull();
         expect(rowButton(currencyRow(), 'save')).not.toBeNull();
     });
@@ -925,13 +986,13 @@ describe('PreferencesTab — Runes read boundaries', () => {
 
     it('does not let late global defaults overwrite a draft made after the user GET', async () => {
         const globals = deferred<ReturnType<typeof globalItems>>();
-        const user = deferred<{language: string; base_currency: string; theme: string}>();
+        const user = deferred<ReturnType<typeof userRead>>();
         globalGet().mockReturnValue(globals.promise);
         userGet().mockReturnValue(user.promise);
         render(PreferencesTab);
 
         await waitFor(expectInitialReadsOnly);
-        user.resolve({language: 'en', base_currency: 'EUR', theme: 'auto'});
+        user.resolve(userRead());
         await waitFor(() => expect(languageRow()).toBeInTheDocument());
         // The user GET, not Promise.all, owns the loading gate.
         expect(screen.getByTestId('settings-layout')).toHaveAttribute('data-busy', 'false');
@@ -967,10 +1028,10 @@ describe('PreferencesTab — Runes read boundaries', () => {
                 }),
             ),
         );
-        expect(userPut().mock.calls).toEqual([[{language: 'it'}], [{base_currency: 'USD'}], [{theme: 'dark'}]]);
+        expect(userPut().mock.calls).toEqual([[{language: 'it'}], [{base_currency: 'USD'}], [{ui_preferences: {theme: 'dark'}}]]);
         expect(setLanguage).toHaveBeenCalledWith('it');
         expect(applyTheme).toHaveBeenCalledWith('dark');
-        expect(setDirect).toHaveBeenCalledWith({language: 'it', base_currency: 'USD', theme: 'dark'});
+        expect(setDirect).toHaveBeenCalledWith(expect.objectContaining({language: 'it', base_currency: 'USD'}));
         expectInitialReadsOnly();
     });
 
@@ -990,5 +1051,99 @@ describe('PreferencesTab — Runes read boundaries', () => {
         expect(globalGet().mock.calls).toEqual([[], []]);
         expect(userGet().mock.calls).toEqual([[], []]);
         expect(userPut()).not.toHaveBeenCalled();
+    });
+});
+
+// =========================================================================
+describe('PreferencesTab — where a preference comes from (lot UIP)', () => {
+    const themeBadge = (kind: 'global' | 'auto') => within(themeRow()).queryByTestId(`preference-theme-badge-${kind}`);
+    const lineShapeRow = () => screen.getByTestId('preference-line-shape');
+
+    it('badges the theme Global while the user has no own theme', async () => {
+        userGet().mockResolvedValue(userRead() as never);
+        await mount();
+
+        expect(themeBadge('global')).not.toBeNull();
+        expect(themeBadge('global')).toHaveAttribute('data-source', 'global');
+    });
+
+    it('shows no Global badge once the user has an own theme', async () => {
+        userGet().mockResolvedValue(userRead({own: {theme: 'dark'}}) as never);
+        await mount();
+
+        expect(themeBadge('global')).toBeNull();
+    });
+
+    it('badges the theme Auto when the saved effective theme is auto, own or inherited', async () => {
+        userGet().mockResolvedValue(userRead({own: {theme: 'auto'}}) as never);
+        const first = await mount();
+        expect(themeBadge('auto')).not.toBeNull();
+        expect(themeBadge('auto')).toHaveAttribute('data-source', 'auto');
+        expect(themeBadge('global'), 'own, though auto: it does not follow the global default').toBeNull();
+        first.unmount();
+
+        userGet().mockResolvedValue(userRead({defaults: {theme: 'auto'}}) as never);
+        await mount();
+        expect(themeBadge('auto'), 'inherited auto').not.toBeNull();
+        expect(themeBadge('global')).not.toBeNull();
+    });
+
+    it('shows no Auto badge when the effective theme is not auto', async () => {
+        userGet().mockResolvedValue(userRead({own: {theme: 'light'}}) as never);
+        await mount();
+
+        expect(themeBadge('auto')).toBeNull();
+    });
+
+    it('offers no reset on the theme row while there is no own theme, and one when there is', async () => {
+        userGet().mockResolvedValue(userRead() as never);
+        const first = await mount();
+        expect(within(themeRow()).queryByTestId('setting-reset')).toBeNull();
+        first.unmount();
+
+        userGet().mockResolvedValue(userRead({own: {theme: 'dark'}}) as never);
+        await mount();
+        expect(within(themeRow()).getByTestId('setting-reset')).toBeInTheDocument();
+    });
+
+    it('the theme reset sends {ui_preferences: {theme: null}}', async () => {
+        userGet().mockResolvedValue(userRead({own: {theme: 'dark'}}) as never);
+        userPut().mockResolvedValue(userRead() as never);
+        await mount();
+
+        await fireEvent.click(within(themeRow()).getByTestId('setting-reset'));
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
+        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {theme: null}});
+        await waitFor(() => expect(within(themeRow()).queryByTestId('setting-reset')).toBeNull());
+    });
+
+    it('badges the line shape Global while the user has none of their own, and offers no reset', async () => {
+        userGet().mockResolvedValue(userRead() as never);
+        await mount();
+
+        expect(within(lineShapeRow()).getByTestId('preference-line-shape-badge-global')).toBeInTheDocument();
+        expect(within(lineShapeRow()).queryByTestId('setting-reset')).toBeNull();
+    });
+
+    it('shows no Global badge on the line shape once the user has chosen one, and offers reset', async () => {
+        userGet().mockResolvedValue(userRead({own: {chart_line_shape: 'steps'}}) as never);
+        await mount();
+
+        expect(within(lineShapeRow()).queryByTestId('preference-line-shape-badge-global')).toBeNull();
+        expect(within(lineShapeRow()).getByTestId('setting-reset')).toBeInTheDocument();
+    });
+
+    it('the line shape reset sends {ui_preferences: {chart_line_shape: null}}, and the badge comes back', async () => {
+        userGet().mockResolvedValue(userRead({own: {chart_line_shape: 'steps'}}) as never);
+        userPut().mockResolvedValue(userRead() as never);
+        await mount();
+
+        await fireEvent.click(within(lineShapeRow()).getByTestId('setting-reset'));
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
+        expect(userPut()).toHaveBeenCalledWith({ui_preferences: {chart_line_shape: null}});
+        await waitFor(() => expect(within(lineShapeRow()).getByTestId('preference-line-shape-badge-global')).toBeInTheDocument());
+        expect(within(lineShapeRow()).queryByTestId('setting-reset')).toBeNull();
     });
 });

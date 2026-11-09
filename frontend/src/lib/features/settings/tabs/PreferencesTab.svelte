@@ -2,7 +2,9 @@
     import {_, type SupportedLocale} from '$lib/i18n';
     import {availableLanguages, currentLanguage} from '$lib/stores/app/language';
     import {userSettings} from '$lib/stores/app/settings';
-    import {applyTheme, getStoredThemePreference} from '$lib/stores/app/themeStore';
+    import {applyTheme, type ThemePreference} from '$lib/stores/app/themeStore';
+    import {effectiveUiPreference, followsGlobalUiPreference, uiPreferenceDefault} from '$lib/stores/app/uiPreferences';
+    import type {UserSettings} from '$lib/types';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
     import {onMount} from 'svelte';
@@ -14,7 +16,9 @@
     import SettingCurrency from '$lib/features/settings/SettingCurrency.svelte';
     import SettingTheme from '$lib/features/settings/SettingTheme.svelte';
     import LineShapePicker from '$lib/components/charts/LineShapePicker.svelte';
-    import {getGlobalLineShape, setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+    import {clearGlobalLineShape, getGlobalLineShape, lineShapeFollowsGlobal, setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+    import SettingActions from '$lib/features/settings/SettingActions.svelte';
+    import PreferenceSourceBadge from '$lib/components/ui/PreferenceSourceBadge.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
@@ -82,9 +86,9 @@
             }
 
             globalDefaults = {
+                ...globalDefaults,
                 language: settingsMap['default_language'] || FALLBACK_DEFAULTS.language,
                 default_currency: settingsMap['default_currency'] || FALLBACK_DEFAULTS.default_currency,
-                theme: (settingsMap['default_theme'] as 'light' | 'dark' | 'auto') || FALLBACK_DEFAULTS.theme,
             };
             debug.log('PreferencesTab', 'globalDefaults set to', globalDefaults);
         } catch (e) {
@@ -101,12 +105,15 @@
             const response = await zodiosApi.get_user_settings_endpoint_api_v1_settings_user_get();
 
             debug.log('PreferencesTab', 'loadSettings response', response);
+            // The theme in force and its default come with the user settings (lot UIP): the user's own, else default_theme.
+            globalDefaults = {...globalDefaults, theme: uiPreferenceDefault(response, 'theme')};
             originalValues = {
                 language: response.language || $currentLanguage,
                 default_currency: response.base_currency || 'EUR',
-                theme: response.theme || getStoredThemePreference(),
+                theme: effectiveUiPreference(response, 'theme'),
             };
             editedValues = {...originalValues};
+            userSettings.setDirect({...userSettings.get(), ...response} as UserSettings);
         } catch (e) {
             debug.error('PreferencesTab', 'loadSettings failed', e);
         } finally {
@@ -122,11 +129,14 @@
     // Check if a field is non-default (compared to global defaults)
     let languageNonDefault = $derived(originalValues.language !== globalDefaults.language);
     let currencyNonDefault = $derived(originalValues.default_currency !== globalDefaults.default_currency);
-    let themeNonDefault = $derived(originalValues.theme !== globalDefaults.theme);
+    // The theme and the line shape are the user's own or follow the administrator's default (lot UIP): «non default» means own.
+    let themeFollowsGlobal = $derived(followsGlobalUiPreference($userSettings, 'theme'));
+    let themeNonDefault = $derived(!themeFollowsGlobal);
+    let lineShapeOwn = $derived(!lineShapeFollowsGlobal());
 
     // Check if any field is modified
     let hasChanges = $derived(languageModified || currencyModified || themeModified);
-    let hasNonDefaults = $derived(languageNonDefault || currencyNonDefault || themeNonDefault);
+    let hasNonDefaults = $derived(languageNonDefault || currencyNonDefault || themeNonDefault || lineShapeOwn);
 
     // Filter settings by category
     // Avatar is always shown at the top, regardless of category selection
@@ -160,25 +170,58 @@
     function savePayload(field: PreferenceField) {
         if (field === 'language') return {language: editedValues.language};
         if (field === 'default_currency') return {base_currency: editedValues.default_currency};
-        return {theme: editedValues.theme};
+        return {ui_preferences: {theme: editedValues.theme}};
     }
 
     function applyPersistedSideEffect(field: PreferenceField) {
         if (field === 'language') {
             currentLanguage.set(editedValues.language as SupportedLocale);
         } else if (field === 'theme') {
-            applyTheme(editedValues.theme as 'light' | 'dark' | 'auto');
+            applyTheme(editedValues.theme as ThemePreference);
         }
     }
 
-    function syncPersistedPreferences(values = originalValues) {
-        // Merge: setDirect replaces the whole value, and the sidebar reads avatar_url from it.
+    function syncPersistedPreferences(values = originalValues, response?: UserSettings | null) {
+        // Merge: setDirect replaces the whole value, and the sidebar reads avatar_url from it. The answer of the write, when
+        // there is one, carries the interface preferences the server now holds (lot UIP).
         userSettings.setDirect({
             ...userSettings.get(),
+            ...(response ?? {}),
             language: values.language,
             base_currency: values.default_currency,
-            theme: values.theme,
-        });
+        } as UserSettings);
+    }
+
+    /**
+     * Forget the user's own theme (lot UIP): it follows the administrator's default_theme again, at once. Not an edit to
+     * save: the value is removed on the server, which is what «back to the global default» means for this preference.
+     */
+    async function clearTheme() {
+        isSaving = true;
+        error = null;
+        const ok = await userSettings.updateUiPreference('theme', null);
+        isSaving = false;
+        if (!ok) {
+            error = $_('settings.preferencesSaveFailed');
+            notify({name: 'settings.preferences.save.failed', detail: {field: 'theme', reason: 'clear'}, toast: {variant: 'error', message: $_('settings.preferencesSaveFailed')}});
+            return;
+        }
+        const theme = effectiveUiPreference(userSettings.get(), 'theme');
+        globalDefaults = {...globalDefaults, theme};
+        originalValues = {...originalValues, theme};
+        editedValues = {...editedValues, theme};
+        applyTheme(theme);
+        notify({name: 'settings.preferences.saved', detail: {fields: 1, field: 'theme', value: null}, toast: {variant: 'success', message: $_('settings.savedSuccessfully')}});
+    }
+
+    /** Forget the user's own line shape (lot UIP): every chart without a shape of its own follows the administrator's default. */
+    async function clearLineShape() {
+        const ok = await clearGlobalLineShape();
+        notify(
+            ok
+                ? {name: 'settings.preferences.saved', detail: {fields: 1, field: 'chart_line_shape', value: null}, toast: {variant: 'success', message: $_('settings.savedSuccessfully')}}
+                : {name: 'settings.preferences.save.failed', detail: {field: 'chart_line_shape', reason: 'clear'}, toast: {variant: 'error', message: $_('settings.preferencesSaveFailed')}},
+        );
     }
 
     function failureMessage(e: unknown): string {
@@ -192,11 +235,11 @@
         error = null;
 
         try {
-            await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put(savePayload(field));
+            const response = await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put(savePayload(field));
             const nextValues = {...originalValues, [field]: editedValues[field]};
             originalValues = nextValues;
             applyPersistedSideEffect(field);
-            syncPersistedPreferences(nextValues);
+            syncPersistedPreferences(nextValues, response);
             notify({
                 name: 'settings.preferences.saved',
                 detail: {fields: 1, field, value: editedValues[field]},
@@ -219,6 +262,10 @@
     }
 
     function resetField(field: keyof typeof editedValues) {
+        if (field === 'theme') {
+            void clearTheme();
+            return;
+        }
         editedValues = {...editedValues, [field]: globalDefaults[field]};
     }
 
@@ -235,10 +282,11 @@
         const saved: {field: PreferenceField; label: string}[] = [];
         const failed: {field: PreferenceField; label: string; reason: string}[] = [];
         let nextValues = {...originalValues};
+        let lastResponse: UserSettings | null = null;
 
         for (const field of fields) {
             try {
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put(savePayload(field));
+                lastResponse = (await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put(savePayload(field))) ?? lastResponse;
                 nextValues = {...nextValues, [field]: editedValues[field]};
                 saved.push({field, label: fieldLabel(field)});
                 applyPersistedSideEffect(field);
@@ -248,7 +296,7 @@
         }
 
         originalValues = nextValues;
-        if (saved.length > 0) syncPersistedPreferences(nextValues);
+        if (saved.length > 0) syncPersistedPreferences(nextValues, lastResponse);
 
         if (failed.length > 0) {
             error = failed.map((f) => `${f.label}: ${f.reason}`).join('\n');
@@ -283,8 +331,14 @@
         editedValues = {...originalValues};
     }
 
+    /**
+     * Language and currency go back to the defaults as edits to save, as before. The theme and the line shape are interface
+     * preferences (lot UIP): the user's own value is removed at once, and they follow the administrator's default again.
+     */
     function resetAll() {
-        editedValues = {...globalDefaults};
+        editedValues = {...globalDefaults, theme: themeNonDefault ? globalDefaults.theme : editedValues.theme};
+        if (themeNonDefault) void clearTheme();
+        if (lineShapeOwn) void clearLineShape();
     }
 </script>
 
@@ -341,6 +395,9 @@
                     label={$_('settings.theme')}
                     hint={$_('settings.themeHint')}
                     icon={Palette}
+                    followsGlobal={themeFollowsGlobal}
+                    showAutoBadge={originalValues.theme === 'auto'}
+                    badgeTestIdPrefix="preference-theme"
                     isModified={themeModified}
                     isNonDefault={themeNonDefault}
                     isLocked={false}
@@ -352,15 +409,21 @@
             </div>
         {/if}
 
-        <!-- Line shape of the charts: kept in this browser, applied as it is picked (FB-3) -->
+        <!-- Line shape of the charts: applied as it is picked, kept with the user settings (FB-3, lot UIP) -->
         {#if visibleFields.includes('theme')}
             <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-lf-subtle text-lf-primary" data-testid="preference-line-shape">
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-lf-secondary">{$_('chartSettings.lineShape')}</div>
+                    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-lf-secondary">
+                        <span>{$_('chartSettings.lineShape')}</span>
+                        {#if !lineShapeOwn}
+                            <PreferenceSourceBadge kind="global" testId="preference-line-shape-badge-global" />
+                        {/if}
+                    </div>
                     <p class="text-xs text-lf-muted mt-1">{$_('settings.lineShapeHint')}</p>
                 </div>
-                <div class="self-end sm:self-auto">
-                    <LineShapePicker value={getGlobalLineShape()} onchange={setGlobalLineShape} testIdPrefix="preference-line-shape-picker" />
+                <div class="flex items-center gap-2 self-end sm:self-auto">
+                    <SettingActions isNonDefault={lineShapeOwn} {isSaving} onreset={() => void clearLineShape()} />
+                    <LineShapePicker value={getGlobalLineShape()} onchange={(shape) => void setGlobalLineShape(shape)} testIdPrefix="preference-line-shape-picker" />
                 </div>
             </div>
         {/if}
