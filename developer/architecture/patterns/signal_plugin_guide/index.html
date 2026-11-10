@@ -11,7 +11,7 @@
         <link rel="canonical" href="https://librefolio.github.io/LibreFolio/developer/architecture/patterns/signal_plugin_guide/">
       
       
-        <link rel="prev" href="../fx_plugin_guide/">
+        <link rel="prev" href="../plugin_settings/">
       
       
         <link rel="next" href="../tool_plugins/">
@@ -29,7 +29,7 @@
       
       
       <link rel="icon" href="../../../../static/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -37,10 +37,10 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -59,6 +59,8 @@
       
     
     
+      <link rel="stylesheet" href="../../../../stylesheets/lf-tokens.css">
+    
       <link rel="stylesheet" href="../../../../static/extra.css">
     
       <link rel="stylesheet" href="../../../../stylesheets/home-custom.css">
@@ -70,7 +72,11 @@
     
     
   
-  <script>window.LF_GALLERY_FALLBACK_BASE = "https://librefolio.github.io/LibreFolio/";</script>
+  <script>window.LF_GALLERY_FALLBACK_BASE = "https://librefolio.github.io/LibreFolio/";</script><script src="../../../../javascripts/search-language.js"></script>
+  <script src="../../../../javascripts/vendor/mermaid/mermaid.min.js"></script>
+  <script src="../../../../javascripts/mermaid-early.js"></script><link rel="stylesheet" href="../../../../stylesheets/diagram-zoom.css">
+  <script src="../../../../javascripts/diagram-zoom.js"></script>
+  
 
   <script type="application/ld+json">
 {
@@ -4250,6 +4256,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../../user/settings/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../../user/settings/about/" class="md-nav__link">
         
   
@@ -4574,6 +4608,60 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2_3" id="__nav_3_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Expose Securely
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Expose Securely
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../../../admin/service_exposure/" class="md-nav__link">
         
@@ -4582,7 +4670,7 @@
   <span class="md-ellipsis">
     
   
-    Expose Securely
+    Overview
   
 
     
@@ -4603,8 +4691,62 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../admin/connection_checks/" class="md-nav__link">
+      <a href="../../../../admin/service_exposure_funnel/" class="md-nav__link">
         
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Public Access (Funnel)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2_4" id="__nav_3_2_4_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -4618,7 +4760,79 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_2_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Check Connection Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/connection_checks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/connection_proxy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reverse Proxy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -4692,6 +4906,60 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3_1" id="__nav_3_3_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Environment Variables
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../../../admin/configuration/" class="md-nav__link">
         
@@ -4700,7 +4968,7 @@
   <span class="md-ellipsis">
     
   
-    Environment Variables
+    Overview
   
 
     
@@ -4721,6 +4989,244 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../../admin/configuration_secrets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secrets and Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/configuration_security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Checks and Protections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/configuration_accounts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accounts and Asset Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3_2" id="__nav_3_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Email
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Email
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/email/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/email_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Links and Messages
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/email_troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../../admin/settings/" class="md-nav__link">
         
   
@@ -4729,6 +5235,34 @@
     
   
     Global Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/users/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Users & Invitations
   
 
     
@@ -4810,9 +5344,27 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../../../admin/cli_tools/" class="md-nav__link">
+    
+    
+    
+    
+      
+      
         
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4_1" id="__nav_3_4_1_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -4826,7 +5378,225 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    CLI Admin Tools
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/cli_tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/cli_backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4_2" id="__nav_3_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup, Restore & Moving
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backup, Restore & Moving
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/backup_restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/backup_sealed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sealed Backups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../../admin/backup_moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving and Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -9674,6 +10444,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -12061,6 +12859,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../backend/email/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    📧 Email (SMTP)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../backend/financial_math/" class="md-nav__link">
         
   
@@ -12729,6 +13555,34 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../../frontend/designer-lab/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Designer Lab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -12745,10 +13599,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2" id="__nav_5_7_4_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_3" id="__nav_5_7_4_3_label" tabindex="0">
             
   
   
@@ -12766,8 +13620,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_4_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -12827,10 +13681,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_3_2" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2_2" id="__nav_5_7_4_2_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_3_2" id="__nav_5_7_4_3_2_label" tabindex="0">
             
   
   
@@ -12848,8 +13702,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_2_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2_2">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_3_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -13421,10 +14275,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2_12" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_3_12" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2_12" id="__nav_5_7_4_2_12_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_3_12" id="__nav_5_7_4_3_12_label" tabindex="0">
             
   
   
@@ -13442,8 +14296,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_2_12_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2_12">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_3_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_3_12">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -15114,24 +15968,48 @@ flowchart TB
 </thead>
 <tbody>
 <tr>
-<td><code>signal_runtime.py</code></td>
+<td><code>signals/runtime.py</code></td>
 <td>Verify the locked <code>pandas-ta-classic</code> + TA-Lib stack at startup and reject silent fallback.</td>
 </tr>
 <tr>
-<td><code>signal_plugins/base.py</code></td>
+<td><code>signals/base.py</code></td>
 <td>Define the plugin contract and build static catalog metadata.</td>
 </tr>
 <tr>
+<td><code>signals/registry.py</code></td>
+<td><code>SignalPluginRegistry</code>: validate definitions and reject duplicate codes.</td>
+</tr>
+<tr>
 <td><code>provider_registry.py</code></td>
-<td>Discover plugin folders, validate definitions, and reject duplicate codes.</td>
+<td>Discover plugin folders (shared by every plugin registry).</td>
 </tr>
 <tr>
-<td><code>signal_service.py</code></td>
-<td>Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output.</td>
+<td><code>signals/service.py</code></td>
+<td><code>SignalService</code>, the façade: plan a batch through <code>prepare_plan()</code>, run it in one worker thread (<code>asyncio.to_thread</code>) through <code>execute()</code>, or do both with <code>compute()</code>.</td>
 </tr>
 <tr>
-<td><code>signal_annotations.py</code></td>
-<td>Derive line crossovers and threshold crossings from extended canonical data.</td>
+<td><code>signals/planning.py</code></td>
+<td><code>prepare_signal_plan</code>: validate the batch and its annotation requests (<code>SignalRequestValidationError</code>), resolve plugins, validate their parameters, deduplicate identical computations, size the history and inputs to load (<code>SignalExecutionPlan</code>), and record preflight failures before any price is read.</td>
+</tr>
+<tr>
+<td><code>signals/execution.py</code></td>
+<td><code>execute_signal_plan</code>: per planned computation, derive a prepared-series plugin's input, risk metadata, and data-quality warnings from the <code>SignalPreparedSeriesBundle</code>, check coverage and availability, select the quote days, call the plugin, slice its visible output, and isolate failures so that one never aborts the batch.</td>
+</tr>
+<tr>
+<td><code>signals/validation.py</code></td>
+<td>Normalize a plugin's output (<code>NaN</code> becomes a missing value, infinity an error), check its series count and metadata against <code>output_specs</code> and its dates against the input, rewrite an availability as unavailable or partial, and build a failure's details.</td>
+</tr>
+<tr>
+<td><code>signals/annotations.py</code></td>
+<td>Derive line crossovers and threshold crossings from extended canonical data, and attach them, with their warnings, to the target results (<code>attach_annotations</code>).</td>
+</tr>
+<tr>
+<td><code>signals/series.py</code></td>
+<td>Provide the pure helpers that planning and execution use: the calendar days loaded per warm-up session (<code>SESSION_WARMUP_DAY_MULTIPLIER</code>), quote-day selection (<code>is_quote_day()</code>), field and date coverage (<code>SignalInputCoverage</code>), the input segment the data policy allows, event filtering, the availability decision and its warnings, and the check and slice of the visible output.</td>
+</tr>
+<tr>
+<td><code>signals/risk_adapters.py</code></td>
+<td>Provide the helpers the prepared-series risk plugins share: read the prepared returns and the annualization factor from the execution context, compute rolling volatility, Sharpe, and beta with vectorised pandas passes (the loop versions stay as the reference that <code>test_risk_metrics_oracle.py</code> checks them against), warn about mathematically undefined windows (<code>undefined_metric_window</code>), and build a line or area output from its <code>SignalOutputSpec</code>.</td>
 </tr>
 <tr>
 <td>Chart Asset/FX adapters</td>
@@ -15186,12 +16064,14 @@ page discards, and an AI Export snapshot carries them only in the text it copies
         S-&gt;&gt;P: compute(neutral points, params, context)
         P--&gt;&gt;S: SignalComputation
         S-&gt;&gt;S: Validate canonical outputs and isolate failures
+        S-&gt;&gt;S: Slice to visible range and assign status
+        S-&gt;&gt;S: Keep the extended series for annotations
     end
     opt Annotation requests
-        S-&gt;&gt;N: Derive crossings and threshold events
-        N--&gt;&gt;S: Canonical annotations
+        S-&gt;&gt;N: Derive crossings and threshold events on the extended series
+        N--&gt;&gt;S: Events within the visible range
+        S-&gt;&gt;S: Attach events and warnings to their target results
     end
-    S-&gt;&gt;S: Slice to visible range and assign status
     S--&gt;&gt;A: SignalResult[]
     A--&gt;&gt;C: One canonical bulk response</code></pre>
 <h3 id="ai-export-component-lifecycle">🧠 AI Export Component Lifecycle</h3>
@@ -15241,17 +16121,34 @@ page discards, and an AI Export snapshot carries them only in the text it copies
 <li>aggregates the union of required price fields/events;</li>
 <li>records per-instance preflight failures without aborting the remaining batch.</li>
 </ul>
-<p>The chart Asset/FX adapter or AI Export domain assembler uses that plan to load one
+<p>A preflight failure stays with its instance, but an incoherent batch stops entirely.
+<code>prepare_signal_plan</code> then raises <code>SignalRequestValidationError</code>, and no instance gets a
+plan or a result. The incoherent cases are:</p>
+<ul>
+<li>duplicate <code>instance_id</code> values, or duplicate annotation request keys;</li>
+<li>an annotation whose target (<code>attach_to_instance_id</code>) or source instance is not a
+  requested signal instance;</li>
+<li>a <code>band</code> source naming a series that its plugin does not declare, or that is not a band;</li>
+<li>a scalar <code>signal</code> source naming a band series.</li>
+</ul>
+<p>The chart endpoints answer it with HTTP 422, the message as <code>detail</code>:
+<code>POST /api/v1/signals/preview</code> (<code>api/v1/signals.py</code>), the Asset price query
+<code>POST /api/v1/assets/prices/query</code> (<code>api/v1/assets/prices.py</code>), and the FX endpoint
+<code>POST /api/v1/fx/currencies/convert</code> (<code>api/v1/fx/currencies.py</code>). An Asset or FX request
+then returns no prices either.</p>
+<p>The chart Asset/FX adapter or AI Export domain assembler uses the plan to load one
 extended input range. For the plain price input, the warm-up in calendar days is
 <code>SignalExecutionPlan.max_history_days_before_visible</code>: the larger of the session
 warm-up times <code>SESSION_WARMUP_DAY_MULTIPLIER</code> and the calendar warm-up. The multiplier
-is 2 (<code>signal_series_preparation.py</code>): a year holds about 252 sessions in 365 days, and
+is 2 (<code>signals/series.py</code>): a year holds about 252 sessions in 365 days, and
 long holiday windows lower that further. The Asset price query, the FX endpoint, and
 the AI Export FX loader all size their load with it.</p>
 <p>A warm-up can also be unbounded. A plugin whose result depends on the whole past returns
 <code>SignalWarmupRequirement(full_history=True)</code>, and the plan sets <code>requires_full_history</code>:
-the Asset price query (<code>price_query.py</code>) then loads from the start of the available
-history instead of the point-derived warm-up, and still slices to the visible range after
+the Asset price query (<code>price_query.py</code>) then extends the point-derived warm-up back to
+the start of the available history, but not before <code>FULL_HISTORY_LOAD_START</code> (1900-01-01),
+never shortening it (a warm-up that starts earlier keeps its start, and a price stored
+before the load start can only seed the fill), and still slices to the visible range after
 the computation. Underwater drawdown (<code>RISK_DRAWDOWN</code>) does so through its <code>full_history</code>
 parameter, on by default (the card's <strong>Full history</strong> checkbox); off, only the visible
 range and a minimal warm-up are loaded, so the running peak is the window's own. AI Export
@@ -15278,10 +16175,31 @@ sequentially, so synchronous numerical libraries never block FastAPI's event loo
 <p>Coverage (<code>SignalInputCoverage</code>) is measured before step 3 and stays calendar-based,
 so the UI coverage thresholds in <a href="#status-and-data-policy">Status and Data Policy</a>
 keep their meaning. A quote-day plugin's output is dated on sessions; the chart aligns
-it by date and bridges the days without a point.</p>
+it by date and bridges the days without a point. A point the plugin returns <strong>without a
+value</strong> is different: a warm-up, an undefined window, a missing reference price. The
+chart renderer (<code>frontend/src/lib/charts/signals/backendRenderer.ts</code>) breaks a line or
+area output there, drawing each stretch between two such points as its own series, so no
+segment crosses a day on which nothing was measured. Bars simply skip those points.</p>
 <h3 id="3-annotations">3. 🎯 Annotations</h3>
-<p>Optional annotation requests run after indicator calculation against the extended series.
-This allows boundary crossovers to be detected correctly before output is sliced.</p>
+<p>Execution slices each signal's result right after validating it (step 7 above).
+<code>execute_signal_plan</code> keeps the unsliced series of each <code>ok</code> or <code>partial</code> instance aside, in
+<code>extended_series_by_instance</code>.</p>
+<p>Optional annotation requests run once every planned signal has executed.
+<code>attach_annotations</code> hands those extended series and the loaded prices to
+<code>SignalAnnotationService.compute()</code>. Crossings are detected across the warm-up too, so a
+crossover on the first visible date is still found. Only the events dated inside the
+requested visible range are kept.</p>
+<p><code>attach_annotations</code> adds those events to their target results, merged with any
+annotations the plugin itself returned, and sorted by date. Problems become
+<code>annotation_unavailable</code> warnings on the target result:</p>
+<ul>
+<li>a request whose source has no usable series, such as an <code>unavailable</code> or <code>failed</code>
+  instance, gets <code>Annotation '&lt;key&gt;' is unavailable</code>, and the others still run;</li>
+<li>events whose target status is not <code>ok</code> or <code>partial</code> are dropped, and the warning
+  <code>Annotation '&lt;key&gt;' could not be attached</code> gives that status as its reason;</li>
+<li>if the whole annotation computation raises, every request gets the
+  <code>Annotation '&lt;key&gt;' is unavailable</code> warning on its target, and the signal results are kept.</li>
+</ul>
 <p>Supported primitives:</p>
 <ul>
 <li>line/line crossover;</li>
@@ -15377,22 +16295,56 @@ frontend receives names, descriptions, parameter controls, required data, output
 and documentation links without a signal-specific UI implementation.</p>
 <p><code>catalog_visible</code> (inherited <code>True</code>) decides whether the plugin appears in that catalog:
 <code>SignalPluginRegistry.list_definitions()</code> skips a plugin that sets it to <code>False</code>, so no
-selector offers it, while a request naming its code still runs. Of the 23 registered plugins,
-<code>calendar_rolling_return</code> (<code>ASSET_CALENDAR_ROLLING_RETURN</code>) is the one hidden: the asset chart
-requests it for its <strong>Rolling Return</strong> mode (see
+selector offers it, while a request naming its code still runs. None of the 22 registered
+plugins sets it today. <code>calendar_rolling_return</code> (<code>ASSET_CALENDAR_ROLLING_RETURN</code>) is in the
+catalog like the others, as the <strong>Rolling Return</strong> of the Risk group, and the asset chart also
+requests it by its code for its <strong>Rolling Return</strong> mode (see
 <a href="../../../frontend/components/charts/#asset-detail-prices-and-rolling-return">Chart internals</a>).
-The Asset catalog, <code>GET /api/v1/assets/prices/signals</code>, lists the 22 visible plugins whose
+The Asset catalog, <code>GET /api/v1/assets/prices/signals</code>, lists the 22 plugins whose
 <code>compatible_domains</code> include <code>ASSET</code>, which is all of them; the FX catalog,
 <code>GET /api/v1/fx/currencies/signals</code>, lists the 9 close-only ones that also declare <code>FX</code>: EMA,
 SMA, KAMA, MACD, PPO, ROC, RSI, Stochastic RSI and Bollinger Bands.
 <code>test_signal_plugin_matrix.py</code> pins both sets.</p>
+<p><code>aggregation_profile</code> says which point stands for a bucket when an output is reduced to one point
+per bucket, by a chart drawing weekly or monthly points or by an AI Export technical component:
+<code>first_with_range</code>, <code>last_with_range</code>, <code>min_with_range</code> and <code>max_with_range</code> keep the earliest, the
+latest, the smallest or the largest point (the earliest among equal values), and <code>band_envelope</code>
+keeps a band's lowest <code>lower</code>, its last <code>middle</code> and its highest <code>upper</code>. The backend keeps that
+rule in one module, <code>backend/app/services/signals/aggregation.py</code> (<code>select_point()</code>,
+<code>scalar_representative()</code>, <code>band_envelope()</code>), which AI Export's temporal aggregators
+(<code>ai_export/temporal/aggregators.py</code>) go through; the chart keeps the same rule in the browser
+(<code>selectSignalRepresentative()</code> and <code>bandRepresentative()</code> in
+<code>frontend/src/lib/components/charts/timeSeriesAggregation.ts</code>). The shared fixture
+<code>backend/test_scripts/fixtures/signals/aggregation_profiles.v1.json</code>, which the tests of both
+stacks read, and <code>test_signal_aggregation.py</code> (<code>./dev.py test services signal-aggregation</code>) tie
+the two.</p>
+<p>The same module also holds <code>sample_signal_series()</code>, which reduces a whole series, not one
+bucket, for an item of <code>POST /assets/prices/query</code> that asks a weekly or monthly sample with
+<code>signals</code> (see <a href="../../../backend/assets/architecture/#price-query-sampling">Sampled Price Series</a>):
+each series of the item's signals comes back with one point per bucket, as the compact chart
+(<code>downsampleRenderedSignal()</code>, in the same <code>timeSeriesAggregation.ts</code>) draws it, and a line or an
+area keeps its gaps. With the backend's reduction a point keeps only its bucket's date and, for a
+calendar return, its <code>provenance</code>: the browser, reducing the daily series itself, also adds the real
+day and the number of days of the bucket. The series of one signal are then aligned
+(<code>align_signal_series()</code>): they leave on the same dates, a point without a value where a series has
+none (a warm-up that ends inside the range), as <code>SignalResult</code> wants them. A client reads the step
+from the answer's <code>resolution</code>, never from the density of a signal's series: a series is daily
+inside a weekly or monthly answer when no output spec describes it or when its reduction keeps no
+point. A second shared table,
+<code>backend/test_scripts/fixtures/signals/signal_sampling_cases.v1.json</code>, read by pytest on every case
+and by Vitest on the cases the browser draws the same way, ties it as <code>aggregation_profiles.v1.json</code>
+ties the per-bucket rule. A plugin needs nothing new for it: the reduction reads each output's
+<code>aggregation_profile</code> from <code>output_specs</code> (matched to the series by <code>key</code>) and the series' kind, so
+a new output only has to declare a profile that fits its kind: <code>band_envelope</code> for a band, one of
+the four scalar profiles for a line, an area or a bar. <code>SignalOutputSpec</code> already refuses a
+band/scalar mismatch when it is built, and <code>sample_signal_series()</code> raises <code>ValueError</code> on one.</p>
 <h3 id="sessions-or-calendar-days">📅 Sessions or Calendar Days</h3>
 <p><code>computes_on_quote_days</code> decides what a plugin's periods count. When it is <code>True</code> (the
 inherited default), <code>SignalService</code> hands the plugin only the <strong>quote days</strong> of its
 input, the sessions, so a period of N means N sessions, as the standard definitions
 count them: SMA 200 is 200 sessions, not 200 calendar days.</p>
 <p>A quote day is a point whose <strong>price</strong> was quoted on its own date: <code>backward_fill_info</code>
-is <code>None</code> or <code>days_back == 0</code> (<code>is_quote_day()</code> in <code>signal_series_preparation.py</code>). The
+is <code>None</code> or <code>days_back == 0</code> (<code>is_quote_day()</code> in <code>signals/series.py</code>). The
 exchange rate does not decide it: a quote converted with a rate carried from an earlier
 day is still a session of the instrument. On the Asset path, a stored weekend or
 market-holiday row that exactly repeats the previous close is marked as carried before
@@ -15403,7 +16355,7 @@ the signals run (<code>mark_market_closed_carries</code>, with the holiday table
 <li>the windows are calendar spans by definition, as in <code>calendar_rolling_return</code>: its
   input keeps every calendar point, and its window is declared in days;</li>
 <li>the plugin uses the prepared series (<code>input_requirements.uses_prepared_asset_series</code>),
-  as the five prepared-series risk signals do (drawdown and rolling beta, return, Sharpe,
+  as the four prepared-series risk signals do (drawdown and rolling beta, Sharpe,
   volatility): that series is already on the quote calendar, and the service never
   filters it.</li>
 </ul>
@@ -15526,7 +16478,7 @@ problem instead of computing over silently altered input.</p>
 </div>
 <h3 id="enforced-status-matrix">🚦 Enforced Status Matrix</h3>
 <p>A plugin never sets the status itself. <code>compute()</code> returns a <code>SignalComputation</code>, or raises
-<code>SignalUnavailableError</code> (<code>backend/app/services/signal_plugins/base.py</code>) with an
+<code>SignalUnavailableError</code> (<code>backend/app/services/signals/base.py</code>) with an
 <em>unavailable</em> <code>reason_code</code>, such as <code>undefined_metric</code> or <code>insufficient_history</code>, when the
 result is mathematically undefined. The service then assigns the status of a computed result —
 <code>partial</code> when the warm-up is incomplete, partial coverage was used, or the availability
@@ -15626,108 +16578,106 @@ TP_t = \frac{H_t + L_t + C_t}{3}
 <a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="n">SignalViewTransform</span><span class="p">,</span>
 <a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="n">SignalWarmupRequirement</span><span class="p">,</span>
 <a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="p">)</span>
-<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="kn">from</span><span class="w"> </span><span class="nn">backend.app.services.provider_registry</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    <span class="n">SignalPluginRegistry</span><span class="p">,</span>
-<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>    <span class="n">register_plugin</span><span class="p">,</span>
-<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="p">)</span>
-<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="kn">from</span><span class="w"> </span><span class="nn">backend.app.services.signal_plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">SignalPlugin</span>
-<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>
-<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>
-<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="k">class</span><span class="w"> </span><span class="nc">TypicalPriceParams</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
-<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>
-<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>
-<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="nd">@register_plugin</span><span class="p">(</span><span class="n">SignalPluginRegistry</span><span class="p">)</span>
-<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="k">class</span><span class="w"> </span><span class="nc">TypicalPriceSignalPlugin</span><span class="p">(</span><span class="n">SignalPlugin</span><span class="p">):</span>
-<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>    <span class="n">signal_code</span> <span class="o">=</span> <span class="s2">"TYPICAL_PRICE"</span>
-<a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>    <span class="n">implementation_version</span> <span class="o">=</span> <span class="s2">"1.0.0"</span>
-<a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>    <span class="n">category</span> <span class="o">=</span> <span class="n">SignalCategory</span><span class="o">.</span><span class="n">TREND</span>
-<a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>    <span class="n">display_name_key</span> <span class="o">=</span> <span class="s2">"signals.typicalPrice.name"</span>
-<a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>    <span class="n">description_key</span> <span class="o">=</span> <span class="s2">"signals.typicalPrice.description"</span>
-<a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>    <span class="n">semantic_id</span> <span class="o">=</span> <span class="s2">"typical_price"</span>
-<a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a>    <span class="n">semantic_description</span> <span class="o">=</span> <span class="s2">"Averages the high, low, and close of each session."</span>
-<a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>    <span class="n">icon</span> <span class="o">=</span> <span class="s2">"⚖️"</span>
-<a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a>    <span class="n">docs_path</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a>        <span class="s2">"financial-theory/technical-analysis/indicators/typical-price/"</span>
-<a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a>    <span class="p">)</span>
-<a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a>    <span class="n">params_model</span> <span class="o">=</span> <span class="n">TypicalPriceParams</span>
-<a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a>    <span class="n">input_requirements</span> <span class="o">=</span> <span class="n">SignalInputRequirements</span><span class="p">(</span>
-<a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a>        <span class="n">price_fields</span><span class="o">=</span><span class="p">[</span>
-<a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a>            <span class="n">SignalPriceField</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
-<a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a>            <span class="n">SignalPriceField</span><span class="o">.</span><span class="n">LOW</span><span class="p">,</span>
-<a id="__codelineno-1-55" name="__codelineno-1-55" href="#__codelineno-1-55"></a>            <span class="n">SignalPriceField</span><span class="o">.</span><span class="n">CLOSE</span><span class="p">,</span>
-<a id="__codelineno-1-56" name="__codelineno-1-56" href="#__codelineno-1-56"></a>        <span class="p">]</span>
-<a id="__codelineno-1-57" name="__codelineno-1-57" href="#__codelineno-1-57"></a>    <span class="p">)</span>
-<a id="__codelineno-1-58" name="__codelineno-1-58" href="#__codelineno-1-58"></a>    <span class="n">output_specs</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-1-59" name="__codelineno-1-59" href="#__codelineno-1-59"></a>        <span class="n">SignalOutputSpec</span><span class="p">(</span>
-<a id="__codelineno-1-60" name="__codelineno-1-60" href="#__codelineno-1-60"></a>            <span class="n">key</span><span class="o">=</span><span class="s2">"typical_price"</span><span class="p">,</span>
-<a id="__codelineno-1-61" name="__codelineno-1-61" href="#__codelineno-1-61"></a>            <span class="n">label_key</span><span class="o">=</span><span class="s2">"signals.typicalPrice.output"</span><span class="p">,</span>
-<a id="__codelineno-1-62" name="__codelineno-1-62" href="#__codelineno-1-62"></a>            <span class="n">semantic_id</span><span class="o">=</span><span class="s2">"typical_price.value"</span><span class="p">,</span>
-<a id="__codelineno-1-63" name="__codelineno-1-63" href="#__codelineno-1-63"></a>            <span class="n">semantic_description</span><span class="o">=</span><span class="s2">"Mean of the high, low, and close prices."</span><span class="p">,</span>
-<a id="__codelineno-1-64" name="__codelineno-1-64" href="#__codelineno-1-64"></a>            <span class="n">kind</span><span class="o">=</span><span class="n">SignalSeriesKind</span><span class="o">.</span><span class="n">LINE</span><span class="p">,</span>
-<a id="__codelineno-1-65" name="__codelineno-1-65" href="#__codelineno-1-65"></a>            <span class="n">aggregation_profile</span><span class="o">=</span><span class="n">SignalAggregationProfile</span><span class="o">.</span><span class="n">LAST_WITH_RANGE</span><span class="p">,</span>
-<a id="__codelineno-1-66" name="__codelineno-1-66" href="#__codelineno-1-66"></a>            <span class="n">unit</span><span class="o">=</span><span class="n">SignalUnit</span><span class="o">.</span><span class="n">PRICE</span><span class="p">,</span>
-<a id="__codelineno-1-67" name="__codelineno-1-67" href="#__codelineno-1-67"></a>            <span class="n">axis</span><span class="o">=</span><span class="n">SignalAxisSpec</span><span class="p">(</span>
-<a id="__codelineno-1-68" name="__codelineno-1-68" href="#__codelineno-1-68"></a>                <span class="n">key</span><span class="o">=</span><span class="s2">"price"</span><span class="p">,</span>
-<a id="__codelineno-1-69" name="__codelineno-1-69" href="#__codelineno-1-69"></a>                <span class="n">role</span><span class="o">=</span><span class="n">SignalAxisRole</span><span class="o">.</span><span class="n">PRICE</span><span class="p">,</span>
-<a id="__codelineno-1-70" name="__codelineno-1-70" href="#__codelineno-1-70"></a>            <span class="p">),</span>
-<a id="__codelineno-1-71" name="__codelineno-1-71" href="#__codelineno-1-71"></a>            <span class="n">view_transform</span><span class="o">=</span><span class="n">SignalViewTransform</span><span class="o">.</span><span class="n">BASE_PERCENTAGE</span><span class="p">,</span>
-<a id="__codelineno-1-72" name="__codelineno-1-72" href="#__codelineno-1-72"></a>        <span class="p">),</span>
-<a id="__codelineno-1-73" name="__codelineno-1-73" href="#__codelineno-1-73"></a>    <span class="p">)</span>
-<a id="__codelineno-1-74" name="__codelineno-1-74" href="#__codelineno-1-74"></a>    <span class="n">compatible_domains</span> <span class="o">=</span> <span class="p">(</span><span class="n">SignalDomain</span><span class="o">.</span><span class="n">ASSET</span><span class="p">,)</span>
-<a id="__codelineno-1-75" name="__codelineno-1-75" href="#__codelineno-1-75"></a>    <span class="n">annotation_capabilities</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"line_crossover"</span><span class="p">,)</span>
-<a id="__codelineno-1-76" name="__codelineno-1-76" href="#__codelineno-1-76"></a>    <span class="c1"># computes_on_quote_days is inherited (True): compute() receives sessions only.</span>
-<a id="__codelineno-1-77" name="__codelineno-1-77" href="#__codelineno-1-77"></a>
-<a id="__codelineno-1-78" name="__codelineno-1-78" href="#__codelineno-1-78"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-1-79" name="__codelineno-1-79" href="#__codelineno-1-79"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">warmup_requirement</span><span class="p">(</span>
-<a id="__codelineno-1-80" name="__codelineno-1-80" href="#__codelineno-1-80"></a>        <span class="bp">cls</span><span class="p">,</span>
-<a id="__codelineno-1-81" name="__codelineno-1-81" href="#__codelineno-1-81"></a>        <span class="n">params</span><span class="p">:</span> <span class="n">TypicalPriceParams</span><span class="p">,</span>
-<a id="__codelineno-1-82" name="__codelineno-1-82" href="#__codelineno-1-82"></a>        <span class="n">context</span><span class="p">:</span> <span class="n">SignalExecutionContext</span><span class="p">,</span>
-<a id="__codelineno-1-83" name="__codelineno-1-83" href="#__codelineno-1-83"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SignalWarmupRequirement</span><span class="p">:</span>
-<a id="__codelineno-1-84" name="__codelineno-1-84" href="#__codelineno-1-84"></a>        <span class="k">return</span> <span class="n">SignalWarmupRequirement</span><span class="p">(</span>
-<a id="__codelineno-1-85" name="__codelineno-1-85" href="#__codelineno-1-85"></a>            <span class="n">minimum_points</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-1-86" name="__codelineno-1-86" href="#__codelineno-1-86"></a>            <span class="n">stabilization_points</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-1-87" name="__codelineno-1-87" href="#__codelineno-1-87"></a>            <span class="n">total_points</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-1-88" name="__codelineno-1-88" href="#__codelineno-1-88"></a>        <span class="p">)</span>
-<a id="__codelineno-1-89" name="__codelineno-1-89" href="#__codelineno-1-89"></a>
-<a id="__codelineno-1-90" name="__codelineno-1-90" href="#__codelineno-1-90"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span>
-<a id="__codelineno-1-91" name="__codelineno-1-91" href="#__codelineno-1-91"></a>        <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-1-92" name="__codelineno-1-92" href="#__codelineno-1-92"></a>        <span class="n">price_points</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SignalPricePoint</span><span class="p">],</span>
-<a id="__codelineno-1-93" name="__codelineno-1-93" href="#__codelineno-1-93"></a>        <span class="n">event_points</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SignalEventPoint</span><span class="p">],</span>
-<a id="__codelineno-1-94" name="__codelineno-1-94" href="#__codelineno-1-94"></a>        <span class="n">params</span><span class="p">:</span> <span class="n">TypicalPriceParams</span><span class="p">,</span>
-<a id="__codelineno-1-95" name="__codelineno-1-95" href="#__codelineno-1-95"></a>        <span class="n">context</span><span class="p">:</span> <span class="n">SignalExecutionContext</span><span class="p">,</span>
-<a id="__codelineno-1-96" name="__codelineno-1-96" href="#__codelineno-1-96"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SignalComputation</span><span class="p">:</span>
-<a id="__codelineno-1-97" name="__codelineno-1-97" href="#__codelineno-1-97"></a>        <span class="n">spec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_specs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-1-98" name="__codelineno-1-98" href="#__codelineno-1-98"></a>        <span class="n">points</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-1-99" name="__codelineno-1-99" href="#__codelineno-1-99"></a>        <span class="k">for</span> <span class="n">point</span> <span class="ow">in</span> <span class="n">price_points</span><span class="p">:</span>
-<a id="__codelineno-1-100" name="__codelineno-1-100" href="#__codelineno-1-100"></a>            <span class="k">if</span> <span class="n">point</span><span class="o">.</span><span class="n">high</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">point</span><span class="o">.</span><span class="n">low</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">point</span><span class="o">.</span><span class="n">close</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-1-101" name="__codelineno-1-101" href="#__codelineno-1-101"></a>                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Typical Price requires high, low and close"</span><span class="p">)</span>
-<a id="__codelineno-1-102" name="__codelineno-1-102" href="#__codelineno-1-102"></a>            <span class="n">points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-<a id="__codelineno-1-103" name="__codelineno-1-103" href="#__codelineno-1-103"></a>                <span class="n">SignalValuePoint</span><span class="p">(</span>
-<a id="__codelineno-1-104" name="__codelineno-1-104" href="#__codelineno-1-104"></a>                    <span class="n">date</span><span class="o">=</span><span class="n">point</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
-<a id="__codelineno-1-105" name="__codelineno-1-105" href="#__codelineno-1-105"></a>                    <span class="n">value</span><span class="o">=</span><span class="p">(</span>
-<a id="__codelineno-1-106" name="__codelineno-1-106" href="#__codelineno-1-106"></a>                        <span class="nb">float</span><span class="p">(</span><span class="n">point</span><span class="o">.</span><span class="n">high</span><span class="p">)</span>
-<a id="__codelineno-1-107" name="__codelineno-1-107" href="#__codelineno-1-107"></a>                        <span class="o">+</span> <span class="nb">float</span><span class="p">(</span><span class="n">point</span><span class="o">.</span><span class="n">low</span><span class="p">)</span>
-<a id="__codelineno-1-108" name="__codelineno-1-108" href="#__codelineno-1-108"></a>                        <span class="o">+</span> <span class="nb">float</span><span class="p">(</span><span class="n">point</span><span class="o">.</span><span class="n">close</span><span class="p">)</span>
-<a id="__codelineno-1-109" name="__codelineno-1-109" href="#__codelineno-1-109"></a>                    <span class="p">)</span>
-<a id="__codelineno-1-110" name="__codelineno-1-110" href="#__codelineno-1-110"></a>                    <span class="o">/</span> <span class="mi">3</span><span class="p">,</span>
-<a id="__codelineno-1-111" name="__codelineno-1-111" href="#__codelineno-1-111"></a>                <span class="p">)</span>
-<a id="__codelineno-1-112" name="__codelineno-1-112" href="#__codelineno-1-112"></a>            <span class="p">)</span>
-<a id="__codelineno-1-113" name="__codelineno-1-113" href="#__codelineno-1-113"></a>
-<a id="__codelineno-1-114" name="__codelineno-1-114" href="#__codelineno-1-114"></a>        <span class="k">return</span> <span class="n">SignalComputation</span><span class="p">(</span>
-<a id="__codelineno-1-115" name="__codelineno-1-115" href="#__codelineno-1-115"></a>            <span class="n">series</span><span class="o">=</span><span class="p">[</span>
-<a id="__codelineno-1-116" name="__codelineno-1-116" href="#__codelineno-1-116"></a>                <span class="n">SignalLineSeries</span><span class="p">(</span>
-<a id="__codelineno-1-117" name="__codelineno-1-117" href="#__codelineno-1-117"></a>                    <span class="n">key</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">key</span><span class="p">,</span>
-<a id="__codelineno-1-118" name="__codelineno-1-118" href="#__codelineno-1-118"></a>                    <span class="n">label_key</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">label_key</span><span class="p">,</span>
-<a id="__codelineno-1-119" name="__codelineno-1-119" href="#__codelineno-1-119"></a>                    <span class="n">semantic_id</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">semantic_id</span><span class="p">,</span>
-<a id="__codelineno-1-120" name="__codelineno-1-120" href="#__codelineno-1-120"></a>                    <span class="n">semantic_description</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">semantic_description</span><span class="p">,</span>
-<a id="__codelineno-1-121" name="__codelineno-1-121" href="#__codelineno-1-121"></a>                    <span class="n">unit</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">unit</span><span class="p">,</span>
-<a id="__codelineno-1-122" name="__codelineno-1-122" href="#__codelineno-1-122"></a>                    <span class="n">axis</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">deep</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-<a id="__codelineno-1-123" name="__codelineno-1-123" href="#__codelineno-1-123"></a>                    <span class="n">view_transform</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">view_transform</span><span class="p">,</span>
-<a id="__codelineno-1-124" name="__codelineno-1-124" href="#__codelineno-1-124"></a>                    <span class="n">points</span><span class="o">=</span><span class="n">points</span><span class="p">,</span>
-<a id="__codelineno-1-125" name="__codelineno-1-125" href="#__codelineno-1-125"></a>                <span class="p">)</span>
-<a id="__codelineno-1-126" name="__codelineno-1-126" href="#__codelineno-1-126"></a>            <span class="p">]</span>
-<a id="__codelineno-1-127" name="__codelineno-1-127" href="#__codelineno-1-127"></a>        <span class="p">)</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="kn">from</span><span class="w"> </span><span class="nn">backend.app.services.provider_registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_plugin</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="kn">from</span><span class="w"> </span><span class="nn">backend.app.services.signals.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">SignalPlugin</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="kn">from</span><span class="w"> </span><span class="nn">backend.app.services.signals.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">SignalPluginRegistry</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="k">class</span><span class="w"> </span><span class="nc">TypicalPriceParams</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="nd">@register_plugin</span><span class="p">(</span><span class="n">SignalPluginRegistry</span><span class="p">)</span>
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="k">class</span><span class="w"> </span><span class="nc">TypicalPriceSignalPlugin</span><span class="p">(</span><span class="n">SignalPlugin</span><span class="p">):</span>
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>    <span class="n">signal_code</span> <span class="o">=</span> <span class="s2">"TYPICAL_PRICE"</span>
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>    <span class="n">implementation_version</span> <span class="o">=</span> <span class="s2">"1.0.0"</span>
+<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>    <span class="n">category</span> <span class="o">=</span> <span class="n">SignalCategory</span><span class="o">.</span><span class="n">TREND</span>
+<a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>    <span class="n">display_name_key</span> <span class="o">=</span> <span class="s2">"signals.typicalPrice.name"</span>
+<a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>    <span class="n">description_key</span> <span class="o">=</span> <span class="s2">"signals.typicalPrice.description"</span>
+<a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>    <span class="n">semantic_id</span> <span class="o">=</span> <span class="s2">"typical_price"</span>
+<a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>    <span class="n">semantic_description</span> <span class="o">=</span> <span class="s2">"Averages the high, low, and close of each session."</span>
+<a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>    <span class="n">icon</span> <span class="o">=</span> <span class="s2">"⚖️"</span>
+<a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a>    <span class="n">docs_path</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>        <span class="s2">"financial-theory/technical-analysis/indicators/typical-price/"</span>
+<a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a>    <span class="p">)</span>
+<a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a>    <span class="n">params_model</span> <span class="o">=</span> <span class="n">TypicalPriceParams</span>
+<a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a>    <span class="n">input_requirements</span> <span class="o">=</span> <span class="n">SignalInputRequirements</span><span class="p">(</span>
+<a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a>        <span class="n">price_fields</span><span class="o">=</span><span class="p">[</span>
+<a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a>            <span class="n">SignalPriceField</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
+<a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a>            <span class="n">SignalPriceField</span><span class="o">.</span><span class="n">LOW</span><span class="p">,</span>
+<a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a>            <span class="n">SignalPriceField</span><span class="o">.</span><span class="n">CLOSE</span><span class="p">,</span>
+<a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a>        <span class="p">]</span>
+<a id="__codelineno-1-55" name="__codelineno-1-55" href="#__codelineno-1-55"></a>    <span class="p">)</span>
+<a id="__codelineno-1-56" name="__codelineno-1-56" href="#__codelineno-1-56"></a>    <span class="n">output_specs</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-1-57" name="__codelineno-1-57" href="#__codelineno-1-57"></a>        <span class="n">SignalOutputSpec</span><span class="p">(</span>
+<a id="__codelineno-1-58" name="__codelineno-1-58" href="#__codelineno-1-58"></a>            <span class="n">key</span><span class="o">=</span><span class="s2">"typical_price"</span><span class="p">,</span>
+<a id="__codelineno-1-59" name="__codelineno-1-59" href="#__codelineno-1-59"></a>            <span class="n">label_key</span><span class="o">=</span><span class="s2">"signals.typicalPrice.output"</span><span class="p">,</span>
+<a id="__codelineno-1-60" name="__codelineno-1-60" href="#__codelineno-1-60"></a>            <span class="n">semantic_id</span><span class="o">=</span><span class="s2">"typical_price.value"</span><span class="p">,</span>
+<a id="__codelineno-1-61" name="__codelineno-1-61" href="#__codelineno-1-61"></a>            <span class="n">semantic_description</span><span class="o">=</span><span class="s2">"Mean of the high, low, and close prices."</span><span class="p">,</span>
+<a id="__codelineno-1-62" name="__codelineno-1-62" href="#__codelineno-1-62"></a>            <span class="n">kind</span><span class="o">=</span><span class="n">SignalSeriesKind</span><span class="o">.</span><span class="n">LINE</span><span class="p">,</span>
+<a id="__codelineno-1-63" name="__codelineno-1-63" href="#__codelineno-1-63"></a>            <span class="n">aggregation_profile</span><span class="o">=</span><span class="n">SignalAggregationProfile</span><span class="o">.</span><span class="n">LAST_WITH_RANGE</span><span class="p">,</span>
+<a id="__codelineno-1-64" name="__codelineno-1-64" href="#__codelineno-1-64"></a>            <span class="n">unit</span><span class="o">=</span><span class="n">SignalUnit</span><span class="o">.</span><span class="n">PRICE</span><span class="p">,</span>
+<a id="__codelineno-1-65" name="__codelineno-1-65" href="#__codelineno-1-65"></a>            <span class="n">axis</span><span class="o">=</span><span class="n">SignalAxisSpec</span><span class="p">(</span>
+<a id="__codelineno-1-66" name="__codelineno-1-66" href="#__codelineno-1-66"></a>                <span class="n">key</span><span class="o">=</span><span class="s2">"price"</span><span class="p">,</span>
+<a id="__codelineno-1-67" name="__codelineno-1-67" href="#__codelineno-1-67"></a>                <span class="n">role</span><span class="o">=</span><span class="n">SignalAxisRole</span><span class="o">.</span><span class="n">PRICE</span><span class="p">,</span>
+<a id="__codelineno-1-68" name="__codelineno-1-68" href="#__codelineno-1-68"></a>            <span class="p">),</span>
+<a id="__codelineno-1-69" name="__codelineno-1-69" href="#__codelineno-1-69"></a>            <span class="n">view_transform</span><span class="o">=</span><span class="n">SignalViewTransform</span><span class="o">.</span><span class="n">BASE_PERCENTAGE</span><span class="p">,</span>
+<a id="__codelineno-1-70" name="__codelineno-1-70" href="#__codelineno-1-70"></a>        <span class="p">),</span>
+<a id="__codelineno-1-71" name="__codelineno-1-71" href="#__codelineno-1-71"></a>    <span class="p">)</span>
+<a id="__codelineno-1-72" name="__codelineno-1-72" href="#__codelineno-1-72"></a>    <span class="n">compatible_domains</span> <span class="o">=</span> <span class="p">(</span><span class="n">SignalDomain</span><span class="o">.</span><span class="n">ASSET</span><span class="p">,)</span>
+<a id="__codelineno-1-73" name="__codelineno-1-73" href="#__codelineno-1-73"></a>    <span class="n">annotation_capabilities</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"line_crossover"</span><span class="p">,)</span>
+<a id="__codelineno-1-74" name="__codelineno-1-74" href="#__codelineno-1-74"></a>    <span class="c1"># computes_on_quote_days is inherited (True): compute() receives sessions only.</span>
+<a id="__codelineno-1-75" name="__codelineno-1-75" href="#__codelineno-1-75"></a>
+<a id="__codelineno-1-76" name="__codelineno-1-76" href="#__codelineno-1-76"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-1-77" name="__codelineno-1-77" href="#__codelineno-1-77"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">warmup_requirement</span><span class="p">(</span>
+<a id="__codelineno-1-78" name="__codelineno-1-78" href="#__codelineno-1-78"></a>        <span class="bp">cls</span><span class="p">,</span>
+<a id="__codelineno-1-79" name="__codelineno-1-79" href="#__codelineno-1-79"></a>        <span class="n">params</span><span class="p">:</span> <span class="n">TypicalPriceParams</span><span class="p">,</span>
+<a id="__codelineno-1-80" name="__codelineno-1-80" href="#__codelineno-1-80"></a>        <span class="n">context</span><span class="p">:</span> <span class="n">SignalExecutionContext</span><span class="p">,</span>
+<a id="__codelineno-1-81" name="__codelineno-1-81" href="#__codelineno-1-81"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SignalWarmupRequirement</span><span class="p">:</span>
+<a id="__codelineno-1-82" name="__codelineno-1-82" href="#__codelineno-1-82"></a>        <span class="k">return</span> <span class="n">SignalWarmupRequirement</span><span class="p">(</span>
+<a id="__codelineno-1-83" name="__codelineno-1-83" href="#__codelineno-1-83"></a>            <span class="n">minimum_points</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-1-84" name="__codelineno-1-84" href="#__codelineno-1-84"></a>            <span class="n">stabilization_points</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-1-85" name="__codelineno-1-85" href="#__codelineno-1-85"></a>            <span class="n">total_points</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-1-86" name="__codelineno-1-86" href="#__codelineno-1-86"></a>        <span class="p">)</span>
+<a id="__codelineno-1-87" name="__codelineno-1-87" href="#__codelineno-1-87"></a>
+<a id="__codelineno-1-88" name="__codelineno-1-88" href="#__codelineno-1-88"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span>
+<a id="__codelineno-1-89" name="__codelineno-1-89" href="#__codelineno-1-89"></a>        <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-1-90" name="__codelineno-1-90" href="#__codelineno-1-90"></a>        <span class="n">price_points</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SignalPricePoint</span><span class="p">],</span>
+<a id="__codelineno-1-91" name="__codelineno-1-91" href="#__codelineno-1-91"></a>        <span class="n">event_points</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SignalEventPoint</span><span class="p">],</span>
+<a id="__codelineno-1-92" name="__codelineno-1-92" href="#__codelineno-1-92"></a>        <span class="n">params</span><span class="p">:</span> <span class="n">TypicalPriceParams</span><span class="p">,</span>
+<a id="__codelineno-1-93" name="__codelineno-1-93" href="#__codelineno-1-93"></a>        <span class="n">context</span><span class="p">:</span> <span class="n">SignalExecutionContext</span><span class="p">,</span>
+<a id="__codelineno-1-94" name="__codelineno-1-94" href="#__codelineno-1-94"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SignalComputation</span><span class="p">:</span>
+<a id="__codelineno-1-95" name="__codelineno-1-95" href="#__codelineno-1-95"></a>        <span class="n">spec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_specs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-1-96" name="__codelineno-1-96" href="#__codelineno-1-96"></a>        <span class="n">points</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-1-97" name="__codelineno-1-97" href="#__codelineno-1-97"></a>        <span class="k">for</span> <span class="n">point</span> <span class="ow">in</span> <span class="n">price_points</span><span class="p">:</span>
+<a id="__codelineno-1-98" name="__codelineno-1-98" href="#__codelineno-1-98"></a>            <span class="k">if</span> <span class="n">point</span><span class="o">.</span><span class="n">high</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">point</span><span class="o">.</span><span class="n">low</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">point</span><span class="o">.</span><span class="n">close</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-99" name="__codelineno-1-99" href="#__codelineno-1-99"></a>                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Typical Price requires high, low and close"</span><span class="p">)</span>
+<a id="__codelineno-1-100" name="__codelineno-1-100" href="#__codelineno-1-100"></a>            <span class="n">points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+<a id="__codelineno-1-101" name="__codelineno-1-101" href="#__codelineno-1-101"></a>                <span class="n">SignalValuePoint</span><span class="p">(</span>
+<a id="__codelineno-1-102" name="__codelineno-1-102" href="#__codelineno-1-102"></a>                    <span class="n">date</span><span class="o">=</span><span class="n">point</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
+<a id="__codelineno-1-103" name="__codelineno-1-103" href="#__codelineno-1-103"></a>                    <span class="n">value</span><span class="o">=</span><span class="p">(</span>
+<a id="__codelineno-1-104" name="__codelineno-1-104" href="#__codelineno-1-104"></a>                        <span class="nb">float</span><span class="p">(</span><span class="n">point</span><span class="o">.</span><span class="n">high</span><span class="p">)</span>
+<a id="__codelineno-1-105" name="__codelineno-1-105" href="#__codelineno-1-105"></a>                        <span class="o">+</span> <span class="nb">float</span><span class="p">(</span><span class="n">point</span><span class="o">.</span><span class="n">low</span><span class="p">)</span>
+<a id="__codelineno-1-106" name="__codelineno-1-106" href="#__codelineno-1-106"></a>                        <span class="o">+</span> <span class="nb">float</span><span class="p">(</span><span class="n">point</span><span class="o">.</span><span class="n">close</span><span class="p">)</span>
+<a id="__codelineno-1-107" name="__codelineno-1-107" href="#__codelineno-1-107"></a>                    <span class="p">)</span>
+<a id="__codelineno-1-108" name="__codelineno-1-108" href="#__codelineno-1-108"></a>                    <span class="o">/</span> <span class="mi">3</span><span class="p">,</span>
+<a id="__codelineno-1-109" name="__codelineno-1-109" href="#__codelineno-1-109"></a>                <span class="p">)</span>
+<a id="__codelineno-1-110" name="__codelineno-1-110" href="#__codelineno-1-110"></a>            <span class="p">)</span>
+<a id="__codelineno-1-111" name="__codelineno-1-111" href="#__codelineno-1-111"></a>
+<a id="__codelineno-1-112" name="__codelineno-1-112" href="#__codelineno-1-112"></a>        <span class="k">return</span> <span class="n">SignalComputation</span><span class="p">(</span>
+<a id="__codelineno-1-113" name="__codelineno-1-113" href="#__codelineno-1-113"></a>            <span class="n">series</span><span class="o">=</span><span class="p">[</span>
+<a id="__codelineno-1-114" name="__codelineno-1-114" href="#__codelineno-1-114"></a>                <span class="n">SignalLineSeries</span><span class="p">(</span>
+<a id="__codelineno-1-115" name="__codelineno-1-115" href="#__codelineno-1-115"></a>                    <span class="n">key</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">key</span><span class="p">,</span>
+<a id="__codelineno-1-116" name="__codelineno-1-116" href="#__codelineno-1-116"></a>                    <span class="n">label_key</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">label_key</span><span class="p">,</span>
+<a id="__codelineno-1-117" name="__codelineno-1-117" href="#__codelineno-1-117"></a>                    <span class="n">semantic_id</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">semantic_id</span><span class="p">,</span>
+<a id="__codelineno-1-118" name="__codelineno-1-118" href="#__codelineno-1-118"></a>                    <span class="n">semantic_description</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">semantic_description</span><span class="p">,</span>
+<a id="__codelineno-1-119" name="__codelineno-1-119" href="#__codelineno-1-119"></a>                    <span class="n">unit</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">unit</span><span class="p">,</span>
+<a id="__codelineno-1-120" name="__codelineno-1-120" href="#__codelineno-1-120"></a>                    <span class="n">axis</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">axis</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">deep</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<a id="__codelineno-1-121" name="__codelineno-1-121" href="#__codelineno-1-121"></a>                    <span class="n">view_transform</span><span class="o">=</span><span class="n">spec</span><span class="o">.</span><span class="n">view_transform</span><span class="p">,</span>
+<a id="__codelineno-1-122" name="__codelineno-1-122" href="#__codelineno-1-122"></a>                    <span class="n">points</span><span class="o">=</span><span class="n">points</span><span class="p">,</span>
+<a id="__codelineno-1-123" name="__codelineno-1-123" href="#__codelineno-1-123"></a>                <span class="p">)</span>
+<a id="__codelineno-1-124" name="__codelineno-1-124" href="#__codelineno-1-124"></a>            <span class="p">]</span>
+<a id="__codelineno-1-125" name="__codelineno-1-125" href="#__codelineno-1-125"></a>        <span class="p">)</span>
 </code></pre></div>
 <h3 id="folder-and-translations">🗂️ Folder and Translations</h3>
 <p>No central registration list is required. The plugin is a folder of <code>signal_plugins/</code>, and
@@ -15760,10 +16710,12 @@ a new plugin lands in the <code>charts</code> subsystem, which owns the <code>si
 <p>Keys outside the plugin's space stay in the <code>charts</code> subsystem, where <code>add</code> puts them by itself:
 the parameter captions and tooltips named by <code>x-i18n-key</code> and <code>x-tooltip-key</code>
 (<code>chartSettings.params.*</code>, <code>chartSettings.tooltips.*</code>), the units (<code>signals.units.*</code>), and the
-keys several plugins share — <code>signals.reference.zero</code>, and <code>signals.riskRollingReturn.*</code>, the space
-of the two rolling-return plugins. <code>./dev.py test utils gate-plugin-i18n-ownership</code> keeps every key
-the plugin declares in its space — <code>display_name_key</code>, <code>description_key</code>, and the <code>label_key</code> and
-<code>description_key</code> of its outputs, reference levels and regions — in its fragment
+keys several plugins share — <code>signals.reference.zero</code>, and <code>signals.tooltips.riskWindow</code>, the
+window tooltip of Rolling Volatility, Sharpe and Beta. A tooltip inside the plugin's space belongs
+to its fragment like any other key: <code>calendar_rolling_return</code> keeps
+<code>signals.riskRollingReturn.windowTooltip</code> there. <code>./dev.py test utils gate-plugin-i18n-ownership</code>
+keeps every key the plugin declares in its space — <code>display_name_key</code>, <code>description_key</code>, and the
+<code>label_key</code> and <code>description_key</code> of its outputs, reference levels and regions — in its fragment
 (<a href="../registry_pattern/#plugin-translations">A Plugin's Translations</a>).</p>
 <hr />
 <h2 id="parameter-metadata">🎛️ Parameter Metadata</h2>
@@ -15785,8 +16737,12 @@ frontend form. The SMA period (<code>signal_plugins/sma/plugin.py</code>):</p>
 <p><code>x-suffix</code> names the unit shown next to the input. A period counted in sessions
 declares <code>"x-suffix": "sessions"</code> and the shared tooltip
 <code>chartSettings.tooltips.sessionPeriod</code>, unless the period needs its own explanation
-(EMA, MACD/PPO, and Stochastic RSI keep dedicated tooltip keys). A calendar window
-declares <code>"x-suffix": "days"</code> (<code>calendar_rolling_return</code> and the rolling risk windows).
+(EMA, MACD/PPO, and Stochastic RSI keep dedicated tooltip keys). A window over the
+prepared return series counts its return observations, one per quote day with a return, and
+declares <code>"x-suffix": "observations"</code> with the shared tooltip <code>signals.tooltips.riskWindow</code>:
+the <code>window</code> of Rolling Volatility, Sharpe and Beta. A calendar window declares
+<code>"x-suffix": "days"</code>: the <code>window_days</code> of <code>calendar_rolling_return</code>, with its own tooltip
+<code>signals.riskRollingReturn.windowTooltip</code>.
 <code>SignalParamControl.svelte</code> renders the suffix through the i18n key
 <code>signals.units.&lt;suffix&gt;</code> and falls back to the raw value when the key is missing: a
 symbol such as <code>%</code> or <code>σ</code> needs no key, while a word unit needs <code>signals.units.&lt;suffix&gt;</code>
@@ -15845,7 +16801,9 @@ event selection, and tests.</p>
 <li>Define a strict Pydantic parameter model.</li>
 <li>Declare required price fields/events and compatible domains.</li>
 <li>Decide what the periods count: sessions (keep the inherited
-   <code>computes_on_quote_days = True</code>, declare <code>"x-suffix": "sessions"</code>) or a calendar
+   <code>computes_on_quote_days = True</code>, declare <code>"x-suffix": "sessions"</code>), the return
+   observations of the prepared series (<code>uses_prepared_asset_series</code>,
+   <code>computes_on_quote_days = False</code>, <code>"x-suffix": "observations"</code>), or a calendar
    span (<code>computes_on_quote_days = False</code>, <code>"x-suffix": "days"</code>).</li>
 <li>Declare every canonical output in <code>output_specs</code>.</li>
 <li>If AI Export will curate the plugin, declare fixed or parameter-matched
@@ -15886,7 +16844,8 @@ event selection, and tests.</p>
 <li>Never compact missing dates or fields silently; dropping the carried days from a
   quote-day plugin's input is the declared contract, not compaction.</li>
 <li>Count a period over trading activity in sessions (inherited
-  <code>computes_on_quote_days = True</code>); a window that is a calendar span by definition sets
+  <code>computes_on_quote_days = True</code>); a window over the prepared return series counts return
+  observations and declares them; a window that is a calendar span by definition sets
   <code>computes_on_quote_days = False</code> and declares days.</li>
 <li>Return canonical line, area, bar, or band series only.</li>
 <li>Use finite numeric output; <code>NaN</code> may represent warm-up gaps, infinity may not.</li>
@@ -15967,12 +16926,10 @@ event selection, and tests.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "content.code.copy"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "content.code.copy"], "search": "../../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.d7400e89.min.js"></script>
-      
-        <script src="../../../../javascripts/mermaid.mjs" type="module"></script>
+      <script src="../../../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../../../javascripts/mathjax.js"></script>
       
@@ -15986,7 +16943,11 @@ event selection, and tests.</p>
       
         <script src="../../../../javascripts/gallery-img-loader.js"></script>
       
+        <script src="../../../../javascripts/moved-anchors.js"></script>
+      
         <script src="../../../../javascripts/bmc-widget.js"></script>
+      
+        <script src="../../../../javascripts/table-code-wrap.js"></script>
       
     
   </body>

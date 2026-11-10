@@ -14,7 +14,7 @@
         <link rel="prev" href="../docker_advanced/">
       
       
-        <link rel="next" href="../connection_checks/">
+        <link rel="next" href="../service_exposure_funnel/">
       
       
         
@@ -29,18 +29,18 @@
       
       
       <link rel="icon" href="../../../static/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
-        <title>Exponer en Seguridad - LibreFolio</title>
+        <title>Resumen - LibreFolio</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -59,6 +59,8 @@
       
     
     
+      <link rel="stylesheet" href="../../../stylesheets/lf-tokens.css">
+    
       <link rel="stylesheet" href="../../../static/extra.css">
     
       <link rel="stylesheet" href="../../../stylesheets/home-custom.css">
@@ -70,7 +72,11 @@
     
     
   
-  <script>window.LF_GALLERY_FALLBACK_BASE = "https://librefolio.github.io/LibreFolio/";</script>
+  <script>window.LF_GALLERY_FALLBACK_BASE = "https://librefolio.github.io/LibreFolio/";</script><script src="../../../javascripts/search-language.js"></script>
+  <script src="../../../javascripts/vendor/mermaid/mermaid.min.js"></script>
+  <script src="../../../javascripts/mermaid-early.js"></script><link rel="stylesheet" href="../../../stylesheets/diagram-zoom.css">
+  <script src="../../../javascripts/diagram-zoom.js"></script>
+  
 
   <script type="application/ld+json">
 {
@@ -92,7 +98,7 @@
     {
       "@type": "ListItem",
       "position": 3,
-      "name": "Exponer en Seguridad",
+      "name": "Resumen",
       "item": "https://librefolio.github.io/LibreFolio/es/admin/service_exposure/"
     }
   ]
@@ -150,7 +156,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Exponer en Seguridad
+              Resumen
             
           </span>
         </div>
@@ -4250,6 +4256,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../user/settings/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../user/settings/about/" class="md-nav__link">
         
   
@@ -4582,6 +4616,60 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_2_3" id="__nav_3_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exponer en Seguridad
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_2_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Exponer en Seguridad
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
     <li class="md-nav__item md-nav__item--active">
       
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
@@ -4597,7 +4685,7 @@
   <span class="md-ellipsis">
     
   
-    Exponer en Seguridad
+    Resumen
   
 
     
@@ -4615,7 +4703,7 @@
   <span class="md-ellipsis">
     
   
-    Exponer en Seguridad
+    Resumen
   
 
     
@@ -4641,10 +4729,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#por-que-no-usar-simplemente-el-reenvio-de-puertos" class="md-nav__link">
+  <a href="#por-que-no-un-simple-reenvio-de-puertos" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔒 ¿Por qué no usar simplemente el reenvío de puertos?
+        🔒 ¿Por qué no un simple reenvío de puertos?
       
     </span>
   </a>
@@ -4702,15 +4790,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#nivel-2-router-de-subred-para-toda-tu-lan-domestica" class="md-nav__link">
+  <a href="#nivel-2-enrutador-de-subred-para-toda-tu-lan-domestica" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🥉 Nivel 2: Router de subred para toda tu LAN doméstica
+        🥉 Nivel 2: Enrutador de subred para toda tu LAN doméstica
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="🥉 Nivel 2: Router de subred para toda tu LAN doméstica">
+    <nav class="md-nav" aria-label="🥉 Nivel 2: Enrutador de subred para toda tu LAN doméstica">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -4729,106 +4817,6 @@
     <span class="md-ellipsis">
       
         ✅ Paso 2: Aprobar la ruta en la consola de administración
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#enabling-funnel-and-acls-on-the-console" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🔑 Habilitar Funnel y ACLs en la consola
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#nivel-3-direccion-https-publica-con-tailscale-funnel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🥈 Nivel 3: Dirección HTTPS pública con Tailscale Funnel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🥈 Nivel 3: Dirección HTTPS pública con Tailscale Funnel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#paso-1-iniciar-el-funnel-en-el-servidor" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        ▶️ Paso 1: Iniciar el Funnel en el servidor
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#paso-2-aprobar-y-esperar-la-propagacion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        ✅ Paso 2: Aprobar y esperar la propagación
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#nivel-4-multi-funnel-con-sidecars-de-docker" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🥇 Nivel 4: Multi-Funnel con sidecars de Docker
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🥇 Nivel 4: Multi-Funnel con sidecars de Docker">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#paso-1-preparar-la-carpeta-y-el-script" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        📁 Paso 1: Preparar la carpeta y el script
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#paso-2-configurar-docker-compose" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🐳 Paso 2: Configurar Docker Compose
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-startup-and-approval" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🚀 Paso 3: Iniciar y aprobar el Funnel
       
     </span>
   </a>
@@ -4862,6 +4850,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#relacionado" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔗 Relacionado
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4878,8 +4877,62 @@
   
   
     <li class="md-nav__item">
-      <a href="../connection_checks/" class="md-nav__link">
+      <a href="../service_exposure_funnel/" class="md-nav__link">
         
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Acceso público (Funnel)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2_4" id="__nav_3_2_4_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -4893,7 +4946,79 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_2_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Comprobar la Seguridad de la Conexión
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connection_checks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resumen
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connection_proxy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Proxy inverso
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -4970,6 +5095,60 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3_1" id="__nav_3_3_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Variables de entorno
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Variables de entorno
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../configuration/" class="md-nav__link">
         
@@ -4978,7 +5157,7 @@
   <span class="md-ellipsis">
     
   
-    Variables de entorno
+    Resumen
   
 
     
@@ -4999,6 +5178,244 @@
   
   
     <li class="md-nav__item">
+      <a href="../configuration_secrets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secretos y plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration_security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comprobaciones y protecciones
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration_accounts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cuentas y búsqueda de activos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3_2" id="__nav_3_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correo
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Correo
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../email/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Puesta en marcha
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../email_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enlaces y mensajes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../email_troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solución de problemas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../settings/" class="md-nav__link">
         
   
@@ -5007,6 +5424,34 @@
     
   
     Configuración Global
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../users/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usuarios e invitaciones
   
 
     
@@ -5091,9 +5536,27 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../cli_tools/" class="md-nav__link">
+    
+    
+    
+    
+      
+      
         
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4_1" id="__nav_3_4_1_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -5107,7 +5570,225 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Herramientas CLI de administración
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resumen
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Copias de seguridad
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4_2" id="__nav_3_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Copia de seguridad, restauración y traslado
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Copia de seguridad, restauración y traslado
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup_restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resumen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup_sealed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Copias selladas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup_moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Traslado y solución de problemas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -9952,6 +10633,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../developer/architecture/patterns/plugin_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../developer/architecture/patterns/signal_plugin_guide/" class="md-nav__link">
         
   
@@ -12050,6 +12759,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../developer/backend/email/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    📧 Email (SMTP)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../developer/backend/financial_math/" class="md-nav__link">
         
   
@@ -12715,6 +13452,34 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/designer-lab/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Designer Lab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -12731,10 +13496,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2" id="__nav_5_7_4_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_3" id="__nav_5_7_4_3_label" tabindex="0">
             
   
   
@@ -12752,8 +13517,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_4_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -12813,10 +13578,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_3_2" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2_2" id="__nav_5_7_4_2_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_3_2" id="__nav_5_7_4_3_2_label" tabindex="0">
             
   
   
@@ -12834,8 +13599,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_2_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2_2">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_3_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -13407,10 +14172,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2_12" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_3_12" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2_12" id="__nav_5_7_4_2_12_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_3_12" id="__nav_5_7_4_3_12_label" tabindex="0">
             
   
   
@@ -13428,8 +14193,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_2_12_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2_12">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_3_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_3_12">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -14777,10 +15542,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#por-que-no-usar-simplemente-el-reenvio-de-puertos" class="md-nav__link">
+  <a href="#por-que-no-un-simple-reenvio-de-puertos" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔒 ¿Por qué no usar simplemente el reenvío de puertos?
+        🔒 ¿Por qué no un simple reenvío de puertos?
       
     </span>
   </a>
@@ -14838,15 +15603,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#nivel-2-router-de-subred-para-toda-tu-lan-domestica" class="md-nav__link">
+  <a href="#nivel-2-enrutador-de-subred-para-toda-tu-lan-domestica" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🥉 Nivel 2: Router de subred para toda tu LAN doméstica
+        🥉 Nivel 2: Enrutador de subred para toda tu LAN doméstica
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="🥉 Nivel 2: Router de subred para toda tu LAN doméstica">
+    <nav class="md-nav" aria-label="🥉 Nivel 2: Enrutador de subred para toda tu LAN doméstica">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -14865,106 +15630,6 @@
     <span class="md-ellipsis">
       
         ✅ Paso 2: Aprobar la ruta en la consola de administración
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#enabling-funnel-and-acls-on-the-console" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🔑 Habilitar Funnel y ACLs en la consola
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#nivel-3-direccion-https-publica-con-tailscale-funnel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🥈 Nivel 3: Dirección HTTPS pública con Tailscale Funnel
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🥈 Nivel 3: Dirección HTTPS pública con Tailscale Funnel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#paso-1-iniciar-el-funnel-en-el-servidor" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        ▶️ Paso 1: Iniciar el Funnel en el servidor
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#paso-2-aprobar-y-esperar-la-propagacion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        ✅ Paso 2: Aprobar y esperar la propagación
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#nivel-4-multi-funnel-con-sidecars-de-docker" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🥇 Nivel 4: Multi-Funnel con sidecars de Docker
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🥇 Nivel 4: Multi-Funnel con sidecars de Docker">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#paso-1-preparar-la-carpeta-y-el-script" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        📁 Paso 1: Preparar la carpeta y el script
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#paso-2-configurar-docker-compose" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🐳 Paso 2: Configurar Docker Compose
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-startup-and-approval" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🚀 Paso 3: Iniciar y aprobar el Funnel
       
     </span>
   </a>
@@ -14998,6 +15663,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#relacionado" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔗 Relacionado
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -15019,8 +15695,8 @@
 
 
 <h1 id="exponer-de-forma-segura">🌐 Exponer de forma segura</h1>
-<p>Esta guía muestra cómo acceder a LibreFolio fuera de casa <strong>sin abrir ningún puerto en tu router</strong>, usando <a href="https://tailscale.com/">Tailscale</a>, una VPN de malla segura que es gratuita para uso doméstico. Los mismos pasos funcionan para cualquier otro servicio en tu red local.</p>
-<p>Necesitas el <strong>Paso 0</strong> más el nivel que te corresponda. Los niveles 3 y 4 también necesitan la <a href="#enabling-funnel-and-acls-on-the-console">configuración única de Funnel en la consola</a>.</p>
+<p>Accede a LibreFolio fuera de casa <strong>sin abrir ningún puerto en tu router</strong>, con <a href="https://tailscale.com/">Tailscale</a>, una VPN de malla gratuita para uso doméstico. Los mismos pasos sirven para cualquier otro servicio de tu red local.</p>
+<p>Haz el <strong>Paso 0</strong> y luego solo el nivel que necesites. Los Niveles 1 y 2, <strong>privados</strong>, en esta página; los Niveles 3 y 4, <strong>públicos</strong>, en <a href="../service_exposure_funnel/">Exponer de forma segura: acceso público con Funnel</a>, después de la <a href="../service_exposure_funnel/#enabling-funnel-and-acls-on-the-console">configuración única de Funnel en la consola</a>.</p>
 <table>
 <thead>
 <tr>
@@ -15028,6 +15704,7 @@
 <th>Ideal para</th>
 <th>Tailscale en tu teléfono/PC</th>
 <th>Dirección HTTPS pública</th>
+<th>Dónde se configura</th>
 </tr>
 </thead>
 <tbody>
@@ -15036,564 +15713,204 @@
 <td>Solo para ti, con la configuración más rápida</td>
 <td>Necesario</td>
 <td>No</td>
+<td>Solo el Paso 0</td>
 </tr>
 <tr>
-<td>🥉 2. Router de subred</td>
+<td>🥉 2. Enrutador de subred</td>
 <td>Todos los dispositivos de tu LAN doméstica, no solo LibreFolio</td>
 <td>Necesario</td>
 <td>No</td>
+<td>Terminal del servidor + consola de Tailscale</td>
 </tr>
 <tr>
-<td>🥈 3. Funnel</td>
-<td>Una dirección pública para LibreFolio, e instalarlo como app</td>
+<td>🥈 <a href="../service_exposure_funnel/#level-3-public-https-address-with-tailscale-funnel">3. Funnel</a></td>
+<td>Una dirección pública para LibreFolio, e instalarlo como aplicación</td>
 <td>No necesario</td>
 <td>Sí</td>
+<td>Consola de Tailscale + terminal del servidor</td>
 </tr>
 <tr>
-<td>🥇 4. Multi-Funnel con Docker</td>
+<td>🥇 <a href="../service_exposure_funnel/#level-4-multi-funnel-with-docker-sidecars">4. Multi-Funnel con Docker</a></td>
 <td>Una dirección pública por servicio, cada uno en su propio contenedor</td>
 <td>No necesario</td>
 <td>Sí</td>
+<td>Consola de Tailscale + <code>docker-compose.yml</code></td>
 </tr>
 </tbody>
 </table>
 <div class="admonition tip">
 <p class="admonition-title">⭐ Nuestra recomendación: Nivel 4</p>
-<p>El Nivel 4 necesita poco más de configuración que el Nivel 3, mantiene cada servicio aislado en su propio contenedor y le da a cada uno su propia dirección pública. Los niveles 1–3 son alternativas más sencillas y muestran el camino que lleva hasta allí.</p>
+<p>Poca configuración más que el Nivel 3; cada servicio queda aislado en su propio contenedor, con una dirección pública propia. Los Niveles 1–3 son alternativas más sencillas y etapas en el camino hacia él.</p>
 </div>
-<p>En todo lo que sigue, <code>6040</code> es el puerto predeterminado de LibreFolio: si configuras un <code>PORT</code> diferente en tu <code>.env</code>, usa ese número en su lugar. LibreFolio sirve la aplicación web, su API y la documentación integrada en este único puerto, por lo que es el único puerto que hay que exponer.</p>
+<p><code>6040</code> es el puerto predeterminado de LibreFolio: si estableces un <code>PORT</code> diferente en tu <code>.env</code>, usa ese número. La aplicación web, la API y la documentación integrada pasan todas por este puerto: es el único que hay que exponer.</p>
+<div class="admonition info">
+<p class="admonition-title">📚 Esta guía está repartida en varias páginas</p>
+<p>Aquí: por qué Tailscale, el Paso 0, los Niveles 1 y 2, MagicDNS. Los Niveles 3 y 4 y la configuración de Funnel: <a href="../service_exposure_funnel/">Exponer de forma segura: acceso público con Funnel</a>.</p>
+</div>
 <hr />
-<h2 id="por-que-no-usar-simplemente-el-reenvio-de-puertos">🔒 ¿Por qué no usar simplemente el reenvío de puertos?</h2>
-<p>La forma clásica es abrir un puerto en tu router doméstico y apuntar un nombre de DNS dinámico (como DuckDNS) a tu IP pública. Funciona, pero:</p>
+<h2 id="por-que-no-un-simple-reenvio-de-puertos">🔒 ¿Por qué no un simple reenvío de puertos?</h2>
+<p>Abrir un puerto en el router y apuntar a él un nombre de DNS dinámico (como DuckDNS) funciona, pero:</p>
 <ul>
-<li><strong>Todo internet puede verlo</strong>: cualquiera puede escanear tu IP pública y atacar el puerto abierto.</li>
-<li><strong>HTTPS es tu responsabilidad</strong>: debes ejecutar un proxy inverso (Nginx, Caddy…) y mantener renovados sus certificados SSL.</li>
-<li><strong>Sin HTTPS, los datos viajan en claro</strong>: tu contraseña y tus datos financieros pueden ser interceptados en el camino.</li>
+<li><strong>El puerto abierto lo ve cualquiera</strong> en internet, que puede escanearlo y atacarlo.</li>
+<li><strong>HTTPS es cosa tuya</strong>: un proxy inverso (Nginx, Caddy…) y sus certificados SSL que renovar.</li>
+<li><strong>Sin HTTPS, los datos viajan en claro</strong>: la contraseña y los datos financieros pueden ser interceptados.</li>
 </ul>
 <pre class="mermaid"><code>graph LR
-    User["👤 External User&lt;br&gt;(Away from Home)"] --- Cloud["☁️ Internet / Router (Public IP / DDNS?)"]
-    Cloud --- Server["🖥️ Local Server&lt;br&gt;(Port 6040)"]</code></pre>
-<p>Tailscale evita las tres cosas: no se abre ningún puerto del router, el tráfico entre tus dispositivos está cifrado y Funnel (Niveles 3 y 4) añade HTTPS con certificados que Tailscale gestiona por ti.</p>
+    User["👤 Usuario externo&lt;br&gt;(fuera de casa)"] --- Cloud["☁️ Internet / Router (IP pública / ¿DDNS?)"]
+    Cloud --- Server["🖥️ Servidor local&lt;br&gt;(puerto 6040)"]</code></pre>
+<p>Con Tailscale no se abre ningún puerto del router, el tráfico entre tus dispositivos va cifrado, y Funnel (Niveles 3 y 4) añade HTTPS con certificados que gestiona Tailscale.</p>
 <hr />
 <h2 id="paso-0-instalar-tailscale-en-tus-dispositivos">🏁 Paso 0: Instalar Tailscale en tus dispositivos</h2>
-<p><a href="https://tailscale.com/">Tailscale</a> es una VPN de malla construida sobre el protocolo <strong>WireGuard</strong>: tus dispositivos se unen a una red privada (tu <em>tailnet</em>) y se comunican entre sí a través de túneles cifrados. Se ejecuta en Linux, macOS, Windows, iOS y Android, en un NAS o dentro de Docker, y su plan <strong>Personal</strong> gratuito es suficiente para uso doméstico (consulta los <a href="https://tailscale.com/pricing">precios de Tailscale</a> para conocer los límites actuales).</p>
-<p>Instálalo e inicia sesión en al menos dos dispositivos: el <strong>servidor</strong> que ejecuta LibreFolio y un <strong>cliente</strong>, como tu teléfono o portátil.</p>
+<p><a href="https://tailscale.com/">Tailscale</a> (protocolo <strong>WireGuard</strong>) une tus dispositivos en una red privada cifrada, tu <em>tailnet</em>. Funciona en Linux, macOS, Windows, iOS y Android, en un NAS o en Docker; el plan gratuito <strong>Personal</strong> basta para uso doméstico (<a href="https://tailscale.com/pricing">precios de Tailscale</a> para conocer los límites actuales).</p>
+<p>Instálalo e inicia sesión en al menos dos dispositivos: el <strong>servidor</strong> de LibreFolio y un <strong>cliente</strong>, teléfono o portátil.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:5"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">macOS</label><label for="__tabbed_1_3">Windows</label><label for="__tabbed_1_4">Android</label><label for="__tabbed_1_5">iOS (iPhone/iPad)</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>Ejecuta el comando de instalación oficial en el servidor:</p>
+<p><strong>En el servidor, en una terminal</strong>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://tailscale.com/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>sudo<span class="w"> </span>tailscale<span class="w"> </span>up
 </code></pre></div>
-<p>Para más detalles, consulta la <a href="https://tailscale.com/docs/install">Guía de instalación genérica</a>.</p>
+<p>El servidor se une a tu tailnet. Detalles: <a href="https://tailscale.com/docs/install">Guía de instalación genérica</a>.</p>
 </div>
 <div class="tabbed-block">
-<p>Instala la aplicación oficial desde la <strong>Mac App Store</strong> o usa Homebrew:</p>
+<p><strong>En el servidor</strong>: la aplicación oficial desde el <strong>Mac App Store</strong>, o desde una terminal con Homebrew:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>brew<span class="w"> </span>install<span class="w"> </span>--cask<span class="w"> </span>tailscale
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>sudo<span class="w"> </span>tailscale<span class="w"> </span>up
 </code></pre></div>
-<p>Para más detalles, consulta la <a href="https://tailscale.com/docs/install">Guía de instalación genérica</a>.</p>
+<p>Detalles: <a href="https://tailscale.com/docs/install">Guía de instalación genérica</a>.</p>
 </div>
 <div class="tabbed-block">
-<p>Descarga el instalador oficial desde el portal de Tailscale y sigue el asistente de inicio de sesión.</p>
-<p>Para más detalles, consulta la <a href="https://tailscale.com/docs/install/windows">Guía de instalación para Windows</a>.</p>
+<p><strong>En el servidor</strong>: descarga el instalador oficial desde el portal de Tailscale y sigue el asistente de inicio de sesión. Detalles: <a href="https://tailscale.com/docs/install/windows">Guía de instalación para Windows</a>.</p>
 </div>
 <div class="tabbed-block">
-<p>Instala la aplicación oficial desde <a href="https://play.google.com/store/apps/details?id=com.tailscale.ipn">Google Play Store</a>.</p>
+<p><strong>En el teléfono</strong>: la aplicación oficial desde <a href="https://play.google.com/store/apps/details?id=com.tailscale.ipn">Google Play Store</a>.</p>
 </div>
 <div class="tabbed-block">
-<p>Instala la aplicación oficial desde la <a href="https://apps.apple.com/us/app/tailscale/id1470499037">Apple App Store</a>.</p>
+<p><strong>En el dispositivo</strong>: la aplicación oficial desde <a href="https://apps.apple.com/us/app/tailscale/id1470499037">Apple App Store</a>.</p>
 </div>
 </div>
 </div>
 <details class="tip">
 <summary>🔑 Mantén el servidor conectado — desactiva la caducidad de la clave</summary>
-<p>De forma predeterminada, Tailscale pide a cada dispositivo que vuelva a iniciar sesión después de 180 días. Un servidor no debería desconectarse de tu tailnet por eso, así que desactívalo para el servidor:</p>
+<p>Tailscale pide a cada dispositivo que vuelva a iniciar sesión después de 180 días. Un servidor no debe desconectarse del tailnet por eso. <strong>En la consola de administración de Tailscale, página Machines</strong>:</p>
 <ol>
-<li>En la página <strong>Máquinas</strong> de la consola de administración, localiza tu servidor.</li>
-<li>Haz clic en el <strong>icono de tres puntos (...)</strong> a la derecha de la fila del dispositivo.</li>
-<li>Selecciona la opción <strong>Desactivar caducidad de clave</strong>.</li>
+<li>Localiza tu servidor.</li>
+<li>Haz clic en el <strong>icono de tres puntos (...)</strong> a la derecha de su fila.</li>
+<li>Selecciona <strong>Disable Key Expiry</strong>.</li>
 </ol>
 </details>
 <hr />
 <h2 id="nivel-1-vpn-privada-punto-a-punto">🏃 Nivel 1: VPN privada punto a punto</h2>
-<p><strong>Ideal solo para ti, con la configuración más rápida.</strong> Tu teléfono o portátil accede a LibreFolio a través de tu tailnet privada y nada queda expuesto a internet.</p>
+<p><strong>Ideal si estás solo tú, con la configuración más rápida.</strong> El cliente accede a LibreFolio a través del tailnet; nada queda expuesto a internet.</p>
 <pre class="mermaid"><code>graph LR
-    Client["👤 Client (VPN active)&lt;br&gt;(100.x.y.z)"] --&gt;|Direct VPN Connection| Server["🖥️ Server (VPN active)&lt;br&gt;(100.a.b.c:6040)"]
-    subgraph LAN ["Local LAN Network"]
-        Server --&gt;|Local access| LibreFolio["📊 LibreFolio (Local)"]
+    Client["👤 Cliente (VPN activa)&lt;br&gt;(100.x.y.z)"] --&gt;|Conexión VPN directa| Server["🖥️ Servidor (VPN activa)&lt;br&gt;(100.a.b.c:6040)"]
+    subgraph LAN ["Red LAN local"]
+        Server --&gt;|Acceso local| LibreFolio["📊 LibreFolio (local)"]
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;</code></pre>
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;</code></pre>
 <h3 id="paso-1-comprobar-que-librefolio-responde-en-su-puerto">▶️ Paso 1: Comprobar que LibreFolio responde en su puerto</h3>
-<p>No hay nada que compartir: con Tailscale activado en el servidor, el puerto <code>6040</code> de LibreFolio ya es accesible desde tu tailnet en la IP de Tailscale del servidor.</p>
+<p>Nada que configurar: con Tailscale activado en el servidor, el puerto <code>6040</code> ya es accesible desde el tailnet en la IP de Tailscale del servidor.</p>
 <details class="tip">
 <summary>¿Prefieres una dirección HTTPS dentro de tu tailnet?</summary>
-<p>Ejecuta esto en el servidor y luego abre <code>https://&lt;server-name&gt;.your-tailnet.ts.net</code> en lugar de la IP:</p>
+<p><strong>En el servidor, en una terminal</strong>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>tailscale<span class="w"> </span>serve<span class="w"> </span>--bg<span class="w"> </span><span class="m">6040</span>
 </code></pre></div>
-<p><code>--bg</code> lo mantiene en ejecución después de cerrar la terminal; <code>tailscale serve reset</code> lo elimina. La primera vez, Tailscale puede pedirte que habilites los certificados HTTPS para tu tailnet. La dirección sigue siendo privada: solo los dispositivos de tu tailnet pueden abrirla.</p>
+<p>Abre <code>https://&lt;server-name&gt;.your-tailnet.ts.net</code> en lugar de la IP; sigue siendo privada, solo la abren los dispositivos de tu tailnet. <code>--bg</code> lo mantiene en ejecución después de cerrar la terminal; <code>tailscale serve reset</code> lo elimina. La primera vez, Tailscale puede pedirte que habilites los certificados HTTPS para el tailnet.</p>
 </details>
 <h3 id="paso-2-abrir-librefolio-desde-tu-dispositivo">📱 Paso 2: Abrir LibreFolio desde tu dispositivo</h3>
-<p>Con Tailscale activado en tu teléfono o PC, escribe la IP de Tailscale del servidor (o su nombre MagicDNS) seguida del puerto en el navegador, por ejemplo <code>http://100.a.b.c:6040</code>.</p>
-<p>Para comprobar el resultado, consulta <a href="../connection_checks/#indicator">Comprobar la seguridad de la conexión</a>.</p>
-<p>⚠️ <strong>Límites:</strong> cada dispositivo desde el que te conectes necesita Tailscale activado, y solo accedes al servidor, no al resto de tu LAN doméstica (el Nivel 2 añade eso).</p>
+<p><strong>En el teléfono o el PC, con Tailscale activado</strong>, escribe en el navegador la IP de Tailscale del servidor (o su nombre MagicDNS) y el puerto:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>http://100.a.b.c:6040
+</code></pre></div>
+<p>LibreFolio se abre. Para comprobar su seguridad: <a href="../connection_checks/#indicator">Comprobación de la seguridad de la conexión</a>.</p>
+<p>⚠️ <strong>Límites:</strong> cada dispositivo desde el que te conectes debe tener Tailscale activado; llegas solo al servidor, no al resto de la LAN (el Nivel 2 añade eso).</p>
 <hr />
-<h2 id="nivel-2-router-de-subred-para-toda-tu-lan-domestica">🥉 Nivel 2: Router de subred para toda tu LAN doméstica</h2>
-<p><strong>Ideal para acceder a todos los dispositivos de casa, no solo a LibreFolio.</strong> El servidor se convierte en un <em>router de subred</em>: con Tailscale activado, tu cliente abre cualquier IP local como si estuviera en casa, por ejemplo <code>http://192.168.1.2:6040</code> para LibreFolio.</p>
+<h2 id="nivel-2-enrutador-de-subred-para-toda-tu-lan-domestica">🥉 Nivel 2: Enrutador de subred para toda tu LAN doméstica</h2>
+<p><strong>Ideal para acceder a todos los dispositivos de casa, no solo a LibreFolio.</strong> El servidor se convierte en un <em>enrutador de subred</em>: el cliente, con Tailscale activado, abre cualquier IP local como si estuviera en casa, por ejemplo <code>http://192.168.1.2:6040</code> para LibreFolio.</p>
 <pre class="mermaid"><code>graph LR
-    Client["👤 Client (VPN active)&lt;br&gt;(100.x.y.z)"] --&gt;|WireGuard Tunneling| Server["🖥️ Server (Subnet Router)&lt;br&gt;(100.a.b.c)"]
-    subgraph LAN ["Local LAN Network (192.168.1.0/24)"]
-        Server --&gt;|Local forwarding| LibreFolio["📊 LibreFolio&lt;br&gt;(e.g. 192.168.1.2:6040)"]
-        Server --&gt;|Local forwarding| OtherDevice["🖨️ Other Devices/Services&lt;br&gt;(e.g. 192.168.1.100)"]
+    Client["👤 Cliente (VPN activa)&lt;br&gt;(100.x.y.z)"] --&gt;|Tunelización WireGuard| Server["🖥️ Servidor (enrutador de subred)&lt;br&gt;(100.a.b.c)"]
+    subgraph LAN ["Red LAN local (192.168.1.0/24)"]
+        Server --&gt;|Reenvío local| LibreFolio["📊 LibreFolio&lt;br&gt;(p. ej. 192.168.1.2:6040)"]
+        Server --&gt;|Reenvío local| OtherDevice["🖨️ Otros dispositivos/servicios&lt;br&gt;(p. ej. 192.168.1.100)"]
     end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;</code></pre>
+    style LibreFolio fill:#d4edda,color:#1b1b1b,stroke:#28a745,stroke-width:2px;</code></pre>
 <h3 id="paso-1-habilitar-el-enrutamiento-de-subred-en-el-servidor">🔀 Paso 1: Habilitar el enrutamiento de subred en el servidor</h3>
+<p>Sustituye <code>192.168.1.0/24</code> por tu red local.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Linux</label><label for="__tabbed_2_2">macOS</label><label for="__tabbed_2_3">Windows</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>Habilita el reenvío de IP a nivel del kernel:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">'net.ipv4.ip_forward = 1'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/sysctl.d/99-tailscale.conf
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">'net.ipv6.conf.all.forwarding = 1'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/sysctl.d/99-tailscale.conf
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>sudo<span class="w"> </span>sysctl<span class="w"> </span>-p<span class="w"> </span>/etc/sysctl.d/99-tailscale.conf
+<ol>
+<li>
+<p><strong>En el servidor, en una terminal</strong>, habilita el reenvío de IP en el kernel:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">'net.ipv4.ip_forward = 1'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/sysctl.d/99-tailscale.conf
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">'net.ipv6.conf.all.forwarding = 1'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/sysctl.d/99-tailscale.conf
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>sudo<span class="w"> </span>sysctl<span class="w"> </span>-p<span class="w"> </span>/etc/sysctl.d/99-tailscale.conf
 </code></pre></div>
-<p>Empieza a anunciar la subred (reemplaza el rango de IP por tu red local, p. ej., <code>192.168.1.0/24</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>sudo<span class="w"> </span>tailscale<span class="w"> </span>up<span class="w"> </span>--advertise-routes<span class="o">=</span><span class="m">192</span>.168.1.0/24
+</li>
+<li>
+<p>Anuncia la subred:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>sudo<span class="w"> </span>tailscale<span class="w"> </span>up<span class="w"> </span>--advertise-routes<span class="o">=</span><span class="m">192</span>.168.1.0/24
 </code></pre></div>
+<p>La ruta aparece en la consola, a la espera de aprobación.</p>
+</li>
+</ol>
 </div>
 <div class="tabbed-block">
-<p>Usa la ruta del ejecutable de Tailscale para anunciar la subred local:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>/Applications/Tailscale.app/Contents/MacOS/Tailscale<span class="w"> </span>up<span class="w"> </span>--advertise-routes<span class="o">=</span><span class="m">192</span>.168.1.0/24
+<p><strong>En el servidor, en una terminal</strong>, con la ruta del ejecutable de Tailscale:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>/Applications/Tailscale.app/Contents/MacOS/Tailscale<span class="w"> </span>up<span class="w"> </span>--advertise-routes<span class="o">=</span><span class="m">192</span>.168.1.0/24
 </code></pre></div>
+<p>La ruta aparece en la consola, a la espera de aprobación.</p>
 </div>
 <div class="tabbed-block">
-<p>Ejecuta el Símbolo del sistema (<code>cmd.exe</code>) o PowerShell como <strong>Administrador</strong> y anuncia la subred local:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>tailscale up --advertise-routes=192.168.1.0/24
+<p><strong>En el servidor, en el Símbolo del sistema (<code>cmd.exe</code>) o en PowerShell como Administrador</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tailscale up --advertise-routes=192.168.1.0/24
 </code></pre></div>
+<p>La ruta aparece en la consola, a la espera de aprobación.</p>
 </div>
 </div>
 </div>
 <h3 id="paso-2-aprobar-la-ruta-en-la-consola-de-administracion">✅ Paso 2: Aprobar la ruta en la consola de administración</h3>
+<p><strong>En la <a href="https://login.tailscale.com/admin/machines">consola de administración de Tailscale</a>, página Machines</strong>:</p>
 <ol>
-<li>Ve a la <a href="https://login.tailscale.com/admin/machines">Consola de administración de Tailscale</a>.</li>
-<li>Haz clic en los tres puntos junto a tu servidor -&gt; <strong>Editar configuración de ruta</strong>.</li>
+<li>Haz clic en los tres puntos junto a tu servidor -&gt; <strong>Edit route settings</strong>.</li>
 <li>Habilita la subred anunciada.</li>
 </ol>
-<p>Un router de subred forma parte de la infraestructura de tu red: si te lo saltaste, desactiva ahora la caducidad de la clave para el servidor (consejo al final del Paso 0).</p>
-<p>⚠️ <strong>Límites:</strong> el cliente sigue necesitando Tailscale activado, debes conocer las IP locales de tus dispositivos y, dentro de tu LAN, el tráfico viaja como HTTP sin cifrar.</p>
-<hr />
-<h2 id="enabling-funnel-and-acls-on-the-console">🔑 Habilitar Funnel y ACLs en la consola</h2>
-<p><strong>Configuración única, necesaria para los Niveles 3 y 4.</strong> Permite Funnel en las reglas de control de acceso (ACLs) de toda tu tailnet.</p>
-<div class="admonition warning">
-<p class="admonition-title">🔐 Antes de hacerlo público</p>
-<p>Con Funnel, cualquiera en internet puede abrir tu página de inicio de sesión de LibreFolio. Crea tu propia cuenta primero: la primera cuenta registrada se convierte en administradora. Los registros permanecen abiertos después de eso (<strong>Habilitar registro</strong>, <code>enable_registration</code>, está activado de forma predeterminada): desactívalo en la <strong>Configuración global</strong> si no quieres que extraños se registren (consulta <a href="../settings/">Configuración global</a>).</p>
-</div>
-<ol>
-<li>Visita la página <a href="https://login.tailscale.com/admin/acls">Controles de acceso</a> en la consola de administración de Tailscale.</li>
-<li>Haz clic en el botón <strong>Añadir atributo de nodo</strong>.</li>
-<li>Completa el formulario:<ul>
-<li><strong>Objetivos</strong>: los nodos autorizados a usar Funnel. <strong>Sugerimos <code>tag:external_access</code></strong> (darás esta etiqueta a los contenedores Docker del Nivel 4) o <code>autogroup:member</code> (todos los dispositivos registrados en tu cuenta personal).</li>
-<li><strong>Atributos</strong>: introduce <code>funnel</code>.</li>
-<li><strong>Nota</strong>: unas palabras sobre por qué existe la regla.</li>
-<li><strong>Grupos de IP, App, Capacidad, etc.</strong>: no son necesarios aquí; déjalos vacíos o con sus valores predeterminados.</li>
-</ul>
-</li>
-</ol>
-<p><img alt="Añadir atributo de nodo" src="../../../static/tailscale-guide/TailscaleNodeAttribute.png" /></p>
-<p>Esta regla no es una clave de autenticación: las claves de autenticación (Nivel 4) solo registran un nuevo dispositivo o contenedor en tu tailnet.</p>
-<details class="example">
-<summary>📄 Ver la configuración JSON completa de ACL para habilitar Funnel</summary>
-<p>Si prefieres editar el archivo de políticas directamente, este ejemplo funcional habilita Funnel para tus propios dispositivos y para los contenedores etiquetados con <code>tag:external_access</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="c1">// Declaration of authorized tags</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">"tagOwners"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">"tag:external_access"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"autogroup:admin"</span><span class="p">]</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="c1">// Standard access rules</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span><span class="nt">"acls"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="c1">// Allows all nodes in your private network to communicate</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="p">{</span><span class="nt">"action"</span><span class="p">:</span><span class="w"> </span><span class="s2">"accept"</span><span class="p">,</span><span class="w"> </span><span class="nt">"src"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"*"</span><span class="p">],</span><span class="w"> </span><span class="nt">"dst"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"*:*"</span><span class="p">]}</span>
-<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span><span class="p">],</span>
-<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
-<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span><span class="nt">"ssh"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span><span class="p">{</span>
-<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">      </span><span class="nt">"action"</span><span class="p">:</span><span class="w"> </span><span class="s2">"check"</span><span class="p">,</span>
-<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">      </span><span class="nt">"src"</span><span class="p">:</span><span class="w">    </span><span class="p">[</span><span class="s2">"autogroup:member"</span><span class="p">],</span>
-<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">      </span><span class="nt">"dst"</span><span class="p">:</span><span class="w">    </span><span class="p">[</span><span class="s2">"autogroup:self"</span><span class="p">],</span>
-<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">      </span><span class="nt">"users"</span><span class="p">:</span><span class="w">  </span><span class="p">[</span><span class="s2">"autogroup:nonroot"</span><span class="p">,</span><span class="w"> </span><span class="s2">"root"</span><span class="p">]</span>
-<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">  </span><span class="p">],</span>
-<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>
-<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">  </span><span class="c1">// Enabling Funnel on specific nodes or tags</span>
-<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="w">  </span><span class="nt">"nodeAttrs"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="w">    </span><span class="p">{</span>
-<a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="w">      </span><span class="nt">"target"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"autogroup:member"</span><span class="p">],</span>
-<a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="w">      </span><span class="nt">"attr"</span><span class="p">:</span><span class="w">   </span><span class="p">[</span><span class="s2">"funnel"</span><span class="p">]</span>
-<a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="w">    </span><span class="p">},</span>
-<a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="w">    </span><span class="p">{</span>
-<a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="w">      </span><span class="nt">"target"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"tag:external_access"</span><span class="p">],</span>
-<a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="w">      </span><span class="nt">"attr"</span><span class="p">:</span><span class="w">   </span><span class="p">[</span><span class="s2">"funnel"</span><span class="p">]</span>
-<a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="w">  </span><span class="p">]</span>
-<a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a><span class="p">}</span>
-</code></pre></div>
-</details>
-<hr />
-<h2 id="nivel-3-direccion-https-publica-con-tailscale-funnel">🥈 Nivel 3: Dirección HTTPS pública con Tailscale Funnel</h2>
-<p><strong>Ideal para una dirección pública, sin VPN en el cliente.</strong> Funnel publica LibreFolio en una dirección segura <code>https://&lt;server-name&gt;.your-tailnet.ts.net</code> que cualquiera puede abrir <strong>sin instalar Tailscale</strong>. HTTPS también es lo que te permite <a href="../../user/pwa/">instalar LibreFolio como app (PWA)</a> en tu teléfono.</p>
-<p><strong>Antes de empezar:</strong> completa la <a href="#enabling-funnel-and-acls-on-the-console">configuración única de Funnel y ACL en la consola</a>.</p>
-<pre class="mermaid"><code>graph LR
-    User["👤 User (No VPN)"] --&gt;|HTTPS Request| Funnel["☁️ Tailscale Funnel Ingress&lt;br&gt;(Tailscale Public Server)"]
-    Funnel --&gt;|WireGuard Tunneling| Server["🖥️ Local Server (tailscaled)&lt;br&gt;(100.a.b.c)"]
-    subgraph LAN ["Local LAN Network"]
-        Server --&gt;|Local forwarding| LibreFolio["📊 LibreFolio (Port 6040)"]
-        Server -.-&gt;|"&lt;font color='red'&gt;&lt;b&gt;Cannot expose&lt;/b&gt;&lt;/font&gt;"| Other["🔌 Other Local Services (Different ports)"]
-    end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;
-    style Other fill:#f8d7da,stroke:#dc3545,stroke-width:2px;
-    linkStyle 3 stroke:#dc3545,stroke-width:2px;</code></pre>
-<h3 id="paso-1-iniciar-el-funnel-en-el-servidor">▶️ Paso 1: Iniciar el Funnel en el servidor</h3>
-<p>En el servidor, publica el puerto local de LibreFolio:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tailscale<span class="w"> </span>funnel<span class="w"> </span>--bg<span class="w"> </span><span class="m">6040</span>
-</code></pre></div>
-<p>Funnel lo sirve en <code>https://&lt;server-name&gt;.your-tailnet.ts.net</code> en el puerto 443; <code>--bg</code> lo mantiene en ejecución después de cerrar la terminal, y <code>tailscale funnel reset</code> lo detiene. Aquí no se necesita ninguna clave de autenticación: el servidor ya se unió a tu tailnet en el Paso 0.
-Tampoco hay nada que configurar en LibreFolio: Funnel envía <code>X-Forwarded-Proto: https</code>, así que con el valor predeterminado <code>SESSION_COOKIE_SECURE=auto</code> LibreFolio marca su <a href="../configuration/">cookie de sesión</a> como <code>Secure</code>. <code>never</code> es solo para un proxy que declara HTTPS a un navegador en HTTP sin cifrar.</p>
-<h3 id="paso-2-aprobar-y-esperar-la-propagacion">✅ Paso 2: Aprobar y esperar la propagación</h3>
-<p>La primera vez, la terminal advierte de que Funnel todavía no está permitido para este nodo y muestra un enlace como este:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Funnel is enabled, but the list of allowed nodes in the tailnet policy file does not include the one you are using.
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>To give access to this node you can edit the tailnet policy file, or visit:
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>         https://login.tailscale.com/f/funnel?node=xxxxxx
-</code></pre></div>
-<ol>
-<li>Abre el enlace en tu navegador, inicia sesión en Tailscale y aprueba Funnel para este nodo.</li>
-<li>La terminal mostrará entonces tu URL pública.</li>
-<li>Espera unos minutos a que se propaguen los registros MagicDNS antes de abrirla desde una red externa.</li>
-</ol>
-<p>Para comprobar el resultado, consulta <a href="../connection_checks/#checklist">Comprobar la seguridad de la conexión</a>.</p>
-<p>⚠️ <strong>Límites:</strong> una máquina tiene un solo nombre público, que deben compartir todos los servicios que publiques desde ella. El Nivel 4 le da a cada servicio el suyo.</p>
-<hr />
-<h2 id="nivel-4-multi-funnel-con-sidecars-de-docker">🥇 Nivel 4: Multi-Funnel con sidecars de Docker</h2>
-<p><strong>Ideal para usuarios de Docker que quieren una dirección pública por servicio.</strong> Cada servicio obtiene un pequeño contenedor de Tailscale (un <em>sidecar</em>) que se une a tu tailnet como su propio nodo, con su propia dirección <code>https://&lt;name&gt;.your-tailnet.ts.net</code>. Un script de inicio instala <strong>socat</strong> en el sidecar, y socat reenvía el tráfico de Funnel a la IP estática de la LAN del servicio.</p>
-<p><strong>Antes de empezar:</strong> completa la <a href="#enabling-funnel-and-acls-on-the-console">configuración única de Funnel y ACL en la consola</a>.</p>
-<details class="info">
-<summary>🧰 ¿Qué es socat?</summary>
-<p><strong>socat</strong> (SOcket CAT) es una pequeña herramienta de línea de comandos que retransmite datos entre dos conexiones. Aquí funciona como un <strong>mini reenviador</strong>: escucha en un puerto dentro del contenedor de Tailscale y pasa todo lo que recibe al puerto real del servicio en tu LAN.</p>
-</details>
-<p>Añade un sidecar por cada servicio que quieras publicar, en un host o en varios; el único límite es el número de dispositivos etiquetados que permita tu <a href="https://tailscale.com/pricing">plan de Tailscale</a>. En este ejemplo, dos hosts ejecutan dos sidecars cada uno:</p>
-<pre class="mermaid"><code>graph LR
-    User["👤 External User"] --&gt;|HTTPS| Funnel1["☁️ Funnel 1&lt;br&gt;(librefolio.yourtailnet.ts.net)"]
-    User --&gt;|HTTPS| Funnel2["☁️ Funnel 2&lt;br&gt;(service1.yourtailnet.ts.net)"]
-    User --&gt;|HTTPS| Funnel3["☁️ Funnel 3&lt;br&gt;(service3.yourtailnet.ts.net)"]
-    User --&gt;|HTTPS| Funnel4["☁️ Funnel 4&lt;br&gt;(service4.yourtailnet.ts.net)"]
-
-    Funnel1 --&gt;|WireGuard| TSC1["🐳 Tailscale Container 1&lt;br&gt;(100.101.x.x)"]
-    Funnel2 --&gt;|WireGuard| TSC2["🐳 Tailscale Container 2&lt;br&gt;(100.102.x.x)"]
-    Funnel3 --&gt;|WireGuard| TSC3["🐳 Tailscale Container 3&lt;br&gt;(100.103.x.x)"]
-    Funnel4 --&gt;|WireGuard| TSC4["🐳 Tailscale Container 4&lt;br&gt;(100.104.x.x)"]
-
-    subgraph LAN ["Local LAN Network (192.168.1.0/24)"]
-        subgraph Host2 ["Server 2 (e.g. Mini PC - 192.168.1.10)"]
-            TSC3 --&gt;|socat: TCP/8080| Service3["🔌 Service 3&lt;br&gt;(192.168.1.10:8080)"]
-            TSC4 --&gt;|socat: TCP/9000| Service4["🔌 Service 4&lt;br&gt;(192.168.1.10:9000)"]
-        end
-        subgraph Host1 ["Server 1 (e.g. NAS - 192.168.1.20)"]
-            TSC1 --&gt;|socat: TCP/6040| LibreFolio["📊 LibreFolio&lt;br&gt;(192.168.1.20:6040)"]
-            TSC2 --&gt;|socat: TCP/80| Service1["🔌 Service 1&lt;br&gt;(192.168.1.20:80)"]
-        end
-    end
-    style LibreFolio fill:#d4edda,stroke:#28a745,stroke-width:2px;</code></pre>
-<h3 id="paso-1-preparar-la-carpeta-y-el-script">📁 Paso 1: Preparar la carpeta y el script</h3>
-<p>Crea una carpeta en el servidor, por ejemplo donde guardas tus volúmenes persistentes de Docker:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Create a folder for the Tailscale nodes and enter it</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>&lt;path_chosen&gt;/tailscale-nodes
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nb">cd</span><span class="w"> </span>&lt;path_chosen&gt;/tailscale-nodes
-</code></pre></div>
-<p>Luego descarga el script de inicio <a href="https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/docs/static/tailscale-guide/custom_startup.sh" target="_blank" rel="noopener noreferrer">custom_startup.sh</a> en ella:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Download the script from the official repository</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>wget<span class="w"> </span>https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/docs/static/tailscale-guide/custom_startup.sh
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Make the script executable</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>chmod<span class="w"> </span>+x<span class="w"> </span>custom_startup.sh
-</code></pre></div>
-<details class="info">
-<summary>🔄 ¿Configuraste el sidecar antes? Actualiza tu copia del script</summary>
-<p>El script actual también funciona como <strong>watchdog</strong> e incluye una comprobación de estado de Docker (consulta el Paso 2). Si tu sidecar ejecuta una copia antigua, actualízala:</p>
-<ol>
-<li>
-<p><strong>Descarga el script de nuevo</strong> en la misma carpeta. La opción <code>-O custom_startup.sh</code> sobrescribe el archivo antiguo (sin ella, <code>wget</code> guarda la descarga como <code>custom_startup.sh.1</code>). Luego asegúrate de que el script sea ejecutable:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">cd</span><span class="w"> </span>&lt;path_chosen&gt;/tailscale-nodes
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>wget<span class="w"> </span>-O<span class="w"> </span>custom_startup.sh<span class="w"> </span>https://raw.githubusercontent.com/Librefolio/LibreFolio/main/mkdocs_src/docs/static/tailscale-guide/custom_startup.sh
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>chmod<span class="w"> </span>+x<span class="w"> </span>custom_startup.sh
-</code></pre></div>
-</li>
-<li>
-<p><strong>Actualiza tu archivo compose</strong>: añade <code>TS_ENABLE_HEALTH_CHECK</code>, <code>TS_LOCAL_ADDR_PORT</code> y, opcionalmente, <code>STARTUP_TIMEOUT</code> al servicio de Tailscale, junto con el bloque <code>healthcheck</code>, exactamente como en el Paso 2.</p>
-</li>
-<li>
-<p><strong>Vuelve a crear el contenedor</strong>: reiniciar no aplica los cambios del compose. Ejecuta <code>docker compose up -d</code> en la carpeta de tu <code>docker-compose.yml</code> (vuelve a crear los servicios cuya configuración cambió), o usa la acción <em>Recreate</em> / volver a desplegar de Portainer o CasaOS.</p>
-</li>
-<li>
-<p><strong>Comprueba el registro</strong> con <code>docker logs -f tailscale-librefolio</code>: deberías ver <code>Tailscale is running.</code>, luego <code>Starting the funnel on port 6040...</code> y <code>Available on the internet:</code> con tu URL pública. Dentro del <code>start_period</code> de 2 minutos de la comprobación de estado, Docker muestra el contenedor como <strong>healthy</strong> (<code>docker ps</code>, Portainer, CasaOS). Si en cambio se reinicia continuamente, consulta el panel de solución de problemas en el <a href="#3-startup-and-approval">Paso 3</a>.</p>
-</li>
-</ol>
-</details>
-<h3 id="paso-2-configurar-docker-compose">🐳 Paso 2: Configurar Docker Compose</h3>
-<p>Añade el servicio de Tailscale al <strong>mismo <code>docker-compose.yml</code> que el servicio</strong> que expone (por ejemplo, LibreFolio), para que ambos permanezcan juntos:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">services</span><span class="p">:</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">tailscale-librefolio</span><span class="p">:</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tailscale/tailscale:latest</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tailscale-librefolio</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="nt">hostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tailscale-librefolio</span>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">privileged</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">    </span><span class="nt">network_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bridge</span>
-<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">    </span><span class="nt">cap_add</span><span class="p">:</span>
-<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NET_ADMIN</span>
-<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NET_RAW</span>
-<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">    </span><span class="nt">devices</span><span class="p">:</span>
-<a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/dev/net/tun:/dev/net/tun</span>
-<a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">    </span><span class="nt">command</span><span class="p">:</span>
-<a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/custom_startup.sh</span>
-<a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-<a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HOST_IP=192.168.1.20</span><span class="w">                </span><span class="c1"># Local IP of the service to expose (e.g. Server 1)</span>
-<a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HOST_PORT=6040</span><span class="w">                      </span><span class="c1"># Real port of the service to expose</span>
-<a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TAILSCALE_FUNNEL_PORT=6040</span><span class="w">          </span><span class="c1"># Internal Funnel port</span>
-<a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_HOSTNAME=librefolio</span><span class="w">              </span><span class="c1"># Custom public hostname (e.g. librefolio)</span>
-<a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_AUTHKEY=tskey-auth-...</span><span class="w">           </span><span class="c1"># Authentication key generated by Tailscale</span>
-<a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_ACCEPT_DNS=true</span>
-<a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_STATE_DIR=/var/lib/tailscale</span>
-<a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_USERSPACE=false</span>
-<a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_ENABLE_HEALTH_CHECK=true</span><span class="w">         </span><span class="c1"># Expose /healthz for the healthcheck below (Tailscale ≥ 1.78)</span>
-<a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_LOCAL_ADDR_PORT=127.0.0.1:9002</span><span class="w">   </span><span class="c1"># Where /healthz listens: inside the container only</span>
-<a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">STARTUP_TIMEOUT=180</span><span class="w">                 </span><span class="c1"># Optional: seconds to reach the Running state (default 180)</span>
-<a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-13-29" name="__codelineno-13-29" href="#__codelineno-13-29"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;path_chosen&gt;/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale</span>
-<a id="__codelineno-13-30" name="__codelineno-13-30" href="#__codelineno-13-30"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;path_chosen&gt;/tailscale-nodes/custom_startup.sh:/custom_startup.sh</span>
-<a id="__codelineno-13-31" name="__codelineno-13-31" href="#__codelineno-13-31"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/etc/localtime:/etc/localtime:ro</span>
-<a id="__codelineno-13-32" name="__codelineno-13-32" href="#__codelineno-13-32"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/etc/timezone:/etc/timezone:ro</span>
-<a id="__codelineno-13-33" name="__codelineno-13-33" href="#__codelineno-13-33"></a><span class="w">    </span><span class="c1"># Shows healthy/unhealthy in Docker, Portainer or CasaOS; the restart itself comes from custom_startup.sh exiting</span>
-<a id="__codelineno-13-34" name="__codelineno-13-34" href="#__codelineno-13-34"></a><span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
-<a id="__codelineno-13-35" name="__codelineno-13-35" href="#__codelineno-13-35"></a><span class="w">      </span><span class="nt">test</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"CMD"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"wget"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"-q"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"-O"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"/dev/null"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"http://127.0.0.1:9002/healthz"</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-13-36" name="__codelineno-13-36" href="#__codelineno-13-36"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
-<a id="__codelineno-13-37" name="__codelineno-13-37" href="#__codelineno-13-37"></a><span class="w">      </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
-<a id="__codelineno-13-38" name="__codelineno-13-38" href="#__codelineno-13-38"></a><span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<a id="__codelineno-13-39" name="__codelineno-13-39" href="#__codelineno-13-39"></a><span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120s</span>
-</code></pre></div>
-<p>Luego establece estos valores para tu red:</p>
-<table>
-<thead>
-<tr>
-<th>Valor</th>
-<th>Qué poner</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>&lt;path_chosen&gt;</code></td>
-<td>La ruta absoluta elegida en el Paso 1, donde viven el script y los datos de estado (p. ej., <code>/home/user/docker</code>).</td>
-</tr>
-<tr>
-<td><code>HOST_IP</code></td>
-<td>La IP estática de la LAN de la máquina que ejecuta el servicio.</td>
-</tr>
-<tr>
-<td><code>HOST_PORT</code></td>
-<td>El puerto real del servicio en esa máquina: para LibreFolio, el <code>PORT</code> de tu <code>.env</code> (<code>6040</code> de forma predeterminada).</td>
-</tr>
-<tr>
-<td><code>TAILSCALE_FUNNEL_PORT</code></td>
-<td>El puerto en el que escucha el contenedor y que publica a través de Funnel. Establécelo con el mismo valor que <code>HOST_PORT</code>.</td>
-</tr>
-<tr>
-<td><code>TS_HOSTNAME</code></td>
-<td>El nombre del nodo: la dirección pública pasa a ser <code>https://TS_HOSTNAME.your-tailnet.ts.net</code>.</td>
-</tr>
-<tr>
-<td><code>TS_AUTHKEY</code></td>
-<td>La clave de autenticación que registra el contenedor en tu tailnet (ver más abajo).</td>
-</tr>
-</tbody>
-</table>
-<p>Para obtener la clave de autenticación para <code>TS_AUTHKEY</code>:</p>
-<ol>
-<li>Ve a <a href="https://login.tailscale.com/admin/settings/keys">Claves de configuración de administración de Tailscale</a>.</li>
-<li>En la sección <strong>Claves de autenticación</strong> (<em>no</em> en la sección de tokens de acceso a la API), haz clic en el botón <strong>Generar clave de autenticación...</strong>.</li>
-<li>Activa el interruptor <strong>Etiquetas</strong> y selecciona tu etiqueta (p. ej., <code>tag:external_access</code>). Añade una descripción que reconozcas, como <code>docker-librefolio-funnel</code>.</li>
-<li>Haz clic en <strong>Generar</strong> y copia la clave (<code>tskey-auth-...</code>).</li>
-</ol>
-<p>Una vez iniciado el contenedor, la clave de un solo uso se consume: desaparece de la lista <strong>Claves</strong> y el nuevo dispositivo aparece en <strong>Máquinas</strong>.</p>
-<details class="info">
-<summary>🩺 Watchdog y comprobación de estado — qué hace la configuración adicional</summary>
-<p>El script de inicio también funciona como <strong>watchdog</strong>, mientras que el bloque <code>healthcheck</code> hace visible el estado del contenedor:</p>
-<ul>
-<li><strong>Watchdog (reinicio automático)</strong>: si Tailscale no puede iniciarse (por ejemplo, no hay conexión a internet al arrancar o una opción incorrecta), no alcanza el estado <em>Running</em> dentro de <code>STARTUP_TIMEOUT</code> segundos, o si Tailscale, socat o el Funnel se detienen más tarde, el script sale con un error y Docker reinicia el contenedor (<code>restart: unless-stopped</code>). El contenedor nunca se queda "en ejecución" sin nada detrás, y un <code>docker stop</code> sigue apagando todo limpiamente.</li>
-<li><strong>Comprobación de estado (solo estado)</strong>: <code>TS_ENABLE_HEALTH_CHECK=true</code> activa el endpoint <code>/healthz</code> de Tailscale (Tailscale 1.78 o posterior), que responde <code>200</code> mientras el nodo tiene una dirección IP de Tailscale y <code>503</code> en caso contrario. Docker lo consulta regularmente y marca el contenedor como <em>healthy</em> o <em>unhealthy</em>; Portainer y CasaOS muestran el mismo estado.</li>
-</ul>
-<p>Docker simple (fuera del modo Swarm) <strong>no</strong> reinicia un contenedor marcado como <em>unhealthy</em>: el reinicio proviene de que el script salga, así que no necesitas un contenedor "autoheal" adicional (tales ayudantes también necesitan el socket de Docker, lo que implica control total del host).</p>
-<table>
-<thead>
-<tr>
-<th>Opción de configuración</th>
-<th>Qué hace</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>TS_LOCAL_ADDR_PORT</code></td>
-<td>Donde escucha <code>/healthz</code>. El endpoint no necesita autenticación, y el valor predeterminado de Tailscale, <code>[::]:9002</code>, escucha en todas las interfaces: <code>127.0.0.1:9002</code> lo mantiene dentro del contenedor. Si lo cambias, actualiza también la URL de la prueba <code>healthcheck</code>.</td>
-</tr>
-<tr>
-<td><code>STARTUP_TIMEOUT</code></td>
-<td>Segundos que el script espera al estado <em>Running</em> (predeterminado <code>180</code>) antes de salir y que Docker reinicie el contenedor. Auméntalo solo en un servidor muy lento.</td>
-</tr>
-<tr>
-<td><code>DEBUG</code></td>
-<td>No está en el ejemplo anterior. <code>DEBUG=1</code> imprime cada comando que ejecuta el script en el registro del contenedor, para solución de problemas. Desactivado de forma predeterminada para mantener el registro legible.</td>
-</tr>
-</tbody>
-</table>
-</details>
-<details class="example">
-<summary>📄 Ver el archivo Docker Compose de producción completo (LibreFolio + Tailscale)</summary>
-<p>Un <code>docker-compose.yml</code> completo: el servicio <code>librefolio</code> del <code>docker-compose.prod.yml</code> oficial, con el sidecar de Tailscale al lado:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># =============================================================================</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># LibreFolio — Production Docker Compose</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># =============================================================================</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Optimized for end-users running the official pre-built image from GHCR.</span>
-<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># =============================================================================</span>
-<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
-<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="nt">services</span><span class="p">:</span>
-<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span><span class="nt">librefolio</span><span class="p">:</span>
-<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${LIBREFOLIO_IMAGE:-ghcr.io/librefolio/librefolio:latest}</span>
-<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">librefolio</span>
-<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
-<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"${PORT:-6040}:6040"</span>
-<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./LibreFolio-data:/app/backend/data/prod-docker</span>
-<a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="w">    </span><span class="nt">env_file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.env</span>
-<a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-<a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker</span>
-<a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HOST=0.0.0.0</span>
-<a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
-<a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">      </span><span class="nt">test</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"CMD"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"python"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"-c"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"import</span><span class="nv"> </span><span class="s">urllib.request;</span><span class="nv"> </span><span class="s">urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
-<a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">      </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
-<a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15s</span>
-<a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a>
-<a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a><span class="w">  </span><span class="nt">tailscale-librefolio</span><span class="p">:</span>
-<a id="__codelineno-14-28" name="__codelineno-14-28" href="#__codelineno-14-28"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tailscale/tailscale:latest</span>
-<a id="__codelineno-14-29" name="__codelineno-14-29" href="#__codelineno-14-29"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tailscale-librefolio</span>
-<a id="__codelineno-14-30" name="__codelineno-14-30" href="#__codelineno-14-30"></a><span class="w">    </span><span class="nt">hostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tailscale-librefolio</span>
-<a id="__codelineno-14-31" name="__codelineno-14-31" href="#__codelineno-14-31"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-14-32" name="__codelineno-14-32" href="#__codelineno-14-32"></a><span class="w">    </span><span class="nt">privileged</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-<a id="__codelineno-14-33" name="__codelineno-14-33" href="#__codelineno-14-33"></a><span class="w">    </span><span class="nt">network_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bridge</span>
-<a id="__codelineno-14-34" name="__codelineno-14-34" href="#__codelineno-14-34"></a><span class="w">    </span><span class="nt">cap_add</span><span class="p">:</span>
-<a id="__codelineno-14-35" name="__codelineno-14-35" href="#__codelineno-14-35"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NET_ADMIN</span>
-<a id="__codelineno-14-36" name="__codelineno-14-36" href="#__codelineno-14-36"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NET_RAW</span>
-<a id="__codelineno-14-37" name="__codelineno-14-37" href="#__codelineno-14-37"></a><span class="w">    </span><span class="nt">devices</span><span class="p">:</span>
-<a id="__codelineno-14-38" name="__codelineno-14-38" href="#__codelineno-14-38"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/dev/net/tun:/dev/net/tun</span>
-<a id="__codelineno-14-39" name="__codelineno-14-39" href="#__codelineno-14-39"></a><span class="w">    </span><span class="nt">command</span><span class="p">:</span>
-<a id="__codelineno-14-40" name="__codelineno-14-40" href="#__codelineno-14-40"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/custom_startup.sh</span>
-<a id="__codelineno-14-41" name="__codelineno-14-41" href="#__codelineno-14-41"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-<a id="__codelineno-14-42" name="__codelineno-14-42" href="#__codelineno-14-42"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HOST_IP=192.168.1.20</span><span class="w">                </span><span class="c1"># Local IP of the service to expose (e.g. Server 1)</span>
-<a id="__codelineno-14-43" name="__codelineno-14-43" href="#__codelineno-14-43"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HOST_PORT=6040</span><span class="w">                      </span><span class="c1"># Real port of the service to expose</span>
-<a id="__codelineno-14-44" name="__codelineno-14-44" href="#__codelineno-14-44"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TAILSCALE_FUNNEL_PORT=6040</span><span class="w">          </span><span class="c1"># Internal Funnel port</span>
-<a id="__codelineno-14-45" name="__codelineno-14-45" href="#__codelineno-14-45"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_HOSTNAME=librefolio</span><span class="w">              </span><span class="c1"># Custom public hostname (e.g. librefolio)</span>
-<a id="__codelineno-14-46" name="__codelineno-14-46" href="#__codelineno-14-46"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_AUTHKEY=tskey-auth-...</span><span class="w">           </span><span class="c1"># Replace with your generated key</span>
-<a id="__codelineno-14-47" name="__codelineno-14-47" href="#__codelineno-14-47"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_ACCEPT_DNS=true</span>
-<a id="__codelineno-14-48" name="__codelineno-14-48" href="#__codelineno-14-48"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_STATE_DIR=/var/lib/tailscale</span>
-<a id="__codelineno-14-49" name="__codelineno-14-49" href="#__codelineno-14-49"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_USERSPACE=false</span>
-<a id="__codelineno-14-50" name="__codelineno-14-50" href="#__codelineno-14-50"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_ENABLE_HEALTH_CHECK=true</span><span class="w">         </span><span class="c1"># Expose /healthz for the healthcheck below (Tailscale ≥ 1.78)</span>
-<a id="__codelineno-14-51" name="__codelineno-14-51" href="#__codelineno-14-51"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TS_LOCAL_ADDR_PORT=127.0.0.1:9002</span><span class="w">   </span><span class="c1"># Where /healthz listens: inside the container only</span>
-<a id="__codelineno-14-52" name="__codelineno-14-52" href="#__codelineno-14-52"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">STARTUP_TIMEOUT=180</span><span class="w">                 </span><span class="c1"># Optional: seconds to reach the Running state (default 180)</span>
-<a id="__codelineno-14-53" name="__codelineno-14-53" href="#__codelineno-14-53"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-14-54" name="__codelineno-14-54" href="#__codelineno-14-54"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/DATA/AppData/tailscale-nodes/tailscale-librefolio/state:/var/lib/tailscale</span>
-<a id="__codelineno-14-55" name="__codelineno-14-55" href="#__codelineno-14-55"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/DATA/AppData/tailscale-nodes/custom_startup.sh:/custom_startup.sh</span>
-<a id="__codelineno-14-56" name="__codelineno-14-56" href="#__codelineno-14-56"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/etc/localtime:/etc/localtime:ro</span>
-<a id="__codelineno-14-57" name="__codelineno-14-57" href="#__codelineno-14-57"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/etc/timezone:/etc/timezone:ro</span>
-<a id="__codelineno-14-58" name="__codelineno-14-58" href="#__codelineno-14-58"></a><span class="w">    </span><span class="c1"># Shows healthy/unhealthy in Docker, Portainer or CasaOS; the restart itself comes from custom_startup.sh exiting</span>
-<a id="__codelineno-14-59" name="__codelineno-14-59" href="#__codelineno-14-59"></a><span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
-<a id="__codelineno-14-60" name="__codelineno-14-60" href="#__codelineno-14-60"></a><span class="w">      </span><span class="nt">test</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"CMD"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"wget"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"-q"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"-O"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"/dev/null"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"http://127.0.0.1:9002/healthz"</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-14-61" name="__codelineno-14-61" href="#__codelineno-14-61"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
-<a id="__codelineno-14-62" name="__codelineno-14-62" href="#__codelineno-14-62"></a><span class="w">      </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
-<a id="__codelineno-14-63" name="__codelineno-14-63" href="#__codelineno-14-63"></a><span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
-<a id="__codelineno-14-64" name="__codelineno-14-64" href="#__codelineno-14-64"></a><span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120s</span>
-</code></pre></div>
-</details>
-<h3 id="3-startup-and-approval">🚀 Paso 3: Iniciar y aprobar el Funnel</h3>
-<p>Inicia el stack, el servicio y su sidecar de Tailscale juntos:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
-</code></pre></div>
-<p>Luego sigue el registro del contenedor de Tailscale:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>docker<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>tailscale-librefolio
-</code></pre></div>
-<p>En el primer inicio, el registro muestra el enlace de aprobación para el nuevo nodo:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Funnel is enabled, but the list of allowed nodes in the tailnet policy file does not include the one you are using.
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>To give access to this node you can edit the tailnet policy file, or visit:
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>         https://login.tailscale.com/f/funnel?node=nsKGo6k9ZF11CNTRL
-</code></pre></div>
-<ul>
-<li>Abre el enlace en tu navegador, inicia sesión en Tailscale y aprueba la activación de Funnel.</li>
-<li>Justo después de la aprobación, el registro confirma la URL pública y el proxy local:</li>
-</ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>Available on the internet:
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>
-<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>https://librefolio.yourtailnet.ts.net/
-<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>|-- proxy http://127.0.0.1:6040
-<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>
-<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>Press Ctrl+C to exit.
-</code></pre></div>
-<p>El servicio ya está en línea: espera unos minutos a que se propaguen los registros MagicDNS y luego abre la URL.
-No hay nada que configurar en LibreFolio: Funnel envía <code>X-Forwarded-Proto: https</code> y socat lo transmite, así que con el valor predeterminado <code>SESSION_COOKIE_SECURE=auto</code> LibreFolio marca su <a href="../configuration/">cookie de sesión</a> como <code>Secure</code>. <code>never</code> es solo para un proxy que declara HTTPS a un navegador en HTTP sin cifrar.</p>
-<p>Para comprobar el resultado, consulta <a href="../connection_checks/#checklist">Comprobar la seguridad de la conexión</a>.</p>
-<details class="question">
-<summary>🛠️ El contenedor se reinicia en bucle o está marcado como unhealthy</summary>
-<p>Un problema persistente se manifiesta como un contenedor que se reinicia continuamente (Docker, Portainer o CasaOS también pueden marcarlo como <em>unhealthy</em>), no como uno que parece "en ejecución" pero no funciona. Lee el registro con <code>docker logs tailscale-librefolio</code>: antes de cada reinicio, el script imprime lo que salió mal, normalmente seguido de <code>Exiting so Docker restarts the container.</code> Las causas más comunes:</p>
-<ul>
-<li><strong>Una opción en <code>TS_EXTRA_ARGS</code> no tiene valor.</strong> Esta variable opcional (no está en el compose anterior) pasa opciones adicionales a <code>tailscale up</code>, divididas por espacios. Una opción sin su valor hace que <code>tailscale up</code> falle: el motivo está en la línea justo después de <code>Running 'tailscale up'</code>, encima del texto de ayuda que empieza por <code>USAGE</code> (por ejemplo, <code>flag needs an argument: -advertise-tags</code>), seguido de <code>failed to auth tailscale: … tailscale up failed: exit status 2</code> y <code>containerboot exited before Tailscale was running.</code> Escribe cada valor como <code>--flag=value</code> o <code>--flag value</code>: <code>--advertise-tags=tag:container</code> y <code>--advertise-tags tag:container</code> funcionan ambos.</li>
-<li><strong>Un panel de gestión cortó el valor.</strong> El editor de variables de entorno de CasaOS (y de paneles similares) trunca un valor en su segundo <code>=</code>: <code>TS_EXTRA_ARGS=--advertise-tags=tag:container</code> se convierte en <code>--advertise-tags</code>, lo que falla como se describió anteriormente. En estos paneles, escribe los valores de las opciones con un espacio: <code>--advertise-tags tag:container</code>.</li>
-<li><strong>Falta una variable obligatoria</strong>: el script se detiene de inmediato con <code>HOST_IP is not set</code> (o el mismo mensaje para <code>HOST_PORT</code> o <code>TAILSCALE_FUNNEL_PORT</code>).</li>
-<li><strong>Sin conexión a internet al arrancar</strong>: el contenedor se reinicia continuamente hasta que Tailscale puede iniciarse, y luego funciona con normalidad. Esto es esperado.</li>
-<li><strong>Inicio muy lento</strong>: el registro muestra <code>Tailscale is not running after 180s.</code>; aumenta <code>STARTUP_TIMEOUT</code>.</li>
-<li><strong>Unhealthy, pero sin reiniciarse</strong>: la comprobación de estado no obtiene una respuesta correcta de <code>/healthz</code>. Si acabas de añadirla, asegúrate de que <code>TS_ENABLE_HEALTH_CHECK=true</code> esté establecido y de que la URL de la prueba <code>healthcheck</code> coincida con <code>TS_LOCAL_ADDR_PORT</code>; de lo contrario, el nodo no tiene una dirección IP de Tailscale en ese momento.</li>
-</ul>
-<p>Para rastrear cada comando del script, añade <code>DEBUG=1</code> a la sección <code>environment</code>, vuelve a crear el contenedor y lee el registro de nuevo.</p>
-</details>
-<p>Como su clave de autenticación lleva una etiqueta, Tailscale desactiva la caducidad de la clave para el contenedor de forma predeterminada. Con una clave sin etiqueta, desactívala como para el servidor (consejo al final del Paso 0).</p>
-<p>⚠️ <strong>Límites:</strong> requiere una terminal y algo de edición de archivos Docker Compose.</p>
+<p>Desde el cliente ya llegas a todas las IP de la LAN. El servidor es ahora infraestructura de red: si aún no lo has hecho, desactiva la caducidad de su clave (consejo al final del Paso 0).</p>
+<p>⚠️ <strong>Límites:</strong> el cliente debe tener Tailscale activado, debes conocer las IP locales de tus dispositivos y, dentro de la LAN, el tráfico viaja como HTTP simple.</p>
 <hr />
 <h2 id="magicdns-y-dominios-personalizados">🔮 MagicDNS y dominios personalizados</h2>
-<p><strong>MagicDNS</strong> da a cada dispositivo de tu tailnet un nombre: en lugar de una IP como <code>100.110.x.x</code>, puedes escribir <code>http://your-server</code> en el navegador. Las direcciones públicas de Funnel terminan en <code>.ts.net</code> (por ejemplo, <code>https://librefolio.your-tailnet.ts.net</code>, donde <code>librefolio</code> es el <code>TS_HOSTNAME</code> del Nivel 4).</p>
-<p>¿Prefieres tu propio dominio, como <code>librefolio.mydomain.com</code>? Dos métodos funcionan para acceso <strong>privado</strong>, a través de la VPN:</p>
+<p><strong>MagicDNS</strong> da un nombre a cada dispositivo del tailnet: en lugar de una IP como <code>100.110.x.x</code>, escribes <code>http://your-server</code>. Las direcciones públicas de Funnel terminan en <code>.ts.net</code> (por ejemplo <code>https://librefolio.your-tailnet.ts.net</code>, donde <code>librefolio</code> es el <code>TS_HOSTNAME</code> del Nivel 4).</p>
+<p>Un dominio propio, como <code>librefolio.mydomain.com</code>, para el acceso <strong>privado</strong> a través de la VPN: dos métodos.</p>
 <details class="tip">
-<summary>🌍 Método 1 — Un registro DNS público que apunta a la IP de Tailscale (el más simple)</summary>
+<summary>🌍 Método 1 — Un registro DNS público que apunta a la IP de Tailscale (el más sencillo)</summary>
+<p><strong>En la consola de tu registrador de dominios</strong> (p. ej. Cloudflare, GoDaddy, Namecheap):</p>
 <ol>
-<li>Inicia sesión en la consola de tu registrador de dominios (p. ej., Cloudflare, GoDaddy, Namecheap).</li>
-<li>Crea un registro DNS de tipo <strong>A</strong> (o <strong>AAAA</strong> para IPv6) para el subdominio elegido (p. ej., <code>librefolio.mydomain.com</code>).</li>
-<li>Apunta el registro directamente a la <strong>IP privada de Tailscale</strong> de tu servidor (p. ej., <code>100.77.x.x</code>).</li>
+<li>Crea un registro DNS de tipo <strong>A</strong> (o <strong>AAAA</strong> para IPv6) para el subdominio elegido (p. ej. <code>librefolio.mydomain.com</code>).</li>
+<li>Apúntalo a la <strong>IP privada de Tailscale</strong> del servidor (p. ej. <code>100.77.x.x</code>).</li>
 </ol>
-<p>Las direcciones de la red <code>100.64.0.0/10</code> no son enrutables en internet, por lo que el nombre funciona <strong>solo</strong> mientras estás conectado a tu tailnet: ningún externo puede alcanzar ni escanear el servicio. Para más detalles, consulta la <a href="https://tailscale.com/kb/1054/dns#public-dns">Documentación oficial sobre configuración de DNS</a>.</p>
+<p>El nombre funciona <strong>solo</strong> mientras estás conectado al tailnet: la red <code>100.64.0.0/10</code> no es enrutable en internet, ningún externo puede alcanzar ni escanear el servicio. Detalles: <a href="https://tailscale.com/kb/1054/dns#public-dns">documentación oficial sobre la configuración de DNS</a>.</p>
 </details>
 <details class="tip">
-<summary>🧭 Método 2 — Split DNS con tu propio servidor DNS</summary>
-<p>Para registros internos que gestionas tú mismo y nunca publicas en internet:</p>
+<summary>🧭 Método 2 — DNS dividido con tu propio servidor DNS</summary>
+<p>Para registros internos que gestionas tú y que nunca se publican en internet:</p>
 <ol>
-<li>Configura un servidor DNS privado en tu LAN (como Pi-hole, AdGuard Home o CoreDNS).</li>
-<li>Añade registros locales de tu dominio apuntándolos a tus IP de Tailscale.</li>
-<li>En la consola de administración de Tailscale, ve a <em>DNS -&gt; Servidores de nombres -&gt; Añadir servidor de nombres</em> y añade la IP de Tailscale de tu DNS privado como servidor de nombres global o restringido a tu dominio. Para más detalles, consulta la <a href="https://tailscale.com/kb/1054/dns#split-dns">Documentación oficial sobre Split DNS</a>.</li>
+<li><strong>En tu LAN</strong>: configura un servidor DNS privado (Pi-hole, AdGuard Home o CoreDNS).</li>
+<li><strong>En tu servidor DNS</strong>: añade los registros de tu dominio, apuntándolos a tus IP de Tailscale.</li>
+<li><strong>En la consola de administración de Tailscale</strong>, <em>DNS -&gt; Nameservers -&gt; Add Nameserver</em>: añade la IP de Tailscale de tu DNS privado, como servidor de nombres global o restringido a tu dominio. Detalles: <a href="https://tailscale.com/kb/1054/dns#split-dns">documentación oficial sobre DNS dividido</a>.</li>
 </ol>
 </details>
-<p>Para acceso <strong>público</strong>, conserva la dirección <code>*.ts.net</code>: Funnel la sirve con un certificado firmado para ese nombre, así que apuntar tu propio dominio a ella (CNAME) provoca errores SSL/TLS en los navegadores, a menos que añadas tu propio proxy inverso (como Caddy o Nginx) con certificados para tu dominio.</p>
+<p>Para el acceso <strong>público</strong>, conserva la dirección <code>*.ts.net</code>: el certificado de Funnel está firmado para ese nombre, así que un CNAME desde tu dominio da errores SSL/TLS en los navegadores, a menos que añadas un proxy inverso propio (Caddy o Nginx) con certificados para tu dominio.</p>
 <hr />
 <h2 id="enlaces-utiles">🔗 Enlaces útiles</h2>
 <ul>
-<li>🖥️ <a href="https://login.tailscale.com/admin/machines">Consola de administración de Tailscale (Máquinas)</a></li>
-<li>🔐 <a href="https://login.tailscale.com/admin/acls">Gestión de controles de acceso (ACLs)</a></li>
+<li>🖥️ <a href="https://login.tailscale.com/admin/machines">Consola de administración de Tailscale (Machines)</a></li>
+<li>🔐 <a href="https://login.tailscale.com/admin/acls">Gestión de los controles de acceso (ACL)</a></li>
 <li>📖 <a href="https://tailscale.com/kb/1223/tailscale-funnel">Guía oficial de Tailscale Funnel (documentación en inglés)</a></li>
 <li>🐳 <a href="https://tailscale.com/kb/1282/docker">Ejecutar Tailscale en Docker</a></li>
+</ul>
+<hr />
+<h2 id="relacionado">🔗 Relacionado</h2>
+<ul>
+<li>📄 <strong><a href="../service_exposure_funnel/">Exponer de forma segura: acceso público con Funnel</a></strong> — Habilitar Funnel y las ACL en la consola, Nivel 3: dirección HTTPS pública con Tailscale Funnel, Nivel 4: Multi-Funnel con sidecars de Docker</li>
 </ul>
 
 
@@ -15650,12 +15967,10 @@ No hay nada que configurar en LibreFolio: Funnel envía <code>X-Forwarded-Proto:
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copiado al portapapeles", "clipboard.copy": "Copiar al portapapeles", "search.result.more.one": "1 m\u00e1s en esta p\u00e1gina", "search.result.more.other": "# m\u00e1s en esta p\u00e1gina", "search.result.none": "No se encontraron documentos", "search.result.one": "1 documento encontrado", "search.result.other": "# documentos encontrados", "search.result.placeholder": "Teclee para comenzar b\u00fasqueda", "search.result.term.missing": "Falta", "select.version": "Seleccionar versi\u00f3n"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copiado al portapapeles", "clipboard.copy": "Copiar al portapapeles", "search.result.more.one": "1 m\u00e1s en esta p\u00e1gina", "search.result.more.other": "# m\u00e1s en esta p\u00e1gina", "search.result.none": "No se encontraron documentos", "search.result.one": "1 documento encontrado", "search.result.other": "# documentos encontrados", "search.result.placeholder": "Teclee para comenzar b\u00fasqueda", "search.result.term.missing": "Falta", "select.version": "Seleccionar versi\u00f3n"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
-      
-        <script src="../../../javascripts/mermaid.mjs" type="module"></script>
+      <script src="../../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../../javascripts/mathjax.js"></script>
       
@@ -15669,7 +15984,11 @@ No hay nada que configurar en LibreFolio: Funnel envía <code>X-Forwarded-Proto:
       
         <script src="../../../javascripts/gallery-img-loader.js"></script>
       
+        <script src="../../../javascripts/moved-anchors.js"></script>
+      
         <script src="../../../javascripts/bmc-widget.js"></script>
+      
+        <script src="../../../javascripts/table-code-wrap.js"></script>
       
     
   </body>

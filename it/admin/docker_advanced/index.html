@@ -29,7 +29,7 @@
       
       
       <link rel="icon" href="../../../static/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -37,10 +37,10 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -59,6 +59,8 @@
       
     
     
+      <link rel="stylesheet" href="../../../stylesheets/lf-tokens.css">
+    
       <link rel="stylesheet" href="../../../static/extra.css">
     
       <link rel="stylesheet" href="../../../stylesheets/home-custom.css">
@@ -70,7 +72,11 @@
     
     
   
-  <script>window.LF_GALLERY_FALLBACK_BASE = "https://librefolio.github.io/LibreFolio/";</script>
+  <script>window.LF_GALLERY_FALLBACK_BASE = "https://librefolio.github.io/LibreFolio/";</script><script src="../../../javascripts/search-language.js"></script>
+  <script src="../../../javascripts/vendor/mermaid/mermaid.min.js"></script>
+  <script src="../../../javascripts/mermaid-early.js"></script><link rel="stylesheet" href="../../../stylesheets/diagram-zoom.css">
+  <script src="../../../javascripts/diagram-zoom.js"></script>
+  
 
   <script type="application/ld+json">
 {
@@ -117,7 +123,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#guida-docker-avanzata" class="md-skip">
+        <a href="#guida-avanzata-a-docker" class="md-skip">
           Vai al contenuto
         </a>
       
@@ -4250,6 +4256,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../user/settings/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../user/settings/about/" class="md-nav__link">
         
   
@@ -4680,10 +4714,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#utente-e-autorizzazioni" class="md-nav__link">
+  <a href="#utente-e-permessi" class="md-nav__link">
     <span class="md-ellipsis">
       
-        👤 Utente e autorizzazioni
+        👤 Utente e permessi
       
     </span>
   </a>
@@ -4711,7 +4745,7 @@
   <a href="#docker-exec" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📡 docker exec — Eseguire comandi all'interno del container
+        📡 docker exec — Eseguire comandi dentro il container
       
     </span>
   </a>
@@ -4752,7 +4786,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#test-mode" class="md-nav__link">
+  <a href="#modalita-test" class="md-nav__link">
     <span class="md-ellipsis">
       
         🧪 Modalità test
@@ -4818,8 +4852,30 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#verify-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ 5. Verificare l'immagine che scaricate
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#correlati" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔗 Correlati
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4838,6 +4894,60 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2_3" id="__nav_3_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Esporre in Sicurezza
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Esporre in Sicurezza
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../service_exposure/" class="md-nav__link">
         
@@ -4846,7 +4956,7 @@
   <span class="md-ellipsis">
     
   
-    Esporre in Sicurezza
+    Panoramica
   
 
     
@@ -4867,8 +4977,62 @@
   
   
     <li class="md-nav__item">
-      <a href="../connection_checks/" class="md-nav__link">
+      <a href="../service_exposure_funnel/" class="md-nav__link">
         
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accesso pubblico (Funnel)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2_4" id="__nav_3_2_4_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -4882,7 +5046,79 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_2_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Verificare la Sicurezza della Connessione
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connection_checks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connection_proxy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reverse Proxy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -4959,6 +5195,60 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3_1" id="__nav_3_3_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Variabili d'ambiente
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Variabili d'ambiente
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../configuration/" class="md-nav__link">
         
@@ -4967,7 +5257,7 @@
   <span class="md-ellipsis">
     
   
-    Variabili d'ambiente
+    Panoramica
   
 
     
@@ -4988,6 +5278,244 @@
   
   
     <li class="md-nav__item">
+      <a href="../configuration_secrets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segreti e plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration_security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controlli e protezioni
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration_accounts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Account e ricerca asset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3_2" id="__nav_3_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Email
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Email
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../email/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Impostazione
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../email_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Link e messaggi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../email_troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Risoluzione dei problemi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../settings/" class="md-nav__link">
         
   
@@ -4996,6 +5524,34 @@
     
   
     Impostazioni Globali
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../users/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utenti e inviti
   
 
     
@@ -5080,9 +5636,27 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../cli_tools/" class="md-nav__link">
+    
+    
+    
+    
+      
+      
         
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4_1" id="__nav_3_4_1_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -5096,7 +5670,225 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Strumenti CLI di amministrazione
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4_2" id="__nav_3_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup, ripristino e trasloco
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backup, ripristino e trasloco
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup_restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Panoramica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup_sealed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup sigillati
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup_moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trasloco e risoluzione dei problemi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -9941,6 +10733,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../developer/architecture/patterns/plugin_settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../developer/architecture/patterns/signal_plugin_guide/" class="md-nav__link">
         
   
@@ -12039,6 +12859,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../developer/backend/email/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    📧 Email (SMTP)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../developer/backend/financial_math/" class="md-nav__link">
         
   
@@ -12704,6 +13552,34 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/designer-lab/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Designer Lab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -12720,10 +13596,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2" id="__nav_5_7_4_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_3" id="__nav_5_7_4_3_label" tabindex="0">
             
   
   
@@ -12741,8 +13617,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_4_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -12802,10 +13678,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_3_2" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2_2" id="__nav_5_7_4_2_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_3_2" id="__nav_5_7_4_3_2_label" tabindex="0">
             
   
   
@@ -12823,8 +13699,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_2_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2_2">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_3_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -13396,10 +14272,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2_12" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_3_12" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2_12" id="__nav_5_7_4_2_12_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_3_12" id="__nav_5_7_4_3_12_label" tabindex="0">
             
   
   
@@ -13417,8 +14293,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_2_12_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2_12">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_3_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_3_12">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -14833,10 +15709,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#utente-e-autorizzazioni" class="md-nav__link">
+  <a href="#utente-e-permessi" class="md-nav__link">
     <span class="md-ellipsis">
       
-        👤 Utente e autorizzazioni
+        👤 Utente e permessi
       
     </span>
   </a>
@@ -14864,7 +15740,7 @@
   <a href="#docker-exec" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📡 docker exec — Eseguire comandi all'interno del container
+        📡 docker exec — Eseguire comandi dentro il container
       
     </span>
   </a>
@@ -14905,7 +15781,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#test-mode" class="md-nav__link">
+  <a href="#modalita-test" class="md-nav__link">
     <span class="md-ellipsis">
       
         🧪 Modalità test
@@ -14971,8 +15847,30 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#verify-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ 5. Verificare l'immagine che scaricate
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#correlati" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔗 Correlati
+      
+    </span>
+  </a>
   
 </li>
       
@@ -14996,28 +15894,77 @@
   
 
 
-<h1 id="guida-docker-avanzata">🐳 Guida Docker avanzata</h1>
-<p>Questa guida è per gli amministratori che personalizzano il proprio deployment Docker, creano la propria immagine o eseguono manutenzione sul container. Per una prima installazione, parti dalla <a href="../../user/installation/">Guida all'installazione</a>.</p>
-<p>LibreFolio viene fornito con due file Compose:</p>
-<ul>
-<li><strong><code>docker-compose.prod.yml</code></strong> esegue l'immagine ufficiale da GHCR: la guida all'installazione la salva come <code>docker-compose.yml</code>.</li>
-<li><strong><code>docker-compose.yml</code></strong>, nel repository, esegue un'immagine che costruisci tu stesso con <code>./dev.py docker build</code>, e mappa anche la porta di test <code>6041</code>.</li>
-</ul>
+<h1 id="guida-avanzata-a-docker">🐳 Guida avanzata a Docker</h1>
+<p>Per chi personalizza il deployment Docker, compila la propria immagine o fa manutenzione sul container.
+Per una prima installazione, parti dalla <a href="../../user/installation/">Guida all'installazione</a>.</p>
+<p>Due file Compose:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Immagine che esegue</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>docker-compose.prod.yml</code></td>
+<td>L'immagine ufficiale da GHCR. La guida all'installazione lo salva come <code>docker-compose.yml</code>.</td>
+</tr>
+<tr>
+<td><code>docker-compose.yml</code>, nel repository</td>
+<td>Un'immagine compilata da te con <code>./dev.py docker build</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Dove si lanciano i comandi di questa pagina:</p>
+<table>
+<thead>
+<tr>
+<th>Comando</th>
+<th>Dove</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>docker compose …</code></td>
+<td>Sull'host, nella cartella che contiene <code>docker-compose.yml</code> e <code>.env</code>. Non serve un checkout.</td>
+</tr>
+<tr>
+<td><code>./dev.py docker …</code></td>
+<td>Sull'host, nella radice di un checkout del repository.</td>
+</tr>
+<tr>
+<td><code>./dev.py docker exec &lt;cmd&gt;</code></td>
+<td>Dal checkout; il comando gira <strong>dentro il container</strong> in esecuzione (<a href="#docker-exec">dettagli</a>).</td>
+</tr>
+<tr>
+<td><code>docker compose run --rm librefolio …</code></td>
+<td>Nella cartella di <code>docker-compose.yml</code>, con il server fermo: un container usa e getta (<a href="#post-migration-fixes">correzioni</a>).</td>
+</tr>
+</tbody>
+</table>
 <h2 id="prerequisiti">⚠️ Prerequisiti</h2>
-<p><strong>Gruppo Docker (Linux).</strong> Il tuo utente deve essere nel gruppo <code>docker</code> per eseguire i comandi Docker senza <code>sudo</code>:</p>
+<ol>
+<li>
+<p><strong>Gruppo Docker (Linux)</strong>, per usare Docker senza <code>sudo</code>. Sull'host:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>sudo<span class="w"> </span>usermod<span class="w"> </span>-aG<span class="w"> </span>docker<span class="w"> </span><span class="nv">$USER</span>
 </code></pre></div>
-<p>Poi <strong>disconnettiti e riconnettiti</strong>, oppure esegui <code>newgrp docker</code> per attivare il gruppo nella sessione corrente. Senza questo, tutti i comandi <code>docker</code> e <code>docker compose</code> falliscono con un errore di autorizzazione.</p>
-<p><strong>File <code>.env</code>.</strong> LibreFolio richiede un file <code>.env</code> accanto al file Compose, e <code>./dev.py docker build</code> rifiuta di procedere senza di esso. In un checkout del repository:</p>
+<p>Poi esci e rientra, oppure esegui <code>newgrp docker</code>. Senza, ogni <code>docker</code> e <code>docker compose</code> fallisce con un errore di permessi.</p>
+</li>
+<li>
+<p><strong>File <code>.env</code></strong>, accanto al file Compose. <code>./dev.py docker build</code> rifiuta di procedere senza. In un checkout:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nv">$EDITOR</span><span class="w"> </span>.env<span class="w">          </span><span class="c1"># review and customize parameters</span>
 </code></pre></div>
+</li>
+</ol>
 <h2 id="architettura">🏗️ Architettura</h2>
-<p>L'immagine è <strong>solo runtime</strong>: l'app web (SvelteKit) e la documentazione (MkDocs) vengono compilate sull'host e copiate al suo interno, e <code>./dev.py docker build</code> esegue quelle build per te. Fasi di build, contenuto dell'immagine e sequenza di avvio: <a href="../../developer/architecture/overview/#docker-image">Panoramica dell'architettura → Immagine Docker</a>.</p>
+<p>L'immagine è <strong>solo runtime</strong>: applicazione web (SvelteKit) e documentazione (MkDocs) sono compilate sull'host e copiate dentro; <code>./dev.py docker build</code> lo fa per te.
+Fasi di build, contenuto e avvio: <a href="../../developer/architecture/overview/#docker-image">Panoramica dell'architettura → Immagine Docker</a>.</p>
 <h2 id="docker-composeyml">📄 <code>docker-compose.yml</code></h2>
-<p>Il file Compose definisce il servizio <code>librefolio</code> e la sua directory di dati persistenti.</p>
+<p>Definisce il servizio <code>librefolio</code> e la sua directory di dati persistenti.</p>
 <h3 id="resolution-priority">🔝 Priorità di risoluzione</h3>
-<p>Quando risolve le variabili di configurazione, LibreFolio rispetta il seguente ordine di precedenza (dalla priorità più bassa alla più alta):</p>
+<p>Dal più basso al più alto:</p>
 <pre class="mermaid"><code>graph LR
     CodeDefaults[1. Code Defaults] --&gt; EnvFile[2. .env File]
     HostShell[3. Host Env Variables]
@@ -15025,70 +15972,176 @@
 
     EnvFile --&gt; HostShell
     HostShell --&gt; DockerCompose</code></pre>
-<p>In Docker, <code>.env</code> raggiunge il container tramite <code>env_file</code>, e il blocco <code>environment:</code> lo sovrascrive. Per i segnaposto <code>${…}</code> del file Compose, come <code>${PORT:-6040}</code>, una variabile impostata nella tua shell ha la precedenza su <code>.env</code>.</p>
+<p><code>.env</code> raggiunge il container tramite <code>env_file</code>; il blocco <code>environment:</code> lo sovrascrive.
+Per i segnaposto <code>${…}</code> del file Compose, come <code>${PORT:-6040}</code>, una variabile della tua shell prevale su <code>.env</code>.</p>
 <h3 id="servizio-librefolio">🔧 Servizio: <code>librefolio</code></h3>
+<table>
+<thead>
+<tr>
+<th>Chiave</th>
+<th>Valore</th>
+<th>Da sapere</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>🏷️ <code>image</code></td>
+<td><code>ghcr.io/librefolio/librefolio:latest</code> (file di produzione) o la tua <code>librefolio:latest</code> locale (file del repository)</td>
+<td><code>LIBREFOLIO_IMAGE</code> in <code>.env</code> sceglie un altro tag</td>
+</tr>
+<tr>
+<td>🏗️ <code>build</code></td>
+<td>Solo file del repository: compila il <code>Dockerfile</code> nella radice</td>
+<td>Argomenti <code>UID</code>, <code>GID</code> e <code>DOCS_VARIANT</code></td>
+</tr>
+<tr>
+<td>🔌 <code>ports</code></td>
+<td>host <code>${PORT:-6040}</code> → container <code>6040</code></td>
+<td><code>PORT</code> sceglie il lato host; dentro il container il server ascolta sempre su <code>6040</code>, l'unica porta dell'immagine</td>
+</tr>
+<tr>
+<td>📂 <code>volumes</code></td>
+<td>bind mount <code>./LibreFolio-data</code> → <code>/app/backend/data/prod-docker</code></td>
+<td></td>
+</tr>
+<tr>
+<td>📝 <code>env_file: .env</code></td>
+<td>La tua configurazione (copiata da <code>.env.example</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>🌍 <code>environment</code></td>
+<td><code>LIBREFOLIO_DATA_DIR</code> (percorso nel container), <code>HOST=0.0.0.0</code>, <code>PORT=6040</code></td>
+<td>Lasciale così. <code>PORT=6040</code> sostituisce la porta host del tuo <code>.env</code>: i comandi <code>dev.py</code> nel container (<a href="#docker-exec"><code>docker exec</code></a>) cercano il server sulla porta giusta, e <code>db upgrade</code> lo vede in esecuzione e rifiuta di partire</td>
+</tr>
+<tr>
+<td>🩺 <code>healthcheck</code></td>
+<td><code>GET /api/v1/system/health</code> ogni 30 secondi</td>
+<td>Dice solo a Docker che il server risponde</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition tip">
+<p class="admonition-title">📈 Monitorare LibreFolio: <code>/api/v1/system/ready</code></p>
+<p>Punta un monitor come <strong>Uptime Kuma</strong> o un orchestratore su <code>GET /api/v1/system/ready</code>, per esempio <code>http://your-server:6040/api/v1/system/ready</code> (con la tua <code>PORT</code>). Nessun accesso richiesto; basta il codice di stato:</p>
 <ul>
-<li>🏷️ <strong><code>image</code></strong>: l'immagine ufficiale <code>ghcr.io/librefolio/librefolio:latest</code> (file di produzione) o la tua <code>librefolio:latest</code> locale (file del repository); <code>LIBREFOLIO_IMAGE</code> in <code>.env</code> sceglie un altro tag.</li>
-<li>🏗️ <strong><code>build</code></strong> (solo file del repository): compila il <code>Dockerfile</code> nella radice con gli argomenti <code>UID</code>, <code>GID</code> e <code>DOCS_VARIANT</code>.</li>
-<li>🔌 <strong><code>ports</code></strong>: host <code>${PORT:-6040}</code> → container <code>6040</code>; il file del repository mappa anche <code>${TEST_PORT:-6041}</code> → <code>6041</code> per la <a href="#test-mode">modalità test</a>.</li>
-<li>📂 <strong><code>volumes</code></strong>: il bind mount <code>./LibreFolio-data</code> → <code>/app/backend/data/prod-docker</code>.</li>
-<li>📝 <strong><code>env_file: .env</code></strong>: carica la tua configurazione (copiata da <code>.env.example</code>).</li>
-<li>🌍 <strong><code>environment</code></strong>: <code>LIBREFOLIO_DATA_DIR</code> specifico di Docker (percorso nel container) e <code>HOST=0.0.0.0</code>; lasciali così come sono.</li>
-<li>🩺 <strong><code>healthcheck</code></strong>: interroga <code>GET /api/v1/system/health</code> ogni 30 secondi.</li>
+<li><strong><code>200</code></strong>: pronto. <code>{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "database_revision": "…", "mode": "normal", "app_version": "…"}</code>. <code>database_revision</code>: la migrazione del database; <code>app_version</code>: la versione in esecuzione, la stessa del <code>GET /api/v1/system/info</code> pubblico, così un monitor verifica la versione dopo un aggiornamento.</li>
+<li>
+<p><strong><code>503</code></strong>: non pronto. <code>status</code> è <code>not_ready</code>; <code>checks</code> mostra ciò che non è <code>ok</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Controllo</th>
+<th>Valore</th>
+<th>Significato</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>database</code></td>
+<td><code>unreachable</code></td>
+<td>Il database non risponde</td>
+</tr>
+<tr>
+<td><code>migrations</code></td>
+<td><code>behind</code></td>
+<td>Il database è a una migrazione più vecchia: una non è stata applicata, o è fallita</td>
+</tr>
+<tr>
+<td><code>migrations</code></td>
+<td><code>ahead</code></td>
+<td>Il database è a una migrazione che questa versione non conosce: i dati vengono da un LibreFolio più recente. Usa quella versione o una più recente: <a href="../backup_moving/#never-backwards">Mai all'indietro</a></td>
+</tr>
+<tr>
+<td><code>migrations</code></td>
+<td><code>unknown</code></td>
+<td>Non può dirlo, per esempio mentre il database è <code>unreachable</code></td>
+</tr>
+</tbody>
+</table>
+</li>
 </ul>
+<p>La risposta non include mai dettagli né percorsi: LibreFolio li scrive nel proprio log (<code>docker compose logs librefolio</code>) come <code>Instance not ready</code>, una volta per ogni cambio di stato. <code>db current</code> mostra la migrazione del database (<a href="../cli_tools/#apply-migrations">Applicare le migrazioni</a>).</p>
+</div>
 <h3 id="directory-dei-dati-librefolio-data">💾 Directory dei dati: <code>LibreFolio-data/</code></h3>
-<p>Una directory <strong>bind mount</strong> accanto al file Compose, che contiene il database SQLite, gli upload personalizzati, i report dei broker e i file di log. Sopravvive all'arresto, al riavvio e alla rimozione del container, e puoi eseguirne il backup direttamente dall'host.</p>
-<h3 id="utente-e-autorizzazioni">👤 Utente e autorizzazioni</h3>
-<p>Il container si avvia come root solo per affidare la directory dei dati all'utente LibreFolio, poi esegue il server come tale utente <strong>non-root</strong>: i file che crea in <code>LibreFolio-data/</code> appartengono a quell'UID/GID sull'host. L'affidamento avviene a ogni avvio e copre tutto ciò che è nella directory.</p>
-<p>Quell'UID/GID proviene dagli <strong>argomenti di build</strong> <code>UID</code> e <code>GID</code>: l'immagine li conserva come <code>LIBREFOLIO_UID</code> e <code>LIBREFOLIO_GID</code>, che l'entrypoint legge a ogni avvio. L'immagine ufficiale GHCR è compilata con <code>1000:1000</code>. <code>./dev.py docker build</code> usa gli id dell'utente che lo esegue, qualunque cosa dica <code>.env</code>, mentre <code>docker compose build</code> legge <code>UID</code> e <code>GID</code> da <code>.env</code> (predefinito <code>1000</code>): impostali in modo che corrispondano all'utente host, o all'utente dedicato, che deve possedere i file di dati:</p>
+<p><strong>Bind mount</strong> accanto al file Compose: database SQLite, caricamenti personalizzati, report dei broker, log.
+Sopravvive ad arresto, riavvio e rimozione del container; la salvi direttamente dall'host.</p>
+<h3 id="utente-e-permessi">👤 Utente e permessi</h3>
+<p>Il container parte come root solo per cedere tutta <code>LibreFolio-data/</code> all'utente LibreFolio, a ogni avvio; poi esegue il server come quell'utente <strong>non-root</strong>: sull'host i file appartengono al suo UID/GID.
+<code>./dev.py docker exec</code> usa lo stesso UID/GID (<a href="#docker-exec">dettagli</a>).</p>
+<p>L'UID/GID viene dagli <strong>argomenti di build</strong> <code>UID</code> e <code>GID</code>, conservati nell'immagine come <code>LIBREFOLIO_UID</code> e <code>LIBREFOLIO_GID</code> e letti dall'entrypoint a ogni avvio.</p>
+<table>
+<thead>
+<tr>
+<th>Immagine</th>
+<th>UID/GID</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ufficiale su GHCR</td>
+<td><code>1000:1000</code>. Le due righe di <code>.env</code> qui sotto non hanno effetto.</td>
+</tr>
+<tr>
+<td><code>./dev.py docker build</code></td>
+<td>Gli id dell'utente che lo esegue, qualunque cosa dica <code>.env</code>.</td>
+</tr>
+<tr>
+<td><code>docker compose build</code></td>
+<td><code>UID</code> e <code>GID</code> letti da <code>.env</code> (predefiniti <code>1000</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>Per far corrispondere gli id all'utente host, o all'utente dedicato, che deve possedere i dati, <strong>in <code>.env</code></strong>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">UID</span><span class="o">=</span><span class="m">1000</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nv">GID</span><span class="o">=</span><span class="m">1000</span>
 </code></pre></div>
-<p>Modificarli in <code>.env</code> ha effetto solo quando <code>docker compose build</code> ricompila l'immagine: <code>.env</code> raggiunge anche il container tramite <code>env_file</code>, ma un riavvio non cambia gli id. Con l'immagine ufficiale, che non compili, queste due righe non hanno effetto.</p>
+<p>Hanno effetto solo quando <code>docker compose build</code> ricompila l'immagine: <code>.env</code> arriva al container anche tramite <code>env_file</code>, ma un riavvio non cambia gli id.</p>
 <ul>
-<li>Sull'<strong>host</strong>, <code>ls -l LibreFolio-data/</code> mostra l'utente e il gruppo che possiedono quell'UID/GID sull'host (risolti tramite <code>/etc/passwd</code> e <code>/etc/group</code>).</li>
-<li><strong>All'interno del container</strong>, gli stessi file di solito appaiono come <code>librefolio:librefolio</code>: lo stesso UID/GID numerico, risolto rispetto a <code>/etc/passwd</code> e <code>/etc/group</code> propri del container.</li>
+<li>Sull'<strong>host</strong>, <code>ls -l LibreFolio-data/</code> mostra utente e gruppo di quel UID/GID secondo <code>/etc/passwd</code> e <code>/etc/group</code> dell'host.</li>
+<li><strong>Dentro il container</strong>, gli stessi file appaiono di solito come <code>librefolio:librefolio</code>: stesso UID/GID numerico, risolto con i <code>/etc/passwd</code> e <code>/etc/group</code> del container.</li>
 </ul>
 <details class="tip">
-<summary>Riferimento rapido Linux: utenti, gruppi e ID</summary>
-<p><strong>Scopri il tuo UID e GID attuali:</strong></p>
+<summary>Promemoria Linux: utenti, gruppi e ID</summary>
+<p>Tutti i comandi: sull'host.</p>
+<p><strong>Il tuo UID e GID:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>id<span class="w"> </span>-u<span class="w">              </span><span class="c1"># your user ID (e.g. 1000)</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>id<span class="w"> </span>-g<span class="w">              </span><span class="c1"># your primary group ID (e.g. 1000)</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>id<span class="w">                 </span><span class="c1"># full info: uid, gid, groups</span>
 </code></pre></div>
-<p><strong>Trova l'UID/GID di qualsiasi utente:</strong></p>
+<p><strong>UID/GID di un altro utente:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>id<span class="w"> </span>-u<span class="w"> </span>username<span class="w">     </span><span class="c1"># UID of 'username'</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>id<span class="w"> </span>-g<span class="w"> </span>username<span class="w">     </span><span class="c1"># primary GID of 'username'</span>
 </code></pre></div>
-<p><strong>Crea un nuovo gruppo:</strong></p>
+<p><strong>Un nuovo gruppo:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>sudo<span class="w"> </span>groupadd<span class="w"> </span>librefolio<span class="w">          </span><span class="c1"># create group (auto-assigns GID)</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>sudo<span class="w"> </span>groupadd<span class="w"> </span>-g<span class="w"> </span><span class="m">1500</span><span class="w"> </span>librefolio<span class="w">  </span><span class="c1"># create group with specific GID</span>
 </code></pre></div>
-<p><strong>Crea un nuovo utente:</strong></p>
+<p><strong>Un nuovo utente:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># System user (no home, no login — ideal for services)</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>sudo<span class="w"> </span>useradd<span class="w"> </span>--system<span class="w"> </span>--no-create-home<span class="w"> </span>--gid<span class="w"> </span>librefolio<span class="w"> </span>--shell<span class="w"> </span>/usr/sbin/nologin<span class="w"> </span>librefolio
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
 <a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Regular user with home directory</span>
 <a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>sudo<span class="w"> </span>useradd<span class="w"> </span>-m<span class="w"> </span>-g<span class="w"> </span>librefolio<span class="w"> </span>librefolio
 </code></pre></div>
-<p><strong>Controlla gli ID assegnati:</strong></p>
+<p><strong>Gli id assegnati:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>id<span class="w"> </span>librefolio
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># → uid=998(librefolio) gid=998(librefolio) groups=998(librefolio)</span>
 </code></pre></div>
-<p><strong>Aggiungi il tuo utente esistente a un gruppo:</strong></p>
+<p><strong>Il tuo utente in un gruppo:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>sudo<span class="w"> </span>usermod<span class="w"> </span>-aG<span class="w"> </span>librefolio<span class="w"> </span><span class="nv">$USER</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>newgrp<span class="w"> </span>librefolio<span class="w">    </span><span class="c1"># activate in current session (or log out/in)</span>
 </code></pre></div>
-<p><strong>Verifica l'appartenenza ai gruppi:</strong></p>
+<p><strong>Verifica dell'appartenenza:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>groups<span class="w"> </span><span class="nv">$USER</span><span class="w">         </span><span class="c1"># list all groups for your user</span>
 </code></pre></div>
-<p><strong>Imposta la proprietà della directory dei dati:</strong></p>
+<p><strong>Proprietà della directory dei dati:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>sudo<span class="w"> </span>chown<span class="w"> </span>-R<span class="w"> </span>librefolio:librefolio<span class="w"> </span>./LibreFolio-data
 </code></pre></div>
-<p>Poi imposta l'UID/GID corrispondente in <code>.env</code> e ricompila l'immagine con <code>docker compose build</code>: a ogni avvio il container restituisce la directory all'UID/GID dell'immagine.</p>
+<p>Poi metti in <code>.env</code> l'UID/GID corrispondente e ricompila con <code>docker compose build</code>: a ogni avvio il container restituisce la directory all'UID/GID dell'immagine.</p>
 </details>
 <h2 id="comandi-cli">🛠️ Comandi CLI</h2>
-<p>In un checkout del repository, <code>dev.py</code> incapsula le operazioni Docker:</p>
+<p><strong>Dove: radice di un checkout del repository.</strong> <code>dev.py</code> incapsula le operazioni Docker:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span>build<span class="w">          </span><span class="c1"># Build image (auto-builds frontend + docs)</span>
 <a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span>build<span class="w"> </span>--light<span class="w">  </span><span class="c1"># Light variant: no documentation screenshots (tagged *-light)</span>
 <a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span>build<span class="w"> </span>--no-cache<span class="w">  </span><span class="c1"># Full rebuild without Docker cache</span>
@@ -15099,203 +16152,302 @@
 <a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span>status<span class="w">         </span><span class="c1"># Show container status</span>
 <a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;cmd&gt;<span class="w">     </span><span class="c1"># Run a dev.py command inside the container</span>
 </code></pre></div>
-<p>Senza un checkout, i comandi semplici svolgono il lavoro quotidiano: <code>docker compose up -d</code>, <code>docker compose down</code>, <code>docker compose logs -f</code> e <code>docker compose ps</code>.</p>
-<ul>
-<li><code>--light</code> compila l'immagine senza gli screenshot della documentazione, che poi vengono caricati dal sito della documentazione online (vedi <a href="../../user/installation/#image-variants-full-and-light">Varianti dell'immagine</a>).</li>
-<li>Tag locali: <code>librefolio:&lt;version&gt;</code> e <code>librefolio:latest</code> per l'immagine completa, <code>librefolio:&lt;version&gt;-light</code> e <code>librefolio:latest-light</code> per quella light, dove <code>&lt;version&gt;</code> è la versione git del tuo checkout. Sul registry invece, <code>latest</code> è la variante light e non esiste <code>latest-light</code>.</li>
-<li>Per eseguire la tua build light con il file Compose del repository, imposta <code>LIBREFOLIO_IMAGE=librefolio:latest-light</code> in <code>.env</code>.</li>
-</ul>
-<details class="warning">
-<summary>🧱 Quando <code>./dev.py docker build</code> si ferma</summary>
-<p><strong>Una risorsa non può essere scaricata.</strong> La build memorizza nella cache alcune risorse esterne, come il font Noto Color Emoji (bandiere su Windows) e MathJax (formule nella documentazione), affinché l'immagine funzioni completamente offline. Se una non può essere scaricata e non esiste ancora una copia in cache, la build si ferma invece di distribuire un'immagine rotta:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>❌ Resource cache incomplete — the build would ship without these:
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>   - noto-color-emoji: ...
-</code></pre></div>
-<p>La <strong>prima build richiede accesso a Internet</strong> (o una cache pre-riscaldata). Quando la rete è di nuovo disponibile, esegui di nuovo la build; <code>./dev.py cache js</code> aggiorna la cache manualmente (<code>--force</code> riscarica tutto).</p>
-<p><strong>Il frontend è una build di debug.</strong> L'immagine deve distribuire la build di produzione dell'app web. Se <code>frontend/build/</code> è stata compilata l'ultima volta in modalità debug (per esempio da <code>./dev.py server --test</code>, <code>./dev.py server --debug</code> o dal test runner) o strumentata per la copertura, la build dell'immagine si ferma con un errore simile a:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>ERROR: /build is not a production frontend build: it is a debug build (.build-debug = 1)
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>Rebuild it with './dev.py front build', then build the image again.
-</code></pre></div>
-<p>Esegui <code>./dev.py front build</code>, poi compila di nuovo l'immagine: <code>./dev.py docker build</code> ricompila il frontend automaticamente solo quando le sue sorgenti sono cambiate, non quando l'ultima build era di debug.</p>
-</details>
-<details class="tip">
-<summary>🖼️ Compilare un'immagine completa con gli screenshot della documentazione</summary>
-<p>Un'immagine completa contiene gli screenshot della documentazione solo se sono stati generati, e la documentazione è stata ricompilata con essi, <strong>prima</strong> della build dell'immagine: altrimenti un'immagine completa locale e una light sono identiche a parte il tag. La sequenza completa è:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>./dev.py<span class="w"> </span>mkdocs<span class="w"> </span>gallery<span class="w">   </span><span class="c1"># generate the screenshots</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>./dev.py<span class="w"> </span>front<span class="w"> </span>build<span class="w">      </span><span class="c1"># the gallery leaves a debug frontend build: rebuild it for production</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>./dev.py<span class="w"> </span>mkdocs<span class="w"> </span>build<span class="w">     </span><span class="c1"># rebuild the documentation with the screenshots</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span>build<span class="w">     </span><span class="c1"># build the full image</span>
-</code></pre></div>
-<p><code>./dev.py mkdocs gallery</code> richiede un ambiente completamente installato (con <code>pipenv</code>) e i browser Playwright. Avvia il proprio server di test e popola automaticamente il database di test (<code>--no-populate</code> salta il ripopolamento). La generazione della galleria richiede alcuni minuti.</p>
-</details>
-<h3 id="docker-exec">📡 <code>docker exec</code> — Eseguire comandi all'interno del container</h3>
-<p><code>./dev.py docker exec &lt;cmd&gt;</code> esegue un comando <code>dev.py</code> all'interno del container <strong>in esecuzione</strong>: equivale a <code>docker compose exec librefolio python dev.py &lt;cmd&gt;</code>. Per esempio, per gestire gli utenti:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>user<span class="w"> </span>create<span class="w"> </span>admin<span class="w"> </span>admin@example.com<span class="w"> </span>Pass123!
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>user<span class="w"> </span>list
-</code></pre></div>
-<p>Nell'immagine, <code>user</code>, <code>db</code> e <code>info</code> funzionano. Anche i comandi di sviluppo (<code>test</code>, <code>i18n</code>, <code>mkdocs translate</code> e <code>mkdocs translate-validate</code>) sono elencati, ma rispondono solo che <em>non sono disponibili in questa installazione</em>: l'immagine distribuisce l'applicazione, non l'albero di sviluppo.</p>
-<p>Anche i comandi della modalità test non vengono eseguiti nel container; come <code>./dev.py mkdocs gallery</code>, appartengono a un checkout di sviluppo:</p>
-<ul>
-<li><code>./dev.py docker exec test db populate</code> riceve la stessa risposta <em>non disponibile</em> di ogni comando <code>test</code>;</li>
-<li><code>./dev.py docker exec server --test</code> si ferma con <code>Frontend build failed. Server not started.</code>: la modalità test tenta prima di ricompilare l'app web in modalità debug, il che richiede Node.js e le sorgenti dell'app web, mentre l'immagine distribuisce solo la build di produzione, senza Node.js.</li>
-</ul>
-<p><strong>Le migrazioni del database non richiedono alcun comando.</strong> Il server applica le migrazioni in sospeso ogni volta che si avvia: dopo <code>docker compose pull</code> e <code>docker compose up -d</code> non c'è altro da eseguire, e <code>docker compose restart librefolio</code> le riprova dopo un errore. Non usare <code>./dev.py docker exec db upgrade</code>: <code>db upgrade</code> richiede che il server sia fermo, e nel container il server è il processo principale, sempre in esecuzione.</p>
-<h2 id="post-migration-fixes">🩹 Correzioni post-migrazione</h2>
-<p>Ogni volta che il server si avvia, subito dopo aver applicato qualsiasi migrazione del database in sospeso, esegue le <strong>correzioni post-migrazione</strong>: riparazioni che una migrazione non può fare. Cosa riparano, e cosa dice il log al riguardo, è spiegato in <a href="../cli_tools/#post-migration-fixes">Strumenti da riga di comando → Correzioni post-migrazione</a>. In Docker:</p>
-<ul>
-<li>il log è l'output del container (<code>./dev.py docker logs</code> o <code>docker compose logs</code>), salvato anche in <code>LibreFolio-data/logs/</code>;</li>
-<li>una copia conservata da una correzione fallita si trova accanto al database, in <code>LibreFolio-data/sqlite/</code>, per esempio <code>app.db.pre-autoincrement-20261008T101500Z.bak</code>.</li>
-</ul>
-<h3 id="eseguire-le-correzioni-con-il-server-fermo">⏹️ Eseguire le correzioni con il server fermo</h3>
-<p>Per visualizzare in anteprima le correzioni, o per riprovare una che è fallita all'avvio e leggerne l'errore, eseguile manualmente con il server fermo. <code>docker exec</code> richiede il container in esecuzione, quindi usa invece <code>docker compose run</code>: il comando che passi sostituisce il server in un container temporaneo. Visualizza sempre prima l'anteprima con <code>--dry-run</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>stop<span class="w"> </span>librefolio
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>librefolio<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>backend.app.db.post_migration<span class="w"> </span>--dry-run<span class="w">   </span><span class="c1"># preview: changes nothing</span>
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>librefolio<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>backend.app.db.post_migration<span class="w">             </span><span class="c1"># apply the fixes</span>
-<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>docker<span class="w"> </span>compose<span class="w"> </span>start<span class="w"> </span>librefolio
-</code></pre></div>
-<p>Lo script lavora sullo stesso database e sulla stessa directory dei dati del server e riporta ciò che ha trovato, per esempio:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Database: /app/backend/data/prod-docker/sqlite/app.db
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>Integrity check: ok
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>Fix autoincrement: would_apply
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>Orphan broker folder: broker_reports/uploaded/broker_7
-</code></pre></div>
-<p>Ogni correzione è <code>clean</code> (niente da fare), <code>would_apply</code> (dry run), <code>applied</code> o <code>failed</code>; vengono elencati anche un backup conservato e qualsiasi errore. Il codice di uscita è <code>0</code> quando non è fallito nulla, dry run incluso, e <code>1</code> quando una correzione o il controllo di integrità è fallito.</p>
-<h2 id="test-mode">🧪 Modalità test</h2>
-<p>Il file <code>docker-compose.yml</code> del repository espone <strong>due porte</strong>:</p>
+<p><strong>Senza checkout</strong>, nella cartella di <code>docker-compose.yml</code>, il lavoro quotidiano:</p>
 <table>
 <thead>
 <tr>
-<th>Porta</th>
-<th>Scopo</th>
-<th>Database</th>
+<th>Azione</th>
+<th>Comando</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>6040</code></td>
-<td>Server di produzione, avviato con il container</td>
-<td><code>LibreFolio-data/sqlite/app.db</code> (bind mount persistente)</td>
+<td>Avviare</td>
+<td><code>docker compose up -d</code></td>
 </tr>
 <tr>
-<td><code>6041</code></td>
-<td>Server di test, uno strumento per sviluppatori</td>
-<td>Nessuno: il server di test non si avvia nel container. In un checkout di sviluppo usa per impostazione predefinita <code>backend/data/test/sqlite/app.db</code>, che <code>./dev.py test db populate --force</code> elimina e ricrea con dati fittizi</td>
+<td>Fermare</td>
+<td><code>docker compose down</code></td>
+</tr>
+<tr>
+<td>Seguire il log</td>
+<td><code>docker compose logs -f</code></td>
+</tr>
+<tr>
+<td>Stato del container</td>
+<td><code>docker compose ps</code></td>
 </tr>
 </tbody>
 </table>
-<p>Il server di test è pensato per gli sviluppatori: come avviarlo, e perché non si avvia con l'immagine attuale, è in <a href="../../developer/dev_workflow/#docker-test-mode">Flusso di lavoro dello sviluppatore</a>. <code>docker-compose.prod.yml</code> non ha porta di test; nel file del repository, rimuovi la riga <code>TEST_PORT</code> da <code>ports:</code> per chiuderla.</p>
+<p>Varianti dell'immagine:</p>
+<ul>
+<li><code>--light</code> compila l'immagine senza gli screenshot della documentazione, caricati poi dal sito online (<a href="../../user/installation/#image-variants-full-and-light">Varianti dell'immagine</a>).</li>
+<li>Tag locali: <code>librefolio:&lt;version&gt;</code> e <code>librefolio:latest</code> per l'immagine completa, <code>librefolio:&lt;version&gt;-light</code> e <code>librefolio:latest-light</code> per la light; <code>&lt;version&gt;</code> è la versione git del checkout. Sul registry, invece, <code>latest</code> è la variante light e <code>latest-light</code> non esiste.</li>
+<li>Per eseguire la tua build light con il file Compose del repository, <strong>in <code>.env</code></strong>: <code>LIBREFOLIO_IMAGE=librefolio:latest-light</code>.</li>
+</ul>
+<details class="warning">
+<summary>🧱 Quando <code>./dev.py docker build</code> si ferma</summary>
+<p><strong>Una risorsa non può essere scaricata.</strong> La build mette in cache risorse esterne (font Noto Color Emoji per le bandiere su Windows, MathJax per le formule, Mermaid per i diagrammi) così che l'immagine funzioni offline. Se una manca e non c'è copia in cache, la build si ferma:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>❌ Resource cache incomplete — the build would ship without these:
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>   - noto-color-emoji: ...
+</code></pre></div>
+<p>La <strong>prima build richiede internet</strong> (o una cache precaricata). Con la rete, rilancia la build; <code>./dev.py cache js</code> aggiorna la cache a mano (<code>--force</code> riscarica tutto).</p>
+<p><strong>Il frontend è una build di debug.</strong> L'immagine deve contenere la build di produzione dell'applicazione web. <code>./dev.py docker build</code> ricompila <code>frontend/build/</code> in produzione quando l'ultima build era di debug (<code>./dev.py server --test</code>, <code>./dev.py server --debug</code>, test runner), quando le sorgenti sono cambiate o quando non è stata compilata per questa versione (<a href="../../developer/dev_workflow/#docker-build-steps">dettagli</a>). <code>docker build</code> o <code>docker compose build</code> saltano quel passo: con <code>frontend/build/</code> in debug o strumentata per la copertura, la build si ferma:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>ERROR: /build is not a production frontend build: it is a debug build (.build-debug = 1)
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>Rebuild it with './dev.py front build', then build the image again.
+</code></pre></div>
+<p>Esegui <code>./dev.py front build</code>, poi ricompila l'immagine; oppure compila con <code>./dev.py docker build</code>.</p>
+</details>
+<details class="tip">
+<summary>🖼️ Compilare un'immagine completa con gli screenshot della documentazione</summary>
+<p>Un'immagine completa contiene gli screenshot solo se generati, e documentazione ricompilata con essi, <strong>prima</strong> della build: altrimenti completa e light locali sono identiche a parte il tag. Nel checkout:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>./dev.py<span class="w"> </span>mkdocs<span class="w"> </span>gallery<span class="w">   </span><span class="c1"># generate the screenshots</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>./dev.py<span class="w"> </span>mkdocs<span class="w"> </span>build<span class="w">     </span><span class="c1"># rebuild the documentation with the screenshots</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span>build<span class="w">     </span><span class="c1"># build the full image; it rebuilds for production the debug frontend the gallery leaves</span>
+</code></pre></div>
+<p><code>./dev.py mkdocs gallery</code> richiede un ambiente completo (<code>pipenv</code>) e i browser Playwright. Avvia un proprio server di test e popola il database di test (<code>--no-populate</code> salta il ripopolamento). Richiede alcuni minuti.</p>
+</details>
+<h3 id="docker-exec">📡 <code>docker exec</code> — Eseguire comandi dentro il container</h3>
+<p><strong>Dove: dal checkout; il comando gira nel container in esecuzione</strong>, con l'utente del server: il <code>LIBREFOLIO_UID:LIBREFOLIO_GID</code> numerico dell'immagine (Utente e permessi, sopra), non root. I file creati in <code>LibreFolio-data/</code> appartengono subito a quell'utente. Per esempio:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>user<span class="w"> </span>create<span class="w"> </span>admin<span class="w"> </span>admin@example.com<span class="w"> </span>Pass123!
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>./dev.py<span class="w"> </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>user<span class="w"> </span>list
+</code></pre></div>
+<p><strong>Senza checkout</strong>, nella cartella di <code>docker-compose.yml</code>, <code>./dev.py docker exec user list</code> equivale a questa riga (<code>gosu</code>, usato anche dall'entrypoint, passa agli id dell'immagine prima che <code>dev.py</code> parta):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>librefolio<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">'exec gosu "${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}" python dev.py "$@"'</span><span class="w"> </span>sh<span class="w"> </span>user<span class="w"> </span>list
+</code></pre></div>
+<p>Un semplice <code>docker compose exec librefolio python dev.py &lt;cmd&gt;</code> gira come root: ciò che crea in <code>LibreFolio-data/</code> appartiene a root fino al successivo avvio, quando l'entrypoint restituisce la directory all'utente dell'immagine.</p>
+<table>
+<thead>
+<tr>
+<th>Comando</th>
+<th>Nell'immagine</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user</code>, <code>db</code>, <code>info</code>, <code>backup</code></td>
+<td>Funzionano (<a href="../cli_backup/#backup-docker">Backup con Docker</a>)</td>
+</tr>
+<tr>
+<td><code>test</code>, <code>i18n</code>, <code>mkdocs translate</code>, <code>mkdocs translate-validate</code></td>
+<td>Elencati, ma rispondono solo che <em>non sono disponibili in questa installazione</em>: l'immagine contiene l'applicazione, non l'albero di sviluppo</td>
+</tr>
+<tr>
+<td><code>./dev.py docker exec test db populate</code></td>
+<td>Stessa risposta <em>non disponibile</em> di ogni comando <code>test</code></td>
+</tr>
+<tr>
+<td><code>./dev.py docker exec server --test</code></td>
+<td>Si ferma con <code>Frontend build failed. Server not started.</code>: la modalità test ricompila l'applicazione web in debug, che richiede Node.js e le sorgenti; l'immagine ha solo la build di produzione, senza Node.js. Come <code>./dev.py mkdocs gallery</code>, appartiene a un checkout di sviluppo</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Le migrazioni del database non richiedono alcun comando.</strong> Il server applica quelle in sospeso a ogni avvio: dopo <code>docker compose pull</code> e <code>docker compose up -d</code> non c'è altro da fare; <code>docker compose restart librefolio</code> le riprova dopo un errore.
+Il riavvio non aiuta quando l'aggiornamento alla 1.3 si ferma perché due account hanno lo stesso indirizzo email a meno delle maiuscole: separa prima i due account, come spiega «Due account con lo stesso indirizzo email» in <a href="../cli_tools/">Strumenti da riga di comando</a>.
+Non usare <code>./dev.py docker exec db upgrade</code>: <code>db upgrade</code> richiede il server fermo, e nel container il server è il processo principale, sempre in esecuzione.</p>
+<h2 id="post-migration-fixes">🩹 Correzioni post-migrazione</h2>
+<p>A ogni avvio, subito dopo le migrazioni in sospeso, il server esegue le <strong>correzioni post-migrazione</strong>: riparazioni che una migrazione non può fare. Cosa riparano e cosa dice il log: <a href="../cli_tools/#post-migration-fixes">Strumenti da riga di comando → Correzioni post-migrazione</a>. In Docker:</p>
+<ul>
+<li>il log è l'output del container (<code>./dev.py docker logs</code> o <code>docker compose logs</code>), salvato anche in <code>LibreFolio-data/logs/</code>;</li>
+<li>la copia conservata da una correzione fallita sta accanto al database, in <code>LibreFolio-data/sqlite/</code>, per esempio <code>app.db.pre-autoincrement-20261008T101500Z.bak</code>.</li>
+</ul>
+<h3 id="eseguire-le-correzioni-con-il-server-fermo">⏹️ Eseguire le correzioni con il server fermo</h3>
+<p>Per vedere in anteprima le correzioni, o riprovarne una fallita all'avvio e leggerne l'errore.
+<code>docker exec</code> richiede il container in esecuzione: <code>docker compose run</code> sostituisce invece il server con il tuo comando, in un container usa e getta.</p>
+<p><strong>Dove: cartella di <code>docker-compose.yml</code>.</strong> Prima sempre l'anteprima con <code>--dry-run</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>stop<span class="w"> </span>librefolio
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>librefolio<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>backend.app.db.post_migration<span class="w"> </span>--dry-run<span class="w">   </span><span class="c1"># preview: changes nothing</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>librefolio<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>backend.app.db.post_migration<span class="w">             </span><span class="c1"># apply the fixes</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>docker<span class="w"> </span>compose<span class="w"> </span>start<span class="w"> </span>librefolio
+</code></pre></div>
+<p>Risultato: lo script lavora sullo stesso database e directory dei dati del server e riporta ciò che trova:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>Database: /app/backend/data/prod-docker/sqlite/app.db
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>Integrity check: ok
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>Fix autoincrement: would_apply
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>Orphan broker folder: broker_reports/uploaded/broker_7
+</code></pre></div>
+<p>Ogni correzione è <code>clean</code> (niente da fare), <code>would_apply</code> (dry run), <code>applied</code> o <code>failed</code>; elenca anche un backup conservato, gli errori e ogni trasferimento di titoli inviato a un broker eliminato, con il costo che comporta o il motivo per cui resta com'è (<a href="../cli_tools/#post-migration-fixes">dettagli</a>).
+Codice di uscita <code>0</code> quando nulla è fallito, dry run incluso; <code>1</code> se è fallita una correzione, il controllo di integrità o la conversione di quei trasferimenti.</p>
+<h2 id="modalita-test">🧪 Modalità test</h2>
+<p>L'immagine non ha una modalità test: ascolta solo su <code>6040</code>, il server di produzione, ed entrambi i file Compose pubblicano solo quella porta.
+Il server di test (<code>./dev.py server --test</code>, porta <code>6041</code> per impostazione predefinita) è uno strumento per sviluppatori: <strong>sull'host, da un checkout dei sorgenti</strong>. Il suo database, <code>backend/data/test/sqlite/app.db</code> per impostazione predefinita, è separato da <code>LibreFolio-data/</code>; <code>./dev.py test db populate --force</code> lo cancella e lo ricrea con dati fittizi.</p>
+<p>Come avviarlo, e perché non parte nel container: <a href="../../developer/dev_workflow/#docker-test-mode">Flusso di lavoro dello sviluppatore</a>.</p>
 <h2 id="considerazioni-sulla-produzione">🏭 Considerazioni sulla produzione</h2>
 <h3 id="1-personalizzare-docker-composeyml">🎮 1. Personalizzare <code>docker-compose.yml</code></h3>
-<p>Le modifiche più comuni:</p>
+<p>Le modifiche più comuni. Dopo (2)–(5), riavvia LibreFolio. Con Docker Compose, esegui <code>docker compose up -d</code>.</p>
 <table>
 <thead>
 <tr>
 <th>#</th>
 <th>Cosa</th>
-<th>Come</th>
+<th>Dove e come</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>(1)</td>
-<td>Far corrispondere UID/GID dell'host</td>
-<td>Ricompila l'immagine con essi: esegui <code>./dev.py docker build</code> come l'utente che deve possedere i file, oppure imposta <code>UID=1001</code> e <code>GID=1001</code> in <code>.env</code> ed esegui <code>docker compose build</code></td>
+<td>Allineare UID/GID dell'host</td>
+<td>Ricompila l'immagine con essi: <code>./dev.py docker build</code> come l'utente che deve possedere i file, oppure <code>UID=1001</code> e <code>GID=1001</code> in <code>.env</code> e poi <code>docker compose build</code></td>
 </tr>
 <tr>
 <td>(2)</td>
 <td>Cambiare la porta di produzione</td>
-<td>Imposta <code>PORT=3000</code> in <code>.env</code></td>
+<td>In <code>.env</code>: <code>PORT=3000</code></td>
 </tr>
 <tr>
 <td>(3)</td>
-<td>Disabilitare la porta di test</td>
-<td>Rimuovi la riga <code>TEST_PORT</code> da <code>ports:</code></td>
+<td>Percorso dati personalizzato</td>
+<td>In <code>docker-compose.yml</code>, il bind mount: <code>./my-data:/app/backend/data/prod-docker</code></td>
 </tr>
 <tr>
 <td>(4)</td>
-<td>Percorso dati personalizzato</td>
-<td>Cambia il bind mount: <code>./my-data:/app/backend/data/prod-docker</code></td>
+<td>Tutta la configurazione</td>
+<td>In <code>.env</code> (copiato da <code>.env.example</code>)</td>
 </tr>
 <tr>
 <td>(5)</td>
-<td>Tutta la configurazione</td>
-<td>Modifica il file <code>.env</code> (copiato da <code>.env.example</code>)</td>
-</tr>
-<tr>
-<td>(6)</td>
 <td>Eseguire un altro tag dell'immagine</td>
-<td>Imposta <code>LIBREFOLIO_IMAGE</code> in <code>.env</code>, per esempio <code>LIBREFOLIO_IMAGE=ghcr.io/librefolio/librefolio:1.1.0</code></td>
+<td>In <code>.env</code>: <code>LIBREFOLIO_IMAGE</code>, per esempio <code>LIBREFOLIO_IMAGE=ghcr.io/librefolio/librefolio:1.1.0</code></td>
 </tr>
 </tbody>
 </table>
-<p>Il primo account creato nel browser diventa automaticamente amministratore: non serve alcun comando.</p>
+<p>Il primo account creato nel browser diventa l'amministratore: nessun comando. Per farlo creare a LibreFolio al primo avvio, da <code>LIBREFOLIO_ADMIN_EMAIL</code>: <a href="../configuration_accounts/#initial-admin">L'amministratore iniziale</a>.</p>
 <details class="example">
 <summary>📄 Il <code>docker-compose.yml</code> del repository, annotato</summary>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">services</span><span class="p">:</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">librefolio</span><span class="p">:</span>
-<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${LIBREFOLIO_IMAGE:-librefolio:latest}</span><span class="w">  </span><span class="c1"># (6) Built by ./dev.py docker build</span>
-<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span><span class="nt">build</span><span class="p">:</span>
-<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">      </span><span class="nt">context</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.</span>
-<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">      </span><span class="nt">args</span><span class="p">:</span>
-<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">        </span><span class="nt">UID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${UID:-1000}</span><span class="w">              </span><span class="c1"># (1) UID owning the data files (build time only)</span>
-<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">        </span><span class="nt">GID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${GID:-1000}</span><span class="w">              </span><span class="c1"># (1) GID owning the data files (build time only)</span>
-<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">        </span><span class="nt">DOCS_VARIANT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${DOCS_VARIANT:-full}</span><span class="w">  </span><span class="c1"># light = no documentation screenshots</span>
-<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">librefolio</span>
-<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="w">    </span><span class="c1"># No 'user:' directive — entrypoint starts as root, fixes permissions,</span>
-<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="w">    </span><span class="c1"># then drops to 'librefolio' user via gosu (same pattern as postgres/redis).</span>
-<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
-<a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
-<a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"${PORT:-6040}:6040"</span><span class="w">           </span><span class="c1"># (2) Production port — change via PORT in .env</span>
-<a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"${TEST_PORT:-6041}:6041"</span><span class="w">      </span><span class="c1"># (3) Test server port (optional)</span>
-<a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-<a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./LibreFolio-data:/app/backend/data/prod-docker</span><span class="w">  </span><span class="c1"># (4) Persistent data (bind mount)</span>
-<a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="w">    </span><span class="nt">env_file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.env</span><span class="w">                     </span><span class="c1"># (5) All config from .env file</span>
-<a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-<a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker</span><span class="w">  </span><span class="c1"># Docker-specific override</span>
-<a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HOST=0.0.0.0</span>
-<a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a><span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
-<a id="__codelineno-18-24" name="__codelineno-18-24" href="#__codelineno-18-24"></a><span class="w">      </span><span class="nt">test</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"CMD"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"python"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"-c"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"import</span><span class="nv"> </span><span class="s">urllib.request;</span><span class="nv"> </span><span class="s">urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-18-25" name="__codelineno-18-25" href="#__codelineno-18-25"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
-<a id="__codelineno-18-26" name="__codelineno-18-26" href="#__codelineno-18-26"></a><span class="w">      </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
-<a id="__codelineno-18-27" name="__codelineno-18-27" href="#__codelineno-18-27"></a><span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15s</span>
-<a id="__codelineno-18-28" name="__codelineno-18-28" href="#__codelineno-18-28"></a><span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">librefolio</span><span class="p">:</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${LIBREFOLIO_IMAGE:-librefolio:latest}</span><span class="w">  </span><span class="c1"># (5) Built by ./dev.py docker build</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">    </span><span class="nt">build</span><span class="p">:</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">      </span><span class="nt">context</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">      </span><span class="nt">args</span><span class="p">:</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">        </span><span class="nt">UID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${UID:-1000}</span><span class="w">              </span><span class="c1"># (1) UID owning the data files (build time only)</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">        </span><span class="nt">GID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${GID:-1000}</span><span class="w">              </span><span class="c1"># (1) GID owning the data files (build time only)</span>
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">        </span><span class="nt">DOCS_VARIANT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${DOCS_VARIANT:-full}</span><span class="w">  </span><span class="c1"># light = no documentation screenshots</span>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">librefolio</span>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">    </span><span class="c1"># No 'user:' directive — entrypoint starts as root, fixes permissions,</span>
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="w">    </span><span class="c1"># then drops to the numeric LIBREFOLIO_UID:LIBREFOLIO_GID via gosu, like ./dev.py docker exec.</span>
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+<a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"${PORT:-6040}:6040"</span><span class="w">           </span><span class="c1"># (2) Production port — change via PORT in .env</span>
+<a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
+<a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./LibreFolio-data:/app/backend/data/prod-docker</span><span class="w">  </span><span class="c1"># (3) Persistent data (bind mount)</span>
+<a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="w">    </span><span class="nt">env_file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.env</span><span class="w">                     </span><span class="c1"># (4) All config from .env file</span>
+<a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker</span><span class="w">  </span><span class="c1"># Docker-specific override</span>
+<a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HOST=0.0.0.0</span>
+<a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PORT=6040</span><span class="w">                      </span><span class="c1"># The container's port; (2) sets the host side</span>
+<a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a><span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
+<a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a><span class="w">      </span><span class="nt">test</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"CMD"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"python"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"-c"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"import</span><span class="nv"> </span><span class="s">urllib.request;</span><span class="nv"> </span><span class="s">urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30s</span>
+<a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a><span class="w">      </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a><span class="w">      </span><span class="nt">start_period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15s</span>
+<a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a><span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
 </code></pre></div>
-<p><code>docker-compose.prod.yml</code> ha lo stesso servizio senza <code>build:</code> e senza la porta di test, e la sua immagine predefinita è <code>ghcr.io/librefolio/librefolio:latest</code>.</p>
+<p><code>docker-compose.prod.yml</code> ha lo stesso servizio senza <code>build:</code>; la sua immagine predefinita è <code>ghcr.io/librefolio/librefolio:latest</code>.</p>
 </details>
 <h3 id="2-sicurezza-ed-esposizione-tailscale-e-reverse-proxy">🔒 2. Sicurezza ed esposizione (Tailscale e reverse proxy)</h3>
-<p>Esponi LibreFolio in modo sicuro tramite <strong>Tailscale</strong> (consigliato, e la scelta più semplice) o dietro un classico reverse proxy come <strong>Nginx</strong> o <strong>Traefik</strong>:</p>
-<ul>
-<li><strong>Tailscale (consigliato)</strong>: accesso sicuro con HTTPS automatico, senza aprire porte del router o configurare record DNS pubblici. Vedi la dettagliata <strong><a href="../service_exposure/">Guida all'esposizione con Tailscale</a></strong>.</li>
-<li><strong>Reverse proxy classico (Nginx/Traefik)</strong>: utile se hai già un'infrastruttura web, o vuoi gestire certificati SSL/TLS personalizzati, servire più applicazioni su un server, o aggiungere header di sicurezza personalizzati e rate limiting.</li>
-</ul>
-<p>Una volta esposto LibreFolio, la pagina <a href="../connection_checks/">Verificare la sicurezza della connessione</a> spiega come controllare che i tuoi utenti si connettano in sicurezza e, <a href="../connection_checks/#reverse-proxy">dietro un reverse proxy</a>, che il cookie di sessione sia marcato <code>Secure</code>.</p>
-<p>LibreFolio comprime già le sue risposte con gzip (JSON dell'API, JavaScript e CSS dell'app web, pagine della documentazione) e invia immagini e stream di ricerca asset in tempo reale così come sono: il proxy non deve comprimerli di nuovo.</p>
+<table>
+<thead>
+<tr>
+<th>Via</th>
+<th>Quando</th>
+<th>Guida</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Tailscale</strong> (consigliato, il più semplice)</td>
+<td>HTTPS automatico, senza porte del router né DNS pubblico</td>
+<td><a href="../service_exposure/">Guida all'esposizione con Tailscale</a></td>
+</tr>
+<tr>
+<td><strong>Reverse proxy classico</strong> (Nginx, Traefik)</td>
+<td>Hai già un'infrastruttura web, certificati SSL/TLS tuoi, più applicazioni su un server, header di sicurezza o limitazione della frequenza personalizzati</td>
+<td>Sotto</td>
+</tr>
+</tbody>
+</table>
+<p>Una volta esposto, <a href="../connection_checks/">Verifica della sicurezza della connessione</a> mostra come controllare che gli utenti si connettano in modo sicuro e, <a href="../connection_proxy/#reverse-proxy">dietro un reverse proxy</a>, che il cookie di sessione sia <code>Secure</code>.</p>
+<p>Dietro un reverse proxy classico, <strong>in <code>.env</code></strong> indica anche di quale proxy fidarsi (<code>FORWARDED_ALLOW_IPS</code>) o quale header contiene l'indirizzo del visitatore (<code>LIBREFOLIO_CLIENT_IP_HEADER</code>): altrimenti LibreFolio vede ogni visitatore con l'indirizzo del proxy, e lo segnala nel log e nei controlli di sicurezza. Vedi <a href="../connection_proxy/#client-address">L'indirizzo del visitatore</a>.</p>
+<p>Nella configurazione del proxy, non comprimere di nuovo: LibreFolio comprime già con gzip (JSON delle API, JavaScript e CSS, pagine della documentazione) e invia immagini e flusso in tempo reale della ricerca degli asset così come sono.</p>
 <h3 id="3-backup-del-database">💾 3. Backup del database</h3>
-<p>Il database è memorizzato nella directory <code>LibreFolio-data/</code> accanto a <code>docker-compose.yml</code>. Non serve <code>docker cp</code> — la directory dei dati è un bind mount accessibile dall'host.</p>
+<p>Il database sta in <code>LibreFolio-data/</code> accanto a <code>docker-compose.yml</code>: un bind mount leggibile dall'host, nessun <code>docker cp</code>.</p>
 <div class="admonition warning">
 <p class="admonition-title">Non copiare <code>app.db</code> da un container in esecuzione</p>
-<p>LibreFolio esegue SQLite in <strong>modalità WAL</strong> (<code>PRAGMA journal_mode=WAL</code>): le transazioni recenti risiedono nel file collaterale <code>app.db-wal</code>, quindi un semplice <code>cp</code> del solo <code>app.db</code> mentre il server è attivo può produrre un backup incoerente o obsoleto. Usa una delle due procedure sicure riportate sotto.</p>
+<p>SQLite gira in <strong>modalità WAL</strong> (<code>PRAGMA journal_mode=WAL</code>): le transazioni recenti stanno in <code>app.db-wal</code>, quindi un <code>cp</code> del solo <code>app.db</code> con il server attivo può dare un backup incoerente o obsoleto. Usa una delle procedure sotto.</p>
 </div>
+<p><strong>Dove: sull'host, cartella di <code>docker-compose.yml</code>.</strong></p>
 <p><strong>Opzione A — Ferma il container, poi copia</strong> (la più semplice):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="ch">#!/bin/bash</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>stop<span class="w"> </span>librefolio
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>cp<span class="w"> </span>./LibreFolio-data/sqlite/app.db<span class="w"> </span>/path/to/backups/app.db-<span class="k">$(</span>date<span class="w"> </span>+%F<span class="k">)</span>
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>docker<span class="w"> </span>compose<span class="w"> </span>start<span class="w"> </span>librefolio
-</code></pre></div>
-<p><strong>Opzione B — Backup online con la CLI SQLite</strong> (senza downtime, richiede lo strumento <code>sqlite3</code> sull'host):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="ch">#!/bin/bash</span>
-<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>sqlite3<span class="w"> </span>./LibreFolio-data/sqlite/app.db<span class="w"> </span><span class="s2">".backup '/path/to/backups/app.db-</span><span class="k">$(</span>date<span class="w"> </span>+%F<span class="k">)</span><span class="s2">'"</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>stop<span class="w"> </span>librefolio
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>cp<span class="w"> </span>./LibreFolio-data/sqlite/app.db<span class="w"> </span>/path/to/backups/app.db-<span class="k">$(</span>date<span class="w"> </span>+%F<span class="k">)</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>docker<span class="w"> </span>compose<span class="w"> </span>start<span class="w"> </span>librefolio
 </code></pre></div>
-<p>Il comando <code>.backup</code> di SQLite usa l'API di backup online, che è sicura con un database WAL attivo.</p>
-<p>Per l'elenco completo di ciò che vale la pena includere nel backup (file caricati, report originali dei broker), vedi la pagina <a href="../filesystem/">Struttura del filesystem</a>.</p>
-<p>File che potresti trovare accanto al database:</p>
-<ul>
-<li><code>app.db.pre-&lt;fix&gt;-&lt;UTC time&gt;.bak</code>: una copia conservata da una <a href="#post-migration-fixes">correzione post-migrazione</a> non riuscita; eliminala quando non ti serve più.</li>
-<li><code>app.db.post-migration.lock</code>: il file di lock vuoto delle <a href="#post-migration-fixes">correzioni post-migrazione</a>, riutilizzato a ogni avvio. È innocuo: lascialo lì, perché eliminarlo mentre il server si avvia potrebbe permettere a due esecuzioni di sovrapporsi.</li>
-</ul>
+<p><strong>Opzione B — Backup online con la CLI SQLite</strong> (nessun downtime; richiede <code>sqlite3</code> sull'host):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="ch">#!/bin/bash</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>sqlite3<span class="w"> </span>./LibreFolio-data/sqlite/app.db<span class="w"> </span><span class="s2">".backup '/path/to/backups/app.db-</span><span class="k">$(</span>date<span class="w"> </span>+%F<span class="k">)</span><span class="s2">'"</span>
+</code></pre></div>
+<p><code>.backup</code> usa l'API di backup online di SQLite, sicura con un database WAL attivo.</p>
+<p><strong>Opzione C — <code>backup create</code></strong>, senza arresto né <code>sqlite3</code> sull'host. Dentro il container, dalla cartella di <code>docker-compose.yml</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>docker<span class="w"> </span>compose<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>librefolio<span class="w"> </span>python<span class="w"> </span>dev.py<span class="w"> </span>backup<span class="w"> </span>create
+</code></pre></div>
+<p>Risultato: una copia coerente di database, file caricati, report dei broker e scenari di stress in un unico archivio, in una propria cartella di <code>LibreFolio-data/backups/</code>, con il server in funzione (<a href="../cli_backup/#backup-docker">Backup con Docker</a>).
+Un archivio in chiaro esclude <code>secrets/</code>, che contiene la chiave dell'istanza: salva quella cartella come spiega <a href="../filesystem/#what-to-back-up">Cosa sottoporre a backup</a>. Un <a href="../backup_restore/#secure">archivio sicuro</a>, con <code>--encrypt</code>, contiene la chiave, cifrata con la tua password.</p>
+<p>Elenco completo di ciò che vale la pena salvare (file caricati, report originali dei broker): <a href="../filesystem/">Struttura del filesystem</a>.</p>
+<p>File che puoi trovare accanto al database:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Cosa fare</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>app.db.pre-&lt;fix&gt;-&lt;UTC time&gt;.bak</code></td>
+<td>Copia conservata da una <a href="#post-migration-fixes">correzione post-migrazione</a> fallita: cancellala quando non serve più</td>
+</tr>
+<tr>
+<td><code>app.db.post-migration.lock</code></td>
+<td>File di lock vuoto delle <a href="#post-migration-fixes">correzioni post-migrazione</a>, riutilizzato a ogni avvio. Lascialo: cancellarlo mentre il server parte potrebbe far sovrapporre due esecuzioni</td>
+</tr>
+</tbody>
+</table>
 <h3 id="4-variabili-dambiente">🔑 4. Variabili d'ambiente</h3>
-<p>Tutta la configurazione è gestita nel file <code>.env</code> (copiato da <code>.env.example</code>); lascia invariati gli override specifici di Docker nel blocco <code>environment:</code>. Per ogni variabile e il suo effetto, vedi la <strong><a href="../configuration/">Guida alla configurazione</a></strong>.</p>
-<p>🔐 <strong>Mantieni gli utenti connessi tra un riavvio e l'altro</strong>: imposta <code>JWT_SECRET</code> in <code>.env</code> su una lunga stringa casuale, per esempio l'output di <code>openssl rand -hex 32</code>. Senza di esso, LibreFolio genera una nuova chiave a ogni avvio, quindi ogni riavvio o aggiornamento del container disconnette tutti gli utenti.</p>
+<p>Tutta la configurazione sta <strong>in <code>.env</code></strong> (copiato da <code>.env.example</code>); lascia così le variabili Docker del blocco <code>environment:</code>. Ogni variabile e il suo effetto: <a href="../configuration/">Guida alla configurazione</a>.</p>
+<p>🔐 <strong>Utenti connessi tra i riavvii.</strong> In <code>.env</code>, <code>JWT_SECRET</code> a una lunga stringa casuale, per esempio l'output di <code>openssl rand -hex 32</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nv">JWT_SECRET</span><span class="o">=</span>&lt;output<span class="w"> </span>of<span class="w"> </span>openssl<span class="w"> </span>rand<span class="w"> </span>-hex<span class="w"> </span><span class="m">32</span>&gt;
+</code></pre></div>
+<p>Riavvia LibreFolio. Con Docker Compose, esegui <code>docker compose up -d</code>.
+Senza, LibreFolio genera una nuova chiave a ogni avvio: ogni riavvio o aggiornamento del container disconnette tutti.</p>
+<h3 id="verify-image">✅ 5. Verificare l'immagine che scaricate</h3>
+<p>Ogni immagine su GHCR (<code>ghcr.io/librefolio/librefolio</code>, completa e light) ha una <strong>attestazione di build</strong>, firmata dalla pipeline di rilascio del repository del progetto: questa esatta immagine è stata compilata lì da questo codice. Nessuna nostra chiave da conservare o perdere (GitHub dimostra l'identità dell'esecuzione, Sigstore la registra): chiunque può verificarla.</p>
+<p><strong>Dove: dove hai Docker e la <a href="https://cli.github.com/">GitHub CLI</a>.</strong></p>
+<ol>
+<li>
+<p>Prendi il digest dell'immagine scaricata:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># The digest of a tag (the line "Digest: sha256:…")</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/librefolio/librefolio:1.3.0
+</code></pre></div>
+</li>
+<li>
+<p>Chiedi a GitHub di verificarlo:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Verify the attestation of that digest</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/librefolio/librefolio@sha256:&lt;digest&gt;<span class="w"> </span>--owner<span class="w"> </span>Librefolio
+</code></pre></div>
+<p>Risultato: <code>✓ Verification succeeded!</code> con repository e workflow che l'hanno compilata. Solo un errore → questo digest non viene dalla pipeline di LibreFolio: non eseguirlo.</p>
+</li>
+</ol>
+<p>L'attestazione copre ogni tag che punta allo stesso digest (<code>1.3.0</code>, <code>latest</code>...). Le release precedenti a questo controllo non ne hanno.</p>
+<hr />
+<h2 id="correlati">🔗 Correlati</h2>
+<ul>
+<li>📄 <strong><a href="../../user/installation/">Guida all'installazione</a></strong> — Prima installazione, Varianti dell'immagine</li>
+<li>📄 <strong><a href="../cli_tools/">Strumenti da riga di comando</a></strong> — Applicare le migrazioni, Correzioni post-migrazione</li>
+<li>📄 <strong><a href="../cli_backup/#backup-docker">Backup</a></strong> — Backup con Docker</li>
+<li>📄 <strong><a href="../filesystem/">Struttura del filesystem</a></strong> — Cosa sottoporre a backup</li>
+<li>📄 <strong><a href="../connection_checks/">Verifica della sicurezza della connessione</a></strong> — Dietro un reverse proxy, L'indirizzo del visitatore</li>
+</ul>
 
 
 
@@ -15351,12 +16503,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copiato", "clipboard.copy": "Copia", "search.result.more.one": "1 altro in questa pagina", "search.result.more.other": "# altri in questa pagina", "search.result.none": "Nessun documento trovato", "search.result.one": "1 documento trovato", "search.result.other": "# documenti trovati", "search.result.placeholder": "Scrivi per iniziare a cercare", "search.result.term.missing": "Non presente", "select.version": "Seleziona la versione"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copiato", "clipboard.copy": "Copia", "search.result.more.one": "1 altro in questa pagina", "search.result.more.other": "# altri in questa pagina", "search.result.none": "Nessun documento trovato", "search.result.one": "1 documento trovato", "search.result.other": "# documenti trovati", "search.result.placeholder": "Scrivi per iniziare a cercare", "search.result.term.missing": "Non presente", "select.version": "Seleziona la versione"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
-      
-        <script src="../../../javascripts/mermaid.mjs" type="module"></script>
+      <script src="../../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../../javascripts/mathjax.js"></script>
       
@@ -15370,7 +16520,11 @@
       
         <script src="../../../javascripts/gallery-img-loader.js"></script>
       
+        <script src="../../../javascripts/moved-anchors.js"></script>
+      
         <script src="../../../javascripts/bmc-widget.js"></script>
+      
+        <script src="../../../javascripts/table-code-wrap.js"></script>
       
     
   </body>

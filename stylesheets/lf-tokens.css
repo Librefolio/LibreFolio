@@ -1,0 +1,330 @@
+/* Generated at build time from frontend/src/lib/theme/tokens.css by mkdocs_src/hooks/lf_theme_tokens.py.
+   Do not edit: change the role there. */
+/*
+ * LibreFolio colour roles — the one home of the interface colours (colour programme, workstream T).
+ *
+ * How it works
+ *   1. A role is a CSS custom property named --lf-<group>-<name>. The light values sit on `:root, html.light, .light`,
+ *      the dark values on `html.dark, .dark`, and the derived roles (references, color-mix) on `:root, .light, .dark`,
+ *      so that a subtree forced into the other theme recomputes them with its own base values.
+ *   2. `@theme inline`, at the bottom, turns each role into Tailwind utilities: --color-lf-card gives bg-lf-card,
+ *      border-lf-card, ring-lf-card… `inline` makes the utility read var(--lf-…) directly, so a theme switch or a live
+ *      override (Designer Lab) reaches every element, subtrees included. The login illustration (--lf-art-*) has no
+ *      utility: its one component reads it with var() in its <style>.
+ *   3. Components use the *-lf-* utilities only. The dark theme comes from the variables: never write `dark:` on a role
+ *      utility. Every `border` names its role, since Tailwind v4 draws an unnamed border in currentColor.
+ *
+ * Migrating a component (skill .github/skills/design-tools/theme-roles/SKILL.md)
+ *   - An element migrates whole: it never mixes role utilities with palette classes. The legacy dark remap in app.css
+ *     (P1) exempts every element that carries a `-lf-` class, so a half-migrated element would escape it with half of
+ *     its old colours.
+ *   - A migrated component sets its text role on its root: `body` keeps the legacy dark text until the clean-up (B6).
+ *   - Gates: src/themeRoles.gate.test.ts (ratchet on the legacy classes, grammar of the roles) and
+ *     src/themeTokens.gate.test.ts (this file: both themes, the utility table, the contrast pairs).
+ *
+ * Values: the designer's round 2 (15/10/2026), «Pietra e Salvia» (light) and «Ardesia e Salvia» (dark), as sRGB hex
+ * (decision D-T5), approved whole by the developer (D-T17): the sidebar is green in both themes, the status tints are
+ * her explicit values. A derived role is built from her values only, and the roles her tables do not cover are marked
+ * «provisional». A minimal contrast correction changes the OKLCH lightness alone and keeps her value in a comment, to be
+ * confirmed by her (policy D-T6). Roles that do not change with the theme sit in the derived block: one value to tune.
+ *
+ * Round 3 (17/10/2026), approved by the developer with the designer: the categories of the asset types, --lf-cat-*
+ * (§1.2 and §1.9 of designer-feedback/2026-10-17-round3-grafici/decisioni.md), her values as written.
+ *
+ * Plan: LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md
+ */
+
+/* ===== Light theme: «Pietra e Salvia» ===== */
+:root,
+html.light,
+.light {
+    /* Surfaces */
+    --lf-surface-page: #f3f5f3; /* the page: the app behind the shell, login, error, offline, splash */
+    --lf-surface-header: #edf0ee; /* D-T23: the app header, a step darker than the page (her round-2 neutral bar) */
+    --lf-surface-card: #fafbfa; /* cards, modals, menus */
+    --lf-surface-panel: #e8ece9; /* the secondary surface: panels, the password-requirements box, insides of a card */
+    --lf-surface-field: #ffffff; /* the inside of an input */
+
+    /* Text */
+    --lf-text-primary: #1c2420;
+    --lf-text-secondary: #4a5550;
+    --lf-text-muted: #616d67; /* placeholders, inactive icons, disabled text. Designer #6E7A74, corrected (D-T6), approved (N5) */
+
+    /* Borders */
+    --lf-border-subtle: #d8e0dc; /* borders and dividers */
+    --lf-border-raised: var(--lf-border-subtle); /* N3: cards in relief (login, modals, dropdowns) */
+    --lf-border-input: #7e8984; /* designer #B2BEB8, corrected (D-T6); N5 asked #94A09B: 3:1 kept (D-T18) */
+
+    /* Brand and interaction */
+    --lf-brand: #1b4334; /* the green of the login header, the sidebar, the mobile header, the PWA title bar (D-T17) */
+    --lf-on-brand: var(--lf-surface-card);
+    --lf-action: #1b4334; /* the primary button */
+    --lf-action-hover: color-mix(in oklab, var(--lf-action) 70%, var(--lf-focus)); /* provisional: toward the focus green */
+    --lf-on-action: var(--lf-surface-card);
+    --lf-focus: #236b4d; /* focus rings and active links */
+
+    /* Status (round 2, §B: explicit tints) */
+    --lf-success: #18794e;
+    --lf-success-soft: #e6f4ed;
+    --lf-success-line: #b8dfca;
+    --lf-success-on-soft: #145937;
+    --lf-warning: #ae4e00; /* round 2: a livelier amber, was #9A5B00. Designer #B45309: 4.21:1 on panel (D-T6) */
+    --lf-warning-soft: #fef3c7;
+    --lf-warning-line: #fde68a;
+    --lf-warning-on-soft: #92400e;
+    --lf-warning-hover: #92400e; /* Q3: a solid warning or donation button, hovered */
+    --lf-warning-on-inverse: #f59e0b; /* Q10: a warning inside the dark tooltip of the light theme */
+    /* Q10 rule, extended (T, 16/10, D-T27: to review): inside the inverted tooltip, the other theme's colour. The parity
+       gate keeps each X-on-inverse equal to the other theme's X. */
+    --lf-danger-on-inverse: #ff7a86; /* the dark theme's danger: 6.34:1 on the dark tooltip */
+    --lf-info-on-inverse: #3f86fa; /* the dark theme's info (KaTeX, links): 4.54:1 */
+    --lf-text-muted-on-inverse: #7f8c87; /* the dark theme's muted text: 4.54:1 */
+    --lf-danger: #c82838;
+    --lf-danger-soft: #ffe5e5; /* designer #FEE2E2: the muted text on it at 4.42:1 (D-T6) */
+    --lf-danger-line: #fecaca;
+    --lf-danger-on-soft: #991b1b;
+    --lf-danger-solid: #c82838; /* Q3: the fill of a solid destructive button, under white text */
+    --lf-danger-hover: #a81f2d; /* Q3 */
+    --lf-info: #155eef;
+    --lf-info-soft: #deedff; /* designer #DBEAFE: the info and the muted text on it at 4.44 and 4.42:1 (D-T6) */
+    --lf-info-line: #bfdbfe;
+    --lf-info-on-soft: #1e40af;
+
+    /* The AI accent (Q11): the AI Export, distinct from the greens */
+    --lf-ai: #6d28d9;
+    --lf-ai-soft: #f3e8ff;
+    --lf-ai-line: #ddd6fe;
+    --lf-on-ai: #ffffff; /* provisional: text on a solid AI fill */
+
+    /* Switch (Q2): off is never green; on is the checked fill */
+    --lf-switch-off: #cbd4d0; /* the track */
+    --lf-switch-knob-off: #ffffff; /* drawn with a --lf-border-input edge in light, so the control reads at 3:1 */
+    --lf-switch-knob-on: #ffffff;
+
+    /* Highlighted search results (Q7) */
+    --lf-mark-bg: #fde68a;
+    --lf-mark-text: #1c2420;
+    --lf-mark-line: transparent; /* no edge in light */
+
+    /* Categories (round 3, §1.2 and §1.9): each asset type's colour, the one the charts draw it in — the one copy since
+       DV-11: chartCategories.ts reads these roles, roleColors.ts keeps their stand-ins — and its badge text, -on-soft: the colour
+       itself, or the colour moved in lightness alone, only as far as 4.5:1 on its tint. The tint, -soft, is derived.
+       No green, teal or cyan among them (§1.1): the cash is slate blue */
+    --lf-cat-stock: #7041c6;
+    --lf-cat-stock-on-soft: #7041c6;
+    --lf-cat-etf: #2459b8;
+    --lf-cat-etf-on-soft: #2459b8;
+    --lf-cat-bond: #536a9e;
+    --lf-cat-bond-on-soft: #4f669a; /* her #50679b (4.51:1 on the rounded #e3e7ed) gives 4.49:1 on the exact tint: OKLCH lightness -0.003 (D-T6), 4.56:1; accepted by the coordinator, 17/10 */
+    --lf-cat-crypto: #b87916;
+    --lf-cat-crypto-on-soft: #925e0c; /* her badge text: the colour, darker */
+    --lf-cat-fund: #5147b8;
+    --lf-cat-fund-on-soft: #5147b8;
+    --lf-cat-hold: #5d687b; /* G1-la, was #657184 */
+    --lf-cat-hold-on-soft: #5c677a; /* her badge text: the colour, darker */
+    --lf-cat-crowdfund: #8b547d;
+    --lf-cat-crowdfund-on-soft: #8b547d;
+    --lf-cat-commodity: #b85e45;
+    --lf-cat-commodity-on-soft: #a64e35; /* her badge text: the colour, darker */
+    --lf-cat-real-estate: #96602c;
+    --lf-cat-real-estate-on-soft: #905a26; /* her badge text: the colour, darker */
+    --lf-cat-index: #a33d79;
+    --lf-cat-index-on-soft: #a33d79;
+    --lf-cat-other: #727b87;
+    --lf-cat-other-on-soft: #616a75; /* her badge text: the colour, darker */
+    --lf-cat-liquidity: #3f628c;
+    --lf-cat-liquidity-on-soft: #3f628c;
+
+    /* Shadows (Q8) */
+    --lf-shadow-raised: color-mix(in oklab, #0d1110 25%, transparent); /* modals and dropdowns */
+    --lf-shadow-card: color-mix(in oklab, #0d1110 7%, transparent); /* the cards of a page: her 6–8% */
+
+    /* Login illustration (ui/AnimatedBackground.svelte): variables only, no utility. Each layer's strength is the alpha
+       of its colour, so the Designer Lab tunes colour and strength in one value. N6: unchanged in light */
+    --lf-art-hill-1: color-mix(in oklab, #9caf9c 25%, transparent);
+    --lf-art-hill-2: color-mix(in oklab, #9caf9c 18%, transparent);
+    --lf-art-hill-3: color-mix(in oklab, #9caf9c 12%, transparent);
+    --lf-art-line: color-mix(in oklab, var(--lf-brand) 30%, transparent);
+}
+
+/* ===== Derived roles, and the roles the same in both themes ===== */
+:root,
+.light,
+.dark,
+[data-md-color-scheme="slate"] {
+    --lf-surface-app: var(--lf-surface-page); /* round 2: one background for the app and the standalone pages */
+    --lf-surface-hover: var(--lf-surface-panel);
+    --lf-surface-neutral: var(--lf-border-subtle); /* tracks, skeletons, neutral chips */
+    --lf-surface-inverse: var(--lf-text-primary); /* tooltips */
+    --lf-surface-overlay: color-mix(in oklab, #0d1110 60%, transparent); /* Q13: modal backdrops, the dark page at 60% */
+    --lf-surface-logo: #ffffff; /* the tile behind the logo: white on the green too (N1) */
+
+    --lf-text-placeholder: var(--lf-text-muted); /* designer: the muted text is for placeholders and disabled text */
+    --lf-text-on-inverse: var(--lf-surface-card);
+    --lf-border-input-hover: var(--lf-text-muted); /* D-T18: a field hovered, in the muted text colour (5.40 / 5.31:1 on a field) */
+
+    --lf-link: var(--lf-focus); /* designer: «Focus, link attivi» */
+    --lf-selected: color-mix(in oklab, var(--lf-focus) 12%, transparent);
+    --lf-checked: var(--lf-focus); /* a selected control: checkbox, radio, switch on, selected day or preset (D-T16) */
+    --lf-on-checked: var(--lf-surface-card); /* its mark, in the card colour: 6.1:1 and 5.3:1 (D-T16) */
+    --lf-on-status: var(--lf-surface-card); /* text on a solid status colour */
+    --lf-on-danger-solid: #ffffff; /* Q3: white text on a solid red button */
+    --lf-on-overlay: #ffffff; /* provisional: text and icons on the backdrop (a camera on an avatar, an icon on a scrim), white in both themes: 4.98:1 at worst, the backdrop over a white field */
+    --lf-success-hover: color-mix(in oklab, var(--lf-success) 80%, var(--lf-text-primary)); /* provisional: a solid success button, hovered. 20% toward the text, so the hover moves away from --lf-on-status in both themes; her Q3 hovers of warning and danger go darker in dark */
+    --lf-info-hover: color-mix(in oklab, var(--lf-info) 80%, var(--lf-text-primary)); /* provisional: a solid info button, hovered, as --lf-success-hover */
+    --lf-tour-glow: color-mix(in oklab, var(--lf-focus) 40%, transparent); /* Q9: the guided tour's glow */
+
+    --lf-gain: var(--lf-success);
+    --lf-loss: var(--lf-danger);
+    --lf-gain-soft: var(--lf-success-soft); /* a gain on a tint, a badge or a chip (toneClasses SIGN_BADGE): its own role, so the designer can part it from the success tint */
+    --lf-gain-on-soft: var(--lf-success-on-soft);
+    --lf-loss-soft: var(--lf-danger-soft); /* a loss on a tint, as --lf-gain-soft */
+    --lf-loss-on-soft: var(--lf-danger-on-soft);
+    --lf-donate: var(--lf-warning); /* designer: the warm amber suits «Offrimi un caffè» */
+    --lf-donate-hover: var(--lf-warning-hover); /* Q3 */
+
+    /* The green bar, the sidebar (README §A, D-T17): one family in both themes. Her names are --lf-surface-sidebar and
+       --lf-sidebar-*; the family is --lf-bar-* since D-T19 shared it with the header, which D-T23 gave back a neutral
+       surface of its own (--lf-surface-header). No edge: D-T23 took off her 1px dark border on the right */
+    --lf-surface-bar: #1b4334; /* her --lf-surface-sidebar */
+    --lf-bar-border: #265946; /* inner dividers; her --lf-sidebar-border */
+    --lf-bar-text: #cfe0d8; /* inactive items, icons, secondary information; her --lf-sidebar-text */
+    --lf-bar-text-muted: #a0bcaf; /* the version, the e-mail. Her --lf-sidebar-text-muted #8CA89B: 4.31:1, 3.59:1 on the hover (D-T6) */
+    --lf-bar-hover: #21503e; /* her --lf-sidebar-hover */
+    --lf-bar-active-bg: #285e49; /* her --lf-sidebar-active-bg */
+    --lf-bar-active-text: #ffffff; /* her --lf-sidebar-active-text */
+    --lf-bar-indicator: #52c493; /* the mark on the left of the active item; her --lf-sidebar-active-bar */
+    --lf-bar-logout-bg: #153529; /* her --lf-sidebar-logout-bg */
+    --lf-bar-logout-hover: #21503e;
+    --lf-bar-focus: #52c493; /* the focus ring on the green, 5.10:1 (the page's --lf-focus gives 1.73:1 there; D-T19) */
+    --lf-bar-success: #5ed69a; /* statuses on the green: the bright ones of the dark theme, in both themes (README §A), D-T26 */
+    --lf-bar-warning: #fbbf24;
+    --lf-bar-danger: #ff7a86; /* the dark theme's red (D-T25); was #F87171 */
+
+    /* The terminal (Q6): dark in both themes */
+    --lf-terminal-bg: #0d1110;
+    --lf-terminal-border: #222c28;
+    --lf-terminal-text: #edf2f0;
+    --lf-terminal-prompt: #36d399; /* the prompt and the commands */
+    --lf-terminal-comment: color-mix(in oklab, var(--lf-terminal-text) 60%, var(--lf-terminal-bg)); /* provisional: `# Docker` */
+
+    /* Categories (round 3, §1.9): a type's tint, its colour at 14% on the card, mixed in sRGB as her badge values
+       were (#e7e1f3 for STOCK in light, #2c2d37 in dark) */
+    --lf-cat-stock-soft: color-mix(in srgb, var(--lf-cat-stock) 14%, var(--lf-surface-card));
+    --lf-cat-etf-soft: color-mix(in srgb, var(--lf-cat-etf) 14%, var(--lf-surface-card));
+    --lf-cat-bond-soft: color-mix(in srgb, var(--lf-cat-bond) 14%, var(--lf-surface-card));
+    --lf-cat-crypto-soft: color-mix(in srgb, var(--lf-cat-crypto) 14%, var(--lf-surface-card));
+    --lf-cat-fund-soft: color-mix(in srgb, var(--lf-cat-fund) 14%, var(--lf-surface-card));
+    --lf-cat-hold-soft: color-mix(in srgb, var(--lf-cat-hold) 14%, var(--lf-surface-card));
+    --lf-cat-crowdfund-soft: color-mix(in srgb, var(--lf-cat-crowdfund) 14%, var(--lf-surface-card));
+    --lf-cat-commodity-soft: color-mix(in srgb, var(--lf-cat-commodity) 14%, var(--lf-surface-card));
+    --lf-cat-real-estate-soft: color-mix(in srgb, var(--lf-cat-real-estate) 14%, var(--lf-surface-card));
+    --lf-cat-index-soft: color-mix(in srgb, var(--lf-cat-index) 14%, var(--lf-surface-card));
+    --lf-cat-other-soft: color-mix(in srgb, var(--lf-cat-other) 14%, var(--lf-surface-card));
+    --lf-cat-liquidity-soft: color-mix(in srgb, var(--lf-cat-liquidity) 14%, var(--lf-surface-card));
+}
+
+/* ===== Dark theme: «Ardesia e Salvia» — after the derived block, so that it wins on a `.dark` subtree ===== */
+[data-md-color-scheme="slate"] {
+    /* Surfaces */
+    --lf-surface-page: #0d1110;
+    --lf-surface-header: #111615; /* D-T23: a step lighter than the page (her round-2 neutral bar) */
+    --lf-surface-card: #151b19;
+    --lf-surface-panel: #1b2421;
+    --lf-surface-field: #0f1413;
+
+    /* Text */
+    --lf-text-primary: #edf2f0;
+    --lf-text-secondary: #9ba8a2;
+    --lf-text-muted: #7f8c87; /* designer #687570, corrected (D-T6), approved (N5) */
+
+    /* Borders */
+    --lf-border-subtle: #222c28;
+    --lf-border-raised: #2e3b36; /* N3 */
+    --lf-border-input: #606f6a; /* designer #313F3A, corrected (D-T6); N5 asked #43524D: 3:1 kept (D-T18) */
+
+    /* Brand and interaction */
+    --lf-brand: #1b4334;
+    --lf-on-brand: var(--lf-text-primary);
+    --lf-action: #215240;
+    --lf-action-hover: #28634e;
+    --lf-on-action: var(--lf-text-primary);
+    --lf-focus: #429e79;
+
+    /* Status (round 2, §B) */
+    --lf-success: #5ed69a; /* D-T26 (developer, 15/10): a softer green, 9.6:1 on the card. Was #36D399 */
+    --lf-success-soft: #13261e;
+    --lf-success-line: #1f4435;
+    --lf-success-on-soft: #86efac;
+    --lf-warning: #f59e0b;
+    --lf-warning-soft: #291e0c;
+    --lf-warning-line: #54380e;
+    --lf-warning-on-soft: #fcd34d;
+    --lf-warning-hover: #d97706;
+    --lf-warning-on-inverse: #ae4e00; /* Q10: the light theme's warning, on the light tooltip. Designer #B45309: 4.44:1 (D-T6) */
+    --lf-danger-on-inverse: #c82838; /* Q10 rule: the light theme's danger, 4.86:1 on the light tooltip */
+    --lf-info-on-inverse: #155eef; /* Q10 rule: the light theme's info, 4.78:1 */
+    --lf-text-muted-on-inverse: #616d67; /* Q10 rule: the light theme's muted text, 4.77:1 */
+    --lf-danger: #ff7a86; /* D-T25 (developer, 15/10): a softer red, 6.97:1 on the card. Was #F84361 (designer #F43F5E, D-T6, N5) */
+    --lf-danger-soft: #2a1417;
+    --lf-danger-line: #581c24;
+    --lf-danger-on-soft: #fca5a5;
+    --lf-danger-solid: #e1284f; /* Q3: under white text. Designer #F84361: 3.52:1 (D-T6) */
+    --lf-danger-hover: #d51c42; /* Q3. Designer #E12D4B: 4.49:1, and a step darker than the fill (D-T6) */
+    --lf-info: #3f86fa; /* designer #3B82F6, corrected (D-T6), approved (N5) */
+    --lf-info-soft: #131f33;
+    --lf-info-line: #1e3a5f;
+    --lf-info-on-soft: #93c5fd;
+
+    /* The AI accent (Q11) */
+    --lf-ai: #a78bfa;
+    --lf-ai-soft: #1e1b2e;
+    --lf-ai-line: #3b3054;
+    --lf-on-ai: var(--lf-surface-card); /* provisional */
+
+    /* Switch (Q2) */
+    --lf-switch-off: #2c3834;
+    --lf-switch-knob-off: #9ba8a2;
+    --lf-switch-knob-on: #ffffff;
+
+    /* Highlighted search results (Q7) */
+    --lf-mark-bg: #78350f;
+    --lf-mark-text: #fef3c7;
+    --lf-mark-line: #b45309;
+
+    /* Categories (round 3, §1.2 and §1.9): every badge text is the colour itself in dark */
+    --lf-cat-stock: #b69af0;
+    --lf-cat-stock-on-soft: #b69af0;
+    --lf-cat-etf: #82acf8;
+    --lf-cat-etf-on-soft: #82acf8;
+    --lf-cat-bond: #9baed8;
+    --lf-cat-bond-on-soft: #9baed8;
+    --lf-cat-crypto: #e8bd69;
+    --lf-cat-crypto-on-soft: #e8bd69;
+    --lf-cat-fund: #9280ff; /* V1-dc, was #a7a0f5 */
+    --lf-cat-fund-on-soft: #9280ff;
+    --lf-cat-hold: #c6d0e0; /* G1-db, was #a6b0c0 */
+    --lf-cat-hold-on-soft: #c6d0e0;
+    --lf-cat-crowdfund: #d5a0c7;
+    --lf-cat-crowdfund-on-soft: #d5a0c7;
+    --lf-cat-commodity: #e99a82;
+    --lf-cat-commodity-on-soft: #e99a82;
+    --lf-cat-real-estate: #d6a36c;
+    --lf-cat-real-estate-on-soft: #d6a36c;
+    --lf-cat-index: #e58bb9;
+    --lf-cat-index-on-soft: #e58bb9;
+    --lf-cat-other: #a9b0bb;
+    --lf-cat-other-on-soft: #a9b0bb;
+    --lf-cat-liquidity: #639bc0; /* B1-dc, was #83a9d8 */
+    --lf-cat-liquidity-on-soft: #639bc0;
+
+    /* Shadows (Q8) */
+    --lf-shadow-raised: color-mix(in oklab, #0d1110 50%, transparent);
+    --lf-shadow-card: color-mix(in oklab, #0d1110 40%, transparent); /* provisional: she gave none for dark cards */
+
+    /* Login illustration (N6): a touch more forest, still dark */
+    --lf-art-hill-1: #16221d;
+    --lf-art-hill-2: #121c18;
+    --lf-art-hill-3: #0f1714;
+    --lf-art-line: #3b5249;
+}
