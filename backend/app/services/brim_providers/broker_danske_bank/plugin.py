@@ -63,6 +63,7 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim import brim_report_set_core as core
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -500,11 +501,11 @@ def _pair_rows(custody_rows: List[_CustodyRow], cash_rows: List[_CashRow]) -> Tu
 
 
 def _raw_segments(custody_files: List[List[_CustodyRow]]) -> List[Tuple[date, date]]:
-    return core.merge_spans(span for span in (core.coverage(rows, lambda row: row.trade) for rows in custody_files) if span)
+    return merged_spans(span for span in (core.coverage(rows, lambda row: row.trade) for rows in custody_files) if span)
 
 
 def _cash_spans(cash_files: List[List[_CashRow]]) -> List[Tuple[date, date]]:
-    return core.merge_spans(span for span in (core.coverage(rows, lambda row: row.value) for rows in cash_files) if span)
+    return merged_spans(span for span in (core.coverage(rows, lambda row: row.value) for rows in cash_files) if span)
 
 
 def _proven_segments(raw: List[Tuple[date, date]], unpaired_cash: List[_CashRow]) -> List[Tuple[date, date]]:
