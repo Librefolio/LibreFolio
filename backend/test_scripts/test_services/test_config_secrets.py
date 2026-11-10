@@ -35,6 +35,7 @@ file lives in ``tmp_path``, and nothing is written in the repository.
 from __future__ import annotations
 
 import os
+import threading
 import traceback
 from collections.abc import Callable
 from pathlib import Path
@@ -385,3 +386,145 @@ def test_the_secrets_a_test_lane_never_inherits_are_the_signing_key_and_the_inst
     unpaired = sorted(name for name, other in pairs.items() if other not in names)
     assert not unpaired, f"INSTANCE_TRUST_SECRETS must list each secret as NAME and as NAME_FILE, or the other form still reaches a test lane: {unpaired} lack their pair"
     print_success(f"{sorted(names)}")
+
+
+# =============================================================================
+# (h) H-47: a secret read from a regular file only, and without links below a root
+# =============================================================================
+#
+# ``read_secret_file(path, label, *, regular_only=False, no_links_under=None)``: the checks and the read go through one
+# open, never a check followed by a second open of the path. Both options are off by default (the startup readers, the
+# Docker secrets), and a link outside the root stays followed (a Kubernetes volume's ``..data`` links).
+
+FIFO_WAIT = 10  # seconds: a FIFO must be refused at once, never waited on
+
+
+def _read_with_timeout(call: Callable[[], str]) -> str | BaseException:
+    """``call()``'s result or its exception, abandoning a call that waits for more than ``FIFO_WAIT`` seconds."""
+    outcome: list = []
+
+    def run() -> None:
+        try:
+            outcome.append(call())
+        except BaseException as exc:  # noqa: BLE001 — the test reports whatever the call raised
+            outcome.append(exc)
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(FIFO_WAIT)
+    assert not worker.is_alive(), "the read waited on the file: a FIFO must be refused at once"
+    return outcome[0]
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs POSIX FIFOs")
+def test_regular_only_refuses_a_fifo_at_once_and_a_directory(tmp_path):
+    """(h) A FIFO, a directory: ``is not a regular file``, the name and the path as in every other error, no wait."""
+    fifo = tmp_path / "pipe"
+    os.mkfifo(fifo, 0o600)
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    for given in (fifo, folder):
+        result = _read_with_timeout(lambda given=given: read_secret_file(given, "the source", regular_only=True))
+        assert isinstance(result, SecretFileError), f"{given}: {result!r}"
+        assert str(result) == f"the source: {given} is not a regular file"
+    print_success("a FIFO and a folder are refused")
+
+
+def test_regular_only_reads_a_regular_file_as_the_default_does(tmp_path):
+    path = _secret_file(tmp_path, UTF8_BOM + f"{CANARY}\r\n".encode())
+    assert read_secret_file(path, "the source", regular_only=True) == read_secret_file(path, "the source") == CANARY
+    for content, problem in ((b"", "is empty or blank"), (b"x" * (SECRET_FILE_MAX_BYTES + 1), "is larger than"), (b"\xff\xfe\x00", "is not UTF-8 text")):
+        bad = _secret_file(tmp_path, content, "bad")
+        with pytest.raises(SecretFileError, match=problem):
+            read_secret_file(bad, "the source", regular_only=True)
+    with pytest.raises(SecretFileError, match="does not exist"):
+        read_secret_file(tmp_path / "nowhere", "the source", regular_only=True)
+
+
+def test_regular_only_reads_the_file_it_checked(tmp_path, monkeypatch):
+    """(h) One open: the descriptor checked is the descriptor read, so a swap after the check is never read."""
+    path = _secret_file(tmp_path, CANARY.encode())
+    opened = []
+    real_open = os.open
+
+    def recording(target, *args, **kwargs):
+        opened.append(os.fsdecode(target))
+        return real_open(target, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", recording)
+    monkeypatch.setattr(Path, "open", lambda self, *a, **k: opened.append(os.fsdecode(self)) or (_ for _ in ()).throw(AssertionError("opened by path")))
+    assert read_secret_file(path, "the source", regular_only=True) == CANARY
+    assert opened == [str(path)], f"the secret is opened once: {opened}"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="needs POSIX links")
+class TestNoLinksUnder:
+    """(h) Below the root a link is refused whole; the file it points to is never opened. Above or outside it, links are followed."""
+
+    @staticmethod
+    def _tree(tmp_path: Path) -> tuple[Path, Path]:
+        root = tmp_path / "data"
+        (root / "backups").mkdir(parents=True)
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        return root, elsewhere
+
+    def test_a_plain_file_below_the_root_is_read(self, tmp_path):
+        root, _ = self._tree(tmp_path)
+        path = _secret_file(root / "backups", CANARY.encode(), "key")
+        assert read_secret_file(path, "the source", no_links_under=root) == CANARY
+
+    def test_a_link_as_the_file_is_refused_and_its_target_is_not_read(self, tmp_path):
+        root, elsewhere = self._tree(tmp_path)
+        target = _secret_file(elsewhere, CANARY.encode(), "root-only")
+        link = root / "backups" / "key"
+        link.symlink_to(target)
+        with pytest.raises(SecretFileError) as raised:
+            read_secret_file(link, "the source", no_links_under=root)
+        assert str(raised.value) == f"the source: {link} goes through a link inside the data directory: give the file itself, from outside it"
+        assert CANARY not in str(raised.value)
+
+    def test_a_link_as_a_folder_of_the_path_is_refused(self, tmp_path):
+        root, elsewhere = self._tree(tmp_path)
+        _secret_file(elsewhere, CANARY.encode(), "key")
+        (root / "linked").symlink_to(elsewhere)
+        given = root / "linked" / "key"
+        with pytest.raises(SecretFileError, match="goes through a link inside the data directory"):
+            read_secret_file(given, "the source", no_links_under=root)
+
+    def test_a_dangling_link_is_a_link_not_a_missing_file(self, tmp_path):
+        root, _ = self._tree(tmp_path)
+        link = root / "backups" / "key"
+        link.symlink_to(tmp_path / "nowhere")
+        with pytest.raises(SecretFileError, match="goes through a link"):
+            read_secret_file(link, "the source", no_links_under=root)
+
+    def test_a_link_outside_the_root_is_followed(self, tmp_path):
+        """Kubernetes mounts its secrets as links (``/etc/secret/pw`` → ``..data/pw``): never a bare ``O_NOFOLLOW``."""
+        root, elsewhere = self._tree(tmp_path)
+        volume = elsewhere / "volume"
+        (volume / "..data").mkdir(parents=True)
+        _secret_file(volume / "..data", CANARY.encode(), "pw")
+        (volume / "pw").symlink_to(Path("..data") / "pw")
+        assert read_secret_file(volume / "pw", "the source", no_links_under=root) == CANARY
+
+    def test_the_root_itself_may_be_reached_through_a_link(self, tmp_path):
+        """The root is the owner's choice (``/var`` is a link on macOS): only what is below it is distrusted."""
+        root, _ = self._tree(tmp_path)
+        _secret_file(root / "backups", CANARY.encode(), "key")
+        alias = tmp_path / "alias"
+        alias.symlink_to(root)
+        assert read_secret_file(alias / "backups" / "key", "the source", no_links_under=alias) == CANARY
+
+    def test_a_missing_file_below_the_root_says_so(self, tmp_path):
+        root, _ = self._tree(tmp_path)
+        with pytest.raises(SecretFileError, match="does not exist"):
+            read_secret_file(root / "backups" / "absent", "the source", no_links_under=root)
+
+    @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs POSIX FIFOs")
+    def test_both_options_together_refuse_a_fifo_below_the_root_at_once(self, tmp_path):
+        root, _ = self._tree(tmp_path)
+        fifo = root / "backups" / "pipe"
+        os.mkfifo(fifo, 0o600)
+        result = _read_with_timeout(lambda: read_secret_file(fifo, "the source", regular_only=True, no_links_under=root))
+        assert isinstance(result, SecretFileError) and str(result).endswith("is not a regular file"), result
