@@ -57,6 +57,7 @@ from backend.app.config import get_data_dir
 from backend.app.schemas.uploads import UploadFileInfo, UploadScope
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.cache import get_ttl_cache
+from backend.app.utils.runtime.upload_names import stored_suffix
 
 logger = structlog.get_logger(__name__)
 
@@ -369,7 +370,7 @@ def save_upload(
 
     # Generate UUID and determine extension
     file_id = str(uuid.uuid4())
-    ext = Path(original_filename).suffix.lower() or ".bin"
+    ext = stored_suffix(original_filename, ".bin")
 
     # Write file
     file_path = get_uploads_dir() / f"{file_id}{ext}"

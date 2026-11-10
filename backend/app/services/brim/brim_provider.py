@@ -84,6 +84,7 @@ from backend.app.services.plugin_settings.contract import BoundSettings, PluginS
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.pydantic_errors import error_params, loc_to_field
 from backend.app.utils.runtime.secret_masking import mask_exception, secrets_in_flight
+from backend.app.utils.runtime.upload_names import stored_suffix
 from backend.app.utils.sql_chunks import chunks
 
 logger = structlog.get_logger(__name__)
@@ -842,7 +843,7 @@ def save_uploaded_file(
 
     # Generate UUID and determine extension
     file_id = str(uuid.uuid4())
-    ext = Path(original_filename).suffix.lower() or ".dat"
+    ext = stored_suffix(original_filename, ".dat")
 
     # Write file to uploaded folder (broker-specific if broker_id provided)
     uploaded_dir = _get_folder_for_status(BRIMFileStatus.UPLOADED, broker_id)
@@ -975,7 +976,7 @@ def _current_compatible_plugins(meta_path: Path, metadata: Dict[str, Any]) -> Li
     signature = detection_signature()
     if metadata.get("plugins_signature") == signature:
         return stored
-    ext = Path(metadata.get("filename", "")).suffix.lower() or ".dat"
+    ext = stored_suffix(metadata.get("filename", ""), ".dat")
     data_path = meta_path.with_name(f"{metadata['file_id']}{ext}")
     if not data_path.exists():
         return stored
@@ -1139,7 +1140,7 @@ def get_file_path(file_id: str) -> Optional[Path]:
         return None
 
     # Get extension from filename
-    ext = Path(file_info.filename).suffix.lower() or ".dat"
+    ext = stored_suffix(file_info.filename, ".dat")
 
     # Construct path (broker-specific if target_broker_id is set)
     folder = _get_folder_for_status(file_info.status, file_info.target_broker_id)
@@ -1349,7 +1350,7 @@ def _delete_file_locked(file_id: str) -> bool:
     _unlink_report_set_references(file_info)
 
     # Get extension and folder (broker-specific if set)
-    ext = Path(file_info.filename).suffix.lower() or ".dat"
+    ext = stored_suffix(file_info.filename, ".dat")
     folder = _get_folder_for_status(file_info.status, file_info.target_broker_id)
 
     # Delete data file
@@ -1720,7 +1721,7 @@ def _move_file_locked(file_id: str, target_status: BRIMFileStatus, error_message
         return False
 
     # Get extension and broker_id
-    ext = Path(file_info.filename).suffix.lower() or ".dat"
+    ext = stored_suffix(file_info.filename, ".dat")
     broker_id = file_info.target_broker_id
 
     # Source paths - check broker subfolder first, then root
