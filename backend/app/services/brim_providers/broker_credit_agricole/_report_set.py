@@ -66,7 +66,7 @@ from backend.app.services.brim_providers.broker_credit_agricole._rows import (
     read_account,
     read_securities,
 )
-from backend.app.services.financial_math.series_steps import merged_spans
+from backend.app.utils.day_spans import merged_spans
 
 __all__ = ["Analysis", "describe_member", "describe_set", "detect_role"]
 

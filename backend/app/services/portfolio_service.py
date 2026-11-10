@@ -124,7 +124,6 @@ from backend.app.services.financial_math.returns import (
     rebase_to_period,
     timing_effect,
 )
-from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.financial_math.weights import percent_of
@@ -135,6 +134,7 @@ from backend.app.services.financial_math.yield_on_cost import (
 )
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.datetime_utils import latest_range_end
+from backend.app.utils.day_spans import merged_spans
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 _logger = structlog.get_logger(__name__)

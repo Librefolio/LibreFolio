@@ -12,7 +12,7 @@ A daily figure is computed only on the days one of its inputs can change, never 
 
 The two unions that call them stay with their domain: the portfolio engine recomputes when a term of its formula
 changes and compares rates (``DailyStateBuilder._collect_dirty_days``); the lots analysis compares the converted price
-in its exact representation (``lots/change_days``). The merging of day spans is ``series_steps.merged_spans``.
+in its exact representation (``lots/change_days``). The merging of day spans is ``utils.day_spans.merged_spans``.
 """
 
 from __future__ import annotations
