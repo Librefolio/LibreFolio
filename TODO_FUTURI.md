@@ -989,6 +989,8 @@ Dettagli nel journal, `Release_2/Phase_2/DA-DECIDERE-residui-1.3.md`.
 - **Selettore dell'icona del broker** (C-40).
 - **`SearchSelect` che sceglie la voce sbagliata dopo una ricerca**: sospeso finché non ricapita.
 - **Traduzioni dei plugin montati a runtime** (U-B1): facoltativo, oggi c'è il ripiego in inglese.
+- **Crédit Agricole, ruolo `portfolio`** (W5-7 gradino 7): le verifiche di posizione e liquidità dal file «Andamento
+  Portafoglio». Si fa quando arriva un file d'esempio; il resto del plugin 2.0.0 è nella 1.3.
 - **Immagine d'avvio su iPhone** (K-6): `app.html` non ha `apple-touch-startup-image`; serve un'immagine per formato.
 - **Quadrato nero sull'icona Android** (K-7): prima una prova sul telefono.
 - **I filtri della lista asset persi al ritorno** (K-19): decisione del 06/10, dopo la lista del Rischio.
