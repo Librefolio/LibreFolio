@@ -2,7 +2,7 @@
 
 Modules under test: ``services/brim/brim_parse_pool.py`` (``parse_file_offloaded``), ``services/brim/brim_provider.py``
 (``parse_file``), ``services/plugin_settings/runtime.py`` (``bound_settings_for``) and the parse endpoint of
-``api/v1/brokers.py``. The contract pinned here:
+``api/v1/brokers/``. The contract pinned here:
 
 1. **A plugin that declares no field is parsed exactly as before** (every real BRIM plugin): ``parse_file`` is called with
    the same three positional arguments and no keyword, whether or not the caller says which user it is parsing for, and
@@ -45,7 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.pool import NullPool
 from structlog.testing import capture_logs
 
-from backend.app.api.v1 import brokers as brokers_api
+from backend.app.api.v1.brokers import parse as brokers_api
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import PluginSystemSetting, PluginUserSetting, User
 from backend.app.logging_config import get_logger
@@ -373,8 +373,8 @@ async def test_the_parse_endpoint_passes_the_calling_user_to_the_offloaded_parse
         seen["args"], seen["kwargs"] = args, kwargs
         raise _Stop
 
-    monkeypatch.setattr(brokers_api, "_get_brim_file_with_access", access)
-    monkeypatch.setattr(brokers_api, "_require_broker_editor", editor)
+    monkeypatch.setattr(brokers_api, "get_brim_file_with_access", access)
+    monkeypatch.setattr(brokers_api, "require_broker_editor", editor)
     monkeypatch.setattr(brokers_api, "_refuse_report_set_member", lambda _code, _info: None)
     monkeypatch.setattr(brokers_api, "parse_file_offloaded", offloaded)
 

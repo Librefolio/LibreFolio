@@ -97,7 +97,7 @@ def _media_type(resp: httpx.Response) -> str:
 def test_inline_safe_set_is_one_shared_object_without_active_types():
     """H6-2.1 — brokers and uploads use the identical set, from services/files/inline_media.py; no html/svg/xml/js in it."""
     print_section("H6-2.1: shared INLINE_SAFE_MEDIA_TYPES")
-    from backend.app.api.v1 import brokers  # noqa: PLC0415 — test-only
+    from backend.app.api.v1.brokers import files as brokers  # noqa: PLC0415 — test-only
     from backend.app.services.files import inline_media  # noqa: PLC0415 — red until the shared module exists
 
     assert inline_media.INLINE_SAFE_MEDIA_TYPES == EXPECTED_INLINE_SAFE
