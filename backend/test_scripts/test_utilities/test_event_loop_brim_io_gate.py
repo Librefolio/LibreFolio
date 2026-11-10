@@ -7,7 +7,7 @@ the coroutines among them (asset search, duplicate detection) are the exception,
 ``async def`` handler that calls one of the synchronous ones directly runs that I/O on uvicorn's single event
 loop, and every other request waits for it. The project rule
 (``LibreFolio_devWiki/wiki/problems/event-loop-blocking.md``): in an ``async def``, sync I/O goes through
-``await asyncio.to_thread(fn, ...)``. The BRIM routes of ``api/v1/brokers.py`` follow it almost everywhere; this
+``await asyncio.to_thread(fn, ...)``. The BRIM routes of ``api/v1/brokers/`` follow it almost everywhere; this
 gate makes the exceptions visible and keeps new ones out.
 
 What it reads, with ``ast`` only — nothing is imported:

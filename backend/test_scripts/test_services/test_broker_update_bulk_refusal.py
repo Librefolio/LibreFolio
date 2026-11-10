@@ -9,7 +9,7 @@ True -> False, it runs ``_validate_broker_balances(broker_id, None)``. On a ``Ba
 ``BRUpdateResult(success=False, validation_triggered=True, error=...)`` and ``continue``s, but the changed attributes stay
 on the object in the session.
 
-Today's single-item endpoint (``api/v1/brokers.py::update_broker``) saves nothing because it rolls back when
+Today's single-item endpoint (``api/v1/brokers/crud.py::update_broker``) saves nothing because it rolls back when
 ``success_count == 0``; a caller that saves after a PARTIAL success (one item refused, one valid) would persist the
 refused broker's turned-off flag and its other fields. The change under test: a refused item leaves the broker EXACTLY
 as it was before the item, in the session, whatever the caller does next. The refusal itself (``success=False``,
