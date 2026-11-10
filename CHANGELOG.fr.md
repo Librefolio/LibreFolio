@@ -24,6 +24,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Dans le graphique de comparaison des lots, le tiret de légende « estimé au coût » a la même couleur que sa ligne.
 - Les boutons du planificateur qui retirent un horaire ont un nom traduit pour les lecteurs d'écran.
 - « Analyser les Lots » fait désormais défiler jusqu'au bout vers le panneau des lots, même sur les machines lentes.
+- La commande de sauvegarde lit `--password-file` et `--instance-key-file` en une seule ouverture : un fichier échangé après la vérification ne peut plus être lu à sa place.
 
 ## [1.3.0] - 2026-11-10
 

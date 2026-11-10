@@ -24,6 +24,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - En el gráfico de comparación de lotes, el trazo discontinuo de la leyenda «estimado al coste» tiene el mismo color que su línea.
 - Los botones del programador que quitan un horario tienen un nombre traducido para los lectores de pantalla.
 - «Analizar Lotes» ahora se desplaza hasta el final hacia el panel de lotes también en máquinas lentas.
+- El comando de copia de seguridad lee `--password-file` y `--instance-key-file` con una sola apertura: un archivo cambiado después de la comprobación ya no puede leerse en su lugar.
 
 ## [1.3.0] - 2026-11-10
 

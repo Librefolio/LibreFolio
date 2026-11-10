@@ -24,6 +24,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Nel grafico di confronto dei lotti, il tratteggio in legenda di «stimato al costo» ha lo stesso colore della sua linea.
 - I pulsanti dello scheduler che tolgono un orario hanno un nome tradotto per i lettori di schermo.
 - «Analizza Lotti» ora scorre fino in fondo al pannello dei lotti anche sulle macchine lente.
+- Il comando di backup legge `--password-file` e `--instance-key-file` con una sola apertura: un file scambiato dopo il controllo non può più essere letto al suo posto.
 
 ## [1.3.0] - 2026-11-10
 

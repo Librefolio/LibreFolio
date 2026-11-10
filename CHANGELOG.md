@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In the lot comparison chart, the dashed legend mark of «estimated at cost» has the same colour as its line.
 - The scheduler's buttons that remove a time have a translated name for screen readers.
 - «Analyze Lots» now scrolls all the way to the lots panel on slower machines.
+- The backup command reads `--password-file` and `--instance-key-file` with a single open: a file swapped after the check can no longer be read in its place.
 
 ## [1.3.0] - 2026-11-10
 
