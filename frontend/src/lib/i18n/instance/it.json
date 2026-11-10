@@ -67,7 +67,8 @@
       "userDescription": "Il fornitore che ospita l'istanza l'ha bloccata, per esempio perché l'abbonamento non è pagato. Chiedi all'amministratore un backup dei tuoi dati.",
       "deletionDate": "L'istanza e i suoi dati verranno cancellati il {date}.",
       "manageSubscription": "Gestisci abbonamento",
-      "backupTitle": "Conserva una copia dei dati"
+      "backupTitle": "Conserva una copia dei dati",
+      "keptBackupsTitle": "Backup già conservati"
     },
     "awaitingRestore": {
       "title": "Stiamo ripristinando i tuoi dati",

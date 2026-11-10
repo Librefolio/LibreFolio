@@ -24,6 +24,16 @@
     import {backupListSignal, shortHash} from './backupList.svelte';
     import RestoreKeptModal from './RestoreKeptModal.svelte';
 
+    interface Props {
+        /**
+         * «Restore» on a row (default: yes). The block page of a hosting provider turns it off: the instance is blocked, so
+         * the restore is refused there, and the page offers to download and delete the kept backups only.
+         */
+        allowRestore?: boolean;
+    }
+
+    let {allowRestore = true}: Props = $props();
+
     let entries = $state<InstanceBackupEntry[] | null>(null);
     let failed = $state(false);
     let errorCode = $state('');
@@ -189,7 +199,7 @@
         {id: 'download', icon: Download, label: () => $_('backup.list.actions.download'), onClick: download},
         // C9-9: a sealed backup opens only with its recipients' private key: it is not restored here.
         // A10: no «are you sure?» here: the modal says what a restore does, and its report asks for a typed word.
-        {id: 'restore', icon: ArchiveRestore, label: () => $_('backup.list.actions.restore'), onClick: restore, visible: (row) => !row.sealed},
+        {id: 'restore', icon: ArchiveRestore, label: () => $_('backup.list.actions.restore'), onClick: restore, visible: (row) => allowRestore && !row.sealed},
         {id: 'delete', icon: Trash2, label: () => $_('backup.list.actions.delete'), onClick: remove, requireConfirm: true, confirmMessage: () => $_('backup.list.deleteConfirm')},
     ];
 
@@ -232,6 +242,6 @@
     {/if}
 </div>
 
-{#if restoring}
+{#if allowRestore && restoring}
     <RestoreKeptModal jobId={restoring.job_id} createdAt={restoring.created_at} onClose={() => (restoring = null)} />
 {/if}
