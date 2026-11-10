@@ -199,6 +199,29 @@ def test_get_file_path_returns_broker_specific_file(isolated_brim_dir) -> None:
     assert file_path is not None and file_path.exists()
 
 
+def test_json_upload_keeps_its_data_and_sidecar(isolated_brim_dir) -> None:
+    """L4: a ``.json`` upload is not overwritten by its metadata sidecar."""
+    content = b'{"a": 1}'
+    file_info = brim_provider.save_uploaded_file(content=content, original_filename="report.json", user_id=7, broker_id=42)
+
+    folder = isolated_brim_dir / "uploaded" / "broker_42"
+    sidecar = json.loads((folder / f"{file_info.file_id}.json").read_text())
+    assert sidecar["file_id"] == file_info.file_id
+    data_path = brim_provider.get_file_path(file_info.file_id)
+    assert data_path is not None and data_path.read_bytes() == content
+    assert [i.file_id for i in brim_provider.list_files()].count(file_info.file_id) == 1
+
+    assert brim_provider.delete_file(file_info.file_id)
+    assert not list(folder.glob(f"{file_info.file_id}*"))
+
+
+def test_long_extension_falls_back_to_dat(isolated_brim_dir) -> None:
+    """L4: no limit on the suffix length used to reach the path."""
+    file_info = brim_provider.save_uploaded_file(content=b"x", original_filename="a." + "y" * 200, user_id=7, broker_id=42)
+    data_path = brim_provider.get_file_path(file_info.file_id)
+    assert data_path is not None and data_path.suffix == ".dat"
+
+
 def test_get_file_path_falls_back_to_root_folder(isolated_brim_dir) -> None:
     """Legacy root-file layout still resolves when metadata has broker_id."""
     file_info = brim_provider.save_uploaded_file(
