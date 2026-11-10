@@ -30,7 +30,7 @@ from backend.app.config.accounts import max_users as configured_max_users
 from backend.app.db.models import BrokerUserAccess, User, UserRole
 from backend.app.db.session import begin_writes
 from backend.app.logging_config import get_logger
-from backend.app.services.accounts import registration_service, user_service
+from backend.app.services.accounts import account_links, registration_service, user_service
 from backend.app.utils.datetime_utils import utcnow
 
 logger = get_logger(__name__)
@@ -187,7 +187,7 @@ async def resolve(session: AsyncSession, admin: User, keep_user_ids: list[int]) 
         moment = utcnow()
         newest_first = sorted(await registration_service.list_pending_invites(session, now=moment), key=lambda invite: (invite.created_at, invite.id), reverse=True)
         for invite in newest_first[:surplus]:
-            if await registration_service.revoke_invite(session, invite.id, now=moment):
+            if await account_links.revoke_link(session, invite.id, now=moment) == "revoked":
                 revoked += 1
     await session.commit()
     logger.warning("The users over the limit were chosen", admin_id=admin.id, kept=len(keep), deactivated=[user.id for user in deactivated], revoked_invites=revoked, max_users=state.max_users)
