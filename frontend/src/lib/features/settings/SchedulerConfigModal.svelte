@@ -261,7 +261,7 @@
                 {#each timeSlots as slot}
                     <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-mono bg-lf-success-soft text-lf-success-on-soft">
                         {slot}
-                        <button type="button" class="ml-0.5 hover:text-lf-danger transition-colors" onclick={() => removeTimeSlot(slot)} aria-label="Remove {slot}">
+                        <button type="button" class="ml-0.5 hover:text-lf-danger transition-colors" onclick={() => removeTimeSlot(slot)} aria-label={$_('settings.global.scheduler.historyTimesRemove', {values: {slot}})}>
                             <X size={14} />
                         </button>
                     </span>
