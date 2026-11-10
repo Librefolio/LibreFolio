@@ -15,8 +15,8 @@ related: [features/F-024, features/F-032, entities/db-models, problems/testid-gr
 `CROWDFUND`, `HOLD`, `COMMODITY`, `REAL_ESTATE`, `INDEX`, `OTHER` — and seven subtypes:
 
 - six ETF subtypes, `ETF_STOCK`, `ETF_BOND`, `ETF_COMMODITY`, `ETF_REAL_ESTATE`, `ETF_CRYPTO`, `ETF_MONETARY`, added
-  with the risk taxonomy (`00d8c735b`, 2026-09-18);
-- `CROWDFUND_REAL_ESTATE` (property-backed crowdfunding loans), added by workstream K (`4041ffa98`, 2026-09-24;
+  with the risk taxonomy (`2ff8207e1`, 2026-09-18);
+- `CROWDFUND_REAL_ESTATE` (property-backed crowdfunding loans), added by workstream K (`8f1fedc2c`, 2026-09-24;
   developer request R17). No migration: the column stores the enum's string.
 
 (`CROWDFUND` was called `CROWDFUND_LOAN` until 2026-07-06.) A subtype answers one question — *which base type does
@@ -36,7 +36,7 @@ one, `ETF` and `CROWDFUND`; their plain values stay selectable as the residual f
 
 ## Two views, one map each
 
-| View | Question | Map / helper | Used by (at `083ed26dc`) |
+| View | Question | Map / helper | Used by (at `111c2c8f3`) |
 |---|---|---|---|
 | **Family** (container) | "which kind of instrument is it?" | `ASSET_TYPE_FAMILY`, `assetTypeFamily()` | the type select's tree; both allocation charts (pie and history) since workstream I's D15 |
 | **Content** | "what does it contain?" | `PRIMARY_TYPE_MAP`, `primaryAssetType()` | the pastille icon (`ASSET_TYPE_CONTENT_ICON`) and the badge colour — the gate asserts `badge(x) = badge(primary(x))` |

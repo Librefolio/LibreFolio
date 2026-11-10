@@ -14,7 +14,7 @@ related:
 
 # Decision: translate the CHANGELOG the way the pages are translated, piece by piece
 
-> Written from workstream M's note for the devWiki (batch 25, 2026-10-12), checked against the code at `b91d6d902`.
+> Written from workstream M's note for the devWiki (batch 25, 2026-10-12), checked against the code at `334704cd5`.
 
 ## Context
 
@@ -27,7 +27,7 @@ re-translating it whole for every added line would be slow and would rewrite tex
 
 ## Decision
 
-The coordinator's frame, implemented by M in `2aecd5a6f` («feat(docs): translate the CHANGELOG by pieces»):
+The coordinator's frame, implemented by M in `dda756254` («feat(docs): translate the CHANGELOG by pieces»):
 
 - **Units and pieces** (`mkdocs_src/aphra-pipeline/changelog.py`, pure functions). The preamble and each chapter are
   units. A chapter over 30,000 characters is cut at its `###` and `####` lines (outside fenced code); a heading alone
@@ -45,8 +45,8 @@ The coordinator's frame, implemented by M in `2aecd5a6f` («feat(docs): translat
 - **Append.** A line added to the open chapter re-translates only its piece, in three languages; a hand port plus
   `translate-stamp --file CHANGELOG.md` does the same with no model call. Both were seen working on the real file.
 
-The translations themselves came in `4325e03d4` (`CHANGELOG.{it,fr,es}.md`, every chapter, [1.2.0] included); tests in
-`e63cfb074`; the developer manual gained a «Changelog» part in `translation-pipeline.md`.
+The translations themselves came in `e85765e21` (`CHANGELOG.{it,fr,es}.md`, every chapter, [1.2.0] included); tests in
+`53c015353`; the developer manual gained a «Changelog» part in `translation-pipeline.md`.
 
 ## Options Considered
 
@@ -60,7 +60,7 @@ The translations themselves came in `4325e03d4` (`CHANGELOG.{it,fr,es}.md`, ever
 - `CHANGELOG.md` stays the coordinator's alone; its translations are generated, and the app reads them lazily.
 - A structure change in a translation surfaces as a refused piece, not as a silent full re-translation.
 - The release-notes discipline of «Changelog Rules» now has three translated companions to keep in step.
-- **The first append** (M's batch 26, train 67, `98fe9ce1d`): the ✨ line «The changelog speaks your language» joined
+- **The first append** (M's batch 26, train 67, `ab9937a5c`): the ✨ line «The changelog speaks your language» joined
   [1.2.0]. The dry-run planned `1.2.0/added` ×3, about 50,400 tokens each, and a model run would have re-translated the
   whole 16.8 KB piece over its hand review; so M ported the line by hand, with each catalogue's
   `changelog.notTranslated` label and each file's own words and marks, then ran `translate-stamp --file CHANGELOG.md`:

@@ -24,10 +24,10 @@ each decision's own ``frozen_quanta`` (when ``mode == "frozen_exact"``) or
 well-formed ``ExactPolicyView`` by ``DecisionAccess``'s own invariants
 (``_validate_decision_mode``/``__post_init__``), not merely for this build's
 expected all-``mutable``, all-zero-baseline PAC-proportional-primary shape.
-This is also semantically inert: reading evaluator.py confirms
+This is also semantically inert: reading ``evaluation/economics.py`` confirms
 ``fixed_reference``/``target_value`` never depend on the probed quanta at
-all (only decision *contract* validity matters — see
-``_candidate_contract_conflicts``/``_decision_access_conflicts``), so any
+all (only decision *contract* validity matters — see ``evaluation/candidates.py``,
+``candidate_contract_conflicts``/``_decision_access_conflicts``), so any
 guaranteed-valid probe candidate returns the identical constants.
 
 Fee fidelity, stated here (not only in the plan and the regression tests) so
@@ -61,7 +61,7 @@ from backend.app.services.pac_allocator.constraints import (
     build_scenario_facts,
     compile_hard_constraints,
 )
-from backend.app.services.pac_allocator.evaluator import evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,

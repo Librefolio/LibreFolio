@@ -61,8 +61,15 @@
       "input_tokens": 0,
       "output_tokens": 0,
       "files": 2
+    },
+    {
+      "date": "2026-11-08T00:28:02.112959+00:00",
+      "input_tokens": 9657738,
+      "output_tokens": 0,
+      "files": 2668,
+      "note": "full rebuild from zero, repo-root scan; input_tokens = total subagent tokens (in+out not split)"
     }
   ],
-  "total_input_tokens": 0,
+  "total_input_tokens": 9657738,
   "total_output_tokens": 0
 }

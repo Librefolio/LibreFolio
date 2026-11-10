@@ -4,8 +4,8 @@ category: decision
 status: resolved
 date: 2026-06-04
 tags: [frontend, transactions, wac, ux, precision, svelte5]
-related_features: [F-097]
-related_problems:
+related:
+  - features/F-097
   - problems/wac-feedback-loop
 ---
 
@@ -50,7 +50,7 @@ function handleValueChange(next: {code: string; amount: string} | null) {
 
 | Role | Path |
 |------|------|
-| WacPreviewSection (handleValueChange) | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
+| WacPreviewSection (handleValueChange) | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
 | formatDecimalForDisplay | `frontend/src/lib/utils/core/formatDecimal.ts` |
 | Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` (F10) |
 

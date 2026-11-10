@@ -40,7 +40,8 @@ import pytest
 from pydantic import BaseModel
 
 from backend.app.config import PROJECT_ROOT
-from backend.app.db.models import TransactionType
+from backend.app.db import precision
+from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.brim import (
     COMBINED_REQUIRED_HEADERS,
     BRIMCombinedTable,
@@ -51,15 +52,17 @@ from backend.app.schemas.brim import (
     BRIMRefusal,
     is_fake_asset_id,
 )
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers._brim_io import MATURITY_NOTICE_KIND, model_bond_maturity, read_rows
 from backend.app.services.brim_providers.broker_coinbase.plugin import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
-from backend.app.services.brim_providers.broker_credit_agricole import plugin as ca
+from backend.app.services.brim_providers.broker_credit_agricole import _classify as ca
 from backend.app.services.brim_providers.broker_credit_agricole.plugin import CreditAgricoleBrokerProvider
 from backend.app.services.brim_providers.broker_degiro.plugin import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
 from backend.app.services.brim_providers.broker_directa.plugin import DirectaBrokerProvider, _parse_directa_date, _parse_directa_number
 from backend.app.services.brim_providers.broker_etoro.plugin import EtoroBrokerProvider, _parse_etoro_date, _parse_etoro_number
+from backend.app.services.brim_providers.broker_fineco import plugin as fineco_plugin
 from backend.app.services.brim_providers.broker_fineco.plugin import FinecoBrokerProvider
 from backend.app.services.brim_providers.broker_finpension.plugin import FinpensionBrokerProvider, _parse_finpension_date, _parse_finpension_number
 from backend.app.services.brim_providers.broker_freetrade.plugin import FreetradeBrokerProvider, _parse_freetrade_datetime, _parse_freetrade_number
@@ -72,7 +75,6 @@ from backend.app.services.brim_providers.broker_trading212.plugin import Trading
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
-from backend.app.services.provider_registry import BRIMProviderRegistry
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
@@ -170,6 +172,97 @@ def _combined_samples_for(plugin: BRIMProvider) -> List[Path]:
     return [_combined_sample(plugin, position) for position in range(len(_sample_sets(plugin)))]
 
 
+# --- Crédit Agricole (2.0.0, a report-set plugin): one export is no longer read alone ---------------------------------------------
+#
+# A Crédit Agricole export is a member of a set, and a member read alone raises ``BRIMSetRequiredError``. A test that wants to prove
+# how the plugin books the ROWS of one export builds a set that holds that export only (``{role: [file]}``), combines it and parses
+# the combined file: the set's two arms (an account row on its own, a securities row on its own) book exactly as the single files
+# did up to 1.5.0, minus the automatic cash legs, which no longer exist (the cash is the account's).
+
+_CA_ROLE_SECURITIES = "securities"
+_CA_ROLE_ACCOUNT = "account"
+_CA_OUTPUTS: dict = {}
+
+
+def _ca_folder() -> Path:
+    """One temporary folder for every combined Crédit Agricole file of the session."""
+    if not _COMBINED_SAMPLE_DIR:
+        folder = Path(tempfile.mkdtemp(prefix="lf-brim-combined-samples-"))
+        atexit.register(shutil.rmtree, folder, True)
+        _COMBINED_SAMPLE_DIR.append(folder)
+    return _COMBINED_SAMPLE_DIR[0]
+
+
+def _ca_combined_file(members: dict, name: str, folder: Path | None = None) -> Path:
+    """The combined file of ``{role: [paths]}``, written by the core as the set API does."""
+    plugin = CreditAgricoleBrokerProvider()
+    path = (folder or _ca_folder()) / f"{name}-combined.csv"
+    write_combined_csv(path, plugin.combine(members))
+    return path
+
+
+def _ca_parse_members(members: dict, name: str, folder: Path | None = None) -> BRIMParseOutput:
+    return CreditAgricoleBrokerProvider().parse(_ca_combined_file(members, name, folder), broker_id=1)
+
+
+def _ca_alone(role: str, path: Path) -> BRIMParseOutput:
+    """The parse of a set that holds one export only (cached for the session: the outputs are read, never changed)."""
+    key = (role, path.name)
+    if key not in _CA_OUTPUTS:
+        _CA_OUTPUTS[key] = _ca_parse_members({role: [path]}, f"alone-{role}-{path.stem}")
+    return _CA_OUTPUTS[key]
+
+
+def _ca_line_in(combined: Path, fragment: str) -> int:
+    """The 1-based line of the one line of a combined file that holds ``fragment`` (the numbers a todo and a notice cite)."""
+    lines = [number for number, line in enumerate(combined.read_text(encoding="utf-8-sig").splitlines(), start=1) if fragment in line]
+    assert len(lines) == 1, f"{len(lines)} lines of {combined.name} hold {fragment!r}, expected exactly one"
+    return lines[0]
+
+
+def _ca_alone_line(fragment: str, role: str = _CA_ROLE_ACCOUNT, path: Path = CA_CONTI_SAMPLE) -> int:
+    """The line of a row in the combined file of a one-member set (``_ca_alone``)."""
+    _ca_alone(role, path)
+    return _ca_line_in(_ca_folder() / f"alone-{role}-{path.stem}-combined.csv", fragment)
+
+
+def _ca_maturity_set(folder: Path, names: tuple, name: str) -> BRIMParseOutput:
+    """The securities sample reduced to the bonds ``names`` (their transfers in and their maturities), with the account rows that
+    state the maturities: a maturity is imported only together with the cash the account states, so the account export that
+    holds it is the other member of the set. Amounts and dates are the sample's own; the account description is synthetic, in the shape of the other account rows."""
+    rows = read_rows(CA_SAMPLE)
+    kept = [rows[0]] + [row for row in rows[1:] if row[1] in names and row[3] in ("GIRO ALTRO DOSSIER", "TITOLI SCADUTI")]
+    account = [["Data Op.", "Data Val.", "Causale", "Descrizione", "Importo", "Divisa"]]
+    account += [[row[0], row[9], "TITOLI SCADUTI O ESTRATTI", f"RIMB.TIT. {row[1]} DOS:0496/05246854 {row[0]}", row[8], "EUR"] for row in kept[1:] if row[3] == "TITOLI SCADUTI"]
+    members = {_CA_ROLE_SECURITIES: [_ca_write_rows(kept, folder, f"{name}-securities")], _CA_ROLE_ACCOUNT: [_ca_write_rows(account, folder, f"{name}-account")]}
+    return _ca_parse_members(members, name, folder)
+
+
+def _ca_account_alone(path: Path = CA_CONTI_SAMPLE) -> BRIMParseOutput:
+    """The account sample as a set of one member."""
+    return _ca_alone(_CA_ROLE_ACCOUNT, path)
+
+
+def _ca_securities_alone(path: Path = CA_SAMPLE) -> BRIMParseOutput:
+    """The securities sample as a set of one member."""
+    return _ca_alone(_CA_ROLE_SECURITIES, path)
+
+
+def _ca_write_rows(rows: list, folder: Path, name: str) -> Path:
+    """Rows (the header first) as a Crédit Agricole CSV: ``;`` separated, UTF-8 with BOM."""
+    path = folder / f"{name}.csv"
+    buffer = io.StringIO()
+    csv.writer(buffer, delimiter=";", lineterminator="\n").writerows(rows)
+    path.write_text(buffer.getvalue(), encoding="utf-8-sig", newline="")
+    return path
+
+
+def _ca_parse_rows(rows: list, role: str, folder: Path) -> BRIMParseOutput:
+    """The parse of a set of one member whose rows are given (a sample with rows added, a header with one row)."""
+    member = _ca_write_rows(rows, folder, f"member-{role}")
+    return _ca_parse_members({role: [member]}, f"rows-{role}", folder)
+
+
 def get_sample_files_for_plugin(plugin: BRIMProvider) -> List[Path]:
     """Get sample files that a plugin can parse.
 
@@ -262,21 +355,6 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_json_safe(v) for v in value]
     return value
-
-
-def _normalize_ca_xlsx_evidence_row_numbers(value: Any, offset: int) -> Any:
-    """Normalize only CA's documented XLSX source-evidence row offset.
-
-    The XLSX securities export has nine presentation rows before the CSV header;
-    the account layouts have no offset.  Every other field remains part of the
-    comparison, including messages, contexts, reasons, ordering and fake IDs.
-    """
-    normalized = _json_safe(value)
-    if isinstance(normalized, dict):
-        return {key: ([row_number - offset for row_number in item] if key == "row_numbers" else _normalize_ca_xlsx_evidence_row_numbers(item, offset)) for key, item in normalized.items()}
-    if isinstance(normalized, list):
-        return [_normalize_ca_xlsx_evidence_row_numbers(item, offset) for item in normalized]
-    return normalized
 
 
 # =============================================================================
@@ -738,6 +816,25 @@ class TestGenericCSVPlugin:
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
         assert plugin.test_file_pattern is None
 
+    def test_generic_asks_a_cost_basis_only_for_adjustments_that_add_units(self, tmp_path: Path):
+        """N78-1 (the developer's decision, 21/10/2026), RED until its cure: an ADJUSTMENT taking units out has no value,
+        so the blocker todo «missing cost basis» (``cost_basis_override``) is raised on the ADJUSTMENT rows with quantity
+        > 0 only, never on an outgoing one — which the Bulk would not let the user fill anyway. The incoming one keeps it
+        (a guard). Rows found by their type and sign, never by position. Before N78-1 both rows got the blocker."""
+        plugin = BRIMProviderRegistry.get_provider_instance(GENERIC_CSV_CODE)
+        csv_file = tmp_path / "generic_adjustments.csv"
+        csv_file.write_text("date,type,asset,quantity,amount,currency\n2025-01-03,adjustment,IE00B4L5Y983,5,0,EUR\n2025-01-04,adjustment,IE00B4L5Y983,-3,0,EUR\n", encoding="utf-8")
+
+        out = plugin.parse(csv_file, broker_id=1)
+
+        adjustments = {index: tx.quantity for index, tx in enumerate(out.transactions) if tx.type == TransactionType.ADJUSTMENT}
+        incoming = {index for index, quantity in adjustments.items() if quantity > 0}
+        outgoing = {index for index, quantity in adjustments.items() if quantity < 0}
+        assert (len(incoming), len(outgoing)) == (1, 1), f"precondition: one ADJUSTMENT +5 and one −3 parsed; quantities by index: {adjustments}, warnings: {out.warnings}"
+        blocked = {todo.tx_index for todo in out.field_todos if todo.field == "cost_basis_override" and todo.severity == "blocker"}
+        rows = f"blocked rows {sorted(blocked)}, incoming {sorted(incoming)}, outgoing {sorted(outgoing)}"
+        assert {"incoming": blocked & incoming, "outgoing": blocked & outgoing} == {"incoming": incoming, "outgoing": set()}, f"N78-1: the blocker «missing cost basis» belongs to the incoming ADJUSTMENT only; {rows}"
+
 
 # =============================================================================
 # CATEGORY 4b: THE GENERIC CSV DECLARES ONLY WHAT IT CAN READ (workstream L, step G — decision 1)
@@ -968,9 +1065,9 @@ class TestGenericCSVSaysWhyItRefuses:
     """Step G.5 of workstream L (issue #26): a plugin can say why it refuses a file, and the generic CSV says which required column is missing.
 
     Since step G the generic CSV refuses a CSV whose header names no ``date`` or no ``type`` column, so a parse forced on
-    such a file stops at the guard of ``parse_file`` — "Plugin 'broker_generic_csv' cannot parse file '…'" — where the
-    plugin's ``parse`` used to say "Required column 'date' not found in CSV header". The developer's decision, verbatim:
-    «Correggi dentro G con il metodo opzionale (Consigliato)».
+    such a file stops at the guard of ``parse_file`` — "Plugin 'Generic CSV' cannot parse file '…'", the plugin by its name and
+    the file by the name it was uploaded with since lot K2a (backlog L6) — where the plugin's ``parse`` used to say "Required
+    column 'date' not found in CSV header". The developer's decision, verbatim: «Correggi dentro G con il metodo opzionale (Consigliato)».
 
     So ``BRIMProvider`` gains a concrete, optional method, ``cannot_parse_reason(file_path) -> Optional[str]``, ``None`` by
     default: one short English sentence (lowercase start, no final period) saying why ``can_parse`` refuses the file, or
@@ -1146,14 +1243,17 @@ class TestPluginSaysWhyWithACode:
 
     @pytest.mark.parametrize(("content", "missing"), _HEADERS_MISSING_DATE_OR_TYPE)
     def test_the_default_wraps_the_reason_without_a_code(self, content: bytes, missing: tuple, tmp_path: Path):
-        """The generic CSV overrides ``cannot_parse_reason`` only: its refusal is that sentence, without a code, with an empty context."""
+        """``BRIMProvider.cannot_parse_detail`` itself, about the generic CSV's sentence: that sentence, without a code, with an empty context.
+
+        The base method is called unbound on the generic CSV, so it is the default that answers, whether or not the plugin gives codes of its
+        own (lot K2a gives it some: category 4e).
+        """
         path = tmp_path / "export.csv"
         path.write_bytes(content)
         plugin = _generic_plugin()
-        assert type(plugin).cannot_parse_detail is BRIMProvider.cannot_parse_detail, "premise: the generic CSV does not override cannot_parse_detail"
         assert plugin.cannot_parse_reason(path) == _REASON_MISSING[missing], f"premise: the generic CSV names the columns {content.splitlines()[0]!r} misses"
 
-        detail = plugin.cannot_parse_detail(path)
+        detail = BRIMProvider.cannot_parse_detail(plugin, path)
 
         assert isinstance(detail, BRIMRefusal), f"the default answers {detail!r}, not a BRIMRefusal"
         assert (detail.code, detail.message, detail.context) == (None, _REASON_MISSING[missing], {})
@@ -1195,6 +1295,147 @@ class TestPluginSaysWhyWithACode:
         broken = [problem for _, problems in answers for problem in problems]
 
         assert not broken, f"{len(broken)} answer(s) break the contract of cannot_parse_detail, the first ones: {broken[:3]}"
+
+
+# =============================================================================
+# CATEGORY 4e: THE GENERIC CSV REFUSES WITH A CODE (workstream W, lot K2a — backlog C-70, part a)
+# =============================================================================
+
+# What a refusal of the generic CSV carries, by the English sentence of category 4c it keeps: the code the import wizard
+# translates as ``importWizard.parseRefusal.<code>``, and the context it translates it with. Written by hand.
+_GENERIC_REFUSAL_BY_REASON = {
+    _REASON_ONLY_CSV: ("csv_only", {"plugin_code": GENERIC_CSV_CODE}),
+    _REASON_UNREADABLE: ("file_unreadable", {}),
+    _REASON_NO_HEADER: ("no_header_row", {}),
+    _REASON_MISSING[("date",)]: ("missing_columns", {"columns": "date", "count": 1}),
+    _REASON_MISSING[("type",)]: ("missing_columns", {"columns": "type", "count": 1}),
+    _REASON_MISSING[("date", "type")]: ("missing_columns", {"columns": "date, type", "count": 2}),
+}
+
+
+def _typed(context: dict) -> dict:
+    """A context with each value's type beside it: a count written ``"1"`` or ``True`` never compares equal to the integer ``1``."""
+    return {key: (type(value).__name__, value) for key, value in context.items()}
+
+
+def _generic_refusal(path: Path, reason: str) -> BRIMRefusal:
+    """The generic CSV's ``cannot_parse_detail`` about ``path``, after the premises: it refuses the file, with the sentence ``reason`` of category 4c."""
+    plugin = _generic_plugin()
+    assert plugin.can_parse(path) is False, f"premise: the generic CSV refuses {path.name}"
+    assert plugin.cannot_parse_reason(path) == reason, f"premise: the generic CSV's English sentence about {path.name} is {reason!r}"
+
+    detail = plugin.cannot_parse_detail(path)
+
+    assert isinstance(detail, BRIMRefusal), f"the generic CSV answers {detail!r}, not a BRIMRefusal"
+    return detail
+
+
+class TestGenericCSVRefusesWithACode:
+    """Lot K2a of workstream W (backlog C-70, part a): the generic CSV refuses a file with a code the import wizard translates.
+
+    The import wizard asks the broker's default plugin about every uploaded file (``GET /import/files/{file_id}/plugin-check``, category 4d)
+    and shows its refusal in the UI language: ``importWizard.parseRefusal.<code>`` with the refusal's context as values, else the plugin's
+    English sentence (``resolveParseRefusalMessage``). Only the two Scalable plugins give a code today. The generic CSV overrides
+    ``cannot_parse_reason`` only, so its refusal is the default one: that sentence without a code, shown in English in every language.
+
+    The contract: ``cannot_parse_detail(p)`` is None exactly when ``can_parse(p)``; otherwise its ``message`` is ``cannot_parse_reason(p)``, the
+    sentence of category 4c unchanged, and its code and context follow the cause:
+
+    - another extension than ``.csv``: ``csv_only``, ``{"plugin_code": "broker_generic_csv"}`` (the wizard names the plugin in the UI language);
+    - nothing to read at the path: ``file_unreadable``, ``{}``;
+    - no header row: ``no_header_row``, ``{}``;
+    - a header without ``date``, ``type`` or both: ``missing_columns``, ``{"columns": "date" | "type" | "date, type", "count": 1 | 1 | 2}``, the
+      count an integer, for the plural of the translation.
+
+    The seven keys of lot K2a are checked in ``frontend/src/lib/features/transactions/import/defaultPluginCheck.test.ts``; DEGIRO's codes in
+    ``test_brim_degiro.py`` (A2). Every input is a sample or a synthetic case of category 4c, every code and context is written by hand, and
+    each test first checks its premise against ``can_parse`` and ``cannot_parse_reason``. Red until the generic CSV gives its codes, but the guard.
+    """
+
+    @pytest.mark.parametrize("name", _NOT_CSV_NAMES)
+    def test_another_extension_is_csv_only_and_names_the_plugin(self, name: str, tmp_path: Path):
+        """The header names both required columns: only the extension is refused, and the context names the plugin that reads only CSV files."""
+        path = tmp_path / name
+        path.write_bytes(_DATE_AND_TYPE_ROWS)
+
+        detail = _generic_refusal(path, _REASON_ONLY_CSV)
+
+        assert (detail.code, detail.message, _typed(detail.context)) == ("csv_only", _REASON_ONLY_CSV, _typed({"plugin_code": GENERIC_CSV_CODE}))
+
+    @pytest.mark.parametrize("kind", _UNREADABLE_PATHS)
+    def test_a_path_with_nothing_to_read_is_file_unreadable(self, kind: str, tmp_path: Path):
+        path = _unreadable_path(tmp_path, kind)
+
+        detail = _generic_refusal(path, _REASON_UNREADABLE)
+
+        assert (detail.code, detail.message, detail.context) == ("file_unreadable", _REASON_UNREADABLE, {})
+
+    @pytest.mark.parametrize("content", _WITHOUT_A_HEADER_ROW)
+    def test_a_file_without_a_header_row_is_no_header_row(self, content: bytes, tmp_path: Path):
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+
+        detail = _generic_refusal(path, _REASON_NO_HEADER)
+
+        assert (detail.code, detail.message, detail.context) == ("no_header_row", _REASON_NO_HEADER, {})
+
+    @pytest.mark.parametrize(("content", "missing"), _HEADERS_MISSING_DATE_OR_TYPE)
+    def test_a_header_without_date_or_type_is_missing_columns_with_the_columns_and_their_count(self, content: bytes, missing: tuple, tmp_path: Path):
+        """The columns the header misses, in the order of the sentence, joined by ``", "``; their number, an integer."""
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+
+        detail = _generic_refusal(path, _REASON_MISSING[missing])
+
+        expected = {"columns": ", ".join(missing), "count": len(missing)}
+        assert (detail.code, detail.message, _typed(detail.context)) == ("missing_columns", _REASON_MISSING[missing], _typed(expected))
+
+    @pytest.mark.parametrize("name", _DANSKE_CASH_SAMPLES)
+    def test_the_danske_cash_statement_misses_both_columns(self, name: str):
+        """``Pvm;Saaja/Maksaja;Määrä;Saldo;Tila;Tarkastus``, Latin-1: the real file of category 4c, neither a date nor a type column."""
+        path = SAMPLE_DIR / name
+
+        detail = _generic_refusal(path, _REASON_MISSING[("date", "type")])
+
+        assert (detail.code, _typed(detail.context)) == ("missing_columns", _typed({"columns": "date, type", "count": 2}))
+
+    @pytest.mark.parametrize(("name", "content"), [*_HEADERS_WITH_DATE_AND_TYPE, _WINDOWS_1252_HEADER])
+    def test_a_file_it_reads_has_no_refusal(self, name: str, content: bytes, tmp_path: Path):
+        """Guard, green before the change too: a file the generic CSV reads has no refusal, code or not."""
+        path = tmp_path / name
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is True, f"premise: the generic CSV reads {name}"
+
+        assert plugin.cannot_parse_detail(path) is None
+
+    def test_every_refusal_carries_the_code_and_the_context_of_its_cause(self, tmp_path: Path):
+        """On every file of ``sample_reports/`` (recursive, every extension) and every synthetic case of category 4c: no refusal exactly when
+        ``can_parse``; otherwise the sentence of ``cannot_parse_reason`` with the code and the context ``_GENERIC_REFUSAL_BY_REASON`` gives it."""
+        corpus = sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file())
+        paths = [*corpus, *_write_every_case(tmp_path)]
+        labels = {path: str(path.relative_to(SAMPLE_DIR) if path.is_relative_to(SAMPLE_DIR) else path.relative_to(tmp_path)) for path in paths}
+        plugin = _generic_plugin()
+        answers = {path: (plugin.can_parse(path), plugin.cannot_parse_reason(path)) for path in paths}
+        causes = {_GENERIC_REFUSAL_BY_REASON[reason][0] for accepted, reason in answers.values() if not accepted and reason in _GENERIC_REFUSAL_BY_REASON}
+        # Positive controls: the generic CSV reads some of these files, and the others cover every cause, so no line of the table is vacuous.
+        assert any(accepted for accepted, _ in answers.values()), "premise: the generic CSV reads some of these files"
+        assert causes == {"csv_only", "file_unreadable", "no_header_row", "missing_columns"}, f"premise: the refused files cover every cause, they cover {sorted(causes)}"
+
+        problems = []
+        for path in paths:
+            accepted, reason = answers[path]
+            detail = plugin.cannot_parse_detail(path)
+            answered = (detail.code, detail.message, _typed(detail.context)) if isinstance(detail, BRIMRefusal) else detail
+            if accepted:
+                if detail is not None:
+                    problems.append(f"{labels[path]}: read, and yet refused with {answered!r}")
+            elif reason not in _GENERIC_REFUSAL_BY_REASON:
+                problems.append(f"{labels[path]}: a sentence this contract does not know, {reason!r}")
+            elif answered != (_GENERIC_REFUSAL_BY_REASON[reason][0], reason, _typed(_GENERIC_REFUSAL_BY_REASON[reason][1])):
+                problems.append(f"{labels[path]}: {answered!r}, expected {(_GENERIC_REFUSAL_BY_REASON[reason][0], reason, _GENERIC_REFUSAL_BY_REASON[reason][1])!r}")
+
+        assert not problems, f"{len(problems)} of {len(paths)} answer(s) of the generic CSV's cannot_parse_detail miss the code of their cause, the first ones: {problems[:3]}"
 
 
 class TestBrokerParserCoverageHelpers:
@@ -1448,7 +1689,7 @@ class TestBrokerParserCoverageHelpers:
             assert isin_of(xlsx_out, xlsx_tx) == isin_of(csv_out, csv_tx)
 
     def test_credit_agricole_imports_succession_as_cashless_adjustment(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = _ca_securities_alone()
 
         succession = [tx for tx in out.transactions if tx.description and "successione" in tx.description]
         assert succession, "sample must contain succession rows"
@@ -1472,57 +1713,33 @@ class TestBrokerParserCoverageHelpers:
         assert "Rettifica" in notice.message
         assert notice.evidence and len(notice.evidence[0].rows) == len(succession)
 
-    def test_credit_agricole_buy_has_deposit_before(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
-        buy = next(tx for tx in out.transactions if tx.type == TransactionType.BUY and tx.description and tx.description.startswith("SICAV: SOTTOSCR"))
+    # The three tests that pinned the automatic cash legs of version 1.5.0 (a purchase preceded by a DEPOSIT, a sale followed by a
+    # WITHDRAWAL, a coupon offset by a WITHDRAWAL) and the one that summed them to zero ("all cash is neutral") are gone, not
+    # ported: from 2.0.0 the cash of a fact is the account's, and no leg is ever added to balance a securities row. The new rule is
+    # pinned where a securities row and its account row meet (test_brim_credit_agricole.py, TestNoAutoCash); here, the case that
+    # has no account at all.
 
-        idx = out.transactions.index(buy)
-        deposit = out.transactions[idx - 1]
-        assert deposit.type == TransactionType.DEPOSIT
-        assert deposit.date == buy.date
-        assert deposit.cash is not None and buy.cash is not None
-        assert deposit.cash.amount == abs(buy.cash.amount)
+    def test_credit_agricole_a_securities_export_alone_books_no_cash_and_no_counter_entry(self):
+        """A set with no account export has no cash to import: the transfers in (cashless) are booked, every other row is named
+        as left out, and nothing is added to balance anything."""
+        out = _ca_securities_alone()
 
-    def test_credit_agricole_sell_has_withdrawal_after(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
-        sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and tx.description and tx.description.startswith("FONDI: RIMBORSO"))
+        assert out.transactions, "the transfers in are still imported"
+        assert all(tx.type == TransactionType.ADJUSTMENT and tx.cash is None for tx in out.transactions)
+        assert not any("auto_cash" in (tx.tags or []) for tx in out.transactions)
+        assert not any(tx.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) for tx in out.transactions)
+        left_out = [notice for notice in out.warnings if notice.code == "excluded_outside_cash_coverage"]
+        assert len(left_out) == 1 and left_out[0].severity == "warning" and left_out[0].evidence, "the rows with no account to state their cash are listed, not lost"
 
-        idx = out.transactions.index(sell)
-        withdrawal = out.transactions[idx + 1]
-        assert withdrawal.type == TransactionType.WITHDRAWAL
-        assert withdrawal.date == sell.date
-        assert withdrawal.cash is not None and sell.cash is not None
-        assert withdrawal.cash.amount == -abs(sell.cash.amount)
-
-    def test_credit_agricole_all_cash_is_neutral(self):
-        """The securities-only export is fully balanced: BUY/SELL, coupons and
-        maturity premiums each get a cash counter-entry, so *total* broker cash
-        (every leg, not just trades) nets to zero — no phantom liquidity."""
-        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
-
-        total_cash = sum((tx.cash.amount for tx in out.transactions if tx.cash is not None), Decimal("0"))
-        assert total_cash == Decimal("0.00")
-
-    def test_credit_agricole_coupon_has_balancing_withdrawal(self):
-        """Each coupon (CEDOLA -> INTEREST) is offset by a same-day auto-cash
-        WITHDRAWAL of the opposite amount, so the securities-only export does not
-        accumulate unbalanced liquidity (regression for the coupon-cash fix)."""
-        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
-
-        coupon = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and tx.description and tx.description.startswith("CEDOLA"))
-        assert coupon.cash is not None
-        offset = next(tx for tx in out.transactions if tx.type == TransactionType.WITHDRAWAL and tx.date == coupon.date and tx.cash is not None and tx.cash.amount == -coupon.cash.amount and "auto_cash" in (tx.tags or []))
-        assert offset is not None
-
-    def test_credit_agricole_securities_ignores_recap_footer(self):
+    def test_credit_agricole_securities_ignores_recap_footer(self, tmp_path):
         """CA can append a recap/summary row at the very end of the XLSX export
         ("Riepilogo ..."). It must be recognised and dropped silently, never
         warned about nor turned into a phantom transaction."""
-        base = CreditAgricoleBrokerProvider()._parse_securities(read_rows(CA_SAMPLE), broker_id=1)
+        base = _ca_parse_rows(read_rows(CA_SAMPLE), _CA_ROLE_SECURITIES, tmp_path)
 
         rows = read_rows(CA_SAMPLE)
         rows.append(["", "Riepilogo movimenti deposito titoli", "", "", "", "", "", "", "", ""])
-        out = CreditAgricoleBrokerProvider()._parse_securities(rows, broker_id=1)
+        out = _ca_parse_rows(rows, _CA_ROLE_SECURITIES, tmp_path)
 
         assert not any("missing date/causale" in n.message for n in out.warnings)
         assert not any("Riepilogo" in n.message for n in out.warnings)
@@ -1539,7 +1756,7 @@ class TestBrokerParserCoverageHelpers:
         assert BRIMProviderRegistry.auto_detect_plugin(CA_CONTI_SAMPLE) == "broker_credit_agricole"
 
     def test_credit_agricole_account_maps_types_by_causale(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         types = [tx.type for tx in out.transactions]
         assert types.count(TransactionType.WITHDRAWAL) == 5
         assert types.count(TransactionType.DEPOSIT) == 4
@@ -1558,7 +1775,7 @@ class TestBrokerParserCoverageHelpers:
         assert len(out.validation_issues) == 0
 
     def test_credit_agricole_account_tax_vs_fee_split(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         # Capital gain / imposta bollo -> TAX; management / coupon-detach / canone -> FEE.
         tax_descs = " | ".join(tx.description for tx in out.transactions if tx.type == TransactionType.TAX)
         assert "CAPITAL GAIN" in tax_descs and "Imposta bollo" in tax_descs
@@ -1570,7 +1787,7 @@ class TestBrokerParserCoverageHelpers:
         assert all(tx.cash is not None and tx.cash.amount < 0 for tx in out.transactions if tx.type in {TransactionType.FEE, TransactionType.TAX})
 
     def test_credit_agricole_account_coupon_and_dividend_link_asset_by_isin(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         # A bond coupon (CEDOLA) that names its bond by ISIN is INTEREST linked to
         # that bond, so it shows under the asset in the FIFO lot detail.
         coupon = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and tx.description.startswith("CEDOLA:"))
@@ -1590,14 +1807,14 @@ class TestBrokerParserCoverageHelpers:
         assert bank_interest.asset_id is None
 
     def test_credit_agricole_account_deposits_withdrawals_by_sign(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         # Pension credit -> DEPOSIT (positive); utility debit -> WITHDRAWAL (negative).
         deposit = next(tx for tx in out.transactions if tx.type == TransactionType.DEPOSIT and "PENSIONE" in tx.description)
         assert deposit.cash is not None and deposit.cash.amount > 0
         withdrawal = next(tx for tx in out.transactions if tx.type == TransactionType.WITHDRAWAL and "UTILITY" in tx.description)
         assert withdrawal.cash is not None and withdrawal.cash.amount < 0
 
-    def test_credit_agricole_account_identifiable_maturity_closes_wac_cost_basis(self):
+    def test_credit_agricole_account_identifiable_maturity_closes_wac_cost_basis(self, tmp_path):
         """Account-only maturity rows must not stay cash-only when same-day coupon identifies ISIN + nominal.
 
         This mirrors the real Nonna Anna 2025 case: the truncated securities export
@@ -1613,7 +1830,7 @@ class TestBrokerParserCoverageHelpers:
             ]
         )
 
-        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+        out = _ca_parse_rows(rows, _CA_ROLE_ACCOUNT, tmp_path)
         sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and tx.description and "BTP 20-25" in tx.description)
         assert sell.asset_id is not None
         assert sell.quantity == Decimal("-95000.00")
@@ -1697,15 +1914,19 @@ class TestBrokerParserCoverageHelpers:
         assert states[1].book_asset_like == Decimal("0")
         assert states[2].book_asset_like == Decimal("0")
 
-    def test_credit_agricole_account_unidentifiable_maturity_books_full_sell(self):
+    def test_credit_agricole_account_unidentifiable_maturity_books_full_sell(self, tmp_path):
         """A maturity row with no same-day coupon (no recoverable ISIN + NOMINALE) is
         booked entirely as a SELL — everything as sold, unknown nominal (quantity 0),
-        no INTEREST split — never a plain cash DEPOSIT, plus a warning."""
+        no INTEREST split — never a plain cash DEPOSIT, plus a warning.
+
+        RED on purpose (W5-7 step 6, plugin bug): ``Booking.book_account_row`` appends ``ca_account_maturity_unlinked`` to
+        ``Booking.warnings``, which ``CombinedParser.output`` never copies into the parse output (it merges ``Booking.notices()``
+        only), so the SELL is booked but the warning is lost. The last assertion is the unchanged 1.5.0 one."""
         rows = read_rows(CA_CONTI_SAMPLE)
         rows.append(
             ["10/06/2025", "10/06/2025", "TITOLI SCADUTI O ESTRATTI", "RIMB.TIT. MYSTERY BOND 30(9999999 ) DOS:0496/05246854 10/06/25", "12.345,00", "EUR"],
         )
-        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+        out = _ca_parse_rows(rows, _CA_ROLE_ACCOUNT, tmp_path)
         sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and tx.description and "MYSTERY BOND" in tx.description)
         assert sell.asset_id is not None
         assert sell.quantity == Decimal("-12345")
@@ -1725,7 +1946,7 @@ class TestBrokerParserCoverageHelpers:
         since the account file is the one that spans years — was created silently and
         then failed to price with no explanation.
         """
-        out = CreditAgricoleBrokerProvider()._parse_account_movements(read_rows(CA_CONTI_SAMPLE), broker_id=1)
+        out = _ca_account_alone()
         sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and "account_maturity" in (tx.tags or []))
         assert sell.asset_id is not None
         info = out.extracted_assets[sell.asset_id]
@@ -1739,7 +1960,7 @@ class TestBrokerParserCoverageHelpers:
         promo refunds. Those rows carry no asset, so they cannot mislabel an instrument —
         this test keeps that true if the row ever gains one.
         """
-        out = CreditAgricoleBrokerProvider()._parse_account_movements(read_rows(CA_CONTI_SAMPLE), broker_id=1)
+        out = _ca_account_alone()
         flagged = {aid for aid, info in out.extracted_assets.items() if any(n.kind == MATURITY_NOTICE_KIND for n in info.notices)}
         for tx in out.transactions:
             if tx.description and "SCT:RIMBORSO" in tx.description:
@@ -1756,7 +1977,7 @@ class TestBrokerParserCoverageHelpers:
         make classification depend on dispatch order, which is exactly the kind of
         silent ambiguity the registry exists to remove.
         """
-        tiers = [ca._ACCT_INCOME_CAUSALI, ca._ACCT_MATURITY_CAUSALI, ca._ACCT_FEETAX_CAUSALI, ca._ACCT_CANONE_CAUSALI, ca._ACCT_UNRESOLVED_CAUSALI, ca._ACCT_DECLARED_CASH_CAUSALI]
+        tiers = [ca.ACCT_INCOME_CAUSALI, ca.ACCT_MATURITY_CAUSALI, ca.ACCT_FEETAX_CAUSALI, ca.ACCT_CANONE_CAUSALI, ca.ACCT_UNRESOLVED_CAUSALI, ca.ACCT_DECLARED_CASH_CAUSALI]
         seen: Set[str] = set()
         for tier in tiers:
             assert not (seen & tier), f"causale listed in more than one tier: {seen & tier}"
@@ -1770,8 +1991,8 @@ class TestBrokerParserCoverageHelpers:
         bills, ATM withdrawals, salary credits and transfers must produce neither a
         todo nor a notice.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
-        declared_cash_slugs = {ca._slug_causale(c) for c in ca._ACCT_DECLARED_CASH_CAUSALI}
+        out = _ca_account_alone()
+        declared_cash_slugs = {ca.slug_causale(c) for c in ca.ACCT_DECLARED_CASH_CAUSALI}
         cash_rows = [tx for tx in out.transactions if declared_cash_slugs & set(tx.tags or [])]
         assert cash_rows, "fixture must exercise the declared-cash tier"
         assert all(tx.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) for tx in cash_rows)
@@ -1794,7 +2015,7 @@ class TestBrokerParserCoverageHelpers:
         loss surfaces much later as an unexplained gap in the cost basis — the same
         failure mode as the 50k bug, arriving through a different door.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         idx = next(i for i, tx in enumerate(out.transactions) if "SAMPLE FUND SICAV" in (tx.description or ""))
         tx = out.transactions[idx]
         # Cash is right and must stay right: only the security is missing.
@@ -1820,7 +2041,7 @@ class TestBrokerParserCoverageHelpers:
         rule additionally requires the ordering party to be named again inside the
         operation text — a fund redeems *itself*, a refund is about something else.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         idx = next(i for i, tx in enumerate(out.transactions) if "MITTENTE SAMPLE" in (tx.description or ""))
         assert out.transactions[idx].type == TransactionType.DEPOSIT
         assert not [t for t in out.field_todos if t.tx_index == idx]
@@ -1833,13 +2054,13 @@ class TestBrokerParserCoverageHelpers:
         rule exists for.
         """
         wrapped = "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*>"
-        assert ca._sct_fund_redemption_name(wrapped) == "SAMPLE FUND SICAV"
+        assert ca.sct_fund_redemption_name(wrapped) == "SAMPLE FUND SICAV"
         # No redemption wording at all.
-        assert ca._sct_fund_redemption_name("ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONE SCT:BONIFICO SU SAMPLE FUND SICAV") == ""
+        assert ca.sct_fund_redemption_name("ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONE SCT:BONIFICO SU SAMPLE FUND SICAV") == ""
         # Redemption wording, but the payer is not the subject of the payment.
-        assert ca._sct_fund_redemption_name("ORD:DIVISIONE SERVIZI DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO IRPEF - 730 ANNO 2023") == ""
+        assert ca.sct_fund_redemption_name("ORD:DIVISIONE SERVIZI DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO IRPEF - 730 ANNO 2023") == ""
         # No ordering party to identify anything with.
-        assert ca._sct_fund_redemption_name("BONIFICO SCT:RIMBORSI SU QUALCOSA") == ""
+        assert ca.sct_fund_redemption_name("BONIFICO SCT:RIMBORSI SU QUALCOSA") == ""
 
     def test_credit_agricole_account_trade_becomes_a_real_buy(self):
         """The 50k bug: a COMPRAVENDITA row used to become an anonymous withdrawal.
@@ -1848,7 +2069,7 @@ class TestBrokerParserCoverageHelpers:
         purchase — booking it as cash lost the position entirely, and the loss only
         surfaced much later as an unexplained gap in the cost basis.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         trade = next(tx for tx in out.transactions if "TIT:BTP SAMPLE" in (tx.description or ""))
         assert trade.type == TransactionType.BUY
         assert trade.cash is not None and trade.cash.amount == Decimal("-40000.00")
@@ -1867,7 +2088,7 @@ class TestBrokerParserCoverageHelpers:
         so a counterpart here would double every trade — and the doubling is invisible
         in the transaction list, showing up only as a wrong balance much later.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         assert not any("auto_cash" in (tx.tags or []) for tx in out.transactions)
         trade_dates = {tx.date for tx in out.transactions if "account_trade" in (tx.tags or [])}
         cash_legs = [tx for tx in out.transactions if tx.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) and tx.date in trade_dates]
@@ -1879,7 +2100,7 @@ class TestBrokerParserCoverageHelpers:
         The two are printed at *different* widths ("BTP SAMPLE" vs "BTP SAMPLE 1/12/2026"),
         so the match is a normalized prefix in both directions — equality would find nothing.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         at_par = next(tx for tx in out.transactions if "TIT:BTP SAMPLE" in (tx.description or ""))
         above_par = next(tx for tx in out.transactions if "ACQ. TIT:BTP OTHER" in (tx.description or ""))
         assert at_par.quantity == Decimal("40000.00")  # NOMINALE of IT0000000001
@@ -1896,7 +2117,7 @@ class TestBrokerParserCoverageHelpers:
         sale the two coincide; for a partial one they do not, and the file never says
         which — so the quantity ships as a declared presumption, never as a silent read.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         sale = next(tx for tx in out.transactions if "VEND. TIT:BTP OTHER" in (tx.description or ""))
         assert sale.type == TransactionType.SELL
         assert sale.quantity == Decimal("-20000.00")
@@ -1913,15 +2134,14 @@ class TestBrokerParserCoverageHelpers:
         the file. Booking a BUY would require inventing it; the row therefore keeps its
         (correct) cash amount and blocks until the user supplies the quantity.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         fund = next(tx for tx in out.transactions if "SOTTOSC SICAV" in (tx.description or ""))
         assert fund.type == TransactionType.WITHDRAWAL
         assert fund.cash is not None and fund.cash.amount == Decimal("-5000.00")
 
-        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
+        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved" and t.context.get("reason") == "no_quantity")
         assert todo.severity == "blocker"
         assert out.transactions[todo.tx_index] is fund
-        assert todo.context.get("reason") == "no_quantity"
         # The instrument *is* readable — the message must say so, or the user goes
         # looking for a name the plugin already had.
         assert "SAMPLE GLOB EQ FUND" in todo.message
@@ -1929,7 +2149,7 @@ class TestBrokerParserCoverageHelpers:
         # an unknown causale would send the user looking for a registry gap that is not there.
         assert not any(n.code == "ca_unknown_causale" for n in out.warnings)
 
-    def test_credit_agricole_account_trade_direction_conflict_is_never_guessed(self):
+    def test_credit_agricole_account_trade_direction_conflict_is_never_guessed(self, tmp_path):
         """Word and sign disagree: a purchase that brings money in is not a purchase.
 
         Typing it either way opens (or closes) a position that then poisons every FIFO
@@ -1937,14 +2157,14 @@ class TestBrokerParserCoverageHelpers:
         """
         header = read_rows(CA_CONTI_SAMPLE)[0]
         conflicting = ["21/05/2026", "21/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000", "15.000,00", "EUR"]
-        out = CreditAgricoleBrokerProvider()._parse_account_movements([header, conflicting], broker_id=1)
+        out = _ca_parse_rows([header, conflicting], _CA_ROLE_ACCOUNT, tmp_path)
 
         assert [tx.type for tx in out.transactions] == [TransactionType.DEPOSIT]
         todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
         assert todo.severity == "blocker"
         assert todo.context.get("reason") == "sign_mismatch"
 
-    def test_credit_agricole_account_trade_ambiguous_name_is_never_guessed(self):
+    def test_credit_agricole_account_trade_ambiguous_name_is_never_guessed(self, tmp_path):
         """Two bonds share the trade's (truncated) name — a wrong nominal is worse than none.
 
         Picking either one would open a position on the wrong instrument, and nothing
@@ -1954,7 +2174,7 @@ class TestBrokerParserCoverageHelpers:
         coupon_a = ["01/06/2026", "01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00", "218,75", "EUR"]
         coupon_b = ["01/06/2026", "01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/9/2030 IT0000000009 DOS:00000/00000000 NOMINALE: 10.000,00", "100,00", "EUR"]
         trade = ["21/05/2026", "21/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000", "'-15.000,00", "EUR"]
-        out = CreditAgricoleBrokerProvider()._parse_account_movements([header, coupon_a, coupon_b, trade], broker_id=1)
+        out = _ca_parse_rows([header, coupon_a, coupon_b, trade], _CA_ROLE_ACCOUNT, tmp_path)
 
         booked = next(tx for tx in out.transactions if "NOTA INF. ACQ." in (tx.description or ""))
         assert booked.type == TransactionType.WITHDRAWAL
@@ -1964,7 +2184,7 @@ class TestBrokerParserCoverageHelpers:
         # Both candidates must be named, or the user cannot resolve what we could not.
         assert "IT0000000001" in todo.evidence[0].comment and "IT0000000009" in todo.evidence[0].comment
 
-    def test_credit_agricole_account_trade_ambiguous_nominal_is_never_guessed(self):
+    def test_credit_agricole_account_trade_ambiguous_nominal_is_never_guessed(self, tmp_path):
         """The same bond shows two different nominals: the position changed over time.
 
         Either value would be a guess about *which* trade this row is, so the quantity
@@ -1974,7 +2194,7 @@ class TestBrokerParserCoverageHelpers:
         coupon_1 = ["01/06/2026", "01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00", "218,75", "EUR"]
         coupon_2 = ["01/12/2026", "01/12/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 25.000,00", "136,72", "EUR"]
         trade = ["21/05/2026", "21/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000", "'-15.000,00", "EUR"]
-        out = CreditAgricoleBrokerProvider()._parse_account_movements([header, coupon_1, coupon_2, trade], broker_id=1)
+        out = _ca_parse_rows([header, coupon_1, coupon_2, trade], _CA_ROLE_ACCOUNT, tmp_path)
 
         todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
         assert todo.severity == "blocker"
@@ -1990,13 +2210,14 @@ class TestBrokerParserCoverageHelpers:
         a trade", not "I caught a contradiction". The at-par wording says as much, and
         the noise stays bounded because the file books few trades (3 on 507 real rows).
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         bundled = [t for t in out.field_todos if t.reason_code == "ca_account_trade_bundled_amount"]
-        at_par = next(t for t in bundled if t.context["row"] == 16)  # the 40.000 = 40.000 purchase
+        at_par = next(t for t in bundled if t.context["isin"] == "IT0000000001")  # the 40.000 = 40.000 purchase
         assert Decimal(at_par.context["delta"]) == 0
         assert "all'emissione" in at_par.evidence[0].comment
-        # Only trades carry it: a coupon or a fee row has nothing to split.
-        assert {t.context["row"] for t in bundled} == {16, 18, 19}
+        # Only trades carry it: a coupon or a fee row has nothing to split. The rows are lines of the combined file (the set's one member sorted by date).
+        assert {t.context["row"] for t in bundled} == {_ca_alone_line("TIT:BTP SAMPLE"), _ca_alone_line("ACQ. TIT:BTP OTHER"), _ca_alone_line("VEND. TIT:BTP OTHER")}
+        assert at_par.context["row"] == _ca_alone_line("TIT:BTP SAMPLE")
 
     def test_credit_agricole_account_trade_suggestions_read_the_rest_of_the_file(self):
         """The panel's hints are read off the export, never inferred from market data.
@@ -2005,18 +2226,18 @@ class TestBrokerParserCoverageHelpers:
         charge as a row of its own, extracting it again from the trade total would count
         it twice — a wrong import, not just a clumsy one.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
-        fund = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
+        out = _ca_account_alone()
+        fund = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved" and t.context.get("reason") == "no_quantity")
         # A blocked trade is still a trade: it gets the same split affordance once the
         # user has supplied type, asset and quantity.
         assert fund.context["split_hint"] == "trade_charges"
         hints = fund.context["split_suggestions"]
-        assert any("conti due volte" in h for h in hints)  # charge row 10 sits near it
+        assert any("conti due volte" in h for h in hints)  # the charge row (capital gain) sits near it
         assert any("fondo" in h for h in hints)  # no accrued interest on a fund
         assert all("rateo cedolare che hai rimborsato" not in h for h in hints)
 
         # The bond purchase has no charge row nearby, so the hint says the opposite.
-        bond = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_bundled_amount" and t.context["row"] == 18)
+        bond = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_bundled_amount" and t.context["row"] == _ca_alone_line("ACQ. TIT:BTP OTHER"))
         assert any("non registra nessuna riga di commissioni" in h for h in bond.context["split_suggestions"])
 
     def test_credit_agricole_account_trade_above_par_declares_the_gap(self):
@@ -2027,8 +2248,8 @@ class TestBrokerParserCoverageHelpers:
         reconcile (one residue comes out negative), and an invented split is worse than a
         declared gap, because the first is a silent error and the second a known one.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
-        gap = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_bundled_amount" and t.context["row"] == 18)
+        out = _ca_account_alone()
+        gap = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_bundled_amount" and t.context["row"] == _ca_alone_line("ACQ. TIT:BTP OTHER"))
 
         assert gap.severity == "warning"  # a heuristic never blocks
         # It rides on the purchase itself, so the correction step can offer the split there.
@@ -2040,7 +2261,7 @@ class TestBrokerParserCoverageHelpers:
         assert len(gap.evidence) == 2
         assert "ACQ. TIT:BTP OTHER" in gap.evidence[0].rows[0][2]
         assert "CEDOLA:BTP OTHER" in gap.evidence[1].rows[0][2]
-        assert gap.evidence[1].row_numbers == [17]
+        assert gap.evidence[1].row_numbers == [_ca_alone_line("CEDOLA:BTP OTHER")]
         # Not also a notice: the same finding shown twice teaches the user to skim past it,
         # and only the todo can be acted upon.
         assert all(n.code != "ca_account_trade_bundled_amount" for n in out.warnings)
@@ -2052,7 +2273,7 @@ class TestBrokerParserCoverageHelpers:
         there in the file*. Gross income + a separate TAX leg sum back to the same cash, so
         the balance still reconciles against the bank's Saldo Finale.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         coupon = next(tx for tx in out.transactions if (tx.description or "").startswith("CEDOLA:BTP SAMPLE"))
         tax = next(tx for tx in out.transactions if "withholding_tax" in (tx.tags or []))
 
@@ -2067,7 +2288,7 @@ class TestBrokerParserCoverageHelpers:
     def test_credit_agricole_account_income_clawback_is_never_grossed_up(self):
         """A negative "CEDOLA" is a clawback, classified as cash — grossing it up would
         invent a tax refund the bank never paid."""
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         clawback = next(tx for tx in out.transactions if "STORNO CEDOLA ERRATA" in (tx.description or ""))
         assert clawback.type == TransactionType.WITHDRAWAL
         assert clawback.cash is not None and clawback.cash.amount == Decimal("-50.00")
@@ -2079,17 +2300,17 @@ class TestBrokerParserCoverageHelpers:
         still in hand. Re-reading the file preview later would cost a second fetch and
         could misalign row indexes if that preview truncates or paginates.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
-        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
+        out = _ca_account_alone()
+        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved" and t.context.get("reason") == "no_quantity")
 
         evidence = todo.evidence[0]
         assert evidence.headers[:4] == ["Data Op.", "Causale", "Descrizione", "Importo"]
         assert len(evidence.rows) == 1 and len(evidence.rows[0]) == len(evidence.headers)
         assert "SOTTOSC SICAV" in evidence.rows[0][2]
-        assert evidence.row_numbers == [20]  # 1-based line in the source file
+        assert evidence.row_numbers == [_ca_alone_line("SOTTOSC SICAV")]  # 1-based line in the combined file the todo was read from
         assert evidence.comment and "L'importo è giusto" in evidence.comment
 
-    def test_credit_agricole_charge_never_names_an_asset_after_itself(self):
+    def test_credit_agricole_charge_never_names_an_asset_after_itself(self, tmp_path):
         """A charge line describes the charge, never the security it is charged on.
 
         "SPESE STACCO CEDOLA DEL 21/05/2026 DOSSIER: 00496/05246854 TIT: IT000..." would
@@ -2104,7 +2325,7 @@ class TestBrokerParserCoverageHelpers:
         coupon = ["01/06/2026", "01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP TF 3,35% MZ35 IT0009999999 DOS:00496/05246854", "12,00", "EUR"]
 
         # Charge first: the placeholder must survive only until the coupon names the bond.
-        out = CreditAgricoleBrokerProvider()._parse_account_movements([header, charge, coupon], broker_id=1)
+        out = _ca_parse_rows([header, charge, coupon], _CA_ROLE_ACCOUNT, tmp_path)
         fee = next(tx for tx in out.transactions if "SPESE STACCO" in (tx.description or ""))
 
         assert fee.asset_id is not None
@@ -2112,11 +2333,11 @@ class TestBrokerParserCoverageHelpers:
         assert out.extracted_assets[fee.asset_id].extracted_isin == "IT0009999999"
 
         # Charge alone: the ISIN stands in, never the fee's own wording.
-        alone = CreditAgricoleBrokerProvider()._parse_account_movements([header, charge], broker_id=1)
+        alone = _ca_parse_rows([header, charge], _CA_ROLE_ACCOUNT, tmp_path)
         lone_fee = alone.transactions[0]
         assert alone.extracted_assets[lone_fee.asset_id].extracted_name == "IT0009999999"
 
-    def test_credit_agricole_prefers_the_untruncated_security_name(self):
+    def test_credit_agricole_prefers_the_untruncated_security_name(self, tmp_path):
         """Crédit Agricole prints the same name at two different widths.
 
         The coupon line cuts it at 19 characters ("BTP 05/26 0.55FOICU") while the
@@ -2130,7 +2351,7 @@ class TestBrokerParserCoverageHelpers:
         charge = ["21/11/2024", "21/11/2024", "COMMISS./SPESE SU OPERAZ. TITOLI", "SPESE STACCO CEDOLA DEL 21/11/2024 DOSSIER: 00496/05246854 TIT: IT0005332827 BTP 05/26 0.55FOICUM MOV:252419599", "'-1,50", "EUR"]
 
         for ordered in ([header, coupon, charge], [header, charge, coupon]):
-            out = CreditAgricoleBrokerProvider()._parse_account_movements(ordered, broker_id=1)
+            out = _ca_parse_rows(ordered, _CA_ROLE_ACCOUNT, tmp_path)
             names = {info.extracted_name for info in out.extracted_assets.values()}
             assert names == {"BTP 05/26 0.55FOICUM"}, names
 
@@ -2141,7 +2362,7 @@ class TestBrokerParserCoverageHelpers:
         unallocated it silently understates that bond's cost basis, and the gap only
         surfaces much later as a return that does not match the statement.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         fee = next(t for t in out.transactions if "SPESE STACCO CEDOLA" in (t.description or ""))
         coupon = next(t for t in out.transactions if "CEDOLA:BTP SAMPLE" in (t.description or ""))
 
@@ -2156,7 +2377,7 @@ class TestBrokerParserCoverageHelpers:
         Account charges (canone, bollo) are correctly unallocated and must NOT be flagged,
         or the review list drowns in noise and gets ignored.
         """
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         todos = [t for t in out.field_todos if t.reason_code == "ca_account_charge_unallocated"]
 
         assert len(todos) == 1
@@ -2169,7 +2390,7 @@ class TestBrokerParserCoverageHelpers:
         account_charges = [t for t in out.transactions if "Imposta bollo" in (t.description or "") or "CANONE MENSILE" in (t.description or "")]
         assert account_charges and not any(out.transactions[t.tx_index] in account_charges for t in todos)
 
-    def test_credit_agricole_account_unknown_causale_is_declared_as_info(self):
+    def test_credit_agricole_account_unknown_causale_is_declared_as_info(self, tmp_path):
         """Tier 4: an unregistered causale is still booked as cash, but never in silence.
 
         COMPRAVENDITA hid in the fallback for exactly this reason, so a causale the
@@ -2178,7 +2399,7 @@ class TestBrokerParserCoverageHelpers:
         """
         rows = read_rows(CA_CONTI_SAMPLE)
         rows.append(["12/07/2026", "12/07/2026", "OPERAZIONE MAI VISTA", "QUALCOSA DI NUOVO", "'-250,00", "EUR"])
-        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+        out = _ca_parse_rows(rows, _CA_ROLE_ACCOUNT, tmp_path)
 
         booked = next(tx for tx in out.transactions if "QUALCOSA DI NUOVO" in (tx.description or ""))
         assert booked.type == TransactionType.WITHDRAWAL
@@ -2187,7 +2408,7 @@ class TestBrokerParserCoverageHelpers:
         notice = next(n for n in out.warnings if n.code == "ca_unknown_causale")
         assert notice.severity == "info"
         assert notice.context is not None and notice.context["causali"] == ["OPERAZIONE MAI VISTA"]
-        assert notice.evidence[0].row_numbers == [len(rows)]  # the appended row, 1-based
+        assert notice.evidence[0].row_numbers == [_ca_line_in(tmp_path / "rows-account-combined.csv", "QUALCOSA DI NUOVO")]  # the appended row: its line in the combined file, 1-based
         # An unknown causale is a disclosure, not a blocker: nothing to fix, only to check.
         assert not any(t.context and t.context.get("causale") == "OPERAZIONE MAI VISTA" for t in out.field_todos)
 
@@ -2207,7 +2428,7 @@ class TestBrokerParserCoverageHelpers:
         assert all(isinstance(n, BRIMNotice) for n in untouched.warnings)
 
     def test_credit_agricole_account_carries_causale_tag_and_currency(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         for tx in out.transactions:
             tags = tx.tags or []
             assert "credit_agricole" in tags
@@ -2216,7 +2437,7 @@ class TestBrokerParserCoverageHelpers:
             assert tx.cash is not None and tx.cash.code == "EUR"
 
     def test_credit_agricole_account_fee_refund_and_income_clawback_edges(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         # A positive amount on a fee causale is a refund -> DEPOSIT.
         refund = next(tx for tx in out.transactions if "RIMBORSO COMMISSIONI" in tx.description)
         assert refund.type == TransactionType.DEPOSIT and refund.cash.amount > 0
@@ -2227,21 +2448,21 @@ class TestBrokerParserCoverageHelpers:
     def test_credit_agricole_account_strips_apostrophe_amount_guard(self):
         """Negative amounts in the CSV carry a leading ``'`` Excel text-guard
         (``'-61,20``); the parser must strip it and keep the sign."""
-        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        out = _ca_account_alone()
         utility = next(tx for tx in out.transactions if "UTILITY" in tx.description)
         assert utility.cash is not None and utility.cash.amount == Decimal("-61.20")
 
-    def test_credit_agricole_account_ignores_recap_footer(self):
+    def test_credit_agricole_account_ignores_recap_footer(self, tmp_path):
         """The XLSX account export closes with numeric recap totals
         ("Totale Entrate/Uscite/Movimenti €"). They must be recognised and
         dropped: no noisy warning, and never leaked as a huge phantom deposit."""
-        base = CreditAgricoleBrokerProvider()._parse_account_movements(read_rows(CA_CONTI_SAMPLE), broker_id=1)
+        base = _ca_account_alone()
 
         rows = read_rows(CA_CONTI_SAMPLE)
         rows.append(["", "", "", "Totale Entrate €", "214.739,70", ""])
         rows.append(["", "", "", "Totale Uscite €", "-164.652,53", ""])
         rows.append(["", "", "", "Totale Movimenti €", "50.087,17", ""])
-        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+        out = _ca_parse_rows(rows, _CA_ROLE_ACCOUNT, tmp_path)
 
         assert not any("missing date/causale" in n.message for n in out.warnings)
         assert not any("Totale" in n.message for n in out.warnings)
@@ -2249,7 +2470,7 @@ class TestBrokerParserCoverageHelpers:
         assert all(tx.cash is None or abs(tx.cash.amount) != Decimal("214739.70") for tx in out.transactions)
 
     def test_credit_agricole_preserves_faithful_succession_multi_rows(self):
-        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = _ca_securities_alone()
 
         btp_2037 = [tx for tx in out.transactions if tx.description and "successione" in tx.description and "BTP FUT 27-04-37 CUM" in tx.description]
         # Each leg is preserved faithfully as its own ADJUSTMENT, keeping its distinct
@@ -2260,13 +2481,16 @@ class TestBrokerParserCoverageHelpers:
             (Decimal("6000"), Decimal("1")),
         ]
 
-    def test_credit_agricole_matured_bond_closes_position_at_par(self):
+    def test_credit_agricole_matured_bond_closes_position_at_par(self, tmp_path):
         """A ``TITOLI SCADUTI`` bond redemption must close the *held* nominal at par
         (100) and book the amount credited above par as a separate INTEREST leg. The
         held nominal comes from the succession legs (3×10000 = 30000 for BTP 05/26,
         32000+32000+31000 = 95000 for BTP 20-25), never from Ctv/Prezzo (which would
-        give the wrong 29985 / 94906)."""
-        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        give the wrong 29985 / 94906).
+
+        Version 2.0.0: a maturity is imported with the cash the account states, so the account row of each one is built from the
+        sample's own figures (``_ca_maturity_set``)."""
+        out = _ca_maturity_set(tmp_path, ("BTP 05/26 0.55FOICUM", "BTP 20-25 1.40FOICUM"), "maturity-par")
 
         # BTP 05/26: held 30000, ctv 30105 -> SELL -30000 @par + INTEREST 105.
         sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and tx.description and tx.description.startswith("TITOLI SCADUTI: BTP 05/26"))
@@ -2285,19 +2509,20 @@ class TestBrokerParserCoverageHelpers:
         premium2 = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and tx.description and "premio/rivalutazione" in tx.description and "BTP 20-25" in tx.description)
         assert premium2.cash is not None and premium2.cash.amount == Decimal("665.00")
 
-    def test_credit_agricole_matured_bond_position_leaves_no_verify_flag(self):
+    def test_credit_agricole_matured_bond_position_leaves_no_verify_flag(self, tmp_path):
         """When the held nominal is known (position built from succession legs), the
         redemption must NOT raise a ``derived_quantity`` field-todo: the SELL closes
         an exact position, so there is nothing for the user to verify."""
-        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = _ca_maturity_set(tmp_path, ("BTP 05/26 0.55FOICUM", "BTP 20-25 1.40FOICUM"), "maturity-verify")
 
+        assert len([tx for tx in out.transactions if tx.type == TransactionType.SELL]) == 2, "premise: both maturities are imported"
         derived = [ft for ft in out.field_todos if ft.reason_code == "derived_quantity"]
         assert derived == [], "position-backed maturities must not need a verify flag"
 
-    def test_credit_agricole_matured_bond_net_position_is_zero(self):
+    def test_credit_agricole_matured_bond_net_position_is_zero(self, tmp_path):
         """End-to-end: after import the net quantity of each matured bond must be 0
         (succession transfers in via ADJUSTMENT, par redemption out via SELL)."""
-        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = _ca_maturity_set(tmp_path, ("BTP 05/26 0.55FOICUM", "BTP 20-25 1.40FOICUM"), "maturity-net")
 
         for name in ("BTP 05/26 0.55FOICUM", "BTP 20-25 1.40FOICUM"):
             net = sum((tx.quantity for tx in out.transactions if tx.description and name in tx.description and tx.type in {TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT}), Decimal("0"))
@@ -2340,8 +2565,10 @@ class TestBrokerParserCoverageHelpers:
         row = "21/05/2026;BTP 05/26 0.55FOICUM;EUR;TITOLI SCADUTI;100,40;000;1;0;30.105,00;21/05/2026"
         csv_path = tmp_path / "credit_agricole-partial.csv"
         csv_path.write_text("\n".join([header, row]) + "\n", encoding="utf-8")
+        # The account export that states the 30.105,00 credited the same day: a maturity is imported with the account's cash.
+        account_path = _ca_write_rows([["Data Op.", "Data Val.", "Causale", "Descrizione", "Importo", "Divisa"], ["21/05/2026", "21/05/2026", "TITOLI SCADUTI O ESTRATTI", "RIMB.TIT. BTP 05/26 0.55FOICUM DOS:0496/05246854 21/05/26", "30.105,00", "EUR"]], tmp_path, "partial-account")
 
-        out = CreditAgricoleBrokerProvider().parse(csv_path, broker_id=1)
+        out = _ca_parse_members({_CA_ROLE_SECURITIES: [csv_path], _CA_ROLE_ACCOUNT: [account_path]}, "partial", tmp_path)
 
         sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL)
         assert sell.quantity == Decimal("-29985.060")
@@ -2361,8 +2588,10 @@ class TestBrokerParserCoverageHelpers:
         row = "21/05/2026;BTP 05/26 0.55FOICUM;EUR;TITOLI SCADUTI;100,40;000;1;0;30.105,00;21/05/2026"
         csv_path = tmp_path / "credit_agricole-partial.csv"
         csv_path.write_text("\n".join([header, row]) + "\n", encoding="utf-8")
+        # The account export that states the 30.105,00 credited the same day: a maturity is imported with the account's cash.
+        account_path = _ca_write_rows([["Data Op.", "Data Val.", "Causale", "Descrizione", "Importo", "Divisa"], ["21/05/2026", "21/05/2026", "TITOLI SCADUTI O ESTRATTI", "RIMB.TIT. BTP 05/26 0.55FOICUM DOS:0496/05246854 21/05/26", "30.105,00", "EUR"]], tmp_path, "partial-account")
 
-        out = CreditAgricoleBrokerProvider().parse(csv_path, broker_id=1)
+        out = _ca_parse_members({_CA_ROLE_SECURITIES: [csv_path], _CA_ROLE_ACCOUNT: [account_path]}, "partial", tmp_path)
 
         derived = [ft for ft in out.field_todos if ft.reason_code == "derived_quantity"]
         assert len(derived) == 1, f"premise: the orphan redemption raises one derived_quantity todo, got {[(ft.reason_code, ft.message) for ft in out.field_todos]}"
@@ -2572,6 +2801,938 @@ class TestBrokerParserCoverageHelpers:
 
 
 # =============================================================================
+# FINECO — SAFE ROWS (lot N74 · W-B83): only settled rows, incomplete rows noted
+# =============================================================================
+
+#: The header row of a Variant-B «Movimenti Dossier Titoli» export, as the samples carry it (``fineco-export.csv``).
+FINECO_COLUMNS = [
+    "Operazione",
+    "Data valuta",
+    "Descrizione",
+    "Titolo",
+    "Isin",
+    "Segno",
+    "Quantita",
+    "Divisa",
+    "Prezzo",
+    "Cambio",
+    "Controvalore",
+    "Commissioni Fondi Sw/Ingr/Uscita",
+    "Commissioni Fondi Banca Corrispondente",
+    "Spese Fondi Sgr",
+    "Commissioni amministrato",
+]
+#: The metadata lines above the header, as in the samples: the header is the file's line 6, the first data row line 7.
+_FINECO_PREAMBLE = ["Dossier: 123456789" + "," * 15, "Intestatario: ROSSI MARIO" + "," * 15, "," * 15, "Titoli e operazioni" + "," * 15, "," * 15]
+_FINECO_FIRST_LINE = len(_FINECO_PREAMBLE) + 2
+
+#: «Today» for the Fineco tests of lot N74. The cure's plugin reads it from ``server_today()`` (``utils/datetime_utils``,
+#: the server's local date), which it imports by name, so the tests pin that name on the plugin module: never the clock.
+FINECO_TODAY = date(2026, 10, 19)
+FINECO_NOT_YET_SETTLED = "fineco_not_yet_settled"
+FINECO_INCOMPLETE_ROWS = "fineco_incomplete_rows"
+_FINECO_N74_CODES = {FINECO_NOT_YET_SETTLED, FINECO_INCOMPLETE_ROWS}
+_FINECO_TAGS = ("import", "fineco")
+
+
+def _pin_fineco_today(monkeypatch: pytest.MonkeyPatch, today: date = FINECO_TODAY) -> date:
+    """Pin the Fineco plugin's ``server_today`` to ``today``. ``raising=False``: before the cure the plugin module has no
+    such name, and a red must fail on its assertion, not on its setup."""
+    monkeypatch.setattr(fineco_plugin, "server_today", lambda: today, raising=False)
+    return today
+
+
+def _fineco_row(trade: str, value: str, description: str, title: str, isin: str, segno: str, quantity: str, currency: str, price: str, fx: str, amount: str, fee: str = "") -> List[str]:
+    """One Variant-B data row: the 15 cells of ``FINECO_COLUMNS``, the commission in the last one (Commissioni amministrato)."""
+    return [trade, value, description, title, isin, segno, quantity, currency, price, fx, amount, "", "", "", fee]
+
+
+def _write_fineco(tmp_path: Path, rows: List[List[str]]) -> Path:
+    """A Variant-B export: the samples' preamble and header, then ``rows`` from line 7 (row ``i`` on line ``7 + i``)."""
+    lines = [*_FINECO_PREAMBLE, ",".join(FINECO_COLUMNS), *(",".join(row) for row in rows)]
+    path = tmp_path / "fineco-n74.csv"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _fineco_tx(tx_type: str, day: str, quantity: str, cash: tuple | None, isin: str | None, description: str, tags: tuple = _FINECO_TAGS) -> tuple:
+    """A transaction as ``_fineco_transactions`` reads it; ``cash`` is ``(code, amount)`` or None."""
+    code, amount = cash if cash is not None else (None, None)
+    return (tx_type, day, Decimal(quantity), code, None if amount is None else Decimal(amount), isin, description, tags)
+
+
+def _fineco_fee(day: str, amount: str, isin: str, name: str) -> tuple:
+    """The Variant-B FEE of a row: the sum of its commission columns, in EUR, linked to the row's security."""
+    return _fineco_tx("FEE", day, "0", ("EUR", amount), isin, f"Commissioni: {name}", ("import", "fineco", "fee"))
+
+
+def _fineco_transactions(out: BRIMParseOutput) -> list:
+    """Every transaction, in order: type, date, quantity, cash code and amount, ISIN of the linked asset, description, tags."""
+    rows = []
+    for tx in out.transactions:
+        asset = out.extracted_assets.get(tx.asset_id) if tx.asset_id is not None else None
+        rows.append(
+            (
+                tx.type.value,
+                tx.date.isoformat(),
+                tx.quantity,
+                tx.cash.code if tx.cash is not None else None,
+                tx.cash.amount if tx.cash is not None else None,
+                asset.extracted_isin if asset is not None else None,
+                tx.description,
+                tuple(tx.tags or ()),
+            )
+        )
+    return rows
+
+
+def _undated(rows: list) -> list:
+    """``_fineco_transactions`` rows without their date (the second item).
+
+    Lot B-52 moves only the date of a transaction (from ``Data valuta`` to ``Operazione``). The tests of N74 and W-B83 compare
+    the transactions this way, so they keep their own subject and stay green on both sides of that change. The fixtures
+    still carry the operation dates, and B-52's reds (``*_operation_date``) compare them with their dates.
+    """
+    return [row[:1] + row[2:] for row in rows]
+
+
+def _fineco_notices(out: BRIMParseOutput, code: str) -> List[BRIMNotice]:
+    return [notice for notice in out.warnings if notice.code == code]
+
+
+def _stripped(cells) -> List[str]:
+    """Cells compared without their surrounding blanks: a plugin may strip them (``Segno`` is a single space on a redemption)."""
+    return [str(cell).strip() for cell in cells]
+
+
+#: The four Fineco samples as they parse after lot B-52. Every transaction is dated on its row's operation date
+#: (``Operazione``), the Variant-B FEE too. Lot N74's contract C holds: the cure keeps every transaction, and only the date moves.
+FINECO_SAMPLE_TRANSACTIONS = {
+    "fineco-export.csv": [
+        _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+        _fineco_fee("2024-01-15", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+        _fineco_tx("BUY", "2024-01-15", "10", ("EUR", "-330.50"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+        _fineco_fee("2024-01-15", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+        _fineco_tx("SELL", "2024-03-15", "-4", ("EUR", "136.80"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+        _fineco_fee("2024-03-15", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+        _fineco_tx("BUY", "2024-02-20", "2", ("USD", "-329.03"), "US0378331005", "Compravendita titoli: APPLE INC"),
+        _fineco_fee("2024-02-20", "-12.95", "US0378331005", "APPLE INC"),
+        _fineco_tx("SELL", "2024-05-15", "-1", ("USD", "176.10"), "US0378331005", "Compravendita titoli: APPLE INC"),
+        _fineco_fee("2024-05-15", "-12.95", "US0378331005", "APPLE INC"),
+        _fineco_tx("BUY", "2024-01-10", "2000", ("EUR", "-1990.00"), "IT0005583478", "Compravendita titoli: BTP VALORE SC MZ30"),
+        _fineco_fee("2024-01-10", "-5.00", "IT0005583478", "BTP VALORE SC MZ30"),
+        _fineco_tx("BUY", "2024-02-01", "3", ("EUR", "-431.04"), "IE00B3B8Q275", "Compravendita titoli: ETF COVERED BOND ISH"),
+        _fineco_tx("DIVIDEND", "2024-06-15", "0", ("EUR", "20.95"), "IE00B2NPKV68", "Dividendo: ISHARES JPMORGAN EM BOND"),
+        _fineco_tx("DIVIDEND", "2024-08-15", "0", ("USD", "4.23"), "US0378331005", "Dividendo: APPLE INC"),
+        _fineco_tx("INTEREST", "2024-06-01", "0", ("EUR", "24.38"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+        _fineco_tx("ADJUSTMENT", "2024-07-20", "6", None, "IE00BKM4GZ66", "Aumento capitale: ISHARES CORE MSCI EM IMI"),
+        _fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC"),
+        _fineco_tx("SELL", "2024-09-01", "-2000", ("EUR", "2000.00"), "IT0005583478", "Rimborso: BTP VALORE SC MZ30"),
+        _fineco_tx("SELL", "2024-10-13", "-5", ("USD", "450.81"), "US0378331005", "Rimborso: APPLE INC"),
+    ],
+    "fineco_btp_market.csv": [
+        _fineco_tx("BUY", "2023-09-04", "5000", ("EUR", "-4920.00"), "IT0005416570", "Compravendita titoli: BTP 20-25 1.40%"),
+        _fineco_fee("2023-09-04", "-3.50", "IT0005416570", "BTP 20-25 1.40%"),
+        _fineco_tx("BUY", "2023-09-11", "2", ("EUR", "-208.20"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+        _fineco_fee("2023-09-11", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+        _fineco_tx("BUY", "2023-09-18", "3", ("EUR", "-420.00"), "IE00B3B8Q275", "Compravendita titoli: ETF COVERED BOND ISH"),
+        _fineco_fee("2023-09-18", "-2.95", "IE00B3B8Q275", "ETF COVERED BOND ISH"),
+    ],
+    "fineco_btp_placement.csv": [
+        _fineco_tx("BUY", "2023-05-12", "10000", ("EUR", "-10000.00"), "IT0005410912", "Compravendita titoli: BTP 20-25 1.40% CUM"),
+        _fineco_fee("2023-05-12", "-3.50", "IT0005410912", "BTP 20-25 1.40% CUM"),
+        _fineco_tx("BUY", "2023-06-20", "4", ("EUR", "-409.20"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+        _fineco_fee("2023-06-20", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+    ],
+    # Variant A: no commission columns, so no FEE.
+    "fineco_variant_a.csv": [
+        _fineco_tx("BUY", "2024-01-10", "8", ("EUR", "-841.60"), "IE00BK5BQT80", "Compravendita titoli: VANGUARD FTSE ALL-WORLD"),
+        _fineco_tx("BUY", "2024-02-14", "3", ("USD", "-1126.24"), "US5949181045", "Compravendita titoli: MICROSOFT CORP"),
+        _fineco_tx("SELL", "2024-03-20", "-2", ("EUR", "221.00"), "IE00BK5BQT80", "Compravendita titoli: VANGUARD FTSE ALL-WORLD"),
+        _fineco_tx("DIVIDEND", "2024-04-15", "0", ("USD", "2.25"), "US5949181045", "Dividendo: MICROSOFT CORP"),
+        _fineco_tx("INTEREST", "2024-05-01", "0", ("EUR", "18.40"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+    ],
+}
+#: The line of ``fineco-export.csv`` each of its transactions comes from, in the order above (a row's FEE follows it).
+FINECO_EXPORT_LINES = (7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19, 20)
+
+# Solution B (21/10/2026): in a trade row, ``Controvalore`` already contains the commission (a BUY's is executed price x quantity
+# + commission, a SELL's is executed price x quantity - commission). The trade fixtures below carry it that way, and the
+# transactions they expect are the same as before the cure: BUY cash = -(Controvalore - fee), SELL cash = +(Controvalore + fee).
+#
+# A: rows settled by today and rows settled after it, interleaved. Line = 7 + index. Lot B-52: a kept row is recorded on its
+# operation date (``Operazione``, the first cell); whether it is kept is still decided by its value date (the second cell).
+_FINECO_SETTLEMENT_ROWS = [
+    # line 7 — settled long ago, with its commission: BUY + FEE, kept, both dated 2024-01-15 (traded 15/01, valued 17/01).
+    _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95"),
+    # line 8 — traded before today, value date tomorrow: its BUY and its Variant-B FEE are left out (the value date decides).
+    _fineco_row("16/10/2026", "20/10/2026", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "A", "10", "EUR", "33.34500", "", "333.45", "2.95"),
+    # line 9 — value date today: BUY + FEE, kept, both dated on the operation date 2026-10-15.
+    _fineco_row("15/10/2026", "19/10/2026", "Compravendita titoli", "VANGUARD FTSE ALL-WORLD", "IE00BK5BQT80", "A", "2", "EUR", "111.47500", "", "222.95", "2.95"),
+    # line 10 — a bond redeemed above par, traded today, value date the day after tomorrow: its par SELL and its INTEREST
+    # surplus are left out.
+    _fineco_row("19/10/2026", "21/10/2026", "Rimborso", "BTP ITALIA FOI NV28", "IT0005000001", " ", "10000", "EUR", "100.40000", "1.00000", "10040.00"),
+    # line 11 — no value date, traded today: the trade date decides, kept, dated 2026-10-19.
+    _fineco_row("19/10/2026", "", "Dividendo", "APPLE INC", "US0378331005", "", "", "USD", "", "1.0850", "4.23"),
+    # line 12 — no value date, traded tomorrow: the trade date decides, left out.
+    _fineco_row("20/10/2026", "", "Dividendo", "ISHARES JPMORGAN EM BOND", "IE00B2NPKV68", "", "", "EUR", "", "", "20.95"),
+]
+_FINECO_SETTLED_TRANSACTIONS = [
+    _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+    _fineco_fee("2024-01-15", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+    _fineco_tx("BUY", "2026-10-15", "2", ("EUR", "-220.00"), "IE00BK5BQT80", "Compravendita titoli: VANGUARD FTSE ALL-WORLD"),
+    _fineco_fee("2026-10-15", "-2.95", "IE00BK5BQT80", "VANGUARD FTSE ALL-WORLD"),
+    _fineco_tx("DIVIDEND", "2026-10-19", "0", ("USD", "4.23"), "US0378331005", "Dividendo: APPLE INC"),
+]
+_FINECO_UNSETTLED_LINES = [8, 10, 12]
+#: The securities of the kept rows (lines 7, 9 and 11): those of lines 8, 10 and 12 appear in no other row.
+_FINECO_SETTLED_ISINS = ["IE00B4L5Y983", "IE00BK5BQT80", "US0378331005"]
+
+# B: one row per (type, needed field) of the contract, blank or unreadable, among complete rows. Line = 7 + index.
+_FINECO_INCOMPLETE_FILE = [
+    # line 7 — complete BUY: not counted.
+    _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95"),
+    # line 8 — BUY, Controvalore blank: a BUY with cash 0, and its FEE.
+    _fineco_row("20/02/2024", "22/02/2024", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "2", "USD", "178.50", "1.0850", "", "12.95"),
+    # line 9 — SELL, Quantita blank: the validation issue qtyNegative.
+    _fineco_row("15/05/2024", "17/05/2024", "Compravendita titoli", "APPLE INC", "US0378331005", "V", "", "USD", "192.30", "1.0920", "176.10"),
+    # line 10 — DIVIDEND, Controvalore blank: a DIVIDEND with cash 0.
+    _fineco_row("15/06/2024", "17/06/2024", "Dividendo", "ISHARES JPMORGAN EM BOND", "IE00B2NPKV68", "", "", "EUR", "", "", ""),
+    # line 11 — INTEREST (Stacco Cedole), Controvalore unreadable: an INTEREST with cash 0.
+    _fineco_row("01/06/2024", "03/06/2024", "Stacco Cedole", "BTP VALORE SC MZ30", "IT0005583478", "", "", "EUR", "", "", "n.d."),
+    # line 12 — ADJUSTMENT (Aumento capitale), Quantita blank: the validation issue qtyNonzero.
+    _fineco_row("20/07/2024", "20/07/2024", "Aumento capitale", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", " ", "", "EUR", "0.00000", "1.00000", "0.00"),
+    # line 13 — SELL (Rimborso), Quantita blank: the validation issue qtyNegative.
+    _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP VALORE SC MZ30", "IT0005583478", " ", "", "EUR", "100.00000", "1.00000", "2000.00"),
+    # line 14 — BUY, Quantita unreadable: the validation issue qtyPositive, and its FEE.
+    _fineco_row("10/01/2024", "12/01/2024", "Compravendita titoli", "BTP VALORE SC MZ30", "IT0005583478", "A", "n.d.", "EUR", "99.75000", "", "1995.00", "5.00"),
+    # line 15 — SELL, Controvalore blank: a SELL with cash 0, and its FEE.
+    _fineco_row("15/03/2024", "19/03/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "V", "4", "EUR", "34.20", "", "", "2.95"),
+    # line 16 — ADJUSTMENT with Controvalore blank: complete, an ADJUSTMENT needs only its quantity.
+    _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "", "", ""),
+    # line 17 — BUY with Divisa and Prezzo blank: complete, neither is in the set.
+    _fineco_row("01/02/2024", "03/02/2024", "Compravendita titoli", "ETF COVERED BOND ISH", "IE00B3B8Q275", "A", "3", "", "", "", "431.04"),
+]
+#: Line -> the column whose value the row's type needs and does not give.
+_FINECO_INCOMPLETE_COLUMNS = {8: "Controvalore", 9: "Quantita", 10: "Controvalore", 11: "Controvalore", 12: "Quantita", 13: "Quantita", 14: "Quantita", 15: "Controvalore"}
+#: What the file imports (contract B: the incomplete rows still import exactly so), each transaction dated on its row's
+#: operation date (lot B-52) — the FEE of line 14, whose BUY is refused, too.
+_FINECO_INCOMPLETE_TRANSACTIONS = [
+    _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+    _fineco_fee("2024-01-15", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+    _fineco_tx("BUY", "2024-02-20", "2", ("USD", "0"), "US0378331005", "Compravendita titoli: APPLE INC"),
+    _fineco_fee("2024-02-20", "-12.95", "US0378331005", "APPLE INC"),
+    _fineco_tx("DIVIDEND", "2024-06-15", "0", ("EUR", "0"), "IE00B2NPKV68", "Dividendo: ISHARES JPMORGAN EM BOND"),
+    _fineco_tx("INTEREST", "2024-06-01", "0", ("EUR", "0"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+    _fineco_fee("2024-01-10", "-5.00", "IT0005583478", "BTP VALORE SC MZ30"),
+    _fineco_tx("SELL", "2024-03-15", "-4", ("EUR", "0"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+    _fineco_fee("2024-03-15", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+    _fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC"),
+    _fineco_tx("BUY", "2024-02-01", "3", ("EUR", "-431.04"), "IE00B3B8Q275", "Compravendita titoli: ETF COVERED BOND ISH"),
+]
+_FINECO_INCOMPLETE_ISSUES = [(9, "qtyNegative"), (12, "qtyNonzero"), (13, "qtyNegative"), (14, "qtyPositive")]
+
+
+class TestFinecoSafeRows:
+    """Lot N74 · Fineco, safe rows (workstream W; W-B83), and lot B-52, the operation date.
+
+    A. Only settled rows. A row is settled when its value date (``Data valuta``), or its trade date (``Operazione``) when the
+       value date is blank, is not after ``server_today()`` (``utils/datetime_utils``, the server's local date, imported by
+       the plugin by name). A row that is not settled is left out whole — its transaction, its Variant-B FEE, the INTEREST
+       surplus of a bond redeemed above par — and the plugin says so once: an ``info`` notice ``fineco_not_yet_settled``,
+       ``context {"count": n}``, one evidence table with the file's header row, those rows and their 1-based line numbers.
+       No ``warning`` for it, not even the «No valid transactions found in file» of a file whose rows are all left out; and
+       a security seen only in left-out rows is not extracted (the row is skipped before its asset is resolved).
+       A settled row is kept. Lot B-52 does not change this rule: a row traded on or before today and valued after it is
+       still left out.
+    B. Incomplete rows. A row is incomplete when a field its type needs gives no number (blank or unreadable): ``Quantita``
+       for BUY, SELL (``Rimborso`` too) and ADJUSTMENT (``Aumento capitale``); ``Controvalore`` for BUY, SELL, DIVIDEND and
+       INTEREST (``Stacco Cedole``) — never ``Divisa`` or ``Prezzo``. It still imports exactly as today (a BUY without
+       ``Controvalore`` is a BUY with cash 0, a SELL without ``Quantita`` the issue ``qtyNegative``), and one ``info``
+       notice ``fineco_incomplete_rows`` lists those rows (``context`` ``count`` and ``report_issue: True``), each evidence
+       row ending with a cell that names the empty column. A row left out for its date is not counted.
+    C. The four samples keep their transactions, with neither notice.
+    D. The operation date (lot B-52, the developer's decision of 19/10/2026). Every transaction is recorded on its row's
+       operation date (``Operazione``), and so are the Variant-B FEE and the INTEREST surplus of a bond redeemed above par.
+       When ``Operazione`` is empty or unreadable, ``Data valuta`` is used. With neither date readable, the row is skipped
+       with today's «invalid date» warning. The plugin becomes 1.3.0.
+
+    The tests of A, B and C compare the transactions without their date (``_undated``). So they keep their own subject and
+    stay green on both sides of B-52. The fixtures carry the operation dates, and D's reds compare them on the same rows.
+
+    «Today» is pinned on the plugin module (``_pin_fineco_today``), never read from the clock. N74 and W-B83 are cured, so
+    their tests are guards now. D's reds fail today because the plugin dates every row on its value date. Guards are green
+    today and must stay so.
+    """
+
+    # --- C: the samples (guards) ---
+
+    def test_guard_the_fineco_samples_are_all_listed(self):
+        """Guard: the plugin's samples are the four this class pins; a fifth must be added to ``FINECO_SAMPLE_TRANSACTIONS``."""
+        samples = sorted(path.name for path in _all_samples_for_plugin(FinecoBrokerProvider()))
+
+        assert samples == sorted(FINECO_SAMPLE_TRANSACTIONS), f"Fineco samples on disk {samples}, pinned {sorted(FINECO_SAMPLE_TRANSACTIONS)}"
+
+    @pytest.mark.parametrize("sample", sorted(FINECO_SAMPLE_TRANSACTIONS))
+    def test_guard_fineco_samples_keep_their_transactions_with_neither_new_notice(self, sample: str, monkeypatch: pytest.MonkeyPatch):
+        """Guard (C): every transaction of the sample, in order, as today except its date (type, quantity, cash, security,
+        description, tags); no validation issue; neither N74 notice. B-52 moves only the date, which
+        ``test_fineco_samples_are_dated_on_the_operation_date`` pins."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(SAMPLE_DIR / sample, broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated(FINECO_SAMPLE_TRANSACTIONS[sample]), f"{sample}: the transactions drifted from today's"
+        assert out.validation_issues == [], f"{sample}: {[(issue.row, issue.code) for issue in out.validation_issues]}"
+        assert [notice.code for notice in out.warnings if notice.code in _FINECO_N74_CODES] == [], f"{sample}: every row is settled and complete"
+
+    @pytest.mark.parametrize("sample", sorted(FINECO_SAMPLE_TRANSACTIONS))
+    def test_fineco_samples_are_dated_on_the_operation_date(self, sample: str, monkeypatch: pytest.MonkeyPatch):
+        """Red today: every transaction is dated on its row's value date (``Data valuta``), two days after the operation in
+        most rows.
+
+        Contract (D): every transaction of the sample, in order, is dated on its row's operation date (``Operazione``), and so
+        is the Variant-B FEE that follows it — for example ``fineco-export.csv`` line 7, traded 15/01/2024 and valued
+        17/01/2024, gives a BUY and a FEE on 2024-01-15."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(SAMPLE_DIR / sample, broker_id=1)
+
+        assert _fineco_transactions(out) == FINECO_SAMPLE_TRANSACTIONS[sample], f"{sample}: B-52 records every row on its operation date (Operazione)"
+
+    # --- A: only settled rows (N74, cured: guards for B-52) ---
+
+    def test_guard_fineco_rows_valued_today_or_earlier_are_kept(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard (A): with today pinned to 2026-10-19, these rows are all kept: a row settled long ago, one whose value date
+        is today, one without a value date traded today, and a bond redeemed above par whose value date is today. The FEEs,
+        the par SELL and its INTEREST surplus are kept too, and nothing is noted. The dates are left out of the comparison
+        (``_undated``): B-52 moves them, and ``test_fineco_settled_rows_are_recorded_on_their_operation_date`` pins them."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _FINECO_SETTLEMENT_ROWS[0],
+            _FINECO_SETTLEMENT_ROWS[2],
+            _FINECO_SETTLEMENT_ROWS[4],
+            _fineco_row("16/10/2026", "19/10/2026", "Rimborso", "BTP ITALIA FOI NV28", "IT0005000001", " ", "10000", "EUR", "100.40000", "1.00000", "10040.00"),
+        ]
+        premium = "Rimborso a scadenza — premio/rivalutazione oltre la pari: BTP ITALIA FOI NV28"
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated(
+            [
+                *_FINECO_SETTLED_TRANSACTIONS,
+                _fineco_tx("SELL", "2026-10-16", "-10000", ("EUR", "10000.00"), "IT0005000001", "Rimborso: BTP ITALIA FOI NV28"),
+                _fineco_tx("INTEREST", "2026-10-16", "0", ("EUR", "40.00"), "IT0005000001", premium, ("import", "fineco", "maturity_premium")),
+            ]
+        )
+        assert out.validation_issues == []
+        assert [(notice.severity, notice.code) for notice in out.warnings] == [], "nothing is left out or incomplete: nothing to say"
+
+    def test_fineco_rows_after_today_are_left_out_whole(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """N74, cured, now a guard for B-52 (green today and after).
+
+        Contract (A): today is pinned to 2026-10-19. The rows not settled by then give no transaction at all: lines 8 and 10
+        by their value date (both traded on or before today: the value date decides, not the operation date), line 12 by
+        its trade date (its value date is blank). The other rows are kept, in order, compared without their dates (B-52's).
+        A left-out row is skipped before its security is resolved. So the extracted assets are exactly the securities of
+        the kept rows: those of lines 8, 10 and 12, seen nowhere else, are not extracted.
+        """
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SETTLEMENT_ROWS), broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated(_FINECO_SETTLED_TRANSACTIONS), "N74: a row not settled by today is left out whole (its FEE and its INTEREST surplus too)"
+        assert out.validation_issues == []
+        extracted = sorted(str(info.extracted_isin) for info in out.extracted_assets.values())
+        assert extracted == sorted(_FINECO_SETTLED_ISINS), "N74: a security seen only in rows left out is not extracted: nothing would carry it to map"
+
+    def test_fineco_a_file_with_only_rows_after_today_gives_only_the_note(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """N74, cured, now a guard for B-52 (green today and after).
+
+        Contract (A), today pinned to 2026-10-19, on a file whose only data rows (lines 7, 8, 9: lines 8, 10 and 12 of the
+        mixed file) are not settled by today: no transaction, no validation issue, no extracted asset; no ``warning`` notice
+        at all — none of the «No valid transactions found in file» a plain string becomes — and exactly one
+        ``fineco_not_yet_settled`` info note, its ``count`` the three rows, its evidence their lines.
+        """
+        _pin_fineco_today(monkeypatch)
+        rows = [_FINECO_SETTLEMENT_ROWS[line - _FINECO_FIRST_LINE] for line in _FINECO_UNSETTLED_LINES]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [], "N74: every row is dated after today, so none gives a transaction"
+        assert out.validation_issues == []
+        assert out.extracted_assets == {}, "a security seen only in rows left out is not extracted"
+        assert [(notice.code, notice.message) for notice in out.warnings if notice.severity == "warning"] == [], "N74: a file whose rows all settle after today says so in a note, never a warning"
+        notices = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert [(notice.severity, (notice.context or {}).get("count")) for notice in notices] == [("info", len(rows))], [(n.severity, n.code, n.context) for n in out.warnings]
+        assert sorted(line for evidence in notices[0].evidence for line in evidence.row_numbers) == [_FINECO_FIRST_LINE + index for index in range(len(rows))]
+
+    def test_fineco_rows_after_today_get_one_info_note_with_their_rows(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """N74, cured, now a guard for B-52 (green today and after): the value date still decides.
+
+        Contract (A): exactly one ``fineco_not_yet_settled`` notice, ``severity="info"``, ``context == {"count": 3}``, one
+        evidence table whose headers are the file's header row and whose rows are lines 8, 10 and 12 as the file holds them,
+        each with its line number; and no ``warning`` notice. Lines 8 and 10 are traded on or before today: a plugin that
+        decided by the operation date would keep them, and this test would see only line 12.
+        """
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SETTLEMENT_ROWS), broker_id=1)
+
+        notices = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert len(notices) == 1, f"N74: one {FINECO_NOT_YET_SETTLED} notice for the rows dated after today; the plugin said {[(n.severity, n.code) for n in out.warnings]}"
+        notice = notices[0]
+        assert (notice.severity, notice.context) == ("info", {"count": len(_FINECO_UNSETTLED_LINES)}), "a row settling after today comes with the next export: a note, never a warning"
+        assert len(notice.evidence) == 1, f"one evidence table, got {len(notice.evidence)}"
+        evidence = notice.evidence[0]
+        assert _stripped(evidence.headers) == FINECO_COLUMNS, "the evidence headers are the file's header row"
+        assert len(evidence.row_numbers) == len(evidence.rows) and all(len(row) == len(evidence.headers) for row in evidence.rows), "each row has its line number and one cell per header"
+        assert sorted(evidence.row_numbers) == _FINECO_UNSETTLED_LINES, f"the rows left out are on lines {_FINECO_UNSETTLED_LINES}, the evidence names {evidence.row_numbers}"
+        assert {line: _stripped(row) for line, row in zip(evidence.row_numbers, evidence.rows, strict=True)} == {line: _stripped(_FINECO_SETTLEMENT_ROWS[line - _FINECO_FIRST_LINE]) for line in _FINECO_UNSETTLED_LINES}
+        assert [(n.severity, n.code) for n in out.warnings if n.severity == "warning"] == [], "N74 adds no warning for a row not yet settled"
+
+    @pytest.mark.parametrize(
+        ("today", "left_out"),
+        [
+            pytest.param(date(2024, 3, 19), [11, 14, 15, 16, 17, 18, 19, 20], id="line-9-valued-today"),
+            pytest.param(date(2024, 3, 18), [9, 11, 14, 15, 16, 17, 18, 19, 20], id="line-9-traded-before-today-valued-after"),
+        ],
+    )
+    def test_fineco_the_pinned_server_today_decides_not_the_wall_clock(self, today: date, left_out: List[int], monkeypatch: pytest.MonkeyPatch):
+        """N74, cured, now a guard for B-52 (green today and after).
+
+        Contract (A), read through the pin. «Today» is the plugin's ``server_today``, never the wall clock (the other tests'
+        2026-10-19 is far from these days). With it pinned, the sample's rows whose value date is after that day are left
+        out and noted, and the others are kept, compared without their dates (B-52's).
+
+        Line 9 is traded 15/03/2024 and valued 19/03/2024. It is kept when today is its value date, and left out on
+        2024-03-18 although it was traded before that day: the value date decides.
+        """
+        _pin_fineco_today(monkeypatch, today)
+
+        out = FinecoBrokerProvider().parse(SAMPLE_DIR / "fineco-export.csv", broker_id=1)
+
+        kept = [tx for tx, line in zip(FINECO_SAMPLE_TRANSACTIONS["fineco-export.csv"], FINECO_EXPORT_LINES, strict=True) if line not in left_out]
+        assert _undated(_fineco_transactions(out)) == _undated(kept), "N74: «today» is server_today() as the plugin module names it, not the clock"
+        notices = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert len(notices) == 1 and (notices[0].context or {}).get("count") == len(left_out), [(n.code, n.context) for n in out.warnings]
+        assert sorted(line for evidence in notices[0].evidence for line in evidence.row_numbers) == left_out
+
+    # --- B: incomplete rows (W-B83, cured: guards for B-52) ---
+
+    @staticmethod
+    def _assert_incomplete_file_imports_as_today(out: BRIMParseOutput) -> None:
+        """The W-B83 outcome of the incomplete file, compared without the dates (B-52's, pinned by
+        ``test_fineco_incomplete_rows_are_recorded_on_their_operation_date``)."""
+        assert _undated(_fineco_transactions(out)) == _undated(_FINECO_INCOMPLETE_TRANSACTIONS), "W-B83: an incomplete row still imports exactly as today"
+        assert [(issue.row, issue.code) for issue in out.validation_issues] == _FINECO_INCOMPLETE_ISSUES, "W-B83: an incomplete row keeps today's validation issue"
+
+    def test_guard_fineco_incomplete_rows_import_as_today(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard (B): the incomplete rows import as today, compared without their dates (B-52's). The BUY, DIVIDEND,
+        INTEREST and SELL without ``Controvalore`` give cash 0, with their FEEs. The rows without ``Quantita`` (or with an
+        unreadable one) get the issue each gets today."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_INCOMPLETE_FILE), broker_id=1)
+
+        self._assert_incomplete_file_imports_as_today(out)
+
+    def test_fineco_incomplete_rows_get_one_info_note_that_asks_for_an_issue(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """W-B83, cured, now a guard for B-52 (green today and after). The outcome is pinned first, without the dates.
+
+        Contract (B): one ``fineco_incomplete_rows`` notice, ``severity="info"``, ``context["count"] == 8`` and
+        ``context["report_issue"] is True``; its evidence lists lines 8 to 15 — never the complete 7, 16 and 17 — each row
+        the file's cells then one naming the empty column (``Controvalore`` or ``Quantita``; that column's header is not
+        pinned); no ``warning`` notice.
+        """
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_INCOMPLETE_FILE), broker_id=1)
+
+        self._assert_incomplete_file_imports_as_today(out)
+        notices = _fineco_notices(out, FINECO_INCOMPLETE_ROWS)
+        assert len(notices) == 1, f"W-B83: one {FINECO_INCOMPLETE_ROWS} notice for the rows a needed number is missing from; the plugin said {[(n.severity, n.code) for n in out.warnings]}"
+        notice = notices[0]
+        context = notice.context or {}
+        assert (notice.severity, context.get("count"), context.get("report_issue")) == ("info", len(_FINECO_INCOMPLETE_COLUMNS), True), f"severity {notice.severity!r}, context {notice.context}"
+        rows: dict = {}
+        for evidence in notice.evidence:
+            assert _stripped(evidence.headers[:-1]) == FINECO_COLUMNS, "the evidence headers are the file's header row, then the column naming the empty field"
+            assert len(evidence.row_numbers) == len(evidence.rows) and all(len(row) == len(evidence.headers) for row in evidence.rows), "each row has its line number and one cell per header"
+            rows.update({line: _stripped(row) for line, row in zip(evidence.row_numbers, evidence.rows, strict=True)})
+        assert sorted(rows) == sorted(_FINECO_INCOMPLETE_COLUMNS), f"the incomplete rows are on lines {sorted(_FINECO_INCOMPLETE_COLUMNS)}, the evidence names {sorted(rows)}"
+        assert {line: row[-1] for line, row in rows.items()} == _FINECO_INCOMPLETE_COLUMNS, "each row's last cell names the empty column"
+        assert {line: row[:-1] for line, row in rows.items()} == {line: _stripped(_FINECO_INCOMPLETE_FILE[line - _FINECO_FIRST_LINE]) for line in _FINECO_INCOMPLETE_COLUMNS}
+        assert [(n.severity, n.code) for n in out.warnings if n.severity == "warning"] == []
+
+    def test_fineco_a_row_left_out_for_its_date_is_not_counted_as_incomplete(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """N74 and W-B83, cured, now a guard for B-52 (green today and after).
+
+        Contract (A then B), today pinned to 2026-10-19. Line 7 is settled and has no ``Controvalore``: it is the one
+        incomplete row (its transaction is compared without its date, B-52's). Lines 8 (no ``Controvalore``) and 9 (no
+        ``Quantita``) are traded on or before today and valued after it. They are left out whole — no transaction, no issue
+        — and noted as not yet settled, not as incomplete.
+        """
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("20/02/2024", "22/02/2024", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "2", "USD", "178.50", "1.0850", ""),
+            _fineco_row("16/10/2026", "20/10/2026", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "1", "USD", "250.00", "1.0850", "", "1.95"),
+            _fineco_row("19/10/2026", "21/10/2026", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "V", "", "EUR", "120.00", "", "237.05", "2.95"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated([_fineco_tx("BUY", "2024-02-20", "2", ("USD", "0"), "US0378331005", "Compravendita titoli: APPLE INC")])
+        assert out.validation_issues == [], "a row left out whole has no issue either"
+        incomplete = _fineco_notices(out, FINECO_INCOMPLETE_ROWS)
+        assert len(incomplete) == 1 and (incomplete[0].context or {}).get("count") == 1, [(n.code, n.context) for n in out.warnings]
+        assert sorted(line for evidence in incomplete[0].evidence for line in evidence.row_numbers) == [7], "only the settled row is counted as incomplete"
+        unsettled = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert len(unsettled) == 1 and sorted(line for evidence in unsettled[0].evidence for line in evidence.row_numbers) == [8, 9]
+
+    def test_guard_fineco_complete_rows_get_no_incomplete_note(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard (B): a blank field a row's type does not need leaves it complete — ``Divisa`` and ``Prezzo`` of a trade,
+        ``Prezzo`` of a redemption, ``Quantita`` of a DIVIDEND and an INTEREST, ``Controvalore`` of an ADJUSTMENT. They import
+        as today (compared without their dates, B-52's), and no ``fineco_incomplete_rows`` notice is emitted."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("01/02/2024", "03/02/2024", "Compravendita titoli", "ETF COVERED BOND ISH", "IE00B3B8Q275", "A", "3", "", "", "", "431.04"),
+            _fineco_row("15/03/2024", "19/03/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "V", "4", "EUR", "33.46250", "", "133.85", "2.95"),
+            _fineco_row("15/06/2024", "17/06/2024", "Dividendo", "ISHARES JPMORGAN EM BOND", "IE00B2NPKV68", "", "", "EUR", "", "", "20.95"),
+            _fineco_row("01/06/2024", "03/06/2024", "Stacco Cedole", "BTP VALORE SC MZ30", "IT0005583478", "", "", "EUR", "", "", "24.38"),
+            _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "", "", ""),
+            _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP VALORE SC MZ30", "IT0005583478", " ", "2000", "EUR", "", "", "2000.00"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _undated(_fineco_transactions(out)) == _undated(
+            [
+                _fineco_tx("BUY", "2024-02-01", "3", ("EUR", "-431.04"), "IE00B3B8Q275", "Compravendita titoli: ETF COVERED BOND ISH"),
+                _fineco_tx("SELL", "2024-03-15", "-4", ("EUR", "136.80"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+                _fineco_fee("2024-03-15", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+                _fineco_tx("DIVIDEND", "2024-06-15", "0", ("EUR", "20.95"), "IE00B2NPKV68", "Dividendo: ISHARES JPMORGAN EM BOND"),
+                _fineco_tx("INTEREST", "2024-06-01", "0", ("EUR", "24.38"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+                _fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC"),
+                _fineco_tx("SELL", "2024-09-01", "-2000", ("EUR", "2000.00"), "IT0005583478", "Rimborso: BTP VALORE SC MZ30"),
+            ]
+        )
+        assert out.validation_issues == []
+        assert _fineco_notices(out, FINECO_INCOMPLETE_ROWS) == [], "every row gives the numbers its type needs"
+
+    # --- D: the operation date (lot B-52) ---
+
+    def test_fineco_a_trade_is_recorded_on_its_operation_date_with_its_fee(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the BUY and its FEE are dated 2024-01-17, the row's value date.
+
+        Contract (D): a row traded on 15/01/2024 (``Operazione``) and valued on 17/01/2024 (``Data valuta``), settled long
+        ago, gives its BUY on its operation date, 2024-01-15, and its Variant-B FEE on the same day."""
+        _pin_fineco_today(monkeypatch)
+        row = _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95")
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [row]), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+            _fineco_fee("2024-01-15", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+        ], "B-52: the trade and its commission are recorded on the operation date"
+
+    def test_fineco_a_bond_redeemed_above_par_is_recorded_on_its_operation_date(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the par SELL and the INTEREST surplus are dated 2024-09-03, the row's value date.
+
+        Contract (D): a bond redeemed above par, traded on 01/09/2024 and valued on 03/09/2024, still gives two
+        transactions: the par SELL of its nominal and the INTEREST surplus over par. Both are dated on the row's operation
+        date, 2024-09-01."""
+        _pin_fineco_today(monkeypatch)
+        row = _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP ITALIA FOI NV28", "IT0005000001", " ", "10000", "EUR", "100.40000", "1.00000", "10040.00")
+        premium = "Rimborso a scadenza — premio/rivalutazione oltre la pari: BTP ITALIA FOI NV28"
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [row]), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("SELL", "2024-09-01", "-10000", ("EUR", "10000.00"), "IT0005000001", "Rimborso: BTP ITALIA FOI NV28"),
+            _fineco_tx("INTEREST", "2024-09-01", "0", ("EUR", "40.00"), "IT0005000001", premium, ("import", "fineco", "maturity_premium")),
+        ], "B-52: the par SELL and the maturity premium are recorded on the operation date"
+
+    def test_fineco_settled_rows_are_recorded_on_their_operation_date(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: lines 7 and 9 are dated on their value dates (2024-01-17 and 2026-10-19).
+
+        Contract (D over A), today pinned to 2026-10-19, on the mixed file. First the premise: the value date still decides
+        which rows are left out, lines 8, 10 and 12 (line 8 is traded on 16/10 and valued on 20/10). Then each kept row is
+        recorded on its operation date, its FEE too: line 7 on 2024-01-15; line 9, traded on 15/10 and valued today, on
+        2026-10-15; line 11, without a value date, on 2026-10-19."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SETTLEMENT_ROWS), broker_id=1)
+
+        notes = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert [sorted(line for evidence in note.evidence for line in evidence.row_numbers) for note in notes] == [_FINECO_UNSETTLED_LINES], "premise (A): the value date decides"
+        assert _fineco_transactions(out) == _FINECO_SETTLED_TRANSACTIONS, "B-52: a kept row is recorded on its operation date, with its FEE"
+
+    def test_fineco_incomplete_rows_are_recorded_on_their_operation_date(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: every transaction is dated on its row's value date.
+
+        Contract (D over B): the incomplete file imports as W-B83 pins it (premise: the same validation issues). Each
+        transaction is dated on its row's operation date. This includes the FEE of line 14, whose BUY is refused because
+        its ``Quantita`` cannot be read."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_INCOMPLETE_FILE), broker_id=1)
+
+        assert [(issue.row, issue.code) for issue in out.validation_issues] == _FINECO_INCOMPLETE_ISSUES, "premise (B): today's validation issues"
+        assert _fineco_transactions(out) == _FINECO_INCOMPLETE_TRANSACTIONS, "B-52: every transaction on its row's operation date"
+
+    def test_guard_fineco_an_empty_or_unreadable_operation_date_falls_back_to_the_value_date(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard (D), green today and after. It cannot be red, because today every row is already dated on its value date.
+
+        A row whose ``Operazione`` is empty (line 7) or unreadable (line 8, ``31/02/2024``) is recorded on its ``Data
+        valuta``, 2024-01-17, and so is its Variant-B FEE. The value date still decides whether such a row is settled: line
+        9, with an empty ``Operazione`` and valued tomorrow, is left out and noted, and no warning is given."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95"),
+            _fineco_row("31/02/2024", "17/01/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "A", "10", "EUR", "33.34500", "", "333.45", "2.95"),
+            _fineco_row("", "20/10/2026", "Compravendita titoli", "VANGUARD FTSE ALL-WORLD", "IE00BK5BQT80", "A", "2", "EUR", "111.47500", "", "222.95", "2.95"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2024-01-17", "5", ("EUR", "-528.55"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+            _fineco_fee("2024-01-17", "-2.95", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+            _fineco_tx("BUY", "2024-01-17", "10", ("EUR", "-330.50"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+            _fineco_fee("2024-01-17", "-2.95", "IE00BKM4GZ66", "ISHARES CORE MSCI EM IMI"),
+        ], "without a readable operation date, the value date is the row's date"
+        notes = _fineco_notices(out, FINECO_NOT_YET_SETTLED)
+        assert [sorted(line for evidence in note.evidence for line in evidence.row_numbers) for note in notes] == [[9]], "the value date still decides whether the row is settled"
+        assert [(notice.severity, notice.code) for notice in out.warnings if notice.severity == "warning"] == []
+
+    def test_fineco_a_row_without_a_readable_date_is_skipped_and_listed_as_unreadable(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the row is skipped with a plain-string warning (code ``legacy``, no ``report_issue``). Contract (Fineco left the
+        beta, W-B92): if neither ``Operazione`` nor ``Data valuta`` can be read, the row gives no transaction and is listed, on its
+        line (7), by one ``rows_unreadable`` warning that asks for a report; no ``legacy`` notice and no N74 note. The row after it
+        imports; it is traded and valued on the same day, so its date is the same before and after B-52."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("", "n.d.", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "2.95"),
+            _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "", "", ""),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [_fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC")]
+        assert [(notice.severity, notice.code) for notice in out.warnings] == [("warning", "rows_unreadable")], [(n.severity, n.code, n.message) for n in out.warnings]
+        (notice,) = out.warnings
+        assert (notice.context or {}).get("report_issue") is True and (notice.context or {}).get("count") == 1
+        assert sorted(line for evidence in notice.evidence for line in evidence.row_numbers) == [_FINECO_FIRST_LINE], "the notice lists the skipped row's line"
+
+    def test_fineco_plugin_version_is_1_5_0(self):
+        """Red today: 1.4.0. Contract (Fineco left the beta, W-B92): the rows it leaves out are now the shared ``rows_not_recognized``
+        and ``rows_unreadable`` notices instead of plain strings, so the output for the same file changes and its version becomes 1.5.0."""
+        assert FinecoBrokerProvider().plugin_version == "1.5.0"
+
+
+# =============================================================================
+# FINECO — CONTROVALORE INCLUDES THE COMMISSION (solution B, developer's decision of 21/10/2026)
+# =============================================================================
+
+#: Four rows SCALED from a real Fineco export (GitHub discussion #49): the same structure and arithmetic, other quantities, prices
+#: and amounts. Controvalore = executed price x quantity +/- commission (+ for a BUY, - for a SELL), Prezzo = Controvalore /
+#: quantity, a dividend's Controvalore is net (gross - tax). Row ``i`` is on line ``7 + i``.
+_FINECO_SCALED_ROWS = [
+    # 1 — BUY 40 at the executed price 21.50 = 860.00, + commission 2.95: Controvalore 862.95.
+    _fineco_row("26/05/2026", "28/05/2026", "Compravendita titoli", "ISH MSCI GLB USD-AC", "IE00I8KRLL9", "A", "40", "EUR", "21.57375", "1.00000", "862.95", "2.95"),
+    # 2 — SELL 4 at the executed price 62.40 = 249.60, - commission 2.95: Controvalore 246.65.
+    _fineco_row("12/08/2026", "14/08/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "V", "4", "EUR", "61.66250", "1.00000", "246.65", "2.95"),
+    # 3 — BUY with a commission of 0.00: Controvalore is the whole cash, no FEE.
+    _fineco_row("05/01/2026", "07/01/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "A", "3", "EUR", "55.80000", "1.00000", "167.40", "0.00"),
+    # 4 — dividend, gross 1.58 - tax 0.41 = Controvalore 1.17 (already net), commission 0.00, no Segno.
+    _fineco_row("24/06/2026", "24/06/2026", "Dividendo", "LEONARDO", "IT0003856405", "", "4", "EUR", "0.00000", "1.00000", "1.17", "0.00"),
+]
+#: What the four rows import (operation dates, B-52): the BUY and the SELL without their commission, which is in the FEE.
+_FINECO_SCALED_TRANSACTIONS = [
+    _fineco_tx("BUY", "2026-05-26", "40", ("EUR", "-860.00"), "IE00I8KRLL9", "Compravendita titoli: ISH MSCI GLB USD-AC"),
+    _fineco_fee("2026-05-26", "-2.95", "IE00I8KRLL9", "ISH MSCI GLB USD-AC"),
+    _fineco_tx("SELL", "2026-08-12", "-4", ("EUR", "249.60"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+    _fineco_fee("2026-08-12", "-2.95", "IT0003856405", "LEONARDO"),
+    _fineco_tx("BUY", "2026-01-05", "3", ("EUR", "-167.40"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+    _fineco_tx("DIVIDEND", "2026-06-24", "0", ("EUR", "1.17"), "IT0003856405", "Dividendo: LEONARDO"),
+]
+
+#: The real export's shape: ``;`` delimiter, Italian decimal commas, ONE commission column (Commissioni amministrato) right
+#: after Controvalore — 12 columns, not the samples' 15.
+_FINECO_REAL_COLUMNS = [*FINECO_COLUMNS[:11], "Commissioni amministrato"]
+_FINECO_REAL_PREAMBLE = ["Dossier n.: 1234567", "Intestazione Dossier: TEST TEST", "", "Titoli e operazioni", ""]
+_FINECO_REAL_ROWS = [
+    "26/05/2026;28/05/2026;Compravendita titoli;ISH MSCI GLB USD-AC;IE00I8KRLL9;A;40;EUR;21,57375;1,00000;862,95;2,95",
+    "12/08/2026;14/08/2026;Compravendita titoli;LEONARDO;IT0003856405;V;4;EUR;61,66250;1,00000;246,65;2,95",
+    "05/01/2026;07/01/2026;Compravendita titoli;LEONARDO;IT0003856405;A;3;EUR;55,80000;1,00000;167,40;0,00",
+    "24/06/2026;24/06/2026;Dividendo;LEONARDO;IT0003856405;;4;EUR;0,00000;1,00000;1,17;0,00",
+]
+
+
+def _write_fineco_layout(tmp_path: Path, columns: List[str], preamble: List[str], rows: List[str], delimiter: str = ",") -> Path:
+    """An export of any layout: ``preamble`` lines padded to the width of ``columns``, the header row, then ``rows`` (ready lines)."""
+    pad = delimiter * (len(columns) - 1)
+    lines = [*(f"{text}{pad}" for text in preamble), delimiter.join(columns), *rows]
+    path = tmp_path / "fineco-layout.csv"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _fineco_multi_fee_row(segno: str) -> List[str]:
+    """A 15-cell trade row with TWO commission cells filled: column 11 (Commissioni Fondi Sw/Ingr/Uscita) 1.50 and column 14
+    (Commissioni amministrato) 2.45, 3.95 together. ``_fineco_row`` fills only the last commission cell."""
+    return ["14/09/2026", "16/09/2026", "Compravendita titoli", "ISH MSCI GLB USD-AC", "IE00I8KRLL9", segno, "5", "EUR", "100.00000", "1.00000", "500.00", "1.50", "", "", "2.45"]
+
+
+class TestFinecoControvaloreIncludesCommission:
+    """Solution B (developer's decision, 21/10/2026): in a Fineco export the Controvalore of a trade already contains the
+    commission (a real export, GitHub discussion #49) — a BUY's is executed price x quantity + commission, a SELL's is
+    executed price x quantity - commission. Today (Variant B, a header with more than 11 columns) the plugin takes Controvalore
+    verbatim and adds a separate FEE of the summed commission columns, so the commission is counted twice.
+
+    Contract. A **Compravendita titoli** row (BUY with Segno A, SELL with Segno V) with a readable Controvalore and a summed
+    commission ``fee > 0`` gives:
+
+    - BUY: cash = -(Controvalore - fee) and a FEE of -fee (together -Controvalore);
+    - SELL: cash = +(Controvalore + fee) and a FEE of -fee (together +Controvalore).
+
+    Not adjusted (guards, green today and after): a dividend (already net), Stacco Cedole, Aumento capitale (no cash),
+    ``Rimborso`` rows, rows with no commission or a commission of 0 (no FEE row), Variant A files (no commission columns),
+    rows with a blank or unreadable Controvalore (cash stays 0, W-B83), a BUY whose fee is more than its Controvalore.
+
+    OPEN QUESTIONS for the developer (the tests pin only what is said in each docstring):
+
+    - Q-WB-1: is the Controvalore of a ``Rimborso`` (a redemption, also the bond above par) net of the commission too? Today it
+      is not adjusted: SELL = +Controvalore and the FEE as before. The guards pin today's behaviour, not a decision.
+    - Q-WB-2: a BUY whose fee is more than its Controvalore is inconsistent data; what cash should it give? Not pinned.
+    - Q-WB-3: in a row with Divisa USD, is Controvalore in USD or in EUR? The cash is tagged with the row's Divisa as today and
+      the FEE is in EUR; the arithmetic test is provisional.
+
+    «Today» is pinned on the plugin module (``_pin_fineco_today``). The reds fail today on the double counting (a BUY of
+    -862.95 instead of -860.00); the guards are green today and must stay so.
+    """
+
+    # --- the cure (red today) ---
+
+    def test_fineco_scaled_export_trades_are_net_of_the_commission(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the BUY of line 7 is cash -862.95 (the Controvalore, commission included) and its FEE -2.95 on top.
+
+        Contract: four rows scaled from a real export (``_FINECO_SCALED_ROWS``). The BUY of 40 gives cash -860.00 and a FEE
+        of -2.95; the SELL of 4 gives cash +249.60 and a FEE of -2.95; the BUY with a commission of 0.00 gives -167.40 and no
+        FEE; the net dividend gives +1.17 and no FEE. Compared in order and with the operation dates; nothing is incomplete
+        or left out, so no notice and no validation issue."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SCALED_ROWS), broker_id=1)
+
+        assert _fineco_transactions(out) == _FINECO_SCALED_TRANSACTIONS, "solution B: Controvalore contains the commission, the BUY and the SELL are net of it"
+        assert out.validation_issues == []
+        assert [notice.code for notice in out.warnings] == [], "every row is settled and complete"
+
+    def test_fineco_real_export_shape_trades_are_net_of_the_commission(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today, for the same double counting as the 15-column file.
+
+        Contract: the real export's shape — 12 columns (one commission column, Commissioni amministrato, right after
+        Controvalore), ``;`` delimiter, Italian decimal commas (``862,95``, ``2,95``, ``21,57375``, a commission of ``0,00``)
+        and the metadata lines of the real file (``Dossier n.``, ``Intestazione Dossier``) — imports exactly as the same
+        four rows in the 15-column file."""
+        _pin_fineco_today(monkeypatch)
+        path = _write_fineco_layout(tmp_path, _FINECO_REAL_COLUMNS, _FINECO_REAL_PREAMBLE, _FINECO_REAL_ROWS, delimiter=";")
+        provider = FinecoBrokerProvider()
+
+        assert provider.can_parse(path), "premise: the real shape is recognised as a Fineco export"
+        out = provider.parse(path, broker_id=1)
+
+        assert _fineco_transactions(out) == _FINECO_SCALED_TRANSACTIONS, "solution B on the real shape: net of the commission, 0,00 gives no FEE"
+        assert out.validation_issues == []
+        assert [notice.code for notice in out.warnings] == []
+
+    def test_fineco_a_trades_cash_and_fee_together_are_its_controvalore(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the BUY of 862.95 and its FEE of 2.95 add up to -865.90.
+
+        Invariant over the trade rows of ``_FINECO_SCALED_ROWS``: for each one, the cash of its BUY (or SELL) plus the FEE
+        of the same security on the same day (none when the commission is 0.00) is -Controvalore for Segno A and
+        +Controvalore for Segno V. The transactions of a row are found by security and day, never by position."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, _FINECO_SCALED_ROWS), broker_id=1)
+
+        txs = _fineco_transactions(out)
+        trades = [row for row in _FINECO_SCALED_ROWS if row[2] == "Compravendita titoli"]
+        assert len(trades) == 3
+        for row in trades:
+            day = "-".join(reversed(row[0].split("/")))
+            isin = row[4]
+            legs = [tx for tx in txs if tx[0] in ("BUY", "SELL") and tx[1] == day and tx[5] == isin]
+            fees = [tx for tx in txs if tx[0] == "FEE" and tx[1] == day and tx[5] == isin]
+            assert len(legs) == 1, f"{day} {isin}: one trade expected, got {legs}"
+            sign = -1 if row[5] == "A" else 1
+            total = legs[0][4] + sum((fee[4] for fee in fees), Decimal("0"))
+            assert total == sign * Decimal(row[10]), f"{day} {isin}: cash {legs[0][4]} + fees {[fee[4] for fee in fees]} = {total}, Controvalore {row[10]}"
+
+    @pytest.mark.parametrize(
+        ("segno", "trade"),
+        [
+            pytest.param("A", _fineco_tx("BUY", "2026-09-14", "5", ("EUR", "-496.05"), "IE00I8KRLL9", "Compravendita titoli: ISH MSCI GLB USD-AC"), id="buy"),
+            pytest.param("V", _fineco_tx("SELL", "2026-09-14", "-5", ("EUR", "503.95"), "IE00I8KRLL9", "Compravendita titoli: ISH MSCI GLB USD-AC"), id="sell"),
+        ],
+    )
+    def test_fineco_several_commission_columns_are_all_taken_out(self, segno: str, trade: tuple, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the BUY is cash -500.00 (the whole Controvalore) and the SELL +500.00.
+
+        Contract: a row with a commission in column 11 (1.50) and another in column 14 (2.45) has a fee of 3.95. With a
+        Controvalore of 500.00 the BUY gives cash -496.05 and the SELL +503.95, each with one FEE of -3.95."""
+        _pin_fineco_today(monkeypatch)
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [_fineco_multi_fee_row(segno)]), broker_id=1)
+
+        assert _fineco_transactions(out) == [trade, _fineco_fee("2026-09-14", "-3.95", "IE00I8KRLL9", "ISH MSCI GLB USD-AC")], "the summed commissions are taken out of the Controvalore, once"
+
+    def test_fineco_a_foreign_currency_trade_is_net_of_the_commission_provisional(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Red today: the USD BUY is cash -359.95 (the whole Controvalore) and the SELL +189.35.
+
+        PROVISIONAL (Q-WB-3): it is not known if the Controvalore of a row with Divisa USD is in USD or in EUR. This pins the
+        same arithmetic as for EUR, with the cash tagged with the row's Divisa as today and the FEE in EUR: a BUY of 2 at the
+        executed price 178.50 = 357.00, + 2.95, Controvalore 359.95, gives USD -357.00; a SELL of 1 at 192.30, - 2.95,
+        Controvalore 189.35, gives USD +192.30. Each has a FEE of -2.95 EUR. Change it with the answer."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("20/02/2026", "22/02/2026", "Compravendita titoli", "APPLE INC", "US0378331005", "A", "2", "USD", "179.97500", "1.0850", "359.95", "2.95"),
+            _fineco_row("15/05/2026", "17/05/2026", "Compravendita titoli", "APPLE INC", "US0378331005", "V", "1", "USD", "189.35000", "1.0920", "189.35", "2.95"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2026-02-20", "2", ("USD", "-357.00"), "US0378331005", "Compravendita titoli: APPLE INC"),
+            _fineco_fee("2026-02-20", "-2.95", "US0378331005", "APPLE INC"),
+            _fineco_tx("SELL", "2026-05-15", "-1", ("USD", "192.30"), "US0378331005", "Compravendita titoli: APPLE INC"),
+            _fineco_fee("2026-05-15", "-2.95", "US0378331005", "APPLE INC"),
+        ], "provisional (Q-WB-3): same arithmetic as EUR, cash in the row's Divisa, FEE in EUR"
+
+    # --- not adjusted (guards, green today and after) ---
+
+    @pytest.mark.parametrize("fee", ["", "0.00"])
+    def test_guard_fineco_a_trade_without_a_commission_keeps_its_controvalore(self, fee: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after: a commission cell that is blank or ``0.00`` is a fee of 0. The BUY is cash
+        -Controvalore, the SELL +Controvalore, and no FEE row is emitted."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("05/01/2026", "07/01/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "A", "3", "EUR", "55.80000", "1.00000", "167.40", fee),
+            _fineco_row("12/08/2026", "14/08/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "V", "4", "EUR", "61.66250", "1.00000", "246.65", fee),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2026-01-05", "3", ("EUR", "-167.40"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+            _fineco_tx("SELL", "2026-08-12", "-4", ("EUR", "246.65"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+        ]
+
+    def test_guard_fineco_rimborso_keeps_its_controvalore_and_its_fee_as_today(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after. It pins TODAY'S behaviour, not a decision (Q-WB-1: is the Controvalore of a
+        redemption net of the commission too?).
+
+        A plain ``Rimborso`` with a commission of 2.00 stays a SELL of +Controvalore (2000.00) with its FEE of -2.00. A bond
+        redeemed above par with a commission of 3.50 keeps its split: the par SELL of +10000.00, the INTEREST surplus of
+        +40.00, and the FEE of -3.50."""
+        _pin_fineco_today(monkeypatch)
+        premium = "Rimborso a scadenza — premio/rivalutazione oltre la pari: BTP ITALIA FOI NV28"
+        rows = [
+            _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP VALORE SC MZ30", "IT0005583478", " ", "2000", "EUR", "100.00000", "1.00000", "2000.00", "2.00"),
+            _fineco_row("01/09/2024", "03/09/2024", "Rimborso", "BTP ITALIA FOI NV28", "IT0005000001", " ", "10000", "EUR", "100.40000", "1.00000", "10040.00", "3.50"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("SELL", "2024-09-01", "-2000", ("EUR", "2000.00"), "IT0005583478", "Rimborso: BTP VALORE SC MZ30"),
+            _fineco_fee("2024-09-01", "-2.00", "IT0005583478", "BTP VALORE SC MZ30"),
+            _fineco_tx("SELL", "2024-09-01", "-10000", ("EUR", "10000.00"), "IT0005000001", "Rimborso: BTP ITALIA FOI NV28"),
+            _fineco_tx("INTEREST", "2024-09-01", "0", ("EUR", "40.00"), "IT0005000001", premium, ("import", "fineco", "maturity_premium")),
+            _fineco_fee("2024-09-01", "-3.50", "IT0005000001", "BTP ITALIA FOI NV28"),
+        ]
+
+    def test_guard_fineco_capital_increase_dividend_and_coupon_keep_their_net_and_their_fee(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after. With a commission cell filled, an ``Aumento capitale`` is still an ADJUSTMENT with no
+        cash, a ``Dividendo`` and a ``Stacco Cedole`` (already net) keep their Controvalore, and each has its FEE as today."""
+        _pin_fineco_today(monkeypatch)
+        rows = [
+            _fineco_row("19/06/2024", "19/06/2024", "Aumento capitale", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", " ", "3", "EUR", "5.02600", "1.00000", "15.08", "1.50"),
+            _fineco_row("15/06/2024", "17/06/2024", "Dividendo", "ISHARES JPMORGAN EM BOND", "IE00B2NPKV68", "", "", "EUR", "", "", "20.95", "1.00"),
+            _fineco_row("01/06/2024", "03/06/2024", "Stacco Cedole", "BTP VALORE SC MZ30", "IT0005583478", "", "", "EUR", "", "", "24.38", "1.00"),
+        ]
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, rows), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("ADJUSTMENT", "2024-06-19", "3", None, "IE00B4L5Y983", "Aumento capitale: ISHARES MSCI WORLD ACC"),
+            _fineco_fee("2024-06-19", "-1.50", "IE00B4L5Y983", "ISHARES MSCI WORLD ACC"),
+            _fineco_tx("DIVIDEND", "2024-06-15", "0", ("EUR", "20.95"), "IE00B2NPKV68", "Dividendo: ISHARES JPMORGAN EM BOND"),
+            _fineco_fee("2024-06-15", "-1.00", "IE00B2NPKV68", "ISHARES JPMORGAN EM BOND"),
+            _fineco_tx("INTEREST", "2024-06-01", "0", ("EUR", "24.38"), "IT0005583478", "Stacco Cedole: BTP VALORE SC MZ30"),
+            _fineco_fee("2024-06-01", "-1.00", "IT0005583478", "BTP VALORE SC MZ30"),
+        ]
+
+    def test_guard_fineco_variant_a_file_has_no_fee_and_keeps_its_controvalore(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after: a Variant-A file (11 columns, the header has no commission column) has nothing to take
+        out. The BUY is cash -Controvalore, the SELL +Controvalore, and there is no FEE."""
+        _pin_fineco_today(monkeypatch)
+        buy = _fineco_row("15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50")[:11]
+        sell = _fineco_row("15/03/2024", "19/03/2024", "Compravendita titoli", "ISHARES CORE MSCI EM IMI", "IE00BKM4GZ66", "V", "4", "EUR", "33.46250", "", "133.85")[:11]
+        path = _write_fineco_layout(tmp_path, FINECO_COLUMNS[:11], ["Dossier: 123456789", "Intestazione Dossier: TEST TEST", "", "Titoli e operazioni", ""], [",".join(buy), ",".join(sell)])
+
+        out = FinecoBrokerProvider().parse(path, broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx("BUY", "2024-01-15", "5", ("EUR", "-531.50"), "IE00B4L5Y983", "Compravendita titoli: ISHARES MSCI WORLD ACC"),
+            _fineco_tx("SELL", "2024-03-15", "-4", ("EUR", "133.85"), "IE00BKM4GZ66", "Compravendita titoli: ISHARES CORE MSCI EM IMI"),
+        ]
+
+    @pytest.mark.parametrize(
+        ("segno", "controvalore", "tx_type", "quantity"),
+        [
+            pytest.param("A", "", "BUY", "3", id="buy-blank"),
+            pytest.param("A", "n.d.", "BUY", "3", id="buy-unreadable"),
+            pytest.param("V", "", "SELL", "-3", id="sell-blank"),
+            pytest.param("V", "n.d.", "SELL", "-3", id="sell-unreadable"),
+        ],
+    )
+    def test_guard_fineco_a_trade_without_a_readable_controvalore_is_not_adjusted(self, segno: str, controvalore: str, tx_type: str, quantity: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after (W-B83). With a blank or unreadable Controvalore the cash stays 0, whatever the fee: the
+        adjustment is not applied (it would invent a cash out of a missing number). The FEE row is still there, and the row is
+        still named by one ``fineco_incomplete_rows`` note."""
+        _pin_fineco_today(monkeypatch)
+        row = _fineco_row("20/02/2026", "22/02/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", segno, "3", "EUR", "55.80000", "1.00000", controvalore, "2.95")
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [row]), broker_id=1)
+
+        assert _fineco_transactions(out) == [
+            _fineco_tx(tx_type, "2026-02-20", quantity, ("EUR", "0"), "IT0003856405", "Compravendita titoli: LEONARDO"),
+            _fineco_fee("2026-02-20", "-2.95", "IT0003856405", "LEONARDO"),
+        ]
+        notices = _fineco_notices(out, FINECO_INCOMPLETE_ROWS)
+        assert len(notices) == 1 and sorted(line for evidence in notices[0].evidence for line in evidence.row_numbers) == [_FINECO_FIRST_LINE]
+
+    def test_guard_fineco_a_fee_above_the_controvalore_does_not_raise_or_lose_the_fee(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Guard, green today and after. Q-WB-2: a BUY whose fee (2.95) is more than its Controvalore (2.00) is inconsistent
+        data, and what cash it should give is the developer's call, so the number is NOT pinned. Whatever the plugin does, it
+        does not raise, the BUY's cash is never positive (a purchase never brings cash in), and the FEE row is still there."""
+        _pin_fineco_today(monkeypatch)
+        row = _fineco_row("20/02/2026", "22/02/2026", "Compravendita titoli", "LEONARDO", "IT0003856405", "A", "1", "EUR", "2.00000", "1.00000", "2.00", "2.95")
+
+        out = FinecoBrokerProvider().parse(_write_fineco(tmp_path, [row]), broker_id=1)
+
+        buys = [tx for tx in out.transactions if tx.type == TransactionType.BUY]
+        assert len(buys) == 1 and buys[0].cash is not None
+        assert buys[0].cash.amount <= 0, f"a BUY never brings cash in, got {buys[0].cash.amount}"
+        fees = [tx for tx in out.transactions if tx.type == TransactionType.FEE]
+        assert len(fees) == 1 and fees[0].cash is not None and fees[0].cash.amount == Decimal("-2.95"), "the FEE row is still there"
+
+
+# =============================================================================
 # PLUGIN -> FRONTEND CONTRACT
 # =============================================================================
 
@@ -2583,6 +3744,20 @@ class _ContractSampleSet:
     plugin_code: str
     position: int
     name: str
+
+
+@dataclass(frozen=True)
+class _ContractMembers:
+    """A set of Crédit Agricole members named by file (``{role: (names,)}``); the contract tests parse its combined file."""
+
+    name: str
+    securities: tuple = ()
+    account: tuple = ()
+
+
+#: The two exports of 1.5.0 as sets of one member: the richest surface of todos and notices (the account arm books a row alone).
+CA_ACCOUNT_ONLY = _ContractMembers("credit_agricole-account-only", account=(CA_CONTI_SAMPLE.name,))
+CA_SECURITIES_ONLY = _ContractMembers("credit_agricole-securities-only", securities=(CA_SAMPLE.name,))
 
 
 class TestPluginFrontendContract:
@@ -2602,8 +3777,10 @@ class TestPluginFrontendContract:
     # whole class applies to it. A report-set plugin's entry names one of its sample sets:
     # the test parses the set's combined file, built when the test runs (a member alone is refused).
     CONTRACT_SAMPLES = [
-        ("broker_credit_agricole", CA_CONTI_SAMPLE),
-        ("broker_credit_agricole", CA_SAMPLE),
+        ("broker_credit_agricole", _ContractSampleSet("broker_credit_agricole", 0, "credit_agricole-main-set")),
+        ("broker_credit_agricole", _ContractSampleSet("broker_credit_agricole", 1, "credit_agricole-gap-set")),
+        ("broker_credit_agricole", CA_ACCOUNT_ONLY),
+        ("broker_credit_agricole", CA_SECURITIES_ONLY),
         ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 0, "danske_bank-main-set")),
         ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 1, "danske_bank-gap-set")),
         # Scalable Capital (37_brimScalable): notices only, each with the rows of the file as evidence.
@@ -2636,7 +3813,10 @@ class TestPluginFrontendContract:
 
     @classmethod
     def _resolve(cls, plugin: str, path) -> Path:
-        """A sample file as is; a report-set sample set as its combined file."""
+        """A sample file as is; a report-set sample set (or a set of named members) as its combined file."""
+        if isinstance(path, _ContractMembers):
+            members = {role: [SAMPLE_DIR / name for name in names] for role, names in (("securities", path.securities), ("account", path.account)) if names}
+            return _ca_combined_file(members, path.name)
         if not isinstance(path, _ContractSampleSet):
             return path
         provider = cls._plugin(path.plugin_code)
@@ -2689,7 +3869,7 @@ class TestPluginFrontendContract:
         Only the account layout bundles several charges into one amount; the securities
         layout states them separately and legitimately never opens this channel.
         """
-        out = self._parse(CA_CONTI_SAMPLE)
+        out = self._parse(CA_ACCOUNT_ONLY)
 
         hinted = [t for t in out.field_todos if isinstance(t.context, dict) and "split_hint" in t.context]
         assert hinted, "account sample must exercise the split channel"
@@ -2763,7 +3943,7 @@ class TestPluginFrontendContract:
         ``derived_quantity`` is raised by the shared maturity model rather than by the
         account parser, so it is expected from the securities layout, not from this one.
         """
-        out = self._parse(CA_CONTI_SAMPLE)
+        out = self._parse(CA_ACCOUNT_ONLY)
 
         emitted = {t.reason_code for t in out.field_todos}
         assert emitted == {
@@ -2787,7 +3967,7 @@ class TestPluginFrontendContract:
         The step asks the user to overrule the plugin; doing that on an assertion alone,
         with the source row not on screen, is guesswork.
         """
-        out = self._parse(CA_CONTI_SAMPLE)
+        out = self._parse(CA_ACCOUNT_ONLY)
 
         by_reason: dict = {}
         for todo in out.field_todos:
@@ -2804,7 +3984,7 @@ class TestPluginFrontendContract:
         An unknown kind still renders — under a generic heading — so the assertion is here,
         where a new kind can be paired with its translation, and not in the component.
         """
-        out = self._parse(CA_CONTI_SAMPLE)
+        out = self._parse(CA_ACCOUNT_ONLY)
 
         noticed = [(aid, n) for aid, info in out.extracted_assets.items() for n in info.notices]
         assert noticed, "account sample must raise at least one asset notice"
@@ -2814,7 +3994,7 @@ class TestPluginFrontendContract:
             assert notice.reason and notice.reason.strip(), f"asset {aid}: notice with no reason"
             assert all(0 <= i < len(out.transactions) for i in notice.transaction_indexes), f"asset {aid}: notice points outside the transaction list"
 
-    def test_an_unknown_causale_never_escalates_past_information(self):
+    def test_an_unknown_causale_never_escalates_past_information(self, tmp_path):
         """A causale we have never seen is news, not a fault.
 
         It is reported so the user knows the row was booked on a guess, and so we can add
@@ -2824,7 +4004,7 @@ class TestPluginFrontendContract:
         """
         rows = read_rows(CA_CONTI_SAMPLE)
         rows.append(["12/07/2026", "12/07/2026", "CAUSALE MAI VISTA", "MOVIMENTO IGNOTO", "'-10,00", "EUR"])
-        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+        out = _ca_parse_rows(rows, _CA_ROLE_ACCOUNT, tmp_path)
 
         unknown = [n for n in out.warnings if n.code == "ca_unknown_causale"]
         assert unknown, "an unmapped causale must be declared"
@@ -2840,7 +4020,7 @@ class TestPluginFrontendContract:
         complaint is deliberately left to the bulk editor.
         """
         editable = {"type", "date", "quantity", "asset_id", "cash", "cash.amount", "cash.code"}
-        out = self._parse(CA_CONTI_SAMPLE)
+        out = self._parse(CA_ACCOUNT_ONLY)
 
         for todo in out.field_todos:
             if todo.severity != "blocker":
@@ -2859,1738 +4039,28 @@ class TestCreditAgricoleCanonicalCharacterization:
     The expected values below are deliberately literal, readable Python structures:
     they are not hashes, serialized blobs, or values computed from parser output at
     test runtime. Every BRIMParseOutput channel and every nested field participates.
+
+    Version 2.0.0: each layout is a set of one member (an export is no longer read alone), combined and parsed.
+
+    - ``account``: the same transactions, todos and assets the 1.5.0 literal held, one for one, in the order of the combined file
+      (by date) instead of the file's; the rows the todos and notices cite are lines of the combined file. Checked against the old
+      literal by comparing the two as multisets before this one was written. The warning ``ca_account_maturity_unlinked`` is
+      kept from the 1.5.0 literal although the 2.0.0 plugin does not emit it (``Booking.warnings`` is never copied into the
+      parse output): see ``test_credit_agricole_account_unidentifiable_maturity_books_full_sell``.
+    - ``securities``: only the 36 transfers in are imported (cashless adjustments) and every other row is listed as left out, because
+      a securities export alone has no account to state the cash of a coupon, a purchase or a maturity. The automatic cash legs of
+      1.5.0 are gone by design.
+    - The combined file does not depend on the format of its members, so the XLSX needs no row offset.
     """
 
     LAYOUTS = [
-        ("securities", CA_SAMPLE, CA_SAMPLE_XLSX, 9),
-        ("account", CA_CONTI_SAMPLE, CA_CONTI_SAMPLE_XLSX, 0),
+        ("securities", CA_SAMPLE, CA_SAMPLE_XLSX),
+        ("account", CA_CONTI_SAMPLE, CA_CONTI_SAMPLE_XLSX),
     ]
 
     EXPECTED_OUTPUTS = {
         "securities": {
             "transactions": [
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483647,
-                    "type": "INTEREST",
-                    "date": "2026-06-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "218.75"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/12/2026 1.25%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-06-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-218.75"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/12/2026 1.25% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483646,
-                    "type": "INTEREST",
-                    "date": "2026-05-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-05-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483645,
-                    "type": "SELL",
-                    "date": "2026-05-21",
-                    "quantity": "-30000.000",
-                    "cash": {"code": "EUR", "amount": "30000.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "TITOLI SCADUTI: BTP 05/26 0.55FOICUM (redeemed at par 100, nominal 30000.000 [position], premium 105.00)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483645,
-                    "type": "INTEREST",
-                    "date": "2026-05-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "105.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "maturity_premium"],
-                    "description": "[TITOLI SCADUTI — premio/rivalutazione a scadenza] BTP 05/26 0.55FOICUM (surplus over par 105.00)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-05-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-105.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-05-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-30000.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for SELL BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483645,
-                    "type": "INTEREST",
-                    "date": "2026-05-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "338.04"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 05/26 0.55FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-05-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-338.04"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483644,
-                    "type": "INTEREST",
-                    "date": "2026-05-17",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "223.12"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 17-11-28 FUT CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-05-17",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-223.12"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 17-11-28 FUT CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483643,
-                    "type": "INTEREST",
-                    "date": "2026-05-16",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "324.84"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP FUT 16-11-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-05-16",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-324.84"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP FUT 16-11-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483642,
-                    "type": "INTEREST",
-                    "date": "2026-04-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "258.99"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 19-27 0.65%FOIEX",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-04-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-258.99"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 19-27 0.65%FOIEX (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483641,
-                    "type": "INTEREST",
-                    "date": "2026-04-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "295.99"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 19-27 0.65FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-04-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-295.99"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 19-27 0.65FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483640,
-                    "type": "INTEREST",
-                    "date": "2026-04-27",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "105.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP FUT 27-04-37 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-04-27",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-105.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP FUT 27-04-37 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483639,
-                    "type": "INTEREST",
-                    "date": "2026-03-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "732.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 01/03/35 3,35%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-03-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-732.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 01/03/35 3,35% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483638,
-                    "type": "INTEREST",
-                    "date": "2026-03-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "360.94"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/3/32 1,65%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-03-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-360.94"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/3/32 1,65% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483646,
-                    "type": "INTEREST",
-                    "date": "2026-02-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-02-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483637,
-                    "type": "INTEREST",
-                    "date": "2026-02-15",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "98.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 15/02/29 0,45%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-02-15",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-98.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 15/02/29 0,45% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483636,
-                    "type": "INTEREST",
-                    "date": "2026-02-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "207.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/08/30 0.95%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-02-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-207.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/08/30 0.95% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483635,
-                    "type": "INTEREST",
-                    "date": "2026-02-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "131.25"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 01/08/31 0,60%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-02-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-131.25"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 01/08/31 0,60% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483647,
-                    "type": "INTEREST",
-                    "date": "2025-12-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "218.75"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/12/2026 1.25%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-12-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-218.75"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/12/2026 1.25% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483646,
-                    "type": "INTEREST",
-                    "date": "2025-11-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-11-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483645,
-                    "type": "INTEREST",
-                    "date": "2025-11-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "167.74"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 05/26 0.55FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-11-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-167.74"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483644,
-                    "type": "INTEREST",
-                    "date": "2025-11-17",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "223.12"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 17-11-28 FUT CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-11-17",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-223.12"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 17-11-28 FUT CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483643,
-                    "type": "INTEREST",
-                    "date": "2025-11-16",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "180.47"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP FUT 16-11-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-11-16",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-180.47"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP FUT 16-11-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483634,
-                    "type": "SELL",
-                    "date": "2025-11-10",
-                    "quantity": "-1867.178",
-                    "cash": {"code": "EUR", "amount": "9984.47"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "FONDI: RIMBORSO: AMUNDI PRIMO INV LC",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-11-10",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-9984.47"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for SELL AMUNDI PRIMO INV LC (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "DEPOSIT",
-                    "date": "2025-11-07",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "20129.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for BUY AMUNDI PIO GLOB EQ G (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483633,
-                    "type": "BUY",
-                    "date": "2025-11-07",
-                    "quantity": "1843.575",
-                    "cash": {"code": "EUR", "amount": "-20129.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "SICAV: SOTTOSCR: AMUNDI PIO GLOB EQ G",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483641,
-                    "type": "INTEREST",
-                    "date": "2025-10-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "322.67"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 19-27 0.65FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-10-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-322.67"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 19-27 0.65FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483642,
-                    "type": "INTEREST",
-                    "date": "2025-10-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "282.34"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 19-27 0.65%FOIEX",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-10-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-282.34"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 19-27 0.65%FOIEX (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483640,
-                    "type": "INTEREST",
-                    "date": "2025-10-27",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "105.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP FUT 27-04-37 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-10-27",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-105.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP FUT 27-04-37 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483638,
-                    "type": "INTEREST",
-                    "date": "2025-09-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "360.94"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/3/32 1,65%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-09-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-360.94"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/3/32 1,65% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483639,
-                    "type": "INTEREST",
-                    "date": "2025-09-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "732.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 01/03/35 3,35%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-09-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-732.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 01/03/35 3,35% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483646,
-                    "type": "INTEREST",
-                    "date": "2025-08-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-08-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483637,
-                    "type": "INTEREST",
-                    "date": "2025-08-15",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "98.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 15/02/29 0,45%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-08-15",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-98.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 15/02/29 0,45% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483636,
-                    "type": "INTEREST",
-                    "date": "2025-08-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "207.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/08/30 0.95%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-08-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-207.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/08/30 0.95% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483635,
-                    "type": "INTEREST",
-                    "date": "2025-08-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "131.25"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 01/08/31 0,60%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-08-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-131.25"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 01/08/31 0,60% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "DEPOSIT",
-                    "date": "2025-07-24",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "50683.13"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for BUY BTP 01/03/35 3,35% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483639,
-                    "type": "BUY",
-                    "date": "2025-07-24",
-                    "quantity": "50000",
-                    "cash": {"code": "EUR", "amount": "-50683.13"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "ACQ.CONT.SU MERC.: BTP 01/03/35 3,35%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "DEPOSIT",
-                    "date": "2025-07-24",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "46603.73"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for BUY BTP 1/3/32 1,65% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483638,
-                    "type": "BUY",
-                    "date": "2025-07-24",
-                    "quantity": "50000",
-                    "cash": {"code": "EUR", "amount": "-46603.73"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "ACQ.CONT.SU MERC.: BTP 1/3/32 1,65%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483647,
-                    "type": "INTEREST",
-                    "date": "2025-06-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "218.75"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/12/2026 1.25%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-06-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-218.75"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/12/2026 1.25% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483632,
-                    "type": "SELL",
-                    "date": "2025-05-26",
-                    "quantity": "-95000.000",
-                    "cash": {"code": "EUR", "amount": "95000.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "TITOLI SCADUTI: BTP 20-25 1.40FOICUM (redeemed at par 100, nominal 95000.000 [position], premium 665.00)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483632,
-                    "type": "INTEREST",
-                    "date": "2025-05-26",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "665.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "maturity_premium"],
-                    "description": "[TITOLI SCADUTI — premio/rivalutazione a scadenza] BTP 20-25 1.40FOICUM (surplus over par 665.00)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-05-26",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-665.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 20-25 1.40FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-05-26",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-95000.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for SELL BTP 20-25 1.40FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483632,
-                    "type": "INTEREST",
-                    "date": "2025-05-26",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "1506.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 20-25 1.40FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-05-26",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-1506.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 20-25 1.40FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483646,
-                    "type": "INTEREST",
-                    "date": "2025-05-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-05-25",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-93.52"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483645,
-                    "type": "INTEREST",
-                    "date": "2025-05-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "348.57"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 05/26 0.55FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-05-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-348.57"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483644,
-                    "type": "INTEREST",
-                    "date": "2025-05-17",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "223.12"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 17-11-28 FUT CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-05-17",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-223.12"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 17-11-28 FUT CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483643,
-                    "type": "INTEREST",
-                    "date": "2025-05-16",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "180.47"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP FUT 16-11-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-05-16",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-180.47"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP FUT 16-11-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483641,
-                    "type": "INTEREST",
-                    "date": "2025-04-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "404.14"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 19-27 0.65FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-04-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-404.14"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 19-27 0.65FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483642,
-                    "type": "INTEREST",
-                    "date": "2025-04-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "353.62"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 19-27 0.65%FOIEX",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-04-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-353.62"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 19-27 0.65%FOIEX (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483640,
-                    "type": "INTEREST",
-                    "date": "2025-04-27",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "65.62"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP FUT 27-04-37 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-04-27",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-65.62"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP FUT 27-04-37 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "DEPOSIT",
-                    "date": "2025-02-17",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "15000.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for BUY BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483646,
-                    "type": "BUY",
-                    "date": "2025-02-17",
-                    "quantity": "15000",
-                    "cash": {"code": "EUR", "amount": "-15000.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "ACQ.CONT.SU MERC.: BTP PIU 25-2-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483637,
-                    "type": "INTEREST",
-                    "date": "2025-02-15",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "98.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 15/02/29 0,45%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-02-15",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-98.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 15/02/29 0,45% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483636,
-                    "type": "INTEREST",
-                    "date": "2025-02-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "207.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/08/30 0.95%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-02-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-207.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/08/30 0.95% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483635,
-                    "type": "INTEREST",
-                    "date": "2025-02-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "131.25"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 01/08/31 0,60%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2025-02-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-131.25"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 01/08/31 0,60% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483647,
-                    "type": "INTEREST",
-                    "date": "2024-12-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "218.75"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/12/2026 1.25%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-12-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-218.75"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/12/2026 1.25% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483632,
-                    "type": "INTEREST",
-                    "date": "2024-11-26",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "1028.03"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 20-25 1.40FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-11-26",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-1028.03"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 20-25 1.40FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483645,
-                    "type": "INTEREST",
-                    "date": "2024-11-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "219.59"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 05/26 0.55FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-11-21",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-219.59"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483644,
-                    "type": "INTEREST",
-                    "date": "2024-11-17",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "223.12"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 17-11-28 FUT CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-11-17",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-223.12"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 17-11-28 FUT CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483643,
-                    "type": "INTEREST",
-                    "date": "2024-11-16",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "180.47"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP FUT 16-11-33 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-11-16",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-180.47"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP FUT 16-11-33 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483641,
-                    "type": "INTEREST",
-                    "date": "2024-10-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "345.50"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 19-27 0.65FOICUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-10-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-345.50"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 19-27 0.65FOICUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483642,
-                    "type": "INTEREST",
-                    "date": "2024-10-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "302.31"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 19-27 0.65%FOIEX",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-10-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-302.31"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 19-27 0.65%FOIEX (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483640,
-                    "type": "INTEREST",
-                    "date": "2024-10-27",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "65.62"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP FUT 27-04-37 CUM",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-10-27",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-65.62"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP FUT 27-04-37 CUM (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483637,
-                    "type": "INTEREST",
-                    "date": "2024-08-15",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "98.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 15/02/29 0,45%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-08-15",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-98.44"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 15/02/29 0,45% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483636,
-                    "type": "INTEREST",
-                    "date": "2024-08-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "207.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 1/08/30 0.95%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-08-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-207.81"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 1/08/30 0.95% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483635,
-                    "type": "INTEREST",
-                    "date": "2024-08-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "131.25"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "CEDOLA: BTP 01/08/31 0,60%",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2024-08-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-131.25"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "auto_cash"],
-                    "description": "Auto cash for INTEREST BTP 01/08/31 0,60% (Crédit Agricole securities-only export)",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483634,
-                    "type": "ADJUSTMENT",
-                    "date": "2024-06-13",
-                    "quantity": "618.458",
-                    "cash": None,
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 4.98, qty 618.458)",
-                    "cost_basis_override": {"code": "EUR", "amount": "4.98"},
-                    "cost_basis_mode": "manual",
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483634,
-                    "type": "ADJUSTMENT",
-                    "date": "2024-06-10",
-                    "quantity": "624.36",
-                    "cash": None,
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 5.26, qty 624.36)",
-                    "cost_basis_override": {"code": "EUR", "amount": "5.26"},
-                    "cost_basis_mode": "manual",
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483634,
-                    "type": "ADJUSTMENT",
-                    "date": "2024-06-10",
-                    "quantity": "624.36",
-                    "cash": None,
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole"],
-                    "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 5.26, qty 624.36)",
-                    "cost_basis_override": {"code": "EUR", "amount": "5.26"},
-                    "cost_basis_mode": "manual",
-                    "asset_event_id": None,
-                },
                 {
                     "broker_id": 1,
                     "asset_id": 2147483647,
@@ -4607,7 +4077,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483645,
+                    "asset_id": 2147483646,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "10000",
@@ -4621,7 +4091,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483641,
+                    "asset_id": 2147483645,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "14000",
@@ -4635,7 +4105,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483642,
+                    "asset_id": 2147483644,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "12000",
@@ -4649,7 +4119,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483636,
+                    "asset_id": 2147483643,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "17000",
@@ -4663,7 +4133,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483632,
+                    "asset_id": 2147483642,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "32000",
@@ -4677,7 +4147,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483644,
+                    "asset_id": 2147483641,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "29000",
@@ -4691,7 +4161,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483635,
+                    "asset_id": 2147483640,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "17000",
@@ -4705,7 +4175,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483640,
+                    "asset_id": 2147483639,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "7000",
@@ -4719,7 +4189,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483643,
+                    "asset_id": 2147483638,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "19000",
@@ -4761,7 +4231,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483645,
+                    "asset_id": 2147483646,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "10000",
@@ -4775,7 +4245,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483641,
+                    "asset_id": 2147483645,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "13000",
@@ -4789,7 +4259,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483642,
+                    "asset_id": 2147483644,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "12000",
@@ -4803,7 +4273,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483636,
+                    "asset_id": 2147483643,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "17000",
@@ -4817,7 +4287,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483632,
+                    "asset_id": 2147483642,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "32000",
@@ -4831,7 +4301,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483644,
+                    "asset_id": 2147483641,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "28000",
@@ -4845,7 +4315,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483635,
+                    "asset_id": 2147483640,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "17000",
@@ -4859,7 +4329,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483640,
+                    "asset_id": 2147483639,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "7000",
@@ -4873,7 +4343,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483643,
+                    "asset_id": 2147483638,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "18000",
@@ -4915,7 +4385,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483645,
+                    "asset_id": 2147483646,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "10000",
@@ -4929,7 +4399,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483641,
+                    "asset_id": 2147483645,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "13000",
@@ -4943,7 +4413,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483642,
+                    "asset_id": 2147483644,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "11000",
@@ -4957,7 +4427,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483636,
+                    "asset_id": 2147483643,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "16000",
@@ -4971,7 +4441,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483632,
+                    "asset_id": 2147483642,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "31000",
@@ -4985,7 +4455,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483644,
+                    "asset_id": 2147483641,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "28000",
@@ -4999,7 +4469,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483635,
+                    "asset_id": 2147483640,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "16000",
@@ -5013,7 +4483,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483640,
+                    "asset_id": 2147483639,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "6000",
@@ -5027,7 +4497,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483643,
+                    "asset_id": 2147483638,
                     "type": "ADJUSTMENT",
                     "date": "2024-06-05",
                     "quantity": "18000",
@@ -5053,25 +4523,192 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "cost_basis_mode": "manual",
                     "asset_event_id": None,
                 },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-10",
+                    "quantity": "624.36",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 5.26, qty 624.36)",
+                    "cost_basis_override": {"code": "EUR", "amount": "5.26"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-10",
+                    "quantity": "624.36",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 5.26, qty 624.36)",
+                    "cost_basis_override": {"code": "EUR", "amount": "5.26"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-13",
+                    "quantity": "618.458",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 4.98, qty 618.458)",
+                    "cost_basis_override": {"code": "EUR", "amount": "4.98"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
             ],
             "warnings": [
                 {
+                    "severity": "warning",
+                    "code": "excluded_outside_cash_coverage",
+                    "message": "58 operazioni si sono regolate in giorni che nessun file del conto copre: non vengono importate.",
+                    "evidence": [
+                        {
+                            "title": "Titoli",
+                            "headers": ["Data operazione", "Nome", "Causale", "Prezzo", "Quantità", "Controvalore"],
+                            "rows": [
+                                ["01/08/2024", "BTP 1/08/30 0.95%", "CEDOLA", "0,00", "50000", "207,81"],
+                                ["01/08/2024", "BTP 01/08/31 0,60%", "CEDOLA", "0,00", "50000", "131,25"],
+                                ["15/08/2024", "BTP 15/02/29 0,45%", "CEDOLA", "0,00", "50000", "98,44"],
+                                ["27/10/2024", "BTP FUT 27-04-37 CUM", "CEDOLA", "0,00", "20000", "65,62"],
+                                ["28/10/2024", "BTP 19-27 0.65FOICUM", "CEDOLA", "0,00", "40000", "345,50"],
+                                ["28/10/2024", "BTP 19-27 0.65%FOIEX", "CEDOLA", "0,00", "35000", "302,31"],
+                                ["16/11/2024", "BTP FUT 16-11-33 CUM", "CEDOLA", "0,00", "55000", "180,47"],
+                                ["17/11/2024", "BTP 17-11-28 FUT CUM", "CEDOLA", "0,00", "85000", "223,12"],
+                                ["21/11/2024", "BTP 05/26 0.55FOICUM", "CEDOLA", "0,00", "30000", "219,59"],
+                                ["26/11/2024", "BTP 20-25 1.40FOICUM", "CEDOLA", "0,00", "95000", "1028,03"],
+                                ["01/12/2024", "BTP 1/12/2026 1.25%", "CEDOLA", "0,00", "40000", "218,75"],
+                                ["01/02/2025", "BTP 1/08/30 0.95%", "CEDOLA", "0,00", "50000", "207,81"],
+                                ["01/02/2025", "BTP 01/08/31 0,60%", "CEDOLA", "0,00", "50000", "131,25"],
+                                ["15/02/2025", "BTP 15/02/29 0,45%", "CEDOLA", "0,00", "50000", "98,44"],
+                                ["17/02/2025", "BTP PIU 25-2-33 CUM", "ACQ.CONT.SU MERC.", "100,00", "15000", "15.000,00"],
+                                ["27/04/2025", "BTP FUT 27-04-37 CUM", "CEDOLA", "0,00", "20000", "65,62"],
+                                ["28/04/2025", "BTP 19-27 0.65FOICUM", "CEDOLA", "0,00", "40000", "404,14"],
+                                ["28/04/2025", "BTP 19-27 0.65%FOIEX", "CEDOLA", "0,00", "35000", "353,62"],
+                                ["16/05/2025", "BTP FUT 16-11-33 CUM", "CEDOLA", "0,00", "55000", "180,47"],
+                                ["17/05/2025", "BTP 17-11-28 FUT CUM", "CEDOLA", "0,00", "85000", "223,12"],
+                                ["21/05/2025", "BTP 05/26 0.55FOICUM", "CEDOLA", "0,00", "30000", "348,57"],
+                                ["25/05/2025", "BTP PIU 25-2-33 CUM", "CEDOLA", "0,00", "15000", "93,52"],
+                                ["26/05/2025", "BTP 20-25 1.40FOICUM", "TITOLI SCADUTI", "100,80", "0", "95.665,00"],
+                                ["26/05/2025", "BTP 20-25 1.40FOICUM", "CEDOLA", "0,00", "95000", "1506,00"],
+                                ["01/06/2025", "BTP 1/12/2026 1.25%", "CEDOLA", "0,00", "40000", "218,75"],
+                                ["24/07/2025", "BTP 01/03/35 3,35%", "ACQ.CONT.SU MERC.", "99,95", "50000", "50.683,13"],
+                                ["24/07/2025", "BTP 1/3/32 1,65%", "ACQ.CONT.SU MERC.", "92,43", "50000", "46.603,73"],
+                                ["01/08/2025", "BTP 1/08/30 0.95%", "CEDOLA", "0,00", "50000", "207,81"],
+                                ["01/08/2025", "BTP 01/08/31 0,60%", "CEDOLA", "0,00", "50000", "131,25"],
+                                ["15/08/2025", "BTP 15/02/29 0,45%", "CEDOLA", "0,00", "50000", "98,44"],
+                                ["25/08/2025", "BTP PIU 25-2-33 CUM", "CEDOLA", "0,00", "15000", "93,52"],
+                                ["01/09/2025", "BTP 1/3/32 1,65%", "CEDOLA", "0,00", "50000", "360,94"],
+                                ["01/09/2025", "BTP 01/03/35 3,35%", "CEDOLA", "0,00", "50000", "732,81"],
+                                ["27/10/2025", "BTP FUT 27-04-37 CUM", "CEDOLA", "0,00", "20000", "105,00"],
+                                ["28/10/2025", "BTP 19-27 0.65FOICUM", "CEDOLA", "0,00", "40000", "322,67"],
+                                ["28/10/2025", "BTP 19-27 0.65%FOIEX", "CEDOLA", "0,00", "35000", "282,34"],
+                                ["07/11/2025", "AMUNDI PIO GLOB EQ G", "SICAV: SOTTOSCR", "10,58", "1843.575", "20.129,44"],
+                                ["10/11/2025", "AMUNDI PRIMO INV LC", "FONDI: RIMBORSO", "5,41", "1867.178", "9984,47"],
+                                ["16/11/2025", "BTP FUT 16-11-33 CUM", "CEDOLA", "0,00", "55000", "180,47"],
+                                ["17/11/2025", "BTP 17-11-28 FUT CUM", "CEDOLA", "0,00", "85000", "223,12"],
+                                ["21/11/2025", "BTP 05/26 0.55FOICUM", "CEDOLA", "0,00", "30000", "167,74"],
+                                ["25/11/2025", "BTP PIU 25-2-33 CUM", "CEDOLA", "0,00", "15000", "93,52"],
+                                ["01/12/2025", "BTP 1/12/2026 1.25%", "CEDOLA", "0,00", "40000", "218,75"],
+                                ["01/02/2026", "BTP 1/08/30 0.95%", "CEDOLA", "0,00", "50000", "207,81"],
+                                ["01/02/2026", "BTP 01/08/31 0,60%", "CEDOLA", "0,00", "50000", "131,25"],
+                                ["15/02/2026", "BTP 15/02/29 0,45%", "CEDOLA", "0,00", "50000", "98,44"],
+                                ["25/02/2026", "BTP PIU 25-2-33 CUM", "CEDOLA", "0,00", "15000", "93,52"],
+                                ["01/03/2026", "BTP 01/03/35 3,35%", "CEDOLA", "0,00", "50000", "732,81"],
+                                ["01/03/2026", "BTP 1/3/32 1,65%", "CEDOLA", "0,00", "50000", "360,94"],
+                                ["27/04/2026", "BTP FUT 27-04-37 CUM", "CEDOLA", "0,00", "20000", "105,00"],
+                                ["28/04/2026", "BTP 19-27 0.65%FOIEX", "CEDOLA", "0,00", "35000", "258,99"],
+                                ["28/04/2026", "BTP 19-27 0.65FOICUM", "CEDOLA", "0,00", "40000", "295,99"],
+                                ["16/05/2026", "BTP FUT 16-11-33 CUM", "CEDOLA", "0,00", "55000", "324,84"],
+                                ["17/05/2026", "BTP 17-11-28 FUT CUM", "CEDOLA", "0,00", "85000", "223,12"],
+                                ["21/05/2026", "BTP 05/26 0.55FOICUM", "TITOLI SCADUTI", "100,40", "0", "30.105,00"],
+                                ["21/05/2026", "BTP 05/26 0.55FOICUM", "CEDOLA", "0,00", "30000", "338,04"],
+                                ["25/05/2026", "BTP PIU 25-2-33 CUM", "CEDOLA", "0,00", "15000", "93,52"],
+                                ["01/06/2026", "BTP 1/12/2026 1.25%", "CEDOLA", "0,00", "40000", "218,75"],
+                            ],
+                            "row_numbers": [
+                                38,
+                                39,
+                                40,
+                                41,
+                                42,
+                                43,
+                                44,
+                                45,
+                                46,
+                                47,
+                                48,
+                                49,
+                                50,
+                                51,
+                                52,
+                                53,
+                                54,
+                                55,
+                                56,
+                                57,
+                                58,
+                                59,
+                                60,
+                                61,
+                                62,
+                                63,
+                                64,
+                                65,
+                                66,
+                                67,
+                                68,
+                                69,
+                                70,
+                                71,
+                                72,
+                                73,
+                                74,
+                                75,
+                                76,
+                                77,
+                                78,
+                                79,
+                                80,
+                                81,
+                                82,
+                                83,
+                                84,
+                                85,
+                                86,
+                                87,
+                                88,
+                                89,
+                                90,
+                                91,
+                                92,
+                                93,
+                                94,
+                                95,
+                            ],
+                            "comment": "Il conto non ha righe per il giorno in cui queste operazioni si sono regolate, quindi il denaro non si vede. Scarica il conto per quel periodo, o inseriscile a mano.",
+                        },
+                    ],
+                    "context": {"count": 58, "reason": "outside_cash_coverage"},
+                },
+                {
                     "severity": "info",
                     "code": "ca_succession_transfer_in",
-                    "message": "Sono stati identificati dei titoli trasferiti da un altro dossier (36 righe).\n"
-                    "Sono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si "
-                    "suppone quindi che fossero già tuoi presso un altro broker.\n"
-                    "In caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il "
-                    "sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\n"
-                    "Di seguito le righe in dettaglio:",
+                    "message": "Sono stati identificati dei titoli trasferiti da un altro dossier (36 righe).\nSono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si suppone quindi che fossero già tuoi presso un altro broker.\nIn caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\nDi seguito le righe in dettaglio:",
                     "evidence": [
                         {
                             "title": "Righe di trasferimento",
-                            "headers": ["Data operazione", "Nome", "Causale", "Prezzo", "Quantità", "Controvalore in Euro"],
+                            "headers": ["Data operazione", "Nome", "Causale", "Prezzo", "Quantità", "Controvalore"],
                             "rows": [
-                                ["13/06/2024", "AMUNDI PRIMO INV LC", "VERS.TITOLI", "4,98", "618.458", "0,00"],
-                                ["10/06/2024", "AMUNDI PRIMO INV LC", "VERS.TITOLI", "5,26", "624.36", "0,00"],
-                                ["10/06/2024", "AMUNDI PRIMO INV LC", "VERS.TITOLI", "5,26", "624.36", "0,00"],
                                 ["05/06/2024", "BTP 1/12/2026 1.25%", "GIRO ALTRO DOSSIER", "95,14", "14000", "0,00"],
                                 ["05/06/2024", "BTP 05/26 0.55FOICUM", "GIRO ALTRO DOSSIER", "96,42", "10000", "0,00"],
                                 ["05/06/2024", "BTP 19-27 0.65FOICUM", "GIRO ALTRO DOSSIER", "95,10", "14000", "0,00"],
@@ -5105,48 +4742,69 @@ class TestCreditAgricoleCanonicalCharacterization:
                                 ["05/06/2024", "BTP FUT 27-04-37 CUM", "GIRO ALTRO DOSSIER", "100,00", "6000", "0,00"],
                                 ["05/06/2024", "BTP FUT 16-11-33 CUM", "GIRO ALTRO DOSSIER", "100,00", "18000", "0,00"],
                                 ["05/06/2024", "BTP 15/02/29 0,45%", "GIRO ALTRO DOSSIER", "93,69", "16000", "0,00"],
+                                ["10/06/2024", "AMUNDI PRIMO INV LC", "VERS.TITOLI", "5,26", "624.36", "0,00"],
+                                ["10/06/2024", "AMUNDI PRIMO INV LC", "VERS.TITOLI", "5,26", "624.36", "0,00"],
+                                ["13/06/2024", "AMUNDI PRIMO INV LC", "VERS.TITOLI", "4,98", "618.458", "0,00"],
                             ],
-                            "row_numbers": [60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
-                            "comment": "Ogni riga qui sotto è un versamento titoli senza contropartita di cassa: nessun denaro è uscito dal " "conto, quindi la posizione è stata aperta come «Rettifica».",
-                        }
+                            "row_numbers": [
+                                2,
+                                3,
+                                4,
+                                5,
+                                6,
+                                7,
+                                8,
+                                9,
+                                10,
+                                11,
+                                12,
+                                13,
+                                14,
+                                15,
+                                16,
+                                17,
+                                18,
+                                19,
+                                20,
+                                21,
+                                22,
+                                23,
+                                24,
+                                25,
+                                26,
+                                27,
+                                28,
+                                29,
+                                30,
+                                31,
+                                32,
+                                33,
+                                34,
+                                35,
+                                36,
+                                37,
+                            ],
+                            "comment": "Ogni riga qui sotto è un versamento titoli senza contropartita di cassa: nessun denaro è uscito dal conto, quindi la posizione è stata aperta come «Rettifica».",
+                        },
                     ],
                     "context": {"row_count": 36},
-                }
+                },
             ],
             "validation_issues": [],
             "field_todos": [],
             "extracted_assets": {
                 2147483647: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 1/12/2026 1.25%", "notices": []},
-                2147483646: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP PIU 25-2-33 CUM", "notices": []},
-                2147483645: {
-                    "extracted_symbol": None,
-                    "extracted_isin": None,
-                    "extracted_name": "BTP 05/26 0.55FOICUM",
-                    "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [4, 5]}],
-                },
-                2147483644: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 17-11-28 FUT CUM", "notices": []},
-                2147483643: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP FUT 16-11-33 CUM", "notices": []},
-                2147483642: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 19-27 0.65%FOIEX", "notices": []},
-                2147483641: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 19-27 0.65FOICUM", "notices": []},
-                2147483640: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP FUT 27-04-37 CUM", "notices": []},
-                2147483639: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 01/03/35 3,35%", "notices": []},
-                2147483638: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 1/3/32 1,65%", "notices": []},
+                2147483646: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 05/26 0.55FOICUM", "notices": []},
+                2147483645: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 19-27 0.65FOICUM", "notices": []},
+                2147483644: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 19-27 0.65%FOIEX", "notices": []},
+                2147483643: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 1/08/30 0.95%", "notices": []},
+                2147483642: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 20-25 1.40FOICUM", "notices": []},
+                2147483641: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 17-11-28 FUT CUM", "notices": []},
+                2147483640: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 01/08/31 0,60%", "notices": []},
+                2147483639: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP FUT 27-04-37 CUM", "notices": []},
+                2147483638: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP FUT 16-11-33 CUM", "notices": []},
                 2147483637: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 15/02/29 0,45%", "notices": []},
-                2147483636: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 1/08/30 0.95%", "notices": []},
-                2147483635: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 01/08/31 0,60%", "notices": []},
-                2147483634: {
-                    "extracted_symbol": None,
-                    "extracted_isin": None,
-                    "extracted_name": "AMUNDI PRIMO INV LC",
-                    "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [42]}],
-                },
-                2147483633: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "AMUNDI PIO GLOB EQ G", "notices": []},
-                2147483632: {
-                    "extracted_symbol": None,
-                    "extracted_isin": None,
-                    "extracted_name": "BTP 20-25 1.40FOICUM",
-                    "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [70, 71]}],
-                },
+                2147483636: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "AMUNDI PRIMO INV LC", "notices": []},
             },
             "checkpoints": [],
             "verifications": [],
@@ -5155,42 +4813,14 @@ class TestCreditAgricoleCanonicalCharacterization:
             "transactions": [
                 {
                     "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-07-30",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-61.20"},
+                    "asset_id": 2147483647,
+                    "type": "SELL",
+                    "date": "2025-05-26",
+                    "quantity": "-30105.000",
+                    "cash": {"code": "EUR", "amount": "30105.00"},
                     "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "pagamento_utenze"],
-                    "description": "SDD A : UTILITY PROVIDER ADDEBITO SDD NUMERO 0000000001",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-07-29",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-500.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "prelievo_sport_autom_altra_banca"],
-                    "description": "PREL. CON CARTA 00000000 DEL 29/07/26 ALTRA BANCA -SPORT. ROMA",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-07-28",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-42.10"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "pagamento_tramite_pos"],
-                    "description": "POS CARTA 00000000 DEL 28/07/26 C/O SUPERMARKET - ROMA",
+                    "tags": ["import", "credit_agricole", "titoli_scaduti_o_estratti", "account_maturity"],
+                    "description": "[TITOLI SCADUTI O ESTRATTI — rimborso/scadenza da conto, titolo non identificato] BTP SAMPLE (source: RIMB.TIT. BTP SAMPLE (0000000 ) DOS:00000/00000000 26/05/25; venduto interamente a par 100, nominale derivato 30105.000)",
                     "cost_basis_override": None,
                     "cost_basis_mode": None,
                     "asset_event_id": None,
@@ -5199,54 +4829,26 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "broker_id": 1,
                     "asset_id": None,
                     "type": "DEPOSIT",
-                    "date": "2026-07-01",
+                    "date": "2025-11-11",
                     "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "2879.70"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "accredito_emolumenti"],
-                    "description": "PENSIONE INPS 0000 000 00000000 01 DEL 01.07.2026",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": None,
-                    "type": "DEPOSIT",
-                    "date": "2026-07-05",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "231.00"},
+                    "cash": {"code": "EUR", "amount": "9984.47"},
                     "link_uuid": None,
                     "tags": ["import", "credit_agricole", "giroconto_bonifico"],
-                    "description": "ORD:MITTENTE SAMPLE DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO",
+                    "description": "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*> RIFERIMENTO SCT:XX-2025-11-10-000000001 IDENTIFICATIVO SCT:",
                     "cost_basis_override": None,
                     "cost_basis_mode": None,
                     "asset_event_id": None,
                 },
                 {
                     "broker_id": 1,
-                    "asset_id": 2147483647,
+                    "asset_id": None,
                     "type": "INTEREST",
-                    "date": "2026-06-01",
+                    "date": "2025-12-31",
                     "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "250.00"},
+                    "cash": {"code": "EUR", "amount": "3.20"},
                     "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
-                    "description": "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 " "RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483647,
-                    "type": "TAX",
-                    "date": "2026-06-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-31.25"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti", "withholding_tax"],
-                    "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 " "NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+                    "tags": ["import", "credit_agricole", "interessi_competenze"],
+                    "description": "INTERESSI CREDITORI LORDI ANNO 2025",
                     "cost_basis_override": None,
                     "cost_basis_mode": None,
                     "asset_event_id": None,
@@ -5254,6 +4856,90 @@ class TestCreditAgricoleCanonicalCharacterization:
                 {
                     "broker_id": 1,
                     "asset_id": 2147483646,
+                    "type": "BUY",
+                    "date": "2026-05-10",
+                    "quantity": "20000.00",
+                    "cash": {"code": "EUR", "amount": "-20412.33"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni", "account_trade"],
+                    "description": "NOTA INF. ACQ. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "BUY",
+                    "date": "2026-05-21",
+                    "quantity": "40000.00",
+                    "cash": {"code": "EUR", "amount": "-40000.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni", "account_trade"],
+                    "description": "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "INTEREST",
+                    "date": "2026-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "250.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+                    "description": "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "TAX",
+                    "date": "2026-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-31.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti", "withholding_tax"],
+                    "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "FEE",
+                    "date": "2026-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-1.50"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "commiss_spese_su_operaz_titoli"],
+                    "description": "SPESE STACCO CEDOLA DEL 01/06/2026 DOSSIER: 00000/00000000 TIT: IT0000000001",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483646,
+                    "type": "INTEREST",
+                    "date": "2026-06-02",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "200.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+                    "description": "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483644,
                     "type": "DIVIDEND",
                     "date": "2026-06-15",
                     "quantity": "0",
@@ -5282,27 +4968,13 @@ class TestCreditAgricoleCanonicalCharacterization:
                 {
                     "broker_id": 1,
                     "asset_id": None,
-                    "type": "TAX",
-                    "date": "2026-07-14",
+                    "type": "WITHDRAWAL",
+                    "date": "2026-06-20",
                     "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-21.42"},
+                    "cash": {"code": "EUR", "amount": "-50.00"},
                     "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "commiss_spese_su_operaz_titoli"],
-                    "description": "ADDEBITO CAPITAL GAIN (D.LGS 461/97) 0000000000000 DATA:21/05/2026",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483647,
-                    "type": "FEE",
-                    "date": "2026-06-01",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-1.50"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "commiss_spese_su_operaz_titoli"],
-                    "description": "SPESE STACCO CEDOLA DEL 01/06/2026 DOSSIER: 00000/00000000 TIT: IT0000000001",
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+                    "description": "STORNO CEDOLA ERRATA IT0000000001 DOS:00000/00000000",
                     "cost_basis_override": None,
                     "cost_basis_mode": None,
                     "asset_event_id": None,
@@ -5352,69 +5024,13 @@ class TestCreditAgricoleCanonicalCharacterization:
                 {
                     "broker_id": 1,
                     "asset_id": None,
-                    "type": "INTEREST",
-                    "date": "2025-12-31",
+                    "type": "DEPOSIT",
+                    "date": "2026-07-01",
                     "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "3.20"},
+                    "cash": {"code": "EUR", "amount": "2879.70"},
                     "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "interessi_competenze"],
-                    "description": "INTERESSI CREDITORI LORDI ANNO 2025",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483647,
-                    "type": "BUY",
-                    "date": "2026-05-21",
-                    "quantity": "40000.00",
-                    "cash": {"code": "EUR", "amount": "-40000.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni", "account_trade"],
-                    "description": "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483645,
-                    "type": "INTEREST",
-                    "date": "2026-06-02",
-                    "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "200.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
-                    "description": "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483645,
-                    "type": "BUY",
-                    "date": "2026-05-10",
-                    "quantity": "20000.00",
-                    "cash": {"code": "EUR", "amount": "-20412.33"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni", "account_trade"],
-                    "description": "NOTA INF. ACQ. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483645,
-                    "type": "SELL",
-                    "date": "2026-07-20",
-                    "quantity": "-20000.00",
-                    "cash": {"code": "EUR", "amount": "20180.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni", "account_trade"],
-                    "description": "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+                    "tags": ["import", "credit_agricole", "accredito_emolumenti"],
+                    "description": "PENSIONE INPS 0000 000 00000000 01 DEL 01.07.2026",
                     "cost_basis_override": None,
                     "cost_basis_mode": None,
                     "asset_event_id": None,
@@ -5422,27 +5038,13 @@ class TestCreditAgricoleCanonicalCharacterization:
                 {
                     "broker_id": 1,
                     "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-07-15",
+                    "type": "DEPOSIT",
+                    "date": "2026-07-05",
                     "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-5000.00"},
+                    "cash": {"code": "EUR", "amount": "231.00"},
                     "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni"],
-                    "description": "SOTTOSC SICAV ORD.:2026/000000001 SAMPLE GLOB EQ FUND",
-                    "cost_basis_override": None,
-                    "cost_basis_mode": None,
-                    "asset_event_id": None,
-                },
-                {
-                    "broker_id": 1,
-                    "asset_id": 2147483644,
-                    "type": "SELL",
-                    "date": "2025-05-26",
-                    "quantity": "-30105.000",
-                    "cash": {"code": "EUR", "amount": "30105.00"},
-                    "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "titoli_scaduti_o_estratti", "account_maturity"],
-                    "description": "[TITOLI SCADUTI O ESTRATTI — rimborso/scadenza da conto, titolo non identificato] BTP SAMPLE (source: RIMB.TIT. " "BTP SAMPLE (0000000 ) DOS:00000/00000000 26/05/25; venduto interamente a par 100, nominale derivato 30105.000)",
+                    "tags": ["import", "credit_agricole", "giroconto_bonifico"],
+                    "description": "ORD:MITTENTE SAMPLE DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO",
                     "cost_basis_override": None,
                     "cost_basis_mode": None,
                     "asset_event_id": None,
@@ -5464,13 +5066,13 @@ class TestCreditAgricoleCanonicalCharacterization:
                 {
                     "broker_id": 1,
                     "asset_id": None,
-                    "type": "WITHDRAWAL",
-                    "date": "2026-06-20",
+                    "type": "TAX",
+                    "date": "2026-07-14",
                     "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "-50.00"},
+                    "cash": {"code": "EUR", "amount": "-21.42"},
                     "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
-                    "description": "STORNO CEDOLA ERRATA IT0000000001 DOS:00000/00000000",
+                    "tags": ["import", "credit_agricole", "commiss_spese_su_operaz_titoli"],
+                    "description": "ADDEBITO CAPITAL GAIN (D.LGS 461/97) 0000000000000 DATA:21/05/2026",
                     "cost_basis_override": None,
                     "cost_basis_mode": None,
                     "asset_event_id": None,
@@ -5478,13 +5080,69 @@ class TestCreditAgricoleCanonicalCharacterization:
                 {
                     "broker_id": 1,
                     "asset_id": None,
-                    "type": "DEPOSIT",
-                    "date": "2025-11-11",
+                    "type": "WITHDRAWAL",
+                    "date": "2026-07-15",
                     "quantity": "0",
-                    "cash": {"code": "EUR", "amount": "9984.47"},
+                    "cash": {"code": "EUR", "amount": "-5000.00"},
                     "link_uuid": None,
-                    "tags": ["import", "credit_agricole", "giroconto_bonifico"],
-                    "description": "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*> " "RIFERIMENTO SCT:XX-2025-11-10-000000001 IDENTIFICATIVO SCT:",
+                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni"],
+                    "description": "SOTTOSC SICAV ORD.:2026/000000001 SAMPLE GLOB EQ FUND",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483646,
+                    "type": "SELL",
+                    "date": "2026-07-20",
+                    "quantity": "-20000.00",
+                    "cash": {"code": "EUR", "amount": "20180.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni", "account_trade"],
+                    "description": "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-07-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-42.10"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "pagamento_tramite_pos"],
+                    "description": "POS CARTA 00000000 DEL 28/07/26 C/O SUPERMARKET - ROMA",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-07-29",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-500.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "prelievo_sport_autom_altra_banca"],
+                    "description": "PREL. CON CARTA 00000000 DEL 29/07/26 ALTRA BANCA -SPORT. ROMA",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-07-30",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-61.20"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "pagamento_utenze"],
+                    "description": "SDD A : UTILITY PROVIDER ADDEBITO SDD NUMERO 0000000001",
                     "cost_basis_override": None,
                     "cost_basis_mode": None,
                     "asset_event_id": None,
@@ -5494,51 +5152,125 @@ class TestCreditAgricoleCanonicalCharacterization:
                 {
                     "severity": "warning",
                     "code": "ca_account_maturity_unlinked",
-                    "message": "Riga 21: scadenza/rimborso 'RIMB.TIT. BTP SAMPLE (0000000 ) DOS:00000/00000000 26/05/25' non collegabile a un titolo "
-                    "(ISIN e nominale non trovati nella stessa data); importata interamente come vendita a valore nominale (par 100, nessuna "
-                    "quota di interesse) — verifica il nominale.",
+                    "message": "Riga 2: scadenza/rimborso 'RIMB.TIT. BTP SAMPLE (0000000 ) DOS:00000/00000000 26/05/25' non collegabile a un titolo (ISIN e nominale non trovati nella stessa data); importata interamente come vendita a valore nominale (par 100, nessuna quota di interesse) — verifica il nominale.",
                     "evidence": [
                         {
                             "title": "Riga del file",
                             "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
                             "rows": [["26/05/2025", "TITOLI SCADUTI O ESTRATTI", "RIMB.TIT. BTP SAMPLE (0000000 ) DOS:00000/00000000 26/05/25", "30.105,00", "EUR"]],
-                            "row_numbers": [21],
-                            "comment": "Per scorporare il capitale dal premio mi serve il nominale, che di solito ricavo dalla cedola pagata lo " "stesso giorno. Qui quella cedola non c'è, quindi ho trattato tutto l'importo come rimborso alla pari.",
-                        }
+                            "row_numbers": [2],
+                            "comment": "Per scorporare il capitale dal premio mi serve il nominale, che di solito ricavo dalla cedola pagata lo stesso giorno. Qui quella cedola non c'è, quindi ho trattato tutto l'importo come rimborso alla pari.",
+                        },
                     ],
-                    "context": {"causale": "TITOLI SCADUTI O ESTRATTI", "row": 21},
-                }
+                    "context": {"causale": "TITOLI SCADUTI O ESTRATTI", "row": 2},
+                },
             ],
             "validation_issues": [],
             "field_todos": [
                 {
-                    "tx_index": 9,
+                    "tx_index": 1,
                     "field": "asset_id",
-                    "severity": "warning",
-                    "reason_code": "ca_account_charge_unallocated",
-                    "message": "Riga 10: spesa su operazione titoli non collegata a nessun titolo. Assegnala al titolo giusto, oppure tienila così " "se riguarda il conto.",
-                    "context": {"causale": "COMMISS./SPESE SU OPERAZ. TITOLI", "row": 10},
+                    "severity": "blocker",
+                    "reason_code": "ca_account_trade_unresolved",
+                    "message": "Riga 3: sembra il disinvestimento di 'SAMPLE FUND SICAV', arrivato come bonifico. Scegli il fondo e inserisci le quote vendute.",
+                    "context": {
+                        "causale": "GIROCONTO/BONIFICO",
+                        "row": 3,
+                        "reason": "fund_redemption",
+                        "split_hint": "trade_charges",
+                        "cash": "9984.47",
+                        "currency": "EUR",
+                        "compare_nominal": False,
+                        "split_suggestions": [
+                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se una commissione c'è stata, è dentro questo totale.",
+                            "È un fondo, non un'obbligazione: non ci sono ratei cedolari da scorporare, quindi la differenza rispetto al prezzo sono commissioni o imposte.",
+                            "Su una vendita l'importo accreditato è già netto: per registrare il ricavo lordo scorpora qui le spese trattenute, l'incasso sul conto non cambia.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del solo titolo e le singole voci di spesa.",
+                        ],
+                    },
                     "evidence": [
                         {
                             "title": "Riga del file",
                             "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
-                            "rows": [["14/07/2026", "COMMISS./SPESE SU OPERAZ. TITOLI", "ADDEBITO CAPITAL GAIN (D.LGS 461/97) 0000000000000 DATA:21/05/2026", "'-21,42", "EUR"]],
-                            "row_numbers": [10],
-                            "comment": "Questa è una spesa o imposta su un'operazione in titoli, ma la descrizione non dice su quale. Resta a "
-                            "carico del conto invece che del titolo, e il costo di carico di quel titolo risulta più basso del "
-                            "reale. Scegli il titolo a cui appartiene, oppure tienila com'è se è una spesa di conto.",
-                        }
+                            "rows": [
+                                [
+                                    "11/11/2025",
+                                    "GIROCONTO/BONIFICO",
+                                    "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*> RIFERIMENTO SCT:XX-2025-11-10-000000001 IDENTIFICATIVO SCT:",
+                                    "9.984,47",
+                                    "EUR",
+                                ],
+                            ],
+                            "row_numbers": [3],
+                            "comment": "Il denaro arriva da 'SAMPLE FUND SICAV' e la causale parla di rimborso sullo stesso fondo: è un disinvestimento pagato per bonifico, non un accredito qualsiasi. Le quote vendute il file non le dice — un fondo riporta il controvalore, non il numero di quote — quindi l'ho registrata come versamento di cassa. Cambiala in vendita, scegli il fondo e inserisci le quote: altrimenti la posizione resta aperta per sempre.",
+                        },
                     ],
                 },
                 {
-                    "tx_index": 15,
+                    "tx_index": 3,
                     "field": "cash",
                     "severity": "warning",
                     "reason_code": "ca_account_trade_bundled_amount",
-                    "message": "Riga 16: acquisto di BTP SAMPLE 1/12/2026 — l'importo di questa riga potrebbe raggruppare più voci insieme.",
+                    "message": "Riga 5: acquisto di BTP OTHER 1/9/2030 — l'importo di questa riga potrebbe raggruppare più voci insieme.",
                     "context": {
                         "causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
-                        "row": 16,
+                        "row": 5,
+                        "isin": "IT0000000003",
+                        "cash": "20412.33",
+                        "nominale": "20000.00",
+                        "delta": "412.33",
+                        "currency": "EUR",
+                        "nominale_row": 9,
+                        "compare_nominal": True,
+                        "split_hint": "trade_charges",
+                        "split_suggestions": [
+                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se una commissione c'è stata, è dentro questo totale.",
+                            "Se è un'obbligazione e non l'hai comprata all'emissione, il totale contiene anche il rateo cedolare che hai rimborsato al venditore: registralo come voce a parte, non fa parte del costo del titolo.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del solo titolo e le singole voci di spesa.",
+                        ],
+                    },
+                    "evidence": [
+                        {
+                            "title": "Riga di acquisto",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [
+                                [
+                                    "10/05/2026",
+                                    "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
+                                    "NOTA INF. ACQ. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+                                    "'-20.412,33",
+                                    "EUR",
+                                ],
+                            ],
+                            "row_numbers": [5],
+                            "comment": "Dal conto sono usciti 20.412,33 EUR. Guardando il resto del file ho trovato una cedola dello stesso titolo (riga 9) che dichiara 20.000,00 di valore nominale, cioè il capitale del titolo. I due numeri non coincidono (412,33 EUR di differenza): il totale di questa riga mette insieme il prezzo del titolo, il rateo cedolare maturato e le eventuali commissioni, e il file non li separa. La cassa è comunque giusta; è il costo di carico a essere approssimato.",
+                        },
+                        {
+                            "title": "Cedola che ha fornito il nominale",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [
+                                [
+                                    "02/06/2026",
+                                    "CEDOLE, DIVIDENDI, PREMI ESTRATTI",
+                                    "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00",
+                                    "200,00",
+                                    "EUR",
+                                ],
+                            ],
+                            "row_numbers": [9],
+                            "comment": "L'ISIN IT0000000003 e il valore nominale 20.000,00 vengono da qui: è il capitale del titolo, cioè quanto la banca rimborsa a scadenza, non quanto hai pagato.",
+                        },
+                    ],
+                },
+                {
+                    "tx_index": 4,
+                    "field": "cash",
+                    "severity": "warning",
+                    "reason_code": "ca_account_trade_bundled_amount",
+                    "message": "Riga 6: acquisto di BTP SAMPLE 1/12/2026 — l'importo di questa riga potrebbe raggruppare più voci insieme.",
+                    "context": {
+                        "causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
+                        "row": 6,
                         "isin": "IT0000000001",
                         "cash": "40000.00",
                         "nominale": "40000.00",
@@ -5548,10 +5280,10 @@ class TestCreditAgricoleCanonicalCharacterization:
                         "compare_nominal": True,
                         "split_hint": "trade_charges",
                         "split_suggestions": [
-                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se " "una commissione c'è stata, è dentro questo totale.",
-                            "Se è un'obbligazione e non l'hai comprata all'emissione, il totale contiene anche il rateo " "cedolare che hai rimborsato al venditore: registralo come voce a parte, non fa parte del " "costo del titolo.",
-                            "Il totale coincide al centesimo con il valore nominale: è il caso tipico dell'acquisto " "all'emissione, alla pari e senza oneri. Se è andata così, non c'è nulla da scorporare.",
-                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
+                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se una commissione c'è stata, è dentro questo totale.",
+                            "Se è un'obbligazione e non l'hai comprata all'emissione, il totale contiene anche il rateo cedolare che hai rimborsato al venditore: registralo come voce a parte, non fa parte del costo del titolo.",
+                            "Il totale coincide al centesimo con il valore nominale: è il caso tipico dell'acquisto all'emissione, alla pari e senza oneri. Se è andata così, non c'è nulla da scorporare.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del solo titolo e le singole voci di spesa.",
                         ],
                     },
                     "evidence": [
@@ -5559,119 +5291,48 @@ class TestCreditAgricoleCanonicalCharacterization:
                             "title": "Riga di acquisto",
                             "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
                             "rows": [["21/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000", "'-40.000,00", "EUR"]],
-                            "row_numbers": [16],
-                            "comment": "Dal conto sono usciti 40.000,00 EUR, esattamente quanto il valore nominale dichiarato dalla cedola "
-                            "alla riga 7. È il caso dell'acquisto all'emissione, alla pari e senza oneri: se è andata così non c'è "
-                            "nulla da correggere. Se invece la nota informativa espone commissioni o rateo, il file li ha inglobati "
-                            "qui dentro.",
+                            "row_numbers": [6],
+                            "comment": "Dal conto sono usciti 40.000,00 EUR, esattamente quanto il valore nominale dichiarato dalla cedola alla riga 7. È il caso dell'acquisto all'emissione, alla pari e senza oneri: se è andata così non c'è nulla da correggere. Se invece la nota informativa espone commissioni o rateo, il file li ha inglobati qui dentro.",
                         },
                         {
                             "title": "Cedola che ha fornito il nominale",
                             "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
-                            "rows": [["01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 " "RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1", "218,75", "EUR"]],
+                            "rows": [
+                                [
+                                    "01/06/2026",
+                                    "CEDOLE, DIVIDENDI, PREMI ESTRATTI",
+                                    "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+                                    "218,75",
+                                    "EUR",
+                                ],
+                            ],
                             "row_numbers": [7],
-                            "comment": "L'ISIN IT0000000001 e il valore nominale 40.000,00 vengono da qui: è il capitale del titolo, cioè " "quanto la banca rimborsa a scadenza, non quanto hai pagato.",
-                        },
-                    ],
-                },
-                {
-                    "tx_index": 17,
-                    "field": "cash",
-                    "severity": "warning",
-                    "reason_code": "ca_account_trade_bundled_amount",
-                    "message": "Riga 18: acquisto di BTP OTHER 1/9/2030 — l'importo di questa riga potrebbe raggruppare più voci insieme.",
-                    "context": {
-                        "causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
-                        "row": 18,
-                        "isin": "IT0000000003",
-                        "cash": "20412.33",
-                        "nominale": "20000.00",
-                        "delta": "412.33",
-                        "currency": "EUR",
-                        "nominale_row": 17,
-                        "compare_nominal": True,
-                        "split_hint": "trade_charges",
-                        "split_suggestions": [
-                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se " "una commissione c'è stata, è dentro questo totale.",
-                            "Se è un'obbligazione e non l'hai comprata all'emissione, il totale contiene anche il rateo " "cedolare che hai rimborsato al venditore: registralo come voce a parte, non fa parte del " "costo del titolo.",
-                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
-                        ],
-                    },
-                    "evidence": [
-                        {
-                            "title": "Riga di acquisto",
-                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
-                            "rows": [["10/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000", "'-20.412,33", "EUR"]],
-                            "row_numbers": [18],
-                            "comment": "Dal conto sono usciti 20.412,33 EUR. Guardando il resto del file ho trovato una cedola dello stesso "
-                            "titolo (riga 17) che dichiara 20.000,00 di valore nominale, cioè il capitale del titolo. I due numeri "
-                            "non coincidono (412,33 EUR di differenza): il totale di questa riga mette insieme il prezzo del "
-                            "titolo, il rateo cedolare maturato e le eventuali commissioni, e il file non li separa. La cassa è "
-                            "comunque giusta; è il costo di carico a essere approssimato.",
-                        },
-                        {
-                            "title": "Cedola che ha fornito il nominale",
-                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
-                            "rows": [["02/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00", "200,00", "EUR"]],
-                            "row_numbers": [17],
-                            "comment": "L'ISIN IT0000000003 e il valore nominale 20.000,00 vengono da qui: è il capitale del titolo, cioè " "quanto la banca rimborsa a scadenza, non quanto hai pagato.",
+                            "comment": "L'ISIN IT0000000001 e il valore nominale 40.000,00 vengono da qui: è il capitale del titolo, cioè quanto la banca rimborsa a scadenza, non quanto hai pagato.",
                         },
                     ],
                 },
                 {
                     "tx_index": 18,
-                    "field": "quantity",
+                    "field": "asset_id",
                     "severity": "warning",
-                    "reason_code": "ca_account_trade_sell_quantity_presumed",
-                    "message": "Riga 19: vendita di BTP OTHER 1/9/2030. Ho usato 20.000,00 come quantità, cioè il valore nominale che risulta dalle " "cedole. Se hai venduto solo una parte, correggila.",
-                    "context": {"causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "row": 19, "isin": "IT0000000003", "nominale": "20000.00"},
+                    "reason_code": "ca_account_charge_unallocated",
+                    "message": "Riga 19: spesa su operazione titoli non collegata a nessun titolo. Assegnala al titolo giusto, oppure tienila così se riguarda il conto.",
+                    "context": {"causale": "COMMISS./SPESE SU OPERAZ. TITOLI", "row": 19},
                     "evidence": [
                         {
                             "title": "Riga del file",
                             "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
-                            "rows": [["20/07/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000", "20.180,00", "EUR"]],
+                            "rows": [
+                                [
+                                    "14/07/2026",
+                                    "COMMISS./SPESE SU OPERAZ. TITOLI",
+                                    "ADDEBITO CAPITAL GAIN (D.LGS 461/97) 0000000000000 DATA:21/05/2026",
+                                    "'-21,42",
+                                    "EUR",
+                                ],
+                            ],
                             "row_numbers": [19],
-                            "comment": "Il file dice quanto denaro è entrato, non quante quote sono uscite. Le cedole di IT0000000003 " "riportano un nominale di 20000.00: è la posizione, quindi è giusto solo se hai venduto tutto.",
-                        }
-                    ],
-                },
-                {
-                    "tx_index": 18,
-                    "field": "cash",
-                    "severity": "warning",
-                    "reason_code": "ca_account_trade_bundled_amount",
-                    "message": "Riga 19: vendita di BTP OTHER 1/9/2030 — l'importo di questa riga potrebbe raggruppare più voci insieme.",
-                    "context": {
-                        "causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
-                        "row": 19,
-                        "isin": "IT0000000003",
-                        "cash": "20180.00",
-                        "nominale": "20000.00",
-                        "delta": "180.00",
-                        "currency": "EUR",
-                        "nominale_row": 17,
-                        "compare_nominal": False,
-                        "split_hint": "trade_charges",
-                        "split_suggestions": [
-                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se " "una commissione c'è stata, è dentro questo totale.",
-                            "Su una vendita l'importo accreditato è già netto: per registrare il ricavo lordo scorpora qui " "le spese trattenute, l'incasso sul conto non cambia.",
-                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
-                        ],
-                    },
-                    "evidence": [
-                        {
-                            "title": "Riga di vendita",
-                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
-                            "rows": [["20/07/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000", "20.180,00", "EUR"]],
-                            "row_numbers": [19],
-                            "comment": "Sul conto sono entrati 20.180,00 EUR, ed è un importo netto: le spese sulla vendita sono già state " "trattenute e il file non le espone. Il ricavo lordo e le singole spese non sono quindi ricavabili da " "questa riga.",
-                        },
-                        {
-                            "title": "Cedola che ha fornito il nominale",
-                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
-                            "rows": [["02/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00", "200,00", "EUR"]],
-                            "row_numbers": [17],
-                            "comment": "L'ISIN IT0000000003 e il valore nominale 20.000,00 vengono da qui: è il capitale del titolo, cioè " "quanto la banca rimborsa a scadenza, non quanto hai pagato.",
+                            "comment": "Questa è una spesa o imposta su un'operazione in titoli, ma la descrizione non dice su quale. Resta a carico del conto invece che del titolo, e il costo di carico di quel titolo risulta più basso del reale. Scegli il titolo a cui appartiene, oppure tienila com'è se è una spesa di conto.",
                         },
                     ],
                 },
@@ -5690,9 +5351,9 @@ class TestCreditAgricoleCanonicalCharacterization:
                         "currency": "EUR",
                         "compare_nominal": False,
                         "split_suggestions": [
-                            "Il file registra già delle spese su titoli a ridosso di questa data — riga 10 (21,42 EUR). " "Sono transazioni a sé: se le scorpori anche da qui le conti due volte.",
-                            "È un fondo, non un'obbligazione: non ci sono ratei cedolari da scorporare, quindi la " "differenza rispetto al prezzo sono commissioni o imposte.",
-                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
+                            "Il file registra già delle spese su titoli a ridosso di questa data — riga 19 (21,42 EUR). Sono transazioni a sé: se le scorpori anche da qui le conti due volte.",
+                            "È un fondo, non un'obbligazione: non ci sono ratei cedolari da scorporare, quindi la differenza rispetto al prezzo sono commissioni o imposte.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del solo titolo e le singole voci di spesa.",
                         ],
                     },
                     "evidence": [
@@ -5701,53 +5362,108 @@ class TestCreditAgricoleCanonicalCharacterization:
                             "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
                             "rows": [["15/07/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "SOTTOSC SICAV ORD.:2026/000000001 SAMPLE GLOB EQ FUND", "'-5.000,00", "EUR"]],
                             "row_numbers": [20],
-                            "comment": "Questa riga è un'operazione su titoli e il titolo si legge ('SAMPLE GLOB EQ FUND'), ma la quantità no: "
-                            "nel file non ci sono cedole di questo strumento da cui ricavarla (i fondi non ne staccano). L'importo "
-                            "è giusto, l'ho registrata come prelievo di cassa.",
-                        }
+                            "comment": "Questa riga è un'operazione su titoli e il titolo si legge ('SAMPLE GLOB EQ FUND'), ma la quantità no: nel file non ci sono cedole di questo strumento da cui ricavarla (i fondi non ne staccano). L'importo è giusto, l'ho registrata come prelievo di cassa.",
+                        },
                     ],
                 },
                 {
-                    "tx_index": 23,
-                    "field": "asset_id",
-                    "severity": "blocker",
-                    "reason_code": "ca_account_trade_unresolved",
-                    "message": "Riga 24: sembra il disinvestimento di 'SAMPLE FUND SICAV', arrivato come bonifico. Scegli il fondo e inserisci le " "quote vendute.",
-                    "context": {
-                        "causale": "GIROCONTO/BONIFICO",
-                        "row": 24,
-                        "reason": "fund_redemption",
-                        "split_hint": "trade_charges",
-                        "cash": "9984.47",
-                        "currency": "EUR",
-                        "compare_nominal": False,
-                        "split_suggestions": [
-                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se " "una commissione c'è stata, è dentro questo totale.",
-                            "È un fondo, non un'obbligazione: non ci sono ratei cedolari da scorporare, quindi la " "differenza rispetto al prezzo sono commissioni o imposte.",
-                            "Su una vendita l'importo accreditato è già netto: per registrare il ricavo lordo scorpora qui " "le spese trattenute, l'incasso sul conto non cambia.",
-                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
-                        ],
-                    },
+                    "tx_index": 20,
+                    "field": "quantity",
+                    "severity": "warning",
+                    "reason_code": "ca_account_trade_sell_quantity_presumed",
+                    "message": "Riga 21: vendita di BTP OTHER 1/9/2030. Ho usato 20.000,00 come quantità, cioè il valore nominale che risulta dalle cedole. Se hai venduto solo una parte, correggila.",
+                    "context": {"causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "row": 21, "isin": "IT0000000003", "nominale": "20000.00"},
                     "evidence": [
                         {
                             "title": "Riga del file",
                             "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
-                            "rows": [["11/11/2025", "GIROCONTO/BONIFICO", "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*> " "RIFERIMENTO SCT:XX-2025-11-10-000000001 IDENTIFICATIVO SCT:", "9.984,47", "EUR"]],
-                            "row_numbers": [24],
-                            "comment": "Il denaro arriva da 'SAMPLE FUND SICAV' e la causale parla di rimborso sullo stesso fondo: è un "
-                            "disinvestimento pagato per bonifico, non un accredito qualsiasi. Le quote vendute il file non le dice "
-                            "— un fondo riporta il controvalore, non il numero di quote — quindi l'ho registrata come versamento di "
-                            "cassa. Cambiala in vendita, scegli il fondo e inserisci le quote: altrimenti la posizione resta aperta "
-                            "per sempre.",
-                        }
+                            "rows": [
+                                [
+                                    "20/07/2026",
+                                    "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
+                                    "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+                                    "20.180,00",
+                                    "EUR",
+                                ],
+                            ],
+                            "row_numbers": [21],
+                            "comment": "Il file dice quanto denaro è entrato, non quante quote sono uscite. Le cedole di IT0000000003 riportano un nominale di 20000.00: è la posizione, quindi è giusto solo se hai venduto tutto.",
+                        },
+                    ],
+                },
+                {
+                    "tx_index": 20,
+                    "field": "cash",
+                    "severity": "warning",
+                    "reason_code": "ca_account_trade_bundled_amount",
+                    "message": "Riga 21: vendita di BTP OTHER 1/9/2030 — l'importo di questa riga potrebbe raggruppare più voci insieme.",
+                    "context": {
+                        "causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
+                        "row": 21,
+                        "isin": "IT0000000003",
+                        "cash": "20180.00",
+                        "nominale": "20000.00",
+                        "delta": "180.00",
+                        "currency": "EUR",
+                        "nominale_row": 9,
+                        "compare_nominal": False,
+                        "split_hint": "trade_charges",
+                        "split_suggestions": [
+                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se una commissione c'è stata, è dentro questo totale.",
+                            "Su una vendita l'importo accreditato è già netto: per registrare il ricavo lordo scorpora qui le spese trattenute, l'incasso sul conto non cambia.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del solo titolo e le singole voci di spesa.",
+                        ],
+                    },
+                    "evidence": [
+                        {
+                            "title": "Riga di vendita",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [
+                                [
+                                    "20/07/2026",
+                                    "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
+                                    "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+                                    "20.180,00",
+                                    "EUR",
+                                ],
+                            ],
+                            "row_numbers": [21],
+                            "comment": "Sul conto sono entrati 20.180,00 EUR, ed è un importo netto: le spese sulla vendita sono già state trattenute e il file non le espone. Il ricavo lordo e le singole spese non sono quindi ricavabili da questa riga.",
+                        },
+                        {
+                            "title": "Cedola che ha fornito il nominale",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [
+                                [
+                                    "02/06/2026",
+                                    "CEDOLE, DIVIDENDI, PREMI ESTRATTI",
+                                    "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00",
+                                    "200,00",
+                                    "EUR",
+                                ],
+                            ],
+                            "row_numbers": [9],
+                            "comment": "L'ISIN IT0000000003 e il valore nominale 20.000,00 vengono da qui: è il capitale del titolo, cioè quanto la banca rimborsa a scadenza, non quanto hai pagato.",
+                        },
                     ],
                 },
             ],
             "extracted_assets": {
-                2147483647: {"extracted_symbol": None, "extracted_isin": "IT0000000001", "extracted_name": "BTP SAMPLE 1/12/2026", "notices": []},
-                2147483646: {"extracted_symbol": None, "extracted_isin": "IT0000000002", "extracted_name": "AZIONE SAMPLE", "notices": []},
-                2147483645: {"extracted_symbol": None, "extracted_isin": "IT0000000003", "extracted_name": "BTP OTHER 1/9/2030", "notices": []},
-                2147483644: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP SAMPLE", "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [20]}]},
+                2147483647: {
+                    "extracted_symbol": None,
+                    "extracted_isin": None,
+                    "extracted_name": "BTP SAMPLE",
+                    "notices": [
+                        {
+                            "kind": "maturity_suspected",
+                            "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: RIMBORSO»).",
+                            "transaction_indexes": [0],
+                        },
+                    ],
+                },
+                2147483646: {"extracted_symbol": None, "extracted_isin": "IT0000000003", "extracted_name": "BTP OTHER 1/9/2030", "notices": []},
+                2147483645: {"extracted_symbol": None, "extracted_isin": "IT0000000001", "extracted_name": "BTP SAMPLE 1/12/2026", "notices": []},
+                2147483644: {"extracted_symbol": None, "extracted_isin": "IT0000000002", "extracted_name": "AZIONE SAMPLE", "notices": []},
             },
             "checkpoints": [],
             "verifications": [],
@@ -5756,12 +5472,13 @@ class TestCreditAgricoleCanonicalCharacterization:
 
     @staticmethod
     def _parse(path: Path) -> BRIMParseOutput:
-        return CreditAgricoleBrokerProvider().parse(path, broker_id=1)
+        role = _CA_ROLE_SECURITIES if path.name.startswith("credit_agricole-export") else _CA_ROLE_ACCOUNT
+        return _ca_alone(role, path)
 
     @pytest.mark.parametrize(
         ("layout", "csv_path"),
-        [(layout, csv_path) for layout, csv_path, _, _ in LAYOUTS],
-        ids=[layout for layout, _, _, _ in LAYOUTS],
+        [(layout, csv_path) for layout, csv_path, _ in LAYOUTS],
+        ids=[layout for layout, _, _ in LAYOUTS],
     )
     def test_csv_freezes_entire_output(self, layout: str, csv_path: Path):
         """Match every CSV value, order, fake ID, message, context and reason."""
@@ -5774,7 +5491,7 @@ class TestCreditAgricoleCanonicalCharacterization:
             "validation_issues",
             "field_todos",
             "extracted_assets",
-            # BRIM report sets (phase A1): truth points, always empty for single-file plugins like CA
+            # BRIM report sets (phase A1): truth points (empty here: a set of one sample member states none)
             "checkpoints",
             "verifications",
         }
@@ -5795,22 +5512,21 @@ class TestCreditAgricoleCanonicalCharacterization:
         assert _json_safe(csv_out) == expected, f"{layout}: complete CSV parse output drifted"
 
     @pytest.mark.parametrize(
-        ("layout", "xlsx_path", "xlsx_evidence_offset"),
-        [(layout, xlsx_path, offset) for layout, _, xlsx_path, offset in LAYOUTS],
-        ids=[layout for layout, _, _, _ in LAYOUTS],
+        ("layout", "xlsx_path"),
+        [(layout, xlsx_path) for layout, _, xlsx_path in LAYOUTS],
+        ids=[layout for layout, _, _ in LAYOUTS],
     )
     def test_xlsx_matches_entire_literal_csv_output(
         self,
         layout: str,
         xlsx_path: Path,
-        xlsx_evidence_offset: int,
     ):
-        """Match XLSX after only the documented +9/0 evidence-row offset."""
+        """Match XLSX against the same literal: the combined file is the same whichever format its members were."""
         pytest.importorskip("openpyxl")
         expected = self.EXPECTED_OUTPUTS[layout]
         xlsx_out = self._parse(xlsx_path)
 
-        assert _normalize_ca_xlsx_evidence_row_numbers(xlsx_out, xlsx_evidence_offset) == expected, f"{layout}: complete XLSX parse output drifted beyond its documented evidence-row offset"
+        assert _json_safe(xlsx_out) == expected, f"{layout}: complete XLSX parse output drifted from the CSV one"
 
 
 # =============================================================================
@@ -6157,6 +5873,105 @@ class TestBundledPluginIcons:
                 problems.append(f"{code}: {relative!r} is not a file of {folder}")
 
         assert not problems, f"{len(problems)} bundled icon(s) the app cannot serve:\n" + "\n".join(f"  {problem}" for problem in problems)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C-97a, decision D6: a value a plugin COMPUTES is rounded by the plugin, with
+# ``precision.round_computed_value`` (column scale ROUND_HALF_EVEN, then 15
+# significant digits on a RealDecimal column), so the batch does not refuse it;
+# a value READ from the file stays as read (decision D2). The rows are the
+# bundled samples with one cell changed, parsed by the rows-level parser, as in
+# test_credit_agricole_securities_ignores_recap_footer.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _decimal_limit_issue():
+    """``precision.decimal_limit_issue``, looked up when the test runs (new in C-97a)."""
+    found = getattr(precision, "decimal_limit_issue", None)
+    if found is None:
+        pytest.fail("backend/app/db/precision.py has no decimal_limit_issue: nothing tells whether the cost basis this plugin computed is one the batch accepts")
+    return found
+
+
+def _set_cells(rows: List[List[Any]], header: List[Any], match: dict, values: dict, *, first_only: bool = True) -> int:
+    """Set ``values`` (column name -> cell) on the rows whose cells equal ``match`` (column name -> cell); returns how many."""
+    index = {str(cell).strip(): position for position, cell in enumerate(header)}
+    changed = 0
+    for row in rows:
+        if all(len(row) > index[name] and str(row[index[name]]).strip() == cell for name, cell in match.items()):
+            for name, cell in values.items():
+                row[index[name]] = cell
+            changed += 1
+            if first_only:
+                break
+    return changed
+
+
+def _succession_costs(out, name: str) -> set:
+    """The per-unit cost bases of the ADJUSTMENTs (successions, transfers-in) of the asset the plugin extracted as ``name``."""
+    return {tx.cost_basis_override.amount for tx in out.transactions if tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and getattr(out.extracted_assets.get(tx.asset_id), "extracted_name", None) == name}
+
+
+class TestComputedValuesAreRounded:
+    """C-97a D6: Intesa's per-unit cost (cost / qty) and Crédit Agricole's bond price (price / 100) are rounded by the plugin."""
+
+    INTESA_FUND_ISIN = "LU2178929613"
+    CA_BOND = "BTP 1/12/2026 1.25%"
+    CA_FUND = "AMUNDI PRIMO INV LC"
+
+    def test_intesa_snapshot_per_unit_cost_is_rounded_by_the_plugin(self):
+        """Red. A snapshot position with a fiscal cost of 1000.00 EUR for 3 units.
+
+        Before: cost_basis_override 333.3333333333333333333333333 (cost / qty, 28 digits), which the batch now
+        refuses (more than 12 decimals). Contract: 333.333333333333 (round_computed_value: 12 decimals,
+        ROUND_HALF_EVEN, 15 significant digits), which decimal_limit_issue accepts.
+        """
+        rows = read_rows(INTESA_PATRIMONIO_SAMPLE)
+        header = next(row for row in rows if any(str(cell).strip() == "Numero Quote" for cell in row))
+        cost_column = next(str(cell).strip() for cell in header if str(cell).strip().startswith("Controvalore di carico fiscale"))
+        assert _set_cells(rows, header, {"ISIN": self.INTESA_FUND_ISIN}, {"Numero Quote": "3", cost_column: "1.000,00"}) == 1, f"the sample has no fund {self.INTESA_FUND_ISIN} to edit"
+
+        out = IntesaSanpaoloBrokerProvider()._parse_patrimonio(rows, broker_id=9)
+
+        seed = next(tx for tx in out.transactions if tx.type == TransactionType.ADJUSTMENT and tx.asset_id in out.extracted_assets and out.extracted_assets[tx.asset_id].extracted_isin == self.INTESA_FUND_ISIN)
+        assert seed.quantity == Decimal("3"), f"the edited position was read as {seed.quantity} units, not 3"
+        assert seed.cost_basis_override is not None
+        amount = seed.cost_basis_override.amount
+        assert amount == Decimal("333.333333333333"), f"an Intesa snapshot of 3 units at a fiscal cost of 1000.00 EUR seeds a per-unit cost basis of {amount}: the batch refuses the import; expected 333.333333333333 (round_computed_value)"
+        issue = _decimal_limit_issue()(amount, Transaction, "cost_basis_override")
+        assert issue is None, f"the per-unit cost basis {amount} the Intesa plugin computed is refused by decimal_limit_issue: {issue}"
+
+    def test_credit_agricole_bond_succession_price_over_100_is_rounded_by_the_plugin(self, tmp_path):
+        """Red. A bond carried in (GIRO ALTRO DOSSIER) at 95,123456789087 per 100 of nominal.
+
+        Before: per-unit cost 0.95123456789087 (price / 100, 14 decimals), which the batch now refuses. Contract:
+        0.951234567891 (12 decimals, ROUND_HALF_EVEN: the digit after the 12th is 8, so not ROUND_DOWN's
+        0.951234567890), which decimal_limit_issue accepts.
+        """
+        rows = read_rows(CA_SAMPLE)
+        header = rows[0]
+        assert _set_cells(rows, header, {"Nome": self.CA_BOND, "Causale": "GIRO ALTRO DOSSIER"}, {"Prezzo": "95,123456789087"}) == 1, f"the sample has no succession of {self.CA_BOND} to edit"
+
+        out = _ca_parse_rows(rows, _CA_ROLE_SECURITIES, tmp_path)
+
+        costs = _succession_costs(out, self.CA_BOND)
+        assert Decimal("0.951234567891") in costs, f"a {self.CA_BOND} carried in at 95,123456789087 per 100 seeds per-unit cost bases {sorted(costs)}: the batch refuses 14 decimals; expected 0.951234567891 (round_computed_value)"
+        refused = {cost: _decimal_limit_issue()(cost, Transaction, "cost_basis_override") for cost in costs}
+        assert not {cost: issue for cost, issue in refused.items() if issue is not None}, f"decimal_limit_issue still refuses the bond cost bases the plugin computed: {refused}"
+
+    def test_guard_credit_agricole_fund_succession_price_stays_as_read(self, tmp_path):
+        """GUARD (D2, green before and after): a fund is priced per unit, nothing is computed, the price is kept as read.
+
+        17 significant digits, which the batch refuses later: rounding a value read from a file is not the plugin's job.
+        """
+        rows = read_rows(CA_SAMPLE)
+        header = rows[0]
+        assert _set_cells(rows, header, {"Nome": self.CA_FUND, "Causale": "VERS.TITOLI"}, {"Prezzo": "4,9812345678912345"}) == 1, f"the sample has no succession of {self.CA_FUND} to edit"
+
+        out = _ca_parse_rows(rows, _CA_ROLE_SECURITIES, tmp_path)
+
+        costs = _succession_costs(out, self.CA_FUND)
+        assert Decimal("4.9812345678912345") in costs, f"a {self.CA_FUND} carried in at 4,9812345678912345 seeds per-unit cost bases {sorted(costs)}: a price read from the file must stay as read (D2)"
 
 
 if __name__ == "__main__":

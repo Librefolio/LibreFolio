@@ -16,7 +16,6 @@ from backend.app.schemas.signals import (
     SignalSeriesKind,
     SignalStatus,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry
 from backend.app.services.signal_plugins.kama import plugin as kama_module
 from backend.app.services.signal_plugins.kama.plugin import (
     KamaSignalParams,
@@ -42,7 +41,8 @@ from backend.app.services.signal_plugins.stoch_rsi.plugin import (
     StochRsiSignalParams,
     StochRsiSignalPlugin,
 )
-from backend.app.services.signal_service import SignalService
+from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.service import SignalService
 from backend.test_scripts.fixtures.signals.plugin_test_utils import (
     VISIBLE_POINTS,
     execution_context,

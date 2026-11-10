@@ -25,6 +25,8 @@ P7 added two levels — **A**: vitest unit coverage; **B**: Playwright E2E cover
 via `page.coverage` — merged into one report through
 `monocart-coverage-reports` 2.12.12 and `vitest-monocart-coverage` 4.0.2.
 
+The campaign this instrument made possible: [[sources/coverage-campaign-2026-08]].
+
 ## The verification that made it cheap
 
 The obstacle assumed to be largest — *"the E2E would have to run against a
@@ -92,7 +94,7 @@ That pattern recurred later at a larger scale in
 | Dependencies | `frontend/package.json` — `vite-plugin-istanbul`, `@vitest/coverage-istanbul`, `istanbul-lib-*` |
 | E2E coverage fixture | `frontend/e2e/fixtures/playwright.ts` |
 | Coverage CLI | `scripts/test_runner/_coverage.py` |
-| Reports | `htmlcov-frontend/`, `frontend/coverage-js/` |
+| Report folders (generated at run time, gitignored; `htmlcov-frontend` is today `htmlcov-backend-e2e`, renamed in `eb3e4adc1`) | `scripts/test_runner/_coverage.py` — `JS_COVERAGE_DIR = "coverage-js"`, `htmlcov-backend-e2e` |
 | Original plan | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-p7-js-coverage.md` |
 
 > **Path note (2026-09-01)**: this table cited `frontend/mcr.config.js`. **That file

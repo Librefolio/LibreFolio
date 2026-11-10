@@ -44,6 +44,7 @@ calendrier.
 ## ⚠️ Ce qu'une synchronisation modifie
 
 - Les dates de la période déjà enregistrées prennent la valeur du fournisseur ; les dates manquantes sont ajoutées.
+  Avant de commencer, la fenêtre vous avertit quand la période contient déjà des taux enregistrés, et pour combien de ses paires.
 - Les dates en dehors de la période restent inchangées.
 - Si la première route d'une paire échoue, LibreFolio essaie la suivante : voir
   [Configuration du fournisseur](detail/provider.md).

@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal, StrictModel
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================
@@ -143,10 +143,13 @@ class BRIMFileInfo(StrictModel):
         last_parse_result: Cached result from last successful parse
         parsed_plugin_code: Plugin code used at last successful parse
         parsed_plugin_version: Plugin version at last successful parse
+        parsed_settings_fingerprint: Fingerprint of the plugin settings the last
+            parse received (internal, never serialised).
         parse_is_stale: Computed flag. True iff status==PARSED and
             parsed_plugin_version differs from the plugin's current
             version (i.e., the plugin code has been updated since the
-            cached parse was produced). The UI can use this to surface a
+            cached parse was produced), or the user's plugin settings
+            moved since (set by the file routes, which know the user). The UI can use this to surface a
             "Re-parse available" hint without introducing a new
             persisted status.
     """
@@ -166,13 +169,20 @@ class BRIMFileInfo(StrictModel):
     # Plugin versioning (for cache invalidation)
     parsed_plugin_code: Optional[str] = Field(default=None, description="Plugin code used at last successful parse")
     parsed_plugin_version: Optional[str] = Field(default=None, description="Plugin version at last successful parse")
-    parse_is_stale: bool = Field(default=False, description="True if cached parse was produced by an older plugin version and a re-parse is recommended")
+    parsed_settings_fingerprint: Optional[str] = Field(default=None, exclude=True, description="Fingerprint of the plugin settings the last parse received; compared in memory only, never serialised")
+    parse_is_stale: bool = Field(default=False, description="True if cached parse was produced by an older plugin version, or over plugin settings that have changed since, and a re-parse is recommended")
     # Report sets: files uploaded together, and the combined file derived from them
     batch_id: Optional[str] = Field(default=None, description="Upload batch the file belongs to; files uploaded together form a report set")
     kind: Literal["original", "combined"] = Field(default="original", description="original = uploaded by the user; combined = derived by a report-set plugin")
     derived_from: List[BRIMDerivedRef] = Field(default_factory=list, description="For a combined file: the originals it was built from")
     combined_into: List[str] = Field(default_factory=list, description="For an original file: the combined files built from it")
     combine_is_stale: bool = Field(default=False, description="True if a combined file was built by an older plugin version")
+
+
+class BRIMFileListItem(BRIMFileInfo):
+    """A file of ``GET /api/v1/brokers/import/files``, with what the current user may do with it (decision 36 of release 1.3)."""
+
+    can_delete: bool = Field(..., description="Whether the current user may delete the file: EDITOR or OWNER of its broker, the uploader of a file with no broker, or an administrator")
 
 
 # =============================================================================

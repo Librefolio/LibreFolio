@@ -7,7 +7,7 @@
      * back to the system icon, an external account (funding only) to a bank.
      */
     import {Landmark} from 'lucide-svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {brokerStoreVersion, getBrokerInfo} from '$lib/stores/reference/brokerStore';
     import type {DraftBroker} from '../draft.svelte';
     import {ICON_BUBBLE} from '../ui';

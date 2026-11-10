@@ -21,7 +21,6 @@ from backend.app.schemas.settings import (
     CacheStatusResponse,
     GlobalSettingBulkUpdate,
     GlobalSettingRead,
-    GlobalSettingsInitializeResponse,
     GlobalSettingsListResponse,
     OnboardingProgressItem,
     OnboardingProgressResponse,
@@ -32,26 +31,27 @@ from backend.app.schemas.settings import (
     UserSettingsRead,
     UserSettingsUpdate,
 )
-from backend.app.services.global_settings_service import get_setting_value
-from backend.app.services.onboarding_service import (
+from backend.app.services.accounts.global_settings_service import get_setting_value
+from backend.app.services.accounts.onboarding_service import (
     OnboardingVersionMismatchError,
     complete_welcome_onboarding,
     get_onboarding_progress,
     transition_onboarding_progress,
     transition_onboarding_step_progress,
 )
-from backend.app.services.scheduler import read_job_log
-from backend.app.services.scheduler.state import load_state
-from backend.app.services.settings_service import (
+from backend.app.services.accounts.settings_service import (
+    GlobalSettingLockedError,
     GlobalSettingNotFoundError,
+    GlobalSettingUnavailableError,
     GlobalSettingValueError,
+    UIPreferencesTooLargeError,
     get_all_global_settings,
-    get_global_setting,
     get_or_create_user_settings,
-    initialize_global_settings,
     update_global_settings,
     update_user_settings,
 )
+from backend.app.services.platform.scheduler import read_job_log
+from backend.app.services.platform.scheduler.state import JobState, load_state
 from backend.app.utils.runtime.cache import clear_all_caches, clear_cache, list_caches
 
 logger = structlog.get_logger(__name__)
@@ -98,14 +98,19 @@ async def update_user_settings_endpoint(
     """
     Update current user's settings.
 
-    All fields are optional. Only provided fields will be updated.
+    All fields are optional. Only provided fields will be updated. ``ui_preferences`` merges key by key: a key with a
+    value is set, a key sent as ``null`` is removed (it follows its global default again), a key left out is kept. An
+    unknown field or preference key answers 422, and so does a write that would leave the preferences over their size cap.
     """
     logger.info(
         "Updating user settings",
         user_id=current_user.id,
         updates=updates.model_dump(exclude_none=True),
     )
-    return await update_user_settings(current_user.id, updates, session)
+    try:
+        return await update_user_settings(current_user.id, updates, session)
+    except UIPreferencesTooLargeError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from None
 
 
 @router.get(
@@ -132,7 +137,7 @@ async def _transition_onboarding_endpoint(
         if request.welcome_settings is not None:
             if flow != OnboardingFlow.WELCOME or target_status != OnboardingStatus.COMPLETED:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="welcome_settings is valid only when completing the welcome flow",
                 )
             return await complete_welcome_onboarding(
@@ -160,7 +165,7 @@ async def _transition_onboarding_endpoint(
         ) from exc
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -236,7 +241,7 @@ async def _transition_onboarding_step_endpoint(
         ) from exc
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -294,28 +299,17 @@ async def skip_onboarding_step_endpoint(
 
 @router.get("/global", response_model=GlobalSettingsListResponse)
 async def list_global_settings(
+    _current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session_generator),
 ) -> GlobalSettingsListResponse:
     """
     List all global settings.
 
-    Public read access - anyone can view global settings.
+    Any signed-in user may read them, administrators write them (decision 36). The login page needs none of them: it
+    reads the public ``GET /system/instance``.
     """
     settings = await get_all_global_settings(session)
     return GlobalSettingsListResponse(items=settings)
-
-
-@router.get("/global/{key}", response_model=GlobalSettingRead)
-async def get_global_setting_endpoint(key: str, session: AsyncSession = Depends(get_session_generator)) -> GlobalSettingRead:
-    """
-    Get a specific global setting by key.
-
-    Public read access.
-    """
-    setting = await get_global_setting(key, session)
-    if not setting:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{key}' not found")
-    return setting
 
 
 @router.patch("/global/bulk", response_model=list[GlobalSettingRead])
@@ -327,28 +321,20 @@ async def bulk_update_global_settings(
     """Bulk update global settings. Admin only.
 
     All or nothing: an unknown key answers 404, a value its setting refuses answers 422 with a ``detail``
-    string naming every refused key, and in both cases nothing is saved.
+    string naming every refused key, a setting an environment variable pins answers 409 ``SETTING_LOCKED_BY_ENV``,
+    and email verification turned on while no email with a link can go out answers 409
+    ``EMAIL_VERIFICATION_UNAVAILABLE``; in every case nothing is saved.
     """
     try:
         return await update_global_settings([(item.key, item.value) for item in update.items], admin.id, session)
     except GlobalSettingNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{exc.key}' not found") from None
+    except GlobalSettingLockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "SETTING_LOCKED_BY_ENV", "message": str(exc), "key": exc.key, "variable": exc.variable}) from None
+    except GlobalSettingUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": exc.code, "message": str(exc), "key": exc.key}) from None
     except GlobalSettingValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
-
-
-@router.post("/global/initialize", status_code=status.HTTP_200_OK, response_model=GlobalSettingsInitializeResponse)
-async def initialize_global_settings_endpoint(
-    admin: Annotated[User, Depends(require_admin)],
-    session: AsyncSession = Depends(get_session_generator),
-) -> dict:
-    """
-    Initialize global settings with default values.
-
-    Admin only. Creates only missing settings.
-    """
-    created = await initialize_global_settings(session)
-    return {"message": f"Initialized {created} global settings"}
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from None
 
 
 @router.get("/scheduler/state", response_model=SchedulerStateResponse)
@@ -373,21 +359,22 @@ async def get_scheduler_state(
     now_utc = datetime.now(UTC)
     server_now_utc = now_utc.strftime("%H:%M")
 
+    def job_info(job: JobState) -> dict:
+        return {
+            "last_run_at": job.last_run_at,
+            "last_duration_s": job.last_duration_s,
+            "last_status": job.last_status,
+            "last_items_ok": job.last_items_ok,
+            "last_items_err": job.last_items_err,
+            "last_items_deferred": job.last_items_deferred,
+            "retry_at": job.retry_at,
+            "consecutive_failures": job.consecutive_failures,
+            "next_attempt_at": job.next_attempt_at,
+        }
+
     return {
-        "current_price": {
-            "last_run_at": state.current_price.last_run_at,
-            "last_duration_s": state.current_price.last_duration_s,
-            "last_status": state.current_price.last_status,
-            "last_items_ok": state.current_price.last_items_ok,
-            "last_items_err": state.current_price.last_items_err,
-        },
-        "history_sync": {
-            "last_run_at": state.history_sync.last_run_at,
-            "last_duration_s": state.history_sync.last_duration_s,
-            "last_status": state.history_sync.last_status,
-            "last_items_ok": state.history_sync.last_items_ok,
-            "last_items_err": state.history_sync.last_items_err,
-        },
+        "current_price": job_info(state.current_price),
+        "history_sync": job_info(state.history_sync),
         "server_tz": "UTC",
         "server_now_utc": server_now_utc,
         "scheduler_timezone": scheduler_tz,

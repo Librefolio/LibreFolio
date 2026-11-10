@@ -109,7 +109,7 @@ $$
 n = \max\left(1,\ \operatorname{round}\left(\frac{h \cdot f}{365}\right)\right)
 $$
 
-Un orizzonte copre quindi lo stesso intervallo di calendario su ogni serie, all'osservazione più vicina. Trenta giorni — il mese negativo che l'app riporta accanto al giorno negativo — sono $n = 21$ osservazioni di una serie quotata nei giorni di negoziazione ($f \approx 252$) e $n = 30$ di una quotata ogni giorno di calendario ($f = 365$).
+Un orizzonte copre quindi lo stesso intervallo di calendario su ogni serie, all'osservazione più vicina. Trenta giorni — la scheda Trenta giorni storti che l'app mostra accanto alla giornata storta — sono $n = 21$ osservazioni di una serie quotata nei giorni di negoziazione ($f \approx 252$) e $n = 30$ di una quotata ogni giorno di calendario ($f = 365$).
 
 L'analitica calcola esattamente queste quantità e pubblica entrambe con il risultato: $n$ come il suo orizzonte in osservazioni, $T$ come il suo conteggio di osservazioni. Quel conteggio pubblicato, non la lunghezza della finestra, è il $T$ a cui si applica la regola. È anche il conteggio rispetto al quale viene verificato il minimo di 20 osservazioni: con meno di 20 finestre composte la cifra non viene calcolata, e il risultato torna non disponibile per storia insufficiente. Un mese negativo richiede quindi $N \ge 40$ rendimenti con $f \approx 252$, dove $n = 21$, e $N \ge 49$ con $f = 365$.
 

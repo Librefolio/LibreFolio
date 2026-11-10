@@ -76,12 +76,12 @@ The question: how should the form modal handle paired transactions — open two 
 
 | Role | Path |
 |------|------|
-| TransactionFormModal (dual-form logic) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| Transaction type store (pairFormLayout) | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
-| i18n EN | `frontend/src/lib/i18n/base/en.json` |
-| i18n IT | `frontend/src/lib/i18n/base/it.json` |
-| i18n FR | `frontend/src/lib/i18n/base/fr.json` |
-| i18n ES | `frontend/src/lib/i18n/base/es.json` |
+| TransactionFormModal (dual-form logic) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| Transaction type store (pairFormLayout) | `frontend/src/lib/features/transactions/transactionTypeStore.ts` |
+| i18n EN (in the base catalogue at filing, moved to the transactions catalogue by `e47f45c98`) | `frontend/src/lib/i18n/transactions/en.json` |
+| i18n IT | `frontend/src/lib/i18n/transactions/it.json` |
+| i18n FR | `frontend/src/lib/i18n/transactions/fr.json` |
+| i18n ES | `frontend/src/lib/i18n/transactions/es.json` |
 | Plan file | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` |
 
 ## Links

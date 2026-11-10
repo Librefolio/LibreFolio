@@ -202,7 +202,6 @@ def snapshot_test_db(log_dir: Path, label: str = "test-db") -> Path | None:
         return None
 
 
-
 _SLUG_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -216,6 +215,7 @@ def log_file_for(log_dir: Path, category: str, unit: str) -> Path:
     share a description the second gets a numeric suffix rather than silently
     overwriting the first.
     """
+
     def _slug(value: str) -> str:
         return _SLUG_RE.sub("-", (value or "unit").strip()).strip("-_.")[:80] or "unit"
 

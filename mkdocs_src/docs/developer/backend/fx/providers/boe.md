@@ -18,6 +18,7 @@ The Bank of England provides exchange rates through their Statistical Interactiv
 
 - **Series codes**: Format `XUDL{XXX}` where `XXX` varies by currency (e.g., `XUDLUSS` for USD).
 - **Quotation**: "Foreign currency per 1 GBP" — the provider normalizes these automatically.
+- **Too many requests**: an HTTP 429 on any currency's request refuses the whole call. After the parallel fetch, `raise_longest_refusal()` raises the `FXRateLimitedError` with the longest `Retry-After`, and the core pauses the provider ([Paused Providers](../configuration.md#paused-providers)).
 
 ### 💰 Supported Currencies
 
@@ -26,5 +27,5 @@ USD 🇺🇸, EUR 🇪🇺, JPY 🇯🇵, CHF 🇨🇭, CAD 🇨🇦, AUD 🇦�
 ### ⚠️ Limitations
 
 - The API returns HTML with embedded CSV data — parsing is more complex than pure JSON/CSV APIs.
-- One request per currency (sequential).
+- One request per currency, sent in parallel (`asyncio.gather`).
 - Some currencies have limited historical coverage.

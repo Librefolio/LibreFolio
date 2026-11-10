@@ -1,4 +1,4 @@
-"""PWA icons and the service-worker stamp: what an installed LibreFolio shows (K, R2 step 13, item 1).
+"""PWA icons and the service-worker stamp: what an installed LibreFolio shows (K, R2 step 13, item 1; H-52).
 
 Both defects live where no browser tab looks, on a home screen and in a service
 worker's cache, so neither had ever turned a test red.
@@ -40,21 +40,47 @@ something else touches ``sw.js``. It happened on 29/09: K step 12b's flags-only
 face edited ``offline.html`` and left ``sw.js`` at ``450af3dd`` while the page
 hashed to ``3e7bd439``, and nothing noticed. This module notices the next one.
 
-PURE: it reads the committed files under ``frontend/static/`` and
-``frontend/src/app.html``, which is what a browser gets. No DB, no server, no
-network, no writes. It never runs the generator: ``copy_docs_assets()`` rewrites
-the icons and restamps ``sw.js``, and a test that ran it would only be comparing
-the generator with itself.
+**Stamping writes only a change, and every frontend build stamps (H-52).**
+``stamp_service_worker()`` runs with every docs build (``copy_docs_assets()``,
+``dev.py server``'s ``auto_build_mkdocs()`` included), and it rewrote ``sw.js``
+every time, the very bytes it held included. Since H-52
+``check_frontend_needs_build()`` (``scripts/cli_base.py``) also watches
+``frontend/static/``: a static file newer than ``build/index.html`` makes the
+build stale, so that rewrite cost a frontend rebuild after every docs build.
+With ``offline.html`` unchanged, a second stamp leaves ``sw.js`` as it was, its
+bytes and its mtime; an edited page is stamped on line 2, the rest of ``sw.js``
+kept; a missing ``sw.js`` or ``offline.html`` writes nothing and raises nothing.
+And ``cmd_fe_build`` generated the favicon but never stamped, so a frontend
+build could ship a ``sw.js`` stamped for another ``offline.html`` than the one
+it shipped, until a later docs build restamped it: it stamps before its npm
+build.
+
+PURE: no DB, no server, no network. The checks of the committed files read
+``frontend/static/`` and ``frontend/src/app.html``, which is what a browser
+gets, and never run the generator on them: ``copy_docs_assets()`` rewrites the
+icons and restamps ``sw.js``, and a test that ran it there would only be
+comparing the generator with itself. The stamping cases run dev.py's own
+``stamp_service_worker()`` in this process, on copies of ``sw.js`` and
+``offline.html`` under ``tmp_path`` with ``dev.PROJECT_ROOT`` pointed there;
+``cmd_fe_build``'s other steps are stood in for, and a real process fails the
+test. Nothing outside ``tmp_path`` is written.
 """
 
 import hashlib
+import inspect
 import json
 import math
+import os
+import subprocess
 from functools import cache
 from html.parser import HTMLParser
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 from PIL import Image
+
+import dev
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 STATIC_DIR = PROJECT_ROOT / "frontend" / "static"
@@ -87,6 +113,17 @@ MANIFEST_ICONS = {
 }
 
 OPAQUE_HEADLINE = "D1: every icon is opaque RGB with no alpha channel; iOS paints transparency black and the Android splash showed dark corners:"
+
+#: A timestamp no write leaves: a file is aged to it before a call, so a write shows whatever the filesystem's granularity.
+AGED_NS = 946_684_800 * 10**9  # 2000-01-01T00:00:00Z
+#: An edit to the copy of ``offline.html``: the copy of ``sw.js`` is then stamped for an earlier page.
+PAGE_EDIT = b"<!-- an edit made after sw.js was stamped -->\n"
+#: Another edit, made once the copy of ``sw.js`` carries the first edit's stamp.
+LATER_PAGE_EDIT = b"<!-- a later edit -->\n"
+#: The npm build ``cmd_fe_build`` runs, by its ``debug`` flag; ``npx svelte-check`` runs before it.
+NPM_BUILD_COMMANDS = {True: ["npm", "run", "build:debug"], False: ["npm", "run", "build"]}
+#: ``cmd_fe_build``'s steps a recorder stands in for, answering 0: the checks, the codegen fingerprint, the API sync, the favicon, the bookkeeping after the build.
+FE_BUILD_STAND_INS = ("require_frontend_dependencies", "update_js_cache", "tool_contract_fingerprint", "cmd_api_sync", "generate_favicon", "_write_frontend_build_mode_marker", "record_tool_contract_inputs")
 
 
 def _report(headline: str, problems: list[str]) -> str:
@@ -203,15 +240,96 @@ def _purpose_problems(purpose: str) -> list[str]:
     return [f"{purpose} {size}x{size}: declares {found}, expected [{src!r}]" for size, src in MANIFEST_ICONS[purpose].items() if (found := _declared_srcs(purpose, size)) != [src]]
 
 
-def _stamps() -> list[str]:
-    """Every ``// build:`` line of ``sw.js``: the lines ``stamp_service_worker()`` itself recognises and rewrites."""
-    lines = SERVICE_WORKER.read_text(encoding="utf-8").splitlines()
+def _stamps(service_worker: Path = SERVICE_WORKER) -> list[str]:
+    """Every ``// build:`` line of ``service_worker``: the lines ``stamp_service_worker()`` itself recognises and rewrites."""
+    lines = service_worker.read_text(encoding="utf-8").splitlines()
     return [line.removeprefix("// build:").strip() for line in lines if line.startswith("// build:")]
 
 
-def _offline_page_hash() -> str:
-    """What ``stamp_service_worker()`` writes: the first 8 hex digits of the page's md5."""
-    return hashlib.md5(OFFLINE_PAGE.read_bytes(), usedforsecurity=False).hexdigest()[:8]
+def _offline_page_hash(page: Path = OFFLINE_PAGE) -> str:
+    """What ``stamp_service_worker()`` writes for ``page``: the first 8 hex digits of its md5."""
+    return hashlib.md5(page.read_bytes(), usedforsecurity=False).hexdigest()[:8]
+
+
+def _files_under(root: Path) -> dict[str, tuple[str, int]]:
+    """Every file under ``root``: the sha256 of its bytes and its mtime in ns."""
+    return {path.relative_to(root).as_posix(): (hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_mtime_ns) for path in sorted(root.rglob("*")) if path.is_file()}
+
+
+def _age(root: Path) -> None:
+    """Every file under ``root`` at ``AGED_NS``."""
+    for path in root.rglob("*"):
+        if path.is_file():
+            os.utime(path, ns=(AGED_NS, AGED_NS))
+
+
+@pytest.fixture
+def static_copy(monkeypatch, tmp_path) -> SimpleNamespace:
+    """Copies of ``sw.js`` and ``offline.html`` where dev.py looks for them, ``dev.PROJECT_ROOT`` pointed at ``tmp_path``.
+
+    The copy of the page carries ``PAGE_EDIT``, so the copy of ``sw.js`` is stamped for an earlier page: a first stamp has
+    something to write, which proves the call works on this tree before a case asserts that a call wrote nothing.
+    """
+    if "PROJECT_ROOT" not in inspect.getclosurevars(dev.stamp_service_worker).globals:
+        pytest.fail("stamp_service_worker() no longer reads dev.PROJECT_ROOT when it runs: pointing that at tmp_path would not keep it off the real frontend/static/, so the case stops before calling it")
+    static_dir = tmp_path / "frontend" / "static"
+    static_dir.mkdir(parents=True)
+    tree = SimpleNamespace(root=tmp_path, service_worker=static_dir / "sw.js", page=static_dir / "offline.html")
+    tree.service_worker.write_bytes(SERVICE_WORKER.read_bytes())
+    tree.page.write_bytes(OFFLINE_PAGE.read_bytes() + PAGE_EDIT)
+    monkeypatch.setattr(dev, "PROJECT_ROOT", tmp_path)
+    assert _stamps(tree.service_worker) != [_offline_page_hash(tree.page)], "premise: the copy of sw.js is stamped for an earlier offline.html"
+    return tree
+
+
+def _stamp_afresh(tree: SimpleNamespace) -> bytes:
+    """dev.py's ``stamp_service_worker()`` on the tree's stale ``sw.js``, which it must stamp for the page (premise); the bytes it leaves."""
+    dev.stamp_service_worker()
+    stamps = _stamps(tree.service_worker)
+    assert stamps == [_offline_page_hash(tree.page)], f"premise: stamp_service_worker() stamps the copy under tmp_path for its page; the copy carries {stamps}"
+    return tree.service_worker.read_bytes()
+
+
+def _stand_in_for_fe_build(monkeypatch, tree: SimpleNamespace) -> SimpleNamespace:
+    """Every step of ``cmd_fe_build`` a recorder, but ``stamp_service_worker``: recorded, then run for real on ``tree``.
+
+    ``events`` holds each step's name in the order it ran (``npx svelte-check`` as ``"svelte-check"``, the npm build as
+    ``"npm build"``), ``stamps_at_build`` the ``// build:`` lines of the tree's ``sw.js`` as each npm build found them.
+    Any other command fails the test, and so does a real process: one that started would build the frontend.
+    """
+    calls = SimpleNamespace(events=[], stamps_at_build=[])
+    real_stamp_service_worker = dev.stamp_service_worker
+
+    def step(name: str):
+        def run(*_args, **_kwargs):
+            calls.events.append(name)
+            return 0
+
+        return run
+
+    def stamp_service_worker(*args, **kwargs):
+        calls.events.append("stamp_service_worker")
+        return real_stamp_service_worker(*args, **kwargs)
+
+    def run_command_live(command, *_args, **_kwargs):
+        if list(command[:2]) == ["npx", "svelte-check"]:
+            return step("svelte-check")()
+        if list(command) in NPM_BUILD_COMMANDS.values():
+            calls.stamps_at_build.append(_stamps(tree.service_worker))
+            return step("npm build")()
+        pytest.fail(f"cmd_fe_build ran a command this test does not expect: {command}")
+
+    def real_process(*_args, **_kwargs):
+        pytest.fail("cmd_fe_build started a real process: it reached a step this test does not stand in for")
+
+    for name in ("Popen", "run"):
+        monkeypatch.setattr(subprocess, name, real_process)
+    for name in FE_BUILD_STAND_INS:
+        monkeypatch.setattr(dev, name, step(name))
+    monkeypatch.setattr(dev.i18n_catalog, "build", step("i18n_catalog.build"))
+    monkeypatch.setattr(dev, "run_command_live", run_command_live)
+    monkeypatch.setattr(dev, "stamp_service_worker", stamp_service_worker)
+    return calls
 
 
 class TestAnyIcons:
@@ -363,3 +481,60 @@ class TestServiceWorkerStamp:
         why = "a page edit that does not change sw.js never reaches installed clients, which keep the old offline page"
         fix = "restamp sw.js with dev.py's stamp_service_worker() and commit it together with the page"
         assert stamps and set(stamps) == {expected}, f"sw.js is stamped {stamps}, offline.html hashes to {expected!r}: {why}. Fix: {fix}."
+
+
+class TestStampServiceWorker:
+    """dev.py's ``stamp_service_worker()`` on copies under ``tmp_path``: ``sw.js`` is written when its stamp changes, and only then (H-52)."""
+
+    def test_stamping_again_with_the_page_unchanged_leaves_sw_js_untouched(self, static_copy):
+        stamped = _stamp_afresh(static_copy)
+        _age(static_copy.root)
+
+        dev.stamp_service_worker()
+
+        assert static_copy.service_worker.read_bytes() == stamped, "a second stamp with offline.html unchanged changed the bytes of sw.js"
+        mtime_ns = static_copy.service_worker.stat().st_mtime_ns
+        why = "it runs with every docs build, and check_frontend_needs_build() watches frontend/static/: sw.js newer than build/index.html makes the next dev.py server rebuild the frontend for nothing"
+        assert mtime_ns == AGED_NS, f"H-52: a second stamp with offline.html unchanged rewrote sw.js with the bytes it already held (mtime {AGED_NS} → {mtime_ns}): {why}"
+
+    def test_an_edited_page_is_stamped_on_line_2_and_the_rest_of_sw_js_kept(self, static_copy):
+        before = _stamp_afresh(static_copy).decode("utf-8").splitlines(keepends=True)
+        static_copy.page.write_bytes(static_copy.page.read_bytes() + LATER_PAGE_EDIT)
+        expected = _offline_page_hash(static_copy.page)
+        assert _stamps(static_copy.service_worker) != [expected], "premise: the edit changes the page's hash"
+        _age(static_copy.root)
+
+        dev.stamp_service_worker()
+
+        after = static_copy.service_worker.read_bytes().decode("utf-8").splitlines(keepends=True)
+        assert after[1:2] == [f"// build: {expected}\n"], f"line 2 of sw.js is {after[1:2]}, expected the edited page's stamp {expected!r}"
+        assert _stamps(static_copy.service_worker) == [expected], f"sw.js carries {_stamps(static_copy.service_worker)}, expected exactly one stamp, {expected!r}"
+        assert after[:1] + after[2:] == before[:1] + before[2:], "restamping changed sw.js beyond its line 2"
+        assert static_copy.service_worker.stat().st_mtime_ns != AGED_NS, "premise of the untouched case: on this filesystem a write moves sw.js off AGED_NS"
+
+    @pytest.mark.parametrize("missing", ["sw.js", "offline.html"])
+    def test_a_missing_sw_js_or_offline_html_writes_nothing(self, static_copy, missing):
+        (static_copy.root / "frontend" / "static" / missing).unlink()
+        _age(static_copy.root)
+        before = _files_under(static_copy.root)
+
+        dev.stamp_service_worker()  # a missing file is no error: an exception fails the case
+
+        assert _files_under(static_copy.root) == before, f"with {missing} missing, stamp_service_worker() wrote under the copy of frontend/static/"
+
+
+class TestFrontendBuildStampsServiceWorker:
+    """``cmd_fe_build`` stamps ``sw.js`` before its npm build, so the build ships the stamp of the ``offline.html`` it ships (H-52)."""
+
+    @pytest.mark.parametrize("debug", [True, False], ids=["debug-build", "production-build"])
+    def test_sw_js_is_stamped_before_the_build_command_runs(self, monkeypatch, static_copy, debug):
+        calls = _stand_in_for_fe_build(monkeypatch, static_copy)
+
+        assert dev.cmd_fe_build(SimpleNamespace(debug=debug)) == 0
+
+        assert "npm build" in calls.events, f"premise: cmd_fe_build reached its npm build: {calls.events}"
+        build_at = calls.events.index("npm build")
+        why = "the build ships a sw.js stamped for another offline.html than the one it ships, and installed clients keep their old offline page until a later docs build restamps sw.js"
+        assert "stamp_service_worker" in calls.events[:build_at], f"H-52: cmd_fe_build ran {calls.events}, no stamp_service_worker() before its npm build: {why}"
+        expected = _offline_page_hash(static_copy.page)
+        assert calls.stamps_at_build == [[expected]], f"H-52: the npm build found sw.js stamped {calls.stamps_at_build}, the offline.html it ships hashing to {expected!r}: {why}"

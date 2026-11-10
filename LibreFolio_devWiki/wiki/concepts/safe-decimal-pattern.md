@@ -27,7 +27,7 @@ Pydantic V2's `model_dump(mode='json')` uses `str()` for Decimal serialization. 
 
 1. **`SafeDecimal` type** in `backend/app/schemas/common.py` — `Annotated[Decimal, PlainSerializer(lambda v: format(v, 'f'))]` forces fixed-point notation
 2. **`Currency.amount`** uses `SafeDecimal` — covers ALL currency amounts throughout the app
-3. **Response schemas** use `SafeDecimal` for bare Decimal fields (`BRAssetHolding`, `TXReadItem`, etc.)
+3. **Response schemas** use `SafeDecimal` for bare Decimal fields (`TXReadItem`, etc.; `BRAssetHolding` until it was removed)
 
 ## Key Rule
 
@@ -37,13 +37,18 @@ Pydantic V2's `model_dump(mode='json')` uses `str()` for Decimal serialization. 
 
 Currently adopted in:
 - `backend/app/schemas/common.py` — type definition + `Currency.amount`
-- `backend/app/schemas/brokers.py` — `BRAssetHolding` fields (`quantity`, `average_cost_per_unit`, `current_price`, `unrealized_pnl_percent`)
-- `backend/app/schemas/transactions.py` — `TXReadItem` fields (`quantity`, `cost_basis_override`, `value`)
+- `backend/app/schemas/brokers.py` — `BRAssetHolding` fields (`quantity`, `average_cost_per_unit`, `current_price`, `unrealized_pnl_percent`) — class removed in `33b66ba1c` (2026-10-28); the file still uses `SafeDecimal` elsewhere
+- `backend/app/schemas/transactions/transactions.py` — `TXReadItem` fields (`quantity`, `cost_basis_override`, `value`)
 
 **Not yet adopted** (lower risk but should be migrated when touched):
 - `backend/app/schemas/prices.py`
 - `backend/app/schemas/fx.py`
 - `backend/app/schemas/brim.py`
+
+> 2026-11-07 lint: the three schemas above have since adopted `SafeDecimal` (prices 18 uses, fx 10, brim 12). The
+> `BRAssetHolding` adoption no longer exists: the broker summary dropped its holdings in `33b66ba1c` (2026-10-28) and
+> `GET /brokers/{id}/summary` itself was removed in `dd9d0ce20` (2026-11-05) —
+> [[decisions/broker-page-is-a-portfolio-view]], [[decisions/api-routes-removed-without-deprecation]].
 
 ## Examples
 
@@ -57,7 +62,7 @@ class MyResponse(BaseModel):
 
 ## Related Cleanup
 
-The introduction of `SafeDecimal` allowed removing a redundant `.normalize()` bandaid in `backend/app/services/broker_service.py` that was masking the problem rather than fixing serialization at the schema layer.
+The introduction of `SafeDecimal` allowed removing a redundant `.normalize()` bandaid in `backend/app/services/brokers/broker_service.py` that was masking the problem rather than fixing serialization at the schema layer.
 
 ## Prevention
 
@@ -69,6 +74,6 @@ When adding new Decimal fields to response schemas, use `SafeDecimal` from the s
 |------|------|
 | Type definition | `backend/app/schemas/common.py` (L50–66) |
 | Broker schema adoption | `backend/app/schemas/brokers.py` |
-| Transaction schema adoption | `backend/app/schemas/transactions.py` |
-| Bandaid removal | `backend/app/services/broker_service.py` |
+| Transaction schema adoption | `backend/app/schemas/transactions/transactions.py` |
+| Bandaid removal | backend/app/services/brokers/summary.py — file removed in `dd9d0ce20` (2026-11-05, with `GET /brokers/{id}/summary`) |
 

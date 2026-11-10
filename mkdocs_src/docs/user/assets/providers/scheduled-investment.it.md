@@ -37,6 +37,14 @@ Poi aggiungi i periodi con **Aggiungi Primo Periodo**, e **Aggiungi Periodo** pe
 I periodi devono susseguirsi, senza interruzioni o sovrapposizioni. **Dividi** taglia un periodo in due; seleziona
 periodi adiacenti e clicca **Unisci** per unirli.
 
+!!! note "Limiti di un piano"
+
+    Ogni periodo deve essere compreso tra il 1° gennaio 1900 e il 31 dicembre 2200, e l'intero piano può
+    estendersi al massimo per 100 anni, con al massimo 1.200 periodi. Anche i giorni di grazia degli
+    [interessi di mora](#late-interest) sono al massimo 100 anni (36.525 giorni). Un piano fuori da
+    questi limiti viene rifiutato: **Testa Configurazione** e il calcolo del prezzo (**Ricalcola** nella
+    pagina dell'asset) segnalano parametri non validi.
+
 ### ⚡ Interessi di Mora {: #late-interest }
 
 Per un prestito rimborsato in ritardo, attiva **⚡ Interessi di Mora** sotto i periodi: l'asset continua a crescere
@@ -56,6 +64,7 @@ Ogni evento conta dalla sua data in poi.
 |---|---|
 | **Interesse** | Un pagamento di interessi che hai ricevuto: il valore diminuisce di quell'importo |
 | **Rettifica prezzo** | Una svalutazione (negativa) o una rivalutazione (positiva) |
+| **Liquidazione a Scadenza** | L'asset arriva a scadenza e rimborsa il suo capitale; il suo valore smette di cambiare. **Genera Cedola** ne aggiunge una all'ultima data di scadenza |
 
 ## 🧮 Come Viene Calcolato il Valore {: #how-value-is-calculated }
 
@@ -77,8 +86,8 @@ come evento di interesse: il valore riparte da $V_0$, e $I$ e le somme ripartono
 
 - **Prima del primo periodo**, il valore è il Valore Iniziale.
 - **Dopo l'ultimo periodo**, rimane al suo importo finale, a meno che gli interessi di mora siano attivi. Con
-  **Genera Cedola** sull'ultimo periodo e nessun interesse di mora, un evento di regolamento a scadenza chiude
-  l'asset a quell'importo.
+  **Genera Cedola** sull'ultimo periodo e nessun interesse di mora, l'ultima cedola è pagata alla data di fine e
+  un evento di regolamento a scadenza chiude l'asset al valore che resta dopo di essa: il Valore Iniziale.
 - **Il grafico** riceve un punto a ogni data di **Frequenza**: scegli **Giornaliera** per una linea continua.
 
 ??? example "🧮 Un prestito di €10.000 al 5%, con una cedola ogni mese"

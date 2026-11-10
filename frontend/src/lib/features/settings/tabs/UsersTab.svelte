@@ -1,0 +1,412 @@
+<!--
+UsersTab — administrators only: the accounts of the instance (decision D-A10) and every account link (lot UA3): the open
+ones in a table, the closed ones (used, expired, revoked) in a second table inside a folded panel.
+
+At the top, the places taken against the limit («N / max», «Manage subscription» when the hoster set a billing page,
+decision D-A9), who can sign up (N69c: the registration mode, saved at the choice, asked about only for «open»; the Global
+settings tab shows the same setting) and the invitation button, off while registration is closed or the instance is full.
+Each account opens
+its actions (UserRow); the confirmations, the invitation, the reset link and the deletion each have their dialog.
+Every action reloads the tab: the backend decides, the tab shows its answer.
+-->
+<script lang="ts">
+    import {onMount} from 'svelte';
+    import {CreditCard, ExternalLink, RefreshCw, UserPlus, Users} from 'lucide-svelte';
+    import {_} from '$lib/i18n';
+    import {zodiosApi} from '$lib/api';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {currentUser} from '$lib/stores/app/auth';
+    import {SimpleSelect} from '$lib/components/ui/select';
+    import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import AccountDeletionDialog from '../AccountDeletionDialog.svelte';
+    import FoldPanel from '$lib/components/ui/display/FoldPanel.svelte';
+    import UserRow from '../users/UserRow.svelte';
+    import AccountLinksTable from '../users/AccountLinksTable.svelte';
+    import InviteDialog from '../users/InviteDialog.svelte';
+    import ResetLinkDialog from '../users/ResetLinkDialog.svelte';
+    import {accountErrorText, describeAccountError} from '../users/accountErrors';
+    import {lockedByEnv, refreshRegistrationConfig, registrationModeOptions, saveRegistrationMode, REGISTRATION_VARIABLE, type RegistrationMode} from '../registrationMode';
+    import type {AccountLink, AccountsUsage, AdminAccount, UserAction} from '../users/types';
+
+    type Confirmable = 'deactivate' | 'cancel-setup' | 'promote' | 'demote' | 'sign-out' | 'restart-guides';
+    type Pending = {kind: Confirmable; account: AdminAccount} | {kind: 'revoke-link'; link: AccountLink} | {kind: 'registration-open'};
+
+    const CONFIRM_KEYS: Record<Pending['kind'], {title: string; message: string; confirm: string; danger: boolean}> = {
+        deactivate: {
+            title: 'settings.usersTab.confirm.deactivate.title',
+            message: 'settings.usersTab.confirm.deactivate.message',
+            confirm: 'settings.usersTab.confirm.deactivate.confirm',
+            danger: true,
+        },
+        // The waiting initial administrator's setup link stops working; the account still waits (A-43)
+        'cancel-setup': {
+            title: 'settings.usersTab.confirm.cancelSetup.title',
+            message: 'settings.usersTab.confirm.cancelSetup.message',
+            confirm: 'settings.usersTab.confirm.cancelSetup.confirm',
+            danger: true,
+        },
+        promote: {
+            title: 'settings.usersTab.confirm.promote.title',
+            message: 'settings.usersTab.confirm.promote.message',
+            confirm: 'settings.usersTab.confirm.promote.confirm',
+            danger: false,
+        },
+        demote: {
+            title: 'settings.usersTab.confirm.demote.title',
+            message: 'settings.usersTab.confirm.demote.message',
+            confirm: 'settings.usersTab.confirm.demote.confirm',
+            danger: true,
+        },
+        'sign-out': {
+            title: 'settings.usersTab.confirm.signOut.title',
+            message: 'settings.usersTab.confirm.signOut.message',
+            confirm: 'settings.usersTab.confirm.signOut.confirm',
+            danger: false,
+        },
+        'restart-guides': {
+            title: 'settings.usersTab.confirm.restartGuides.title',
+            message: 'settings.usersTab.confirm.restartGuides.message',
+            confirm: 'settings.usersTab.confirm.restartGuides.confirm',
+            danger: false,
+        },
+        'revoke-link': {
+            title: 'settings.usersTab.confirm.revokeLink.title',
+            message: 'settings.usersTab.confirm.revokeLink.message',
+            confirm: 'settings.usersTab.confirm.revokeLink.confirm',
+            danger: true,
+        },
+        // «Open» lets in anyone who reaches the login page: asked about first, once chosen (N69c)
+        'registration-open': {
+            title: 'settings.usersTab.registration.confirm.title',
+            message: 'settings.usersTab.registration.confirm.message',
+            confirm: 'settings.usersTab.registration.confirm.confirm',
+            danger: false,
+        },
+    };
+
+    let accounts = $state<AdminAccount[]>([]);
+    let usage = $state<AccountsUsage | null>(null);
+    let links = $state<AccountLink[]>([]);
+    const openLinks = $derived(links.filter((link) => link.state === 'open'));
+    const closedLinks = $derived(links.filter((link) => link.state !== 'open'));
+    let busy = $state(true);
+    let loadFailed = $state(false);
+    let pending = $state<Pending | null>(null);
+    let inviteOpen = $state(false);
+    let resetFor = $state<AdminAccount | null>(null);
+    let deleteFor = $state<AdminAccount | null>(null);
+
+    const meId = $derived($currentUser?.id ?? null);
+    const activeAdmins = $derived(accounts.filter((account) => account.is_superuser && account.is_active));
+    const onlyActiveAdminId = $derived(activeAdmins.length === 1 ? activeAdmins[0].id : null);
+    const maxUsers = $derived(usage?.max_users ?? null);
+    const full = $derived(usage !== null && maxUsers !== null && usage.used >= maxUsers);
+    const registrationClosed = $derived(instanceConfig.config.accounts.registration_mode === 'disabled');
+    const registrationLocked = $derived(instanceConfig.config.accounts.registration_locked);
+    const registrationMode = $derived(instanceConfig.config.accounts.registration_mode);
+    const modeOptions = $derived(registrationModeOptions((key) => $_(key)));
+    // What the select shows: the mode in force, until a choice that is saved or refused sends it back to it
+    let shownMode = $state<string>(instanceConfig.config.accounts.registration_mode);
+    let savingMode = $state(false);
+    $effect(() => {
+        shownMode = registrationMode;
+    });
+    // The backend's order: a closed registration refuses an invitation before the limit is counted
+    const inviteBlocked = $derived<'registration-disabled' | 'limit' | null>(registrationClosed ? 'registration-disabled' : full ? 'limit' : null);
+    const confirmCopy = $derived.by(() => {
+        if (pending === null) {
+            return null;
+        }
+        const keys = CONFIRM_KEYS[pending.kind];
+        const values = pending.kind === 'registration-open' ? {} : pending.kind === 'revoke-link' ? linkValues(pending.link) : {username: pending.account.username};
+        return {title: $_(keys.title, {values}), message: $_(keys.message, {values}), confirm: $_(keys.confirm), danger: keys.danger};
+    });
+
+    /** The confirmation's words for a link: its type and whom it is for, as its table row shows them. */
+    function linkValues(link: AccountLink): {type: string; target: string} {
+        const target = link.username ?? (link.email || $_('settings.usersTab.links.anyone'));
+        return {type: $_(`settings.usersTab.links.purpose.${link.purpose}`), target};
+    }
+
+    async function load() {
+        busy = true;
+        try {
+            const [list, linkList] = await Promise.all([zodiosApi.list_accounts_api_v1_users_get(), zodiosApi.list_account_links_api_v1_users_account_links_get()]);
+            accounts = (list.items ?? []) as AdminAccount[];
+            usage = list.usage as AccountsUsage;
+            links = (linkList.items ?? []) as AccountLink[];
+            loadFailed = false;
+        } catch (e) {
+            loadFailed = true;
+            notify({name: 'accounts.action.failed', detail: {action: 'load', code: describeAccountError(e).code}, toast: {variant: 'error', message: $_('settings.usersTab.errors.load')}});
+        } finally {
+            busy = false;
+        }
+    }
+
+    // An invitation accepted elsewhere (FB-22) changes the list without anything here moving: reload when the tab comes
+    // back to the front, as well as at the «Reload» button. A load already running is not doubled.
+    function reloadOnReturn() {
+        if (document.visibilityState === 'visible' && !busy) {
+            void load();
+        }
+    }
+
+    onMount(() => {
+        void load();
+        document.addEventListener('visibilitychange', reloadOnReturn);
+        return () => document.removeEventListener('visibilitychange', reloadOnReturn);
+    });
+
+    /** Runs one administrator action, tells what happened (the toast only where the outcome is not on screen), then reloads. */
+    async function perform(action: string, detail: Record<string, unknown>, call: () => Promise<unknown>, event: string, toastMessage?: string) {
+        try {
+            await call();
+            notify(toastMessage ? {name: event, detail, toast: {variant: 'success', message: toastMessage}} : {name: event, detail});
+        } catch (e) {
+            const error = describeAccountError(e);
+            notify({name: 'accounts.action.failed', detail: {...detail, action, code: error.code}, toast: {variant: 'error', message: accountErrorText(error, $_)}});
+        }
+        await load();
+    }
+
+    function setStatus(account: AdminAccount, body: {is_active: boolean} | {is_superuser: boolean}, action: string, event: string) {
+        return perform(action, {user_id: account.id}, () => zodiosApi.update_account_api_v1_users__user_id__patch(body, {params: {user_id: account.id}}), event);
+    }
+
+    /** Saves a mode chosen here: no «Save» button, the select already shows it, so an event and no toast; a refusal is toasted and the select goes back. */
+    async function applyMode(mode: RegistrationMode) {
+        savingMode = true;
+        try {
+            await saveRegistrationMode(mode);
+            notify({name: 'settings.global.saved', detail: {keys: ['registration_mode'], count: 1}});
+        } catch (e) {
+            const variable = lockedByEnv(e);
+            const message = variable !== null ? $_('settings.lockedByEnv', {values: {variable}}) : $_('settings.usersTab.registration.saveFailed');
+            notify({name: 'accounts.registration.failed', detail: {mode, code: variable !== null ? 'SETTING_LOCKED_BY_ENV' : describeAccountError(e).code}, toast: {variant: 'error', message}});
+            shownMode = registrationMode;
+            // A pin the tab did not know about: the configuration says so now
+            if (variable !== null) void refreshRegistrationConfig();
+        } finally {
+            savingMode = false;
+        }
+    }
+
+    function onModeChange(value: string) {
+        if (value === registrationMode) {
+            return;
+        }
+        if (value === 'open') {
+            pending = {kind: 'registration-open'};
+            return;
+        }
+        void applyMode(value as RegistrationMode);
+    }
+
+    function cancelPending() {
+        if (pending?.kind === 'registration-open') {
+            shownMode = registrationMode;
+        }
+        pending = null;
+    }
+
+    function onAction(action: UserAction, account: AdminAccount) {
+        if (action === 'reactivate') {
+            void setStatus(account, {is_active: true}, 'reactivate', 'accounts.user.reactivated');
+        } else if (action === 'reset-link') {
+            resetFor = account;
+        } else if (action === 'delete') {
+            deleteFor = account;
+        } else {
+            pending = {kind: action, account};
+        }
+    }
+
+    async function confirmPending() {
+        const current = pending;
+        pending = null;
+        if (current === null) {
+            return;
+        }
+        if (current.kind === 'registration-open') {
+            await applyMode('open');
+            return;
+        }
+        if (current.kind === 'revoke-link') {
+            const {id: linkId, purpose} = current.link;
+            await perform('revoke-link', {link_id: linkId, purpose}, () => zodiosApi.revoke_account_link_api_v1_users_account_links__link_id__delete(undefined, {params: {link_id: linkId}}), 'accounts.link.revoked');
+            return;
+        }
+        const {account} = current;
+        const userId = account.id;
+        switch (current.kind) {
+            case 'deactivate':
+                await setStatus(account, {is_active: false}, 'deactivate', 'accounts.user.deactivated');
+                break;
+            case 'cancel-setup':
+                // The row still reads «waiting» afterwards: the toast tells what changed. `cancel_setup` makes it a cancellation
+                // and nothing else: an administrator that completed its setup meanwhile answers 409 SETUP_COMPLETED (A-51)
+                await perform(
+                    'cancel-setup',
+                    {user_id: userId},
+                    () => zodiosApi.update_account_api_v1_users__user_id__patch({is_active: false, cancel_setup: true}, {params: {user_id: userId}}),
+                    'accounts.user.setup-cancelled',
+                    $_('settings.usersTab.toasts.setupCancelled', {values: {username: account.username}}),
+                );
+                break;
+            case 'promote':
+                await setStatus(account, {is_superuser: true}, 'promote', 'accounts.user.promoted');
+                break;
+            case 'demote':
+                await setStatus(account, {is_superuser: false}, 'demote', 'accounts.user.demoted');
+                break;
+            case 'sign-out':
+                await perform(
+                    'sign-out',
+                    {user_id: userId},
+                    () => zodiosApi.revoke_account_sessions_api_v1_users__user_id__sessions_revoke_post(undefined, {params: {user_id: userId}}),
+                    'accounts.user.sessions-revoked',
+                    $_('settings.usersTab.toasts.signedOut', {values: {username: account.username}}),
+                );
+                break;
+            case 'restart-guides':
+                await perform(
+                    'restart-guides',
+                    {user_id: userId},
+                    () => zodiosApi.reset_account_onboarding_api_v1_users__user_id__onboarding_reset_post(null, {params: {user_id: userId}}),
+                    'accounts.user.onboarding-reset',
+                    $_('settings.usersTab.toasts.guidesRestarted', {values: {username: account.username}}),
+                );
+                break;
+        }
+    }
+</script>
+
+<div aria-busy={busy} class="space-y-6 text-lf-primary" data-busy={busy ? 'true' : 'false'} data-testid="users-tab">
+    <section class="rounded-lg border border-lf-subtle bg-lf-card p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <Users class="h-5 w-5 text-lf-muted" />
+                <h2 class="text-lg font-semibold text-lf-primary">{$_('settings.usersTab.title')}</h2>
+                {#if usage}
+                    <span class="rounded-full border border-lf-subtle bg-lf-panel px-2.5 py-0.5 text-sm text-lf-secondary" data-max={maxUsers ?? ''} data-testid="users-usage" data-used={usage.used}>
+                        {maxUsers !== null ? $_('settings.usersTab.usage', {values: {used: usage.used, max: maxUsers}}) : $_('settings.usersTab.usageUnlimited', {values: {used: usage.used}})}
+                    </span>
+                {/if}
+                {#if usage?.billing_url}
+                    <a class="inline-flex items-center gap-1 text-sm text-lf-link hover:underline" data-testid="users-billing-link" href={usage.billing_url} rel="noopener noreferrer" target="_blank">
+                        <CreditCard class="h-4 w-4" />{$_('settings.usersTab.billing')}<ExternalLink class="h-3 w-3" />
+                    </a>
+                {/if}
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2" data-locked={String(registrationLocked)} data-mode={registrationMode} data-saving={String(savingMode)} data-shown={shownMode} data-testid="users-registration">
+                    <span class="text-sm text-lf-secondary">{$_('settings.usersTab.registration.label')}</span>
+                    <SimpleSelect
+                        ariaLabel={$_('settings.usersTab.registration.label')}
+                        bind:value={shownMode}
+                        compact
+                        disabled={registrationLocked || savingMode}
+                        onchange={onModeChange}
+                        optionTestId={(option) => `users-registration-option-${option.value}`}
+                        options={modeOptions}
+                        testId="users-registration-mode"
+                    />
+                </div>
+                <button class="inline-flex items-center gap-1.5 rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-reload-button" disabled={busy} onclick={() => void load()} type="button">
+                    <RefreshCw class="h-4 w-4" />{$_('common.refresh')}
+                </button>
+                <button
+                    class="inline-flex items-center gap-1.5 rounded-md bg-lf-action px-3 py-1.5 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    data-disabled-reason={inviteBlocked ?? undefined}
+                    data-testid="users-invite-button"
+                    disabled={inviteBlocked !== null}
+                    onclick={() => (inviteOpen = true)}
+                    type="button"
+                >
+                    <UserPlus class="h-4 w-4" />{$_('settings.usersTab.invite.button')}
+                </button>
+            </div>
+        </div>
+        <p class="mt-1 text-xs text-lf-muted">{$_('settings.usersTab.usageHint')}</p>
+        {#if registrationLocked}
+            <p class="mt-2 text-xs text-lf-muted" data-testid="users-registration-locked">{$_('settings.lockedByEnv', {values: {variable: REGISTRATION_VARIABLE}})}</p>
+        {/if}
+
+        {#if full}
+            <div class="mt-3 rounded-md border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-sm text-lf-warning-on-soft" data-testid="users-limit-banner" role="status">
+                {$_('settings.usersTab.limitBanner')}
+                {#if usage?.billing_url}
+                    <a class="ml-1 font-medium underline" data-testid="users-limit-billing-link" href={usage.billing_url} rel="noopener noreferrer" target="_blank">{$_('settings.usersTab.billing')}</a>
+                {/if}
+            </div>
+        {/if}
+        {#if inviteBlocked === 'registration-disabled'}
+            <p class="mt-2 text-xs text-lf-muted" data-testid="users-invite-blocked">
+                {registrationLocked ? $_('settings.usersTab.invite.blockedLocked', {values: {variable: 'LIBREFOLIO_REGISTRATION'}}) : $_('settings.usersTab.invite.blocked')}
+            </p>
+        {/if}
+    </section>
+
+    <section class="rounded-lg border border-lf-subtle bg-lf-card p-4">
+        <h3 class="text-sm font-semibold text-lf-secondary">{$_('settings.usersTab.accounts.title')}</h3>
+        {#if loadFailed}
+            <p class="mt-2 rounded-md border border-lf-danger-line bg-lf-danger-soft px-3 py-2 text-sm text-lf-danger-on-soft" role="alert">{$_('settings.usersTab.errors.load')}</p>
+        {/if}
+        <ul class="mt-1 divide-y divide-lf-subtle" data-testid="users-accounts">
+            {#each accounts as account (account.id)}
+                <UserRow {account} {full} isOnlyActiveAdmin={account.id === onlyActiveAdminId} isSelf={account.id === meId} {onAction} />
+            {/each}
+        </ul>
+    </section>
+
+    <section class="space-y-3 rounded-lg border border-lf-subtle bg-lf-card p-4" data-testid="users-links">
+        <div>
+            <h3 class="text-sm font-semibold text-lf-secondary">{$_('settings.usersTab.links.title')}</h3>
+            <p class="mt-1 text-xs text-lf-muted">{$_('settings.usersTab.links.hint')}</p>
+        </div>
+        <AccountLinksTable isLoading={busy && links.length === 0} links={openLinks} onRevoke={(link) => (pending = {kind: 'revoke-link', link})} testId="users-links-open" variant="open" />
+        <FoldPanel testId="users-links-closed-fold" title={$_('settings.usersTab.links.closedTitle', {values: {count: closedLinks.length}})}>
+            <AccountLinksTable links={closedLinks} testId="users-links-closed" variant="closed" />
+        </FoldPanel>
+    </section>
+
+    <ConfirmModal confirmText={confirmCopy?.confirm} danger={confirmCopy?.danger ?? false} message={confirmCopy?.message ?? ''} onCancel={cancelPending} onConfirm={confirmPending} open={pending !== null} testId="users-confirm" title={confirmCopy?.title ?? ''} />
+
+    <InviteDialog
+        onClose={() => {
+            inviteOpen = false;
+            void load();
+        }}
+        open={inviteOpen}
+    />
+
+    {#if resetFor}
+        {@const target = resetFor}
+        <ResetLinkDialog
+            account={{id: target.id, username: target.username}}
+            onClose={() => {
+                resetFor = null;
+                void load();
+            }}
+            open
+        />
+    {/if}
+
+    {#if deleteFor}
+        {@const target = deleteFor}
+        <AccountDeletionDialog
+            account={{id: target.id, username: target.username, is_active: target.is_active}}
+            mode="admin"
+            onClose={() => (deleteFor = null)}
+            onDeactivate={() => setStatus(target, {is_active: false}, 'deactivate', 'accounts.user.deactivated')}
+            onDeleted={() => {
+                deleteFor = null;
+                void load();
+            }}
+            open
+            testIdPrefix="users-delete"
+        />
+    {/if}
+</div>

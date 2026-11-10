@@ -55,11 +55,17 @@ createValidateScheduler({
 }
 ```
 
+> 2026-11-07 lint: since `ac37afe7e` (2026-06-04) the default debounce is **500 ms**, not 1 s, and manual triggers
+> bypass the anti-bounce. `validateFn` now receives the trigger reason and returns `{issuesCount}`; `state` also carries
+> `autoDisabled`. The 50-row limit is `AUTO_VALIDATE_THRESHOLD` in the BulkModal's `enabled` predicate; the FormModal
+> auto-fires only when the form is complete and has no local error (V-37). The anti-bounce key is sampled when the
+> request leaves, not when the answer lands — [[concepts/load-only-red-is-a-product-defect]].
+
 ## Source files
 
 | Role | Path |
 |------|------|
-| Scheduler factory | `frontend/src/lib/utils/transactions/useValidateScheduler.svelte.ts` |
-| FormModal consumer | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| BulkModal consumer | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Scheduler factory | `frontend/src/lib/features/transactions/useValidateScheduler.svelte.ts` |
+| FormModal consumer | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| BulkModal consumer | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 

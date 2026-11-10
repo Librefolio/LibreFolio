@@ -1,6 +1,7 @@
-r"""A blank ``JWT_SECRET`` never becomes the key that signs session cookies (``backend/app/services/auth_service.py``).
+r"""A blank ``JWT_SECRET`` never becomes the key that signs session cookies (``backend/app/services/accounts/auth_service.py``).
 
-The signing key is read once, when the module is imported, from the ``JWT_SECRET`` environment variable:
+The signing key is read once, when the module is imported, from the ``JWT_SECRET`` environment variable
+(``configured_jwt_secret``, ``backend/app/config/platform.py``):
 
 * a value made only of whitespace (``"   "``, ``"\t \n"``, ``" "``) counts as unset: the module signs with
   a random key of at least 64 URL-safe characters, new in every process, never with the blank value; a
@@ -9,13 +10,14 @@ The signing key is read once, when the module is imported, from the ``JWT_SECRET
   process exactly as it is written;
 * any other value is the key exactly as it is written, surrounding spaces included, so the sessions of
   an installation that already has a secret survive the upgrade: a token signed with that exact value
-  decodes to its user id;
+  decodes to its user id (``SessionClaims.user_id``);
 * an unset or empty ``JWT_SECRET`` gives a random key too.
 
 Because the key is computed at import, every case imports the module in a fresh interpreter, run in
-``tmp_path``, whose environment is this one's without ``JWT_SECRET``, plus the case's value. The child
-reports the key it got (``_JWT_SECRET``) and what ``decode_jwt_token`` made of a token signed with the
-case's value; each refusal is first proven not vacuous, the child checking that the token is valid under
+``tmp_path``, whose environment is this one's without ``JWT_SECRET`` and ``JWT_SECRET_FILE`` (read when
+``JWT_SECRET`` is blank, so a developer's file cannot leak into a case), plus the case's value. The child
+reports the key it got (``_JWT_SECRET``) and the user id ``decode_jwt_token`` read from a token signed with
+the case's value; each refusal is first proven not vacuous, the child checking that the token is valid under
 the key it was signed with. No DB, no server, no network.
 """
 
@@ -51,6 +53,9 @@ URL_SAFE = re.compile(r"[A-Za-z0-9_-]+")
 
 RESULT_MARKER = "JWT-SECRET-PROBE "
 
+#: Where the key may come from (``env_secret("JWT_SECRET")``): none is inherited by a probe.
+JWT_SECRET_SOURCES = ("JWT_SECRET", "JWT_SECRET_FILE")
+
 #: Runs in the child. argv[1] is the JSON pair [key the token is signed with or null, user id].
 PROBE = """
 import json, sys, warnings
@@ -60,7 +65,7 @@ warnings.simplefilter("ignore")  # PyJWT warns about short HMAC keys, and the bl
 
 import jwt
 
-from backend.app.services import auth_service
+from backend.app.services.accounts import auth_service
 
 signing_key, user_id = json.loads(sys.argv[1])
 result = {"key": auth_service._JWT_SECRET, "token_valid_under_its_key": None, "decoded": None}
@@ -68,7 +73,8 @@ if signing_key is not None:
     now = datetime.now(UTC)
     token = jwt.encode({"sub": str(user_id), "iat": now, "exp": now + timedelta(hours=1)}, signing_key, algorithm="HS256")
     result["token_valid_under_its_key"] = jwt.decode(token, signing_key, algorithms=["HS256"])["sub"] == str(user_id)
-    result["decoded"] = auth_service.decode_jwt_token(token)
+    claims = auth_service.decode_jwt_token(token)
+    result["decoded"] = None if claims is None else claims.user_id
 print("RESULT_MARKER" + json.dumps(result))
 """.replace("RESULT_MARKER", RESULT_MARKER)
 
@@ -79,7 +85,7 @@ class Probe:
 
     key: str  # auth_service._JWT_SECRET
     token_valid_under_its_key: bool | None  # the token is well formed; None when no token was signed
-    decoded: int | None  # decode_jwt_token(token)
+    decoded: int | None  # decode_jwt_token(token).user_id; None when refused
 
 
 ProbeRunner = Callable[..., Probe]
@@ -98,7 +104,7 @@ def probe(tmp_path_factory: pytest.TempPathFactory) -> ProbeRunner:
     def run(env_value: str | None, signing_key: str | None, process: int = 0) -> Probe:
         case = (env_value, signing_key, process)
         if case not in results:
-            env = {name: value for name, value in os.environ.items() if name != "JWT_SECRET"}
+            env = {name: value for name, value in os.environ.items() if name not in JWT_SECRET_SOURCES}
             if env_value is not None:
                 env["JWT_SECRET"] = env_value
             env["PYTHONPATH"] = os.pathsep.join(part for part in (str(REPO_ROOT), os.environ.get("PYTHONPATH")) if part)

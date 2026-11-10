@@ -9,13 +9,15 @@
  * - the engine (`pdfium.wasm`), the snippet's own pinned dependency, so the version always matches the snippet;
  * - the fallback fonts for Cyrillic, Greek and Vietnamese text (Noto Sans, regular and bold, upright and italic),
  *   Arabic (Noto Naskh Arabic) and Hebrew (Noto Sans Hebrew);
- * - Chinese, Japanese and Korean stay on the CDN, fetched only for a PDF that needs them: tens of megabytes each,
- *   too heavy to ship in the image;
+ * - Chinese, Japanese and Korean come from the instance's own font route (`/api/v1/files/pdf-fonts/…`), asked only for
+ *   a PDF that needs them: tens of megabytes each, too heavy for the image, the server fetches each file once from
+ *   jsDelivr and keeps it only if its sha256 is the expected one (`backend/app/services/files/pdf_fonts.py`, lot H-55);
  * - the interface font is the app's own, the signature fonts and the stamp library are not loaded at all: the preview
  *   cannot sign or stamp.
  *
- * Our copies come first; when they cannot be reached, the viewer falls back on its CDN defaults, so a broken
- * deployment still previews PDFs.
+ * Nothing comes from a third party: the Content-Security-Policy keeps `connect-src 'self'`. When our engine cannot be
+ * reached, `pdfViewerAssets` throws, and the preview shows the browser's own viewer instead (FilePreviewModal.svelte):
+ * the viewer's CDN defaults are never used.
  */
 
 import type {PDFViewerConfig} from '@embedpdf/snippet';
@@ -56,12 +58,8 @@ export const LOCAL_FONT_FILES: Readonly<Record<string, string>> = {
     'NotoSansHebrew-Bold.ttf': notoSansHebrewBold,
 };
 
-/**
- * The version of the CJK font packages the CDN URLs point at: the one installed, so the file names they list exist
- * there (the viewer's own default asks for `@latest`). A unit test keeps it equal to the installed packages.
- */
-export const CDN_FONTS_VERSION = '1.0.0';
-const CDN_FONTS_BASE = 'https://cdn.jsdelivr.net/npm/@embedpdf';
+/** The instance's route of the CJK fonts: `<route>/<package>/<file>`, files of the list in `pdf_font_hashes.json`. */
+const PDF_FONT_ROUTE = '/api/v1/files/pdf-fonts';
 
 /** Whether `url` can be fetched. Never throws. */
 export type AssetProbe = (url: string) => Promise<boolean>;
@@ -75,29 +73,31 @@ export const headProbe: AssetProbe = async (url) => {
     }
 };
 
-/** What changes with where the assets come from: absent keys leave the viewer on its CDN defaults. */
+/** Where the viewer takes its engine and its fallback fonts: always ours, never its CDN defaults. */
 export interface PdfViewerAssets {
-    wasmUrl?: string;
-    fontFallback?: FontFallback;
+    wasmUrl: string;
+    fontFallback: FontFallback;
 }
 
 /**
- * Our engine and fonts when our copy of the engine answers, the viewer's CDN defaults otherwise. URLs are absolute:
- * the engine runs in a worker started from a blob, where a relative URL has nothing to resolve against.
+ * Our engine and fonts; an Error when our copy of the engine does not answer (the preview then shows the browser's own
+ * viewer). URLs are absolute: the engine runs in a worker started from a blob, where a relative URL has nothing to
+ * resolve against.
  */
 export async function pdfViewerAssets(base: string, probe: AssetProbe = headProbe): Promise<PdfViewerAssets> {
     const wasmUrl = new URL(LOCAL_PDF_ENGINE, base).href;
-    if (!(await probe(wasmUrl))) return {};
+    if (!(await probe(wasmUrl))) throw new Error('The PDF engine of this instance cannot be reached');
     return {wasmUrl, fontFallback: localFontFallback(base)};
 }
 
 /**
- * The viewer's own fallback map (charset → fonts), with the scripts we ship pointing at our copies and the CJK ones at
- * the CDN. Only the variants we ship are listed: the engine picks the closest one for a weight it is not given.
+ * The viewer's own fallback map (charset → fonts): the scripts we ship pointing at our copies, the CJK ones at the
+ * instance's font route. Only the variants we ship are listed: the engine picks the closest one for a weight it is not
+ * given.
  */
 export function localFontFallback(base: string): FontFallback {
     const local = (files: readonly FontFile[]) => files.filter((font) => font.file in LOCAL_FONT_FILES).map((font) => ({url: new URL(LOCAL_FONT_FILES[font.file], base).href, weight: font.weight, italic: font.italic}));
-    const cdn = (pkg: string, files: readonly FontFile[]) => files.map((font) => ({url: `${CDN_FONTS_BASE}/${pkg}@${CDN_FONTS_VERSION}/fonts/${font.file}`, weight: font.weight, italic: font.italic}));
+    const served = (pkg: string, files: readonly FontFile[]) => files.map((font) => ({url: new URL(`${PDF_FONT_ROUTE}/${pkg}/${font.file}`, base).href, weight: font.weight, italic: font.italic}));
     const latin = local(latinFonts);
     return {
         fonts: {
@@ -106,10 +106,10 @@ export function localFontFallback(base: string): FontFallback {
             [FontCharset.VIETNAMESE]: latin,
             [FontCharset.ARABIC]: local(arabicFonts),
             [FontCharset.HEBREW]: local(hebrewFonts),
-            [FontCharset.SHIFTJIS]: cdn('fonts-jp', japaneseFonts),
-            [FontCharset.HANGEUL]: cdn('fonts-kr', koreanFonts),
-            [FontCharset.GB2312]: cdn('fonts-sc', simplifiedChineseFonts),
-            [FontCharset.CHINESEBIG5]: cdn('fonts-tc', traditionalChineseFonts),
+            [FontCharset.SHIFTJIS]: served('fonts-jp', japaneseFonts),
+            [FontCharset.HANGEUL]: served('fonts-kr', koreanFonts),
+            [FontCharset.GB2312]: served('fonts-sc', simplifiedChineseFonts),
+            [FontCharset.CHINESEBIG5]: served('fonts-tc', traditionalChineseFonts),
         },
     };
 }

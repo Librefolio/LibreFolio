@@ -1,13 +1,13 @@
 /**
  * tx-bulk-promote-cost-basis.spec.ts — the bulk editor's side of a promote that leaves the
- * receiving side of an asset TRANSFER without a cost basis (d7c148564).
+ * receiving side of an asset TRANSFER without a cost basis (48c3f52a9).
  *
- * `validate_cost_basis` (`backend/app/services/transaction_batch_stages.py`) checks promoted
+ * `validate_cost_basis` (`backend/app/services/transactions/transaction_batch_stages.py`) checks promoted
  * pairs: once two ADJUSTMENTs are promoted into a TRANSFER, the receiving side (quantity > 0)
  * needs a cost basis like any other receiver, unless it is in Auto mode, and without one the
  * whole batch is refused. A promoted NEW row is checked as the create it is — `{operation:
  * 'create', index: <its create index>}` — which the editor maps onto its rows with
- * `resolveBulkIssueRows` (`$lib/utils/transactions/bulkDisplay.ts`): `create:<i>` names the new
+ * `resolveBulkIssueRows` (`$lib/features/transactions/bulk/bulkDisplay.ts`): `create:<i>` names the new
  * row, and the jump lands on the one row the pair is shown as (the other half is its hidden
  * partner). A promoted SAVED row is checked on the promote that paired it — `{operation:
  * 'promote', index: <promote index>, ref_id: <its id>}` (`_check_promoted_saved_cost_basis`) —
@@ -27,15 +27,20 @@
  *        `create` issue, and the jump lands on PC1's pair, not on the other one;
  *   PC4  (the banner, not the save) a new +5 beside a saved −3 and a saved −5 of the same asset:
  *        the banner offers one merge only, the −5's, never the crossed −3 / +5 the backend's
- *        promote rule refuses (`assetQuantitiesCancel`, `$lib/utils/transactions/promoteSuggest.ts`);
- *   PC5  (the selection toolbar, not the save) two new ADJUSTMENTs, −123456789012.123456 on A and
- *        +123456789012.123457 on B, opposite as doubles and not as decimals → neither the banner nor
- *        the selection toolbar offers the merge; the regression test of C-46, see «PC5» below;
+ *        promote rule refuses (`assetQuantitiesCancel`, `$lib/features/transactions/bulk/promoteSuggest.ts`);
+ *   PC5  (B-48, the form, not the save) the leg the old PC5 typed, −123456789012.123456 — 18 significant
+ *        digits — after the same leg cut to 15, which the form takes → the form refuses it on its own: the
+ *        message under the quantity, Apply disabled; red until the cure, see «PC5» below. Its old subject,
+ *        C-46, is guarded in TransactionBulkModal.test.ts (Vitest);
  *   PC6  (the 💡's window, not the save) a new +5 on B, two saved −5 on A outside the editor, today and
  *        yesterday → with «Max Δ days» at 0 the 💡 offers today's alone, and moving the slider to 1
- *        searches again and offers both; red until the cure, see «PC6» below.
+ *        searches again and offers both; red until the cure, see «PC6» below;
+ *   PC7  (W-B70, the notes' limit) «Merge all», combining both texts, on two saved cash pairs: the pair whose
+ *        notes combine into exactly 500 characters is merged and saved; the pair whose notes would combine into
+ *        501 is left as two rows, each with its own notes, and the editor says so — a warning and the app event
+ *        `tx.bulk.promote-all.left-for-manual-merge`, `{pairs: 1}`; red until the cure, see «PC7» below.
  *
- * PC1 and PC3, the two tests that save, each prove three things: the commit's answer, read
+ * PC1 and PC3, the two tests whose save is refused, each prove three things: the commit's answer, read
  * against the request the editor actually sent (indexes are looked up there by id and link_uuid,
  * never assumed); that nothing was written (the owned ledger is exactly as it was before the
  * save); and that the refused-save banner's issue (`tx-bulk-error` → `tx-bulk-issue`, i.e.
@@ -48,18 +53,19 @@
  * A saved incoming ADJUSTMENT without a cost basis cannot be created plainly through the public
  * API: a create without one is refused with `costBasisRequired` itself (backend test B2.8); Auto
  * mode stores the computed average cost (0 for an empty pool) or refuses with `wacFxUnavailable`;
- * and an update cannot clear a cost basis (`None` there means "not sent"). The one such row the
+ * and an update that clears it is refused with `costBasisRequired` too (since decision P5 an
+ * explicit `null` removes a cost basis: `_apply_update_values()`, `batch_edits.py`). The one such row the
  * app itself stores is an ADJUSTMENT linked to a SPLIT asset event and saved in Auto mode, whose
  * cost the engines derive from the split ratio (`_compute_wac_for_auto_items`, `is_split_linked`;
  * backend test
- * `test_forward_split_relabelled_as_price_adjustment_becomes_an_unknown_cost_acquisition` asserts
+ * `test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one` asserts
  * `cost_basis_override is None`). The form saves the same row whenever a positive ADJUSTMENT is
  * linked to a split.
  *
  * Since lot 42 (D2) a row linked to an asset event is never promoted: no promote target —
  * TRANSFER, CASH_TRANSFER, FX_CONVERSION — accepts the link (`event_compatible: false`). The
  * editor offers no merge for it: the banner, «Merge all» and the selection toolbar all ask
- * `findPromoteMatch` (`$lib/stores/transactions/transactionTypeStore.ts`), and `buildPromoteCtx`
+ * `findPromoteMatch` (`$lib/features/transactions/transactionTypeStore.ts`), and `buildPromoteCtx`
  * hands it each row's `asset_event_id`. A promote sent anyway is refused by the backend with
  * `eventTypeIncompatible` on the promote (`apply_promotes` → `_promoted_state_issues`; backend
  * test `test_promote_split_linked_adjustment_is_rejected`) and is not applied, so the saved-row
@@ -98,27 +104,33 @@
  * anchors every absence on a twin the search must still offer. The 💡 is not shown before that
  * answer lands, since no earlier answer offers anything, so a count of exactly 1 can only come from it.
  *
- * ## PC5: the selection toolbar compared doubles (C-46), regression test
+ * ## PC5: the form refuses what the backend refuses (B-48), red until the cure
  *
- * Two paths offer an asset TRANSFER merge. The banner asks `findPromoteMatch` and
- * `assetQuantitiesCancel`, which compares the signed decimal strings exactly, as the backend's
- * `_validate_linked_pair` compares `Decimal`s. The selection toolbar (`selectedForPromote` in
- * TransactionBulkModal → `promote-toolbar-confirm`) asked `findPromoteMatch` only, whose TRANSFER rule
- * is `qA !== 0 && qA === -qB` on JavaScript numbers (`buildPromoteCtx` reads `Number(quantity)`): two
- * quantities opposite as doubles and not as decimals passed the toolbar and not the banner, and two
- * new rows merged that way were refused on save with `pairQuantityMismatch`. Since C-46 the toolbar
- * asks `assetQuantitiesCancel` too; PC5 was written red against the old behaviour.
+ * PC5 used to be C-46's regression test. Two paths offer an asset TRANSFER merge: the banner asks
+ * `findPromoteMatch` and `assetQuantitiesCancel`, which compares the signed decimal strings exactly, as the
+ * backend's `_validate_linked_pair` compares `Decimal`s; the selection toolbar (`selectedForPromote` in
+ * TransactionBulkModal → `promote-toolbar-confirm`) asked `findPromoteMatch` only, whose TRANSFER rule is
+ * `qA !== 0 && qA === -qB` on JavaScript numbers (`buildPromoteCtx` reads `Number(quantity)`). Two new legs typed
+ * through the form, −123456789012.123456 on A and +123456789012.123457 on B — one double, not one decimal — were
+ * offered by the toolbar, and their save was refused with `pairQuantityMismatch`. Since C-46 the toolbar asks
+ * `assetQuantitiesCancel` too.
  *
- * The pair fits the column (`Numeric(18, 6)`) and the form (12 integer digits, 6 decimals). Between
- * 2^36 and 2^37 consecutive doubles are 2^-16 ≈ 1.5e-5 apart, about 15 steps of the 6th decimal, so
- * 123456789012.123456 and 123456789012.123457 are one double (0x423CBE991A141F9B), inside the run
- * .123452–.123466 that rounds to it; neither ends on a zero the form would strip, so the text typed is
- * the text the form must keep. The test re-checks the premise in Node, whose `Number()` is the browser's.
+ * Those legs have 18 significant digits, and the backend keeps at most 15 (`precision._digit_counts`, refusal
+ * `significantDigitsExceeded`). Within 15 significant digits two different decimals are always two different
+ * doubles (a decimal of at most 15 significant digits survives the round trip through a double: DBL_DIG), so
+ * C-46's case exists only outside the domain the form and the backend accept, and a form that keeps to that
+ * domain cannot type it. Its guard left this file: the same pair, and the same positive control, are brought into
+ * the editor the way an import brings them, never typed, in
+ * `src/lib/features/transactions/bulk/TransactionBulkModal.test.ts` («C-46», Vitest).
  *
- * The positive control comes first, in the same editor: A's same −123456789012.123456 against an exact
- * +123456789012.123456 on B, one digit away from the pair under test. The banner offers it and its
- * selection shows the toolbar's merge; the banner then merges it, so that the banner is hidden again
- * and none of its rows is selected when the pair under test is typed. Nothing is saved.
+ * What the old PC5 typed is now B-48's subject. The form held the quantity's integer digits (15) and its decimals
+ * (10) apart, so −123456789012.123456, within both, passed, and only the save's validation refused it. The contract
+ * of the cure: at most 15 significant digits in the form; over them the quantity is one of the form's own errors —
+ * the message under the field (`tx-form-quantity-significant-error`, carrying the 15) and Apply disabled. PC5
+ * types it with the old steps short of Apply (`fillAdjustment`: + Add row → ADJUSTMENT → broker A → the asset →
+ * the quantity, read back after the blur → the description), after a positive control in the same form: the same
+ * leg cut to 15 significant digits, −123456789012.123, leaves the form complete, with no message and Apply enabled,
+ * so the refusal that follows is the quantity's doing. Nothing is saved.
  *
  * ## PC6: the 💡's window, red until the cure
  *
@@ -141,6 +153,26 @@
  * than from the slider. With nothing to rewrite the rows, once the editor has settled a request at 1
  * can only come from the slider.
  *
+ * ## PC7: «Merge all» never writes notes past 500 characters, red until the cure (W-B70)
+ *
+ * A transaction's notes hold 500 characters (`max_length=500` on a create and on a promote's
+ * `resolved_fields`, counted by Python's `len()`). «Merge all» combining both texts writes `left\nright`
+ * into the two rows of every pair it merges, and nothing checks the length: two notes of 250 combine into
+ * 501 characters, the pair is shown merged, and the save is refused on its promote (`string_too_long`),
+ * nothing saved. The decision (D-W70-4 a): such a pair is left unmerged, each row keeping its own notes —
+ * no text is ever cut — and the editor says so, with a warning toast and the app event
+ * `tx.bulk.promote-all.left-for-manual-merge`, `{pairs: <how many>}`, whose name and detail are what PC7
+ * reads (never the toast's text); every other pair is merged as before. The limit is inclusive, and PC7
+ * sits on both sides of it: the merged pair combines into exactly 500 characters and its save is asserted,
+ * so a limit off by one in either direction, in the editor or against the backend, turns it red.
+ *
+ * Both pairs are saved rows (edit + edit: the promote carries the combined notes as `resolved_fields`),
+ * each a WITHDRAWAL on A and a DEPOSIT on B of an amount no other row shares, so the banner offers exactly
+ * these two pairs and «Merge all» is on offer. The notes open on words that tell the four rows apart; a
+ * filler only sets their length. Today PC7 is red on the pair that must stay two rows: «Merge all» merges
+ * it into one, whose notes are the 501 characters. Its save is not asserted refused: that is today's defect,
+ * and the cure's save must go through.
+ *
  * ## The save gate
  *
  * Save opens `tx-bulk-unseen-suggestions` instead of committing while a merge suggestion is still
@@ -149,7 +181,10 @@
  * banner, first seen on screen, is then asserted gone — and the 💡 could only offer saved rows of
  * the owned asset outside the editor, of which there are none. So Save must reach the commit:
  * `saveExpectingRefusal` waits for the refused-save banner OR the gate, and fails by name if it is
- * the gate, rather than clicking past it.
+ * the gate, rather than clicking past it. In PC7 the banner still offers the pair left behind, but it
+ * has been touched («Merge all» is clicked inside it), and the 💡 has nothing to offer either: every
+ * owned row but the float is in the editor, the float pairs with none, and no other row of the user
+ * carries the pairs' amounts. Its save, `saveExpectingCommit`, names the gate too if nothing is sent.
  *
  * ## Owned data, parallel-safe
  *
@@ -164,7 +199,7 @@
  */
 import {expect, test as base, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {waitForSettled} from '../fixtures/app-events';
+import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
@@ -200,7 +235,7 @@ type PromoteItem = {id_a?: number; id_b?: number; link_uuid_a?: string; link_uui
 type CommitRequest = {creates?: CreateItem[]; updates?: Array<{id: number}>; deletes?: number[]; splits?: unknown[]; promotes?: PromoteItem[]};
 type Issue = {operation: string; index: number; ref_id?: number | null; code?: string | null; field?: string | null};
 type CommitBody = {committed: boolean; issues?: Issue[]; results?: Array<{operation: string; index?: number; ids?: number[]; status?: string}>};
-type LedgerRow = {id: number; broker_id: number; type: string; quantity: string; related_transaction_id: number | null; cost_basis_override: Money | null; asset_event_id: number | null};
+type LedgerRow = {id: number; broker_id: number; type: string; quantity: string; related_transaction_id: number | null; cost_basis_override: Money | null; asset_event_id: number | null; description?: string | null};
 /** One row the editor asks the database search about (`TXPromoteSuggestInput`), as the editor sends it. */
 type SuggestInput = {id: number; type: string; broker_id: number; date: string; asset_id?: number | null; quantity?: number | null; asset_event_id?: number | null};
 /** One promote-suggest request: the rows it asked about, and the candidates per asked id (JSON keys are strings). */
@@ -214,7 +249,8 @@ type Owned = {
     today: string;
     brokerIds: number[];
     assetIds: number[];
-    eventIds: number[];
+    /** Each owned event with its asset: the events delete is scoped by asset (decision 21, I-12a). */
+    events: Array<{id: number; assetId: number}>;
 };
 type Broker = {id: number; name: string};
 type Brokers = {a: Broker; b: Broker};
@@ -284,7 +320,7 @@ async function ownSplitEvent(page: Page, owned: Owned, asset: Asset, date: strin
     const queried = await jsonFrom<{items: Array<{asset_id: number; events: Array<{id: number; type: string; notes?: string | null}>}>}>(await page.request.post(`${API}/assets/events/query`, {data: [{asset_id: asset.id, date_range: {start: date, end: date}}]}), 'read the owned SPLIT event back');
     const event = queried.items.find((item) => item.asset_id === asset.id)?.events.find((candidate) => candidate.type === 'SPLIT' && candidate.notes === notes);
     if (!event) throw new Error(`The owned SPLIT event was not found: ${JSON.stringify(queried)}`);
-    owned.eventIds.push(event.id);
+    owned.events.push({id: event.id, assetId: asset.id});
     return event.id;
 }
 
@@ -294,6 +330,13 @@ function adjustment(broker: Broker, asset: Asset, date: string, quantity: string
 
 function cashRow(broker: Broker, type: 'DEPOSIT' | 'WITHDRAWAL', date: string, amount: string, description: string): CreateItem {
     return {broker_id: broker.id, type, date, quantity: '0', cash: {code: 'EUR', amount}, description};
+}
+
+/** Notes of exactly `length` characters, all ASCII: `marker`, the words that tell a row apart, then a filler. */
+function notesOf(marker: string, length: number): string {
+    const notes = `${marker} ${'x'.repeat(length - marker.length - 1)}`;
+    expect(notes, `notes of ${length} characters`).toHaveLength(length);
+    return notes;
 }
 
 /** Commit the owned rows in one batch; returns them in the order given, each with its id. */
@@ -348,10 +391,10 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<void> {
             for (const id of owned.brokerIds) expect(result.results.find((item) => item.id === id)?.success, `broker ${id} deleted`).toBe(true);
         });
     }
-    for (const eventId of owned.eventIds) {
-        await attempt(`event ${eventId}`, async () => {
-            const result = await jsonFrom<{results: Array<{event_id: number; status: string}>}>(await page.request.delete(`${API}/assets/events?ids=${eventId}`), 'delete the owned event');
-            expect(result.results.find((item) => item.event_id === eventId)?.status).toBe('deleted');
+    for (const ownedEvent of owned.events) {
+        await attempt(`event ${ownedEvent.id}`, async () => {
+            const result = await jsonFrom<{results: Array<{asset_id: number; deleted_ids?: number[]}>}>(await page.request.post(`${API}/assets/events`, {data: [{asset_id: ownedEvent.assetId, delete_ids: [ownedEvent.id]}]}), 'delete the owned event');
+            expect(result.results.find((item) => item.asset_id === ownedEvent.assetId)?.deleted_ids).toEqual([ownedEvent.id]);
         });
     }
     for (const assetId of owned.assetIds) {
@@ -369,7 +412,7 @@ const test = base.extend<{owned: Owned}>({
         if (!baseURL || new URL(baseURL).port !== TEST_PORT || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
             throw new Error(`These checks write owned rows and may only run against the local test backend on port ${TEST_PORT}`);
         }
-        const owned: Owned = {suffix: `pcb${testInfo.workerIndex}-${uniqueSuffix()}`, today: '', brokerIds: [], assetIds: [], eventIds: []};
+        const owned: Owned = {suffix: `pcb${testInfo.workerIndex}-${uniqueSuffix()}`, today: '', brokerIds: [], assetIds: [], events: []};
         try {
             await login(page, TEST_USER);
             owned.today = await browserToday(page);
@@ -489,33 +532,48 @@ async function applyForm(page: Page): Promise<void> {
 }
 
 /**
- * `+ Add row` → the form → one ADJUSTMENT pushed into the grid.
+ * `+ Add row` → the form → one ADJUSTMENT typed in, short of Apply: its type, broker, asset, quantity (read back
+ * after the blur, `fillQuantity`) and description. PC5 stops here; `addAdjustment` goes on to Apply.
  *
- * `withoutCostBasis` is the receiver under test, NOT in Auto mode: Manual is chosen first, before
- * the form is complete enough to validate (Auto is the form's default for a positive ADJUSTMENT,
- * and an Auto validate writes the computed cost into the field), and the field is then left alone,
- * as by a user who skips it. The form's own warning (`tx-form-cost-basis-warning`: positive
- * quantity, not Auto, no amount) proves the draft is in exactly that state when it is applied.
+ * `withoutCostBasis` is the receiver under test, NOT in Auto mode: Manual is chosen before the
+ * form is complete enough to validate (Auto is the form's default for a positive ADJUSTMENT, and
+ * an Auto validate writes the computed cost into the field), and the field is then left alone, as
+ * by a user who skips it. N78-1 (developer's decision, 21/10/2026) shows the cost section only
+ * once the quantity is positive, so the (positive) quantity is typed first, then Manual, then the
+ * broker and the asset: without the asset the draft is not ready (`isDraftReadyForValidation`
+ * gates the form's automatic validation), so no Auto validate can have run — the empty amount
+ * read just before switching proves it. The form's own warning (`tx-form-cost-basis-warning`:
+ * positive quantity, not Auto, no amount) proves the draft is in exactly that state when it is
+ * applied. Every other row keeps the order type → broker → asset → quantity → description.
  */
-async function addAdjustment(page: Page, row: {broker: Broker; asset: Asset; quantity: string; description: string; withoutCostBasis?: boolean}): Promise<void> {
+async function fillAdjustment(page: Page, row: {broker: Broker; asset: Asset; quantity: string; description: string; withoutCostBasis?: boolean}): Promise<void> {
     await page.getByTestId('tx-bulk-add-row').click();
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: UI_TIMEOUT});
     await selectType(page, 'ADJUSTMENT');
     const manual = page.getByTestId('tx-form-cost-basis-toggle-manual');
+    const amount = page.getByTestId('tx-form-cost-basis-input-amount');
     if (row.withoutCostBasis) {
-        await expect(manual).toBeVisible({timeout: UI_TIMEOUT});
+        await fillQuantity(page, row.quantity);
+        await expect(page.getByTestId('tx-form-cost-basis-inline'), 'N78-1: the cost section appears once the ADJUSTMENT quantity is positive').toBeVisible({timeout: UI_TIMEOUT});
+        await expect(amount, 'no broker nor asset yet: no Auto validate has written a cost').toHaveValue('');
+        await expect(manual).toBeVisible();
         await manual.click();
         await expect(manual).toHaveAttribute('aria-pressed', 'true');
     }
     await pickBroker(page, row.broker);
     await pickAsset(page, row.asset);
-    await fillQuantity(page, row.quantity);
+    if (!row.withoutCostBasis) await fillQuantity(page, row.quantity);
     await fillDescription(page, row.description);
     if (row.withoutCostBasis) {
         await expect(manual, 'the receiver stays in Manual mode').toHaveAttribute('aria-pressed', 'true');
-        await expect(page.getByTestId('tx-form-cost-basis-input-amount'), 'with no cost basis typed').toHaveValue('');
+        await expect(amount, 'with no cost basis typed').toHaveValue('');
         await expect(page.getByTestId('tx-form-cost-basis-warning'), 'the form says it: Manual, positive quantity, no amount').toBeVisible();
     }
+}
+
+/** `fillAdjustment`, then Apply: one ADJUSTMENT pushed into the grid. */
+async function addAdjustment(page: Page, row: {broker: Broker; asset: Asset; quantity: string; description: string; withoutCostBasis?: boolean}): Promise<void> {
+    await fillAdjustment(page, row);
     await applyForm(page);
 }
 
@@ -544,17 +602,6 @@ async function selectBulkRows(rows: Locator, count: number): Promise<void> {
         await expect(checkbox).toBeVisible({timeout: UI_TIMEOUT});
         if ((await checkbox.getAttribute('data-state')) !== 'checked') await checkbox.click();
         await expect(checkbox).toHaveAttribute('data-state', 'checked');
-    }
-}
-
-/** The reverse of `selectBulkRows`: every row of an ALREADY-FILTERED locator back to `unchecked`. */
-async function unselectBulkRows(rows: Locator, count: number): Promise<void> {
-    await expect(rows).toHaveCount(count, {timeout: UI_TIMEOUT});
-    for (let i = 0; i < count; i++) {
-        const checkbox = rows.nth(i).locator('[data-testid^="dt-row-checkbox-"]');
-        await expect(checkbox).toBeVisible({timeout: UI_TIMEOUT});
-        if ((await checkbox.getAttribute('data-state')) !== 'unchecked') await checkbox.click();
-        await expect(checkbox).toHaveAttribute('data-state', 'unchecked');
     }
 }
 
@@ -652,6 +699,29 @@ async function saveExpectingRefusal(page: Page): Promise<{request: CommitRequest
     await expect(gate.or(refused), 'Save answers with the refused-save banner (or, wrongly, with the unseen-suggestions gate)').toBeVisible({timeout: SAVE_TIMEOUT});
     await expect(gate, 'Save opened the unseen-suggestions gate: a merge suggestion was still on offer, and nothing was committed').toHaveCount(0);
     const response = await answered;
+    return {request: response.request().postDataJSON() as CommitRequest, body: await jsonFrom<CommitBody>(response, 'Save All')};
+}
+
+/**
+ * Save All on a batch the backend must accept; returns the request the editor sent and the answer, whatever it says
+ * (the caller asserts `committed` next to the answer described).
+ *
+ * As for `saveExpectingRefusal`, Save must reach the commit (see «The save gate» in the header). A save that sends
+ * nothing names the unseen-suggestions gate if that is what stands in the way, before the wait's own timeout is
+ * reported.
+ */
+async function saveExpectingCommit(page: Page): Promise<{request: CommitRequest; body: CommitBody}> {
+    await waitForSettled(page.getByTestId('tx-bulk-modal-root'), SAVE_TIMEOUT);
+    const save = page.getByTestId('tx-bulk-commit');
+    await expect(save).toBeEnabled({timeout: UI_TIMEOUT});
+    const answered = page.waitForResponse((response) => isCommitRequest(response.request()), {timeout: SAVE_TIMEOUT});
+    // Handled below; this keeps a rejection from surfacing as unhandled before it is awaited.
+    void answered.catch(() => undefined);
+    await save.click();
+    const response = await answered.catch(async (error: unknown): Promise<never> => {
+        await expect(page.getByTestId('tx-bulk-unseen-suggestions'), 'Save opened the unseen-suggestions gate instead of committing: a merge suggestion was still on offer, unseen').toHaveCount(0);
+        throw error;
+    });
     return {request: response.request().postDataJSON() as CommitRequest, body: await jsonFrom<CommitBody>(response, 'Save All')};
 }
 
@@ -862,7 +932,8 @@ test.describe('Bulk editor — a promoted receiver without a cost basis is refus
         // The second pair is a cash one on purpose: a WITHDRAWAL and a DEPOSIT can only meet each other,
         // so the pairs «Merge all» takes do not depend on how the banner matches asset quantities —
         // which PC4 checks on its own. (The selection toolbar asks `findPromoteMatch`, which compares the
-        // quantities as JavaScript numbers, then, since C-46, the exact `assetQuantitiesCancel`: see PC5.)
+        // quantities as JavaScript numbers, then, since C-46, the exact `assetQuantitiesCancel`: its guard is
+        // «C-46» in TransactionBulkModal.test.ts.)
         const [fund, float, sender, withdrawal] = await commitOwnedRows(page, [
             {label: 'fund', create: adjustment(brokers.a, asset, dayBefore(owned.today), '10', `PCB fund ${owned.suffix}`, {cost_basis_override: {code: 'EUR', amount: '50'}})},
             {label: 'float', create: cashRow(brokers.a, 'DEPOSIT', dayBefore(owned.today), '1000', `PCB float ${owned.suffix}`)},
@@ -954,62 +1025,42 @@ test.describe('Bulk editor — a promoted receiver without a cost basis is refus
         await expectLedgerUntouched(page, brokers, before);
     });
 
-    test('PC5: two new legs opposite as doubles, not as decimals → no merge from the banner, none from the selection toolbar', async ({page, owned}) => {
-        // A's leg is the same in both pairs. B's cancels it exactly in the control, and one digit off in the
-        // 6th decimal in the pair under test: one double all the same (see «PC5» in the header).
-        const out = '-123456789012.123456';
-        const exactIn = '123456789012.123456';
-        const nearIn = '123456789012.123457';
-        expect(out, 'premise: the control is exactly opposite as decimals').toBe(`-${exactIn}`);
-        expect(out, 'premise: the pair under test is not').not.toBe(`-${nearIn}`);
-        expect(Number(out), 'premise: yet it is opposite as doubles, the comparison findPromoteMatch makes').toBe(-Number(nearIn));
+    test('PC5: the form refuses a quantity of eighteen significant digits — the message under the field, Apply disabled (B-48)', async ({page, owned}) => {
+        // The leg the old PC5 typed (C-46's), and the same leg cut to fifteen significant digits: the backend keeps at
+        // most fifteen (see «PC5» in the header). The premise, re-checked: digits counted as the backend counts them,
+        // the sign, the point and the zeros that lead or trail not counted.
+        const refused = '-123456789012.123456';
+        const accepted = '-123456789012.123';
+        const significantDigits = (value: string) => value.replace(/[-.]/g, '').replace(/^0+/, '').replace(/0+$/, '').length;
+        expect([significantDigits(refused), significantDigits(accepted)], 'premise: eighteen significant digits refused, fifteen accepted').toEqual([18, 15]);
 
         const {asset, brokers} = await ownAssetAndBrokers(page, owned);
-        const exact = `PCB exact ${owned.suffix}`;
-        const near = `PCB near ${owned.suffix}`;
-        // The editor opens on A's fund, the earlier unrelated row. It does not cover A's legs, and the editor says
-        // so (A's holdings would go negative): balances play no part in what the banner or the toolbar offers, and
-        // nothing is saved.
+        const description = `PCB refused ${owned.suffix}`;
+        // The editor opens on A's fund, the earlier unrelated row, as the old PC5's did. Nothing is saved.
         const [fund] = await commitOwnedRows(page, [{label: 'fund', create: adjustment(brokers.a, asset, dayBefore(owned.today), '10', `PCB fund ${owned.suffix}`, {cost_basis_override: {code: 'EUR', amount: '50'}})}]);
         const before = await readOwnedLedger(page, brokers);
         expect(before.map((row) => row.id)).toEqual([fund.id]);
-
         await openEditorOn(page, brokers, [fund]);
-        const banner = page.getByTestId('promote-suggest-banner');
-        const promote = page.getByTestId('promote-toolbar-confirm');
 
-        // The positive control, typed through the same form: the banner offers it, and so does the toolbar.
-        await addAdjustment(page, {broker: brokers.a, asset, quantity: out, description: exact});
-        await addAdjustment(page, {broker: brokers.b, asset, quantity: exactIn, description: exact});
-        const exactRows = bulkRowsWith(page, exact);
-        await expect(exactRows, 'the control is two rows').toHaveCount(2, {timeout: UI_TIMEOUT});
-        await expectBannerOffers(page, 1);
-        await selectBulkRows(exactRows, 2);
-        await expect(promote, 'the control: the selection toolbar offers the merge of two legs that cancel exactly').toBeVisible();
-        // Unselected before the banner merges them: the merged row, still selected, would be a third row in the
-        // selection below, and the toolbar asks about two rows only.
-        await unselectBulkRows(exactRows, 2);
-        await banner.getByTestId('promote-suggest-link-0').click();
-        await expect(exactRows, 'the banner offered the control: its two rows are now one pair row').toHaveCount(1, {timeout: UI_TIMEOUT});
-        await expect(banner, 'and it has nothing else to offer').toBeHidden();
+        // The old PC5's typing steps, short of Apply, on the control first: fifteen significant digits, the form
+        // complete, no message and Apply enabled — so a disabled Apply below is the quantity's doing.
+        await fillAdjustment(page, {broker: brokers.a, asset, quantity: accepted, description});
+        const quantity = page.getByTestId('tx-form-quantity');
+        const message = page.getByTestId('tx-form-quantity-significant-error');
+        const apply = page.getByTestId('tx-form-save');
+        await expect(apply, 'the control: fifteen significant digits, the form complete, Apply enabled').toBeEnabled({timeout: UI_TIMEOUT});
+        await expect(quantity, 'the control: the quantity is not flagged').toHaveAttribute('aria-invalid', 'false');
+        await expect(message, 'the control: no message under the quantity').toBeHidden();
 
-        // The pair under test, typed through the form: addAdjustment reads each quantity back after the blur
-        // (fillQuantity), and Apply is enabled only for a quantity within the form's 12 + 6 digits (applyForm).
-        await addAdjustment(page, {broker: brokers.a, asset, quantity: out, description: near});
-        await addAdjustment(page, {broker: brokers.b, asset, quantity: nearIn, description: near});
-        const nearRows = bulkRowsWith(page, near);
-        await expect(nearRows, 'the pair under test is two rows').toHaveCount(2, {timeout: UI_TIMEOUT});
-        // Side check, the exact one: the banner derives from the rows on screen, synchronously (see PC4), and
-        // compares the decimal strings.
-        await expect(banner, 'the banner offers no merge: the two legs differ in the 6th decimal').toBeHidden();
+        // The old PC5's leg: refused by the form itself, before any save. `fillQuantity` reads it back whole after the
+        // blur: a refused value is kept as typed, never cut to fit.
+        await fillQuantity(page, refused);
+        await expect(message, 'B-48: the form takes eighteen significant digits without a word; only the save would refuse them').toBeVisible({timeout: UI_TIMEOUT});
+        await expect(message, 'the message carries the limit: 15').toContainText('15');
+        await expect(quantity, 'B-48: the quantity is flagged').toHaveAttribute('aria-invalid', 'true');
+        await expect(apply, 'B-48: Apply is enabled on a quantity the backend refuses').toBeDisabled();
 
-        // The selection is exactly the two legs: their boxes checked, the anchor as in PC2, and no other.
-        await selectBulkRows(nearRows, 2);
-        for (const other of [bulkRowsWith(page, fund.description), exactRows]) await expect(other.locator('[data-testid^="dt-row-checkbox-"]'), 'no other row is selected').toHaveAttribute('data-state', 'unchecked');
-        await expect(promote, `nor does the selection toolbar: Number() makes ${out} and ${nearIn} one double, and the save would be refused (pairQuantityMismatch)`).toHaveCount(0);
-        await expect(nearRows, 'the two legs stay apart').toHaveCount(2);
-
-        // Nothing was saved: the editor is left open and discarded by the cleanup.
+        // Nothing was saved: the editor and its form are left open and discarded by the cleanup.
         await expectLedgerUntouched(page, brokers, before);
     });
 
@@ -1061,5 +1112,89 @@ test.describe('Bulk editor — a promoted receiver without a cost basis is refus
 
         // Nothing was saved: the editor is left open and discarded by the cleanup.
         await expectLedgerUntouched(page, brokers, before);
+    });
+
+    test('PC7: «Merge all», combining both texts, merges the pair whose notes fit in 500 characters and leaves the other two rows, each with its own notes (W-B70)', async ({page, owned}) => {
+        // The owned asset is not used: the brokers come with it.
+        const {brokers} = await ownAssetAndBrokers(page, owned);
+        const fitsMark = `PCB fits ${owned.suffix}`;
+        const overMark = `PCB over ${owned.suffix}`;
+        const fits = {out: notesOf(`${fitsMark} out`, 250), in: notesOf(`${fitsMark} in`, 249)};
+        const over = {out: notesOf(`${overMark} out`, 250), in: notesOf(`${overMark} in`, 250)};
+        expect(`${fits.out}\n${fits.in}`, 'premise: one pair’s notes combine into exactly 500 characters').toHaveLength(500);
+        expect(`${over.out}\n${over.in}`, 'premise: the other’s into 501').toHaveLength(501);
+        // A: the float (the day before, in no pair), then each pair's withdrawal; B: each pair's deposit. Each pair has an amount of its own.
+        const [float, fitsOut, fitsIn, overOut, overIn] = await commitOwnedRows(page, [
+            {label: 'float', create: cashRow(brokers.a, 'DEPOSIT', dayBefore(owned.today), '1000', `PCB float ${owned.suffix}`)},
+            {label: 'fits out', create: cashRow(brokers.a, 'WITHDRAWAL', owned.today, '-137.31', fits.out)},
+            {label: 'fits in', create: cashRow(brokers.b, 'DEPOSIT', owned.today, '137.31', fits.in)},
+            {label: 'over out', create: cashRow(brokers.a, 'WITHDRAWAL', owned.today, '-248.69', over.out)},
+            {label: 'over in', create: cashRow(brokers.b, 'DEPOSIT', owned.today, '248.69', over.in)},
+        ]);
+        const before = await readOwnedLedger(page, brokers);
+        expect(before.map((row) => row.id)).toEqual([float.id, fitsOut.id, fitsIn.id, overOut.id, overIn.id].sort(byId));
+
+        await openEditorOn(page, brokers, [fitsOut, fitsIn, overOut, overIn]);
+        const fitsRows = bulkRowsWith(page, fitsMark);
+        const overRows = bulkRowsWith(page, overMark);
+        await expect(fitsRows, 'one pair is two rows').toHaveCount(2, {timeout: UI_TIMEOUT});
+        await expect(overRows, 'and so is the other').toHaveCount(2, {timeout: UI_TIMEOUT});
+
+        // Two pairs on offer, which is what makes «Merge all» appear; combining both texts is its default.
+        const banner = await expectBannerOffers(page, 2);
+        await banner.getByTestId('promote-suggest-merge-all').click();
+        const mergeAll = page.getByTestId('promote-all-modal');
+        await expect(mergeAll).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(mergeAll.getByTestId('promote-all-choice-merge').getByRole('radio'), 'combining both texts, the default').toBeChecked();
+        const since = await eventSeq(page);
+        await mergeAll.getByTestId('promote-all-confirm').click();
+        await expect(mergeAll).toBeHidden({timeout: UI_TIMEOUT});
+
+        // The pair whose notes fit is merged, as before: one row, with its partner, showing both texts.
+        await expect(fitsRows, 'the pair whose notes combine into exactly 500 characters is merged into one row').toHaveCount(1, {timeout: UI_TIMEOUT});
+        await expect(fitsRows.getByTestId('tx-bulk-date'), 'with its partner').toHaveAttribute('data-partner-date', owned.today);
+        await expect(fitsRows, 'showing both texts').toContainText(`${fitsMark} out`);
+        await expect(fitsRows).toContainText(`${fitsMark} in`);
+
+        // The pair whose notes would not fit stays two rows, each with its own notes, whole. Today's red: «Merge all»
+        // merges every pair, this one into a row whose notes are the 501 characters.
+        await expect(overRows, 'the pair whose notes would combine into 501 characters stays two rows, unmerged').toHaveCount(2, {timeout: UI_TIMEOUT});
+        for (const [notes, otherMark] of [
+            [over.out, `${overMark} in`],
+            [over.in, `${overMark} out`],
+        ]) {
+            const row = bulkRowsWith(page, notes);
+            await expect(row, 'a row keeps its own notes, whole').toHaveCount(1);
+            await expect(row, 'and only its own').not.toContainText(otherMark);
+            await expect(row.getByTestId('tx-bulk-date'), 'with no partner').toHaveAttribute('data-partner-date', '');
+        }
+
+        // The editor says so: the app event counts the pairs left for a manual merge, and the user gets a warning.
+        const leftBehind = await waitForEvent(page, 'tx.bulk.promote-all.left-for-manual-merge', {since});
+        expect(leftBehind.detail, 'one pair left for a manual merge').toMatchObject({pairs: 1});
+        await expect(page.getByTestId('toast-warning'), 'and a warning on screen').toBeVisible();
+        // Left for a manual merge, not dropped: the banner still offers that pair, alone.
+        await expectBannerOffers(page, 1);
+
+        // Save: the merged pair is the one promote, its notes the 500 characters, and the batch is saved.
+        const {request, body} = await saveExpectingCommit(page);
+        const answer = describeAnswer(request, body, {float: float.id, fitsOut: fitsOut.id, fitsIn: fitsIn.id, overOut: overOut.id, overIn: overIn.id});
+        expect(body.committed, `the batch is saved — ${answer}`).toBe(true);
+        const promotes = request.promotes ?? [];
+        expect(
+            promotes.map((item) => [item.id_a ?? 0, item.id_b ?? 0].sort(byId)),
+            `one promote, the fitting pair's — ${answer}`,
+        ).toEqual([[fitsOut.id, fitsIn.id].sort(byId)]);
+        const combined = promotes[0].resolved_fields?.description;
+        expect([`${fits.out}\n${fits.in}`, `${fits.in}\n${fits.out}`], `its notes are both texts, one per line: the 500 characters — ${answer}`).toContain(combined);
+        await expect(page.getByTestId('tx-bulk-modal'), 'a saved batch closes the editor').toBeHidden({timeout: UI_TIMEOUT});
+
+        // What the database holds: the merged pair linked, with the combined notes; the other two rows as they were.
+        const after = await readOwnedLedger(page, brokers);
+        const savedRow = (id: number) => after.find((row) => row.id === id);
+        expect(savedRow(fitsOut.id), 'the merged pair is a Cash Transfer, linked, with the combined notes').toMatchObject({type: 'CASH_TRANSFER', related_transaction_id: fitsIn.id, description: combined});
+        expect(savedRow(fitsIn.id), 'on both legs').toMatchObject({type: 'CASH_TRANSFER', related_transaction_id: fitsOut.id, description: combined});
+        expect(savedRow(overOut.id), 'the pair left behind is as it was: the withdrawal, unlinked, its own notes whole').toMatchObject({type: 'WITHDRAWAL', related_transaction_id: null, description: over.out});
+        expect(savedRow(overIn.id), 'and the deposit, unlinked, its own notes whole').toMatchObject({type: 'DEPOSIT', related_transaction_id: null, description: over.in});
     });
 });

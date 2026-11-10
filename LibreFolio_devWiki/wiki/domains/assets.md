@@ -1,7 +1,7 @@
 ---
 title: "Domain: ASSETS"
 category: domain
-features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036, F-114]
+features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036, F-095, F-114]
 status: stable
 mkdocs: "developer/backend/assets/architecture.md"
 ---
@@ -18,6 +18,8 @@ Price sync fetches OHLCV data (open, high, low, close, volume) and stores it one
 
 The asset detail page is the richest view in LibreFolio: a full price history chart with the complete signal overlay system (EMA, RSI, MACD, Bollinger, FX pair comparison, asset comparison, benchmarks, measure tool), an inline data editor for adding/correcting prices and events via click, CSV, or form, a provider comparison modal showing differences between provider data and stored data, and a metadata refresh button. Asset events — dividends, splits, interest payments — are displayed as markers on the chart and will be linked to transactions once Phase 7's event-transaction link is complete.
 
+> 2026-11-07 lint: the event-transaction link shipped — [[F-051]] is `implemented` (Phase 7 Part 3, 2026-04-25; «Relink events» via `GET /transactions/event-reconciliation` in 1.3). A fifth provider, Borsa Italiana (`backend/app/services/asset_source_providers/borsa_italiana/`), now sits beside the four named above.
+
 ## Feature cluster
 
 | Code | Feature | Layer | Role in domain | Status |
@@ -27,14 +29,16 @@ The asset detail page is the richest view in LibreFolio: a full price history ch
 | [[F-026]] | Asset Provider Assignment (dynamic params form) | fullstack | core — assign provider with dynamic config form | implemented |
 | [[F-027]] | Asset Data Sync (price fetch from providers) | fullstack | core — fetch and store OHLCV from providers | implemented |
 | [[F-028]] | Asset Search Autocomplete (multi-provider parallel) | frontend | support — parallel search across providers in add modal | implemented |
-| [[F-029]] | Asset Metadata Refresh | fullstack | support — re-fetch name, sector, currency from provider | implemented |
+| [[F-029]] | Asset Metadata Refresh | fullstack | support — re-fetch name, sector, currency from provider | documented |
 | [[F-030]] | Asset Price History (OHLCV store/query) | backend | core — daily OHLCV storage and range query | implemented |
 | [[F-031]] | Asset Events (DIVIDEND, SPLIT, INTEREST, etc.) | fullstack | core — event markers linked to price history | implemented |
 | [[F-032]] | Asset List View (dual view: card + table) | frontend | display — card grid + DataTable, toggle persisted | implemented |
 | [[F-033]] | Asset Detail Page (chart, signals, editor) | frontend | display — full chart + signals + inline editor | implemented |
 | [[F-034]] | Scheduled Investment Provider (synthetic yield) | backend | support — loan/structured product price synthesis | implemented |
 | [[F-035]] | CSS Scraper Provider (arbitrary web scraping) | backend | support — scrapes any web page for a price | implemented |
-| [[F-036]] | Provider Comparison Modal (diff provider vs DB) | frontend | support — shows diff between provider data and stored data | implemented |
+| [[F-036]] | Provider Comparison Modal (diff provider vs DB) | frontend | support — shows diff between provider data and stored data | documented |
+| [[F-095]] | Asset Delete — Transaction Count Link | fullstack | support — a blocked delete shows the transaction count and links to them | documented |
+| [[F-114]] | Benchmark assets (a switch that offers an asset as a comparison benchmark) | fullstack | support — `is_benchmark` flag, offered in comparison pickers | implemented |
 
 ## Architecture at a glance
 
@@ -48,7 +52,7 @@ graph TD
     ProvRegistry --> JustETF[JustETF<br/>ISIN IE00B4L5Y983]
     ProvRegistry --> CSS[F-035 CSS Scraper<br/>URL + selector]
     ProvRegistry --> SchedInv[F-034 Scheduled Investment<br/>synthetic from schedule]
-    ProvAssign -->|POST /assets/:id/sync| SyncSvc[F-027 Sync Service<br/>thread-isolated calls]
+    ProvAssign -->|POST /assets/prices/sync| SyncSvc[F-027 Sync Service<br/>thread-isolated calls]
     SyncSvc -->|5-layer TTL cache| Cache[F-061 Provider Cache<br/>15min history / 2min current]
     Cache -->|miss| Provider[Provider call<br/>per thread, own event loop]
     Provider -->|OHLCV| PriceDB[(PriceHistory table<br/>F-030, one/day)]
@@ -70,6 +74,7 @@ graph TD
 - [[decisions/data-editor-unification]] — the inline data editor was unified into a generic `DataEditor` component set shared by both the FX and Asset detail pages, eliminating duplicated logic for click-to-edit, CSV import, and bulk save.
 - [[decisions/price-currency-hard-reject]] — Phase 7 Part 3: hard-400 on any price-currency mismatch in `upsert_prices_bulk`; HTTP 409 on `Asset.currency` PATCH while price/event history exists.
 - [[decisions/policy-d-currency-wipe]] — when the user accepts the 409, currency change is destructive: prices + events wiped symmetrically, transactions preserved with `asset_event_id = NULL`. Pre-confirm snapshots via [[entities/backup-router]] (`/api/v1/backup/asset/{id}/{prices,events}`).
+- [[decisions/asset-event-saves-all-or-nothing]] — release 1.3, decisions 20–23. An events save is one transaction that refuses whole and says where. «+ New event» never overwrites (409 `EVENT_EXISTS`). The `DELETE` names its asset, and the editor's deletions travel inside its save. An unknown type is refused, and the stored ones are repaired by a post-migration fix.
 
 ## Known problems / limitations
 
@@ -78,14 +83,17 @@ graph TD
 - [[problems/asset-currency-mismatch]] — asset price currency may differ from `Asset.currency` (e.g. a EUR-denominated ETF with prices returned in USD by yfinance); per-row currency column added in 2026-04 (still present as forensic canary), now superseded at the API contract level by [[decisions/price-currency-hard-reject]].
 - [[problems/assets-wipe-error-attr-mismatch]] — Policy D wipe handlers used non-existent `e.code` attribute; fixed in G-batch6 (one residual occurrence flagged).
 - [[problems/babel-currency-symbol-echo]] — `normalize_currency` echoed unknown garbage via babel; fixed via strict pycountry lookup in G-batch7.
+- [[problems/provider-event-dated-today-not-synced]] — a sync reads the history up to yesterday, and today's point (the current value) carries no events: a provider event dated today arrives with the first sync of a later day. Open.
 
 ## What comes next
 
 - [[F-051]] Transaction ↔ AssetEvent Link — Phase 7: link `AssetEvent` records (dividends, splits) to `Transaction` records for accurate income tracking.
+  *2026-11-07 lint: shipped — `implemented` since Phase 7 Part 3 (2026-04-25).*
 - [[F-029]] Metadata Refresh — already implemented but not yet documented; mkdocs page planned.
+  *2026-11-07 lint: shipped — documented in `mkdocs_src/docs/user/assets/create-edit.en.md`.*
 - [[F-036]] Provider Comparison Modal — already implemented; mkdocs page planned.
+  *2026-11-07 lint: shipped — documented in `mkdocs_src/docs/user/assets/create-edit.en.md` («Check the provider's data»).*
 - [[F-094]] Sync Date Range Dialog — let users choose the historical range when syncing.
-- [[F-095]] Asset Delete — Transaction Count Link — show transaction count before delete confirmation.
 - [[F-096]] Scheduled Investment — Decoupled Frequencies + Anchor Day — idea for finer-grained schedule control.
 
 ## See also
@@ -102,8 +110,8 @@ graph TD
 | Database pricing mkdocs | `mkdocs_src/docs/developer/architecture/database/assets_pricing.md` |
 | User assets docs | `mkdocs_src/docs/user/assets/` |
 | Scheduled investment docs | `mkdocs_src/docs/developer/backend/assets/provider_scheduled_investment.md` |
-| Asset API | `backend/app/api/v1/assets.py` |
-| Asset service + abstract base | `backend/app/services/asset_source.py` |
+| Asset API | `backend/app/api/v1/assets/` |
+| Asset service + abstract base | `backend/app/services/assets/` |
 | Asset providers | `backend/app/services/asset_source_providers/` |
 | DB models (Asset, PriceHistory, AssetEvent) | `backend/app/db/models.py` |
 | Asset pages | `frontend/src/routes/(app)/assets/` |

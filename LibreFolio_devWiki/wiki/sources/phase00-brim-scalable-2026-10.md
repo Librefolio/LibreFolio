@@ -24,9 +24,9 @@ the day before. Its companion, the exporter's recap (245 lines), records that ea
 developer's decisions, the facts checked on real data, the gaps. The plan went further than the importers. It added a
 check of every uploaded file against its broker's default plugin, pairs of new and saved rows in the bulk editor, and a
 fix for merged transfers that came back as new. It also reversed the broker icon order and translated every plugin's
-name and description. All five checkpoints entered `dev_release2` with train 30 (merge `262339501`); the developer's
+name and description. All five checkpoints entered `dev_release2` with train 30 (merge `5cbb5604a`); the developer's
 test with his real exports passed 7 of 7. On 2026-10-12 M's batch 21 rewrote the user page and took the importers out
-of alpha (`ff2cf5b3d`, train 55).
+of alpha (`9e2eb8774`, train 55).
 
 ## Key Takeaways
 
@@ -40,26 +40,26 @@ of alpha (`ff2cf5b3d`, train 55).
 - **The broker icon order** puts a dedicated plugin before the portal's favicon, with one threshold constant —
   [[decisions/broker-icon-order-dedicated-plugin-first]].
 - **Plugin texts translated by code** in four languages: [[concepts/brim-texts-translated-by-code]].
-- The glossary of the translations (PRU in French, PMC in Spanish, «Giroconto» in Italian…, `cd0b404d2`) and the
+- The glossary of the translations (PRU in French, PMC in Spanish, «Giroconto» in Italian…, `63a3b626d`) and the
   non-breaking space before «%» in French and Spanish were aligned on the way.
 
 ## Checkpoints
 
 | Checkpoint | Content | Commit |
 |---|---|---|
-| CP1 | the plan, the samples, the contract and the endpoint, the plugins, merged-transfer duplicates, API tests, icons, docs, the modal and its translations | `305b80202` |
-| CP2 | new + saved pairs in the bulk editor | `94271713b` |
-| CP3 | three items from the coordinator: the cost warning's text, eToro's description, the bulk page | `4347f8962` |
-| CP4 | fixes from the developer's test; the glossary | `2046b7419`, `cd0b404d2` |
-| CP5 | the icon order, French spaces, securities pairs that cancel, the spec for lot 40 | `d5c649e9f`, `1a4fe32a4`, `3efa748cd` |
+| CP1 | the plan, the samples, the contract and the endpoint, the plugins, merged-transfer duplicates, API tests, icons, docs, the modal and its translations | `7de8e0b88` |
+| CP2 | new + saved pairs in the bulk editor | `b7b54a50f` |
+| CP3 | three items from the coordinator: the cost warning's text, eToro's description, the bulk page | `5079329b6` |
+| CP4 | fixes from the developer's test; the glossary | `0b5644ab5`, `63a3b626d` |
+| CP5 | the icon order, French spaces, securities pairs that cancel, the spec for lot 40 | `07538f0cc`, `754d4f4ab`, `c1aba7efa` |
 
 Outside the monorepo: the exporter 1.0.1 (`6672084`, tag `v1.0.1`), committed and tagged by the developer.
 
 ## Left open, with whom (2026-10-10, updated)
 
 - The translations of the documentation: done by M's batch 21 on 2026-10-12. A second rewrite of the page, M's batch
-  23, is not in the target at `573f7c5c7`.
-  *Update (step B8)*: batch 23 reached the target with train 58 (`11339afa6`). The developer reviewed the page in a live
+  23, is not in the target at `2d2536111`.
+  *Update (step B8)*: batch 23 reached the target with train 58 (`30ca24392`). The developer reviewed the page in a live
   preview and approved it («vista la pagina di scalable, approvata a pieni voti»): accounts with their icons in the
   first column, «❓ Why two brokers?» as a heading, the exporter recommended in bold, the wrong-broker hint in a blue
   note — [[sources/phase00-translation-round12-2026-10]], [[problems/mkdocs-material-tables-resist-styling]].

@@ -1,6 +1,9 @@
 ---
 type: source
 title: "Phase 07 — Part 2: BRIM Revision 2 (Parser-Only)"
+category: source
+source_type: plan
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte2/plan-phase07-transaction-Part2.prompt.md
 date_ingested: 2026-04-24
 date_updated: 2026-04-25
 git_hash: a61b0dfa
@@ -95,8 +98,8 @@ New tests added:
 
 | Role | Path |
 |------|------|
-| BRIM abstract base | `backend/app/services/brim_provider.py` |
+| BRIM abstract base | `backend/app/services/brim/brim_provider.py` |
 | BRIM schemas | `backend/app/schemas/brim.py` |
 | BRIM API endpoint | `backend/app/api/v1/brokers.py` |
-| Asset source (renamed method) | `backend/app/services/asset_source.py` |
+| Asset source (renamed method) | `backend/app/services/assets/event_store.py` |
 | Plugin test | `backend/test_scripts/test_external/test_brim_providers.py` |

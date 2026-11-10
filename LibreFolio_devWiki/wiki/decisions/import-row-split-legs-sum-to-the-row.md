@@ -22,7 +22,8 @@ commissions together ([[sources/beta-testing-2026-08-05]], finding B2). The impo
 but the user has it on the contract note.
 
 The importer already emitted several transactions from one row (fee and tax legs, the counter-entries of the
-*Deposito Titoli* layout). What was missing was a split **driven by the user**: the repair step edited one row as one
+*Deposito Titoli* layout — replaced on 2026-10-28 by the report set, [[decisions/credit-agricole-securities-only-cash-neutral-brim]]).
+What was missing was a split **driven by the user**: the repair step edited one row as one
 transaction, with no cash field and no extra leg.
 
 ## Decision
@@ -44,14 +45,14 @@ deduced. The gap only decides when the question is asked.
 
 ## What the code does today
 
-- `splitRowCharges.ts` (shipped in `d1e04b2b8`, 12/08/2026; the plan's first form, `splitRowAmount`, had two fixed
+- `splitRowCharges.ts` (shipped in `ca69c1a25`, 12/08/2026; the plan's first form, `splitRowAmount`, had two fixed
   legs): the user lists the charges they can name, and the trade leg is the remainder. The user can only move money
   **between** legs, never into or out of the import. On a purchase the trade leg is smaller than the row; on a sale
   the credit is already net, so the trade leg is larger.
 - The repair step (`FixFlaggedStep.svelte`) offers three kinds of charge — fee, tax, accrued interest — and books a tax
   as `TAX` and the other two as `FEE`.
 - **Accrued interest is a `FEE`, not an `INTEREST`**: an `INTEREST` row must carry positive cash
-  (`backend/app/schemas/transactions.py`), and accrued interest paid on a purchase is cash out. It is also not part of
+  (`backend/app/schemas/transactions/transactions.py`), and accrued interest paid on a purchase is cash out. It is also not part of
   the cost of the security, since it comes back with the first gross coupon, so it must stay out of the FIFO cost
   basis, which is where `FEE` keeps it.
 - Amounts are subtracted in **fixed point**: in floating point `50683.13 - 50018.11` is `665.0199999999968`, and a leg
@@ -75,10 +76,10 @@ deduced. The gap only decides when the question is asked.
 
 | Role | Path |
 |------|------|
-| Split arithmetic | `frontend/src/lib/utils/transactions/splitRowCharges.ts` |
-| Split tests | `frontend/src/lib/utils/transactions/splitRowCharges.test.ts` |
-| Repair step | `frontend/src/lib/components/transactions/import/FixFlaggedStep.svelte` |
-| Hints, Crédit Agricole | `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` |
+| Split arithmetic | `frontend/src/lib/features/transactions/import/splitRowCharges.ts` |
+| Split tests | `frontend/src/lib/features/transactions/import/splitRowCharges.test.ts` |
+| Repair step | `frontend/src/lib/features/transactions/import/FixFlaggedStep.svelte` |
+| Hints, Crédit Agricole (since plugin 2.0.0, `d0be8c7f2`) | `backend/app/services/brim_providers/broker_credit_agricole/_booking.py` |
 | Hints, Danske Bank | `backend/app/services/brim_providers/broker_danske_bank/plugin.py` |
-| `INTEREST` cash rule | `backend/app/schemas/transactions.py` |
+| `INTEREST` cash rule | `backend/app/schemas/transactions/transactions.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00BrimCreditAgricoleTrades.prompt.md` |

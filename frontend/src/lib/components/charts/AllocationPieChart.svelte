@@ -1,15 +1,29 @@
 <!--
   AllocationPieChart — Pie chart for allocation distribution (sector or asset type).
 
-  Supports two modes:
-  - 'sector' (default): uses emoji from backend AllocationItem; shows emoji inside each slice
+  Supports three modes:
+  - 'sector' (default): shows each sector's emoji inside its slice — read from the sector
+    store, i.e. the backend's one map (GET /utilities/sectors), never from the data;
   - 'type': translates asset-type keys via assets.types.*; shows the PNG icon
-    inside each slice (ECharts rich text), icon + label in legend and tooltip.
+    inside each slice (ECharts rich text), icon + label in the legend; the tooltip opens with
+    the icon and the type's badge (the Liquidity slice, the cash and not an asset type, gets the
+    Liquidity badge, in the colour of the cash bar of the net-worth card);
+  - 'asset': one ring, one slice per asset, the name exactly as sent (nobody's translation
+    key, no emoji, no families), each slice in the colour of its weight rank (`colorRanks`,
+    asset id -> rank) in the designer's sequence; an entry without an id (the cash) wears
+    the Liquidity type colour; each slice shows its asset's icon (its own, else its type's, the cash's the Liquidity one), and the pie has no legend:
+    the icons and the tooltip name the slices; the tooltip opens with the icon and the type's
+    badge, the Liquidity one for the cash.
+
+  Every slice wears its category's own colour (GR1 of the designer's round 2): the same
+  family or sector is the same colour in every view, portfolio and period, read through
+  `categoryColor` (lib/theme/chartCategories). Subtypes are GR4 shades of their family.
 
   Props:
-  - data: AllocationEntry[] — name, value (0-100%), amount (abs), optional emoji
+  - data: AllocationEntry[] — name, value (0-100%), amount (abs)
   - height: CSS height (default "280px")
-  - mode: 'sector' | 'type' (default 'sector')
+  - mode: 'sector' | 'type' | 'asset' (default 'sector')
+  - colorRanks: asset id -> colour rank, read in 'asset' mode only
   - currency: currency code for absolute value formatting (default 'EUR')
 
   Used by:
@@ -20,17 +34,26 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
+    import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import {_ as t} from '$lib/i18n';
-    import {assetTypeFamily, sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {ASSET_TYPES, LIQUIDITY_KEY, assetTypeBadgeHtml, assetTypeFamily, sectorI18nKey, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum} from '$lib/components/charts/allocationRings';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {ALLOCATION_CHART_COLORS, chartNeutrals} from '$lib/theme/chartTheme';
+    import {CATEGORY_SEQUENCE, categoryColor, sequenceColor} from '$lib/theme/chartCategories';
+    import {familyShade, shadePoles} from '$lib/theme/chartShades';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {ensureSectorsLoaded, getSectorEmoji, sectorEmojiVersion} from '$lib/stores/reference/sectorStore';
+    import {assetSliceIconUrl, createIconProbe} from './assetPieIcons';
 
     // =========================================================================
     // Types & Props
@@ -38,12 +61,16 @@
 
     export interface AllocationEntry {
         name: string;
-        /** Percentage share 0-100 */
+        /** Percentage share of the NET total: with negative cash the positive shares add up above 100 (decision 49). */
         value: number;
         /** Absolute amount in base currency */
         amount: number;
-        /** Emoji from backend (sectors) */
-        emoji?: string | null;
+        /** The asset's id, in 'asset' mode: the key of its colour rank. The cash slice has none. */
+        id?: number | null;
+        /** The asset's own icon, in 'asset' mode. */
+        iconUrl?: string | null;
+        /** The asset's type, in 'asset' mode: its icon when it has none of its own. */
+        assetType?: string | null;
     }
 
     interface Props {
@@ -51,8 +78,10 @@
         data: AllocationEntry[];
         /** CSS height of the chart container */
         height?: string;
-        /** Display mode: 'sector' uses backend emoji + i18n labels; 'type' uses asset type PNG icons */
-        mode?: 'sector' | 'type';
+        /** Display mode: 'sector' uses the sector store's emoji + i18n labels; 'type' uses asset type PNG icons */
+        mode?: 'sector' | 'type' | 'asset';
+        /** 'asset' mode: asset id -> rank of its colour in the designer's sequence (0 = the heaviest held asset) */
+        colorRanks?: ReadonlyMap<number, number>;
         /**
          * Legend placement strategy.
          * - 'auto' (default): legend on the right when wide, below when narrow (<400px)
@@ -63,7 +92,7 @@
         currency?: string;
     }
 
-    let {data = [], height = '280px', mode = 'sector', legendPosition = 'auto', currency = 'EUR'}: Props = $props();
+    let {data = [], height = '280px', mode = 'sector', legendPosition = 'auto', currency = 'EUR', colorRanks}: Props = $props();
 
     // =========================================================================
     // State
@@ -104,23 +133,38 @@
     // back to one would leave the two ring series of the old option on screen. Only that
     // transition asks ECharts to replace the series; every other rebuild merges as before.
     let lastRings = false;
+    /** The colour ranks the last full build painted the asset pie with: new ranks rebuild in full. */
+    let lastRanksKey = '';
     let needsInitialLayoutStabilityPass = false;
-
-    // Diversified color palette — high chromatic distance
-    const PALETTE_LIGHT = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c', '#6366f1', '#0891b2', '#ca8a04', '#9333ea'];
-    const PALETTE_DARK = ['#4ade80', '#60a5fa', '#a78bfa', '#f87171', '#fbbf24', '#2dd4bf', '#f472b6', '#818cf8', '#34d399', '#fb923c', '#a5b4fc', '#22d3ee', '#facc15', '#c084fc'];
+    /** The sector store's version the last full build wrote its emoji from: a new list rebuilds the names. */
+    let lastEmojiVersion = -1;
+    /** The own icons known to load ('asset' mode); each answer redraws the pie, which writes the icons in its labels. */
+    let iconsVersion = $state(0);
+    const iconProbe = createIconProbe(undefined, () => (iconsVersion += 1));
 
     // =========================================================================
     // Lifecycle
     // =========================================================================
 
     onMount(() => {
-        const observer = new MutationObserver(() => renderChart());
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(() => renderChart());
+        // A colour changed without a theme switch (a Designer Lab edit, contract C4): rebuild the whole option, never
+        // the data-only fast path below.
+        const colors = onChartColorsChange(() => {
+            chartFullyInitialized = false;
+            renderChart();
+        });
         return () => {
             observer.disconnect();
+            colors.disconnect();
+            iconProbe.dispose();
             cleanup();
         };
+    });
+
+    // The sector emoji come from the sector store (the backend's one map), in every view.
+    $effect(() => {
+        if (mode === 'sector') void ensureSectorsLoaded();
     });
 
     $effect(() => {
@@ -132,6 +176,15 @@
         void data.map((slice) => ({...slice}));
         // Labels and amounts are written in the interface locale: a language switch redraws them (M-18).
         void uiLocale();
+        // The sector names carry their emoji, which arrive with the sector store: a new list redraws them.
+        if (mode === 'sector') void sectorEmojiVersion();
+        // The asset colours are a function of the ranks, not of the data: new ranks redraw the pie.
+        if (mode === 'asset') void [...(colorRanks ?? [])];
+        // The icons: an own icon that loads replaces the type's one.
+        if (mode === 'asset') {
+            iconProbe.ask(data.map((slice) => ({assetId: slice.id ?? null, iconUrl: slice.iconUrl, assetType: slice.assetType})));
+            void iconsVersion;
+        }
 
         if (chartContainer) {
             tick().then(() => {
@@ -159,7 +212,7 @@
         if (!chartContainer) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, chartInitOptions(chartContainer));
             attachChartReady(chartInstance, chartContainer, 'allocation-pie');
             // ECharts draws to a canvas, so a colour has no DOM an E2E could read.
             // Exposing the instance is the only way a test can assert that the
@@ -169,9 +222,14 @@
             needsInitialLayoutStabilityPass = true;
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
         const tr = $t;
-        const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
+        // GR4: a subtype is a shade of its family's colour, toward white in the light theme and toward the card the
+        // chart sits on in the dark one.
+        const poles = shadePoles(isDark, chartRoles(isDark, chartContainer).color('--lf-surface-card'));
+        const shade = (base: string, rank: number) => familyShade(base, rank, poles);
+        const emojiVersion = sectorEmojiVersion();
 
         const entries = data.filter((e) => e.value > 0);
         if (entries.length === 0) return; // Keep old chart visible, don't clear
@@ -179,10 +237,13 @@
         // Build chart data with name for ECharts diffing
         const mappedEntries = entries.map((entry) => {
             let displayName: string;
-            if (mode === 'sector') {
+            if (mode === 'asset') {
+                // An asset's name is nobody's translation key: shown exactly as sent.
+                displayName = entry.name;
+            } else if (mode === 'sector') {
                 const i18nKey = `sectors.${sectorI18nKey(entry.name)}`;
                 const translated = tr(i18nKey) !== i18nKey ? tr(i18nKey) : entry.name.replace(/_/g, ' ');
-                const emoji = entry.emoji ?? '';
+                const emoji = getSectorEmoji(entry.name);
                 displayName = emoji ? `${emoji} ${translated}` : translated;
             } else {
                 // Bugfix: namespace is plural "assets.types.X" (matches en.json) — the
@@ -192,27 +253,31 @@
                 const translated = tr(typeKey);
                 displayName = translated !== typeKey ? translated : entry.name;
             }
-            return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, emoji: entry.emoji ?? ''};
+            return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, assetId: entry.id ?? null, iconUrl: entry.iconUrl ?? null, assetType: entry.assetType ?? null};
         });
 
-        // Asset-type subtypes sit inside their family, adjacent to it — ordering and
-        // colour are one change, because two similar colours on opposite sides of the
-        // circle read as an accident. The family is the **vehicle** (developer's
-        // decision of 24/09/2026, R12 option B), as K's taxonomy files it
-        // (`assetTypeFamily`): every ETF subtype belongs to ETF, real-estate
-        // crowdfunding to Crowdfund.
+        // Asset-type subtypes sit inside their family, adjacent to it: two similar colours
+        // on opposite sides of the circle read as an accident. The family is the
+        // **vehicle** (developer's decision of 24/09/2026, R12 option B), as K's taxonomy
+        // files it (`assetTypeFamily`): every ETF subtype belongs to ETF, real-estate
+        // crowdfunding to Crowdfund. Its colour is its own (GR1), whatever its rank.
         //
-        // 'type' only, deliberately: the sector dimension has no taxonomy to fold,
-        // and this same component draws the Asset Detail sector pie, which is out
-        // of scope. With no subtypes present every group is a singleton, so the
-        // order and the colours are identical to the plain value sort below.
+        // 'type' only: the sector dimension has no taxonomy to fold. A sector wears its
+        // own colour too, in the plain value order below.
         const hierarchy =
             mode === 'type'
                 ? buildAllocationHierarchy(
                       mappedEntries.map((item) => ({key: item.rawName, weight: item.value, item})),
-                      {resolvePrimary: assetTypeFamily, palette},
+                      {resolvePrimary: assetTypeFamily, colorOf: (primary) => categoryColor('type', primary, isDark, chartContainer), shade},
                   )
                 : [];
+        // 'asset': the colour is the asset's rank in the designer's sequence; no id (the cash) is the Liquidity type,
+        // an id the ranks do not know is an unknown type.
+        const assetColor = (item: {assetId: number | null}) => {
+            if (item.assetId == null) return categoryColor('type', 'Liquidity', isDark, chartContainer);
+            const rank = colorRanks?.get(item.assetId);
+            return rank === undefined ? categoryColor('type', 'Unknown', isDark, chartContainer) : sequenceColor(CATEGORY_SEQUENCE, rank, isDark, poles, chartContainer);
+        };
         const chartData =
             mode === 'type'
                 ? hierarchy.map(({item, color, primary, groupSize, primaryTotal}) => ({
@@ -222,13 +287,13 @@
                       groupSize,
                       primaryTotal,
                   }))
-                : mappedEntries.sort((a, b) => b.value - a.value);
+                : mappedEntries.sort((a, b) => b.value - a.value).map((item) => ({...item, itemStyle: {color: mode === 'asset' ? assetColor(item) : categoryColor('sector', item.rawName, isDark, chartContainer)}}));
 
         // D72: as soon as one family contains a subtype, the relation is drawn as a
         // second ring, separate from the first, instead of a shade (R12). With no
         // subtype on screen the layout says so, and the single legacy ring below is
         // drawn untouched.
-        const layout = mode === 'type' ? buildAllocationRings(hierarchy, {weightOf: (item) => item.value}) : null;
+        const layout = mode === 'type' ? buildAllocationRings(hierarchy, {weightOf: (item) => item.value, shade}) : null;
         const rings = layout?.rings === true;
 
         const typeLabel = (key: string) => {
@@ -261,11 +326,15 @@
         // build — a new type needs richStyles/legend/label formatters rebuilt so its
         // icon actually registers (see lastRawTypeKeys declaration above for why).
         const currentRawTypeKeys = mode === 'type' ? [...new Set(chartData.map((d) => d.rawName.toUpperCase()))].sort().join(',') + (rings ? '|rings' : '') : '';
-        const sameTypeSet = mode !== 'type' || currentRawTypeKeys === lastRawTypeKeys;
+        const ranksKey = mode === 'asset' ? chartData.map((d) => `${d.assetId ?? ''}:${d.assetId == null ? '' : (colorRanks?.get(d.assetId) ?? '')}:${assetSliceIconUrl(d, iconProbe.loaded)}`).join(',') : '';
+        // The asset colours follow the ranks, and the icons their probes: a new rank order or a new icon is not a data-only change.
+        const sameTypeSet = (mode !== 'type' || currentRawTypeKeys === lastRawTypeKeys) && ranksKey === lastRanksKey;
+        // A change of the ranks alone (same assets, same amounts) forces a full rebuild.
         // A language switch rebuilds in full, as a theme switch does: the legend's name map and
-        // the label formatters were built for the previous language (M-18).
+        // the label formatters were built for the previous language (M-18). So does a new list of
+        // sector emoji: the names carry them.
         const locale = uiLocale();
-        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && sameTypeSet) {
+        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && lastEmojiVersion === emojiVersion && sameTypeSet) {
             // Bugfix: preserve the FULL data item (not just {name, value}) — formatters
             // (tooltip especially) read params.data.rawName/amount, and stripping them
             // here silently broke the fallback path for any type whose translated name
@@ -285,6 +354,7 @@
             return;
         }
         lastRawTypeKeys = currentRawTypeKeys;
+        lastRanksKey = ranksKey;
 
         // Build ECharts rich-text image styles for type mode (one key per asset type)
         const richStyles: Record<string, any> = {};
@@ -315,13 +385,19 @@
             }
         }
 
+        // 'asset': one icon per slice, the asset's own if it loads, else its type's (the cash: Liquidity's).
+        const assetIconKey = (assetId: number | null) => `img_a${assetId ?? 'cash'}`;
+        if (mode === 'asset') {
+            for (const item of chartData) richStyles[assetIconKey(item.assetId)] = {backgroundColor: {image: assetSliceIconUrl(item, iconProbe.loaded)}, width: 16, height: 16, align: 'center'};
+        }
+
         // Responsive: narrow containers → legend below the pie
         const containerWidth = chartContainer.getBoundingClientRect().width;
         const isNarrow = containerWidth < 400;
         const legendBelow = legendPosition === 'bottom' || isNarrow;
 
         // Legend — always scrollable to avoid 4+ unwrapped rows
-        const legendBaseTextStyle: any = {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11};
+        const legendBaseTextStyle: any = {color: neutrals.dashboard.text, fontSize: 11};
         const legendTextStyle = mode === 'type' ? {...legendBaseTextStyle, rich: richStyles} : legendBaseTextStyle;
 
         const legendTypeExtras =
@@ -352,9 +428,9 @@
                   left: 'center',
                   width: '95%',
                   textStyle: legendTextStyle,
-                  pageTextStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 10},
-                  pageIconColor: isDark ? '#94a3b8' : '#64748b',
-                  pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
+                  pageTextStyle: {color: neutrals.dashboard.text, fontSize: 10},
+                  pageIconColor: neutrals.dashboard.text,
+                  pageIconInactiveColor: neutrals.legendPageIconInactive,
                   pageButtonGap: 4,
               }
             : {
@@ -365,49 +441,62 @@
                   top: 20,
                   bottom: 20,
                   textStyle: legendTextStyle,
-                  pageTextStyle: {color: isDark ? '#94a3b8' : '#64748b'},
-                  pageIconColor: isDark ? '#94a3b8' : '#64748b',
-                  pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
+                  pageTextStyle: {color: neutrals.dashboard.text},
+                  pageIconColor: neutrals.dashboard.text,
+                  pageIconInactiveColor: neutrals.legendPageIconInactive,
               };
 
-        const pieCenter = legendBelow ? ['50%', '40%'] : ['35%', '50%'];
-        const pieRadius = legendBelow ? ['25%', '55%'] : ['35%', '70%'];
+        // 'asset' has no legend: the pie takes the room (the icons and the tooltip name the slices).
+        const noLegend = mode === 'asset';
+        const pieCenter = noLegend ? ['50%', '50%'] : legendBelow ? ['50%', '40%'] : ['35%', '50%'];
+        const pieRadius = noLegend ? ['30%', '70%'] : legendBelow ? ['25%', '55%'] : ['35%', '70%'];
 
-        // Inner label — sector: emoji only (from data.emoji); type: PNG icon via rich text.
+        // Inner label — sector: emoji only (from the sector store, in the display name); type: PNG icon via rich text;
+        // asset: the asset's icon (own, else its type's), through rich text too.
         const labelConfig: any =
-            mode === 'sector'
+            mode === 'asset'
                 ? {
                       show: true,
                       position: 'inner',
-                      // Show only the emoji (first token before the space in display name)
-                      formatter: (params: any) => {
-                          const first = (params.name as string).split(' ')[0];
-                          // If it looks like an emoji (non-ASCII), use it; otherwise skip
-                          return first && first.codePointAt(0)! > 127 ? first : '';
-                      },
-                      fontSize: 14,
-                      backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                      formatter: (params: any) => `{${assetIconKey(params.data?.assetId ?? null)}|}`,
+                      rich: richStyles,
+                      backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
                       borderRadius: 20,
                       padding: [4, 4],
                   }
-                : {
-                      show: true,
-                      position: 'inner',
-                      formatter: (params: any) => {
-                          // Bugfix: use the raw backend type carried on the data item
-                          // (params.data.rawName) instead of re-deriving a key from
-                          // params.name (already translated — would produce a mismatched
-                          // key for languages whose translation differs from the enum,
-                          // e.g. IT/FR/ES "Crowdfunding" -> "CROWDFUNDING" != "CROWDFUND").
-                          const rawSource = params.data?.rawName ?? params.name;
-                          const rawKey = (rawSource as string).toUpperCase().replace(/[^A-Z_]/g, '');
-                          return `{img_${rawKey}|}`;
-                      },
-                      rich: richStyles,
-                      backgroundColor: 'rgba(255, 255, 255, 0.75)',
-                      borderRadius: 20,
-                      padding: [4, 4],
-                  };
+                : mode === 'sector'
+                  ? {
+                        show: true,
+                        position: 'inner',
+                        // Show only the emoji (first token before the space in display name)
+                        formatter: (params: any) => {
+                            const first = (params.name as string).split(' ')[0];
+                            // If it looks like an emoji (non-ASCII), use it; otherwise skip
+                            return first && first.codePointAt(0)! > 127 ? first : '';
+                        },
+                        fontSize: 14,
+                        backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
+                        borderRadius: 20,
+                        padding: [4, 4],
+                    }
+                  : {
+                        show: true,
+                        position: 'inner',
+                        formatter: (params: any) => {
+                            // Bugfix: use the raw backend type carried on the data item
+                            // (params.data.rawName) instead of re-deriving a key from
+                            // params.name (already translated — would produce a mismatched
+                            // key for languages whose translation differs from the enum,
+                            // e.g. IT/FR/ES "Crowdfunding" -> "CROWDFUNDING" != "CROWDFUND").
+                            const rawSource = params.data?.rawName ?? params.name;
+                            const rawKey = (rawSource as string).toUpperCase().replace(/[^A-Z_]/g, '');
+                            return `{img_${rawKey}|}`;
+                        },
+                        rich: richStyles,
+                        backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
+                        borderRadius: 20,
+                        padding: [4, 4],
+                    };
 
         // Build amount lookup by display name for tooltip
         const amountByName: Record<string, number> = {};
@@ -434,6 +523,11 @@
                 // its vehicle and its content (the review of R12, 24/09/2026, asked for both).
                 const iconUrl = getAssetTypeIconUrl(rawKey);
                 const iconHtml = `<img src="${escapeHtml(iconUrl)}" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
+                // T-3c: the same first line as the asset pie's, the icon then the type's badge (without the type's icon: it is
+                // already beside it), the name on its own line. The Liquidity slice is the cash, not an asset type, but it wears
+                // the Liquidity badge (R-6): the badge helper maps `LIQUIDITY` to the cash's own roles.
+                const hasBadge = (ASSET_TYPES as readonly string[]).includes(rawKey) || rawKey === LIQUIDITY_KEY;
+                const badgeLine = hasBadge ? `<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${iconHtml}${assetTypeBadgeHtml(rawKey, tr(`assets.types.${rawKey}`) || rawKey, {icon: false})}</span><br/>` : '';
                 // The shading says "this belongs to that mass"; this line says how big
                 // the mass is. Only when there is actually a sibling — otherwise it
                 // would restate the slice's own number.
@@ -451,9 +545,24 @@
                     // Same precision as the member's own figure: two decimals beside one read
                     // as two different quantities (review of R12, 24/09/2026).
                     const parentTotal = roundedPercent(params.data?.primaryTotal ?? 0);
-                    parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${parentLabel} ${formatPercent(parentTotal, {digits: 2, signed: false, trim: true})}</span>`;
+                    parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${escapeHtml(parentLabel)} ${formatPercent(parentTotal, {digits: 2, signed: false, trim: true})}</span>`;
                 }
-                return `${iconHtml}${translated}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}${parentLine}`;
+                const nameLine = `${escapeHtml(String(translated))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}${parentLine}`;
+                return hasBadge ? `${badgeLine}${nameLine}` : `${iconHtml}${nameLine}`;
+            }
+            if (mode === 'asset') {
+                // The icon of the slice: the asset's own once it is known to load, else its type's (the cash: Liquidity).
+                const slice = {assetId: params.data?.assetId ?? null, iconUrl: params.data?.iconUrl ?? null, assetType: params.data?.assetType ?? null};
+                const drawnIcon = assetSliceIconUrl(slice, iconProbe.loaded);
+                const iconHtml = `<img src="${escapeHtml(drawnIcon)}" alt="" style="width:14px;height:14px;vertical-align:middle;margin-right:5px;">`;
+                const nameLine = `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
+                // T-3: an asset's first line is its icon and its type's badge (without the type's icon: the slice's is beside it);
+                // the name follows on its own line. The cash slice (no id) wears the Liquidity badge, as on the type pie (R-6);
+                // an asset with no type keeps one line.
+                const badgeType = slice.assetId === null ? LIQUIDITY_KEY : slice.assetType;
+                if (!badgeType) return `${iconHtml}${nameLine}`;
+                const badge = assetTypeBadgeHtml(badgeType, tr(`assets.types.${badgeType}`) || badgeType, {icon: false});
+                return `<span style="display:inline-flex;align-items:center;gap:4px;vertical-align:middle">${iconHtml}${badge}</span><br/>${nameLine}`;
             }
             // Sector: display name already contains the emoji prefix
             return `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
@@ -462,16 +571,15 @@
         const option: echarts.EChartsOption = {
             ...CHART_ANIMATION_CONFIG,
             ...(opts.skipAnimation ? {animation: false} : {}),
-            color: palette,
             tooltip: {
                 trigger: 'item',
                 formatter: tooltipFormatter,
                 position: tooltipPositionAboveFinger,
-                backgroundColor: isDark ? '#1e293b' : '#fff',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                backgroundColor: neutrals.tooltip.box.background,
+                borderColor: neutrals.tooltip.box.border,
+                textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
             },
-            legend: legendConfig,
+            legend: noLegend ? {show: false} : legendConfig,
             series: rings
                 ? ringSeries()
                 : [
@@ -483,11 +591,13 @@
                           padAngle: 1,
                           itemStyle: {
                               borderRadius: 4,
-                              borderColor: isDark ? '#293548' : '#ffffff',
+                              borderColor: neutrals.allocation.sliceBorder,
                               borderWidth: 2,
                           },
                           label: labelConfig,
                           labelLayout: {hideOverlap: true},
+                          // A slice too thin for its icon draws none (the tooltip names it).
+                          ...(mode === 'asset' ? {minShowLabelAngle: 12} : {}),
                           emphasis: {
                               // Tooltip is sufficient on hover — hide inner label instead of replacing it with text
                               label: {show: false},
@@ -516,7 +626,7 @@
             const span = end - start;
             const innerEnd = `${start + span * 0.67}%`;
             const outerStart = `${start + span * 0.8}%`;
-            const border = {borderRadius: 4, borderColor: isDark ? '#293548' : '#ffffff', borderWidth: 2};
+            const border = {borderRadius: 4, borderColor: neutrals.allocation.sliceBorder, borderWidth: 2};
             const shared = {type: 'pie' as const, center: pieCenter, avoidLabelOverlap: true, padAngle: 0, itemStyle: border, labelLayout: {hideOverlap: true}};
             const captionConfig = {
                 show: true,
@@ -524,7 +634,7 @@
                 formatter: (params: any) => `${params.data?.caption ?? params.name}\n${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}`,
                 fontSize: 11,
                 lineHeight: 14,
-                color: isDark ? '#cbd5e1' : '#374151',
+                color: neutrals.allocation.caption,
             };
             return [
                 // Family icons only where they fit: a 0.01% "Liquidity" arc would otherwise
@@ -543,6 +653,7 @@
         chartFullyInitialized = true;
         lastDark = isDark;
         lastLocale = locale;
+        lastEmojiVersion = emojiVersion;
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;
             scheduleFirstRenderStabilityFix(chartInstance, chartContainer);

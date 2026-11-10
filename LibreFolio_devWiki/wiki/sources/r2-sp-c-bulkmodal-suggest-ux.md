@@ -3,7 +3,7 @@ title: "R2 SP-C — BulkModal UX Polish + Suggest Overhaul + Modal Cleanup"
 category: source
 source_type: plan
 date_ingested: 2026-06-01
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/PlanD_SplitPromoteFullStack/R2-WalktestFeedback/plan-R2-SP-C-BulkModalSuggestUX.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-R2/SP-C-BulkModalSuggestUX/plan-R2-SP-C-BulkModalSuggestUX.prompt.md
 tags: [phase07, transactions, frontend, bulkModal, suggest, promote, split, ux, e2e]
 related:
   - sources/r2-walktest-feedback-master
@@ -50,10 +50,10 @@ Frontend UX plan (✅ completed + BugfixRound1/2 all done by 2026-05-30) impleme
 ## Source files
 | Role | Path |
 |------|------|
-| BulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| PromoteMergeModal | `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte` |
-| TransactionActionModal | `frontend/src/lib/components/transactions/modals/TransactionActionModal.svelte` |
-| FormModal | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| BulkModal | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| PromoteMergeModal | `frontend/src/lib/features/transactions/bulk/PromoteMergeModal.svelte` |
+| TransactionActionModal | `frontend/src/lib/features/transactions/TransactionActionModal.svelte` |
+| FormModal | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | E2E split/promote | `frontend/e2e/transactions/tx-split-promote.spec.ts` |
 | E2E bulk operations | `frontend/e2e/transactions/tx-bulk-operations.spec.ts` |
 | Test runner registration | `scripts/test_runner/_frontend_transaction.py` |

@@ -10,6 +10,7 @@ The **About** tab shows:
 - **License** (AGPL-3.0)
 - Links to the **GitHub repository** and **documentation**
 - A **Support LibreFolio** card with the coffee link and the share buttons — see [Support LibreFolio](#support-librefolio) below
+- A **Legal notice** card — see [Legal Notice](#legal-notice) below
 - A **system information** grid (Python version, operating system, deployment mode — Docker or local — browser, viewport, theme and language) with a **copy-for-issue** button that packs these details into a ready-to-paste bug report
 - The **installed plugins**: collapsible lists of the asset price providers, FX rate providers, broker import plugins, and signal indicators detected at startup, followed by **Plugin diagnostics**
 
@@ -20,8 +21,8 @@ The **About** tab shows:
 The **Support LibreFolio** card offers two ways to help the project:
 
 - **Buy Me a Coffee** opens the project's Buy Me a Coffee page in a new tab. The same link is in
-  the page header (the coffee icon, with its label on wider screens) and in the
-  **Help & Support** menu.
+  the page header (the coffee icon, with its label on wider screens), in the
+  **Help & Support** menu, and at the top of the sign-in pages.
 - Below **Or share**, one button per social network: **X**, **Reddit**, **Facebook**,
   **Instagram**, and **TikTok**.
 
@@ -58,6 +59,19 @@ project, with the same coffee link and share buttons.
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="support" data-name="donation-popup" alt="Donation popup after sign-in, with Buy Me a Coffee, the five share buttons and Maybe later">
 </div>
+
+---
+
+## ⚖️ Legal Notice {: #legal-notice }
+
+The **Legal notice** card holds a short disclaimer: LibreFolio helps you follow your investments,
+and it is not financial advice. If your instance has them, the card also links its
+**Terms of service** and **Privacy policy**: each opens in a new tab.
+
+You find the same notice under the card of the Welcome page. A shorter version, on one line with the
+same links, sits under the card of every sign-in page and at the foot of the sidebar, below the
+version number, while the sidebar is expanded. Every text you copy with
+[AI Export](../ai-export/index.md) carries the notice too, near its end and without the links.
 
 ---
 
@@ -148,6 +162,23 @@ A check started here always tells you how it went:
   here still shows it). Admins are also probed automatically at login — see
   [Update Notifications](../../admin/index.md#update-notifications) for the admin-side flow.
 - If a newer release exists and you are **not an admin**, the **Update available — contact an administrator** dialog lists the instance **administrators** — with e-mail addresses when available, each with a mailto link and a copy button — so you know whom to ask for the upgrade. Non-admins are never probed automatically.
+
+### ✨ What's new after an update {: #whats-new }
+
+When LibreFolio has been updated since your last visit, the next time you open it a
+**What's new in LibreFolio** window shows what changed: the part of the changelog for each version
+released since the last one you saw. If your account is older than this window, it shows the part of
+the version now running.
+
+- Each part is in your interface language when its translation is ready; otherwise it is in English,
+  marked **Not translated yet**, as in the changelog.
+- **Full changelog** opens the complete changelog on GitHub, in a new tab.
+- **Got it** closes the window, and so do <kbd>Esc</kbd> and a click outside it. It does not come
+  back until the next update. If LibreFolio cannot record that you closed it, for example because
+  the connection dropped, the window shows again the next time you open LibreFolio.
+- It waits until no guide and no other window is open, and comes before the
+  [donation popup](#donation-popup) and the update notice.
+- A new account never sees it: it starts with the version it was created on.
 
 ---
 

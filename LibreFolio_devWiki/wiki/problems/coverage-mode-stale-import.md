@@ -84,4 +84,4 @@ The failure mode is a **default**, not an error. Siblings:
 | Definition | `scripts/test_runner/_common.py` |
 | Correct pattern (unaffected) | `scripts/test_runner/_cli.py` (`_common._COVERAGE_MODE` attribute access) |
 | Fixed | `scripts/test_runner/_suites.py` (`run_all_tests`, `run_all_backend_tests`, `run_all_frontend_tests`) |
-| Consumer (env var) | `frontend/playwright.config.ts` (`webServer` command reads `COVERAGE_BACKEND`) |
+| Consumer (env var) | `frontend/playwright.config.ts` (`webServer` command reads `COVERAGE_BACKEND`; today it appends `--coverage` to `./dev.py server --test`, and the E2E report is written to the generated folder htmlcov-backend-e2e) |

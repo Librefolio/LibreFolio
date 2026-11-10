@@ -57,7 +57,9 @@ This is the standard XIRR/MWRR formula: initial investment (negative) + intermed
 
 ## Links
 
-- [[entities/portfolio-service]] — `calculate_mwrr` called from `get_summary()`/`get_history()`
+- [[entities/portfolio-service]] — `calculate_mwrr` called from `get_summary()`/`get_history()` (*2026-11-07 lint:* today through
+  `period_mwrr()` and `period_mwrr_series()` of `returns.py`, which run the same solve from the first snapshot's NAV)
+- [[decisions/mwrr-solver-newton-cap]] — the solver choice, superseded on 2026-10-15 by a verified Newton/Brent solve
 - [[concepts/twrr-mwrr-algorithms]] — algorithm documentation
 - Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md`
 

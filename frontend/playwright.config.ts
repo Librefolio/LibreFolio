@@ -33,6 +33,8 @@ const WEB_SERVER_ENV: Record<string, string> = {
     LIBREFOLIO_TEST_DATA_DIR: TEST_DATA_DIR,
     LIBREFOLIO_TEST_LANE_ID: TEST_LANE_ID,
     PIPENV_DONT_LOAD_ENV: '1',
+    // A lane's own settings (H-43, `--lane-setting`): `dev.py server --test` applies them again after its own clean-up.
+    ...(process.env.LIBREFOLIO_TEST_LANE_SETTINGS ? {LIBREFOLIO_TEST_LANE_SETTINGS: process.env.LIBREFOLIO_TEST_LANE_SETTINGS} : {}),
 };
 if (process.env.COVERAGE_JS === '1') {
     WEB_SERVER_ENV.COVERAGE_INSTRUMENT = '1';
@@ -76,8 +78,11 @@ const SHARED_SERVER = !!process.env.LIBREFOLIO_TEST_SHARED_SERVER;
 // How long Playwright waits for its own `dev.py server --test` to answer: the same contract as
 // STARTUP_TIMEOUT in scripts/test_runner/_server.py, which waits for the runner's shared backend.
 // 300 s everywhere, overridable with LIBREFOLIO_TEST_STARTUP_TIMEOUT (whole seconds). The server
-// first rebuilds a stale frontend and MkDocs (about 130 s after a large merge, longer on a loaded
-// machine or a cold CI cache); a server that exits fails at once, so only a hung start waits this long.
+// rebuilds a stale frontend and MkDocs before it binds (about 130 s after a large merge): the test
+// runner and `dev.py mkdocs gallery` run `dev.py server --test --build-only` before they start it, so
+// this wait measures the start alone. A server started without that step (`--no-shared-server`, a
+// direct `playwright test`) still builds inside it. A server that exits fails at once, so only a hung
+// start waits this long.
 const STARTUP_TIMEOUT_RAW = process.env.LIBREFOLIO_TEST_STARTUP_TIMEOUT ?? '300';
 if (!/^\s*\d+\s*$/.test(STARTUP_TIMEOUT_RAW)) {
     throw new Error(`LIBREFOLIO_TEST_STARTUP_TIMEOUT must be a whole number of seconds, got ${JSON.stringify(STARTUP_TIMEOUT_RAW)}`);
@@ -192,7 +197,8 @@ export default defineConfig({
         // Send SIGTERM instead of SIGKILL so coverage run can flush .coverage.<pid>.
         // In coverage mode the flush itself takes time (writing the coverage data file), and a
         // SIGKILL there silently discards the whole run's backend coverage — so the grace
-        // window is widened. Outside coverage there is nothing to flush: 5s stays.
-        gracefulShutdown: {signal: 'SIGTERM', timeout: process.env.COVERAGE_BACKEND ? 30000 : 5000},
+        // window is widened. Outside coverage the server has its own shutdown budget
+        // (LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, 8 s by default): 10s gives it that and a margin.
+        gracefulShutdown: {signal: 'SIGTERM', timeout: process.env.COVERAGE_BACKEND ? 30000 : 10000},
     },
 });

@@ -89,6 +89,17 @@ vi.mock('$lib/features/onboarding/onboardingGuide.svelte', async (importOriginal
     };
 });
 
+// C-54: DeferredAppPopups now also hosts «What's new»: its store is mocked idle (never pending, so every case below keeps its meaning) and the changelog module stubbed, since its `CHANGELOG.md?raw` import is refused under jsdom.
+vi.mock('$lib/features/changelog/whatsNewStore.svelte', () => ({
+    whatsNew: {shouldShow: false, pending: null, chapters: [], dismiss: vi.fn()},
+}));
+vi.mock('$lib/features/changelog/changelog', () => ({
+    changelogChapters: [],
+    baseLanguage: () => 'en',
+    localizedChangelog: {peek: () => [], load: () => Promise.resolve([])},
+    CHANGELOG_REMOTE_URL: 'https://example.invalid/CHANGELOG.md',
+}));
+
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import OnboardingCoachmark from './OnboardingCoachmark.svelte';
 import OnboardingOverlayHost from './OnboardingOverlayHost.svelte';

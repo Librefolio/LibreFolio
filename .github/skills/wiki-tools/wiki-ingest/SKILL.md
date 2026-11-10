@@ -1,6 +1,6 @@
 ---
 name: wiki-ingest
-description: "Use this skill (historian agent) when a new source needs to be processed and integrated into the LibreFolio devWiki. Sources can be: completed plans from developer_journal/, external articles, journal entries, architecture notes. Produces: source summary page, updated entity/decision/concept/problem pages, updated index.md and log.md. Triggers graphify --update at the end to keep the knowledge graph current."
+description: "Use this skill (historian agent) when a new source needs to be processed and integrated into the LibreFolio devWiki. Sources can be: completed plans from ../LibreFolio_developer_journal/, external articles, journal entries, architecture notes. Produces: source summary page, updated entity/decision/concept/problem pages, updated index.md and log.md. Triggers graphify --update at the end to keep the knowledge graph current."
 ---
 
 # Wiki Ingest Skill
@@ -23,9 +23,9 @@ description: "Use this skill (historian agent) when a new source needs to be pro
 The source to ingest. Can be:
 | Type | Typical Path |
 |------|-------------|
-| Completed plan | `LibreFolio_developer_journal/RoadmapVX/plan-*.md` |
-| Archived phase | `LibreFolio_developer_journal/RoadmapV4_UI/phases/` |
-| Knowledge base file | `LibreFolio_developer_journal/knowledge_base/*.md` |
+| Completed plan | `../LibreFolio_developer_journal/Release_N/Phase_K/<theme>/plan-*.md` (older: `RoadmapVX/plan-*.md`) |
+| Archived phase | `../LibreFolio_developer_journal/Release_N/phases/` (older: `RoadmapV4_UI/phases/`) |
+| Knowledge base file | `../LibreFolio_developer_journal/knowledge_base/*.md` |
 | External article | `LibreFolio_devWiki/raw/` (already clipped) |
 | Inline text | Provided directly in conversation |
 
@@ -36,7 +36,7 @@ The source to ingest. Can be:
 Before reading the source, query the graph to see what's already known about the topic:
 
 ```bash
-cd /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki
+cd "$(git rev-parse --show-toplevel)/LibreFolio_devWiki"
 $(cat graphify-out/.graphify_python) -c "
 import json
 import networkx as nx
@@ -118,23 +118,27 @@ Updated: [[entities/bar]], [[concepts/baz]].
 
 After creating all new pages, update the knowledge graph:
 
+The graph scans the **repository root** (allow-list in `/.graphifyignore`: devWiki pages, English MkDocs
+pages, backend and frontend code) and writes to `LibreFolio_devWiki/graphify-out/` through `GRAPHIFY_OUT`.
+Code changes need only `./dev.py graph update` (AST, no LLM). New or changed `.md` pages need the semantic
+pass below.
+
 ```bash
-cd /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki
-$(cat graphify-out/.graphify_python) -c "
+cd "$(git rev-parse --show-toplevel)"
+GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out "$(cat LibreFolio_devWiki/graphify-out/.graphify_python)" -c "
 from graphify.detect import detect_incremental
 from pathlib import Path
-import json
-result = detect_incremental(Path('corpus/'))
-new_total = result.get('new_total', 0)
-print(f'Changed files: {new_total}')
+result = detect_incremental(Path('.'))
+print(f\"Changed files: {result.get('new_total', 0)}\")
 "
 ```
 
-If `new_total > 0`, run the graphify `--update` pipeline:
+If `new_total > 0`, run the graphify `--update` pipeline from the repository root (scan path `.`,
+`GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out`, `PYTHONHASHSEED=0`):
 - Steps 3B-3C (re-extract only changed files, merge with cache)
 - Step 4 (rebuild graph with new nodes, recluster)
 - Step 5 (re-label communities)
-- Step 6 (regenerate graph.html)
+- Step 6 (regenerate graph.html: `./dev.py graph viz`)
 - Step 9 (save manifest, cleanup)
 
 This ensures newly ingested wiki pages become part of the graph's queryable knowledge.

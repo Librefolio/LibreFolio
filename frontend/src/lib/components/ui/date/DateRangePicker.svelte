@@ -461,6 +461,8 @@
     // =========================================================================
 
     function handleDayClick(iso: string) {
+        // A second click on the pending day would close a range of one day: it is ignored, the day stays pending.
+        if (iso === pendingDate) return;
         if (pendingDate === null) {
             pendingDate = iso;
         } else {
@@ -477,6 +479,12 @@
             discardDraft();
             onchange?.(newStart, newEnd);
         }
+    }
+
+    /** The preview follows the pointer from the pending day, but the pending day itself previews no range of one day. */
+    function handleDayHover(iso: string) {
+        if (!pendingDate) return;
+        hoveredDate = iso === pendingDate ? null : iso;
     }
 
     function goToTodayLeft() {
@@ -907,8 +915,8 @@
 
     let typedStartIso = $derived(typedStart === null ? null : parseTypedDate(typedStart));
     let typedEndIso = $derived(typedEnd === null ? null : parseTypedDate(typedEnd));
-    let startUnparseable = $derived(typedStart !== null && typedStart.trim() !== '' && !isSelectableDate(typedStartIso));
-    let endUnparseable = $derived(typedEnd !== null && typedEnd.trim() !== '' && !isSelectableDate(typedEndIso));
+    let startUnparseable = $derived(typedStart !== null && typedStart.trim() !== '' && !isAcceptableDate('start', typedStartIso));
+    let endUnparseable = $derived(typedEnd !== null && typedEnd.trim() !== '' && !isAcceptableDate('end', typedEndIso));
     // A field is invalid only once its validation is armed — i.e. once the user has
     // left it (blur/Enter). Half a date is unreadable too, and flagging it red while
     // it is still being typed correctly is noise, not help.
@@ -922,10 +930,45 @@
         return true;
     }
 
+    function otherField(which: RangeField): RangeField {
+        return which === 'start' ? 'end' : 'start';
+    }
+
+    /**
+     * Whether a typed or stepped date can go into a field: within the ceiling, and not the
+     * other end's day. A range of one day is refused like a future date, as the calendar
+     * refuses a second click on its pending day.
+     */
+    function isAcceptableDate(which: RangeField, iso: string | null): iso is string {
+        return isSelectableDate(iso) && iso !== fieldIso(otherField(which));
+    }
+
+    /** A field's end as it stands: a date, '' (blank), or the `min`/`max` sentinel. */
+    function fieldValue(which: RangeField): string {
+        return which === 'start' ? (draftStart ?? start) : (draftEnd ?? end);
+    }
+
+    /** A concrete date, or '' for the `min`/`max` sentinels and blanks. */
+    function concreteIso(value: string): string {
+        return !value || value === 'min' || value === 'max' ? '' : value;
+    }
+
     /** A concrete date for a field, or '' for the `min`/`max` sentinels and blanks. */
     function fieldIso(which: RangeField): string {
-        const iso = which === 'start' ? (draftStart ?? start) : (draftEnd ?? end);
-        return !iso || iso === 'min' || iso === 'max' ? '' : iso;
+        return concreteIso(fieldValue(which));
+    }
+
+    /**
+     * The date left typed in a field because it was the other end's day, or null. Only a
+     * date the user has walked away from (armed) and the ceiling allows: anything else is
+     * not waiting for the other end to move.
+     */
+    function waitingTypedDate(which: RangeField): string | null {
+        const typed = which === 'start' ? typedStart : typedEnd;
+        const armed = which === 'start' ? startArmed : endArmed;
+        if (typed === null || !armed) return null;
+        const parsed = parseTypedDate(typed);
+        return isSelectableDate(parsed) ? parsed : null;
     }
 
     /**
@@ -946,12 +989,26 @@
      * other. A start after its end is not a range, and refusing the edit would be the
      * worse answer: the user has said where they want that date, they simply reached
      * it from the other field. Returns whether the swap happened.
+     *
+     * A blank other end, or a `min`/`max` sentinel, stays as it is: an open range, from or
+     * up to the date. Only two real dates swap.
      */
     function applyRangeDate(which: RangeField, iso: string): boolean {
-        let nextStart = which === 'start' ? iso : fieldIso('start') || iso;
-        let nextEnd = which === 'end' ? iso : fieldIso('end') || iso;
+        const other = otherField(which);
+        // A date typed in the other field and refused only because it was this field's
+        // day goes in now that the two differ — with this one, as a pair, so the swap
+        // orders the two dates the user wrote.
+        const waiting = waitingTypedDate(other);
+        const takeWaiting = waiting !== null && waiting !== iso;
+        if (takeWaiting) {
+            if (other === 'start') typedStart = null;
+            else typedEnd = null;
+        }
+        const otherValue = takeWaiting ? waiting : fieldValue(other);
+        let nextStart = which === 'start' ? iso : otherValue;
+        let nextEnd = which === 'end' ? iso : otherValue;
         let swapped = false;
-        if (nextStart > nextEnd) {
+        if (concreteIso(nextStart) && concreteIso(nextEnd) && nextStart > nextEnd) {
             [nextStart, nextEnd] = [nextEnd, nextStart];
             swapped = true;
         }
@@ -1023,7 +1080,7 @@
         const typed = which === 'start' ? typedStart : typedEnd;
         if (typed === null) return;
         const parsed = parseTypedDate(typed);
-        if (isSelectableDate(parsed)) {
+        if (isAcceptableDate(which, parsed)) {
             // Accepted: clear the scratch text and let the committed value take over.
             if (which === 'start') typedStart = null;
             else typedEnd = null;
@@ -1045,7 +1102,15 @@
         if (stepped !== null) {
             // Arrows are a stepper, and a stepper stops at its bound rather than
             // walking past it into a date the calendar would grey out.
-            void applyAndFollow(which, !allowFuture && stepped > todayIso() ? todayIso() : stepped);
+            let next = !allowFuture && stepped > todayIso() ? todayIso() : stepped;
+            // Nor does it stop on the other end's day, a range of one day: it goes one day
+            // further the same way, and the swap still applies. When that day is a future
+            // the picker refuses, the step does nothing.
+            if (next === fieldIso(otherField(which))) {
+                next = addDays(next, e.key === 'ArrowUp' ? 1 : -1);
+                if (!isSelectableDate(next)) return;
+            }
+            void applyAndFollow(which, next);
             return;
         }
         if (e.key === 'Enter') {
@@ -1134,7 +1199,7 @@
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
         >
     {/each}
@@ -1149,7 +1214,7 @@
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
         >
     {/each}
@@ -1163,7 +1228,7 @@
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
         >
     {/each}
@@ -1177,7 +1242,7 @@
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
         >
     {/each}
@@ -1203,7 +1268,7 @@
     {/if}
 {/snippet}
 
-<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${effectiveMaxWidth}px` : ''} data-testid="date-range-picker-root" data-open={calendarOpen ? 'true' : 'false'}>
+<div class="relative flex flex-col gap-1.5 text-lf-primary {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${effectiveMaxWidth}px` : ''} data-testid="date-range-picker-root" data-open={calendarOpen ? 'true' : 'false'}>
     {#if showPresets}
         <!-- align='start': JS decides ONLY isSingleRow + jolly counts (see measureAndFill) —
              the actual spreading/"giustificato" look is native CSS justify-between, applied to
@@ -1272,21 +1337,19 @@
                  click away, but a known date should not have to be navigated to. -->
             <div
                 bind:this={triggerEl}
-                class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen
-                    ? 'ring-1 ring-libre-green border-libre-green'
-                    : ''} {fieldsClass}"
+                class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-lf-field rounded-xl border overflow-hidden transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen ? 'ring-1 ring-lf-focus border-lf-focus' : 'border-lf-input hover:border-lf-input-hover'} {fieldsClass}"
             >
                 <!-- A label, so the padding around the field is part of the field. -->
                 <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
-                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
-                    <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
+                    <Calendar size={compact ? 11 : 14} class="text-lf-link flex-shrink-0" />
+                    <span class="text-[9px] font-medium text-lf-muted uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
                     <input
                         bind:this={startInputEl}
                         type="text"
                         inputmode="numeric"
                         autocomplete="off"
                         spellcheck="false"
-                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {startInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} outline-none {startInvalid ? 'text-lf-danger' : 'text-lf-primary'}"
                         value={fieldText('start')}
                         title={$_('datePicker.formatHint')}
                         data-testid="date-range-input-start"
@@ -1303,21 +1366,21 @@
                     />
                 </label>
                 {#if stacked}
-                    <span class="block w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
+                    <span class="block w-full h-px bg-lf-subtle flex-shrink-0"></span>
                 {:else}
-                    <span class="block w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
+                    <span class="block w-px h-6 bg-lf-subtle flex-shrink-0"></span>
                 {/if}
                 <!-- A label, so the padding around the field is part of the field. -->
                 <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
-                    <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
-                    <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
+                    <Calendar size={compact ? 11 : 14} class="text-lf-link flex-shrink-0" />
+                    <span class="text-[9px] font-medium text-lf-muted uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
                     <input
                         bind:this={endInputEl}
                         type="text"
                         inputmode="numeric"
                         autocomplete="off"
                         spellcheck="false"
-                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {endInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} outline-none {endInvalid ? 'text-lf-danger' : 'text-lf-primary'}"
                         value={fieldText('end')}
                         title={$_('datePicker.formatHint')}
                         data-testid="date-range-input-end"
@@ -1341,7 +1404,7 @@
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div use:portal>
                         <div class="fixed inset-0" style="z-index:99998;" onclick={closeCalendar}></div>
-                        <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle} data-testid="date-range-popover">
+                        <div class="drp-popover bg-lf-card rounded-xl shadow-2xl shadow-lf-shadow border border-lf-raised p-4" style={popoverStyle} data-testid="date-range-popover">
                             <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                                 <CalendarMonth
                                     year={calLeftYear}
@@ -1349,9 +1412,7 @@
                                     {weekdayLabels}
                                     {monthLabels}
                                     onDayClick={handleDayClick}
-                                    onDayHover={(iso) => {
-                                        if (pendingDate) hoveredDate = iso;
-                                    }}
+                                    onDayHover={handleDayHover}
                                     onPrevMonth={leftPrevMonth}
                                     onNextMonth={leftNextMonth}
                                     onSetMonth={setLeftMonth}
@@ -1360,16 +1421,14 @@
                                     highlights={calHighlights}
                                     {allowFuture}
                                 />
-                                <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
+                                <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-lf-subtle self-stretch"></div>
                                 <CalendarMonth
                                     year={calRightYear}
                                     month={calRightMonth}
                                     {weekdayLabels}
                                     {monthLabels}
                                     onDayClick={handleDayClick}
-                                    onDayHover={(iso) => {
-                                        if (pendingDate) hoveredDate = iso;
-                                    }}
+                                    onDayHover={handleDayHover}
                                     onPrevMonth={rightPrevMonth}
                                     onNextMonth={rightNextMonth}
                                     onSetMonth={setRightMonth}
@@ -1380,14 +1439,14 @@
                                 />
                             </div>
                             {#if pendingDate}
-                                <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
+                                <div class="mt-3 text-xs text-center text-lf-muted">
                                     {$_('datePicker.selectSecondDate')}
                                 </div>
                             {/if}
                         </div>
                     </div>
                 {:else}
-                    <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle} data-testid="date-range-popover">
+                    <div class="drp-popover bg-lf-card rounded-xl shadow-2xl shadow-lf-shadow border border-lf-raised p-4" style={popoverStyle} data-testid="date-range-popover">
                         <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                             <CalendarMonth
                                 year={calLeftYear}
@@ -1395,9 +1454,7 @@
                                 {weekdayLabels}
                                 {monthLabels}
                                 onDayClick={handleDayClick}
-                                onDayHover={(iso) => {
-                                    if (pendingDate) hoveredDate = iso;
-                                }}
+                                onDayHover={handleDayHover}
                                 onPrevMonth={leftPrevMonth}
                                 onNextMonth={leftNextMonth}
                                 onSetMonth={setLeftMonth}
@@ -1406,16 +1463,14 @@
                                 highlights={calHighlights}
                                 {allowFuture}
                             />
-                            <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-gray-200 dark:bg-slate-600 self-stretch"></div>
+                            <div class="{singleColumn ? 'hidden' : 'block'} w-px bg-lf-subtle self-stretch"></div>
                             <CalendarMonth
                                 year={calRightYear}
                                 month={calRightMonth}
                                 {weekdayLabels}
                                 {monthLabels}
                                 onDayClick={handleDayClick}
-                                onDayHover={(iso) => {
-                                    if (pendingDate) hoveredDate = iso;
-                                }}
+                                onDayHover={handleDayHover}
                                 onPrevMonth={rightPrevMonth}
                                 onNextMonth={rightNextMonth}
                                 onSetMonth={setRightMonth}
@@ -1426,7 +1481,7 @@
                             />
                         </div>
                         {#if pendingDate}
-                            <div class="mt-3 text-xs text-center text-gray-400 dark:text-gray-500">
+                            <div class="mt-3 text-xs text-center text-lf-muted">
                                 {$_('datePicker.selectSecondDate')}
                             </div>
                         {/if}

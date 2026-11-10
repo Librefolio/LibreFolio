@@ -9,17 +9,17 @@
  * Stage 1 extracts it from the Asset Global lab into `ui/select/`, in two modes, and each mode is a
  * promise made to code that exists today:
  *
- *  - `mode="multi"` is the lab's «+», `risk/LabAssetPicker.svelte`. The lab keeps a thin wrapper and
- *    must behave exactly as before, so the cases below restate today's behaviour under generic test
- *    ids: every one is `${testId}-…`.
+ *  - `mode="multi"` is the lab's «+», `features/risk/LabAssetPicker.svelte`. The lab keeps a thin
+ *    wrapper and must behave exactly as before, so the cases below restate today's behaviour under
+ *    generic test ids: every one is `${testId}-…`.
  *  - `mode="single"` is a drop-in for `SearchSelect`, and for what `AssetSelect` adds to it: the same
  *    test ids, the same search (`filterOptions`), the same keyboard (`stepSelectable`), plus Risk's
  *    verdicts. A ruled-out asset is listed, disabled, in `${testId}-blocked`, and the current value is
  *    never dropped from the trigger, whatever hides it from the list.
  *
- * The five helpers that leave `risk/assetSetSelection.ts` with the picker (`applyFilters`,
+ * The five helpers that leave `features/risk/assetSetSelection.ts` with the picker (`applyFilters`,
  * `foldForSearch`, `pickerRows`, `toggleVisibleRows`, `visibleRowsAllChecked`) bring their tests
- * along, unchanged in substance. `ui/select` imports nothing from `components/risk/`, and the last
+ * along, unchanged in substance. `ui/select` imports nothing from `features/risk/`, and the last
  * block gates it.
  *
  * Conventions, the suite's own:
@@ -28,7 +28,7 @@
  *    labels, the placeholder, the verdicts' texts. What the panel translates itself («Add {count}»,
  *    its two empty states) is read for its number, or compared with itself, never with a literal.
  *  - No class is a selector. Three are read on purpose, because the contract names them: the value
- *    line's `truncate` span, its icon's `w-4 h-4`, and the trigger's height class, which must not
+ *    line's marquee span, its icon's `w-4 h-4`, and the trigger's height class, which must not
  *    change when a value arrives. `AssetSelect`'s trigger stacked a second line under the name, and
  *    the field grew with it.
  *  - Lookups are scoped to this instance: `search-select-option-*` is shared by every SearchSelect on
@@ -38,14 +38,15 @@
  */
 import {beforeAll, describe, expect, expectTypeOf, it, vi} from 'vitest';
 import {createRawSnippet} from 'svelte';
-import {readdirSync, readFileSync} from 'node:fs';
-import {dirname, join, resolve, sep} from 'node:path';
+import {existsSync, readdirSync, readFileSync} from 'node:fs';
+import {dirname, join, relative, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {reactiveBox} from '$test/runes.svelte';
-import type {EligibilityView} from '$lib/components/risk/eligibility';
+import type {EligibilityView} from '$lib/features/risk/eligibility';
 import type {AssetInfo} from '$lib/stores/reference/assetStore';
+import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
 import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 import AssetPickerPanel from './AssetPickerPanel.svelte';
 import {applyFilters, assetSearchText, assetSelectOrder, dropdownPlacement, foldForSearch, pickerRows, toggleVisibleRows, visibleRowsAllChecked, type PickerAsset, type PickerSection, type PickerVerdict, type SelectionFilters} from './assetPicker';
@@ -95,7 +96,7 @@ const ELIGIBLE: PickerVerdict = {level: 'eligible', codes: [], texts: []};
 const BLOCKED_LABEL = 'probe: cannot take part';
 const FULL_LABEL = 'probe: no room left';
 
-// ─── assetPicker.ts: the helpers that moved out of risk/assetSetSelection.ts ─────────────────
+// ─── assetPicker.ts: the helpers that moved out of features/risk/assetSetSelection.ts ────────
 
 /** The fields `applyFilters` reads, and an id to name a row by. Structural: risk's `SelectableAsset` stays in risk. */
 interface FilterRow {
@@ -419,7 +420,7 @@ describe('dropdownPlacement', () => {
 
 /**
  * Compile-time pins. `expectTypeOf` does nothing at run time: `npm run check` (svelte-check) is
- * what fails on them. The one import from `components/risk/` in this folder lives here, type-only,
+ * what fails on them. The one import from `features/risk/` in this folder lives here, type-only,
  * in a test: it is the contract the panel must meet without importing it.
  */
 describe('the exported types', () => {
@@ -1056,10 +1057,10 @@ function lineCount(trigger: HTMLElement): number {
 /** AssetSelect's own id for the badge, kept so the panel stays a drop-in for its trigger. */
 const INACTIVE_BADGE = 'asset-select-selected-inactive-badge';
 
-/** The value line: the trigger's one `truncate` element, a span. */
+/** The value line: the trigger's one marquee element, a span (a long name scrolls instead of being cut, Y-38 / Y5-F4). */
 function valueLine(trigger: HTMLElement): HTMLElement {
-    const lines = trigger.querySelectorAll<HTMLElement>('.truncate');
-    expect(lines, 'one truncate element: the value line').toHaveLength(1);
+    const lines = trigger.querySelectorAll<HTMLElement>(OVERFLOW_MARQUEE_SELECTOR);
+    expect(lines, 'one marquee element: the value line').toHaveLength(1);
     expect(lines[0].tagName).toBe('SPAN');
     return lines[0];
 }
@@ -1381,7 +1382,7 @@ describe('AssetPickerPanel, mode="single": SearchSelect’s drop-in', () => {
 
     /**
      * The final markup is the compact item AssetSelect is landing: one line, a `w-4 h-4` icon when
-     * the asset has one, then one `truncate` span holding `ticker · name`, then AssetSelect's own
+     * the asset has one, then one marquee span holding `ticker · name`, then AssetSelect's own
      * inactive badge. No currency, no second line. Without a value, a plain span holds the placeholder.
      */
     describe('the trigger', () => {
@@ -1415,7 +1416,7 @@ describe('AssetPickerPanel, mode="single": SearchSelect’s drop-in', () => {
             expect(within(trigger).queryByTestId(INACTIVE_BADGE)).toBeNull();
         });
 
-        it('shows the value as one truncate span, ticker first, after a w-4 h-4 icon, with no currency', () => {
+        it('shows the value as one marquee span, ticker first, after a w-4 h-4 icon, with no currency', () => {
             mountSingle({value: 21});
             const trigger = singleTrigger();
             const line = valueLine(trigger);
@@ -1478,15 +1479,68 @@ describe('AssetPickerPanel, mode="single": SearchSelect’s drop-in', () => {
             }
         });
     });
+
+    describe('AssetPickerPanel, mode="single": long names scroll and say their whole label (Y-38)', () => {
+        /** The row's one marquee span of the name: a row that held two (or none) would scroll the wrong thing. The type badge's own marquee (Y2 FB-10) is another thing. */
+        function rowMarquee(row: HTMLElement): HTMLElement {
+            const marquees = [...row.querySelectorAll<HTMLElement>(OVERFLOW_MARQUEE_SELECTOR)].filter((marquee) => !marquee.closest('[data-testid*="-type-"]'));
+            expect(marquees, `row ${idOf(row)}: exactly one marquee`).toHaveLength(1);
+            return marquees[0];
+        }
+
+        it('gives the closed field’s marquee a title equal to its text, ticker first when the asset has one', () => {
+            // HARBOR has a ticker, SAFFRON none: both forms of rowText.
+            for (const [value, shown] of [
+                [21, 'HTM · Harbor Total Market'],
+                [24, 'Saffron Dividend'],
+            ] as const) {
+                const view = mountSingle({value});
+                const line = valueLine(singleTrigger());
+                expect(textOf(line), `asset ${value}`).toBe(shown);
+                expect(line, `asset ${value}`).toHaveAttribute('title', textOf(line));
+                view.unmount();
+            }
+        });
+
+        it('gives every choosable row of the open list one marquee whose title equals its text', async () => {
+            mountSingle();
+            await openSingle();
+            const blocked = singleBlocked();
+            const rows = within(singleRoot())
+                .queryAllByTestId(CHOICE)
+                .filter((row) => !blocked.contains(row));
+
+            expect(rows.map(idOf), 'premise: the list is open and holds the choosable rows').toEqual([21, 25, 22, 24, 26]);
+            for (const row of rows) {
+                const marquee = rowMarquee(row);
+                expect(textOf(marquee), `row ${idOf(row)}`).not.toBe('');
+                expect(marquee, `row ${idOf(row)}`).toHaveAttribute('title', textOf(marquee));
+            }
+        });
+
+        it('gives a blocked row one marquee whose title equals its text', async () => {
+            mountSingle();
+            await openSingle();
+            const rows = within(singleBlocked()).queryAllByTestId(CHOICE);
+
+            expect(rows.map(idOf), 'premise: the blocked section holds the ruled-out asset').toEqual([23]);
+            const marquee = rowMarquee(rows[0]);
+            expect(textOf(marquee)).toBe('QRY · Quarry Resources');
+            expect(marquee).toHaveAttribute('title', textOf(marquee));
+        });
+    });
 });
 
-// ─── The boundary: ui/select imports nothing from components/risk/ ──────────────────────────
+// ─── The boundary: ui/select imports nothing from features/risk/ ─────────────────────────────
 
 describe('the ui/select boundary', () => {
     /** This folder, from the test's own location: the gate does not depend on where vitest was started. */
     const HERE = dirname(fileURLToPath(import.meta.url));
-    const RISK = resolve(HERE, '../../risk');
-    /** The files stage 1 adds here. Moved out of `components/risk/`, they are the likeliest to keep a risk import. */
+    /** `$lib`, as SvelteKit maps it by default: `src/lib`, three folders up. */
+    const LIB = resolve(HERE, '../../..');
+    /** The folder the gate keeps out: the whole risk feature, its components, modules and stores alike. */
+    const RISK = resolve(HERE, '../../../features/risk');
+    /** The files stage 1 adds here. Moved out of the risk folder (now `features/risk/`), they are the likeliest to keep a risk import. */
     const STAGE_ONE = ['AssetPickerPanel.svelte', 'SelectPopover.svelte', 'CheckMenu.svelte', 'assetPicker.ts'];
 
     /** Every module a source names: imports and re-exports, side-effect imports, dynamic imports. */
@@ -1496,9 +1550,9 @@ describe('the ui/select boundary', () => {
         return [...named, ...bare];
     }
 
-    /** Whether a specifier written in a file of this folder lands in `components/risk/`. */
+    /** Whether a specifier written in a file of this folder lands in `features/risk/`. */
     function reachesRisk(specifier: string): boolean {
-        if (specifier.startsWith('$lib/')) return /^\$lib\/components\/risk(\/|$)/.test(specifier);
+        if (specifier.startsWith('$lib/')) return /^\$lib\/features\/risk(\/|$)/.test(specifier);
         if (!specifier.startsWith('.')) return false;
         const target = resolve(HERE, specifier);
         return target === RISK || target.startsWith(RISK + sep);
@@ -1513,21 +1567,100 @@ describe('the ui/select boundary', () => {
         expect(specifiers(readFileSync(join(HERE, 'SearchSelect.svelte'), 'utf8'))).toContain('./optionFilter');
     });
 
-    it('recognises a risk import in every form it can take', () => {
-        const source = ["import {x} from '../../risk/eligibility';", 'import type {Y} from "$lib/components/risk/eligibility";', "export {z} from './z';", "import './side-effect';", "const lazy = () => import('../../risk/lazy');"].join('\n');
-        expect(specifiers(source)).toEqual(['../../risk/eligibility', '$lib/components/risk/eligibility', './z', './side-effect', '../../risk/lazy']);
-        expect(specifiers(source).filter(reachesRisk)).toEqual(['../../risk/eligibility', '$lib/components/risk/eligibility', '../../risk/lazy']);
-        expect(reachesRisk('../../risk/LabPopover.svelte')).toBe(true);
-        expect(reachesRisk('$lib/components/riskless/probe')).toBe(false);
-        expect(reachesRisk('$lib/components/ui/select/types')).toBe(false);
+    it('watches the risk folder where it is: features/risk/ exists, holds eligibility.ts, and $lib/ names it too', () => {
+        // A gate aimed at a folder that is gone finds nothing to forbid, and stays green: Y4b's move
+        // into features/risk/ would have left it watching the old path. The folder must be there, with
+        // the module the type pins above import from it.
+        expect(existsSync(RISK), `${RISK} exists`).toBe(true);
+        expect(existsSync(join(RISK, 'eligibility.ts')), `${RISK} holds eligibility.ts`).toBe(true);
+        // The $lib/ spelling must name that same folder: a move that updated RISK and not the
+        // pattern would watch the relative imports and wave every $lib/ one through.
+        const viaLib = `$lib/${relative(LIB, RISK).split(sep).join('/')}`;
+        expect(reachesRisk(viaLib), viaLib).toBe(true);
+        expect(reachesRisk(`${viaLib}/eligibility`), `${viaLib}/eligibility`).toBe(true);
     });
 
-    it('imports nothing from components/risk/', () => {
+    it('recognises a risk import in every form it can take', () => {
+        const source = ["import {x} from '../../../features/risk/eligibility';", 'import type {Y} from "$lib/features/risk/eligibility";', "export {z} from './z';", "import './side-effect';", "const lazy = () => import('../../../features/risk/lazy');"].join('\n');
+        expect(specifiers(source)).toEqual(['../../../features/risk/eligibility', '$lib/features/risk/eligibility', './z', './side-effect', '../../../features/risk/lazy']);
+        expect(specifiers(source).filter(reachesRisk)).toEqual(['../../../features/risk/eligibility', '$lib/features/risk/eligibility', '../../../features/risk/lazy']);
+        expect(reachesRisk('../../../features/risk/LabPopover.svelte')).toBe(true);
+        expect(reachesRisk('$lib/features/riskless/probe')).toBe(false);
+        expect(reachesRisk('$lib/components/ui/select/types')).toBe(false);
+        // The old home, in both spellings: since Y4b it is not the risk folder.
+        expect(reachesRisk('$lib/components/risk/eligibility')).toBe(false);
+        expect(reachesRisk('../../risk/eligibility')).toBe(false);
+    });
+
+    it('imports nothing from features/risk/', () => {
         const offenders = productionFiles().flatMap((name) =>
             specifiers(readFileSync(join(HERE, name), 'utf8'))
                 .filter(reachesRisk)
                 .map((specifier) => `${name} → ${specifier}`),
         );
         expect(offenders).toEqual([]);
+    });
+});
+
+// ─── An asset with no currency is not a currency ─────────────────────────────────────────────
+
+/**
+ * Y5-2 (mini-lot): `ChartSignalsSection` hands the panel `currency: ''` for an asset that has none, and the CURRENCY
+ * filter menu then listed an entry with an empty label. A missing currency is not a value to filter by: the menu offers
+ * the currencies assets actually have, the asset stays in the list, and a currency filter (which can only match a
+ * currency) leaves it out.
+ */
+describe('AssetPickerPanel: an asset whose currency is empty or blank', () => {
+    const NO_CURRENCY_NAME = 'Nocur Probe Fund';
+    const WITH_CURRENCY_NAME = 'Withcur Probe Fund';
+    /** EUR, USD, an empty currency and a blank one; all of one type, so a row differs from another only by name and currency. */
+    const CURRENCY_CATALOGUE = [asset(61, WITH_CURRENCY_NAME, {currency: 'EUR'}), asset(62, 'Dollar Probe Fund', {currency: 'USD'}), asset(63, NO_CURRENCY_NAME, {currency: ''}), asset(64, 'Blank Probe Fund', {currency: '  '})];
+
+    it('multi: adds no entry to the currency menu, whatever the empty value is spelled', async () => {
+        mountMulti({assets: CURRENCY_CATALOGUE, verdicts: new Map()});
+        const panel = await openMulti();
+
+        const values = [...menuOptions(await openFilterMenu(panel, MULTI, 'currency'), MULTI, 'currency').keys()];
+        expect(values.sort()).toEqual(['EUR', 'USD']);
+        // Control: the type menu is untouched, one type for the four assets.
+        expect([...menuOptions(await openFilterMenu(panel, MULTI, 'type'), MULTI, 'type').keys()]).toEqual(['ETF']);
+    });
+
+    it('multi: the asset stays listed and can be added; a currency filter leaves it out; its row shows no currency', async () => {
+        const {onadd} = mountMulti({assets: CURRENCY_CATALOGUE, verdicts: new Map()});
+        const panel = await openMulti();
+
+        expect(listedIds(panel)).toEqual(expect.arrayContaining([61, 62, 63, 64]));
+        // The row says what the currency-less asset is, and no currency: it reads as its sibling's row minus «EUR».
+        const expectedText = textOf(multiRow(panel, 61))
+            .replace(WITH_CURRENCY_NAME, NO_CURRENCY_NAME)
+            .replace(/\s*\S*\s*EUR$/, '');
+        expect(textOf(multiRow(panel, 61)), 'control: the sibling row ends on its currency (a flag before it)').toMatch(/EUR$/);
+        expect(textOf(multiRow(panel, 63))).toBe(expectedText);
+
+        await toggleFilter(panel, MULTI, 'currency', 'EUR');
+        expect(listedIds(panel)).toEqual([61]);
+        await toggleFilter(panel, MULTI, 'currency', 'EUR');
+        expect(listedIds(panel)).toEqual(expect.arrayContaining([61, 62, 63, 64]));
+
+        await fireEvent.click(multiRow(panel, 63));
+        await fireEvent.click(multiConfirm(panel));
+        expect(onadd).toHaveBeenCalledExactlyOnceWith([63]);
+    });
+
+    it('single: adds no entry to the currency menu; the asset is listed and can be chosen; the EUR filter hides it', async () => {
+        const {onchange} = mountSingle({assets: CURRENCY_CATALOGUE, verdicts: new Map()});
+        await openSingle();
+
+        expect([...menuOptions(await openFilterMenu(singleRoot(), SINGLE, 'currency'), SINGLE, 'currency').keys()].sort()).toEqual(['EUR', 'USD']);
+        expect(optionIds()).toEqual(expect.arrayContaining([61, 62, 63, 64]));
+
+        await toggleFilter(singleRoot(), SINGLE, 'currency', 'EUR');
+        expect(optionIds()).toEqual([61]);
+        await toggleFilter(singleRoot(), SINGLE, 'currency', 'EUR');
+        expect(optionIds()).toEqual(expect.arrayContaining([61, 62, 63, 64]));
+
+        await fireEvent.click(choice(63));
+        expect(onchange).toHaveBeenCalledExactlyOnceWith(63);
     });
 });

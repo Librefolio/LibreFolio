@@ -100,16 +100,17 @@ not collect it.
 - **Left after 1.2** (backlog section V): V-1 the same refresh gap after «Sync prices»; V-2 the lots panel publishes no
   `data-busy`; V-3 the orphan TRANSFER; V-4 E2 must be rebuilt if P-10 is closed; V-5 an outdated comment about the
   seed; V-6 the developer doc lists only part of the banner tests; V-7 the neighbour-spec red above.
-  *Update (trains 58 and 64 in the wiki, 2026-10-12)*: V-1, V-5, V-6 and V-7 were closed by V's batch 2 (train 58: `a0722f755`, `4e710a1f9`,
-  `6f5a3bcff` — V-7's spec now runs on a disposable account that owns two brokers), V-9 and V-10 by work 3 (`973ca3961`,
-  `8994100b4`); the isolation audit that followed is [[problems/e2e-writes-leaked-into-shared-state]].
+  *Update (trains 58 and 64 in the wiki, 2026-10-12)*: V-1, V-5, V-6 and V-7 were closed by V's batch 2 (train 58: `86217eaf4`, `7273cc81c`,
+  `b211967c7` — V-7's spec now runs on a disposable account that owns two brokers), V-9 and V-10 by work 3 (`fe166aa0e`,
+  `c2146f844`); the isolation audit that followed is [[problems/e2e-writes-leaked-into-shared-state]].
 
 ## Links
 
 - [[problems/open-panels-stale-after-fx-sync]] — D2, the fix found by E1
 - [[problems/zero-purchase-cost-foreign-asset-paid-in-report-currency]] and [[decisions/financial-math-single-average-cost]]
   — where `MISSING_COST_BASIS` comes from
-- [[decisions/auto-cost-basis-zero-without-position]] — the Auto rule P-10 runs into
+- [[decisions/auto-cost-basis-zero-without-position]] — the Auto rule P-10 runs into (superseded on 17/10: an Auto cost
+  with nothing to average is now refused, `3b6bc8e2d`; 2026-11-07 lint)
 - [[features/F-054]] — the Dashboard and its banner
 - Source: [[sources/phase00-data-quality-e2e-2026-10]]
 
@@ -124,6 +125,6 @@ not collect it.
 | MOCKFX provider | `backend/app/services/fx_providers/mockfx/plugin.py` |
 | Runner actions `data-quality-real`, `data-quality-legacy` | `scripts/test_runner/_frontend_portfolio.py` |
 | `data-column-id` (D3) | `frontend/src/lib/components/table/DataTable.svelte` |
-| `kpi-unrealized-delta` test id | `frontend/src/lib/components/dashboard/KpiSection.svelte` |
+| `kpi-unrealized-delta` test id | `frontend/src/lib/features/dashboard/KpiSection.svelte` |
 | Developer doc (how to trigger each warning, the tests) | `mkdocs_src/docs/developer/frontend/data-quality-banner.md` |
 | Plan 46 | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |

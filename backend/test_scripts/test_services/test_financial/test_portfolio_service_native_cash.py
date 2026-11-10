@@ -76,8 +76,18 @@ import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Broker, BrokerUserAccess, FxRate, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import BrokerBreakdown, CostHistorySeries, DepositHistorySeries, IncomeHistorySeries, PortfolioReportQuery, PortfolioSummary, PositionsContribution
+from backend.app.schemas.portfolio import (
+    BrokerBreakdown,
+    CostHistorySeries,
+    DepositHistorySeries,
+    IncomeHistorySeries,
+    OtherPeriodEffectCode,
+    PortfolioReportQuery,
+    PortfolioSummary,
+    PositionsContribution,
+)
 from backend.app.services.portfolio_service import PortfolioService
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 _HistorySeries = IncomeHistorySeries | CostHistorySeries | DepositHistorySeries
 
@@ -225,6 +235,15 @@ async def _seed_around_today(session: AsyncSession, keep_alive: list[object], br
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the native-cash scenarios here live in 2039–2040, after tomorrow, so the range bound is lifted for the
+    whole module, before any fixture builds data (see ``lift_range_bound``); the today-relative ones end by tomorrow."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")
@@ -738,6 +757,24 @@ class TestFxOnCashContributionRows:
 
         problems = await _other_effects_problems(PortfolioService(session), test_user, [_income_row(broker, "80"), _fx_row(broker, "-280")], None, d3)
         assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_only_the_exchange_row_carries_the_fx_on_cash_code(self, session, keep_alive, test_user):
+        """F-AI (b). The February scenario of the income test: [Unallocated income 80, FX on cash -280].
+
+        Expected: the FX row has ``code == fx_on_cash`` and the income row has none: a reader tells the row by its code,
+        never by the English description. Before F-AI (b): ``OtherPeriodEffect`` had no ``code``."""
+        _, d2, d3 = _days(2)
+        broker = await _owned_broker(session, keep_alive, test_user, "F1", Decimal("1.0"))
+        await _rates(session, keep_alive, "FJD", 2, *_S1_RATES)
+        await _fjd_deposits(session, keep_alive, broker, 2, "1000", "500")
+        await _persist(session, keep_alive, _cash_row(broker, TransactionType.INTEREST, d2, "100", "FJD"))
+
+        contribution = await PortfolioService(session).get_positions_contribution(user_id=test_user.id, broker_ids=None, date_from=None, date_to=d3, target_currency_override="EUR")
+
+        codes = {row.description: row.code for row in contribution.other_effects}
+        assert codes == {"Unallocated income": None, "FX on cash": OtherPeriodEffectCode.FX_ON_CASH}
+        assert OtherPeriodEffectCode.FX_ON_CASH.value == "fx_on_cash"
 
     @pytest.mark.parametrize(("from_day", "to_day", "fx"), [(None, 3, "-362.5"), (2, 3, "-187.5"), (1, 2, "-175")], ids=["none-to-d3", "d2-to-d3", "d1-to-d2"])
     @pytest.mark.asyncio

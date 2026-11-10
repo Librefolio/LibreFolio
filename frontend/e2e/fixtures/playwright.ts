@@ -8,19 +8,21 @@
  * `./dev.py test --coverage js|all`): a flag spento la fixture esce subito e
  * la corsa normale non paga nulla.
  *
- * Nota sull'architettura: qui si scrive un JSON per test e basta; il report si
- * produce a fine corsa da `scripts/js-coverage-report.js`. È lo stesso schema
- * con cui il backend accumula i `.coverage.<pid>` e poi li unisce con
- * `coverage combine` — e per la stessa ragione: accumulare in memoria dentro il
- * worker è ciò che, sui 25 spec di una categoria consolidata, arrivava a 8 GB.
+ * Architecture: each worker sums its tests' counters in one istanbul map and
+ * writes it to one file per worker (`./js-coverage-sink.ts`); the report is
+ * produced at the end of the run by `scripts/js-coverage-report.js`. It is the
+ * scheme the backend follows with its `.coverage.<pid>` files and
+ * `coverage combine`. Until 08/11/2026 the fixture wrote one file per test —
+ * ~17 MB each, ~30 GB over a full run — because the V8-era accumulator had
+ * reached 8 GB; why an istanbul map does not grow that way is in the sink.
  */
 import {test as testBase, expect, request as playwrightRequest} from '@playwright/test';
 import type {APIRequestContext, Browser, BrowserContext, Locator, Page, Request, Response} from '@playwright/test';
 import {existsSync} from 'node:fs';
-import {mkdir, writeFile} from 'node:fs/promises';
-import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {TEST_USER} from './test-users';
+import {cspCollectorEnabled, isKnown, loadBaseline, type CspViolation} from './csp';
+import {WorkerCoverageSink, type CoveragePayload} from './js-coverage-sink';
 
 const COVERAGE_ON = process.env.COVERAGE_JS === '1';
 
@@ -45,27 +47,27 @@ const INSTRUMENTED_BUILD = (() => {
     }
 })();
 
-/** Where each test drops its slice of `window.__coverage__`. */
+/** Where each worker writes the sum of its tests' `window.__coverage__` (`worker-<parallelIndex>-<pid>.json`). */
 const E2E_COVERAGE_DIR = fileURLToPath(new URL('../../coverage-js/e2e-raw', import.meta.url));
 
 /**
  * The JS coverage collection's own time budget. Collecting is not the test's work: once the test is over, the
  * `jsCoverage` teardown reads `window.__coverage__` from every page (about 17 MB of JSON per test on the
- * instrumented build), serialises it and writes it. A fixture without a `timeout` has its teardown charged to the
- * slot Playwright gives the test's after-hooks — the test timeout again, 30 s, shared with every `afterEach` and
- * every other teardown — and under load the collection overran it: 15 reds «Tearing down "jsCoverage" exceeded the
- * test timeout of 30000ms» in R's coverage run (12/10, load 45–112), after 40–49 s, on tests that pass in 11–19 s
+ * instrumented build) and merges it into the worker's sum, which it writes every few tests. A fixture without a
+ * `timeout` has its teardown charged to the slot Playwright gives the test's after-hooks — the test timeout again,
+ * 30 s, shared with every `afterEach` and every other teardown — and under load the collection overran it: 15 reds
+ * «Tearing down "jsCoverage" exceeded the test timeout of 30000ms» in R's coverage run (12/10, load 45–112), after 40–49 s, on tests that pass in 11–19 s
  * alone, collection included. With a `timeout`, Playwright gives the fixture a slot of its own, shared only by its
  * setup (a bare `use()`) and its teardown: the test's budget stays the test's, and a slow collection fails as
  * «Fixture "jsCoverage" timeout of 120000ms exceeded during teardown», naming the collection rather than a slow
  * test. 120 s is four times the 30 s it overran — the only measurement under load, and a censored one — and still
  * short enough for a hung `page.evaluate` to fail rather than hold the worker. Unconditional on purpose: without
  * COVERAGE_JS the teardown returns at once, the slot can never fire, and every run exercises the registration the
- * coverage run relies on.
+ * coverage run relies on. The worker-scoped `jsCoverageSink` takes the same budget for its setup (reading the files
+ * of dead predecessors) and its teardown (the last write).
  */
 const JS_COVERAGE_TIMEOUT_MS = 120_000;
 
-let coverageSeq = 0;
 let warnedUninstrumented = false;
 
 /**
@@ -252,7 +254,18 @@ async function restore(api: APIRequestContext, baseline: Set<number>): Promise<b
 
 type HygieneState = {api: APIRequestContext | null; file: string | null; baseline: Set<number>; baseURL: string};
 
-const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: HygieneState}>({
+/** The collector of Content-Security-Policy violations (H-43, `./csp.ts`): on, unless `E2E_CSP_COLLECTOR=0`. */
+const CSP_COLLECTOR_ON = cspCollectorEnabled(process.env);
+const CSP_BASELINE = loadBaseline();
+
+/** What a test reads of the collector: every violation of its pages, and those the baseline does not know. */
+type CspRecorder = {list(): CspViolation[]; unknown(): CspViolation[]};
+
+function describeCspViolation(v: CspViolation): string {
+    return `${v.directive} blocked ${v.blockedURI || '(nothing)'} at ${v.sourceFile || v.documentURI}:${v.lineNumber} (page ${v.page ?? v.documentURI}, ${v.disposition})`;
+}
+
+const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknown: boolean; cspViolations: CspRecorder}, {hygieneApi: HygieneState; jsCoverageSink: WorkerCoverageSink | null}>({
     hygieneApi: [
         async ({}, use) => {
             if (HYGIENE_REQUESTED && !HYGIENE_ON) {
@@ -308,9 +321,38 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
         {scope: 'test', auto: true},
     ],
 
-    jsCoverage: [
-        async ({context}, use) => {
+    /**
+     * The worker's running sum of JS coverage (`./js-coverage-sink.ts`): set up on the first test, written
+     * every few tests and once more at teardown, after the worker's last test. `jsCoverage` depends on it,
+     * so Playwright keeps it alive until every test teardown has handed in its slice.
+     */
+    jsCoverageSink: [
+        async ({}, use, workerInfo) => {
             if (!COVERAGE_ON) {
+                await use(null);
+                return;
+            }
+            const sink = new WorkerCoverageSink(E2E_COVERAGE_DIR, workerInfo.parallelIndex);
+            try {
+                await sink.absorbDeadPredecessors();
+            } catch (e) {
+                // A failed setup would fail every test of the worker: collecting must never turn a test red.
+                // The predecessors' files stay on disk, and the report reads them as they are.
+                console.warn('[coverage-js] could not absorb the files of earlier workers:', e);
+            }
+            await use(sink);
+            try {
+                await sink.flush();
+            } catch (e) {
+                console.warn('[coverage-js] could not write the worker file:', e);
+            }
+        },
+        {scope: 'worker', timeout: JS_COVERAGE_TIMEOUT_MS},
+    ],
+
+    jsCoverage: [
+        async ({context, jsCoverageSink}, use) => {
+            if (!COVERAGE_ON || !jsCoverageSink) {
                 await use();
                 return;
             }
@@ -345,22 +387,69 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
                 return;
             }
 
-            // One file per test rather than an in-process accumulator. The
-            // accumulator is what used to die: it retained every payload —
-            // sources and sourcemaps included — and over the 25 spec files a
-            // consolidated category then ran in a single worker it reached 8 GB
-            // and took the worker with it, reported against whichever test
-            // happened to be running. Writing and forgetting is O(1) in memory,
-            // and the merge is somebody else's problem: `js-coverage-report.js`.
+            // Into the worker's sum, no file of its own: the sink merges with
+            // istanbul-lib-coverage, as the report does, and writes one file
+            // per worker every few tests. Every page is summed: a module two
+            // pages loaded counts the hits of both.
             try {
-                await mkdir(E2E_COVERAGE_DIR, {recursive: true});
-                const name = `${Date.now().toString(36)}-${process.pid}-${coverageSeq++}.json`;
-                await writeFile(join(E2E_COVERAGE_DIR, name), JSON.stringify(Object.assign({}, ...entries)));
+                await jsCoverageSink.add(...(entries as CoveragePayload[]));
             } catch (e) {
-                console.warn('[coverage-js] raccolta non riuscita:', e);
+                console.warn('[coverage-js] collection failed:', e);
             }
         },
         {scope: 'test', auto: true, timeout: JS_COVERAGE_TIMEOUT_MS},
+    ],
+
+    /** Whether a violation the baseline does not know fails the test (H-43): a spec may turn it off for itself. */
+    cspFailOnUnknown: [true, {option: true}],
+
+    cspViolations: [
+        async ({context, cspFailOnUnknown}, use, testInfo) => {
+            if (!CSP_COLLECTOR_ON) {
+                await use({list: () => [], unknown: () => []});
+                return;
+            }
+            const seen: CspViolation[] = [];
+            // Every page of the test's context, before its first script runs, and after every navigation: the binding
+            // and the init script are the context's.
+            await context.exposeBinding('__lfCspViolation', ({page}, violation: Omit<CspViolation, 'page'>) => {
+                seen.push({...violation, page: page ? page.url() : null});
+            });
+            await context.addInitScript(() => {
+                document.addEventListener(
+                    'securitypolicyviolation',
+                    (e) => {
+                        const report = (window as unknown as {__lfCspViolation?: (v: unknown) => unknown}).__lfCspViolation;
+                        void report?.({
+                            directive: e.effectiveDirective,
+                            violatedDirective: e.violatedDirective,
+                            blockedURI: e.blockedURI,
+                            sourceFile: e.sourceFile,
+                            lineNumber: e.lineNumber,
+                            columnNumber: e.columnNumber,
+                            sample: e.sample,
+                            disposition: e.disposition,
+                            documentURI: e.documentURI,
+                        });
+                    },
+                    true,
+                );
+            });
+            const unknownOf = () => seen.filter((v) => !isKnown(v, CSP_BASELINE));
+
+            await use({list: () => [...seen], unknown: unknownOf});
+
+            // A report sent just before the test ended is still on its way: one round trip per open page lets it land.
+            await Promise.all(context.pages().map((page) => page.evaluate(() => 0).catch(() => undefined)));
+            if (seen.length > 0) {
+                await testInfo.attach('csp-violations', {body: JSON.stringify(seen, null, 2), contentType: 'application/json'});
+            }
+            const unknown = unknownOf();
+            if (cspFailOnUnknown && unknown.length > 0) {
+                expect(unknown.map(describeCspViolation), 'Content-Security-Policy violations e2e/csp-baseline.json does not know (H-43)').toEqual([]);
+            }
+        },
+        {scope: 'test', auto: true},
     ],
 });
 

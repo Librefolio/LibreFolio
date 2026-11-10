@@ -37,10 +37,11 @@
  * ## The claims — each tested as a claim rather than as a snapshot
  *
  * 1. **A subtype is shaded by its rank among the subtypes, not by its position in the
- *    family.** With the generic member absent, position 0 is the subtype itself, and
- *    `shadeForDepth(base, 0)` hands back the base colour verbatim — R12 again, one layer up.
- *    So a lone subtype is held to a *measured* lightness distance from its family colour, not
- *    merely to a different hex string, which a one-digit drift would satisfy.
+ *    family.** With the generic member absent, position 0 is the subtype itself, and a shade of
+ *    rank 0 is the base colour verbatim — R12 again, one layer up. So the outer ring asks
+ *    `shade(family colour, rank)` with the rank counted over the subtypes alone: 1 for the first
+ *    subtype whether or not the generic member is held. The generic member and the fillers keep the
+ *    family colour, which the hierarchy got from `colorOf` (GR1: the family's own, by key).
  * 2. **A family may have N members.** By vehicle the ETF family holds the generic ETF and up to
  *    six subtypes, and the CROWDFUND family its generic member and real-estate crowdfunding; one
  *    scenario draws five members at once.
@@ -56,16 +57,13 @@
  *    whole family.
  * 6. **One rounding for a member and its family.** R12d: a member and its family were printed
  *    at two different precisions — two roundings of one quantity, read as two quantities.
- * 7. **A family of six subtypes stays separable on the outer ring — rule B, red until it lands.**
- *    By vehicle the ETF family holds the generic ETF and six subtypes; shaded one-sided, the
- *    later subtypes clamp to white or black and share one colour. The rule the developer chose on
- *    01/10/2026 spreads a family of four or more on both sides of its base inside L [10, 90],
- *    halving the saturation of even depths, and the rings shade a family as a group of one plus
- *    its subtypes: the base arc carries depth 0 even when no generic member is held. Measured as
- *    the hierarchy measures it — every pair at least as far apart in CIEDE2000 as the closest pair
- *    the pie draws today, the hue within 3°, every shade inside L [10, 90] — while a family of one
- *    or two subtypes keeps today's colours exactly. The ruler is this file's own copy of the one in
- *    `allocationHierarchy.test.ts`, checked here on the same published data.
+ * 7. **The colours are asked, never made here.** Which colour a family has (`categoryColor`)
+ *    and how a shade is mixed (`familyShade`, GR4 of the designer's round 2, D-T17) are pinned by
+ *    the theme's own tests. Most tests stub both with functions whose answer spells the question —
+ *    `colour(ETF)`, `colour(ETF)·2` — so an arc's colour reads as the call that produced it, and
+ *    what the rings ask is recorded. One block wires the real functions as the pie does, in both
+ *    themes, on the ETF family with all six of its subtypes: the generic member and the base arc
+ *    in the family colour, each subtype a shade of its own, the seven pairwise distinct.
  *
  * No fixture holds a real portfolio figure: every weight and amount below is synthetic (rule of
  * 24/09 — no real financial value of the developer in a versioned file). The review case keeps
@@ -78,9 +76,10 @@
  * ## Why the component's fast path is pinned by reading its source
  *
  * A test of the pure module cannot see how the chart *refreshes*. `AllocationPieChart` has a
- * data-only path — chart already drawn, same theme, same interface locale, same set of types — that
- * calls `setOption({series: …})` without rebuilding the option. With two rings it must address both
- * series by id. The trap was written down before D72 was built (mandate G §6,
+ * data-only path — chart already drawn, same theme, same interface locale, same list of sector
+ * emoji, same set of types — that calls `setOption({series: …})` without rebuilding the option.
+ * With two rings it must address both series by id. The trap was written down before D72 was
+ * built (mandate G §6,
  * `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation/G-frontend-colori-allocazione.md`):
  * a `series: [{data}]` that refreshes the base ring and leaves the outer one on stale numbers —
  * no error, no symptom, and only on the second render of a mounted chart, a sequence no test of
@@ -98,31 +97,27 @@
  */
 import {existsSync, readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {beforeAll, describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it, vi} from 'vitest';
 
-import {PALETTE_SLOTS, paletteDefects, readSourcePalette} from '$test/sourcePalettes';
+import {categoryColor} from '$lib/theme/chartCategories';
+import {familyShade, shadePoles} from '$lib/theme/chartShades';
+import {chartRoles} from '$lib/theme/roleColors';
 
-import {buildAllocationHierarchy, shadeForDepth} from '../allocationHierarchy';
+import {buildAllocationHierarchy} from '../allocationHierarchy';
 import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum, type AllocationRingItem, type AllocationRingsLayout} from '../allocationRings';
-import {hexToHsl, hslToHex} from '$lib/utils/colors';
 
 // =============================================================================
 // Fixtures
 // =============================================================================
 
-/** The only chart that draws rings. Its palettes are read from it, by name, not copied. */
-const PIE_CHART = new URL('../AllocationPieChart.svelte', import.meta.url);
+/**
+ * The stand-in for the family colour — `categoryColor('type', primary, dark)` in the pie: a colour
+ * that names the key it was asked for.
+ */
+const colourOf = (primary: string): string => `colour(${primary})`;
 
-/** `PALETTE_LIGHT` in `AllocationPieChart.svelte`. */
-const PIE_PALETTE_LIGHT = readSourcePalette(PIE_CHART, 'PALETTE_LIGHT');
-/** `PALETTE_DARK` in `AllocationPieChart.svelte`. */
-const PIE_PALETTE_DARK = readSourcePalette(PIE_CHART, 'PALETTE_DARK');
-
-/** Both themes of that chart. */
-const PIE_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
-    ['PALETTE_LIGHT', PIE_PALETTE_LIGHT],
-    ['PALETTE_DARK', PIE_PALETTE_DARK],
-];
+/** The stand-in for a shade — `familyShade(base, rank, poles)` in the pie: a colour that names its base and its rank. */
+const shadeOf = (base: string, rank: number): string => `${base}·${rank}`;
 
 type Resolver = (key: string) => string;
 
@@ -268,14 +263,28 @@ const genericCaption = (familyLabel: string): string => `${familyLabel} generico
 /** The component's percent rule: two decimals. */
 const roundTo2Decimals = (value: number): number => Math.round(value * 100) / 100;
 
+/** The colour functions the pie hands the hierarchy and the rings: the stand-ins by default. */
+interface Colours {
+    colorOf?: (primary: string) => string;
+    shade?: (base: string, rank: number) => string;
+}
+
 /**
- * The component's own handoff: the real hierarchy first, the rings on top of it, and the
- * weight read back from the payload exactly as `AllocationPieChart` reads it.
+ * The component's own handoff: the real hierarchy first, the rings on top of it, the weight read
+ * back from the payload exactly as `AllocationPieChart` reads it, and the same `shade` handed to both.
  */
-function ringsFor(entries: readonly Entry[], {palette = PIE_PALETTE_LIGHT, resolve = resolveByVehicle}: {palette?: readonly string[]; resolve?: Resolver} = {}) {
-    const hierarchy = buildAllocationHierarchy(entries, {resolvePrimary: resolve, palette});
-    const layout = buildAllocationRings(hierarchy, {weightOf: (item) => item.value});
+function ringsFor(entries: readonly Entry[], {resolve = resolveByVehicle, colorOf = colourOf, shade = shadeOf}: {resolve?: Resolver} & Colours = {}) {
+    const hierarchy = buildAllocationHierarchy(entries, {resolvePrimary: resolve, colorOf, shade});
+    const layout = buildAllocationRings(hierarchy, {weightOf: (item) => item.value, shade});
     return {hierarchy, layout};
+}
+
+/** The same handoff with the rings' `shade` recording its calls — the hierarchy's apart — so what the rings ask is read alone. */
+function ringsRecordingShade(entries: readonly Entry[], resolve: Resolver = resolveByVehicle) {
+    const hierarchy = buildAllocationHierarchy(entries, {resolvePrimary: resolve, colorOf: colourOf, shade: shadeOf});
+    const shade = vi.fn(shadeOf);
+    const layout = buildAllocationRings(hierarchy, {weightOf: (item) => item.value, shade});
+    return {hierarchy, layout, shade};
 }
 
 /** The same handoff down to the arcs the pie draws, with this file's labels. */
@@ -322,56 +331,22 @@ function sumOfValues(data: readonly AllocationRingDatum[]): number {
     return data.reduce((sum, datum) => sum + datum.value, 0);
 }
 
-/** Measured lightness of a hex colour. Fails loudly rather than returning NaN. */
-function lightnessOf(hex: string): number {
-    const hsl = hexToHsl(hex);
-    expect(hsl, `expected ${hex} to be parseable hex`).not.toBeNull();
-    return hsl!.l;
-}
-
-/** Measured hue of a hex colour. */
-function hueOf(hex: string): number {
-    const hsl = hexToHsl(hex);
-    expect(hsl, `expected ${hex} to be parseable hex`).not.toBeNull();
-    return hsl!.h;
-}
-
-/** Hue distance on the circle: 359.9° and 0.1° are 0.2° apart, not 359.8°. */
-function hueDistance(a: string, b: string): number {
-    const delta = Math.abs(hueOf(a) - hueOf(b));
-    return Math.min(delta, 360 - delta);
-}
-
-// =============================================================================
-// The palettes under test — what was read, so no loop below can pass on nothing
-// =============================================================================
-
-describe('the palettes under test', () => {
-    it.each(PIE_PALETTES)(`AllocationPieChart %s is ${PALETTE_SLOTS} distinct #rrggbb colours`, (_name, palette) => {
-        expect(paletteDefects(palette), `the palette the rings draw with is not ${PALETTE_SLOTS} distinct colours: two families would share one, or a slot is missing`).toEqual([]);
-    });
-
-    it('pairs the light and dark palettes slot by slot', () => {
-        expect(PIE_PALETTE_DARK.length, 'the two themes are not the same length: a family would change colour when the theme changes').toBe(PIE_PALETTE_LIGHT.length);
-    });
-});
-
 // =============================================================================
 // R12, option B — the review case, grouped by vehicle
 // =============================================================================
 
 describe('the pie groups by vehicle — the review case (R12, option B)', () => {
-    it.each(PIE_PALETTES)('splits the ETF family alone, into ETF generico + ETF azionario, on %s', (_name, palette) => {
+    it('splits the ETF family alone, into ETF generico + ETF azionario', () => {
         // Barrier: this is the input on which the two groupings disagree. By content — K2, the
         // pie's until 24/09 and the history chart's until D15, no chart's since — the same numbers
         // put the equity ETF in a family of its own, "Azione", apart from the generic ETF: the
         // picture the review turned down.
-        const byContent = ringsFor(REVIEW_CASE_ENTRIES, {palette, resolve: resolveByContent}).layout;
+        const byContent = ringsFor(REVIEW_CASE_ENTRIES, {resolve: resolveByContent}).layout;
         expect(byContent.base.map((arc) => arc.primary)).toEqual(['ETF', 'CROWDFUND', 'BOND', 'STOCK', 'LIQUIDITY']);
         expect(baseArcOf(byContent, 'ETF').split).toBe(false);
         expect(outerArcsOf(byContent, 'STOCK').map((arc) => arc.key)).toEqual(['ETF_STOCK']);
 
-        const {layout} = ringsFor(REVIEW_CASE_ENTRIES, {palette, resolve: resolveByVehicle});
+        const {layout} = ringsFor(REVIEW_CASE_ENTRIES, {resolve: resolveByVehicle});
         expect(layout.rings).toBe(true);
         expect(layout.base.map((arc) => arc.primary)).toEqual(['ETF', 'CROWDFUND', 'BOND', 'LIQUIDITY']);
 
@@ -382,7 +357,7 @@ describe('the pie groups by vehicle — the review case (R12, option B)', () => 
         expect(family.split).toBe(true);
         expect(family.memberCount).toBe(2);
         expect(family.weight).toBeCloseTo(61.6, 9);
-        expect(family.color).toBe(palette[0]);
+        expect(family.color).toBe(colourOf('ETF'));
         expect(family.items.map((item) => item.id)).toEqual(['item-ETF', 'item-ETF_STOCK']);
 
         // Its members on the outer ring: ETF generico — the pure member — then ETF azionario.
@@ -394,12 +369,10 @@ describe('the pie groups by vehicle — the review case (R12, option B)', () => 
         expect(generic.weight).toBeCloseTo(56.4, 9);
         expect(equity.weight).toBeCloseTo(5.2, 9);
 
-        // ETF generico wears the family colour verbatim; ETF azionario the family's first shade — at
-        // a distance the eye can use, on the same hue, so it still reads as an ETF.
+        // ETF generico wears the family colour verbatim — the family's own, by key (GR1) — and
+        // ETF azionario the family's first shade (GR4), so it still reads as an ETF.
         expect(generic.color).toBe(family.color);
-        expect(equity.color).toBe(shadeForDepth(family.color, 1));
-        expect(Math.abs(lightnessOf(equity.color) - lightnessOf(family.color)), `${family.color} → ${equity.color} ΔL`).toBeGreaterThanOrEqual(15);
-        expect(hueDistance(equity.color, family.color), `${family.color} → ${equity.color} Δh`).toBeLessThanOrEqual(1);
+        expect(equity.color).toBe(shadeOf(family.color, 1));
 
         // Only ETF is split: every other family is exactly one filler under its base arc.
         expect(layout.base.filter((arc) => arc.split).map((arc) => arc.primary)).toEqual(['ETF']);
@@ -414,32 +387,30 @@ describe('the pie groups by vehicle — the review case (R12, option B)', () => 
 });
 
 // =============================================================================
-// Split families — pure member first, one shade step per subtype
+// Split families — pure member first, one shade per subtype, by its rank among the subtypes
 // =============================================================================
 
 describe('buildAllocationRings — split families', () => {
-    it.each(PIE_PALETTES)('shades a lone subtype by its rank among the subtypes, not by its position — its generic member absent, on %s', (_name, palette) => {
-        const {hierarchy, layout} = ringsFor(LONE_SUBTYPE_ENTRIES, {palette});
+    it('shades a lone subtype by its rank among the subtypes, not by its position — its generic member absent', () => {
+        const {hierarchy, layout} = ringsFor(LONE_SUBTYPE_ENTRIES);
 
         // Barrier: this is the R12 shape. Under D71 alone the lone ETF_STOCK is a group of one,
-        // painted with the verbatim palette entry — the defect itself.
+        // never shaded: it wears the family colour itself — the defect, one layer down.
         const underD71 = hierarchy.find((row) => row.key === 'ETF_STOCK');
         expect(underD71, 'ETF_STOCK must survive the hierarchy').toBeDefined();
-        expect(underD71!.groupSize).toBe(1);
-        expect(underD71!.depth).toBe(0);
-        expect(underD71!.color).toBe(palette[2]);
+        expect({groupSize: underD71!.groupSize, depth: underD71!.depth, color: underD71!.color}).toEqual({groupSize: 1, depth: 0, color: colourOf('ETF')});
 
         expect(layout.rings).toBe(true);
         expect(layout.base.map((arc) => arc.primary)).toEqual(['CROWDFUND', 'BOND', 'ETF', 'LIQUIDITY']);
 
-        // The family is named after its vehicle, although no generic ETF is held.
+        // The family is named after its vehicle, and wears its own colour, although no generic ETF is held.
         const family = baseArcOf(layout, 'ETF');
         expect(family.key).toBe('ETF');
         expect(family.role).toBe('base');
         expect(family.split).toBe(true);
         expect(family.memberCount).toBe(1);
         expect(family.weight).toBeCloseTo(5.2, 9);
-        expect(family.color).toBe(palette[2]);
+        expect(family.color).toBe(colourOf('ETF'));
         expect(family.items.map((item) => item.id)).toEqual(['item-ETF_STOCK']);
 
         const members = outerArcsOf(layout, 'ETF');
@@ -450,14 +421,23 @@ describe('buildAllocationRings — split families', () => {
         expect(lone.pure).toBe(false);
         expect(lone.weight).toBeCloseTo(5.2, 9);
 
-        // The fix, stated three ways. A colour other than the family's — under D71 it was the
-        // same one …
+        // The fix: the family's first *subtype* shade, whatever its position — never the family
+        // colour it would vanish into.
+        expect(lone.color).toBe(shadeOf(family.color, 1));
         expect(lone.color).not.toBe(family.color);
-        // … at a distance the eye can use, on the same hue, so it still reads as that family …
-        expect(Math.abs(lightnessOf(lone.color) - lightnessOf(family.color)), `${family.color} → ${lone.color} ΔL`).toBeGreaterThanOrEqual(15);
-        expect(hueDistance(lone.color, family.color), `${family.color} → ${lone.color} Δh`).toBeLessThanOrEqual(1);
-        // … because it is the family's first *subtype* shade, whatever its position.
-        expect(lone.color).toBe(shadeForDepth(family.color, 1));
+    });
+
+    it('counts the rank over the subtypes alone: two subtypes and no generic member are shades 1 and 2, never the family colour', () => {
+        // The hierarchy hands the heavier subtype depth 0 — the family colour — and the lighter one
+        // depth 1; the outer ring must not inherit either.
+        const {hierarchy, layout} = ringsFor([entry('ETF_STOCK', 30), entry('BOND', 40), entry('ETF_BOND', 20)]);
+        expect(hierarchy.filter((row) => row.primary === 'ETF').map((row) => `${row.key}@${row.depth}`)).toEqual(['ETF_STOCK@0', 'ETF_BOND@1']);
+
+        const family = baseArcOf(layout, 'ETF');
+        expect(family.color).toBe(colourOf('ETF'));
+        const members = outerArcsOf(layout, 'ETF');
+        expect(members.map((arc) => `${arc.role}:${arc.key}`)).toEqual(['member:ETF_STOCK', 'member:ETF_BOND']);
+        expect(members.map((arc) => arc.color)).toEqual([shadeOf(family.color, 1), shadeOf(family.color, 2)]);
     });
 
     it('splits a full family into [pure member in the family colour, subtype shaded], pure first', () => {
@@ -466,7 +446,7 @@ describe('buildAllocationRings — split families', () => {
 
         expect(layout.rings).toBe(true);
         const family = baseArcOf(layout, 'ETF');
-        expect(family.color).toBe(PIE_PALETTE_LIGHT[0]);
+        expect(family.color).toBe(colourOf('ETF'));
         expect(family.memberCount).toBe(2);
         expect(family.weight).toBeCloseTo(100, 9);
 
@@ -479,10 +459,8 @@ describe('buildAllocationRings — split families', () => {
         expect(members.map((arc) => arc.memberCount)).toEqual([2, 2]);
 
         const [pure, subtype] = members;
-        // Verbatim palette entry — no hex → HSL → hex round trip.
         expect(pure.color).toBe(family.color);
-        expect(subtype.color).not.toBe(family.color);
-        expect(subtype.color).toBe(shadeForDepth(family.color, 1));
+        expect(subtype.color).toBe(shadeOf(family.color, 1));
         // Where D71 already worked, the outer ring repaints nothing: the hierarchy's own shade.
         expect(subtype.color).toBe(hierarchy.find((row) => row.key === 'ETF_STOCK')!.color);
 
@@ -492,7 +470,7 @@ describe('buildAllocationRings — split families', () => {
         expect(family.items.map((item) => item.id)).toEqual(['item-ETF', 'item-ETF_STOCK']);
     });
 
-    it.each(PIE_PALETTES)('splits a family of three into three distinct colours, pure first then subtypes by weight, on %s', (_name, palette) => {
+    it('splits a family of three into three distinct colours, pure first then subtypes by weight', () => {
         // Barrier: the family of three exists only by content, through K2. The pie's own grouping —
         // by vehicle — scatters it: real-estate crowdfunding is a crowdfunding, ETF_REAL_ESTATE is
         // an ETF, and REAL_ESTATE stays on its own.
@@ -502,13 +480,13 @@ describe('buildAllocationRings — split families', () => {
         expect(resolveByContent('CROWDFUND_REAL_ESTATE')).toBe('REAL_ESTATE');
         expect(resolveByContent('ETF_REAL_ESTATE')).toBe('REAL_ESTATE');
 
-        const {layout} = ringsFor(FAMILY_OF_THREE_ENTRIES, {palette, resolve: resolveByContent});
+        const {layout} = ringsFor(FAMILY_OF_THREE_ENTRIES, {resolve: resolveByContent});
 
         expect(layout.rings).toBe(true);
         const family = baseArcOf(layout, 'REAL_ESTATE');
         expect(family.memberCount).toBe(3);
         expect(family.weight).toBeCloseTo(60, 9);
-        expect(family.color).toBe(palette[1]);
+        expect(family.color).toBe(colourOf('REAL_ESTATE'));
 
         const members = outerArcsOf(layout, 'REAL_ESTATE');
         expect(members).toHaveLength(3);
@@ -517,21 +495,67 @@ describe('buildAllocationRings — split families', () => {
         expect(members.map((arc) => arc.weight)).toEqual([20, 30, 10]);
         expect(members.map((arc) => arc.memberCount)).toEqual([3, 3, 3]);
 
-        // One shade step per subtype, by rank: a rule that assumed two members would give both
-        // subtypes the same shade.
-        const colors = members.map((arc) => arc.color);
-        expect(new Set(colors).size).toBe(3);
-        expect(colors).toEqual([family.color, shadeForDepth(family.color, 1), shadeForDepth(family.color, 2)]);
+        // One shade per subtype, by rank: a rule that assumed two members would give both subtypes
+        // the same shade.
+        expect(members.map((arc) => arc.color)).toEqual([family.color, shadeOf(family.color, 1), shadeOf(family.color, 2)]);
+        expect(new Set(members.map((arc) => arc.color)).size).toBe(3);
+    });
 
-        // Distinct is measured, pairwise: three hex strings one digit apart would satisfy the Set.
-        let pairsChecked = 0;
-        for (let i = 0; i < colors.length; i++) {
-            for (let j = i + 1; j < colors.length; j++) {
-                expect(Math.abs(lightnessOf(colors[i]) - lightnessOf(colors[j])), `${colors[i]} vs ${colors[j]} ΔL`).toBeGreaterThanOrEqual(15);
-                pairsChecked++;
-            }
-        }
-        expect(pairsChecked).toBe(3);
+    it('asks shade for the subtypes only — never for a base arc, a generic member or a filler — once each, by rank', () => {
+        // The family of five beside four unsplit families: every role the rings draw, at once.
+        const {layout, shade} = ringsRecordingShade(EVERY_SHAPE_ENTRIES);
+
+        // Barrier: the ETF family is split into its generic member and four subtypes, the rest are fillers.
+        expect(outerArcsOf(layout, 'ETF').map((arc) => `${arc.role}:${arc.key}`)).toEqual(['member:ETF', 'member:ETF_STOCK', 'member:ETF_BOND', 'member:ETF_REAL_ESTATE', 'member:ETF_MONETARY']);
+        expect(layout.outer.filter((arc) => arc.role === 'filler').map((arc) => arc.key)).toEqual(['CROWDFUND', 'BOND', 'REAL_ESTATE', 'LIQUIDITY']);
+
+        expect(shade.mock.calls).toEqual([1, 2, 3, 4].map((rank) => [colourOf('ETF'), rank]));
+    });
+});
+
+// =============================================================================
+// The colour of every arc — the family's own, or a shade of it by rank
+// =============================================================================
+
+/**
+ * What every arc of a layout must wear, by the rule of the rings: the family's own colour on its
+ * base arc, its filler and its generic member; on every other member, the shade of its rank among
+ * the subtypes of its family, counted in drawing order.
+ */
+function expectedArcColours(layout: Layout): {base: string[]; outer: string[]} {
+    const ranks = new Map<string, number>();
+    return {
+        base: layout.base.map((arc) => colourOf(arc.primary)),
+        outer: layout.outer.map((arc) => {
+            if (arc.role !== 'member' || arc.pure) return colourOf(arc.primary);
+            const rank = (ranks.get(arc.primary) ?? 0) + 1;
+            ranks.set(arc.primary, rank);
+            return shadeOf(colourOf(arc.primary), rank);
+        }),
+    };
+}
+
+/** The scenarios the colour rule is checked on: every shape a family takes on the outer ring. */
+const COLOUR_SCENARIOS: ReadonlyArray<readonly [string, readonly Entry[], Resolver]> = [
+    ['the review case', REVIEW_CASE_ENTRIES, resolveByVehicle],
+    ['a lone subtype, its generic member absent', LONE_SUBTYPE_ENTRIES, resolveByVehicle],
+    ['a full family', FULL_FAMILY_ENTRIES, resolveByVehicle],
+    ['a family of five, beside the base types it holds', EVERY_SHAPE_ENTRIES, resolveByVehicle],
+    ['a family of three, by content', FAMILY_OF_THREE_ENTRIES, resolveByContent],
+    ['no subtype at all', [entry('STOCK', 40), entry('BOND', 35), entry('Liquidity', 25)], resolveByVehicle],
+];
+
+describe('buildAllocationRings — the colour of every arc', () => {
+    it.each(COLOUR_SCENARIOS)("%s: each base arc, filler and generic member in its family's own colour, each subtype the shade of its rank", (_name, entries, resolve) => {
+        const {layout} = ringsFor(entries, {resolve});
+
+        // Positive barrier: every check below iterates over these arcs.
+        expect(layout.base.length).toBeGreaterThan(0);
+        expect(layout.outer.length).toBeGreaterThanOrEqual(layout.base.length);
+
+        const expected = expectedArcColours(layout);
+        expect(layout.base.map((arc) => `${arc.primary} ${arc.color}`)).toEqual(layout.base.map((arc, index) => `${arc.primary} ${expected.base[index]}`));
+        expect(layout.outer.map((arc) => `${arc.role} ${arc.key} ${arc.color}`)).toEqual(layout.outer.map((arc, index) => `${arc.role} ${arc.key} ${expected.outer[index]}`));
     });
 });
 
@@ -690,211 +714,12 @@ describe('buildAllocationRings — when to draw two rings', () => {
 });
 
 // =============================================================================
-// Degenerate palette
+// Wired to the real colours, as the pie wires them
 // =============================================================================
-
-describe('buildAllocationRings — short palette', () => {
-    it('never hands out an undefined colour when families outnumber the palette', () => {
-        const palette = ['#1a4031', '#2563eb'];
-        // Six families on two colours, the split one past the wrap point: the ETF family — two
-        // subtypes, no generic ETF — is shaded from a wrapped entry.
-        const entries = [entry('STOCK', 30), entry('BOND', 26), entry('ETF_REAL_ESTATE', 12), entry('ETF_STOCK', 8), entry('CROWDFUND', 15), entry('REAL_ESTATE', 8), entry('Liquidity', 1)];
-        const {layout} = ringsFor(entries, {palette});
-
-        // Barrier: really more families than colours, really two rings, and the split family
-        // really past the wrap point.
-        expect(layout.base.length).toBeGreaterThan(palette.length);
-        expect(layout.rings).toBe(true);
-        expect(layout.base.findIndex((arc) => arc.split)).toBeGreaterThanOrEqual(palette.length);
-        expect(layout.base.map((arc) => arc.color)).toEqual(['#1a4031', '#2563eb', '#1a4031', '#2563eb', '#1a4031', '#2563eb']);
-
-        // A 6-digit hex on every arc of both rings, as the ring item contract promises.
-        for (const arc of [...layout.base, ...layout.outer]) {
-            expect(arc.color, `${arc.role} ${arc.key}`).toMatch(/^#[0-9a-f]{6}$/i);
-        }
-    });
-});
-
-// =============================================================================
-// A large family on the outer ring — rule B (red until the group size reaches the shading)
-// =============================================================================
-
-/** A colour in CIELAB, D65 white: `[L*, a*, b*]`. */
-type Lab = readonly [number, number, number];
-
-/**
- * `#rrggbb` → CIELAB (D65): the sRGB transfer function (IEC 61966-2-1), the seven-digit sRGB → XYZ
- * matrix whose rows sum to the D65 white it divides by, CIE 1976 L*a*b* with the exact ε and κ.
- * The same ruler as `allocationHierarchy.test.ts`, checked below on the same published data. Throws
- * on anything else: a NaN distance compares false with every floor, and would pass in silence.
- */
-function labOf(hex: string): Lab {
-    const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-    if (!match) throw new Error(`labOf: ${hex} is not #rrggbb`);
-    const [r, g, b] = match.slice(1).map((channel) => {
-        const c = parseInt(channel, 16) / 255;
-        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    });
-    const x = 0.4124564 * r + 0.3575761 * g + 0.1804375 * b;
-    const y = 0.2126729 * r + 0.7151522 * g + 0.072175 * b;
-    const z = 0.0193339 * r + 0.119192 * g + 0.9503041 * b;
-    const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116);
-    const [fx, fy, fz] = [f(x / 0.95047), f(y), f(z / 1.08883)];
-    return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
-}
-
-/**
- * CIEDE2000 (CIE 142-2001), kL = kC = kH = 1, as Sharma, Wu & Dalal (2005) write it out: the hue of
- * a neutral colour is 0 (and so is Δh' beside one), and the mean of two hues more than 180° apart is
- * taken across 0°/360°.
- */
-function ciede2000([L1, a1, b1]: Lab, [L2, a2, b2]: Lab): number {
-    const rad = Math.PI / 180;
-    const meanC7 = ((Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2) ** 7;
-    const G = 0.5 * (1 - Math.sqrt(meanC7 / (meanC7 + 25 ** 7)));
-    const a1p = (1 + G) * a1;
-    const a2p = (1 + G) * a2;
-    const C1p = Math.hypot(a1p, b1);
-    const C2p = Math.hypot(a2p, b2);
-    const hueAngle = (b: number, ap: number) => (b === 0 && ap === 0 ? 0 : (Math.atan2(b, ap) / rad + 360) % 360);
-    const h1p = hueAngle(b1, a1p);
-    const h2p = hueAngle(b2, a2p);
-
-    let dhp = 0;
-    if (C1p * C2p !== 0) {
-        dhp = h2p - h1p;
-        if (dhp > 180) dhp -= 360;
-        else if (dhp < -180) dhp += 360;
-    }
-    const dLp = L2 - L1;
-    const dCp = C2p - C1p;
-    const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin((dhp / 2) * rad);
-
-    const meanLp = (L1 + L2) / 2;
-    const meanCp = (C1p + C2p) / 2;
-    let meanHp: number;
-    if (C1p * C2p === 0) meanHp = h1p + h2p;
-    else if (Math.abs(h1p - h2p) <= 180) meanHp = (h1p + h2p) / 2;
-    else meanHp = h1p + h2p < 360 ? (h1p + h2p + 360) / 2 : (h1p + h2p - 360) / 2;
-
-    const T = 1 - 0.17 * Math.cos((meanHp - 30) * rad) + 0.24 * Math.cos(2 * meanHp * rad) + 0.32 * Math.cos((3 * meanHp + 6) * rad) - 0.2 * Math.cos((4 * meanHp - 63) * rad);
-    const meanCp7 = meanCp ** 7;
-    const RT = -2 * Math.sqrt(meanCp7 / (meanCp7 + 25 ** 7)) * Math.sin(60 * Math.exp(-(((meanHp - 275) / 25) ** 2)) * rad);
-    const SL = 1 + (0.015 * (meanLp - 50) ** 2) / Math.sqrt(20 + (meanLp - 50) ** 2);
-    const SC = 1 + 0.045 * meanCp;
-    const SH = 1 + 0.015 * meanCp * T;
-    return Math.sqrt((dLp / SL) ** 2 + (dCp / SC) ** 2 + (dHp / SH) ** 2 + RT * (dCp / SC) * (dHp / SH));
-}
-
-/** The perceptual distance between two `#rrggbb` colours. */
-function deltaE00(a: string, b: string): number {
-    return ciede2000(labOf(a), labOf(b));
-}
-
-/**
- * Rows of table 1 of G. Sharma, W. Wu and E. N. Dalal, "The CIEDE2000 color-difference formula:
- * implementation notes, supplementary test data, and mathematical observations", Color Research &
- * Application 30(1), 2005 — the same rows as `allocationHierarchy.test.ts`, one per branch an
- * implementation gets wrong — and the CIELAB (D65) of three sRGB colours, two of them exact.
- */
-const SHARMA_PAIRS: ReadonlyArray<readonly [pair: number, first: Lab, second: Lab, deltaE: number]> = [
-    [1, [50, 2.6772, -79.7751], [50, 0, -82.7485], 2.0425],
-    [7, [50, 0, 0], [50, -1, 2], 2.3669],
-    [10, [50, 2.49, -0.001], [50, -2.49, 0.001], 7.1792],
-    [11, [50, 2.49, -0.001], [50, -2.49, 0.0011], 7.2195],
-    [17, [50, 2.5, 0], [73, 25, -18], 27.1492],
-];
-const SRGB_LAB: ReadonlyArray<readonly [hex: string, lab: Lab]> = [
-    ['#ffffff', [100, 0, 0]],
-    ['#808080', [53.585, 0, 0]],
-    ['#ff0000', [53.2408, 80.0925, 67.2032]],
-];
-
-/**
- * `shadeForDepth` as it stood before rule B, transcribed: `step` lightness points per depth away
- * from the nearer extreme, clamped to 0..100 — "today's colours" for the families rule B must leave
- * alone. Anchored on literal output in the test below, and at every depth in `allocationHierarchy.test.ts`.
- */
-function todaysShade(base: string, depth: number, step: number = 20): string {
-    if (depth <= 0) return base;
-    const hsl = hexToHsl(base);
-    if (!hsl) return base;
-    const direction = hsl.l < 50 ? 1 : -1;
-    return hslToHex(hsl.h, hsl.s, Math.min(100, Math.max(0, hsl.l + direction * step * depth)));
-}
-
-/**
- * The floor: the closest pair the pie draws today — today's groups of two and three (the pure
- * entry, `shadeForDepth(base, 1)`, `shadeForDepth(base, 2)`, default step, no group size) on every
- * slot of both pie palettes, every pair inside a group, in CIEDE2000; the smallest, and where.
- * Why this bar and not a lightness gap is written beside its twin in `allocationHierarchy.test.ts`.
- */
-function closestPairOfTodaysSmallGroups(): {deltaE: number; pair: string; pairsMeasured: number} {
-    let closest = {deltaE: Infinity, pair: 'none', pairsMeasured: 0};
-    for (const [name, palette] of PIE_PALETTES) {
-        palette.forEach((base, slot) => {
-            for (const size of [2, 3]) {
-                const group = Array.from({length: size}, (_, depth) => shadeForDepth(base, depth));
-                for (let i = 0; i < size; i++) {
-                    for (let j = i + 1; j < size; j++) {
-                        const deltaE = deltaE00(group[i], group[j]);
-                        closest.pairsMeasured++;
-                        if (deltaE < closest.deltaE) closest = {...closest, deltaE, pair: `${name} slot ${slot}, a group of ${size}: ${group[i]} (depth ${i}) and ${group[j]} (depth ${j})`};
-                    }
-                }
-            }
-        });
-    }
-    return closest;
-}
-
-const FLOOR = closestPairOfTodaysSmallGroups();
-
-/** Rule B's band: a shade's HSL lightness stays inside it, off black and off white. */
-const LIGHTNESS_BAND = [10, 90] as const;
-
-/** What the hex round trip may move a lightness by: half a step of 1/255 on the brightest and the darkest channel. */
-const HEX_LIGHTNESS_QUANTUM = (0.5 / 255) * 100;
-
-/** How far a shade's hue may stray from its family's: the hex quantisation of a halved saturation moves it by up to 2.2° (measured). */
-const HUE_TOLERANCE = 3;
-
-/**
- * What breaks rule B's criterion among the colours of one family, one phrase per problem — empty
- * when nothing does: two sharing a colour, two closer than `floor` in CIEDE2000, a shade more than
- * 3° off the hue of depth 0 or outside L [10, 90].
- */
-function perceptualProblems(colours: ReadonlyArray<{label: string; color: string; depth: number}>, floor: number): string[] {
-    const base = colours.find((colour) => colour.depth === 0);
-    if (!base) return ['no colour at depth 0 to hold the hue against'];
-
-    const problems: string[] = [];
-    for (let i = 0; i < colours.length; i++) {
-        for (let j = i + 1; j < colours.length; j++) {
-            const [first, second] = [colours[i], colours[j]];
-            if (first.color.toLowerCase() === second.color.toLowerCase()) {
-                problems.push(`${first.label} and ${second.label} share ${first.color}`);
-                continue;
-            }
-            const deltaE = deltaE00(first.color, second.color);
-            // Negated on purpose: a NaN distance is a problem, not a pass.
-            if (!(deltaE >= floor)) problems.push(`${first.label}/${second.label} ΔE00 ${deltaE.toFixed(2)}`);
-        }
-    }
-    for (const colour of colours) {
-        if (colour.depth === 0) continue;
-        const deltaH = hueDistance(colour.color, base.color);
-        if (deltaH > HUE_TOLERANCE) problems.push(`${colour.label} Δh ${deltaH.toFixed(1)}°`);
-        const lightness = lightnessOf(colour.color);
-        if (lightness < LIGHTNESS_BAND[0] - HEX_LIGHTNESS_QUANTUM || lightness > LIGHTNESS_BAND[1] + HEX_LIGHTNESS_QUANTUM) problems.push(`${colour.label} L ${lightness.toFixed(1)}`);
-    }
-    return problems;
-}
 
 /**
  * Six of the ETF family's subtypes by vehicle, read off K's enum in its order — the generic ETF
- * excluded. Six, whatever K adds later: the claim is about a family of six subtypes, and the ETF
- * family as a whole is measured, at whatever size K gives it, in `allocationHierarchy.test.ts`.
+ * excluded. Six: as many shades as GR4 gives a family, three toward each pole.
  */
 function sixEtfSubtypes(): string[] {
     const subtypes = loadedTaxonomy().assetTypes.filter((type) => type !== 'ETF' && resolveByVehicle(type) === 'ETF');
@@ -904,121 +729,37 @@ function sixEtfSubtypes(): string[] {
     return subtypes.slice(0, 6);
 }
 
-/**
- * The ETF family at palette slot `index`: heavier unsplit families before it, then the generic ETF
- * when `withGeneric`, then `subtypes` by descending weight — so their rank follows the order given.
- */
-function etfFamilyAtSlot(index: number, subtypes: readonly string[], withGeneric: boolean): Entry[] {
-    const fillers = Array.from({length: index}, (_, j) => entry(`FILLER_${j}`, 1000 - j));
-    const members = withGeneric ? ['ETF', ...subtypes] : [...subtypes];
-    return [...fillers, ...members.map((key, rank) => entry(key, 10 * (members.length - rank)))];
-}
+const REAL_COLOUR_CASES = [
+    {theme: 'light', dark: false, withGeneric: true},
+    {theme: 'light', dark: false, withGeneric: false},
+    {theme: 'dark', dark: true, withGeneric: true},
+    {theme: 'dark', dark: true, withGeneric: false},
+] as const;
 
-/**
- * The ETF family's arcs at slot `index`, through the real hierarchy and rings — after the barrier
- * proving they are the arcs meant: the family last, on the palette entry, split; its members on the
- * outer ring in the order given; the generic ETF, when held, wearing the family colour verbatim.
- */
-function etfArcsAtSlot(palette: readonly string[], index: number, subtypes: readonly string[], withGeneric: boolean): {family: Arc; arcs: Arc[]; subtypeArcs: Arc[]} {
-    const {layout} = ringsFor(etfFamilyAtSlot(index, subtypes, withGeneric), {palette});
+describe('buildAllocationRings — wired to the real colours (categoryColor, familyShade)', () => {
+    it.each(REAL_COLOUR_CASES)('$theme theme, ETF with six subtypes (generic member held: $withGeneric): the base arc in categoryColor of ETF, the generic member the same, each subtype the familyShade of its rank — seven colours, pairwise distinct', ({dark, withGeneric}) => {
+        const subtypes = sixEtfSubtypes();
+        const keys = withGeneric ? ['ETF', ...subtypes] : [...subtypes];
+        // Descending weights, so the subtypes rank in K's order; a plain family beside them.
+        const entries = [...keys.map((key, rank) => entry(key, 10 * (keys.length - rank))), entry('BOND', 5)];
+        // As the pie wires it: the card the chart sits on is the dark theme's near pole. Read through the bridge,
+        // which in a node run (no document, no reader) answers the stand-in of the theme.
+        const poles = shadePoles(dark, chartRoles(dark).color('--lf-surface-card'));
+        const {layout} = ringsFor(entries, {colorOf: (primary) => categoryColor('type', primary, dark), shade: (base, rank) => familyShade(base, rank, poles)});
 
-    expect(layout.rings).toBe(true);
-    expect(layout.base.map((arc) => arc.primary)).toEqual([...Array.from({length: index}, (_, j) => `FILLER_${j}`), 'ETF']);
-    const family = baseArcOf(layout, 'ETF');
-    expect(family.color, `slot ${index}: the family's base arc is not the palette entry`).toBe(palette[index]);
-    expect(family.split).toBe(true);
-    expect(family.memberCount).toBe(subtypes.length + (withGeneric ? 1 : 0));
+        const family = baseArcOf(layout, 'ETF');
+        expect(family.color).toBe(categoryColor('type', 'ETF', dark));
+        const arcs = outerArcsOf(layout, 'ETF');
+        expect(arcs.map((arc) => `${arc.role}:${arc.key}`)).toEqual(keys.map((key) => `member:${key}`));
 
-    const arcs = outerArcsOf(layout, 'ETF');
-    const keys = withGeneric ? ['ETF', ...subtypes] : [...subtypes];
-    expect(arcs.map((arc) => `${arc.role}:${arc.key}`)).toEqual(keys.map((key) => `member:${key}`));
-    expect(arcs.map((arc) => arc.pure)).toEqual(keys.map((key) => key === 'ETF'));
-    if (withGeneric) expect(arcs[0].color, 'the generic ETF wears the family colour verbatim').toBe(family.color);
+        const subtypeArcs = arcs.filter((arc) => !arc.pure);
+        expect(subtypeArcs.map((arc) => arc.color)).toEqual(subtypes.map((_, index) => familyShade(family.color, index + 1, poles)));
+        if (withGeneric) expect(arcs[0].color, 'the generic ETF wears the family colour').toBe(family.color);
 
-    return {family, arcs, subtypeArcs: arcs.filter((arc) => !arc.pure)};
-}
-
-/**
- * Rule B's criterion on the outer ring, on every slot of `palette`: the base arc — depth 0 — and the
- * subtypes' arcs, one line per slot that breaks it, with every colour, so a red says what the reader
- * sees.
- *
- * Before measuring, the wiring: the subtypes are shaded by rank as a group of one plus their number,
- * generic member or not. Today `shadeForDepth` has no fourth parameter and ignores the argument, so
- * that holds trivially; it binds the moment the parameter exists.
- */
-function outerRingDefects(palette: readonly string[], subtypes: readonly string[], withGeneric: boolean, floor: number) {
-    const defects: string[] = [];
-    let slotsChecked = 0;
-
-    for (let index = 0; index < palette.length; index++) {
-        const {family, subtypeArcs} = etfArcsAtSlot(palette, index, subtypes, withGeneric);
-        expect(
-            subtypeArcs.map((arc) => arc.color),
-            `slot ${index}: the outer ring does not shade ${subtypes.length} subtypes as a group of ${1 + subtypes.length}`,
-        ).toEqual(subtypes.map((_, rank) => shadeForDepth(family.color, rank + 1, undefined, 1 + subtypes.length)));
-
-        const colours = [{label: 'ETF (base arc)', color: family.color, depth: 0}, ...subtypeArcs.map((arc, rank) => ({label: arc.key, color: arc.color, depth: rank + 1}))];
-        const problems = perceptualProblems(colours, floor);
-        if (problems.length > 0) defects.push(`slot ${index} ${palette[index]} → ${colours.map((colour) => `${colour.label} ${colour.color}`).join(', ')}: ${problems.join('; ')}`);
-        slotsChecked++;
-    }
-
-    return {defects, slotsChecked};
-}
-
-describe('buildAllocationRings — a family of six subtypes on the outer ring (rule B)', () => {
-    it('premise: the ruler reproduces published data — CIEDE2000 pairs of Sharma, Wu & Dalal (2005), both ways, and the CIELAB of sRGB colours', () => {
-        for (const [pair, first, second, deltaE] of SHARMA_PAIRS) {
-            expect(Math.abs(ciede2000(first, second) - deltaE), `pair ${pair}, first → second`).toBeLessThanOrEqual(1e-4);
-            expect(Math.abs(ciede2000(second, first) - deltaE), `pair ${pair}, second → first`).toBeLessThanOrEqual(1e-4);
-        }
-        for (const [hex, lab] of SRGB_LAB) {
-            const measured = labOf(hex);
-            lab.forEach((expected, axis) => expect(Math.abs(measured[axis] - expected), `${hex} ${['L*', 'a*', 'b*'][axis]}`).toBeLessThanOrEqual(1e-3));
-        }
-    });
-
-    it(`premise: today's groups of two and three on the pie palettes are never closer than ΔE00 ${FLOOR.deltaE.toFixed(2)}, and that is above 5`, () => {
-        // Anti-vacuous: the minimum over nothing is +∞, and +∞ is above 5.
-        expect(FLOOR.pairsMeasured, 'the floor was not measured on every slot of both pie palettes').toBe(4 * (PIE_PALETTE_LIGHT.length + PIE_PALETTE_DARK.length));
-        expect(Number.isFinite(FLOOR.deltaE), `the floor is not a finite distance: ${FLOOR.deltaE}`).toBe(true);
-        expect(FLOOR.deltaE, `the closest pair today — ${FLOOR.pair} — is no longer above 5`).toBeGreaterThan(5);
-    });
-
-    it.each(PIE_PALETTES)('ETF with six subtypes: the base arc and every outer arc pairwise distinct, at least the floor apart in CIEDE2000, on its hue and inside L [10, 90], on every entry of %s', (_name, palette) => {
-        const {defects, slotsChecked} = outerRingDefects(palette, sixEtfSubtypes(), true, FLOOR.deltaE);
-        expect(slotsChecked, 'the loop ran on fewer slots than the palette holds').toBe(palette.length);
-        expect(defects, `arcs of ETF and six subtypes the pie cannot tell apart (closer than ΔE00 ${FLOOR.deltaE.toFixed(2)}, today's closest pair), or that leave its hue, or reach black or white`).toEqual([]);
-    });
-
-    it.each(PIE_PALETTES)('six ETF subtypes and no generic ETF: the base arc still carries depth 0 — it and every outer arc pairwise distinct, at least the floor apart, on its hue and inside L [10, 90], on every entry of %s', (_name, palette) => {
-        const {defects, slotsChecked} = outerRingDefects(palette, sixEtfSubtypes(), false, FLOOR.deltaE);
-        expect(slotsChecked, 'the loop ran on fewer slots than the palette holds').toBe(palette.length);
-        expect(defects, `arcs of six ETF subtypes and their base arc the pie cannot tell apart (closer than ΔE00 ${FLOOR.deltaE.toFixed(2)}, today's closest pair), or that leave its hue, or reach black or white`).toEqual([]);
-    });
-
-    it.each(PIE_PALETTES)("a family of one or two subtypes keeps today's colours exactly, generic member or not, on every entry of %s", (_name, palette) => {
-        // The transcription of today's walk, anchored on the literal output of the code before rule B.
-        expect([1, 2].map((depth) => todaysShade('#1a4031', depth))).toEqual(['#378969', '#65c19d']);
-        expect([1, 2].map((depth) => todaysShade('#4ade80', depth))).toEqual(['#1ea44f', '#0e4e25']);
-
-        const [first, second] = sixEtfSubtypes();
-        let familiesChecked = 0;
-        for (const subtypes of [[first], [first, second]]) {
-            for (const withGeneric of [true, false]) {
-                for (let index = 0; index < palette.length; index++) {
-                    const {arcs} = etfArcsAtSlot(palette, index, subtypes, withGeneric);
-                    const today = [...(withGeneric ? [palette[index]] : []), ...subtypes.map((_, rank) => todaysShade(palette[index], rank + 1))];
-                    expect(
-                        arcs.map((arc) => arc.color),
-                        `slot ${index}: ${subtypes.join(' + ')}${withGeneric ? ' beside the generic ETF' : ''}`,
-                    ).toEqual(today);
-                    familiesChecked++;
-                }
-            }
-        }
-        expect(familiesChecked).toBe(4 * palette.length);
+        const colours = [family.color, ...subtypeArcs.map((arc) => arc.color)];
+        expect(new Set(colours.map((colour) => colour.toLowerCase())).size, `the ETF family's arcs sharing a colour: ${colours.join(', ')}`).toBe(7);
+        // The family beside it keeps its own colour on its base arc and on its filler.
+        expect([baseArcOf(layout, 'BOND'), ...outerArcsOf(layout, 'BOND')].map((arc) => `${arc.role} ${arc.color}`)).toEqual(['base', 'filler'].map((role) => `${role} ${categoryColor('type', 'BOND', dark)}`));
     });
 });
 
@@ -1193,8 +934,12 @@ describe('buildAllocationRingData — rounding', () => {
  * Why (re-pin, M-18): a language switch rebuilds in full, as a theme switch does — the legend's name map
  * and the label formatters were built for the locale of the last full build — so the guard also requires
  * `lastLocale === locale`, the interface locale the full build records beside `lastDark`.
+ *
+ * Why (re-pin, DV): the sector names carry the emoji of the sector store (the backend's one map), which
+ * arrive after the first build; a new list of emoji rebuilds in full too, so the guard also requires
+ * `lastEmojiVersion === emojiVersion`, the store's version the full build wrote its names from.
  */
-const FAST_PATH_HEADER = /if\s*\(\s*chartFullyInitialized\s*&&\s*lastDark\s*===\s*isDark\s*&&\s*lastLocale\s*===\s*locale\s*&&\s*sameTypeSet\s*\)\s*\{/;
+const FAST_PATH_HEADER = /if\s*\(\s*chartFullyInitialized\s*&&\s*lastDark\s*===\s*isDark\s*&&\s*lastLocale\s*===\s*locale\s*&&\s*lastEmojiVersion\s*===\s*emojiVersion\s*&&\s*sameTypeSet\s*\)\s*\{/;
 
 /** The two series of D72 since the redesign of 24/09, as `ringSeries()` names them. */
 const RING_SERIES_IDS = ['alloc-base', 'alloc-outer'];
@@ -1316,7 +1061,7 @@ function expectOnlyTheTwoRingSeries(code: string): void {
  * the very `FAST_PATH_HEADER` the real check uses.
  */
 const SINGLE_SERIES_FAST_PATH = `
-        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && sameTypeSet) {
+        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && lastEmojiVersion === emojiVersion && sameTypeSet) {
             // was: {id: 'alloc-base', data: baseRingData}, {id: 'alloc-outer', data: outerRingData}
             chartInstance.setOption({series: [{data: chartData}]});
             return;

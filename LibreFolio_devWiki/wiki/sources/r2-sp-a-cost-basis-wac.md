@@ -3,7 +3,7 @@ title: "R2 SP-A — Cost Basis Override Currency + WAC Service + recalc-wac"
 category: source
 source_type: plan
 date_ingested: 2026-06-01
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/PlanD_SplitPromoteFullStack/R2-WalktestFeedback/plan-R2-SP-A-CostBasisWAC.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-R2/SP-A-CostBasisWAC/plan-R2-SP-A-CostBasisWAC.prompt.md
 tags: [phase07, transactions, wac, cost-basis, currency, fx, backend, schema, endpoint]
 related:
   - sources/r2-walktest-feedback-master
@@ -16,7 +16,7 @@ related:
 # Source: R2 SP-A — Cost Basis Override Currency + WAC Service
 
 ## Summary
-Backend implementation plan (✅ completed, commit `a79e68156`) covering the fundamental breaking change: `cost_basis_override` upgraded from `SafeDecimal` to `Currency` object. Steps 1–5 of the master plan. Adds `cost_basis_currency` DB column, rewrites `compute_weighted_avg_cost` with FX cross-currency support, and introduces `POST /transactions/recalc-wac` endpoint.
+Backend implementation plan (✅ completed, commit `5441cf544`) covering the fundamental breaking change: `cost_basis_override` upgraded from `SafeDecimal` to `Currency` object. Steps 1–5 of the master plan. Adds `cost_basis_currency` DB column, rewrites `compute_weighted_avg_cost` with FX cross-currency support, and introduces `POST /transactions/recalc-wac` endpoint.
 
 ## Key Takeaways
 
@@ -55,8 +55,8 @@ Backend implementation plan (✅ completed, commit `a79e68156`) covering the fun
 |------|------|
 | DB model | `backend/app/db/models.py` |
 | Alembic migration | `backend/alembic/versions/001_initial.py` |
-| TX schemas | `backend/app/schemas/transactions.py` |
+| TX schemas | `backend/app/schemas/transactions/transactions.py` |
 | Common schemas (Currency) | `backend/app/schemas/common.py` |
-| TX service (WAC) | `backend/app/services/transaction_service.py` |
-| FX service (rate lookup) | `backend/app/services/fx.py` |
+| TX service (WAC) | `backend/app/services/transactions/transaction_service.py` |
+| FX service (rate lookup) | `backend/app/services/fx/conversion.py` |
 | TX API endpoints | `backend/app/api/v1/transactions.py` |

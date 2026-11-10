@@ -17,7 +17,7 @@ Before the 1.2 tag, workstreams T and I checked the 227 lines of the CHANGELOG's
 the code and against `v1.1.0` (T 139 lines, I 88). More than 40 claims were false or partly false — six of them in
 the version they named; 15 lines described defects born and cured after 1.1.0, so they were no news to a 1.1 user;
 lines sat in the wrong section; the four-level risk panel, new in 1.2, was not announced at all. The chapter was
-rewritten in `60f734e08` (+132 −141).
+rewritten in `ed85502e2` (+132 −141).
 
 ## Decision
 

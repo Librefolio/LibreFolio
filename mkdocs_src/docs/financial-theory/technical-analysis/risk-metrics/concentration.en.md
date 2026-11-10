@@ -79,7 +79,7 @@ A figure computed over positions is verifiable on this point: LibreFolio's portf
 
 ## 🪙 Where Cash Sits {: #where-cash-sits }
 
-Cash has to be handled somehow, and the choice changes the result. In the portfolio and broker reporting, the rule is stated in the code itself: weights are position value over **total NAV**, and cash is *included in the denominator but is not itself a term of the index*.
+Cash has to be handled somehow, and the choice changes the result. In the portfolio and broker reporting, the rule is stated in the code itself: weights are position value over **total NAV**, and cash is *included in the denominator but is not itself a term of the index*. That denominator has to be positive: with a total NAV — the Net Worth — at or below zero there is no weight, so the reporting gives neither a largest-position weight nor an index (both null) rather than a figure divided by an arbitrary stand-in.
 
 The consequence is worth spelling out, because it runs in a direction most readers would not guess. Cash dilutes every weight without contributing a square of its own, so holding more cash **lowers** the index and therefore **raises** the effective-asset count. A portfolio holding half its value in cash looks better diversified than the same holdings without it.
 
@@ -101,7 +101,7 @@ That is defensible — cash genuinely is an unconcentrated position, and it genu
 
 Read the two figures as a pair, in this order:
 
-1. **Effective assets against the actual number of holdings.** The direction of the gap selects its meaning: **below** the count, the weights are lopsided and a few positions carry the portfolio regardless of how many rows it has; **above** it, the excess is cash, and it says nothing about how the weights are spread.
+1. **Effective assets against the actual number of holdings.** The direction of the gap selects its meaning: **below** the count, the weights are lopsided and a few positions carry the portfolio regardless of how many rows it has; **above** it, the excess comes from the part the weights do not cover — cash and holdings without a usable price series, not cash alone — and it says nothing about how the weights are spread.
 2. **Diversification ratio.** A value near 1 means the holdings move as one, and the spreading bought little. The further above 1, the more the holdings offset one another.
 
 The second figure is the one that can contradict the first, and it is the contradiction that carries the information. A portfolio can be perfectly balanced by weight and undiversified in substance — it is the ordinary outcome of holding several funds that track overlapping markets.

@@ -8,6 +8,7 @@ import shutil
 import sqlite3
 import subprocess
 import time
+import webbrowser
 from pathlib import Path
 
 from scripts.cli_base import pipenv_prefix
@@ -173,11 +174,7 @@ def _clean_js_coverage_dirs() -> None:
             return
         except OSError as exc:
             if attempt == 3:
-                raise RuntimeError(
-                    f"Could not remove frontend/{JS_COVERAGE_DIR}/ ({exc}). JS coverage "
-                    "cannot be reused across a rebuild, so the run is stopped rather "
-                    "than left to report stale data. Remove the directory by hand and retry."
-                ) from exc
+                raise RuntimeError(f"Could not remove frontend/{JS_COVERAGE_DIR}/ ({exc}). JS coverage " "cannot be reused across a rebuild, so the run is stopped rather " "than left to report stale data. Remove the directory by hand and retry.") from exc
             time.sleep(0.2)
 
 
@@ -215,8 +212,9 @@ def _finalize_js_coverage() -> None:
     - **unit** — vitest's istanbul provider writes a ``coverage-final.json`` at
       the end of every process, and the runner launches vitest once per
       category, each into its own ``unit/<tag>`` directory.
-    - **e2e** — the Playwright fixture drops one JSON per test into
-      ``e2e-raw/``, read straight out of ``window.__coverage__``.
+    - **e2e** — each Playwright worker sums its tests' ``window.__coverage__``
+      and writes one JSON per worker into ``e2e-raw/``
+      (``worker-<parallelIndex>-<pid>.json``, ``e2e/fixtures/js-coverage-sink.ts``).
 
     That both levels are istanbul is what makes the merge mean anything: while
     the E2E level was V8, the two counted different things and the combined
@@ -243,11 +241,11 @@ def _finalize_js_coverage() -> None:
         print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/unit-combined/ ({len(unit_jsons)} run){Colors.NC}")
         sources.append(f"{JS_COVERAGE_DIR}/unit-combined/coverage-final.json")
 
-    # --- e2e: one istanbul JSON per test ---
+    # --- e2e: one istanbul JSON per Playwright worker, each the sum of its tests ---
     e2e_raw = js_dir / "e2e-raw"
     e2e_jsons = sorted(e2e_raw.glob("*.json")) if e2e_raw.is_dir() else []
     if e2e_jsons and report("e2e", "e2e", [f"{JS_COVERAGE_DIR}/e2e-raw"]):
-        print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/e2e/ ({len(e2e_jsons)} test){Colors.NC}")
+        print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/e2e/ ({len(e2e_jsons)} worker file(s)){Colors.NC}")
         sources.append(f"{JS_COVERAGE_DIR}/e2e/coverage-final.json")
 
     if not sources:
@@ -292,9 +290,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
 
         print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
         if pid_files:
-            print(f"   Found {len(pid_files)} coverage data file(s): "
-                  f"{', '.join(f.name for f in pid_files[:5])}"
-                  f"{'...' if len(pid_files) > 5 else ''}")
+            print(f"   Found {len(pid_files)} coverage data file(s): " f"{', '.join(f.name for f in pid_files[:5])}" f"{'...' if len(pid_files) > 5 else ''}")
             combined, leftovers, detail = combine_coverage_dir(cwd, cwd=cwd, append=False)
             if not combined:
                 if detail:
@@ -308,27 +304,17 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
                 print(f"   {Colors.GREEN}💾 Saved frontend coverage → .coverage_data/frontend{Colors.NC}")
         else:
             print_warning("   No .coverage.* files found! Server may not have written coverage data.")
-            print(f"   {Colors.YELLOW}Hint: check that './dev.py server --coverage' starts the server "
-                  f"with 'coverage run'{Colors.NC}")
+            print(f"   {Colors.YELLOW}Hint: check that './dev.py server --coverage' starts the server " f"with 'coverage run'{Colors.NC}")
 
     if is_all:
         if backend_db.exists():
             shutil.copy2(str(backend_db), str(main_cov))
-            subprocess.run(
-                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov-backend",
-                 "--title", "LibreFolio Backend Coverage", "--ignore-errors"],
-                cwd=os.getcwd(), capture_output=True, text=True
-            )
+            subprocess.run([*pipenv_prefix(), "coverage", "html", "-d", "htmlcov-backend", "--title", "LibreFolio Backend Coverage", "--ignore-errors"], cwd=os.getcwd(), capture_output=True, text=True)
             print(f"   {Colors.GREEN}📊 Generated htmlcov-backend/{Colors.NC}")
 
         if frontend_db.exists():
             shutil.copy2(str(frontend_db), str(main_cov))
-            r_fe = subprocess.run(
-                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov-backend-e2e",
-                 "--title", "LibreFolio Frontend E2E → Backend Coverage",
-                 "--ignore-errors"],
-                cwd=os.getcwd(), capture_output=True, text=True
-            )
+            r_fe = subprocess.run([*pipenv_prefix(), "coverage", "html", "-d", "htmlcov-backend-e2e", "--title", "LibreFolio Frontend E2E → Backend Coverage", "--ignore-errors"], cwd=os.getcwd(), capture_output=True, text=True)
             if r_fe.returncode != 0:
                 print_warning(f"coverage html (frontend) failed: {r_fe.stderr.strip()}")
             else:
@@ -339,31 +325,18 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
             if main_cov.exists():
                 main_cov.unlink()
             print(f"{Colors.YELLOW}📊 Merging backend + frontend for combined report...{Colors.NC}")
-            r_merge = subprocess.run(
-                [*pipenv_prefix(), "coverage", "combine", "--keep"] + combine_srcs,
-                cwd=os.getcwd(), capture_output=True, text=True
-            )
+            r_merge = subprocess.run([*pipenv_prefix(), "coverage", "combine", "--keep"] + combine_srcs, cwd=os.getcwd(), capture_output=True, text=True)
             if r_merge.returncode != 0:
                 # Come sopra: coverage.py parla su stdout quando il combine rifiuta.
-                err_lines = [l for l in (r_merge.stdout + "\n" + r_merge.stderr).strip().splitlines()
-                             if "Loading .env" not in l and l.strip()]
+                err_lines = [l for l in (r_merge.stdout + "\n" + r_merge.stderr).strip().splitlines() if "Loading .env" not in l and l.strip()]
                 if err_lines:
                     print_warning(f"   coverage combine: {' '.join(err_lines)}")
 
-        r = subprocess.run(
-            [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov",
-             "--title", "LibreFolio Combined Coverage", "--ignore-errors"],
-            cwd=os.getcwd(), capture_output=True, text=True
-        )
+        r = subprocess.run([*pipenv_prefix(), "coverage", "html", "-d", "htmlcov", "--title", "LibreFolio Combined Coverage", "--ignore-errors"], cwd=os.getcwd(), capture_output=True, text=True)
         if r.returncode != 0:
             print_warning(f"coverage html failed: {r.stderr.strip()}")
     elif is_front:
-        r = subprocess.run(
-            [*pipenv_prefix(), "coverage", "html", "-d", html_dir,
-             "--title", "LibreFolio Frontend E2E → Backend Coverage",
-             "--ignore-errors"],
-            cwd=os.getcwd(), capture_output=True, text=True
-        )
+        r = subprocess.run([*pipenv_prefix(), "coverage", "html", "-d", html_dir, "--title", "LibreFolio Frontend E2E → Backend Coverage", "--ignore-errors"], cwd=os.getcwd(), capture_output=True, text=True)
         if r.returncode != 0:
             print_warning(f"coverage html failed: {r.stderr.strip()}")
     else:
@@ -372,10 +345,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
             shutil.copy2(str(main_cov), str(backend_db))
             print(f"   {Colors.GREEN}💾 Saved backend coverage → .coverage_data/backend{Colors.NC}")
 
-    subprocess.run(
-        [*pipenv_prefix(), "coverage", "report", "--skip-covered", "--ignore-errors"],
-        cwd=os.getcwd(), capture_output=False, text=True
-    )
+    subprocess.run([*pipenv_prefix(), "coverage", "report", "--skip-covered", "--ignore-errors"], cwd=os.getcwd(), capture_output=False, text=True)
 
     print()
     print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")
@@ -399,13 +369,13 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
 
 def _handle_coverage_command(args) -> int:
     """Handle ./dev.py test coverage show [backend|frontend|combined]."""
-    action = getattr(args, 'cov_action', None)
+    action = getattr(args, "cov_action", None)
     if not action:
         print_error("Usage: ./dev.py test coverage show [backend|frontend|combined]")
         return 1
 
     if action == "show":
-        target = getattr(args, 'target', 'combined')
+        target = getattr(args, "target", "combined")
         return _coverage_show(target)
     elif action == "combine":
         return _coverage_combine()
@@ -453,7 +423,10 @@ def _coverage_show(target: str) -> int:
 
     if index_file.exists():
         print_success(f"Opening {target} coverage report: {html_dir}/index.html")
-        subprocess.run(["open", str(index_file)])
+        # `open` exists on macOS only: the standard library picks the platform's opener (xdg-open on Linux, the
+        # default browser on Windows), and a machine with no browser just leaves the path printed above.
+        if not webbrowser.open(index_file.resolve().as_uri()):
+            print_info(f"No browser to open it here: {index_file}")
         return 0
     else:
         print_error(f"Failed to generate {target} coverage report")
@@ -462,10 +435,7 @@ def _coverage_show(target: str) -> int:
 
 def _coverage_combine() -> int:
     """Combine all .coverage.* files and generate combined HTML report."""
-    return _coverage_combine_internal(
-        html_dir="htmlcov",
-        title="LibreFolio Combined Coverage (Backend + Frontend)"
-    )
+    return _coverage_combine_internal(html_dir="htmlcov", title="LibreFolio Combined Coverage (Backend + Frontend)")
 
 
 def _combine_keeping(cwd: Path, snapshots: list) -> None:
@@ -515,19 +485,12 @@ def _coverage_combine_internal(html_dir: str = "htmlcov", title: str = "LibreFol
 
         _combine_keeping(cwd, combine_files if snapshots else [])
 
-    result = subprocess.run(
-        [*pipenv_prefix(), "coverage", "html", "-d", html_dir, "--title", title],
-        cwd=os.getcwd(), capture_output=True, text=True
-    )
+    result = subprocess.run([*pipenv_prefix(), "coverage", "html", "-d", html_dir, "--title", title], cwd=os.getcwd(), capture_output=True, text=True)
     if result.returncode == 0:
         print_success(f"Coverage report generated: {html_dir}/index.html")
     else:
         print_error(f"Failed to generate report: {result.stderr.strip()}")
         return 1
 
-    subprocess.run(
-        [*pipenv_prefix(), "coverage", "report", "--skip-covered"],
-        cwd=os.getcwd(), capture_output=False, text=True
-    )
+    subprocess.run([*pipenv_prefix(), "coverage", "report", "--skip-covered"], cwd=os.getcwd(), capture_output=False, text=True)
     return 0
-

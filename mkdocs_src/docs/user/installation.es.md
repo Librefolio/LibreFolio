@@ -4,6 +4,8 @@ Esta guía instala LibreFolio con la imagen Docker oficial precompilada: la form
 
 Solo necesitas Docker: nada de Python, Node.js o Pipenv, y nada que compilar.
 
+🍓 La imagen oficial se publica para `amd64` y `arm64`, así que se ejecuta de forma nativa, sin emulación, en una Raspberry Pi 4/5 (SO de 64 bits) y en los Mac con Apple Silicon (el ARM de 32 bits no se publica).
+
 ---
 
 ## ✅ Requisitos previos
@@ -108,6 +110,7 @@ El stack ejecuta la imagen oficial desde el GitHub Container Registry (GHCR) y g
         environment:
           - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
           - HOST=0.0.0.0
+          - PORT=6040
         healthcheck:
           test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
           interval: 30s
@@ -132,7 +135,7 @@ Docker descarga la imagen oficial desde GHCR e inicia LibreFolio. La etiqueta `l
 
 Abre tu navegador en **`http://localhost:6040`**.
 
-En tu primera visita, LibreFolio muestra la página de registro: la primera cuenta que crees se convierte automáticamente en **administrador**.
+En tu primera visita, LibreFolio muestra la página de inicio de sesión: haz clic en **Regístrate aquí** para crear tu cuenta. La primera cuenta se convierte automáticamente en **administrador**; para dejar entrar a otras personas, envíales un [enlace de invitación](../admin/users.md#invitations).
 
 ??? tip "🖥️ Ver el estado y los registros (opcional)"
 
@@ -223,6 +226,7 @@ Las migraciones de la base de datos se ejecutan automáticamente cuando se inici
 
 - Con la etiqueta `latest` siempre obtienes la versión más reciente, junto con cualquier cambio que traiga.
 - Para actualizar solo cuando tú decidas, fija una versión en lugar de `latest`: `ghcr.io/librefolio/librefolio:1.1.0` (variante completa) o `ghcr.io/librefolio/librefolio:1.1.0-light` (variante ligera). Consulta [Variantes de imagen](#image-variants-full-and-light).
+- Tras la actualización, cada usuario ve una vez qué ha cambiado desde la versión que usó por última vez: consulta [Novedades tras una actualización](settings/about.md#whats-new).
 
 ### 🛠️ 1. Actualización manual {: #manual-update }
 

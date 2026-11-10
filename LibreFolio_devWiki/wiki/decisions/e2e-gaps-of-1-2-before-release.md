@@ -12,7 +12,7 @@ related:
 
 # Decision: test the new 1.2 paths end to end before shipping
 
-> **Delivered** (train 76, `56830fc79`, 2026-10-12): the seven gaps have their E2E through the real backend, listed
+> **Delivered** (train 76, `b30e53b22`, 2026-10-12): the seven gaps have their E2E through the real backend, listed
 > under «Delivered». Recorded first on 2026-10-12 from plan 46, §12.4, when no test of the list existed.
 
 ## Context
@@ -63,7 +63,7 @@ records no red-before run for these gaps: they are new coverage, not cures.
 - **1 — Risk** (`portfolio/risk-real.spec.ts`): levels 1 and 4 from a real `/risk/query` on two seed assets, every
   answer checked against its schema, no stubbed route.
 - **6 — account deletion** (`brokers/account-deletion.spec.ts`): the broker the user alone owned goes, the co-owned one
-  stays with the other owner; the test ids it needs came in `be3e1ed60`.
+  stays with the other owner; the test ids it needs came in `2182ac532`.
 - **4 — yield on cost** (`portfolio/yield-on-cost-real.spec.ts`): per asset and broker (30 / 10 ÷ 100 = 3.00 %,
   12 / 8 ÷ 125 = 1.20 %), and no YoC without a cost (P-10).
 - **7 — the PDF preview offline** (`files-pdf-offline.spec.ts`): a PDF drawn with every other origin refused, every

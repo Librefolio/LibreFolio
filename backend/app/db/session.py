@@ -6,7 +6,7 @@ Handles SQLite connection and session lifecycle with async support.
 from pathlib import Path
 from typing import AsyncGenerator
 
-from sqlalchemy import Engine, create_engine, event
+from sqlalchemy import Engine, create_engine, event, false, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -22,6 +22,12 @@ def set_sqlite_pragma(dbapi_conn, _connection_record):
     """
     Enable essential SQLite PRAGMAs for proper operation.
 
+    - trusted_schema=OFF, first (H-51): the SQL a database's schema keeps (a CHECK, a DEFAULT, a generated
+      column, an index's expression) may call only the functions SQLite marks innocuous. SQLAlchemy's SQLite
+      dialects register ``regexp`` and ``floor`` in Python on every connection; a restored archive's schema,
+      which the restore check reads by kind only (B-28), could otherwise make every write call them with its own
+      pattern. LibreFolio's own schema calls only the built-in ``lower()`` (``ux_users_email_lower``); top-level
+      SQL is not restricted. ``writable_schema=RESET`` comes last, see below.
     - foreign_keys=ON: Required for referential integrity
     - journal_mode=WAL: Write-Ahead Logging — allows concurrent readers and
       one writer without blocking. Essential for the FX sync pipeline that
@@ -49,9 +55,14 @@ def set_sqlite_pragma(dbapi_conn, _connection_record):
     Note: This event listener applies to ALL sync engines (including the one backing async).
     """
     cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA trusted_schema=OFF")
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA busy_timeout=30000")
+    # Last (H-51): journal_mode read the schema while regexp and floor did not exist yet — this listener runs before the
+    # dialect registers them — so a CHECK or an index's expression calling them was read as an unknown function and never
+    # marked as the schema's own. Reloaded at the next statement, with them registered, the schema is refused there.
+    cursor.execute("PRAGMA writable_schema=RESET")
     cursor.close()
 
 
@@ -172,3 +183,17 @@ async def get_session_generator() -> AsyncGenerator[AsyncSession]:
     """
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         yield session
+
+
+async def begin_writes(session: AsyncSession, table: type) -> None:
+    """Make SQLite open the transaction now, before the first SAVEPOINT of a write path (backlog W-B20).
+
+    pysqlite defers ``BEGIN`` until the first write. A SAVEPOINT opened after only reads is then the outermost
+    transaction, and its RELEASE commits: a later rollback can no longer undo it, and one failing step of a bulk
+    operation cannot be rolled back on its own. An UPDATE of ``table`` that matches no row is a write to pysqlite, so it
+    emits ``BEGIN``, and the savepoints opened after it nest inside one transaction. With a transaction already open it
+    changes nothing. A global ``begin`` listener is not an option: a session that reads, sees another writer commit,
+    then writes, would fail at once with ``SQLITE_BUSY_SNAPSHOT``.
+    """
+    key = next(iter(table.__table__.primary_key.columns))
+    await session.execute(update(table).where(false()).values({key.name: key}).execution_options(synchronize_session=False))

@@ -17,25 +17,27 @@ Ogni blocco qui sotto segue uno schema fisso: a cosa risponde, uno screenshot, i
 Quanto potresti perdere, e quanto è già stato grave? Ogni cifra qui è qualcosa che il tuo portafoglio ha realmente attraversato nel periodo; versamenti e prelievi non contano come guadagni o perdite.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="Il blocco Quanto può farmi male?: le schede Una brutta giornata, Un brutto mese e Il peggior calo, ciascuna con il suo importo, e le loro righe di dettaglio (peggior giornata effettivamente vista, quanto è durato il calo, recupero necessario, drawdown a rischio, media oltre quella soglia); poi Tempo trascorso sotto il picco con l'indice di Ulcer, e la Distribuzione dei rendimenti giornalieri con la soglia VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="Il blocco Quanto può farmi male?: le schede Una giornata storta, Trenta giorni storti e La peggior discesa, ciascuna con il suo importo, e le loro righe di dettaglio (il giorno peggiore e quando, i 30 giorni peggiori e quando, le date della peggior discesa e quanto è durata, recupero richiesto, drawdown a rischio, media oltre la soglia, indice di Ulcer); poi Tempo trascorso sotto il picco, e la Distribuzione dei rendimenti giornalieri con la soglia VaR" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 **Strumenti mostrati**
 
-- **Una brutta giornata**, **Un brutto mese** — la tua perdita media nel 5% peggiore delle giornate, o di periodi di un mese → [VaR condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Soglia VaR** — su *Distribuzione dei rendimenti giornalieri*: la perdita giornaliera che solo il 5% peggiore delle giornate ha superato → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
-- **Il giorno peggiore davvero visto** — la singola giornata peggiore del periodo → [peggior realizzazione](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
-- **Il peggior calo** — la discesa più profonda da un massimo a un minimo successivo → [drawdown massimo](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **Una giornata storta**, **Trenta giorni storti** — la tua perdita media nel 5% peggiore delle giornate, o dei periodi di 30 giorni → [VaR condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
+- **Soglia VaR** — su *Distribuzione dei rendimenti giornalieri*: la perdita giornaliera che solo il 5% peggiore delle giornate ha superato; una linea tratteggiata la segna nel grafico, e passando su una barra vedi quanti giorni ci sono caduti e se sta oltre la soglia; la rotella o due dita ingrandiscono il grafico, e con molte barre compare uno slider sotto → [Value at Risk](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **Il giorno peggiore** — sotto *Una giornata storta*: la singola giornata peggiore del periodo, e quando è stata → [peggior realizzazione](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
+- **I 30 giorni peggiori** — sotto *Trenta giorni storti*: il peggior periodo di 30 giorni che il portafoglio ha davvero attraversato, e quando è stato. *Trenta giorni storti* è invece una media del 5% peggiore, che nessun periodo ha mai mostrato da solo
+- **Il peggior calo** — la discesa più profonda da un massimo a un minimo successivo, quando è iniziata e finita, e quanto è durata → [drawdown massimo](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Drawdown a rischio** — quanto sotto il suo picco si trovava il portafoglio, a parte il 5% peggiore delle giornate → [drawdown a rischio](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
-- **Media oltre quella soglia** — quanto sotto il suo picco si trovava, in media, in quelle giornate peggiori → [drawdown a rischio condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
-- **Attualmente sotto il massimo** — quanto sotto il suo ultimo massimo si trova oggi il portafoglio → [drawdown attuale](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Indice di Ulcer** — sotto *Tempo passato sotto il picco*: quanto sono stati profondi e lunghi i cali; più basso è più calmo → [indice di Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
+- **Media oltre la soglia** — quanto sotto il suo picco si trovava, in media, in quelle giornate peggiori → [drawdown a rischio condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
+- **Sotto il massimo, oggi** — quanto sotto il suo ultimo massimo si trova oggi il portafoglio → [drawdown attuale](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Indice di Ulcer** — sotto *La peggior discesa*, accanto al drawdown a rischio: quanto sono stati profondi e lunghi i cali; più basso è più calmo → [indice di Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **Come leggerlo**
 
 - **Orizzonti diversi**: le schede vanno da un giorno a un mese al peggior calo, quindi non sommarle mai tra loro.
-- **L'importo** sotto ogni percentuale è quella perdita applicata al tuo patrimonio netto.
-- **Attualmente sotto il massimo** compare solo mentre il tuo portafoglio è sotto il suo ultimo massimo.
+- **L'importo** accanto a ogni percentuale è quella perdita applicata al tuo patrimonio netto.
+- **Ogni scheda ha la stessa forma**: un titolo e un sottotitolo, la percentuale con il suo importo, poi righe di dettaglio con il nome a sinistra e la cifra a destra. Una data è scritta come la scrive la tua lingua.
+- **Sotto il massimo, oggi** compare solo mentre il tuo portafoglio è sotto il suo ultimo massimo.
 - **Le icone ? e ⓘ** accanto a una cifra aprono la sua pagina teorica.
 
 ---
@@ -50,8 +52,8 @@ Possedere molte posizioni non è la stessa cosa che essere diversificato. Questo
 
 **Strumenti mostrati**
 
-- **Quante scommesse indipendenti ho davvero?** — quanto è uniformemente distribuito il tuo denaro → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
-- **Distribuire il denaro è servito a qualcosa?** — quanto le tue posizioni si attutiscono a vicenda → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **Quante scommesse indipendenti ho davvero?** — il numero effettivo di posizioni: quanto è uniformemente distribuito il tuo denaro; sopra il numero di posizioni, l'eccesso viene dalla parte non coperta (liquidità e posizioni senza prezzo) → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **Distribuire il denaro è servito a qualcosa?** — quanto le tue posizioni si attutiscono a vicenda: 1 significa nessun beneficio, più alto è meglio, fino a circa √N con N posizioni → [Concentration](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
 - **Quanto di me non è misurato qui?** — liquidità, più le posizioni senza prezzi utilizzabili → [qualità dei dati](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#excluded-weight)
 - **Peso** e **contributo al rischio** — la quota di ciascuna posizione del tuo denaro, e del tuo rischio → [contributo al rischio](../../financial-theory/technical-analysis/risk-metrics/risk-contribution.md)
 - **Quali di queste sono la stessa scommessa?** — quanto strettamente si muove insieme ogni coppia di posizioni → [Correlation](../../financial-theory/technical-analysis/risk-metrics/correlation.md)
@@ -110,7 +112,7 @@ Cosa farebbe una crisi passata, o uno shock che immagini, al portafoglio che det
 - **Aggiungi uno strumento** con i pulsanti **Aggiungi:**; la sua **×** lo chiude e ne scarta il risultato. Gli strumenti che lasci aperti tornano la prossima volta, in questo browser.
 - **Replay storico**: scegli una crisi in **Preset**, oppure il tuo **Periodo**, poi **Esegui replay**. Le posizioni senza prezzi per quel periodo vengono escluse, e un pulsante può offrire un periodo in cui tutte hanno prezzi.
 - **Shock ipotetico**: clicca su uno scenario, come *Crollo azionario*, per eseguirlo; **Mostra lo shock per bucket** ti consente di modificarne le ipotesi.
-- **Simulazione**: scegli una modalità — *Storia rimescolata* è quella consigliata — e un orizzonte, poi **Simula**. Leggi il cono come una gamma di possibilità, non come una previsione.
+- **Simulazione**: scegli una modalità — *Storia rimescolata* è quella consigliata — e un orizzonte, in giorni o come anni, mesi e giorni (`2a3m5g`), poi **Simula**. Leggi il cono come una gamma di possibilità, non come una previsione.
 
 !!! note "La simulazione è ancora in beta"
 
@@ -133,6 +135,7 @@ Una cifra di rischio vale solo quanto i prezzi che vi stanno dietro. Quando i da
 **Come leggerlo**
 
 - **Il banner in alto** elenca prezzi e tassi di cambio mancanti o obsoleti: sistemali con i suoi pulsanti, oppure con **Sincronizza** in alto a destra.
+- **Una coppia di valute senza una rotta di cambio** ha un pulsante proprio nel banner, uno per coppia (descrizione **Aggiungi coppia FX**): apre subito la finestra **Aggiungi Nuova Coppia FX**, già compilata con quella coppia, e la scheda si ricalcola da sola quando la coppia è salvata e i suoi tassi sono scaricati → [Aggiungere una coppia di valute](../fx/add-pair.md)
 - **L'avviso sopra i blocchi** dice quali risultati sono parziali, e perché.
 - **Un banner dentro un blocco** nomina una cifra che non è stato possibile calcolare, con il motivo.
 - **Un trattino (—)** significa che una cifra non ha potuto essere misurata: non significa mai zero.

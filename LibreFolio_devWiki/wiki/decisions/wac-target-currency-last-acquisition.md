@@ -10,6 +10,7 @@ related_decisions:
   - decisions/cost-basis-currency-object
   - decisions/wac-inline-validate-commit
   - decisions/financial-math-single-average-cost
+related: [features/F-097, decisions/cost-basis-currency-object, decisions/wac-inline-validate-commit, decisions/financial-math-single-average-cost]
 ---
 
 # WAC Target Currency = Last Acquisition's Currency
@@ -63,11 +64,11 @@ choose it:
 | Caller | Target currency |
 |--------|-----------------|
 | Transaction preview / automatic cost basis (`TransactionService._compute_wac_for_auto_items()`, via `compute_wac_iterative()`) | The `cost_basis_override.code` sent as a hint (the sentinel above), otherwise **the last acquisition's currency** — this rule |
-| `POST /portfolio/wac` (`portfolio_api.py`, via `compute_wac_iterative()`) | **The last acquisition's currency** — this rule |
+| `POST /portfolio/wac` (`portfolio_api.py`, via `compute_wac_iterative()`; route removed in `d5e467847`, 2026-11-04, [[decisions/api-routes-removed-without-deprecation]]) | **The last acquisition's currency** — this rule |
 | PAC planner ([[features/F-107]]; `portfolio_allocation_source.py`, via `compute_wac_iterative()`) | The report currency T, passed as `target_currency_override` |
 | Portfolio engine → Dashboard purchase cost, realized/unrealized P&L, holdings' WAC per unit, Yield on Cost | The report currency T |
 | Lots analysis WAC lines | The analysis report currency T |
-| Broker summary (`GET /brokers/{id}/summary`) | T = the asset's own currency, one call per currency group |
+| Broker summary (`GET /brokers/{id}/summary`; route removed in 1.3, [[decisions/broker-page-is-a-portfolio-view]]) | T = the asset's own currency, one call per currency group |
 
 So the alternative this page rejected — "portfolio base currency" — is exactly what the Dashboard uses. That is not a
 contradiction: it answers a different question (what the position cost, in the currency the user is reading the
@@ -84,16 +85,16 @@ split or an acquisition of unknown cost — or there is no addition at all — i
 |------|------|
 | determine_target_currency | `backend/app/services/financial_math/average_cost.py` |
 | WAC facade `compute_wac_iterative()` (override, or this rule) | `backend/app/services/portfolio_service.py` |
-| Currency sentinella logic | `backend/app/services/transaction_service.py` |
-| `POST /portfolio/wac` | `backend/app/api/v1/portfolio_api.py` |
-| PAC planner (passes T as override) | `backend/app/services/portfolio_allocation_source.py` |
-| Frontend chip selector | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
+| Currency sentinella logic | `backend/app/services/transactions/auto_cost.py` |
+| `POST /portfolio/wac` (until `d5e467847`, 2026-11-04) | `backend/app/api/v1/portfolio_api.py` |
+| PAC planner (passes T as override) | `backend/app/services/pac_allocator/source/wac.py` |
+| Frontend chip selector | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
 | Target-currency unit tests (`TestTargetCurrency`) | `backend/test_scripts/test_services/test_financial_math/test_average_cost.py` |
 | Developer docs (the WAC facade, "Two target-currency rules") | `mkdocs_src/docs/developer/backend/transactions/wac.md` |
 | Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrency.prompt.md` |
 
 > Until 2026-10-07 the first row cited `backend/app/services/wac_service.py`. The function actually lived in
-> `backend/app/utils/financial_utils.py`, which Phase 09 M1 (commit `81fc556d7`) moved to
+> `backend/app/utils/financial_utils.py`, which Phase 09 M1 (commit `3e23f5f8e`) moved to
 > `backend/app/utils/financial/wac_utils.py`, deleted on 2026-10-07; `wac_service.py` became `portfolio_service.py` in
 > the same commit.
 

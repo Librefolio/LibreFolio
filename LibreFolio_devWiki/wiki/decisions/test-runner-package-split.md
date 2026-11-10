@@ -102,7 +102,7 @@ Only 3 touches required:
 
 ### Fixes included in this refactoring
 - **`_build_pytest_cmd` consistency**: 4 functions were manually building pytest commands with `[*pipenv_prefix(), "python", "-m", "pytest", ...]` instead of using the shared `_build_pytest_cmd()` helper. All now use the helper.
-- **`front-transaction` category**: new category added as part of this split. Maps to `frontend/e2e/transactions/transactions.spec.ts`. Run with `./dev.py test front-transaction transactions --ui`.
+- **`front-transaction` category**: new category added as part of this split. Maps to `transactions.spec.ts` (renamed `frontend/e2e/transactions/transactions-modals.spec.ts` in `bc362cf7f`, 2026-05-04). Run with `./dev.py test front-transaction transactions --ui`.
 
 
 ## History — 2026-08 (figures corrected 2026-09-01)
@@ -128,6 +128,8 @@ was not reversed; it was the precondition for the next layer:
 - [[concepts/run-cache-and-campaign-semantics]] — `--fresh-run` vs `--resume`.
 - [[sources/p8-runner-parallel-architecture]] — the migration plan.
 - [[entities/test-runner]] — the current-state description of the package.
+- [[decisions/test-runner-refuses-test-names-it-cannot-apply]] — 2026-10-17: test names given to an action that runs
+  whole stop the command with exit 2, before anything runs.
 
 The module table below therefore describes the 2026-06 state, not the current
 one. It is left intact because the *rationale* is what this page is for.

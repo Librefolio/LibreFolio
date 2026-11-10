@@ -15,16 +15,19 @@
  * caller keeps ownership of the translated strings.
  */
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPrice} from '$lib/utils/core/formatFixed';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
 /**
  * Provider error codes that mean "config is fine, just no data here" — a warning,
  * not a hard failure. `NO_DATA` (e.g. a fund whose NAV isn't dated today) and
  * `NOT_IMPLEMENTED` (the provider doesn't offer this operation) must never gate
- * the "Save Without Testing?" warning.
+ * the "Save Without Testing?" warning. Nor does `RATE_LIMITED`: the provider is
+ * paused after «too many requests» (decision 34), the configuration may well be
+ * right, and the message says until when.
  */
-export const SOFT_FAIL_CODES = new Set(['NO_DATA', 'NOT_IMPLEMENTED']);
+export const SOFT_FAIL_CODES = new Set(['NO_DATA', 'NOT_IMPLEMENTED', 'RATE_LIMITED']);
 
 /**
  * Classify whether a failed operation is a *soft* failure (a warning) rather than
@@ -99,14 +102,16 @@ export interface ProbeTooltipLabels {
 
 /**
  * Build the rich HTML tooltip for a probe result — a single-row table for a
- * current price, a multi-row table for a history sample, the raw detail
- * otherwise. Kept as a pure string builder so both the branch shape and the
- * escaping can be asserted directly.
+ * current price, a multi-row table for a history sample, the detail otherwise.
+ * Kept as a pure string builder so both the branch shape and the escaping can
+ * be asserted directly. The detail is escaped: a failure's text comes from the
+ * provider (an external site's error, a reason phrase) and the tooltip renders
+ * HTML (security review of CP10–CP11).
  */
 export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeTooltipLabels): string {
-    if (!result.success) return result.detail ?? 'Error';
+    if (!result.success) return escapeHtml(result.detail ?? 'Error');
 
-    const thStyle = 'text-align:left;padding:2px 8px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.2);';
+    const thStyle = 'text-align:left;padding:2px 8px;font-weight:600;border-bottom:1px solid color-mix(in oklab, var(--lf-text-on-inverse) 20%, transparent);';
     const tdStyle = 'padding:2px 8px;';
     const tdRight = 'padding:2px 8px;text-align:right;font-variant-numeric:tabular-nums;';
 
@@ -116,7 +121,7 @@ export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeT
         let html = '<table style="font-size:12px;border-collapse:collapse;">';
         html += `<tr><th style="${thStyle}">📅 ${labels.date}</th><th style="${thStyle}">💰 ${labels.currentPrice}</th></tr>`;
         html += `<tr><td style="${tdStyle}">${result.priceDate ? formatDay(result.priceDate) : '—'}</td>`;
-        html += `<td style="${tdRight}">${formatFixed(Number(result.priceValue), 2)} ${ccyLabel}</td></tr>`;
+        html += `<td style="${tdRight}">${formatPrice(Number(result.priceValue))} ${ccyLabel}</td></tr>`;
         html += '</table>';
         return html;
     }
@@ -127,11 +132,11 @@ export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeT
         let html = '<table style="font-size:12px;border-collapse:collapse;">';
         html += `<tr><th style="${thStyle}">📅 ${labels.date}</th><th style="${thStyle}">💰 ${labels.close}${ccyLabel ? ` (${ccyLabel})` : ''}</th></tr>`;
         for (const p of result.samplePrices) {
-            html += `<tr><td style="${tdStyle}">${formatDay(p.date)}</td><td style="${tdRight}">${formatFixed(Number(p.close), 2)}</td></tr>`;
+            html += `<tr><td style="${tdStyle}">${formatDay(p.date)}</td><td style="${tdRight}">${formatPrice(Number(p.close))}</td></tr>`;
         }
         html += '</table>';
         return html;
     }
 
-    return result.detail ?? '—';
+    return escapeHtml(result.detail ?? '—');
 }

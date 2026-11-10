@@ -61,7 +61,7 @@ Every command that writes edits the **sources** and regenerates the catalogue by
 - **Ownership**: a plugin owns exactly the keys its fragment holds; otherwise the subsystem with the **longest
   declared prefix**; otherwise `base`. A key in two sources, a string in one and a branch in another, or a key outside
   the folder its prefix names is an error. Keys several plugins share (`signals.reference.*`,
-  `signals.riskRollingReturn.*`) and the `risk.warnings.*` vocabulary stay in their subsystem.
+  `signals.tooltips.riskWindow`) and the `risk.warnings.*` vocabulary stay in their subsystem.
 - **Languages**: EN is mandatory. In a build a translation a source lacks falls back to English with a warning;
   `./dev.py i18n check`, the audit and the gates fail on it. Backend tests read the catalogue with
   `scripts.i18n_catalog.load_catalog(lang, fallback=False)`, never from a frontend build.
@@ -195,7 +195,7 @@ What counts as evidence:
 - **Backend f-string families** (`f"aiExport.additionalData.reason.{reason}"`) and suffixes
   (`` `${displayNameKey}Full` ``).
 - A backend family whose namespace exists but holds no key is listed under 👻 (today:
-  `tools.allocation.constraints.` ← `pac_allocator/evaluator.py:968`, a field nobody reads).
+  `tools.allocation.constraints.` ← `pac_allocator/evaluation/references.py:52`, a field nobody reads).
 - A key that only **unreferenced sources** keep alive is listed under 📦, with the verdict it would get
   without them. A source is unreferenced when no SvelteKit entry (route files, hooks, service worker)
   reaches it through static or dynamic imports. Informational: decide whether the source is dead, then

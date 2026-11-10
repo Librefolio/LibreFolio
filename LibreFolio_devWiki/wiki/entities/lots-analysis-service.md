@@ -2,7 +2,7 @@
 title: "Lots Analysis Service"
 category: entity
 type: service
-updated: 2026-10-12
+updated: 2026-10-19
 tags: [backend, fifo, lots, orchestration, fx, wac, average-cost, data-quality, financial-math]
 related:
   - entities/fifo-lot-engine
@@ -13,7 +13,10 @@ related:
   - decisions/financial-math-one-home
   - problems/fifo-income-silently-dropped-after-full-close
   - problems/zero-purchase-cost-foreign-asset-paid-in-report-currency
+  - problems/lots-failed-when-a-transfer-crossed-the-broker-scope
   - concepts/fifo-lot-tracking
+  - concepts/self-parity-needs-the-shared-step-pinned
+  - problems/equal-closes-read-back-alike-through-realdecimal
 ---
 
 # Lots Analysis Service
@@ -29,7 +32,7 @@ Since 2026-10-07 it also no longer computes the **WAC lines** (per broker and cu
 single average-cost function of the `financial_math` layer ([[decisions/financial-math-single-average-cost]]). FIFO
 stays here only to create the lots.
 
-Since 2026-10-12 its pure math is not here either. Workstream T's T-1 (step B3, `a57a43fbd`) turned every pure method of
+Since 2026-10-12 its pure math is not here either. Workstream T's T-1 (step B3, `94901d98a`) turned every pure method of
 `LotsAnalysisService` into a function of `backend/app/services/financial_math/lots/` — `prices`, `conversions`,
 `economic_events`, `histories`, `average_cost_lines` — with the same bodies; names read across modules became public
 (`FxRateResolver`, `WithheldEconomics`, `ALL_BROKERS`, …). The service keeps the orchestration, the database loading,
@@ -38,7 +41,7 @@ the DTOs (summaries, Gantt, event rows) and the lots data-quality report ([[deci
 ## Location
 
 `backend/app/services/lots_analysis_service.py` (~1980 lines at the v4 ingest; 2 032 lines on 2026-10-07; 2 274 before
-T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financial_math/lots/`.
+T-1's cut, 1 172 at `4bc7be91b`, 1 375 on 2026-11-07), plus its math in `backend/app/services/financial_math/lots/`.
 
 ## Key Interfaces
 
@@ -47,7 +50,8 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
 - Maps engine `EconomicAllocationGroup`/`TargetOperationAllocation`/`EconomicLotAllocation` audit objects into
   the public DTO's inline 3-level audit shape (`backend/app/schemas/portfolio.py`).
 - Computes net summary and net history series from the engine's per-lot economic accumulators.
-- Maps internal `analysis_status` (`COMPLETE|DEGRADED|FAILED`) to the public `calculation_status` field.
+- Maps internal `analysis_status` (`COMPLETE|DEGRADED|FAILED`) to the public `calculation_status` field. **Since
+  2026-10-17 (J-12, N81)** a `FAILED` analysis withholds every lot figure — see Design Notes.
 - **WAC lines (since 2026-10-07):** `_compute_average_cost_lines()` makes **one** `compute_average_costs()` call — one
   position per broker plus `"__all__"` (every broker in scope pooled), in the analysis target currency,
   `asset_leg=False`. `average_cost_points()` (`financial_math/lots/average_cost_lines.py` since 2026-10-12, before a
@@ -81,10 +85,54 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
 - ~~**Known limit (outside workstream P):** the FIFO lot figures still fall back to the unconverted amount when a rate
   is missing — e.g. `fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost` in
   `_build_value_history()` and `_build_return_history()`, and the same `… or <unconverted>` shape for closure
-  proceeds.~~ *Resolved 2026-10-11* by workstream T, B3a (`82c1d3ab9`): a price, a cost or closure proceeds without a
+  proceeds.~~ *Resolved 2026-10-11* by workstream T, B3a (`f8eb42aff`): a price, a cost or closure proceeds without a
   rate are unavailable (`None`) from that date, the analysis turns `DEGRADED` and the pair is reported; never the
   native amount. The remaining fallbacks (summary fields, the Gantt `unit_price`, economic events, trade weights) were
-  closed in B3b the same day (`59a7c3e2f`, "withhold pools without a rate").
+  closed in B3b the same day (`c171402d8`, "withhold pools without a rate").
+- **A FAILED replay withholds its figures (2026-10-17, J-12, decision N81 option A).** Until then a `FAILED` analysis
+  ("warn but show", 2026-07-22) returned the lots of a replay that no longer matched the account — a sale beyond the
+  quantity held left a lot of 4 open where 1 was held. Now, right after the engine, `shown_analyses` keeps only the
+  analyses that do not come from the replay (`_REPLAY_FREE_ANALYSES`, named `_AVERAGE_COST_ANALYSES` until Y-30): the
+  WAC lines, from the transactions, and — since Y-30 the same evening — the lot-free `market_price_history`, from the
+  asset's prices. Every lot section, `price_history` included (one series per lot), and the orphan totals are `None`.
+  `data_quality` keeps the issues that fail the replay and the gaps of what is still drawn — the WAC lines'
+  (`_report_gaps()`) and the market price line's missing rates — and drops the issues about withheld things (reference
+  prices, the `*_NO_ELIGIBLE_LOTS` orphans, `CURRENT_PRICE_ASSUMED_AT_COST`, the rates of the lot figures). One
+  exception, found by Y-30's docs pass and not covered by a test: the income, fee and tax conversions run before the
+  engine (`needs_income_alloc` reads the requested analyses), so a rate missing there is still reported with FAILED.
+  Each failing issue gets
+  `transaction_date` and `fails_analysis: true` in `message_params`; its `transaction_id` is the row to fix — for a
+  transfer, the giving leg (`raw_transaction_ids[0]` in the engine, no longer the pair's id). The AI Export reads the
+  codes back with `analysis_failure_codes()` and declares the asset (`failed_lot_reconstructions`) instead of exporting
+  its lots. The panel half (Y) and the decision record: [[decisions/fifo-v4-gross-net-status-model]], revision 17/10.
+- **The performance history values the days at cost too (2026-10-17, J-33).** Since CP-7b (J-17 decision (a)) the value
+  and return histories valued a day with no observation on or before it at cost, but `build_performance_history()`
+  read a NAV only on a day with a mark: its first NAV was the first mark, the TWRR's base, so the move from cost to the
+  first price fell outside the TWRR chain while the ROI counted it, and a transfer on such a day emptied ROI and TWRR.
+  Now the NAV of those days is the open LONG fragments at cost (opening rate), and a transfer moves the cost of its
+  units (an edge leg: its cost basis in, the cost of the pieces it closes out; a re-run transfer: its pair's pieces).
+  A costless adjustment still counts 0 there, as in the value history: J-35 is the developer's open question.
+- **A transfer crossing the scope no longer fails the asset (2026-10-16/17).** J-10 (N76) reads a leg whose partner
+  sits outside the broker scope at the scope's edge ([[problems/lots-failed-when-a-transfer-crossed-the-broker-scope]]);
+  J-47 hands the engine the arriving leg dated after `date_to` (`_load_late_transfer_legs()`, `replay_until`), so a
+  transfer still in transit stays `IN_TRANSIT` instead of failing on `TRANSFER_PAIR_MISSING`.
+- **The daily series are computed on their change days (2026-10-19, L1a).** Every builder used to value every lot on
+  every day from the first transaction (floored at 1900) and then trim to the window: a lot of 1900 read over one month
+  cost 221 200 calls of the per-day snapshot helpers. Now `lot_change_days()` (`financial_math/lots/change_days.py`)
+  lists the days an input can change on: the first and the last day; a day whose converted mark or estimated entry
+  changes form (`as_tuple()`, so a new exchange rate counts); `at_cost_until + 1`; every event date (the rows, what both
+  engines derive from them, the prefixes, the withheld pools, the average-cost steps); and the day after each. The
+  builders run on those days, and `expand_to_days()` re-dates the last change day's row over every day of the window.
+  The output is byte-identical: 0 differences on four DB copies (13.3 million daily points on the 1900 copy), the real
+  data included, and the 1900 copy runs in half the time. It is the engine's rule, decision 28; it is not
+  `native_cash.change_days()`, which compares rates. Still per day: the mark conversion, the per-day FX needs and the
+  scan itself, which is L1b, after MF's P3. See [[concepts/self-parity-needs-the-shared-step-pinned]] and
+  [[problems/equal-closes-read-back-alike-through-realdecimal]].
+- **The series are returned as steps (2026-10-25/26, D-P4).** *2026-11-07 lint:* `expand_to_days()` no longer exists:
+  J5-5 (`fa3222728`) made the lots histories steps — one point per stretch of unchanged days, `date` to `through` —
+  built and read through `backend/app/services/financial_math/series_steps.py` (`StepRow`, `steps_from_rows`), and L2
+  (`1663fbc7e`) dropped the 1900 floor: `computed_from` is the first transaction's date, `display_from` is `date_from`
+  or `computed_from`.
 
 ## Source files
 
@@ -96,6 +144,11 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
 | WAC lines (since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Public DTO | `backend/app/schemas/portfolio.py` |
 | Service-level tests | `backend/test_scripts/test_services/test_financial/test_lots_analysis_service.py` |
+| FAILED withholding (J-12) | `backend/test_scripts/test_services/test_financial/test_lots_failed_analysis_withholding.py`, `backend/test_scripts/test_services/test_ai_export_fifo_failed_reconstruction.py` |
+| Lot-free market price series (Y-30) | `backend/test_scripts/test_services/test_financial/test_lots_market_price_history.py` |
+| Scope edge (J-10) | `backend/app/services/financial_math/lots/scope_boundary.py` |
+| Series as steps (D-P4) | `backend/app/services/financial_math/series_steps.py` |
+| Change days (L1a) | `backend/app/services/financial_math/lots/change_days.py`, `backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py`, `backend/test_scripts/test_services/test_financial/test_lots_change_days_parity.py` |
 | Pure tests (WAC lines and their gaps) | `backend/test_scripts/test_services/test_lots_analysis_pure.py` |
 | Lots WAC lines of the #32 case (L1–L3) | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |
 | Developer docs | `mkdocs_src/docs/developer/backend/transactions/lots_analysis_service.md` |

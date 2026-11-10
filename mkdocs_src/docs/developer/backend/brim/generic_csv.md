@@ -93,7 +93,9 @@ The fastest way to import data from an unsupported source is to **paste this ent
     An `ADJUSTMENT` row that seeds an **inherited or transferred** position
     (you owned it before, with a known purchase cost) carries a *frozen cost basis*. The
     generic CSV has no `cost_basis` column, so the import wizard **prompts you to fill it**
-    ("Missing inherited per-unit cost basis (WAC)"). Enter the **cost per single unit**
+    ("Missing inherited per-unit cost basis (WAC)"). Only a row with a positive quantity is
+    flagged: an `ADJUSTMENT` taking units out has no value (developer decision N78-1), so it takes
+    no cost basis. Enter the **cost per single unit**
     (e.g. `42.50` for a share bought at €42.50), **not** the position's total value. The
     engine multiplies it by `quantity`; a total entered here inflates the cost basis by a
     factor of `quantity`. For bonds, `quantity` is the face value and the per-unit cost is
@@ -212,8 +214,10 @@ match no synonym are ignored, and when two headers map to the same field the lef
 The same map drives detection: `can_parse` — through `cannot_parse_reason` — accepts a `.csv`
 only when both `date` and `type` are mapped, so the wizard offers the plugin only for such files.
 If the user forces it on another file, `parse_file` refuses it with
-`Plugin 'broker_generic_csv' cannot parse file '<name>': required column 'date' not found in the CSV header`
-(HTTP 400), and the file moves to failed.
+`Plugin 'Generic CSV' cannot parse file '<file name>': required column 'date' not found in the CSV header`
+(HTTP 400), and the file moves to failed. Each refusal also has a code the import wizard
+translates — `csv_only`, `file_unreadable`, `no_header_row`, `missing_columns` (see
+[Saying why with a code](../../architecture/patterns/brim_plugin_guide.md#cannot-parse-detail)).
 
 ### 2️⃣ Row Parsing (`_parse_row`)
 

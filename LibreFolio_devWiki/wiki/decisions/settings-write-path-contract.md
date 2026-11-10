@@ -72,6 +72,8 @@ response — becomes a visible dead interval.
 C1 and C7 have to ship together: confirming before applying *without* a pending
 indicator would make the UI feel broken.
 
+*2026-11-07 lint:* shipped the next day, in `11c4d70b1` (2026-08-31): all five controls take `isSaving`.
+
 ## Two neighbouring findings from the same lane
 
 **C8 — `resolveFormItemsFromOps` is not dead code.** It is the right function,
@@ -79,6 +81,7 @@ never wired up. `TransactionBulkModal.svelte` (~2280) builds the pair by hand,
 skipping `orientPair` and `validatePair`. Wiring it requires care with the
 ordering against the `mainItem.type` overwrite at ~2264-2275 — which is why it
 was not done inside a test lane.
+*2026-11-07 lint:* wired in `11c4d70b1` (2026-08-31): the bulk editor's edit path calls `resolveFormItemsFromOps`.
 
 **C9 — the `transactions/modals/index.ts` barrel is dead code.** Verified: no
 importer. Deleted.
@@ -108,11 +111,11 @@ characterisation tests ([[concepts/characterisation-test-latch]]).
 
 | Role | Path |
 |------|------|
-| Save orchestration | `frontend/src/lib/components/settings/SettingsLayout.svelte` — `saveField`, `saveAll` |
-| Preferences tab (C2, C1) | `frontend/src/lib/components/settings/tabs/PreferencesTab.svelte` |
-| Global settings tab (C5) | `frontend/src/lib/components/settings/tabs/GlobalSettingsTab.svelte` |
-| Controls missing `isSaving` (C7) | `frontend/src/lib/components/settings/SettingCurrency.svelte`, `SettingSelect.svelte`, `SettingTheme.svelte` |
-| Controls that have it | `frontend/src/lib/components/settings/SettingNumber.svelte`, `SettingToggle.svelte` |
-| Unwired helper (C8) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` (~2280), `resolveFormItemsFromOps` |
+| Save orchestration | `frontend/src/lib/features/settings/SettingsLayout.svelte` — `saveField`, `saveAll` |
+| Preferences tab (C2, C1) | `frontend/src/lib/features/settings/tabs/PreferencesTab.svelte` |
+| Global settings tab (C5) | `frontend/src/lib/features/settings/tabs/GlobalSettingsTab.svelte` |
+| Controls that lacked `isSaving` (C7, fixed in `11c4d70b1`) | `frontend/src/lib/features/settings/SettingCurrency.svelte`, `SettingSelect.svelte`, `SettingTheme.svelte` |
+| Controls that have it | `frontend/src/lib/features/settings/SettingNumber.svelte`, `SettingToggle.svelte` |
+| The helper of C8 (wired since `11c4d70b1`) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte`, `frontend/src/lib/features/transactions/resolveFormItems.ts` |
 | Settings API | `backend/app/api/v1/settings.py` |
 | mkdocs | `mkdocs_src/docs/user/settings/index.en.md` |

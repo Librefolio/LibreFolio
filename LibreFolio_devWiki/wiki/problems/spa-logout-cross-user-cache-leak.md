@@ -24,7 +24,7 @@ could also land after the switch.
 
 ## Solution
 
-`5b9dddb45` («feat: add backend signals and isolate sessions») added `ClientSessionState`
+`01d21471c` («feat: add backend signals and isolate sessions») added `ClientSessionState`
 (`stores/app/clientSession.ts`): one central reset whenever the signed-in user changes; portfolio keys scoped per
 user; a generation guard that drops responses started under the previous session; resets for the broker, asset,
 transaction, file-preview, settings and chart, date and navigation state; and one cache invalidator for API

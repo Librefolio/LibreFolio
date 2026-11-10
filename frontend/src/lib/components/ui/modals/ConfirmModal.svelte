@@ -72,9 +72,9 @@
     <!-- Header -->
     <div class="modal-header" data-testid={testId || undefined}>
         {#if danger}
-            <AlertTriangle class="text-red-500" size={24} />
+            <AlertTriangle class="text-lf-danger" size={24} />
         {:else if warning}
-            <AlertTriangle class="text-amber-500" size={24} />
+            <AlertTriangle class="text-lf-warning" size={24} />
         {/if}
         <h2 class="modal-title">{title}</h2>
         <button aria-label="Close" class="close-btn" onclick={onCancel} type="button">
@@ -90,9 +90,9 @@
                 {#each results as r}
                     <li class="result-item">
                         {#if r.success}
-                            <Check size={14} class="text-emerald-500 shrink-0" />
+                            <Check size={14} class="text-lf-success shrink-0" />
                         {:else}
-                            <XCircle size={14} class="text-red-500 shrink-0" />
+                            <XCircle size={14} class="text-lf-danger shrink-0" />
                         {/if}
                         <span class="result-label">{r.label}</span>
                         {#if r.detail}
@@ -155,30 +155,23 @@
 </ModalBase>
 
 <style>
-    /* No backdrop styles needed — handled by ModalBase */
+    /* No backdrop styles needed — handled by ModalBase. The colours are the roles of lib/theme/tokens.css, the same
+       in both themes by name: no `.dark` rule. */
 
     .modal-header {
         display: flex;
         align-items: center;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-bottom: 1px solid #e2e8f0;
-    }
-
-    :global(.dark) .modal-header {
-        border-bottom-color: #334155;
+        border-bottom: 1px solid var(--lf-border-subtle);
     }
 
     .modal-title {
         flex: 1;
         font-size: 1.125rem;
         font-weight: 600;
-        color: #0f172a;
+        color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    :global(.dark) .modal-title {
-        color: #f1f5f9;
     }
 
     .close-btn {
@@ -190,19 +183,14 @@
         border: none;
         border-radius: 6px;
         background: transparent;
-        color: #64748b;
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .close-btn:hover {
-        background: #f1f5f9;
-        color: #0f172a;
-    }
-
-    :global(.dark) .close-btn:hover {
-        background: #334155;
-        color: #f1f5f9;
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .modal-body {
@@ -211,24 +199,16 @@
     }
 
     .message {
-        color: #475569;
+        color: var(--lf-text-secondary);
         line-height: 1.6;
         margin: 0;
     }
 
-    :global(.dark) .message {
-        color: #94a3b8;
-    }
-
     .description {
-        color: #64748b;
+        color: var(--lf-text-muted);
         font-size: 0.8125rem;
         line-height: 1.5;
         margin: 0.5rem 0 0;
-    }
-
-    :global(.dark) .description {
-        color: #94a3b8;
     }
 
     .results-list {
@@ -245,11 +225,7 @@
         align-items: center;
         gap: 0.5rem;
         font-size: 0.8125rem;
-        color: #334155;
-    }
-
-    :global(.dark) .result-item {
-        color: #e2e8f0;
+        color: var(--lf-text-primary);
     }
 
     .result-label {
@@ -257,35 +233,23 @@
     }
 
     .result-detail {
-        color: #64748b;
+        color: var(--lf-text-muted);
         font-size: 0.75rem;
-    }
-
-    :global(.dark) .result-detail {
-        color: #94a3b8;
     }
 
     .result-action {
         margin-left: auto;
-        color: #2563eb;
+        color: var(--lf-link);
         font-size: 0.75rem;
         font-weight: 500;
         white-space: nowrap;
     }
 
-    :global(.dark) .result-action {
-        color: #60a5fa;
-    }
-
     .items-section {
         margin-top: 1rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 8px;
         overflow: hidden;
-    }
-
-    :global(.dark) .items-section {
-        border-color: #334155;
     }
 
     .items-toggle {
@@ -294,25 +258,18 @@
         justify-content: space-between;
         width: 100%;
         padding: 0.625rem 0.875rem;
-        background: #f8fafc;
+        background: var(--lf-surface-panel);
         border: none;
-        color: #64748b;
+        color: var(--lf-text-muted);
         font-size: 0.875rem;
         cursor: pointer;
         transition: background 0.15s;
     }
 
+    /* On a panel the hover is `neutral` (open question 3), where the muted text falls under 4.5:1: secondary. */
     .items-toggle:hover {
-        background: #f1f5f9;
-    }
-
-    :global(.dark) .items-toggle {
-        background: #1e293b;
-        color: #94a3b8;
-    }
-
-    :global(.dark) .items-toggle:hover {
-        background: #334155;
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-secondary);
     }
 
     .items-list {
@@ -321,24 +278,16 @@
         padding: 0.5rem 0;
         max-height: 200px;
         overflow-y: auto;
-        background: white;
-    }
-
-    :global(.dark) .items-list {
-        background: #0f172a;
+        background: var(--lf-surface-field);
     }
 
     .item {
         padding: 0.375rem 0.875rem;
         font-size: 0.8125rem;
-        color: #475569;
+        color: var(--lf-text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-    }
-
-    :global(.dark) .item {
-        color: #94a3b8;
     }
 
     .modal-footer {
@@ -346,11 +295,7 @@
         justify-content: flex-end;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-top: 1px solid #e2e8f0;
-    }
-
-    :global(.dark) .modal-footer {
-        border-top-color: #334155;
+        border-top: 1px solid var(--lf-border-subtle);
     }
 
     .btn {
@@ -364,47 +309,38 @@
     }
 
     .btn-secondary {
-        background: #f1f5f9;
-        color: #475569;
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-secondary);
     }
 
     .btn-secondary:hover {
-        background: #e2e8f0;
-    }
-
-    :global(.dark) .btn-secondary {
-        background: #334155;
-        color: #e2e8f0;
-    }
-
-    :global(.dark) .btn-secondary:hover {
-        background: #475569;
+        background: var(--lf-surface-neutral);
     }
 
     .btn-primary {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover {
-        background: #153428;
+        background: var(--lf-action-hover);
     }
 
     .btn-danger {
-        background: #dc2626;
-        color: white;
+        background: var(--lf-danger-solid);
+        color: var(--lf-on-danger-solid);
     }
 
     .btn-danger:hover {
-        background: #b91c1c;
+        background: var(--lf-danger-hover);
     }
 
     .btn-warning {
-        background: #f59e0b;
-        color: white;
+        background: var(--lf-warning);
+        color: var(--lf-on-status);
     }
 
     .btn-warning:hover {
-        background: #d97706;
+        background: var(--lf-warning-hover);
     }
 </style>

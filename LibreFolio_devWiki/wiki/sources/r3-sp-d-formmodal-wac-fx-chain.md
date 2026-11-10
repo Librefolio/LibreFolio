@@ -1,8 +1,27 @@
+---
+title: "R3-SP-D Plan Chain — FormModal Props + Event Picker + WAC FX Feedback + Bugfixes"
+category: source
+source_type: plan
+date_ingested: 2026-06-04
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-R3-SP-D-FormModalEventPickerWacFx.prompt.md
+tags: [transactions, form-modal, wac, fx, asset-events, frontend, backend]
+related:
+  - sources/r2-sp-c-bugfix-chain
+  - sources/r2-walktest-feedback-master
+  - decisions/wac-target-currency-last-acquisition
+  - decisions/fxsyncmodal-parent-ownership
+  - decisions/blur-detection-format-string-comparison
+  - decisions/cost-basis-currency-object
+  - features/F-097
+  - features/F-048
+---
+
 # Source: R3-SP-D Plan Chain — FormModal Props + Event Picker + WAC FX Feedback + Bugfixes
 
-> **Ingested**: 2026-06-04 @ `4e5e500c0`
+> **Ingested**: 2026-06-04 @ `ac37afe7e`
 > **Status**: ✅ ALL DONE (2026-06-01 → 2026-06-04)
 > **Origin**: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/`
+> **Previous in the chain**: [[sources/r2-sp-c-bugfix-chain]] · **Master plan**: [[sources/r2-walktest-feedback-master]]
 
 ---
 
@@ -95,6 +114,14 @@
 
 ---
 
+## Related wiki pages
+
+- [[decisions/wac-target-currency-last-acquisition]] — D, the target currency
+- [[decisions/fxsyncmodal-parent-ownership]] — E, one FxSyncModal owned by the parent
+- [[decisions/blur-detection-format-string-comparison]] — the blur detection
+- [[decisions/cost-basis-currency-object]] — `cost_basis_override` as a Currency object
+- [[features/F-097]], [[features/F-048]]
+
 ## Source Files
 
 | Role | Path |
@@ -107,12 +134,12 @@
 | WacFxEnrich | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` |
 | WAC service (wac_service.py was git-mv'd into the portfolio service on 2026-06-10) | `backend/app/services/portfolio_service.py` |
 | Financial utils (financial_utils.py → wac_utils.py on 2026-06-10 → the average-cost function on 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
-| Transaction service | `backend/app/services/transaction_service.py` |
-| FormModal | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| WacPreviewSection | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
-| AssetEventPicker | `frontend/src/lib/components/transactions/events/AssetEventPicker.svelte` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
+| FormModal | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| WacPreviewSection | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
+| AssetEventPicker | `frontend/src/lib/features/transactions/events/AssetEventPicker.svelte` |
 | FxSyncModal | `frontend/src/lib/components/fx/FxSyncModal.svelte` |
-| ValidateScheduler | `frontend/src/lib/utils/transactions/useValidateScheduler.svelte.ts` |
+| ValidateScheduler | `frontend/src/lib/features/transactions/useValidateScheduler.svelte.ts` |
 | E2E WAC FX | `frontend/e2e/transactions/tx-wac-fx.spec.ts` |
 | E2E WAC mode | `frontend/e2e/transactions/tx-wac-mode.spec.ts` |
 

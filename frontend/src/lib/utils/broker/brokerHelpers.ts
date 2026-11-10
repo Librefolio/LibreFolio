@@ -63,7 +63,8 @@ export async function ensurePluginIconsLoaded(): Promise<void> {
                 if (p?.code && isFallbackPlugin(p)) _fallbackPluginCodes.add(p.code);
             }
         } catch {
-            _pluginIconCache = new Map(); // don't retry on error
+            // Nothing is cached after a failure, so the next call asks again (the API client already logged it); an empty cache would hide the icons until a reload (W6-8).
+            _pluginIconCache = null;
         } finally {
             _pluginIconLoading = null;
         }
@@ -100,11 +101,6 @@ export function normalizeBrokerIconField(value: unknown): string | null {
         }
     }
     return null;
-}
-
-function getExhaustedScript(action: BrokerIconExhaustedAction): string {
-    const exhausted = action === 'show-next-sibling' ? "this.style.display='none';const fallback=this.nextElementSibling;if(fallback){fallback.style.display='inline-flex';}" : "this.style.display='none';";
-    return `try{const raw=this.dataset.fallbacks||'[]';const urls=JSON.parse(raw);const next=urls.shift();if(next){this.dataset.fallbacks=JSON.stringify(urls);this.src=next;return;}}catch{}${exhausted}`;
 }
 
 function getBrokerSourceById(brokerId: number, brokers: Map<number, BrokerIconSource> | ReadonlyArray<BrokerLike>): BrokerIconSource | undefined {
@@ -202,7 +198,8 @@ export function getBrokerIconImgHtml(broker: BrokerIconSource | null | undefined
         `width="${width}"`,
         `height="${height}"`,
         `data-fallbacks="${escapeHtml(JSON.stringify(candidates.slice(1)))}"`,
-        `onerror="${escapeHtml(getExhaustedScript(onExhausted))}"`,
+        // The chain and what follows it are done by imageErrorFallback.ts: no inline handler under the enforced CSP (H-55 v2)
+        `data-hide-on-error="${onExhausted === 'show-next-sibling' ? 'next-sibling' : 'display'}"`,
         `referrerpolicy="${escapeHtml(referrerPolicy)}"`,
     ];
     if (className) attrs.push(`class="${escapeHtml(className)}"`);

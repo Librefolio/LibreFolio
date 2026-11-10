@@ -19,6 +19,13 @@ requests**. It has already answered twice, both times with a product defect rath
 (a cache that silently stopped caching, and a SQLite `busy_timeout` left at zero so a second writer
 failed instead of waiting).
 
+The test database needs no preparation either. Several units (`brim`, `uploads`, …) sign in as the
+fixture users `e2e_test_admin` and `e2e_test_user`, which `db populate` seeds. A whole `api` run
+reseeds the database of its [lane](index.md#isolated-runtime-lanes) first; before one action run on
+its own (`./dev.py test api brim`), the runner checks that database and reseeds it only when those
+users are missing, saying so in one line. After a run that recreated the database empty
+(`services`, `db create`), there is no `db populate --force` to remember.
+
 ## ⛔ The semantics: verify, never assume
 
 Modules share one database, and now share it *at the same time*. Three consequences, normative in

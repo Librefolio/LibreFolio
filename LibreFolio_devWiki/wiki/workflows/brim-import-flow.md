@@ -70,6 +70,14 @@ After identity grouping and corrections, the wizard refreshes candidates and cal
 silently reuse a stale parse-time verdict. If the recheck changes selection or reveals a
 cross-file group requiring arbitration, the user remains in the review flow.
 
+### 5b. Align with the bank (report sets, since 2026-10-01)
+
+*Added by the 2026-11-07 lint.* When the parsed files form a report set that brings the bank's truth points
+(balances, positions), the wizard compares them with what LibreFolio will know after the import
+(`POST /api/v1/brokers/import/gap-fix`) and, only when there is something to show, opens the `gapFix` step, where the
+user keeps or drops each proposed correction. Report sets are previewed and combined through
+`POST /api/v1/brokers/import/sets/preview` and `/sets/combine`. See [[entities/import-wizard-modal]].
+
 ### 6. Hand off and commit
 
 The wizard substitutes resolved real asset IDs and sends selected, eligible drafts plus
@@ -86,6 +94,8 @@ through the standard transaction bulk API. BRIM has no commit endpoint.
 | Parse preview | POST JSON | `/api/v1/brokers/import/files/{file_id}/parse` |
 | Refresh candidates | POST JSON | `/api/v1/brokers/import/asset-candidates` |
 | Final duplicate recheck | POST JSON | `/api/v1/brokers/import/duplicates` |
+| Report set preview / combine | POST JSON | `/api/v1/brokers/import/sets/preview`, `/api/v1/brokers/import/sets/combine` |
+| Align with the bank | POST JSON | `/api/v1/brokers/import/gap-fix` |
 | Validate bulk draft | POST JSON | `/api/v1/transactions/validate` |
 | Commit bulk draft | POST JSON | `/api/v1/transactions/commit` |
 
@@ -94,9 +104,10 @@ through the standard transaction bulk API. BRIM has no commit endpoint.
 | Role | Path |
 |------|------|
 | BRIM routes and access checks | `backend/app/api/v1/brokers.py` |
-| File storage and parse cache | `backend/app/services/brim_provider.py` |
+| File storage and parse cache | `backend/app/services/brim/brim_provider.py` |
+| Report sets and gap-fix | `backend/app/services/brim/brim_report_sets.py`, `backend/app/services/brim/brim_gap_fix.py` |
 | BRIM schemas | `backend/app/schemas/brim.py` |
-| Import wizard | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Bulk editor | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Import wizard | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| Bulk editor | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | Import wizard developer guide | `mkdocs_src/docs/developer/frontend/components/features/import-wizard.md` |
 | Generic CSV developer guide | `mkdocs_src/docs/developer/backend/brim/generic_csv.md` |

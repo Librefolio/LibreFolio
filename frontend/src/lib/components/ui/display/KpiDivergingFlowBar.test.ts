@@ -58,9 +58,10 @@ describe('KpiDivergingFlowBar', () => {
             expect(right.style.width).toBe('60%');
             expect(left.style.width).toBe('25%');
 
-            // The colours and the height are the visible identity of this bar.
-            expect(right.className).toContain('bg-green-500');
-            expect(left.className).toContain('bg-red-400');
+            // The colours and the height are the visible identity of this bar. The colours are the
+            // gain and loss roles, which take their value from the theme: no `dark:` half to pin.
+            expect(right.className).toContain('bg-lf-gain');
+            expect(left.className).toContain('bg-lf-loss');
             expect(track(container).className).toContain('h-1.5');
         });
 
@@ -199,9 +200,50 @@ describe('KpiDivergingFlowBar', () => {
 
             const {right} = fills(container);
             expect(right.className).toContain('bg-blue-500');
-            expect(right.className).not.toContain('bg-green-500');
+            // Replaced, not joined: the default gain role must be gone from the fill.
+            expect(right.className).not.toContain('bg-lf-gain');
             expect(right.style.width).toBe('44%');
             expect(track(container).className).toContain('h-5');
+        });
+    });
+
+    // F-7: the row of «Sono diversificato come credo?» is stacked in a narrow box and inline in a wide one. A container
+    // query is a stylesheet's business and jsdom has none, so what is pinned here is what the markup must carry for it
+    // to work — the one markup that serves both, the cells that carry the bar and the figure, the scrolling name.
+    describe('layout="responsive" (F-7)', () => {
+        it('is one markup with the name, the bar and the value in it, and publishes its layout', async () => {
+            await setupI18n();
+            const {container} = render(KpiDivergingFlowBar, {props: {label: 'Row', value: '+9.0pp', signedPct: 9, layout: 'responsive', testId: 'row', valueTestId: 'row-value'}});
+
+            expect(screen.getByTestId('row').getAttribute('data-layout')).toBe('responsive');
+            expect(screen.getByTestId('row-value')).toHaveTextContent('+9.0pp');
+            expect(fills(container).right.style.width).toBe('9%');
+            // The root is the query container: without it the width the row answers to is the page's, not its own.
+            expect(screen.getByTestId('row').className).toContain('@container');
+        });
+
+        it('puts the bar on a line of its own in a narrow box and beside the name from the threshold up', async () => {
+            await setupI18n();
+            const {container} = render(KpiDivergingFlowBar, {props: {label: 'Row', value: 'x', signedPct: 9, layout: 'responsive'}});
+
+            const barCell = track(container).parentElement as HTMLElement;
+            expect(barCell.className).toContain('col-span-2');
+            expect(barCell.className).toContain('row-start-2');
+            expect(barCell.className).toContain('@[26rem]:row-start-1');
+        });
+
+        it('scrolls a long name instead of cutting it, when asked, and keeps the full name in the title', async () => {
+            await setupI18n();
+            const long = 'Amundi MSCI Semiconductors UCITS ETF Acc';
+            const scrolling = render(KpiDivergingFlowBar, {props: {label: long, value: 'x', signedPct: 1, layout: 'responsive', scrollLabel: true}});
+
+            const name = scrolling.getByTitle(long);
+            expect(name.className).toContain('overflow-scroll-marquee');
+            expect(name.className).not.toContain('truncate');
+            scrolling.unmount();
+
+            const cut = render(KpiDivergingFlowBar, {props: {label: long, value: 'x', signedPct: 1, layout: 'responsive'}});
+            expect(cut.getByTitle(long).className).toContain('truncate');
         });
     });
 });

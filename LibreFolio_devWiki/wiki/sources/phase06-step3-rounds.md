@@ -1,4 +1,10 @@
 ---
+title: "Phase 06 Step 3 Rounds 1–11 (AssetModal & ScheduledInvestmentEditor Bugfix Iterations)"
+category: source
+source_type: plan
+date_ingested: 2026-05-24
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step3/
+related: [features/F-033, features/F-034]
 type: source
 group: phase06-step3-rounds
 ingested: 2026-05-24

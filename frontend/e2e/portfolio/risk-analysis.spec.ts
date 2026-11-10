@@ -719,6 +719,10 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                     // fixture sitting exactly on an edge would pass under both the
                     // half-open rule and the closed one it exists to distinguish.
                     var_bin_edge: longHorizon ? null : -0.021,
+                    // F-6: the worst compounded window the series really lived through, dated; only the month states one
+                    // (the day has the worst realization's date). −0,121 is worse than the 0,094 average of the worst 5 %,
+                    // as a worst window always is.
+                    ...(longHorizon ? {worst_horizon: {compounded_return: -0.121, start_date: '2023-11-14', end_date: '2023-12-14'}} : {}),
                 },
             };
         }
@@ -753,6 +757,9 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                         {date: '2024-03-18', drawdown: -0.032},
                     ],
                     maximum_drawdown: -0.087,
+                    // The rise from the trough back to the prior peak, which L1
+                    // reads as is: the backend's −MDD/(1+MDD), drawdown_summary 1.2.0.
+                    maximum_drawdown_trough_to_peak_ratio: 0.087 / 0.913,
                     maximum_drawdown_peak_date: '2023-11-14',
                     maximum_drawdown_trough_date: '2023-12-03',
                     maximum_drawdown_recovery_status: 'open',
@@ -1702,11 +1709,12 @@ async function openDashboardRiskWithHoldings(page: Page): Promise<Locator> {
  * card is whichever name sorts first.
  *
  * Broker Detail loads the asset cache and its report side by side and publishes
- * no busy flag on the page, so the barrier is its refresh control, which stays
- * disabled while `loading || reportLoading` — `reportLoading` starts `true` and
- * drops only after `portfolioSummary`, the object `assetIds` is drawn from, has
- * been assigned. The Risk tab is opened after it, so the picker mounts with the
- * holdings already known.
+ * no busy flag on its root, so the barrier is its refresh control, disabled
+ * while `pageBusy.busy`: the first load is tracked (`broker-first-load`) and
+ * ends only after the `Promise.all` of the broker, its overview and the broker
+ * and asset caches, and `loadOverview` assigns `portfolioSummary` — the object
+ * `assetIds` is drawn from — before it resolves. The Risk tab is opened after
+ * it, so the picker mounts with the holdings already known.
  */
 async function openBrokerRiskWithHoldings(page: Page, brokerId: number): Promise<Locator> {
     await navigateTo(page, `/brokers/${brokerId}`);
@@ -1839,6 +1847,52 @@ async function dragColumnEdge(page: Page, header: Locator, dx: number): Promise<
 }
 
 /**
+ * One rest of the pointer on a trigger, in `hoverUntilHelpOpens`: six times the Tooltip's own delay (`showDelayMs`,
+ * 500 ms). It is all the room a delay run late gets: the next attempt's move to the corner disarms a delay still
+ * pending (`handlePointerLeave`), so a wider deadline buys more rests, never a longer one. Widened on 17/10/2026 from
+ * 2 s, four times the delay, together with the deadline: on the deadline's evidence, not a measurement of its own.
+ */
+const HELP_REST_MS = 3_000;
+
+/**
+ * How long `hoverUntilHelpOpens` rests on a trigger again before a help that never opened is a red: a deadline, not a
+ * delay. 17/10/2026, load 94–115: 10 s did not fit; 20 s — inside the 90 s budget of «Risk analysis functional
+ * integration», so a help that never opens still fails here, by name.
+ */
+const HELP_OPEN_DEADLINE_MS = 20_000;
+
+/**
+ * Rest the pointer on `trigger` until the help it carries is open, and hand that help back.
+ *
+ * The project's Tooltip arms its delay on `mouseenter` and opens only if the pointer is still on the
+ * trigger when the delay ends: a `mouseleave` in between disarms it. A single hover is therefore a bet
+ * that nothing moves under the pointer for that long, and a parallel run takes the other side of it: L3's
+ * table may still be fitting its columns to their titles after the hover, or a busy main thread runs the
+ * delay late. Measured on `front-portfolio risk` at 2 workers (16/10/2026): no help in the snapshot taken
+ * when a single hover's assertion gave up, the right help open in the screenshot taken after it.
+ *
+ * So every attempt enters the trigger afresh and gives its help a few times that delay to open, and the
+ * attempts repeat until the deadline. Afresh means from the page's corner, where no Tooltip is drawn: a
+ * pointer already resting on the trigger fires no new `mouseenter`, and a hover alone would never arm
+ * the delay again. Leaving for the corner also disarms a delay the last attempt left pending, so attempts
+ * never add up: a delay run late must fit in one rest, and the deadline only buys more of them. For the
+ * deadline, on the same category at 2 workers — 17/10/2026, load 94–115: 10 s did not fit; 20 s. No sleep:
+ * every attempt ends on an assertion.
+ *
+ * The help is portalled to `<body>`, so it is found by its testid on the whole page: the caller starts
+ * from a pointer that left no other help open, and reads the help's text itself.
+ */
+async function hoverUntilHelpOpens(page: Page, trigger: Locator, why: string): Promise<Locator> {
+    const help = page.getByTestId('tooltip-content');
+    await expect(async () => {
+        await page.mouse.move(0, 0);
+        await trigger.hover();
+        await expect(help).toBeVisible({timeout: HELP_REST_MS});
+    }, why).toPass({timeout: HELP_OPEN_DEADLINE_MS});
+    return help;
+}
+
+/**
  * The figure titles of a DataTable that do not fit their column, each said with how; empty when every
  * one fits.
  *
@@ -1876,6 +1930,11 @@ async function cutTitles(table: Locator, columns: readonly string[]): Promise<st
 test.describe.configure({mode: 'parallel'});
 
 test.describe('Risk analysis functional integration', () => {
+    // A budget, not a wait: room for each test's own deadlines (barriers, the
+    // benchmark picker, polls) to run out first on a busy machine, so a red names
+    // its step instead of «Test timeout of 30000ms exceeded».
+    test.describe.configure({timeout: 90_000});
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
@@ -1918,6 +1977,14 @@ test.describe('Risk analysis functional integration', () => {
         // read as a positive magnitude of 8,7%, not as a dropped contradiction.
         await expect(panel.getByTestId('risk-l1-card-worst-value')).toHaveText(loss('8.7%'));
         await expect(panel.getByTestId('risk-l1-duration-worst')).toBeVisible();
+        // F-6: which one it was. The worst fall from its peak to its trough, and the worst month the series really
+        // went through beside the average of the worst 5 % the card prints; the day has its own date (below).
+        await expect(panel.getByTestId('risk-l1-period-worst')).toHaveAttribute('data-from', '2023-11-14');
+        await expect(panel.getByTestId('risk-l1-period-worst')).toHaveAttribute('data-to', '2023-12-03');
+        await expect(panel.getByTestId('risk-l1-worst-month')).toContainText(loss('12.1%'));
+        await expect(panel.getByTestId('risk-l1-period-month')).toHaveAttribute('data-from', '2023-11-14');
+        await expect(panel.getByTestId('risk-l1-period-month')).toHaveAttribute('data-to', '2023-12-14');
+        await expect(panel.getByTestId('risk-l1-period-day')).toHaveCount(0);
         await expect(panel.getByTestId('risk-l1-recovery-worst')).toBeVisible();
         // Where the portfolio stands now is a different question from its worst
         // moment, and the drawdown summary is what answers it.
@@ -1938,7 +2005,11 @@ test.describe('Risk analysis functional integration', () => {
         // instead of fragments, and still fails if a fifth card appears.
         await expect(panel.getByTestId('risk-l1-cards').locator('> div > [data-testid^="risk-l1-card-"]')).toHaveCount(4);
         await expect(panel.getByTestId('risk-l1-worst-realization')).toContainText(loss('3.8%'));
-        await expect(panel.getByTestId('risk-l1-worst-realization-date')).toContainText('2023-11-21');
+        // The day is written the way the language writes a day (F8, 06/11/2026), never as an ISO date.
+        const worstDayDate = panel.getByTestId('risk-l1-worst-realization-date-value');
+        await expect(worstDayDate).toContainText('2023');
+        await expect(worstDayDate).toContainText('21');
+        await expect(worstDayDate).not.toHaveText(/\d{4}-\d{2}-\d{2}/);
         // ⚠️ 90%, from the fixture's `drawdown_confidence_level`. The usual 95% is
         // a default the backend publishes, not a constant: this assertion turns red
         // the moment anyone writes the familiar number into the label.
@@ -1952,9 +2023,10 @@ test.describe('Risk analysis functional integration', () => {
         // window it spans because only trading days appear. A chart fed by an
         // interpolation would have some other number here.
         await expect(panel.getByTestId('risk-l1-underwater-chart')).toHaveAttribute('data-point-count', '6');
-        // The ulcer index is the caption of that curve, never a figure on its own:
-        // alone it is a dimensionless number with no reading.
-        await expect(panel.getByTestId('risk-l1-ulcer')).toBeVisible();
+        // The ulcer index is a row of the worst fall's card, beside the drawdown at risk (D4, 07/11/2026), and no longer the
+        // caption of that curve.
+        await expect(panel.getByTestId('risk-l1-card-worst').getByTestId('risk-l1-ulcer')).toBeVisible();
+        await expect(panel.getByTestId('risk-l1-underwater').getByTestId('risk-l1-ulcer')).toHaveCount(0);
 
         await expect(panel.getByTestId('risk-l1-histogram-bars')).toHaveAttribute('data-bin-count', '7');
         await expect(panel.getByTestId('risk-l1-histogram-observations')).toContainText('60');
@@ -1972,12 +2044,40 @@ test.describe('Risk analysis functional integration', () => {
         // in — the one conversion the unit tests cannot see. Without it the same stub prints
         // «−210.0%», which does not contain «−2.1%». The figure is not translated.
         await expect(panel.getByTestId('risk-l1-histogram-cut')).toContainText(loss('2.1%'));
-        // The axis ends, read off the stub's first lower bound (−0.06) and last upper bound
-        // (0.04): positions, one decimal. The two spans carry no testid, so each is found by its
-        // exact text inside the histogram — exact, because «4.0%» is also a substring of «−4.0%».
+        // The axis ends, read off the stub's first lower bound (−0.06) and last upper bound (0.04): positions, one decimal.
+        // The chart is a canvas since F-5, so the section publishes the two ends as text (the same `axisPercent` the axis labels
+        // use), and the bars' tooltips as the entries of a hidden list: this is what a test, and a screen reader, can read.
         const histogram = panel.getByTestId('risk-l1-histogram');
-        await expect(histogram.getByText(loss('6.0%'), {exact: true})).toBeVisible();
-        await expect(histogram.getByText('4.0%', {exact: true})).toBeVisible();
+        await expect(histogram.getByTestId('risk-l1-histogram-axis-min')).toHaveText(loss('6.0%'));
+        await expect(histogram.getByTestId('risk-l1-histogram-axis-max')).toHaveText('4.0%');
+        // The chart itself is drawn, by ECharts, and says when it is done.
+        await expect(histogram.getByTestId('risk-l1-histogram-chart')).toHaveAttribute('data-chart-ready', 'true');
+        // What it drew, read off the instance the chart publishes (`__lfChart`): one bar per bin of the stub, and the threshold
+        // line at the stub's cut (−0.021, written in percent units).
+        const drawn = await histogram.getByTestId('risk-l1-histogram-chart').evaluate((element) => {
+            const chart = (element as unknown as {__lfChart: {getOption(): {series: {data: unknown[]; markLine?: {data?: ({xAxis?: number} | {xAxis?: number}[])[]}}[]}}}).__lfChart;
+            const series = chart.getOption().series[0];
+            const line = series.markLine?.data?.[0];
+            return {bars: series.data.length, cut: (Array.isArray(line) ? line[0] : line)?.xAxis ?? null};
+        });
+        expect(drawn.bars, 'the chart drew a different number of bars than the engine binned').toBe(7);
+        expect(drawn.cut, 'the chart has no threshold line at the cut').toBeCloseTo(-2.1, 6);
+        // The tooltip of a bar (F8, 06/11/2026): the interval typeset by KaTeX, in a box of the chart's own, with the days beneath.
+        await histogram.getByTestId('risk-l1-histogram-chart').evaluate((element) => (element as unknown as {__lfChart: {dispatchAction(action: unknown): void}}).__lfChart.dispatchAction({type: 'showTip', seriesIndex: 0, dataIndex: 2}));
+        await expect(histogram.getByTestId('risk-l1-histogram-chart').locator('.katex').first(), 'the interval of the bar is not typeset').toBeVisible();
+        // Zoom (D3, 07/11/2026): the chart takes a zoom window like the others do — seven bars carry no slider, and the window the
+        // chart is given is the one it holds.
+        const zoom = await histogram.getByTestId('risk-l1-histogram-chart').evaluate((element) => {
+            const chart = (element as unknown as {__lfChart: {dispatchAction(action: unknown): void; getOption(): {dataZoom: {type: string; start: number; end: number}[]}}}).__lfChart;
+            const before = chart.getOption().dataZoom.map((entry) => entry.type);
+            chart.dispatchAction({type: 'dataZoom', start: 10, end: 60});
+            const after = chart.getOption().dataZoom[0];
+            return {before, start: Math.round(after.start), end: Math.round(after.end)};
+        });
+        expect(zoom.before, 'the histogram has no zoom').toContain('inside');
+        expect(zoom.before, 'a slider for seven bars').not.toContain('slider');
+        expect([zoom.start, zoom.end]).toEqual([10, 60]);
+        await expect(histogram.getByTestId('risk-l1-histogram-chart')).toHaveAttribute('data-has-slider', 'false');
 
         // Nothing came back degraded, so nothing is disclosed. The mirror of the
         // two-entry assertion in the unavailable test: without this half, a
@@ -2755,6 +2855,9 @@ test.describe('Risk analysis functional integration', () => {
         await expect(health, "L4's status line does not name each step by its block's title, in the blocks' order").toHaveText(entries.join(' · '));
     });
 
+    /** How long the D377 test polls L4's offered tools before a red: a deadline for a page whose main thread can stay busy for seconds after a tool opens, not a wait. */
+    const L4_OFFER_DEADLINE_MS = 10_000;
+
     /**
      * L4's tool selector (D377): the reader picks L4's tools, and the pick is theirs to keep.
      *
@@ -2781,13 +2884,13 @@ test.describe('Risk analysis functional integration', () => {
         let level4 = await openLevel4Drawer(panel);
         const offered = () => level4.locator('[data-testid^="risk-l4-add-"]').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('data-testid')));
         await expect(level4.getByTestId('risk-l4-empty'), 'a first visit does not say that no tool is open').toBeVisible();
-        await expect.poll(offered, {message: 'a first visit does not offer the three tools, in the fixed order'}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
+        await expect.poll(offered, {message: 'a first visit does not offer the three tools, in the fixed order', timeout: L4_OFFER_DEADLINE_MS}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
         for (const tool of L4_TOOLS) await expect(level4.getByTestId(`risk-l4-${tool}`), `the ${tool} is open on a first visit`).toHaveCount(0);
 
         // --- Adding the replay opens its box, and leaves the two others offered ---
         await level4.getByTestId('risk-l4-add-replay').click();
         await expect(level4.getByTestId('risk-l4-replay'), 'adding the replay did not open its box').toBeVisible();
-        await expect.poll(offered, {message: 'the replay is still offered once open, or another tool stopped being offered'}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
+        await expect.poll(offered, {message: 'the replay is still offered once open, or another tool stopped being offered', timeout: L4_OFFER_DEADLINE_MS}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
         await expect(level4.getByTestId('risk-l4-empty'), 'L4 says it is empty with the replay open').toHaveCount(0);
 
         // --- A reload brings the replay back open, and only the replay ---
@@ -2800,7 +2903,7 @@ test.describe('Risk analysis functional integration', () => {
         level4 = await openLevel4Drawer(await waitForRiskLevels(page));
         const replayBox = level4.getByTestId('risk-l4-replay');
         await expect(replayBox, 'the replay added before the reload is not open after it: the set was not remembered').toBeVisible();
-        await expect.poll(offered, {message: 'after the reload the shock and the simulation are not both still offered'}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
+        await expect.poll(offered, {message: 'after the reload the shock and the simulation are not both still offered', timeout: L4_OFFER_DEADLINE_MS}).toEqual(['risk-l4-add-shock', 'risk-l4-add-simulation']);
         await expect(level4.getByTestId('risk-l4-shock')).toHaveCount(0);
         await expect(level4.getByTestId('risk-l4-simulation')).toHaveCount(0);
 
@@ -2818,7 +2921,7 @@ test.describe('Risk analysis functional integration', () => {
         await replayBox.getByTestId('risk-l4-replay-close').click();
         await expect(replayBox, 'the closed replay is still on screen').toHaveCount(0);
         await expect(level4.getByTestId('risk-l4-empty'), 'with its one tool closed, L4 does not say it is empty').toBeVisible();
-        await expect.poll(offered, {message: 'the closed replay is not offered again beside the two others'}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
+        await expect.poll(offered, {message: 'the closed replay is not offered again beside the two others', timeout: L4_OFFER_DEADLINE_MS}).toEqual(L4_TOOLS.map((tool) => `risk-l4-add-${tool}`));
         await expect(health, 'the status line still names the replay the reader closed: its answer was kept').toHaveCount(0);
     });
 
@@ -3469,6 +3572,28 @@ test.describe('Risk analysis functional integration', () => {
             expect(await page.evaluate(() => document.documentElement.classList.contains('dark')), 'premise: the page is drawn in the light theme').toBe(false);
         }
 
+        /**
+         * A colour role as this page resolves it: a probe painted with the role, read and removed, the way
+         * `expectComputedBorderColor` does in `transactions-modals.spec.ts` (design system, rule 10). A row's
+         * `background-color` is read by the same `getComputedStyle` under the same `:root` properties, so the
+         * two strings agree to the digit, a `color-mix()` written out as `oklab(…)` included. A row is held to
+         * its role, never to a hex: the value is T's to tune. Call it after `expectLightTheme`, since a role
+         * changes with the theme. Premise: the role resolves — an unknown one paints transparent, like a row
+         * that lost it, and the comparison would pass on two absences.
+         */
+        async function roleBackground(page: Page, role: `--lf-${string}`): Promise<string> {
+            const resolved = await page.evaluate((name) => {
+                const probe = document.createElement('span');
+                probe.style.backgroundColor = `var(${name})`;
+                document.body.appendChild(probe);
+                const colour = getComputedStyle(probe).backgroundColor;
+                probe.remove();
+                return colour;
+            }, role);
+            expect(resolved, `premise: ${role} resolves in the page`).not.toBe('rgba(0, 0, 0, 0)');
+            return resolved;
+        }
+
         test('the portfolio and the benchmark open the table, tinted like their dots and marked by their shape, their names written like any holding’s', async ({page}) => {
             try {
                 const {panel, benchmarkId} = await openWithUnheldBenchmark(page);
@@ -3484,10 +3609,14 @@ test.describe('Risk analysis functional integration', () => {
                 await expectLightTheme(page);
                 await page.mouse.move(0, 0);
 
-                // 1. The tints, computed. Red: the rows are white again — the review-4 defect.
+                // 1. The tints, computed. Red: the references are plain again, painted like any row — the
+                //    review-4 defect. The sky and the amber are categorical and stay written out. A plain row
+                //    is the card role, no longer white since T's lot «le tabelle» (16/10): a holding row is
+                //    compared with `--lf-surface-card` as the page resolves it, never with a hex.
                 await expect.soft(portfolioRow, 'the portfolio row is not tinted like its dot (sky, at a tenth)').toHaveCSS('background-color', 'rgba(2, 132, 199, 0.1)');
                 await expect.soft(benchmarkRow, 'the benchmark row is not tinted like its dot (amber, at a tenth)').toHaveCSS('background-color', 'rgba(217, 119, 6, 0.1)');
-                await expect.soft(holdingRow, 'a holding row is tinted: only the references are').toHaveCSS('background-color', 'rgb(255, 255, 255)');
+                const plainRowColour = await roleBackground(page, '--lf-surface-card');
+                await expect.soft(holdingRow, 'a holding row is tinted: only the references are').toHaveCSS('background-color', plainRowColour);
 
                 // 2. The name cell scrolls with its row and paints nothing of its own, so the tint shows
                 //    once. Red: the names are pinned again — a sticky cell with an inherited background,
@@ -3569,16 +3698,19 @@ test.describe('Risk analysis functional integration', () => {
             await holdingRow.getByTestId('risk-l3-row-volatility').click();
             await expect(holdingRow).toHaveAttribute('data-selected', 'true');
             await page.mouse.move(0, 0);
-            // Red: DataTable's own selection green, the one review 4 asked to make lighter.
-            await expect.soft(holdingRow, 'the selected row is not the lighter green').toHaveCSS('background-color', 'rgba(34, 197, 94, 0.12)');
+            // Every table selects with the light role `--lf-selected` since T's lot «le tabelle» (16/10): the
+            // focus green at 12%, lighter than DataTable's old green, as review 4 asked. Compared with the role
+            // as the page resolves it, never with a hex. Red: the L3 row lost the selection role.
+            const selectionColour = await roleBackground(page, '--lf-selected');
+            await expect.soft(holdingRow, 'the selected row is not the lighter green').toHaveCSS('background-color', selectionColour);
 
-            // The selection shows over a reference's tint as well.
+            // The selection shows over a reference's tint as well: the same role, in the tint's place.
             const portfolioRow = l3PortfolioRow(panel);
             await l3PortfolioCell(panel, 'volatility').click();
             await expect(portfolioRow).toHaveAttribute('data-selected', 'true');
             await expect(holdingRow).toHaveAttribute('data-selected', 'false');
             await page.mouse.move(0, 0);
-            await expect.soft(portfolioRow, "the selected portfolio row keeps its tint instead of the selection's green").toHaveCSS('background-color', 'rgba(34, 197, 94, 0.12)');
+            await expect.soft(portfolioRow, "the selected portfolio row keeps its tint instead of the selection's green").toHaveCSS('background-color', selectionColour);
         });
 
         /**
@@ -3640,10 +3772,10 @@ test.describe('Risk analysis functional integration', () => {
             // As written, before the header's style writes it in capitals: the text, not its rendering.
             await expect(title, "the return's title is not the short name (review 4: «va accorciato»)").toHaveText(await catalogueSentence(page, 'risk.levels.l3.table.expectedReturnShort'));
 
-            // The tooltip opens after its own hover delay, which the retrying assertions absorb.
-            await title.hover();
-            const help = page.getByTestId('tooltip-content');
-            await expect(help, "resting on the return's title must open its help").toBeVisible();
+            // The tooltip opens after its own hover delay, and only if the title is still under the pointer
+            // when the delay ends: `hoverUntilHelpOpens` rests on the title again until the help is open,
+            // within a deadline.
+            const help = await hoverUntilHelpOpens(page, title, "resting on the return's title must open its help");
             const fullName = await catalogueSentence(page, 'risk.assetSet.levels.l3.expectedReturn');
             await expect.poll(() => help.evaluate((element) => (element.textContent ?? '').split('\n')[0].trim()), {message: "the help does not open with the return's full name, on a line of its own"}).toBe(fullName);
         });
@@ -3687,12 +3819,13 @@ test.describe('Risk analysis functional integration', () => {
                 }
 
                 // A clean slate: the pointer rests on a figure, which has no help to open, so the help that
-                // opens next is the dash's. The Tooltip opens after its own hover delay, which the retrying
-                // assertion absorbs: nothing here waits on a clock.
+                // opens next is the dash's. The Tooltip opens after its own hover delay, and only if the dash
+                // is still under the pointer when the delay ends: `hoverUntilHelpOpens` rests on the dash again
+                // until the help is open, within a deadline — nothing here waits on a clock.
                 await listed.getByTestId('risk-l3-row-beta').hover();
                 const help = page.getByTestId('tooltip-content');
                 await expect(help, 'a help is still open with the pointer resting on a measured figure').toHaveCount(0);
-                await leftOut.getByTestId('risk-l3-row-beta').hover();
+                await hoverUntilHelpOpens(page, leftOut.getByTestId('risk-l3-row-beta'), 'resting on the dash of a holding the comparison could not measure must open its help');
                 await expect(help, 'resting on the dash of a holding the comparison could not measure must open its explanation').toHaveText(await catalogueSentence(page, 'risk.assetSet.levels.blankNote'));
             } finally {
                 await clearRiskBenchmark(page);
@@ -3999,7 +4132,8 @@ test.describe('Risk analysis functional integration', () => {
                 await expect(benchmarkRow(panel, benchmarkId), "D378: the benchmark's row outlived the verdict that rules it out").toHaveCount(0);
 
                 // Nothing measured over the new window. Barriers: the verdict above, and the new window's base wave
-                // asked and landed — the refresh control is back — with L3's table drawn from it.
+                // asked and landed — the page's Refresh is idle again: it waits for the panel's base wave, the panel
+                // having no Refresh of its own (Y11, decision 48) — with L3's table drawn from it.
                 const newWave = () =>
                     new Set(
                         requests
@@ -4008,7 +4142,7 @@ test.describe('Risk analysis functional integration', () => {
                             .map((request) => request.mode),
                     );
                 await expect.poll(newWave, {timeout: 10_000, message: "premise: the new window's base wave was never asked"}).toEqual(new Set(['historical', 'current_composition']));
-                await expect(panel.getByTestId('risk-refresh-button'), "premise: the new window's base wave never landed").toBeEnabled({timeout: 15_000});
+                await expect(page.getByTestId('sync-button'), "premise: the new window's base wave never landed").toHaveAttribute('data-busy', 'false', {timeout: 20_000});
                 await expectBaseTable(panel);
                 expect(
                     comparisonsAgainst(requests, owned, benchmarkId).filter(({at}) => at >= loggedBefore),
@@ -4147,6 +4281,214 @@ test.describe('Risk analysis functional integration', () => {
         });
         expect(captionStyle.whiteSpace, 'the uncovered caption is held on one line: its style does not let it wrap').not.toBe('nowrap');
         expect(captionStyle.lineClamp, 'the uncovered caption has no two-line clamp: a longer sentence would run past two lines').toBe('2');
+    });
+
+    /**
+     * F-7 (testlist 1.3): on a narrow screen the rows of «Sono diversificato come credo?» stack — the name above, then the bar,
+     * then the weight and the contribution — and no row leaves the screen. Wide, they stay as they were: name, bar and
+     * figure on one line. The switch follows the room the row has (a container query), so it is read on boxes, not on a width.
+     */
+    test('F-7: an L2 row stacks on a phone and no row leaves the screen; wide, it stays on one line', async ({page}) => {
+        await installRiskMocks(page, {concentration: true});
+        const panel = await openDashboardRisk(page);
+        const level2 = panel.getByTestId('risk-level-2');
+        const rows = level2.locator('[data-testid^="risk-l2-divergence-bar-"]');
+        await expect(rows.first(), 'the stub draws no L2 row').toBeVisible({timeout: 10_000});
+
+        /** The three boxes of the first row, read together: the name cell, the bar's track and the figures line. */
+        const geometry = () =>
+            level2.evaluate((section) => {
+                const bar = section.querySelector<HTMLElement>('[data-testid^="risk-l2-divergence-bar-"]');
+                const item = bar?.closest('li');
+                if (!bar || !item) return null;
+                const id = bar.getAttribute('data-testid')!.replace('risk-l2-divergence-bar-', '');
+                const label = bar.querySelector<HTMLElement>('[title]');
+                const track = bar.querySelector<HTMLElement>('.rounded-l-full')?.parentElement?.parentElement;
+                const figures = section.querySelector<HTMLElement>(`[data-testid="risk-l2-figures-${id}"]`);
+                if (!label || !track || !figures) return null;
+                const top = (element: Element) => Math.round(element.getBoundingClientRect().top);
+                const middle = (element: Element) => Math.round(element.getBoundingClientRect().top + element.getBoundingClientRect().height / 2);
+                return {
+                    labelTop: top(label),
+                    labelBottom: Math.round(label.getBoundingClientRect().bottom),
+                    trackTop: top(track),
+                    trackMiddle: middle(track),
+                    figuresTop: top(figures),
+                    itemOverflow: item.scrollWidth - item.clientWidth,
+                    pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                    itemRight: Math.round(item.getBoundingClientRect().right),
+                    viewport: window.innerWidth,
+                };
+            });
+
+        // Desktop first: one line for the name and the bar, the figures under them.
+        const wide = await geometry();
+        expect(wide, 'the first L2 row has no name, bar or figures line').not.toBeNull();
+        // Beside the name: the bar's middle falls within the name's own line (the cells are centred, so their tops differ).
+        expect(wide!.trackMiddle, 'wide, the bar is not beside the name').toBeGreaterThanOrEqual(wide!.labelTop);
+        expect(wide!.trackMiddle, 'wide, the bar is not beside the name').toBeLessThanOrEqual(wide!.labelBottom);
+        expect(wide!.figuresTop, 'the figures are not under the bar').toBeGreaterThan(wide!.trackTop);
+
+        await page.setViewportSize({width: 375, height: 812});
+        await expect
+            .poll(
+                async () => {
+                    const narrow = await geometry();
+                    return narrow !== null && narrow.trackTop >= narrow.labelBottom - 1;
+                },
+                {message: 'at 375 px the bar is not under the name'},
+            )
+            .toBe(true);
+        const narrow = (await geometry())!;
+        expect(narrow.figuresTop, 'at 375 px the figures are not under the bar').toBeGreaterThan(narrow.trackTop);
+        expect(narrow.itemOverflow, 'an L2 row is wider than its box at 375 px').toBeLessThanOrEqual(1);
+        expect(narrow.pageOverflow, 'the page scrolls sideways at 375 px').toBeLessThanOrEqual(1);
+        expect(narrow.itemRight, 'a row leaves the screen at 375 px').toBeLessThanOrEqual(narrow.viewport);
+    });
+
+    /**
+     * D6 (07/11/2026): on a phone, nothing of L2 is cut. Not the cards, not the rows, not the matrix and its two lists: each either fits the
+     * width of the screen or scrolls inside its own box (the matrix does, by design, and says so with `data-overflowing`). Measured on
+     * boxes at 375 px, level and page: a figure that leaves the screen on the right is cut, wherever it leaves from.
+     */
+    test('D6: nothing in L2 is cut at 375 px: every part fits the screen or scrolls inside its own box', async ({page}) => {
+        await page.setViewportSize({width: 375, height: 812});
+        await installRiskMocks(page, {concentration: true});
+        const panel = await openDashboardRisk(page);
+        const level2 = panel.getByTestId('risk-level-2');
+        await expect(level2.getByTestId('risk-correlation-heatmap'), 'the stub draws no matrix').toBeVisible({timeout: 15_000});
+        await expect(level2.locator('[data-testid^="risk-l2-divergence-bar-"]').first()).toBeVisible();
+
+        const cut = await level2.evaluate((section) => {
+            const viewport = window.innerWidth;
+            const offenders: string[] = [];
+            /** A part is inside a scroller when an ancestor below the level scrolls sideways: what it hides is reachable, not cut. */
+            const scrolls = (element: Element) => {
+                for (let node = element.parentElement; node && node !== section.parentElement; node = node.parentElement) {
+                    const style = getComputedStyle(node);
+                    if ((style.overflowX === 'auto' || style.overflowX === 'scroll') && node.scrollWidth > node.clientWidth) return true;
+                }
+                return false;
+            };
+            for (const element of section.querySelectorAll<HTMLElement>('[data-testid]')) {
+                const box = element.getBoundingClientRect();
+                if (box.width === 0 || box.height === 0) continue;
+                if (box.right > viewport + 1 && !scrolls(element)) offenders.push(`${element.dataset.testid} right=${Math.round(box.right)}`);
+            }
+            return {offenders, pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth};
+        });
+        expect(cut.offenders, 'a part of L2 leaves the screen on the right and nothing scrolls it').toEqual([]);
+        expect(cut.pageOverflow, 'the page scrolls sideways at 375 px').toBeLessThanOrEqual(1);
+
+        // The matrix: its box fits the screen, and when its squares are wider than it, it scrolls (and says so) rather than shrinking them.
+        const matrix = level2.getByTestId('risk-correlation-heatmap');
+        const geometry = await matrix.evaluate((element) => ({right: Math.round(element.getBoundingClientRect().right), viewport: window.innerWidth, scrollable: element.scrollWidth > element.clientWidth, overflowX: getComputedStyle(element).overflowX}));
+        expect(geometry.right, 'the matrix box leaves the screen').toBeLessThanOrEqual(geometry.viewport);
+        await expect(matrix).toHaveAttribute('data-overflowing', String(geometry.scrollable));
+        // The colour scale under the matrix: inside the box when the matrix fits it (it used to run past the right edge, cut).
+        if (!geometry.scrollable) {
+            const legend = await level2.getByTestId('risk-correlation-legend').evaluate((element) => ({right: Math.round(element.getBoundingClientRect().right), box: Math.round(element.parentElement!.getBoundingClientRect().right)}));
+            expect(legend.right, 'the colour scale under the matrix is cut on the right').toBeLessThanOrEqual(legend.box);
+        }
+        if (geometry.scrollable) expect(['auto', 'scroll'], 'a matrix wider than its box does not scroll').toContain(geometry.overflowX);
+    });
+
+    /**
+     * T-4 (testlist of 07/11/2026): on a phone the simulation's parameters are one per row, the label on the left and the field on
+     * the right, every field on one right edge; the days line of the horizon sits under its field and never on the row below.
+     */
+    test('T-4: at 375 px each simulation parameter is a row, label left and field right, and the horizon days stay off the next row', async ({page}) => {
+        await page.setViewportSize({width: 375, height: 812});
+        await installRiskMocks(page);
+        const panel = await openDashboardRisk(page);
+        const level4 = await openLevel4(panel);
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '365');
+
+        const layout = await level4.evaluate((section) => {
+            const box = (id: string) => {
+                const element = section.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+                if (!element) return null;
+                const rect = element.getBoundingClientRect();
+                return {left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom};
+            };
+            const horizonRow = section.querySelector<HTMLElement>('[data-testid="risk-simulation-horizon-field"] label')!.getBoundingClientRect();
+            // Each row: the box of the row and of its field. The sampling and seed rows exist when the catalogue offers them.
+            const rows = [
+                {id: 'horizon', row: {left: horizonRow.left, right: horizonRow.right, top: horizonRow.top, bottom: horizonRow.bottom}, field: box('risk-simulation-horizon')},
+                {id: 'paths', row: box('risk-simulation-paths-row'), field: box('risk-simulation-paths')},
+                {id: 'sampling', row: box('risk-simulation-sampling-row'), field: box('risk-simulation-sampling')},
+                {id: 'seed', row: box('risk-simulation-seed-row'), field: box('risk-simulation-seed')},
+            ].filter((entry) => entry.row !== null && entry.field !== null);
+            return {rows, days: box('risk-simulation-horizon-days')!, pathsRow: box('risk-simulation-paths-row')!};
+        });
+
+        expect(layout.rows.map((entry) => entry.id).slice(0, 2), 'the horizon and the paths rows are drawn').toEqual(['horizon', 'paths']);
+        for (const {id, row, field} of layout.rows) {
+            expect(Math.abs(field!.right - row!.right), `${id}: the field is not on the right of its row`).toBeLessThanOrEqual(1);
+            const middle = (field!.top + field!.bottom) / 2;
+            expect(middle >= row!.top && middle <= row!.bottom, `${id}: the field is not on the line of its label`).toBe(true);
+        }
+        const rights = layout.rows.map((entry) => Math.round(entry.field!.right));
+        expect(Math.max(...rights) - Math.min(...rights), 'the fields do not share one right edge').toBeLessThanOrEqual(1);
+        const horizonField = layout.rows[0].field!;
+        expect(layout.days.top, 'the days line is not under the horizon field').toBeGreaterThanOrEqual(horizonField.bottom - 1);
+        expect(layout.days.bottom, 'the days line lies on the paths row').toBeLessThanOrEqual(layout.pathsRow.top + 1);
+    });
+
+    /**
+     * F-8 (testlist 1.3): the simulation horizon takes a number of days as before, and also years, months and days in the
+     * interface language (`2y3m5d` in English), as a fixed sum: a year is 365 days, a month 30. The days it comes to are written under the field, a text that is no horizon is an
+     * error of the field and keeps the run button off, and what goes to the engine is always calendar days. The unit letters
+     * are read from the catalogue of the language the page is drawn in, never written here.
+     */
+    test('F-8: the simulation horizon accepts 1y, shows its days, refuses a bad text and sends calendar days', async ({page}) => {
+        const requests = await installRiskMocks(page);
+        const panel = await openDashboardRisk(page);
+        const level4 = await openLevel4(panel);
+        const horizon = level4.getByTestId('risk-simulation-horizon');
+        await expect(horizon).toHaveValue('365');
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '365');
+
+        const year = await catalogueSentence(page, 'risk.params.horizonExpr.units.year');
+        const month = await catalogueSentence(page, 'risk.params.horizonExpr.units.month');
+
+        await horizon.fill(`1${year}6${month}`);
+        // A fixed sum (developer's decision, 05/11/2026): a year is 365 days and a month 30, so a year and six months are 545.
+        const days = Number(await level4.getByTestId('risk-simulation-horizon-days').getAttribute('data-days'));
+        expect(days).toBe(545);
+        await expect(horizon).toHaveAttribute('aria-invalid', 'false');
+
+        await level4.getByTestId('risk-simulation-run').click();
+        await expect.poll(() => requests.some((request) => request.analytics.some((analytic) => analytic.analytic_code === 'simulation' && analytic.parameters?.horizon_days === days)), {message: 'the run did not send the days the field showed', timeout: 10_000}).toBe(true);
+
+        // The letters in any order, repeated, all counting (06/11/2026): 30 days, a year and two months is 455.
+        const day = await catalogueSentence(page, 'risk.params.horizonExpr.units.day');
+        await horizon.fill(`30${day} 1${year} 2${month}`);
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '455');
+
+        // The field sits on the baseline of its neighbours, with the days line under it and nothing moved by it: the bottoms of the
+        // horizon and paths inputs are the same.
+        const bottoms = await level4.evaluate((section) => ['risk-simulation-horizon', 'risk-simulation-paths'].map((id) => Math.round(section.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().bottom)));
+        expect(bottoms[0], 'the horizon input is not aligned with the paths input').toBe(bottoms[1]);
+
+        // A text that is no horizon: the red border and the reason in the tooltip; the days line keeps its place; the run button is off.
+        await horizon.fill('1x');
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', 'format');
+        await expect(horizon).toHaveAttribute('aria-invalid', 'true');
+        await expect(level4.getByTestId('risk-simulation-horizon-days')).toHaveAttribute('data-days', '');
+        await expect(level4.getByTestId('risk-simulation-run')).toBeDisabled();
+        const bottomsInError = await level4.evaluate((section) => ['risk-simulation-horizon', 'risk-simulation-paths'].map((id) => Math.round(section.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().bottom)));
+        expect(bottomsInError, 'the error moved a field').toEqual(bottoms);
+        // A number with no letter beside letters is an error too.
+        await horizon.fill(`1${year} 30`);
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', 'format');
+
+        // Past the engine's ten years: its own error, not a request the engine would refuse.
+        await horizon.fill('3651');
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', 'tooLong');
+        await horizon.fill('30');
+        await expect(level4.getByTestId('risk-simulation-horizon-field')).toHaveAttribute('data-error', '');
+        await expect(level4.getByTestId('risk-simulation-run')).toBeEnabled();
     });
 
     /**

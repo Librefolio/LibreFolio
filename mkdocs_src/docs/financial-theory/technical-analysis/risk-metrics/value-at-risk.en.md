@@ -109,7 +109,7 @@ $$
 n = \max\left(1,\ \operatorname{round}\left(\frac{h \cdot f}{365}\right)\right)
 $$
 
-A horizon therefore spans the same stretch of calendar on every series, to the nearest observation. Thirty days — the bad month the app reports beside the bad day — are $n = 21$ observations of a series quoted on trading days ($f \approx 252$) and $n = 30$ of one quoted every calendar day ($f = 365$).
+A horizon therefore spans the same stretch of calendar on every series, to the nearest observation. Thirty days — the Thirty bad days card the app shows beside the bad day — are $n = 21$ observations of a series quoted on trading days ($f \approx 252$) and $n = 30$ of one quoted every calendar day ($f = 365$).
 
 The analytic computes exactly these quantities and publishes both with the result: $n$ as its horizon in observations, $T$ as its observation count. That published count, not the window length, is the $T$ the rule applies to. It is also the count the minimum of 20 observations is checked against: with fewer than 20 compounded windows the figure is not computed, and the result comes back unavailable for insufficient history. A bad month therefore needs $N \ge 40$ returns at $f \approx 252$, where $n = 21$, and $N \ge 49$ at $f = 365$.
 

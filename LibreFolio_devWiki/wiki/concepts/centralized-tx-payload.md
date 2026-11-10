@@ -22,7 +22,7 @@ The pattern was extracted during Phase 07 PlanD-D1D2 as part of the `plan-Centra
 All transaction mutation paths:
 - `TransactionFormModal` — single + dual creates/updates
 - `TransactionBulkModal` — mixed batch (create/edit/delete/split/promote)
-- `BulkDeleteLinkedPairModal` — deletes only
+- `BulkDeleteLinkedPairModal` — deletes only (*2026-11-07 lint:* the component was deleted in `b31416872`, 2026-08-31)
 - `transactions/+page.svelte` — split, promote, confirmDelete, validateDelete
 
 ## The Pattern
@@ -51,9 +51,13 @@ Pure function: no side effects. Assembles `{creates, updates, deletes, splits, p
 ### Step 3 — Commit/Validate via `txCommitApi.ts`
 
 ```typescript
-commitBatch(payload): Promise<TrySaveResult<TXBatchResponse>>
-validateBatch(payload): Promise<TrySaveResult<TXValidationResponse>>
+commitTransactions(payload, opts?): Promise<CommitResult>
+validateTransactions(payload, opts?): Promise<CommitResult>
 ```
+
+*2026-11-07 lint:* the names were corrected from `commitBatch`/`validateBatch`, which never existed in the code: the
+module exports `commitTransactions` and `validateTransactions` since it was created (`d20c55220`, 2026-05-21); both use
+`trySave` internally and return a `CommitResult` (`committed`, normalized `issues`, `networkError`).
 
 Single entry point for all commit and validate calls. Handles:
 - Uniform error extraction from FastAPI 422 + service-layer validation issues
@@ -81,16 +85,16 @@ const batch = buildBatchPayload(ops, {
     splits: pendingSplits,
     promotes: pendingPromotes,
 });
-const result = await commitBatch(batch);
+const result = await commitTransactions(batch);
 ```
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Payload helpers | `frontend/src/lib/utils/transactions/txPayloadHelpers.ts` |
-| Commit API | `frontend/src/lib/utils/transactions/txCommitApi.ts` |
+| Payload helpers | `frontend/src/lib/features/transactions/txPayloadHelpers.ts` |
+| Commit API | `frontend/src/lib/features/transactions/txCommitApi.ts` |
 | trySave wrapper | `frontend/src/lib/utils/trySave.ts` |
-| BulkModal (main consumer) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| FormModal (dual creates) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| BulkModal (main consumer) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| FormModal (dual creates) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | Page-level delete/split/promote | `frontend/src/routes/(app)/transactions/+page.svelte` |

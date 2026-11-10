@@ -1,4 +1,4 @@
-"""Calendar-day rolling return over an already-resolved daily asset series."""
+"""Calendar-day rolling return over an already-resolved daily series: an asset's prices or an FX pair's rates."""
 
 from __future__ import annotations
 
@@ -37,10 +37,12 @@ from backend.app.schemas.signals import (
     SignalWarning,
     SignalWarningCode,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
-from backend.app.services.signal_plugins.base import SignalPlugin, SignalUnavailableError
+from backend.app.services.financial_math.returns import price_return
+from backend.app.services.provider_registry import register_plugin
+from backend.app.services.signals.base import SignalPlugin, SignalUnavailableError
+from backend.app.services.signals.registry import SignalPluginRegistry
 
-CalendarWindowDays = Annotated[int, Field(strict=True, gt=0)]
+CalendarWindowDays = Annotated[int, Field(strict=True, ge=1)]
 
 
 class CalendarRollingReturnParams(BaseModel):
@@ -55,7 +57,7 @@ class CalendarRollingReturnParams(BaseModel):
             "x-control-order": 1,
             "x-suffix": "days",
             "x-step": 1,
-            "x-tooltip-key": "signals.tooltips.riskWindow",
+            "x-tooltip-key": "signals.riskRollingReturn.windowTooltip",
         },
     )
 
@@ -109,6 +111,20 @@ def _point_provenance(
     )
 
 
+def _unavailable_span(days: Sequence[date_type], references: Sequence[date_type]) -> dict[str, str]:
+    """Where the undefined points are, as ISO days (Z5-F1): ``unavailable_start`` and ``unavailable_end``, the first and last
+    undefined point; ``resync_start`` and ``resync_end``, the period whose prices to sync again — from the earliest
+    reference an undefined point needed to the last undefined point. Empty when there is none."""
+    if not days:
+        return {}
+    return {
+        "unavailable_start": min(days).isoformat(),
+        "unavailable_end": max(days).isoformat(),
+        "resync_start": min(references).isoformat(),
+        "resync_end": max(days).isoformat(),
+    }
+
+
 @register_plugin(SignalPluginRegistry)
 class CalendarRollingReturnPlugin(SignalPlugin):
     """Compare each resolved daily price with the resolved price N calendar days earlier."""
@@ -125,7 +141,7 @@ class CalendarRollingReturnPlugin(SignalPlugin):
     docs_path = "financial-theory/fundamentals/returns/"
     category = SignalCategory.RISK
     params_model = CalendarRollingReturnParams
-    catalog_visible = False
+    catalog_visible = True
     allows_sparse_output_dates = True
     allows_sparse_input_dates = True
     input_requirements = SignalInputRequirements(
@@ -158,7 +174,8 @@ class CalendarRollingReturnPlugin(SignalPlugin):
             ],
         ),
     )
-    compatible_domains = (SignalDomain.ASSET,)
+    # Z-29fx: an FX rate series is a resolved daily series too (the FX half of Y-40).
+    compatible_domains = (SignalDomain.ASSET, SignalDomain.FX)
 
     @classmethod
     def warmup_requirement(
@@ -209,7 +226,9 @@ class CalendarRollingReturnPlugin(SignalPlugin):
         points_by_date = {point.date: point for point in price_points}
         output_points: list[SignalCalendarReturnValuePoint] = []
         unavailable_counts: Counter[str] = Counter()
-        one = Decimal("1")
+        # Z5-F1: where the undefined points are, for the page to say it: their days and their references' days.
+        unavailable_days: list[date_type] = []
+        unavailable_references: list[date_type] = []
         hundred = Decimal("100")
         requested_end = context.requested_range.end or context.requested_range.start
 
@@ -233,10 +252,14 @@ class CalendarRollingReturnPlugin(SignalPlugin):
                 status = SignalCalendarReturnPointStatus.INVALID_REFERENCE_PRICE
                 value = None
             else:
+                # Both prices are positive here, so the return is always defined.
+                change = price_return(reference.close, current.close)
                 status = SignalCalendarReturnPointStatus.AVAILABLE
-                value = float((current.close / reference.close - one) * hundred)
+                value = float(change * hundred) if change is not None else None
             if value is None:
                 unavailable_counts[status.value] += 1
+                unavailable_days.append(current.date)
+                unavailable_references.append(reference_target_date)
             output_points.append(
                 SignalCalendarReturnValuePoint(
                     date=current.date,
@@ -258,6 +281,7 @@ class CalendarRollingReturnPlugin(SignalPlugin):
                     "window_days": params.window_days,
                     "unavailable_points": sum(unavailable_counts.values()),
                     "reasons": dict(sorted(unavailable_counts.items())),
+                    **_unavailable_span(unavailable_days, unavailable_references),
                 },
             )
         first_available_index = next(
@@ -276,6 +300,7 @@ class CalendarRollingReturnPlugin(SignalPlugin):
                     details={
                         "unavailable_points": sum(unavailable_counts.values()),
                         "reasons": dict(sorted(unavailable_counts.items())),
+                        **_unavailable_span(unavailable_days, unavailable_references),
                     },
                 )
             ]

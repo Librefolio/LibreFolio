@@ -3,7 +3,7 @@ title: "Batch 4: Five Independent Mini-Plans (Log Audit, Candlestick, FxRange, L
 category: source
 source_type: plan
 date_ingested: 2026-06-01
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-independent-*.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-*-subplan/plan-independent-*.prompt.md
 tags: [backend, frontend, logging, charts, fx, cache, signals, independent]
 related: [features/F-076, features/F-080, features/F-086, features/F-039, features/F-072, concepts/log-level-policy, concepts/image-preview-cache-pattern]
 ---
@@ -18,11 +18,15 @@ Five self-contained plans executed in parallel on 2026-06-01, each addressing a 
 
 | Plan | Commit | Area |
 |------|--------|------|
-| `plan-independent-BackendLogAudit.prompt.md` | `82c9224d5` | Backend: TRACE level + log policy + full audit |
-| `plan-independent-CandlestickChart.prompt.md` | `aefb764ed` | Frontend: CandlestickChart.svelte + volume bars |
-| `plan-independent-FxRangeHelper.prompt.md` | `5e12fef35` | Frontend: ensureFxRangeLoaded DRY refactor |
-| `plan-independent-LazyImageCache.prompt.md` | `315d3e826` | Frontend: client-side image preview cache |
-| `plan-independent-RsiSignalBands.prompt.md` | `7a6bd67bb` | Frontend: RSI zone-driven line style |
+| `plan-independent-BackendLogAudit.prompt.md` | `4f5d240bd` | Backend: TRACE level + log policy + full audit |
+| `plan-independent-CandlestickChart.prompt.md` | `a9e30b6b0` | Frontend: CandlestickChart.svelte + volume bars |
+| `plan-independent-FxRangeHelper.prompt.md` | `a6269acbe` | Frontend: ensureFxRangeLoaded DRY refactor |
+| `plan-independent-LazyImageCache.prompt.md` | `2eb451ca6` | Frontend: client-side image preview cache |
+| `plan-independent-RsiSignalBands.prompt.md` | `6073f4c1e` | Frontend: RSI zone-driven line style |
+
+> **Path note (2026-11-07 lint)**: the five plans were archived out of `RoadmapV4_UI/` — FxRangeHelper into
+> `phases/phase-05-subplan/`, CandlestickChart and RsiSignalBands into `phases/phase-06-subplan/`, BackendLogAudit and
+> LazyImageCache into `phases/phase-10-subplan/`.
 
 ## Key Takeaways
 

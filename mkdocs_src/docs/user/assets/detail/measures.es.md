@@ -10,11 +10,13 @@ La herramienta Medida responde a *¿cuánto cambió entre estos dos días?* Elig
 
 ## 🛠️ Tomar una medida
 
-1. Haz clic en **📏 Añadir medición** en la parte superior derecha del gráfico: el panel **Medidas** se abre debajo de él.
-2. Haz clic en el punto **inicio** del gráfico, luego en el punto **fin**.
+1. Haz clic en **📏 Añadir medición** en la parte superior derecha del gráfico: el panel **Medidas** se abre debajo de él, y sobre el gráfico el puntero se convierte en una cruz.
+2. Haz clic en el punto **inicio** del gráfico: una línea discontinua sigue al puntero desde ahí. Luego haz clic en el punto **fin**, en otro día.
 3. La nueva medida se abre con su tabla, y el gráfico la dibuja con su propio color.
 
-**+ Añadir medición** en el encabezado del panel, en cambio, mide todo el gráfico, desde su primer hasta su último punto: práctico en el móvil. El encabezado de cada medida contiene su color y 🗑️ para eliminarla; despliega la medida para cambiar sus fechas.
+Una medida necesita dos días distintos. Al volver sobre el día del punto de inicio, la línea discontinua desaparece y el puntero muestra el signo de *no permitido* (🚫): un segundo clic ahí no hace nada, y el punto de inicio sigue elegido.
+
+**+ Añadir medición** en el encabezado del panel, en cambio, mide todo el gráfico, desde su primer hasta su último punto: práctico en el móvil. El encabezado de cada medida contiene su color y 🗑️ para eliminarla; despliega la medida para cambiar sus fechas, de nuevo dos días distintos.
 
 Las medidas no se guardan: recargar la página vacía el panel. **Precios** y **Rendimiento móvil** mantienen medidas separadas.
 
@@ -25,8 +27,8 @@ Las medidas no se guardan: recargar la página vacía el panel. **Precios** y **
 La tabla tiene una fila para el activo (una segunda en su propia moneda cuando el gráfico se convierte) y una para cada línea dibujada en el eje de precios, como un activo de comparación o una media móvil. Junto a los valores de **Inicio** y **Fin**:
 
 - **Δ Abs** — la diferencia $V_{end} - V_{start}$, en la unidad de la línea.
-- **Δ %** — el cambio $\frac{V_{end} - V_{start}}{V_{start}}$ → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
-- **Δ%/año** — el mismo cambio como tasa anual a lo largo de los $d$ días naturales entre los puntos, $(1 + \Delta\%)^{365/d} - 1$ → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
+- **Δ %** — el cambio $\frac{V_{end} - V_{start}}{V_{start}}$, o `—` cuando la línea parte de 0 → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/año** — el mismo cambio como tasa anual a lo largo de los $d$ días naturales entre los puntos, $(1 + \Delta\%)^{365/d} - 1$, a partir de 30 días: `—` en un intervalo más corto, sin un **Δ %**, o cuando la línea termina al otro lado del cero → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
 
 La línea de resumen de la medida añade el número de días.
 

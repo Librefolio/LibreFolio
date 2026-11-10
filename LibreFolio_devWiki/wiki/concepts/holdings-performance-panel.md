@@ -17,7 +17,7 @@ related:
 
 The "YOUR POSITIONS" panel on the Dashboard Home page (`PositionsPanel.svelte`) is split into two tabs —
 **Holdings** and **Performance** — each with a Table/Chart toggle. This replaces the earlier
-"Exposure/Contribution" naming and semantics (renamed in commit `13052a006`, 2026-07-06, per
+"Exposure/Contribution" naming and semantics (renamed in commit `35c2740c4`, 2026-07-06, per
 `Low-dashboard_refactor.md` design and `Low-dashboard_gap_analysis.md`).
 
 The core insight driving the refactor: **Holdings** and **Performance** answer two genuinely different
@@ -73,6 +73,11 @@ correctly anchored to `date_to` instead of "now".
 A new `_compute_period_summary_metrics()` helper deduplicates the NAV/P&L-for-period logic that both
 `get_summary()` and `get_positions_contribution()` need — eliminating the previous double computation.
 
+> *2026-11-07 lint:* `_compute_period_summary_metrics()` is gone — the period P&L and its identity moved to
+> `financial_math/portfolio/period.py` (`period_pnl()`, `period_other_result()`, `8c478997f`, 2026-10-15), and
+> `price_at_or_before()` / `_get_latest_price()` no longer exist in `backend/app` (the engine's states replaced them,
+> `94901d98a`, 2026-10-12).
+
 Irrelevant positions (no activity in the period AND no position at either boundary,
 `qty_at_start=0 and qty_at_end=0`) are now skipped, avoiding "ghost rows" not pertinent to the period.
 
@@ -110,12 +115,16 @@ independent of the Holdings/Performance renaming, but ships in the same refactor
   `dashboard.*` keys added across en/it/fr/es for Holdings/Performance columns, tab labels, Other Period
   Effects, status values, and `resetZoom`.
 
+> *2026-11-07 lint:* since `3c5973efa` (2026-10-24, #48) the panel also holds a `PositionsReturnChart`
+> (`data-testid="positions-chart-section"`): ticked positions drawn as their daily result (Abs or base 100) against the
+> portfolio line, from the positions-series endpoint — on the Dashboard and on the broker page.
+
 ## Where It Applies
 
-- `frontend/src/lib/components/dashboard/PositionsPanel.svelte` — tab container, wiring of all 5 components
+- `frontend/src/lib/features/dashboard/PositionsPanel.svelte` — tab container, wiring of all 5 components
 - `frontend/src/routes/(app)/dashboard/+page.svelte` — hosts the panel, feeds data from `portfolioStore`
 - `backend/app/services/portfolio_service.py` — `get_summary()`, `get_positions_contribution()`,
-  `_compute_period_summary_metrics()`
+  `_compute_period_summary_metrics()` (removed; see the note above)
 - `backend/app/services/financial_math/portfolio/daily_state.py` — `position_states_end`;
   `backend/app/services/financial_math/portfolio/data_quality.py` — `dataQuality.transactionImplied` now
   includes `as_of_date` in `message_params` (both in `portfolio_engine.py` until 2026-10-12)
@@ -124,12 +133,14 @@ independent of the Holdings/Performance renaming, but ships in the same refactor
 
 | Role | Path |
 |------|------|
-| Holdings table | `frontend/src/lib/components/dashboard/ExposureTable.svelte` |
-| Holdings chart | `frontend/src/lib/components/dashboard/ExposureTreemap.svelte` |
-| Performance table | `frontend/src/lib/components/dashboard/ContributionTable.svelte` |
-| Performance chart (new) | `frontend/src/lib/components/dashboard/PerformanceChart.svelte` |
-| Other period effects (new) | `frontend/src/lib/components/dashboard/OtherPeriodEffectsTable.svelte` |
-| Tab container | `frontend/src/lib/components/dashboard/PositionsPanel.svelte` |
+| Holdings table | `frontend/src/lib/features/dashboard/ExposureTable.svelte` |
+| Holdings chart | `frontend/src/lib/features/dashboard/ExposureTreemap.svelte` |
+| Performance table | `frontend/src/lib/features/dashboard/ContributionTable.svelte` |
+| Performance chart (new) | `frontend/src/lib/features/dashboard/PerformanceChart.svelte` |
+| Other period effects (new) | `frontend/src/lib/features/dashboard/OtherPeriodEffectsTable.svelte` |
+| Tab container | `frontend/src/lib/features/dashboard/PositionsPanel.svelte` |
+| Per-position return chart (since 2026-10-24) | `frontend/src/lib/features/dashboard/PositionsReturnChart.svelte` |
+| Period P&L and its identity (since 2026-10-15) | `backend/app/services/financial_math/portfolio/period.py` |
 | Treemap zoom/pan guard | `frontend/src/lib/components/charts/echartsTreemapZoomGuard.ts` |
 | Service (date-aware wiring) | `backend/app/services/portfolio_service.py` |
 | Engine (position_states_end) | `backend/app/services/financial_math/portfolio/daily_state.py` |

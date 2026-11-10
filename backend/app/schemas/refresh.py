@@ -34,7 +34,7 @@ from typing import List, Literal, Optional
 
 from pydantic import Field, field_validator, model_validator
 
-from backend.app.schemas.common import BaseBulkResponse, Currency, DateRangeModel, StrictModel
+from backend.app.schemas.common import BaseBulkResponse, BaseListResponse, Currency, DateRangeModel, StrictModel
 from backend.app.schemas.prices import FAPricePoint
 
 # ============================================================================
@@ -108,6 +108,25 @@ class FARefreshItem(StrictModel):
     date_range: SyncDateRangeModel = Field(..., description="Date range for refresh")
 
 
+class FAStoredPriceCountItem(StrictModel):
+    """One asset's range whose stored prices are counted (X-R29): the range a sync would ask for."""
+
+    asset_id: int = Field(..., description="Asset ID")
+    date_range: SyncDateRangeModel = Field(..., description="The range a sync would ask for ('min' counts from the first stored day, 'resume' counts none: it starts after the last one)")
+
+
+class FAStoredPriceCount(StrictModel):
+    """The prices stored for one asset in a range, and how many of them were entered by hand."""
+
+    asset_id: int
+    stored_count: int = Field(0, ge=0, description="Prices stored in the range, whoever wrote them")
+    manual_count: int = Field(0, ge=0, description="Of them, those entered by hand (source MANUAL): a sync replaces them with the provider's")
+
+
+class FAStoredPriceCountResponse(BaseListResponse[FAStoredPriceCount]):
+    """One count per requested item, in request order."""
+
+
 class FARefreshResult(StrictModel):
     """Result of refresh for single asset."""
 
@@ -122,6 +141,8 @@ class FARefreshResult(StrictModel):
     events_changed: int = Field(0, description="Number of events actually inserted/updated in DB")
     message: Optional[str] = Field(None, description="Optional note/summary (non-error)")
     errors: List[str] = Field(default_factory=list)
+    error_code: Optional[str] = Field(None, description="'RATE_LIMITED' when the provider refused for too many requests or is paused: the item failed, or saved only part of the data")
+    retry_after: Optional[float] = Field(None, ge=0, description="With RATE_LIMITED: seconds until the provider may be called again")
     elapsed_ms: Optional[int] = Field(None, ge=0, description="Backend sync time for this asset in ms")
     # I-bis #24 (2026-04-24) — delta payload for targeted frontend refresh.
     # Populated with the subset of ``FAPricePoint`` rows that were actually
@@ -213,6 +234,8 @@ class FXSyncPairResult(StrictModel):
     points_changed: int = Field(0, ge=0, description="Number of rate points actually inserted/updated in DB")
     message: Optional[str] = Field(None, description="Optional note (e.g. 'monthly data only', 'fallback used')")
     errors: List[str] = Field(default_factory=list, description="List of error messages for this pair")
+    error_code: Optional[str] = Field(None, description="'RATE_LIMITED' when the pair failed because its providers refused for too many requests or are paused")
+    retry_after: Optional[float] = Field(None, ge=0, description="With RATE_LIMITED: seconds until the first of those providers may be called again")
     detail: Optional[List[FXSyncLegDetail]] = Field(None, description="Per-leg diagnostic breakdown. Present for chains and single-provider routes " "when status is partial or failed. Each entry shows provider name, " "leg pair, dates available, and any error encountered.")
     elapsed_ms: Optional[int] = Field(None, ge=0, description="Backend sync time for this pair in integer milliseconds. " "Measured from bulk start (Phase 1) to commit completion, " "via time.monotonic_ns() with integer division (// 1_000_000). " "None for SKIPPED/MANUAL pairs.")
 

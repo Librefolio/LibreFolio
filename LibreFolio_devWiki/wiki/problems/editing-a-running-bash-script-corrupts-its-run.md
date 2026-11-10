@@ -6,6 +6,7 @@ date: 2026-10-12
 tags: [bash, scripting, tooling, agents, parallel-calls, workstream-u, release-1.2]
 related:
   - decisions/plugin-folders-and-split-i18n
+  - problems/direct-playwright-run-in-a-test-lane
 ---
 
 # Problem: changing the script under bash's feet
@@ -31,6 +32,8 @@ The new part was run again on its own, in a new process.
 
 - Never change a script in the batch that runs it, nor while it runs (U's rule after this).
 - To change a long-running script, write a new file and start a new process.
+- The same trap struck again on 2026-10-17, in a trace script for a test lane:
+  [[problems/direct-playwright-run-in-a-test-lane]].
 
 ## Source files
 

@@ -34,7 +34,7 @@ Approved with the Round 8 plan (2026-09-23, defaults Q5 and Q6), then corrected 
   (`dismissHost({restartAtFirst: true})`).
 - **Logging out keeps it** — point 14, a reversal. Q5 said the keys were deleted at logout; the developer's decision on
   2026-09-24: an armed replay must still be armed after logging out and back in, in the same account on the same
-  browser. `208296923` removed `clearAccountReplays`; an account change now resets only the in-memory state.
+  browser. `0c6de3e67` removed `clearAccountReplays`; an account change now resets only the in-memory state.
 - **A guide that ends in one tab closes in the others.** Ending a guide deletes its key, and the `storage` listener
   (`createReplayStorageListener`) makes every other tab drop its copy and close the step, so a stale tab cannot write
   the key back. Point 15: «era più di quello che avevo chiesto, teniamola». There is no `BroadcastChannel`.

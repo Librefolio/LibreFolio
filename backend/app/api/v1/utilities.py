@@ -10,24 +10,22 @@ Provides helper endpoints for:
 
 from fastapi import APIRouter, Query
 
+from backend.app.schemas.common import is_canonical_iso_currency, iso_currency_candidates, suggested_iso_currency
 from backend.app.schemas.utilities import (
     CountryListItem,
     CountryListResponse,
     CurrencyListItem,
     CurrencyListResponse,
-    CurrencyNormalizationResponse,
+    CurrencySuggestionResponse,
     SectorItem,
     SectorListResponse,
 )
 from backend.app.utils.asset.geo import (
     list_countries as list_countries_util,
 )
-from backend.app.utils.asset.sector import FinancialSector
+from backend.app.utils.asset.sector import ALLOCATION_BUCKETS, SECTOR_EMOJI_FALLBACK, FinancialSector, sector_emoji
 from backend.app.utils.fx.currency import (
     list_currencies as list_currencies_util,
-)
-from backend.app.utils.fx.currency import (
-    normalize_currency,
 )
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
@@ -36,10 +34,15 @@ router = APIRouter(prefix="/utilities", tags=["Utilities"])
 @router.get("/sectors", response_model=SectorListResponse)
 async def list_sectors(include_other: bool = Query(True, description="Include 'Other' in the list")):
     """
-    Get list of all standard financial sectors.
+    Get list of all standard financial sectors, with their emoji.
 
     Returns the list of sectors that the system recognizes and stores.
     Based on GICS (Global Industry Classification Standard).
+
+    The emoji come from the one map of `utils/asset/sector.py`, which the allocation views of the portfolio engine read
+    too. `buckets` lists the two allocation buckets the engine adds beside the sectors, the cash and the holdings
+    without a sector: never a sector to choose, listed for their emoji. `fallback_emoji` is the glyph of a key outside
+    both lists.
 
     **Example Request**:
     ```
@@ -47,53 +50,30 @@ async def list_sectors(include_other: bool = Query(True, description="Include 'O
     GET /api/v1/utilities/sectors?include_other=false
     ```
 
-    **Response**:
+    **Response** (items shortened):
     ```json
     {
-      "sectors": [
-        "Industrials",
-        "Technology",
-        "Financials",
-        "Consumer Discretionary",
-        "Health Care",
-        "Real Estate",
-        "Basic Materials",
-        "Energy",
-        "Consumer Staples",
-        "Telecommunication",
-        "Utilities",
-        "Other"
+      "items": [
+        {"key": "Industrials", "emoji": "🏭"},
+        {"key": "Technology", "emoji": "💻"},
+        {"key": "Other", "emoji": "📦"}
       ],
-      "count": 12
+      "buckets": [
+        {"key": "Liquidity", "emoji": "💰"},
+        {"key": "Unknown", "emoji": "❓"}
+      ],
+      "fallback_emoji": "❓"
     }
     ```
     """
-    SECTOR_EMOJI: dict[str, str] = {
-        "Industrials": "🏭",
-        "Technology": "💻",
-        "Financials": "🏦",
-        "Consumer Discretionary": "🛍️",
-        "Health Care": "🏥",
-        "Real Estate": "🏠",
-        "Basic Materials": "⛏️",
-        "Energy": "⚡",
-        "Consumer Staples": "🛒",
-        "Telecommunication": "📡",
-        "Utilities": "💡",
-        "Corporate Bonds": "🏢",
-        "Government Bonds": "🏛️",
-        "Other": "📦",
-        "Liquidity": "💰",
-        "Unknown": "❓",
-    }
-
     if include_other:
         sectors = FinancialSector.list_all_with_other()
     else:
         sectors = FinancialSector.list_all()
 
-    items = [SectorItem(key=s, emoji=SECTOR_EMOJI.get(s, "📊")) for s in sectors]
-    return SectorListResponse(items=items)
+    items = [SectorItem(key=s, emoji=sector_emoji(s)) for s in sectors]
+    buckets = [SectorItem(key=bucket, emoji=sector_emoji(bucket)) for bucket in ALLOCATION_BUCKETS]
+    return SectorListResponse(items=items, buckets=buckets, fallback_emoji=SECTOR_EMOJI_FALLBACK)
 
 
 @router.get("/countries", response_model=CountryListResponse)
@@ -194,51 +174,18 @@ async def list_currencies(language: str = Query("en", description="Language for 
     return CurrencyListResponse(items=currencies, language=language)
 
 
-@router.get("/currencies/normalize", response_model=CurrencyNormalizationResponse)
-async def normalize_currency_endpoint(
-    name: str = Query(..., min_length=1, description="Currency code, symbol, or name to normalize"),
-    language: str = Query("en", description="Language for name matching (default: en)"),
-):
+#: The longest value the suggestion reads (E-19b1): every ISO 4217 name (at most 65 characters) fits, with room.
+SUGGEST_MAX_LENGTH = 200
+
+
+@router.get("/currencies/suggest", response_model=CurrencySuggestionResponse)
+def suggest_currency(value: str = Query(..., min_length=1, max_length=SUGGEST_MAX_LENGTH, description="A stored currency value: a code, a numeric code or a currency name")):
+    """The ISO 4217 code a stored currency value stands for (E-19b1).
+
+    Since E-18 a write takes only an ISO 4217 alphabetic code, while an earlier version saved what it accepted as written:
+    a numeric code or a name (``978``, ``EURO``). The currency picker asks here for such a value it cannot list, and
+    shows the code it stands for. ``canonical``: already stored as a code. ``suggestion``: the one code it stands for, or
+    null when it stands for none or for two (``Bolívar Soberano``: VED and VES); a subunit code (``GBX``, ``ZAC``,
+    ``ILA``) never gets one. ``candidates``: every code it may stand for, sorted. The rule is ``schemas/common.py``'s.
     """
-    Normalize currency name/code/symbol to ISO 4217 format.
-
-    Accepts:
-    - ISO 4217 codes (e.g., USD, EUR)
-    - Currency symbols (e.g., $, €, £)
-    - Currency names in requested language (e.g., "Dollar", "Euro")
-
-    **Example Requests**:
-    ```
-    GET /api/v1/utilities/currencies/normalize?name=USD
-    GET /api/v1/utilities/currencies/normalize?name=$
-    GET /api/v1/utilities/currencies/normalize?name=Dollar&language=en
-    ```
-
-    **Response for exact match**:
-    ```json
-    {
-      "query": "EUR",
-      "iso_codes": ["EUR"],
-      "match_type": "exact",
-      "error": null
-    }
-    ```
-
-    **Response for ambiguous symbol**:
-    ```json
-    {
-      "query": "$",
-      "iso_codes": ["USD", "CAD", "AUD", "NZD", "HKD", "SGD", "MXN"],
-      "match_type": "symbol_ambiguous",
-      "error": "Symbol '$' matches multiple currencies"
-    }
-    ```
-    """
-    result = normalize_currency(name, language)
-
-    return CurrencyNormalizationResponse(
-        query=result["query"],
-        iso_codes=result["iso_codes"],
-        match_type=result["match_type"],
-        error=result.get("error"),
-    )
+    return CurrencySuggestionResponse(canonical=is_canonical_iso_currency(value), suggestion=suggested_iso_currency(value), candidates=list(iso_currency_candidates(value)))

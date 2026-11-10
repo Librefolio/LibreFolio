@@ -50,7 +50,7 @@ La participación decide qué cuenta en tus cifras:
 
 - El **Panel** solo cuenta los brókeres que **posees** con una participación superior al 0%, y escala sus importes según tu participación: con el 50%, ves la mitad del valor, los ingresos y el P&L del bróker.
 - La pestaña **Riesgo** del panel cubre los mismos brókeres: los que posees con una participación superior al 0% (consulta [Pestaña de riesgo](../dashboard/index.md#risk-tab)).
-- Los brókeres en los que eres Lector o Editor, o que posees con el 0%, no están en tu panel. Su propia página los muestra: los Lectores y Editores ven los importes **completos**, los Propietarios su participación.
+- Los brókeres en los que eres Lector o Editor, o que posees con el 0%, no están en tu panel. Su propia página los muestra, y muestra el bróker **entero** (100%) a cada rol, también a un Propietario con una participación menor.
 
 ---
 

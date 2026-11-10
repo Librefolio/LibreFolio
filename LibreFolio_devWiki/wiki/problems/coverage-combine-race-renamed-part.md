@@ -11,7 +11,7 @@ related: [concepts/test-isolation-classes, entities/test-runner, problems/e2e-py
 
 ## Symptom
 
-The full coverage run of 2026-10-07 (`d07412899`, `--workers 2`) ended **green** with the backend at 36.8 %.
+The full coverage run of 2026-10-07 (`d0e7eb405`, `--workers 2`) ended **green** with the backend at 36.8 %.
 Two of its four parallel passes, the large ones with 111 and 54 units, had printed
 
 ```text

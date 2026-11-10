@@ -1,111 +1,140 @@
 # 🔍 Comprobar la seguridad de la conexión
 
-Cada usuario ve, en la parte inferior de la barra lateral de LibreFolio, lo segura que es la
-comunicación entre su navegador y el servidor: **Conexión: segura**, **Conexión: red local** o
-**Conexión: no segura**. La guía del usuario, [Seguridad de la conexión](../user/connection-security.md),
-le explica los tres niveles. Esta página es para quien gestiona el servidor: cómo comprobar que tu
-instalación da a sus usuarios **Conexión: segura**, y cómo corregirla cuando no es así.
+En la parte inferior de la barra lateral, cada usuario ve con qué seguridad habla el navegador con el servidor:
+**Conexión: segura**, **Conexión: red local** o **Conexión: no segura**.
+Los tres niveles, explicados a los usuarios: [Seguridad de la conexión](../user/connection-security.md).
 
-El objetivo es una dirección HTTPS, de Tailscale Serve o Funnel
-([Exponer de forma segura](service_exposure.md)) o de un proxy inverso con un certificado
-([Detrás de un proxy inverso](#reverse-proxy)), y una cookie de sesión marcada como `Secure`.
+Esta página es para quien administra el servidor: cómo comprobar que tu despliegue muestra **Conexión: segura** y cómo arreglarlo cuando no es así.
+
+El objetivo:
+
+- una dirección HTTPS, de Tailscale Serve o Funnel ([Exposición segura](service_exposure.md)) o de un proxy inverso con certificado ([Detrás de un proxy inverso](connection_proxy.md#reverse-proxy));
+- una cookie de sesión marcada como `Secure`.
+
+!!! info "📚 Esta guía tiene varias páginas"
+
+    Esta página es la lista de comprobación: qué muestra el indicador, cómo mirar la vista del servidor y la cookie de sesión, qué hacer cuando falla una comprobación.
+    Si ejecutas LibreFolio detrás de un proxy inverso, [Comprobar la seguridad de la conexión: detrás de un proxy inverso](connection_proxy.md) explica las cabeceras que debe enviar y cómo LibreFolio averigua la dirección del visitante.
 
 ---
 
 ## ✅ Lista de comprobación {: #checklist }
 
-Recórrela una vez que tu dirección HTTPS funcione, y de nuevo tras cualquier cambio en el proxy o en
-`.env`. Necesitas una cuenta de administrador y, para las dos últimas comprobaciones, un teléfono con
-datos móviles.
+Recórrela cuando tu dirección HTTPS funcione, y de nuevo después de cualquier cambio en el proxy o en `.env`.
+Necesitas una cuenta de administrador y, para las dos últimas comprobaciones, un teléfono con los datos móviles activados.
 
-1. **Abre la dirección HTTPS e inicia sesión.** El indicador muestra 🟢 **Conexión: segura**, y sus
-   detalles dicen que la conexión está cifrada con HTTPS.
-2. **Busca la línea de la cookie.** Con la sesión de administrador, los detalles muestran solo ese
-   motivo y el enlace **Cómo conectarse de forma segura**. Una línea más, sobre la cookie de sesión,
-   significa que LibreFolio no sabe que hay HTTPS: consulta [Detrás de un proxy inverso](#reverse-proxy).
-3. **Pregunta al servidor.** En una pestaña nueva, abre `https://<your address>/api/v1/system/connection`:
-   la respuesta contiene `"cookie_secure":true` ([El punto de vista del servidor](#server-view)).
-4. **Mira la cookie.** En las herramientas para desarrolladores del navegador, la cookie
-   `session` está marcada como `Secure` ([La cookie de sesión](#session-cookie)).
-5. **Desde fuera, abre la dirección HTTPS.** En el teléfono, con el Wi-Fi apagado, la página carga
-   y, una vez iniciada la sesión, el indicador muestra 🟢 **Conexión: segura**. Mantén Tailscale
-   apagado en el teléfono para una dirección de Funnel o de proxy inverso; enciéndelo para una
-   dirección de Tailscale Serve, que solo tu tailnet puede abrir.
-6. **Desde fuera, prueba HTTP sin cifrar.** En el mismo teléfono, `http://<your public IP or name>:6040`,
-   o tu propio `PORT`, no carga. Si aparece la página de inicio de sesión, HTTP sin cifrar está
-   abierto a internet: no inicies sesión ahí, porque la contraseña viajaría en texto claro, y cierra
-   el puerto ([Cuando una comprobación falla](#when-a-check-fails)). Quien inicie sesión por esa
-   dirección ve 🔴 **Conexión: no segura**, o 🏠 **Conexión: red local** con un motivo *Incierta*
-   cuando el servidor no puede ver de dónde llegan los visitantes ([Límites](#limits)).
+1. **Abre la dirección HTTPS e inicia sesión.**
 
-¿Todas las comprobaciones superadas? Pide a tus usuarios que usen la dirección HTTPS en todos los
-dispositivos y que actualicen sus marcadores antiguos
-([Cómo conectarse de forma segura](../user/connection-security.md#https-address)).
+    El indicador muestra 🟢 **Conexión: segura**; los detalles dicen que la conexión está cifrada con HTTPS.
 
-!!! note "📶 ¿Todavía sin dirección HTTPS?"
+2. **Busca la línea de la cookie.** Como administrador, los detalles muestran:
 
-    Con el Nivel 1 o 2 de [Exponer de forma segura](service_exposure.md), los usuarios llegan a
-    LibreFolio por HTTP sin cifrar. Comprueba el nivel que obtiene cada dirección
-    ([Lo que muestra el indicador](#indicator)) y que HTTP sin cifrar no cargue desde fuera
-    (comprobación 6). Las comprobaciones de la cookie no se aplican: por HTTP sin cifrar la cookie de
-    sesión no es `Secure`, y `"cookie_secure":false` es lo esperado.
+    - ese motivo y el enlace **Cómo conectarse de forma segura**;
+    - un enlace a las [comprobaciones de seguridad](settings.md#security-tab) cuando listan errores o advertencias, por ejemplo **2 avisos de seguridad**.
+
+    Una línea más sobre la cookie de sesión significa que LibreFolio no sabe nada del HTTPS: consulta [Detrás de un proxy inverso](connection_proxy.md#reverse-proxy).
+
+3. **Pregunta al servidor.** En una pestaña nueva, abre:
+
+    ```text
+    https://<your address>/api/v1/system/connection
+    ```
+
+    La respuesta contiene `"cookie_secure":true` ([La vista del servidor](#server-view)).
+
+4. **Mira la cookie.** Abre las herramientas de desarrollo del navegador.
+
+    La cookie `session` está marcada como `Secure` ([La cookie de sesión](#session-cookie)).
+
+5. **Desde fuera, abre la dirección HTTPS.** En el teléfono, con el Wi-Fi apagado.
+
+    La página se carga y, tras iniciar sesión, el indicador muestra 🟢 **Conexión: segura**.
+
+    | Dirección | Tailscale en el teléfono |
+    | --- | --- |
+    | Funnel o proxy inverso | Apagado |
+    | Tailscale Serve (solo tu tailnet la abre) | Encendido |
+
+6. **Desde fuera, prueba HTTP sin cifrar.** En el mismo teléfono, abre:
+
+    ```text
+    http://<your public IP or name>:6040
+    ```
+
+    O tu propio `PORT`. La página **no** se carga.
+
+    Si aparece la página de inicio de sesión, el HTTP sin cifrar está abierto a internet:
+
+    - no inicies sesión ahí: la contraseña viajaría en texto claro;
+    - cierra el puerto ([Cuando falla una comprobación](#when-a-check-fails)).
+
+    Quien inicie sesión desde esa dirección ve 🔴 **Conexión: no segura**, o 🏠 **Conexión: red local** con un motivo *Incierta* cuando el servidor no puede ver de dónde vienen los visitantes ([Límites](#limits)).
+
+¿Han pasado todas las comprobaciones? Pide a tus usuarios que usen la dirección HTTPS en todos sus dispositivos y que actualicen sus marcadores antiguos ([Cómo conectarse de forma segura](../user/connection-security.md#https-address)).
+
+!!! note "📶 ¿Todavía no hay dirección HTTPS?"
+
+    Con el nivel 1 o 2 de [Exposición segura](service_exposure.md), los usuarios llegan a LibreFolio por HTTP sin cifrar.
+    Comprueba el nivel que obtiene cada dirección ([Qué muestra el indicador](#indicator)) y que el HTTP sin cifrar no se cargue desde fuera (comprobación 6).
+    Las comprobaciones de la cookie no se aplican: por HTTP sin cifrar la cookie de sesión no es `Secure`, y se espera `"cookie_secure":false`.
 
 ---
 
-## 🚦 Lo que muestra el indicador {: #indicator }
+## 🚦 Qué muestra el indicador {: #indicator }
 
-El navegador juzga la dirección que abrió; luego el servidor informa de dónde ve llegar la
-solicitud, y puede confirmar ese veredicto o hacerlo incierto, pero nunca hacerlo seguro. Esto es lo
-que ven tus usuarios, según cómo llegan a LibreFolio:
+El navegador juzga la dirección que abrió.
+Después, el servidor informa de desde dónde ve llegar la solicitud: puede confirmar el veredicto o volverlo incierto, nunca hacerlo seguro.
 
 | Cómo llegan los usuarios a LibreFolio | Ejemplo | Nivel |
 | --- | --- | --- |
-| Tailscale Serve o Funnel, o un proxy inverso con un certificado | `https://librefolio.your-tailnet.ts.net` | 🟢 **segura**: HTTPS |
+| Tailscale Serve o Funnel, o un proxy inverso con certificado | `https://librefolio.your-tailnet.ts.net` | 🟢 **segura**: HTTPS |
 | En el propio servidor | `http://localhost:6040` | 🟢 **segura**: `localhost` |
-| IP de Tailscale o nombre MagicDNS completo, HTTP sin cifrar (Nivel 1) | `http://100.a.b.c:6040` | 🟢 **segura**: VPN (Tailscale) |
-| Nombre MagicDNS corto, HTTP sin cifrar: un nombre sin punto cuenta como local | `http://your-server:6040` | 🏠 **red local** |
-| Dirección local, también a través de un subnet router (Nivel 2) | `http://192.168.1.100:6040` | 🏠 **red local** |
+| IP de Tailscale o nombre MagicDNS completo, HTTP sin cifrar (nivel 1) | `http://100.a.b.c:6040` | 🟢 **segura**: VPN (Tailscale) |
+| Nombre MagicDNS corto, HTTP sin cifrar: un nombre sin puntos cuenta como local | `http://your-server:6040` | 🏠 **red local** |
+| Dirección local, también a través de un subnet router (nivel 2) | `http://192.168.1.100:6040` | 🏠 **red local** |
 | Un puerto abierto en el router, HTTP sin cifrar | `http://myhome.duckdns.org:6040` | 🔴 **no segura** |
 
-Cuando el servidor no puede ver las direcciones de tus visitantes, la última fila muestra en su
-lugar 🏠 **red local** con un motivo *Incierta* ([Límites](#limits)). La guía del usuario da las
-reglas exactas bajo cada nivel: rangos de direcciones, nombres y casos *Incierta*
-([Seguridad de la conexión](../user/connection-security.md#connection-secure)).
+Cuando el servidor no puede ver las direcciones de los visitantes, la última fila muestra 🏠 **red local** con un motivo *Incierta* en su lugar ([Límites](#limits)).
+Las reglas exactas de cada nivel (rangos de direcciones, nombres, casos *Incierta*): [Seguridad de la conexión](../user/connection-security.md#connection-secure).
 
 ---
 
-## 🔎 El punto de vista del servidor {: #server-view }
+## 🔎 La vista del servidor {: #server-view }
 
-El indicador pregunta al servidor cómo ve la conexión, una vez por cada carga de la página:
-`GET /api/v1/system/connection`. Puedes leer la misma respuesta: con la sesión iniciada, abre esta
-dirección en una pestaña nueva del mismo navegador, con tu propia dirección de LibreFolio en lugar de
-la del ejemplo:
+En cada carga de página, el indicador pregunta al servidor cómo ve la conexión: `GET /api/v1/system/connection`.
 
-```text
-https://librefolio.your-tailnet.ts.net/api/v1/system/connection
-```
+Para leer la misma respuesta:
 
-El navegador muestra una respuesta de una línea, por ejemplo:
+1. **Inicia sesión en LibreFolio.**
 
-```json
-{"client_class":"public","cookie_secure":true}
-```
+2. **Abre esta dirección en una pestaña nueva del mismo navegador**, con tu dirección de LibreFolio en lugar de la del ejemplo:
 
-Sirve cualquier cuenta, no solo una de administrador. Una respuesta como
-`{"detail":"Not authenticated"}` significa que no hay sesión en esa dirección: las sesiones
-pertenecen a una dirección, así que iniciar sesión en `http://192.168.1.100:6040` no te deja con la
-sesión iniciada en la dirección HTTPS. Y como el indicador pregunta solo una vez por carga de la
-página, recarga LibreFolio tras un cambio para ver su nuevo veredicto.
+    ```text
+    https://librefolio.your-tailnet.ts.net/api/v1/system/connection
+    ```
 
-**`cookie_secure`** dice si una cookie de sesión establecida en esta solicitud sería `Secure`,
-según [`SESSION_COOKIE_SECURE`](#session-cookie). En la dirección HTTPS debe ser `true`: `false` es
-lo que muestra la línea para el administrador sobre la cookie
-([Detrás de un proxy inverso](#reverse-proxy)). Por HTTP sin cifrar, `false` es lo esperado.
+    El navegador muestra una respuesta de una línea:
 
-**`client_class`** es de dónde ve el servidor llegar la solicitud. Lee el último valor de
-`X-Forwarded-For`, el que añadió el proxy más cercano, cuando es una dirección IP, y si no, la
-dirección de la propia conexión. Del servidor sale solo la clase: la dirección nunca se devuelve ni
-se registra.
+    ```json
+    {"client_class":"public","cookie_secure":true}
+    ```
+
+Conviene saber:
+
+- sirve cualquier cuenta, no solo la de administrador;
+- `{"detail":"Not authenticated"}` significa que no hay sesión en esa dirección: las sesiones pertenecen a una dirección, así que iniciar sesión en `http://192.168.1.100:6040` no te inicia sesión en la dirección HTTPS;
+- el indicador pregunta una sola vez por carga de página: recarga LibreFolio tras un cambio para ver el nuevo veredicto.
+
+**`cookie_secure`**: si una cookie de sesión establecida en esta solicitud sería `Secure`, según [`SESSION_COOKIE_SECURE`](#session-cookie).
+
+| Dirección | Valor esperado |
+| --- | --- |
+| HTTPS | `true`. `false` muestra la línea del administrador sobre la cookie ([Detrás de un proxy inverso](connection_proxy.md#reverse-proxy)) |
+| HTTP sin cifrar | `false` |
+
+**`client_class`**: desde dónde ve el servidor que llega la solicitud.
+Lee el último valor de `X-Forwarded-For`, el que añadió el proxy más cercano, si es una dirección IP; si no, la dirección de la propia conexión.
+Solo sale del servidor la clase: la dirección nunca se devuelve ni se registra.
 
 | `client_class` | La solicitud llega desde |
 | --- | --- |
@@ -115,146 +144,114 @@ se registra.
 | `public` | Cualquier otra dirección: internet |
 | `unknown` | Ninguna dirección, o una que no se puede leer |
 
-La clase solo cuenta por HTTP sin cifrar, y no en el propio servidor (`localhost`):
+La clase cuenta solo por HTTP sin cifrar, y no en el propio servidor (`localhost`):
 
-- con una dirección pública en el navegador, `public` o `unknown` confirma **Conexión: no segura**,
-  mientras que `loopback`, `vpn` o `lan` la convierten en **Conexión: red local**, como incierta;
-- con una dirección local o de Tailscale en el navegador, `public` hace incierto el veredicto, y
-  cualquier otra clase lo deja como está.
+| Dirección en el navegador | `client_class` | Efecto en el veredicto |
+| --- | --- | --- |
+| Pública | `public` o `unknown` | Confirma **Conexión: no segura** |
+| Pública | `loopback`, `vpn` o `lan` | Pasa a **Conexión: red local**: veredicto incierto |
+| Local o de Tailscale | `public` | Veredicto incierto |
+| Local o de Tailscale | Cualquier otra | Ninguno |
 
-En la dirección HTTPS la clase no cambia nada, pero te dice si el servidor puede ver las direcciones
-de tus visitantes: desde el teléfono con datos móviles, con Tailscale apagado, `public` significa que
-puede, y `lan` o `loopback` que no puede ([Límites](#limits)).
+En la dirección HTTPS la clase no cambia nada, pero te dice si el servidor ve las direcciones de los visitantes.
+Desde el teléfono con datos móviles, con Tailscale apagado:
+
+- `public`: el servidor las ve;
+- `lan` o `loopback`: no las ve ([Límites](#limits)).
 
 ---
 
 ## 🍪 La cookie de sesión {: #session-cookie }
 
-La cookie que mantiene la sesión de un usuario se llama `session`. LibreFolio la establece al
-iniciar sesión, siempre `HttpOnly`, para que los scripts de la página no puedan leerla, y
-`SameSite=Lax`. Si además es `Secure`, es decir, enviada solo por HTTPS, depende de
-`SESSION_COOKIE_SECURE` en `.env`:
+La cookie que mantiene tu sesión iniciada se llama `session`.
+LibreFolio la establece al iniciar sesión, siempre con `HttpOnly` (los scripts de la página no pueden leerla) y `SameSite=Lax`.
 
-- **`auto`**, el valor predeterminado: `Secure` cuando la solicitud es HTTPS, vista directamente o
-  porque el primer valor de `X-Forwarded-Proto` enviado por un proxy inverso es `https`;
-- **`always`**: siempre `Secure`;
-- **`never`**: nunca `Secure`.
+Que además sea `Secure`, es decir, que se envíe solo por HTTPS, depende de `SESSION_COOKIE_SECURE` en `.env`:
 
-Las mayúsculas y los espacios alrededor del valor no importan; cualquier otro valor detiene
-LibreFolio al arrancar. Cuándo `always` o `never` son la elección correcta:
-[Configuración](configuration.md#session-cookie-secure).
+| Valor | `Secure` |
+| --- | --- |
+| `auto` (predeterminado) | Cuando la solicitud es HTTPS: vista directamente, o porque el primer valor de `X-Forwarded-Proto` enviado por un proxy inverso es `https` |
+| `always` | Siempre |
+| `never` | Nunca |
 
-El atributo se decide al iniciar sesión: la cookie que un navegador ya tiene conserva el atributo
-que recibió entonces. Después de corregir el proxy o la opción, cierra la sesión y vuelve a
-iniciarla.
+Las mayúsculas y los espacios alrededor del valor no importan.
+Cualquier otro valor detiene LibreFolio al arrancar.
+Cuándo `always` o `never` es la elección correcta: [Configuración](configuration.md#session-cookie-secure).
 
-Para ver el atributo en el navegador:
+La marca se decide al iniciar sesión: una cookie que ya está en el navegador conserva la marca que recibió entonces.
+Tras arreglar el proxy o la opción, cierra sesión y vuelve a iniciarla.
 
-1. Inicia sesión en la dirección HTTPS.
-2. Abre las herramientas para desarrolladores: `F12`, o clic derecho en la página y **Inspeccionar**.
-   Safari solo las muestra una vez activadas sus funciones para desarrolladores en sus ajustes.
-3. Abre las cookies de tu dirección de LibreFolio: **Application** → **Cookies** en Chrome y Edge,
-   **Storage** → **Cookies** en Firefox y Safari (los nombres siguen el idioma del navegador).
-4. En la fila `session`, **Secure** está marcada (`true` en Firefox), y también **HttpOnly**;
-   **SameSite** indica `Lax`.
+Para ver la marca en el navegador:
 
-La consola no puede mostrarlo: `document.cookie` deja fuera las cookies `HttpOnly`.
+1. **Inicia sesión en la dirección HTTPS.**
 
----
+2. **Abre las herramientas de desarrollo**: `F12`, o clic derecho en la página → **Inspeccionar**.
 
-## 🧰 Detrás de un proxy inverso {: #reverse-proxy }
+    Safari las muestra solo cuando las funciones de desarrollo están activadas en sus ajustes.
 
-Un proxy inverso recibe la conexión HTTPS y la pasa a LibreFolio por HTTP sin cifrar, así que
-LibreFolio solo sabe del HTTPS, y del visitante, por las cabeceras del proxy:
+3. **Abre las cookies de tu dirección de LibreFolio.**
 
-- `X-Forwarded-Proto: https` dice que el navegador usa HTTPS: con `SESSION_COOKIE_SECURE=auto`, el
-  valor predeterminado, LibreFolio marca entonces la cookie de sesión como `Secure`;
-- `X-Forwarded-For` lleva la dirección del visitante, lo que permite al indicador ver desde dónde se
-  conectan los usuarios.
+    | Navegador | Ruta |
+    | --- | --- |
+    | Chrome, Edge | **Aplicación** → **Cookies** |
+    | Firefox, Safari | **Almacenamiento** → **Cookies** |
 
-Tailscale Serve y Funnel, Caddy y Traefik envían ambas por sí solos. Nginx necesita las dos líneas en
-el bloque `location` que pasa las solicitudes a LibreFolio:
+4. **Lee la fila `session`.**
 
-```nginx
-proxy_set_header X-Forwarded-Proto $scheme;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-```
+    **Secure** está marcada (`true` en Firefox), igual que **HttpOnly**; **SameSite** indica `Lax`.
 
-Si el navegador usa HTTPS pero la cookie de sesión no está marcada como `Secure`, porque el proxy no
-envía `X-Forwarded-Proto` o porque `SESSION_COOKIE_SECURE` es `never`, los administradores ven una
-línea más en los detalles del indicador. El nivel sigue siendo **Conexión: segura**, porque la
-conexión está cifrada; solo a la cookie le falta `Secure`:
-
-> Tu navegador usa HTTPS, pero la cookie de sesión no está marcada como Secure. Haz que el proxy
-> inverso envíe X-Forwarded-Proto (Nginx: `proxy_set_header X-Forwarded-Proto $scheme;`), o vuelve
-> a poner SESSION_COOKIE_SECURE en auto si está en never.
-
-Una vez corregido el proxy, recarga LibreFolio: la línea desaparece. Después cierra la sesión y
-vuelve a iniciarla, para que el navegador reciba una cookie `Secure`.
-
-??? tip "⚙️ Configura `SESSION_COOKIE_SECURE` en su lugar"
-
-    Enviar la cabecera es la mejor corrección. Si solo llegas a LibreFolio por HTTPS, puedes en su
-    lugar añadir esta línea a `.env`:
-
-    ```bash
-    SESSION_COOKIE_SECURE=always
-    ```
-
-    Después reinicia LibreFolio: con Docker, ejecuta `docker compose up -d` (un simple
-    `docker compose restart` conserva el entorno anterior); en una instalación en el host, reinicia
-    `./dev.py server`, que también lee `.env`. Después cierra la sesión y vuelve a iniciarla.
-
-    Usa `never` solo para el raro proxy que declara HTTPS mientras el navegador está en HTTP sin
-    cifrar. Consulta [Configuración](configuration.md#session-cookie-secure) para todas las opciones.
+La consola no puede mostrarlo: `document.cookie` omite las cookies `HttpOnly`.
 
 ---
 
-## 🛠️ Cuando una comprobación falla {: #when-a-check-fails }
+## 🛠️ Cuando falla una comprobación {: #when-a-check-fails }
 
-| Lo que ves | Por qué | Qué hacer |
+| Qué ves | Por qué | Qué hacer |
 | --- | --- | --- |
-| La dirección HTTPS no muestra **Conexión: segura** | La página no está en HTTPS: la barra de direcciones muestra `http://` | Abre la dirección `https://`, y haz que el proxy redirija `http://` a ella |
-| La línea sobre la cookie de sesión, o `"cookie_secure":false` en la dirección HTTPS | El proxy no envía `X-Forwarded-Proto: https`, o `SESSION_COOKIE_SECURE` es `never` | Corrige el proxy ([Detrás de un proxy inverso](#reverse-proxy)) o vuelve a poner la opción en `auto`, y recarga |
-| `"cookie_secure":true`, pero la cookie `session` no es `Secure` | La cookie se estableció antes de la corrección | Cierra la sesión y vuelve a iniciarla |
+| La dirección HTTPS no muestra **Conexión: segura** | La página no está en HTTPS: la barra de direcciones muestra `http://` | Abre la dirección `https://` y haz que el proxy redirija `http://` a ella |
+| La línea sobre la cookie de sesión, o `"cookie_secure":false` en la dirección HTTPS | El proxy no envía `X-Forwarded-Proto: https`, o `SESSION_COOKIE_SECURE` es `never` | Arregla el proxy ([Detrás de un proxy inverso](connection_proxy.md#reverse-proxy)) o vuelve a poner la opción en `auto`, y recarga |
+| `"cookie_secure":true`, pero la cookie `session` no es `Secure` | La cookie se estableció antes del arreglo | Cierra sesión y vuelve a iniciarla |
 | `{"detail":"Not authenticated"}` | No hay sesión en esta dirección | Inicia sesión en esta dirección, en el mismo navegador |
-| Cada inicio de sesión vuelve a acabar en la página de inicio de sesión | La cookie es `Secure`, pero el navegador usa HTTP sin cifrar: `SESSION_COOKIE_SECURE=always`, o un proxy que envía `X-Forwarded-Proto: https` a un navegador en HTTP sin cifrar | Usa la dirección HTTPS, o corrige el proxy: consulta [Configuración](configuration.md#session-cookie-secure) |
-| Desde fuera, la dirección HTTPS no carga | Una dirección de Tailscale Serve es privada; un Funnel nuevo necesita aprobación y unos minutos | Enciende Tailscale en el teléfono, o usa Funnel; aprueba el Funnel y espera ([Exponer de forma segura](service_exposure.md)) |
-| Desde fuera, `http://…:6040` sin cifrar carga | El puerto de LibreFolio está abierto a internet: una redirección de puertos en el router, o un servidor con una dirección pública | Ciérralo: elimina la redirección de puertos, o bloquea el puerto en el cortafuegos del servidor. Tailscale no necesita puertos abiertos, y un proxy inverso solo el suyo |
-| `client_class` indica `lan` o `loopback` desde los datos móviles, o HTTP sin cifrar desde internet muestra **Conexión: red local**, *Incierta* | El servidor no puede ver de dónde llegan los visitantes | Consulta [Límites](#limits); con Nginx, añade la línea `X-Forwarded-For` |
-| Una dirección de Tailscale muestra **Conexión: red local** | Un nombre MagicDNS corto no tiene punto, así que cuenta como local | Usa la IP de Tailscale, el nombre completo `.ts.net` o, mejor, la dirección HTTPS |
+| Cada inicio de sesión acaba otra vez en la página de inicio de sesión | La cookie es `Secure`, pero el navegador usa HTTP sin cifrar: `SESSION_COOKIE_SECURE=always`, o un proxy que envía `X-Forwarded-Proto: https` a un navegador con HTTP sin cifrar | Usa la dirección HTTPS o arregla el proxy: [Configuración](configuration.md#session-cookie-secure) |
+| Desde fuera, la dirección HTTPS no se carga | Una dirección de Tailscale Serve es privada; un Funnel nuevo necesita aprobación y unos minutos | Enciende Tailscale en el teléfono, o usa Funnel; aprueba el Funnel y espera ([Exposición segura: acceso público con Funnel](service_exposure_funnel.md#step-2-approve-and-wait-for-propagation)) |
+| Desde fuera, se carga `http://…:6040` sin cifrar | El puerto de LibreFolio está abierto a internet: una redirección de puertos en el router, o un servidor con dirección pública | Ciérralo: quita la redirección de puertos o bloquea el puerto en el cortafuegos del servidor. Tailscale no necesita ningún puerto abierto, un proxy inverso solo el suyo |
+| `client_class` muestra `lan` o `loopback` desde datos móviles, o el HTTP sin cifrar desde internet muestra **Conexión: red local**, *Incierta* | El servidor no puede ver de dónde vienen los visitantes | Consulta [Límites](#limits); con Nginx, añade la línea `X-Forwarded-For` |
+| Una dirección de Tailscale muestra **Conexión: red local** | Un nombre MagicDNS corto no tiene puntos, así que cuenta como local | Usa la IP de Tailscale, el nombre completo `.ts.net` o, mejor, la dirección HTTPS |
 
 ---
 
 ## ⚠️ Límites {: #limits }
 
-El indicador es un consejo, no un control: no bloquea nada. Dos límites importan cuando compruebas
-una instalación.
+El indicador es un consejo, no una comprobación: no bloquea nada.
+Dos límites importan cuando compruebas un despliegue.
 
-**No siempre ve dónde están los visitantes.** Con Docker Desktop expuesto directamente, o detrás de
-un proxy que no pasa la dirección del visitante en `X-Forwarded-For`, el servidor ve a todos los
-visitantes como locales: `lan`, o `loopback` para un proxy en la misma máquina. HTTP sin cifrar
-desde internet muestra entonces **Conexión: red local**, como incierta, en lugar de
-**Conexión: no segura**. Docker Engine en Linux conserva la dirección del visitante. Las
-direcciones HTTPS no se ven afectadas: muestran **Conexión: segura** en cualquier caso.
+**No siempre ve de dónde vienen los visitantes.**
 
-**No comprueba los certificados.** Un certificado autofirmado que un usuario aceptó en el navegador
-muestra **Conexión: segura**: el tráfico está cifrado, pero nadie garantiza que el servidor sea
-realmente el tuyo.
+- Con Docker Desktop expuesto directamente, o detrás de un proxy que no pasa la dirección del visitante en `X-Forwarded-For`, el servidor ve a todos los visitantes como locales: `lan`, o `loopback` para un proxy en la misma máquina.
+- Entonces el HTTP sin cifrar desde internet muestra **Conexión: red local**, con un veredicto incierto, en lugar de **Conexión: no segura**.
+- Las direcciones HTTPS no se ven afectadas: muestran **Conexión: segura** en ambos casos.
+- Docker Engine en Linux conserva la dirección del visitante por IPv4.
+- Por IPv6, a menos que el contenedor tenga una dirección IPv6 propia, los visitantes IPv6 llegan a través del proxy de Docker, desde la puerta de enlace de la red del contenedor: todos comparten esa única dirección local, para el indicador y para los límites por dirección del visitante, que por tanto los cuentan juntos.
+- El proxy de Docker no añade ninguna cabecera de reenvío, así que LibreFolio no puede notarlo: su advertencia sobre un proxy en el que no confía necesita una cabecera de ese tipo.
+- Un proxy inverso por delante que vea la dirección de cada visitante, configurado como explica [La dirección del visitante](connection_proxy.md#client-address), lo evita.
 
-No hay una lista de proxies de confianza que configurar. `X-Forwarded-For` solo alimenta el
-indicador, así que un valor falsificado solo engaña al indicador de quien lo envió;
-`X-Forwarded-Proto` solo puede activar `Secure`, así que un `https` falsificado solo rompe el inicio
-de sesión de quien lo envió.
+**No comprueba los certificados.**
+
+- Un certificado autofirmado que un usuario aceptó en el navegador muestra **Conexión: segura**: el tráfico está cifrado, pero nadie garantiza que el servidor sea realmente tuyo.
+
+Ni el indicador ni la cookie de sesión necesitan una lista de proxies de confianza:
+
+- un `X-Forwarded-For` falsificado solo engaña al indicador de quien lo envió;
+- `X-Forwarded-Proto` solo puede activar `Secure`, así que un `https` falsificado solo rompe el propio inicio de sesión del remitente.
+
+Los límites por dirección del visitante son otra cuestión: [La dirección del visitante](connection_proxy.md#client-address).
 
 ---
 
 ## 🔗 Relacionado
 
-- 🔐 **[Seguridad de la conexión](../user/connection-security.md)** — La guía del usuario: los tres
-  niveles y qué hacer en cada uno
-- 🌐 **[Exponer de forma segura](service_exposure.md)** — Tailscale, desde una VPN privada hasta una
-  dirección HTTPS pública
+- 📄 **[Comprobar la seguridad de la conexión: detrás de un proxy inverso](connection_proxy.md)** — En qué proxies confía LibreFolio, la dirección del visitante, Tailscale con Docker
+- 🔐 **[Seguridad de la conexión](../user/connection-security.md)** — La guía de usuario: los tres niveles y qué hacer en cada uno
+- 🌐 **[Exposición segura](service_exposure.md)** — Tailscale, de una VPN privada a una dirección HTTPS pública
 - 🐳 **[Docker avanzado](docker_advanced.md)** — Archivo Compose, variables de entorno, proxy inverso
-- 📝 **[Configuración](configuration.md)** — `SESSION_COOKIE_SECURE` y todas las demás opciones de
-  `.env`
+- 📝 **[Configuración](configuration.md)** — `SESSION_COOKIE_SECURE` y todas las demás opciones de `.env`

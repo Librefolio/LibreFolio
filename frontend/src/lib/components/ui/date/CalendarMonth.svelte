@@ -7,7 +7,7 @@
   Used by: DateRangePicker (×2), SingleDatePicker (×1).
 -->
 <script lang="ts">
-    import {todayIso} from '$lib/utils/dateOnly';
+    import {todayIso, utcMs} from '$lib/utils/dateOnly';
     import {CalendarCheck, ChevronLeft, ChevronRight} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {SimpleSelect} from '$lib/components/ui/select';
@@ -24,7 +24,7 @@
         rangeStart?: string;
         /** Range end date (DateRangePicker) */
         rangeEnd?: string;
-        /** Pending first-click date (DateRangePicker) */
+        /** Pending first-click date (DateRangePicker). Not clickable: a second click on it would make a range of one day. */
         pending?: string;
         /** Currently hovered date for range preview (DateRangePicker) */
         hovered?: string;
@@ -55,7 +55,7 @@
     // =========================================================================
 
     function formatISO(y: number, m: number, d: number): string {
-        return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        return `${String(y).padStart(4, '0')}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
 
     function isFuture(iso: string): boolean {
@@ -67,11 +67,12 @@
     let monthSelectOptions = $derived(monthLabels.map((label, i) => ({value: String(i), label})));
 
     function getMonthGrid(y: number, m: number): Array<Array<{day: number; iso: string; inMonth: boolean}>> {
-        const firstDay = new Date(y, m, 1);
-        let startDow = firstDay.getDay() - 1;
+        // UTC with `utcMs`: the plain Date constructor reads a year below 100 as 19xx, and local time has no part in a calendar day (W5-11).
+        const firstDay = new Date(utcMs(y, m, 1));
+        let startDow = firstDay.getUTCDay() - 1;
         if (startDow < 0) startDow = 6;
-        const daysInMonth = new Date(y, m + 1, 0).getDate();
-        const prevMonthDays = new Date(y, m, 0).getDate();
+        const daysInMonth = new Date(utcMs(y, m + 1, 0)).getUTCDate();
+        const prevMonthDays = new Date(utcMs(y, m, 0)).getUTCDate();
         const cells: Array<{day: number; iso: string; inMonth: boolean}> = [];
         for (let i = startDow - 1; i >= 0; i--) {
             const d = prevMonthDays - i;
@@ -131,6 +132,8 @@
     }
 
     function isDisabled(iso: string): boolean {
+        // The first day a stored date may have is 0001-01-01: the leading cells of January in the year 1 belong to the year 0.
+        if (iso < '0001-01-01') return true;
         return disabledDates?.has(iso) ?? false;
     }
 
@@ -140,7 +143,7 @@
      * `getDayClasses` below encodes the same information, but as Tailwind classes:
      * unusable as a test selector (they change with every restyle) and invisible to
      * anything but a human eye. Publishing the state separately is what lets a test
-     * ask "is this day the range start?" instead of matching on `bg-libre-green`.
+     * ask "is this day the range start?" instead of matching on `bg-lf-checked`.
      *
      * Precedence mirrors the highlight block in `getDayClasses` on purpose — the two
      * must agree, or the DOM would claim one thing and show another.
@@ -168,68 +171,74 @@
 
         let cls = '';
 
-        // Base color
-        if (disabled) {
-            cls += 'text-gray-300/40 dark:text-gray-700/40 cursor-not-allowed line-through';
-        } else if (future && outOfMonth) {
-            cls += 'text-gray-300/40 dark:text-gray-700/40 cursor-not-allowed';
+        // Colour: the highlight, else the base state — one branch each, for the background and for the text alike.
+        // Tailwind 4 emits two utilities of one property in alphabetical order, not by state, so a base text colour
+        // kept beside a highlight one would win or lose by its name.
+        if (selected || rangeStart || rangeEnd) {
+            cls += 'bg-lf-checked text-lf-on-checked font-bold !opacity-100 !not-italic';
+        } else if (inRange) {
+            cls += 'bg-lf-selected text-lf-primary !opacity-100 !not-italic';
+        } else if (pending) {
+            cls += 'bg-lf-checked/50 text-lf-primary font-bold !not-italic';
+        } else if (disabled || (future && outOfMonth)) {
+            cls += 'text-lf-muted/40';
         } else if (future) {
-            cls += 'text-gray-400 dark:text-gray-500 opacity-40 cursor-not-allowed italic';
+            cls += 'text-lf-muted';
         } else if (outOfMonth) {
-            cls += 'text-gray-300 dark:text-gray-600';
+            cls += 'text-lf-muted hover:bg-lf-hover';
         } else {
-            cls += 'text-gray-700 dark:text-gray-200';
+            cls += 'text-lf-primary hover:bg-lf-hover';
         }
 
-        // Highlight
-        if (selected || rangeStart || rangeEnd) {
-            cls += ' bg-libre-green !text-white font-bold !opacity-100 !not-italic';
-        } else if (inRange) {
-            cls += ' bg-libre-green/20 dark:bg-libre-green/25 !text-gray-800 dark:!text-gray-100 !opacity-100 !not-italic';
+        // Base state
+        if (disabled) {
+            cls += ' cursor-not-allowed line-through';
+        } else if (future && outOfMonth) {
+            cls += ' cursor-not-allowed';
+        } else if (future) {
+            cls += ' opacity-40 cursor-not-allowed italic';
         } else if (pending) {
-            cls += ' bg-libre-green/50 !text-white font-bold !not-italic';
-        } else if (!future && !disabled) {
-            cls += ' hover:bg-gray-100 dark:hover:bg-slate-700';
+            // The pending day keeps its colour and says "you can't go there" as a future day does.
+            cls += ' cursor-not-allowed';
         }
 
         // Today ring
         if (today && !selected && !rangeStart && !rangeEnd && !pending) {
-            cls += ' ring-1 ring-libre-green ring-inset font-bold !opacity-100 !not-italic';
+            cls += ' ring-1 ring-lf-focus ring-inset font-bold !opacity-100 !not-italic';
         }
 
         return cls;
     }
 </script>
 
-<div class="min-w-[240px]" data-testid="calendar-month" data-year={year} data-month={month}>
+<div class="min-w-[240px] text-lf-primary" data-testid="calendar-month" data-year={year} data-month={month}>
     <!-- Month/Year navigation header -->
     <div class="flex items-center justify-between mb-2">
-        <button data-testid="calendar-prev-month" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={onPrevMonth} type="button">
+        <button data-testid="calendar-prev-month" class="p-1 rounded hover:bg-lf-hover text-lf-muted" onclick={onPrevMonth} type="button">
             <ChevronLeft size={16} />
         </button>
         <div class="flex items-center gap-1">
             <SimpleSelect class="inline-block w-auto" compact dropdownPosition="auto" onchange={(v) => onSetMonth(parseInt(v))} options={monthSelectOptions} showChevron={false} value={String(month)} />
             <input
                 type="number"
-                use:numericArrows
+                use:numericArrows={{min: 1}}
                 data-testid="calendar-year-input"
                 value={year}
-                min="1900"
                 max="2200"
                 onchange={(e) => onSetYear(parseInt(e.currentTarget.value) || new Date().getFullYear())}
                 class="w-14 px-1 py-0.5 text-xs font-semibold text-center bg-transparent border-none outline-none
-                           text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded
-                           focus:ring-1 focus:ring-libre-green/50
+                           text-lf-primary hover:bg-lf-hover rounded
+                           focus:ring-1 focus:ring-lf-focus/50
                            [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
         </div>
         <div class="flex items-center gap-0.5">
             {#if onGoToToday}
-                <button data-testid="calendar-go-today" type="button" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-gray-500" title={$_('datePicker.today')} onclick={onGoToToday}>
+                <button data-testid="calendar-go-today" type="button" class="p-1 rounded hover:bg-lf-hover text-lf-muted" title={$_('datePicker.today')} onclick={onGoToToday}>
                     <CalendarCheck size={14} />
                 </button>
             {/if}
-            <button data-testid="calendar-next-month" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400" onclick={onNextMonth} type="button">
+            <button data-testid="calendar-next-month" class="p-1 rounded hover:bg-lf-hover text-lf-muted" onclick={onNextMonth} type="button">
                 <ChevronRight size={16} />
             </button>
         </div>
@@ -240,7 +249,7 @@
         <thead>
             <tr>
                 {#each weekdayLabels as wdLabel}
-                    <th class="text-center text-[10px] font-semibold text-gray-500 dark:text-gray-400 pb-1 w-[14.28%]">{wdLabel}</th>
+                    <th class="text-center text-[10px] font-semibold text-lf-muted pb-1 w-[14.28%]">{wdLabel}</th>
                 {/each}
             </tr>
         </thead>
@@ -250,6 +259,7 @@
                     {#each week as cell}
                         {@const future = isFuture(cell.iso)}
                         {@const disabled = isDisabled(cell.iso)}
+                        {@const pendingDay = cell.iso === highlights.pending}
                         <td
                             class="text-center p-0"
                             onmouseenter={() => {
@@ -263,9 +273,9 @@
                                 data-state={getDayState(cell.iso, cell.inMonth)}
                                 data-in-month={cell.inMonth ? 'true' : 'false'}
                                 class="w-full aspect-square text-xs leading-none rounded-md transition-colors {getDayClasses(cell.iso, cell.inMonth)}"
-                                disabled={future || disabled}
+                                disabled={future || disabled || pendingDay}
                                 onclick={() => {
-                                    if (!disabled) onDayClick(cell.iso);
+                                    if (!disabled && !pendingDay) onDayClick(cell.iso);
                                 }}>{cell.day}</button
                             >
                         </td>

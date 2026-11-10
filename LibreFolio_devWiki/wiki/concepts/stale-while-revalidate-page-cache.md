@@ -41,11 +41,21 @@ request's answer is never *applied*.
 A defect fixed on the way (F2): the Dashboard asked Performance before it knew which brokers the user owns, so it
 briefly showed brokers the user does not own. The view now waits for its scope.
 
+**Confirmed by the developer (07/11/2026, October notes D1):** a change made in this browser updates the page at once;
+a change made elsewhere in the backend (another user, the command line) shows only with *Refresh*. «It is already so»:
+nothing to change. The alternative, «no call until I press Refresh», was rejected, because it would show old numbers
+after one's own new transaction.
+
 ## Where it does not apply yet
 
 The rule is written for the portfolio stores (`mkdocs_src/docs/developer/frontend/state/domain-state.md`, "Portfolio
 Page Cache") but not in the frontend instructions, and the broker contribution in Broker detail does not follow it.
 `TimeSeriesStore.invalidateAll()` and `entityStore` still clear (N-1).
+
+> 2026-11-07 lint: a first piece of phase 2 landed for the price and rate caches: since `3c5f5140f` (2026-10-17) a price
+> catch-up calls `TimeSeriesStore.markStale()` on every asset-price and FX store (`assetPriceStoreRegistry.ts`,
+> `fxStoreRegistry.ts`, driven by `onPricesCaughtUp.ts`): the points stay readable, a page shows them and asks again in
+> background. `invalidateAll()` itself still clears.
 
 ## Source files
 
@@ -53,9 +63,9 @@ Page Cache") but not in the frontend instructions, and the broker contribution i
 |------|------|
 | Report cache, `invalidate`, `peekReport`, `resetPortfolioCache` | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
 | Mutation bus, "a write only when it wrote" | `frontend/src/lib/stores/portfolio/portfolioMutation.ts` |
-| Lots analysis cache | `frontend/src/lib/stores/portfolio/lotsAnalysisStore.svelte.ts` |
-| Dashboard currency/broker per session | `frontend/src/lib/stores/portfolio/dashboardViewStore.ts` |
-| Risk answers, `markRiskStale` | `frontend/src/lib/stores/risk/riskStore.svelte.ts` |
+| Lots analysis cache | `frontend/src/lib/features/brokers/lots/lotsAnalysisStore.svelte.ts` |
+| Dashboard currency/broker per session | `frontend/src/lib/features/dashboard/dashboardViewStore.ts` |
+| Risk answers, `markRiskStale` | `frontend/src/lib/features/risk/riskStore.svelte.ts` |
 | Still clearing (phase 2, N-1) | `frontend/src/lib/stores/core/TimeSeriesStore.ts` |
 | Developer doc (the rule) | `mkdocs_src/docs/developer/frontend/state/domain-state.md` |
 | Plan (E1, §3.1-ter/quater) | `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00FxDashboardSyncStep2PageCache.prompt.md` |

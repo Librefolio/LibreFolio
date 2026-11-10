@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-05-10
 tags: [backend, settings, dead-code, cleanup]
-related_features: []
+related: []
 ---
 
 # Problem: Sync Settings Functions — Dead Code Accumulation
@@ -25,10 +25,10 @@ Removed all three functions. No callers found. No tests broken.
 **Do not create sync wrappers for async functions unless there is an immediate, concrete consumer.** "Might need it later" wrappers become dead code that clutters the codebase and confuses future readers.
 
 ## Affected files
-- `backend/app/services/global_settings_service.py` (functions removed)
+- `backend/app/services/global_settings_service.py` (functions removed; the file is `backend/app/services/accounts/global_settings_service.py` since `158cd00c7`, 2026-10-14)
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Fixed file | `backend/app/services/global_settings_service.py` |
+| Fixed file | `backend/app/services/accounts/global_settings_service.py` |

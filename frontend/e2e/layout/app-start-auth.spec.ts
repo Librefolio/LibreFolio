@@ -6,7 +6,7 @@
  *   1. A slow GET /auth/me is not a sign-out. On a full load of an app page the (app) layout asks /auth/me; when
  *      nothing has answered after 5 s it shows the `server-unreachable` panel (Retry: `server-unreachable-retry`) and
  *      stays on the requested URL; when /auth/me then answers 200 the panel goes and the page loads. At the base
- *      (3a8139c29) the layout raced the check against a 5 s timeout and read the timeout as "not signed in":
+ *      (7203fe5d9) the layout raced the check against a 5 s timeout and read the timeout as "not signed in":
  *      `goto('/')`, where the root page routes a signed-in user to /dashboard.
  *   2. Signed out, an app page hands over to the root login carrying itself, `/?redirect=<path+query>`, and signing in
  *      through that form lands on it. At the base: a bare `/`, then /dashboard.
@@ -90,7 +90,7 @@ async function keepOffline(page: Page, origin: string): Promise<void> {
         (route) => route.abort('blockedbyclient'),
     );
     // Answered empty: the live providers are not asked, and today's price row of the shared seeded assets is not written.
-    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
 }
 
 interface Hop {

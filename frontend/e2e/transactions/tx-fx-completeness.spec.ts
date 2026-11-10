@@ -17,10 +17,15 @@
  * pair nobody had touched. That normalization is a plain sign-strip
  * (`cash.amount.replace(/^-/, '')`), deliberately not `Math.abs(Number(...))`:
  * the latter round-trips the decimal string through a JS double and silently
- * rounds any amount with more precision than a double can hold. Test 1 uses
- * an 18-significant-digit amount (the exact edge of the DB's `NUMERIC(18,6)`
- * column) specifically because it demonstrates that loss when parsed as a
- * float, and asserts the exact string survives Apply → reopen unchanged.
+ * rounds any amount with more precision than a double can hold. Test 1 used
+ * an 18-significant-digit amount to show that loss. Since B-48 the form, like
+ * the backend, keeps at most 15 significant digits, and a double holds every
+ * such amount, so the loss can no longer be typed here: the sign-strip's
+ * exactness is pinned by `applySign`'s own cases (txPayloadHelpers.test.ts).
+ * Test 1 now types an amount at the edge of what the backend keeps for one —
+ * 15 significant digits, 6 decimals — and still asserts that its string
+ * survives Apply → reopen unchanged; its subject is the broker, the dates and
+ * the staging, not the digits.
  *
  * What this file does NOT assume, and checks instead:
  *  - that the From/To date fields are two independent pieces of state, and
@@ -52,7 +57,7 @@ import {waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
-import type {TXReadItem} from '../../src/lib/components/transactions/types';
+import type {TXReadItem} from '../../src/lib/features/transactions/types';
 
 const API = '/api/v1';
 
@@ -127,6 +132,12 @@ async function fillCashAmount(page: Page, testid: string, raw: string): Promise<
  *  tx-form-dual-to), never a bare page-level getByTestId. */
 function dualDateInput(panel: Locator): Locator {
     return panel.getByTestId('single-date-picker-root').getByRole('textbox');
+}
+
+/** A cell of the form (V-37b): the wrapper `[data-cell="<name>"]`. It carries `data-cell-invalid` only while it is wrong,
+ *  and only after «⚡ Validate now» was clicked. */
+function formCell(page: Page, name: string): Locator {
+    return page.locator(`[data-cell="${name}"]`);
 }
 
 /** Type an ISO date and commit with Enter — Enter both calls `commitTyped()`
@@ -245,26 +256,33 @@ test.describe('FX_CONVERSION dual-form completeness', () => {
         const saveBtn = page.getByTestId('tx-form-save');
         const validateBtn = page.getByTestId('tx-form-validate-now');
 
-        // Canonical decimal on the From leg (currency defaults to EUR).
-        // 18 significant digits (12 integer + 6 fraction — the exact edge of
-        // the DB's NUMERIC(18,6) column) deliberately exceeds what a JS double
-        // can round-trip: `String(Math.abs(Number('-123456789012.123456')))`
-        // collapses to `'123456789012.12346'`, silently dropping precision.
-        // `fromTx()` must never go through Number() for this — only a plain
-        // sign-strip preserves every digit through Apply → reopen below.
-        const FROM_AMOUNT = '123456789012.123456';
+        // Canonical decimal on the From leg (currency defaults to EUR), at the
+        // edge of what the backend keeps for an amount: 15 significant digits,
+        // 6 decimals. B-48: it was 123456789012.123456, 18 significant digits —
+        // past that edge, refused by the form since B-48. The digits are not
+        // this test's subject (see the header): the value only has to be one
+        // the form and the backend accept, and it still survives Apply →
+        // reopen exactly as typed.
+        const FROM_AMOUNT = '123456789.123456';
         await fillCashAmount(page, 'tx-form-cash-from', FROM_AMOUNT);
         await expect(page.getByTestId('tx-form-cash-from-amount')).toHaveValue(FROM_AMOUNT);
 
-        // To leg still untouched — no amount, no currency committed yet. Both
-        // gates must stay closed: this is the "missing leg" case, not a guess.
+        // To leg still untouched — no amount, no currency committed yet. Apply
+        // stays closed: this is the "missing leg" case, not a guess. ⚡ Validate
+        // now stays available (V-37b): it does not ask the server, it marks the
+        // cell that is missing.
         await expect(saveBtn).toBeDisabled();
-        await expect(validateBtn).toBeDisabled();
+        await expect(validateBtn).toBeEnabled();
+        await expect(formModal.locator('[data-cell-invalid]'), 'nothing is marked before the click').toHaveCount(0);
+        await validateBtn.click();
+        await expect(formCell(page, 'cashTo')).toHaveAttribute('data-cell-invalid', 'required');
+        await expect(page.locator('[data-cell="cash"][data-cell-invalid]'), 'the From leg is complete: not marked').toHaveCount(0);
 
         // Comma decimal on the To leg (currency defaults to USD) — normalizes
         // to canonical dot form on blur.
         await fillCashAmount(page, 'tx-form-cash-to', '2200,75');
         await expect(page.getByTestId('tx-form-cash-to-amount')).toHaveValue('2200.75');
+        await expect(page.locator('[data-cell="cashTo"][data-cell-invalid]'), 'the mark goes away live when the leg is filled').toHaveCount(0);
 
         // Both legs complete, broker resolved from the source (not a stale
         // separate field), both currencies present and different → the fixed
@@ -313,9 +331,10 @@ test.describe('FX_CONVERSION dual-form completeness', () => {
         // Reopen the local pair: `fromTx()` must hand back a POSITIVE magnitude
         // for the From leg (it is stored internally as a negative amount), or
         // the "positive" sign guard would re-block Apply on a pair nobody edited.
-        // It must ALSO hand back the exact digits it was given — the tightened
-        // fix (`cash.amount.replace(/^-/, '')`) never round-trips through a JS
-        // Number, unlike the old `String(Math.abs(Number(cash.amount)))`.
+        // It must also hand back the digits it was given. (Since B-48 the amount
+        // is one a double holds exactly, so a Number round trip would hand them
+        // back too: the plain sign-strip `cash.amount.replace(/^-/, '')` is
+        // pinned against Number by `applySign`'s own cases.)
         await appended.hover();
         const kebab = appended.getByTestId(`row-actions-${appendedRowId}`);
         await expect(kebab).toBeVisible({timeout: 2_000});
@@ -323,9 +342,7 @@ test.describe('FX_CONVERSION dual-form completeness', () => {
         await page.getByTestId('context-menu-action-edit-single').click();
         await expect(formModal).toBeVisible({timeout: 5_000});
 
-        // Exact string match, not just numeric equality: a reopened value of
-        // '123456789012.12346' would also satisfy `Number(x) === Number(FROM_AMOUNT)`
-        // to float precision, but it is not the value the user typed.
+        // Exact string match: the reopened From leg is the value the user typed.
         await expect(page.getByTestId('tx-form-cash-from-amount')).toHaveValue(FROM_AMOUNT);
         await expect(page.getByTestId('tx-form-cash-to-amount')).toHaveValue('2200.75');
         // Each leg's distinct date must round-trip on its own side — no
@@ -358,9 +375,12 @@ test.describe('FX_CONVERSION dual-form completeness', () => {
 
         await fillCashAmount(page, 'tx-form-cash-from', '1000');
 
-        // 1) To leg untouched: missing amount AND currency.
+        // 1) To leg untouched: missing amount AND currency. Apply is blocked;
+        // ⚡ Validate now is available and marks the missing leg (V-37b).
         await expect(saveBtn).toBeDisabled();
-        await expect(validateBtn).toBeDisabled();
+        await expect(validateBtn).toBeEnabled();
+        await validateBtn.click();
+        await expect(formCell(page, 'cashTo')).toHaveAttribute('data-cell-invalid', 'required');
 
         await fillCashAmount(page, 'tx-form-cash-to', '1050');
         await expect(validateBtn).toBeEnabled({timeout: 3_000});
@@ -370,6 +390,9 @@ test.describe('FX_CONVERSION dual-form completeness', () => {
         await selectCurrency(page, 'tx-form-cash-to', 'EUR');
         await expect(dualError).toBeVisible({timeout: 3_000});
         await expect(saveBtn).toBeDisabled();
+        // ⚡ Validate now marks the To leg as a format problem and leaves the server alone.
+        await validateBtn.click();
+        await expect(formCell(page, 'cashTo')).toHaveAttribute('data-cell-invalid', 'format');
 
         // Restore distinct currencies before the next sub-case.
         await selectCurrency(page, 'tx-form-cash-to', 'USD');
@@ -383,11 +406,49 @@ test.describe('FX_CONVERSION dual-form completeness', () => {
         await expect(validateBtn).toBeEnabled();
         await expect(saveBtn).toBeDisabled();
 
-        // 4) Zero To amount: isFormComplete itself rejects a zero amount —
-        // both gates close together.
+        // 4) Zero To amount: a zero is no amount, so Apply stays closed. ⚡ Validate
+        // now no longer closes with it (V-37b): it marks the To leg as required.
         await fillCashAmount(page, 'tx-form-cash-to', '0');
-        await expect(validateBtn).toBeDisabled();
+        await expect(validateBtn).toBeEnabled();
         await expect(saveBtn).toBeDisabled();
+        await validateBtn.click();
+        await expect(formCell(page, 'cashTo')).toHaveAttribute('data-cell-invalid', 'required');
+    });
+
+    test('single form (V-37b): a missing quantity and a date the picker refuses are marked, the focus goes to the date, and nothing is validated', async ({page}) => {
+        const brokerId = await createOwnedBroker(page, 'third');
+        rememberOwnedBroker(page, brokerId);
+
+        await goToTransactions(page);
+
+        // «Validate now» with a problem on screen must not ask the server: count the requests that would.
+        let validateCalls = 0;
+        page.on('request', (req) => {
+            if (req.method() === 'POST' && new URL(req.url()).pathname.endsWith('/transactions/validate')) validateCalls++;
+        });
+
+        const {formModal} = await openCreateFlow(page);
+        await pickBroker(page, brokerId);
+
+        // The create form starts with an empty quantity (default type BUY). The date gets text the picker refuses,
+        // and the field is left.
+        const dateWrap = page.getByTestId('tx-form-date-wrap');
+        const dateInput = dualDateInput(dateWrap);
+        await expect(dateInput).toBeVisible({timeout: 2_000});
+        await dateInput.fill('abc');
+        await dateInput.blur();
+        await expect(dateWrap.locator('[data-invalid="true"]'), 'premise: the picker refused the typed text').toHaveCount(1);
+        await expect(formModal.locator('[data-cell-invalid]'), 'nothing is marked until the user asks').toHaveCount(0);
+
+        const validateBtn = page.getByTestId('tx-form-validate-now');
+        await expect(validateBtn).toBeEnabled();
+        await validateBtn.click();
+
+        await expect(formCell(page, 'quantity')).toHaveAttribute('data-cell-invalid', 'required');
+        await expect(formCell(page, 'date')).toHaveAttribute('data-cell-invalid', 'format');
+        // The date comes first on screen, so the focus is inside its cell.
+        await expect(formCell(page, 'date').locator(':focus')).toHaveCount(1);
+        expect(validateCalls, 'a form with problems of its own never reaches /transactions/validate').toBe(0);
     });
 
     test('SaveAll commits a funded FX pair for real, and GET readback proves the linked DB pair', async ({page}) => {

@@ -9,15 +9,19 @@
  *   EUR-USD pair must exist.
  */
 
+import type {Route} from '@playwright/test';
 import {expect, test as base} from '../fixtures/playwright';
 import type {Locator, Page, Request, Response} from '../fixtures/playwright';
 import {schemas} from '../../src/lib/api/generated';
-import {waitForSettled} from '../fixtures/app-events';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
+import {login, navigateTo, openMobileMenu} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
-import {localIso, todayIso} from '../fixtures/dates';
+import {assetComparison, assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
+import {expectPairLineDrawn, expectPairLineReaches} from '../fixtures/pairLine';
+import {daysAgoIso, localIso, todayIso} from '../fixtures/dates';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxDetailPage} from './fx-helpers';
+import {createOwnedAsset, deleteOwned, type Owned} from '../assets/asset-events-owned';
 
 type SyntheticRange = {
     start: string;
@@ -617,7 +621,7 @@ async function installFxComparisonSyncFixture(page: Page) {
         });
     });
 
-    await page.route('**/api/v1/assets/all*', async (route) => {
+    await page.route('**/api/v1/assets/query*', async (route) => {
         await route.fulfill({status: 200, contentType: 'application/json', json: peers});
     });
 
@@ -1456,9 +1460,14 @@ test.describe('FX Detail Page', () => {
         expect(fixture.stats.mainPriceRequests.length).toBe(initialMainPriceRequests + 1);
         expect(fixture.stats.comparisonRequests.length).toBe(initialComparisonRequests + 1);
 
+        // Y11: Refresh is disabled while the page's big requests are in flight, and a
+        // disabled button takes no focus: wait until it can be pressed. A sync's own
+        // reload is not one of them (P3), so the A1 sync still held does not keep it.
+        const assetRefreshButton = page.getByTestId('asset-detail-refresh-btn');
+        await expect(assetRefreshButton).toBeEnabled({timeout: 10_000});
         fixture.conversionFailures.add(gbpPeer.slug);
         const restoreComparisonResponsePromise = page.waitForResponse(isComparisonResponse, {timeout: 10_000});
-        await activateByKeyboard(page.getByTestId('asset-detail-refresh-btn'));
+        await activateByKeyboard(assetRefreshButton);
         const restoreComparisonResponse = await restoreComparisonResponsePromise;
         expect(restoreComparisonResponse.status()).toBe(200);
         expect(await restoreComparisonResponse.finished()).toBeNull();
@@ -2340,5 +2349,1549 @@ test.describe('FX Detail Page', () => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-back-btn').click();
         await expect(page).toHaveURL(/\/fx$/, {timeout: 10_000});
+    });
+});
+
+// ============================================================================
+// The summary's Δ over the range is the backend's (workstream Y, lot X-R59 A)
+// ============================================================================
+
+/** The FX period changes, whatever their query string. */
+const FX_PERIOD_CHANGES = /\/api\/v1\/fx\/currencies\/period-changes(\?.*)?$/;
+
+/** The pair the summary is read on: the seeded EUR/USD, canonical (alphabetical) as the backend and the stores key it. */
+const RANGE_PAIR = {base: 'EUR', quote: 'USD'} as const;
+
+/** One pair of a period-changes request (`FXPeriodChangesRequest`). */
+type FxRangeChangesQuery = {base: string; quote: string; as_of: string; range_start?: string | null};
+
+/** A pair's Δ over the range as a stub answers it (`FXRangeChange`): decimal strings, null where the backend has none. */
+type FxRangeChange = {change_abs: string | null; change_ratio: string | null; inverse_change_abs: string | null; inverse_change_ratio: string | null};
+
+/**
+ * +42.42 % as configured, −21.21 % inverted, which is neither the inversion of the first (−29.79 %) nor its negation,
+ * so the inverted page shows it only by reading `inverse_change_ratio`. No seeded rate moves 42 % in two months: a
+ * figure on screen comes from the answer.
+ */
+const STUBBED_RANGE_CHANGE: FxRangeChange = {change_abs: '0.1234', change_ratio: '0.4242', inverse_change_abs: '-0.0567', inverse_change_ratio: '-0.2121'};
+
+/** What the range of the range-change test answers once changed: −13.13 % as configured, a figure of its own. */
+const CHANGED_RANGE_CHANGE: FxRangeChange = {change_abs: '-0.0321', change_ratio: '-0.1313', inverse_change_abs: '0.0222', inverse_change_ratio: '0.1515'};
+
+/** A Δ over the range the backend could not compute: every field null, both ways. */
+const NO_RANGE_CHANGE: FxRangeChange = {change_abs: null, change_ratio: null, inverse_change_abs: null, inverse_change_ratio: null};
+
+/** What `routePairRangeChanges` saw: every item asked, what went wrong, how many requests it answered. */
+type FxRangeChangesLog = {asked: FxRangeChangesQuery[]; failures: string[]; answered: number};
+
+/**
+ * The FX period changes, routed through the backend: every request is recorded, and each answer goes back with each
+ * pair's `range_change` replaced by what `stubFor` gives for the item that asked it — null: as the backend gave it. A
+ * non-OK answer is a failure, passed on as it came.
+ */
+async function routePairRangeChanges(page: Page, stubFor: (asked: FxRangeChangesQuery) => FxRangeChange | null): Promise<FxRangeChangesLog> {
+    const log: FxRangeChangesLog = {asked: [], failures: [], answered: 0};
+    await page.route(FX_PERIOD_CHANGES, async (route) => {
+        try {
+            const body = (route.request().postDataJSON() as FxRangeChangesQuery[] | null) ?? [];
+            log.asked.push(...body);
+            const response = await route.fetch();
+            if (!response.ok()) {
+                log.failures.push(`HTTP ${response.status()}: ${await response.text()}`);
+                await route.fulfill({response});
+                return;
+            }
+            const answer = (await response.json()) as {items?: Array<{base: string; quote: string; range_change?: Record<string, unknown> | null}>};
+            const items = (answer.items ?? []).map((item) => {
+                const asked = body.find((query) => query.base === item.base && query.quote === item.quote);
+                const stub = asked ? stubFor(asked) : null;
+                return stub ? {...item, range_change: {...(item.range_change ?? {}), ...stub}} : item;
+            });
+            await route.fulfill({response, json: {...answer, items}});
+        } catch (error) {
+            // Nobody awaits a route callback, so what it throws would land on whatever runs next: recorded, and the
+            // request let through, for the test to fail on its own assertions.
+            log.failures.push(String(error));
+            await route.continue().catch(() => undefined);
+        } finally {
+            log.answered += 1;
+        }
+    });
+    return log;
+}
+
+/**
+ * A percentage as any of the four languages writes it, matched whole, as `percentCell` reads a Δ cell of the lists:
+ * `+1.25%` (English), `+1,25%` (Italian), `+1,25 %` (French, Spanish: a no-break space before the sign); a minus may be
+ * `-` or `−`. The figure is read, never a translation.
+ */
+function percentText(figure: string): RegExp {
+    const parts = /^([+-])(\d+)\.(\d+)$/.exec(figure);
+    if (!parts) throw new Error(`percentText: ${figure} is not a signed decimal such as +1.25`);
+    return new RegExp(`^\\s*${parts[1] === '+' ? '\\+' : '[-\\u2212]'}${parts[2]}[.,]${parts[3]}\\s?%\\s*$`);
+}
+
+/**
+ * The pair page's summary shows the pair's Δ over the range on screen (X-R59, lot A): the change from the first to the
+ * last day of the range, which the backend computes both ways — the `range_change` of
+ * `POST /fx/currencies/period-changes`, asked for the pair canonical (alphabetical) whichever way the URL shows it, from
+ * the first day of the range (`range_start`, as it is: the backend takes any day from the year 1, D-P4) to its last (`as_of`): on load, on a range change and after a refresh. Shown as configured the
+ * summary reads `change_ratio`; inverted, `inverse_change_ratio`; where the backend has none it draws no Δ beside the
+ * rate. The browser computes none.
+ *
+ * The pair is the seeded EUR/USD, read and never written: the real answer is fetched and only its `range_change` is
+ * changed, with figures its rates do not give over these days. The range before 1900 has its rates answered in the
+ * browser, empty, so no conversion is walked back over a century; its period changes still reach the backend, which says
+ * whether it takes the first day asked, as it is. The refresh button publishes the page's big requests (`data-busy`, `pageBusy`),
+ * the Δ over the range among them: the barrier before reading what an answer left.
+ *
+ * Red before the cure of lot A: the page never asks the endpoint — the route never fires — and computes its Δ from the
+ * rates it charted.
+ */
+test.describe('FX pair page — the summary’s Δ over the range is the backend’s (X-R59)', () => {
+    // A ceiling, never a delay: the page loads the pair's rates, its signals and its Δ, and some tests load them again.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('the page asks the canonical pair from the first day of the range on screen; the summary shows the answer’s Δ, the inverse one once swapped', async ({page}) => {
+        // About two months ending on a known day in the past.
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        try {
+            const log = await routePairRangeChanges(page, () => STUBBED_RANGE_CHANGE);
+            // Opened by URL: on a full load the query is what seeds the page's period.
+            const root = await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            await expect(root, 'premise: the page shows the seeded EUR-USD').toHaveAttribute('data-chart-pair', 'EUR-USD');
+
+            await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes: its Δ is still computed in the browser', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'the page asks the pair from the first day of the range on screen to the last').toContainEqual(expected);
+
+            const delta = page.getByTestId('fx-price-summary-range-delta');
+            await expect(delta, 'as configured: change_ratio 0.4242').toHaveText(percentText('+42.42'), {timeout: 10_000});
+
+            // The page's own swap: the URL shows the pair inverted, and the summary reads the inverse field.
+            await page.getByTestId('fx-detail-swap-btn').click();
+            await expect(page).toHaveURL(/\/fx\/USD-EUR(?:\?|$)/, {timeout: 10_000});
+            await expect(delta, 'inverted: inverse_change_ratio -0.2121').toHaveText(percentText('-21.21'), {timeout: 10_000});
+            await expect(page.getByTestId('fx-detail-refresh-btn'), 'what the swap asked is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            for (const item of log.asked) expect(item, 'whichever way the URL shows the pair, every request asks it canonical over the range on screen').toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('opened inverted, the page still asks the canonical pair, and the summary shows the answer’s inverse Δ', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        try {
+            const log = await routePairRangeChanges(page, () => STUBBED_RANGE_CHANGE);
+            const root = await openSyntheticDetail(page, `/fx/USD-EUR?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            await expect(root, 'premise: the page keys the pair canonical, EUR-USD').toHaveAttribute('data-chart-pair', 'EUR-USD');
+            await expect(page.getByTestId('fx-detail-pair-label'), 'premise: and shows it inverted, USD → EUR').toHaveText(/USD[\s\S]*EUR/);
+
+            await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes: its Δ is still computed in the browser', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'the page asks the pair canonical, EUR first, though the URL shows it inverted').toContainEqual(expected);
+
+            await expect(page.getByTestId('fx-price-summary-range-delta'), 'inverted: inverse_change_ratio -0.2121, not the direct +42.42 %').toHaveText(percentText('-21.21'), {timeout: 10_000});
+            await expect(page.getByTestId('fx-detail-refresh-btn'), 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            for (const item of log.asked) expect(item, 'every request asks the pair canonical over the range on screen').toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a range change asks the Δ from the new first day, and the summary shows the new answer', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        // A later first day, the same last: the range shrinks to about a month.
+        const changed = {start: daysAgoIso(40), end: range.end};
+        try {
+            // The answer depends on the first day asked: the stub for the first range, a figure of its own for the changed one.
+            const log = await routePairRangeChanges(page, (asked) => (asked.range_start === changed.start ? CHANGED_RANGE_CHANGE : STUBBED_RANGE_CHANGE));
+            await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            const delta = page.getByTestId('fx-price-summary-range-delta');
+            await expect(delta, 'the first range: change_ratio 0.4242').toHaveText(percentText('+42.42'), {timeout: 10_000});
+            const refresh = page.getByTestId('fx-detail-refresh-btn');
+            await expect(refresh, 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            const askedBefore = log.asked.length;
+
+            // The range on screen changes through the page's own picker.
+            const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+            const startInput = picker.getByTestId('date-range-input-start');
+            const endInput = picker.getByTestId('date-range-input-end');
+            await startInput.fill(changed.start);
+            await expect(startInput).toHaveValue(changed.start);
+            await endInput.fill(changed.end);
+            await expect(endInput).toHaveValue(changed.end);
+            await endInput.press('Enter');
+            await expect(picker, 'the picker closed on the new range').toHaveAttribute('data-open', 'false');
+
+            await expect(delta, 'the changed range: its own answer, change_ratio -0.1313').toHaveText(percentText('-13.13'), {timeout: 10_000});
+            await expect(refresh, 'the reload of the changed range is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            const askedAfter = log.asked.slice(askedBefore);
+            expect(askedAfter.length, 'the range change asked the Δ over the range again').toBeGreaterThan(0);
+            for (const item of askedAfter) expect(item, 'after the change, every request asks the pair from the new first day to the last').toEqual({...RANGE_PAIR, as_of: changed.end, range_start: changed.start});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a refresh asks the Δ again, and an answer with every field null leaves the summary its rate and no Δ', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        let answer: FxRangeChange = STUBBED_RANGE_CHANGE;
+        try {
+            const log = await routePairRangeChanges(page, () => answer);
+            const root = await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            const delta = page.getByTestId('fx-price-summary-range-delta');
+            // Presence first: the load's answer is on screen, beside the pair's rate.
+            await expect(delta, 'the load: change_ratio 0.4242').toHaveText(percentText('+42.42'), {timeout: 10_000});
+            const refresh = page.getByTestId('fx-detail-refresh-btn');
+            await expect(refresh, 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            await expect(refresh).toBeEnabled();
+
+            // The page's refresh, over the same range: this time the backend has no Δ.
+            answer = NO_RANGE_CHANGE;
+            const askedBefore = log.asked.length;
+            const answeredBefore = log.answered;
+            await refresh.click();
+            await expect.poll(() => log.answered, {message: 'the refresh never asked the Δ over the range again', timeout: 10_000}).toBeGreaterThan(answeredBefore);
+            await expect(refresh, 'the refresh is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            for (const item of log.asked.slice(askedBefore)) expect(item, 'the refresh asks the same pair over the same range').toEqual(expected);
+
+            // The summary still draws its rate — the half the Δ sits beside — and no Δ.
+            await expect(root, 'the pair still shows a rate').toHaveAttribute('data-chart-last-rate', /\d/);
+            await expect(page.getByTestId('fx-price-summary-missing')).toHaveCount(0);
+            await expect(delta, 'every field of range_change is null: no Δ in the summary').toHaveCount(0);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a range that starts before 1900 asks the Δ from its first day, as it is, which the backend takes', async ({page}) => {
+        // A month before 1900: the backend takes any day from the year 1 (D-P4), so the first day goes as it is.
+        const range = {start: '1899-12-01', end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        try {
+            // The chart's rates answered in the browser, empty: no conversion is walked back over a century.
+            await page.route(`**${FX_CONVERT_PATH}`, async (route) => {
+                await route.fulfill({json: {results: [], success_count: 0, errors: []}});
+            });
+            const log = await routePairRangeChanges(page, () => null);
+            await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+
+            await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes', timeout: 10_000}).toBeGreaterThan(0);
+            await expect(page.getByTestId('fx-detail-refresh-btn'), 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the backend took every request: it takes any day from the year 1').toEqual([]);
+            expect(log.asked, `the page asks the pair from ${range.start} to the last day of the range`).toContainEqual(expected);
+            for (const item of log.asked) expect(item, `never raised above ${range.start}`).toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+});
+
+// ============================================================================
+// The provider editor replaces the pair's routes in one write (workstream X, lot X-R75)
+// ============================================================================
+
+/** `GET /fx/providers`: the provider capabilities the editor's route picker builds its graph from — not `/routes`. */
+const FX_PROVIDERS_PATH = `${API}/fx/providers`;
+
+/** What the browser answers the editor's refused POST with: a fixture string, read on the banner without a translation. */
+const REFUSED_ROUTE_WRITE = 'owned-e2e-route-write-refused';
+
+/**
+ * The quote currencies of the provider editor's tests, one per test and per Playwright project, because FX routes are
+ * global rows. As for `RESERVED_QUOTE`: none is used by any seed, spec or other test (grep of the whole worktree), and
+ * each sorts after EUR, so the pair is stored as EUR-X — what `createMockFxRoute` and `resetReservedPair` address.
+ */
+const EDITOR_QUOTE: Readonly<Record<string, Readonly<Record<'failedSave' | 'removeAll', string>>>> = {
+    desktop: {failedSave: 'NIO', removeAll: 'SRD'},
+    mobile: {failedSave: 'MOP', removeAll: 'ZMW'},
+};
+
+function editorQuote(owner: 'failedSave' | 'removeAll'): string {
+    const project = test.info().project.name;
+    const quote = EDITOR_QUOTE[project]?.[owner];
+    if (!quote) throw new Error(`No currency is reserved for the ${owner} editor test on project "${project}": reserve one that sorts after EUR and that no seed, spec or test uses`);
+    return quote;
+}
+
+/** The FX routes endpoint, whatever its query string: the cured editor's POST carries `?replace=true`. */
+function isFxRoutesUrl(url: URL): boolean {
+    return url.pathname === FX_ROUTES_PATH;
+}
+
+/** A route as the backend stores it, reduced to what the editor decides: its priority and its steps. */
+type StoredRoute = {priority: number; chain_steps: Array<{from: string; to: string; provider: string}>};
+
+/** EUR-`quote` served by MOCKFX alone, as `createMockFxRoute` stores it. */
+function mockFxRoute(quote: string): StoredRoute {
+    return {priority: 1, chain_steps: [{from: 'EUR', to: quote, provider: 'MOCKFX'}]};
+}
+
+/** EUR-`quote` kept with no provider: its MANUAL route, priority 999, the item creation posts for a manual pair. */
+function manualRoute(quote: string): StoredRoute {
+    return {priority: 999, chain_steps: [{from: 'EUR', to: quote, provider: 'MANUAL'}]};
+}
+
+/** The routes stored for EUR-`quote`, by priority, read through the API: never inferred from the page. */
+async function storedRoutes(page: Page, quote: string): Promise<StoredRoute[]> {
+    const listing = schemas.FXConversionRoutesResponse.parse(await jsonFrom<unknown>(await page.request.get(FX_ROUTES_PATH), 'list the FX routes'));
+    return (listing.items ?? [])
+        .filter((item) => item.base === 'EUR' && item.quote === quote)
+        .sort((a, b) => a.priority - b.priority)
+        .map((item) => ({priority: item.priority, chain_steps: item.chain_steps.map(({from, to, provider}) => ({from, to, provider}))}));
+}
+
+/** EUR-`quote` with one MOCKFX route and no rate, registered for the teardown before it exists, and verified. */
+async function setUpOwnedMockFxPair(page: Page, ownedFxQuotes: string[], quote: string): Promise<void> {
+    await test.step(`setup: EUR-${quote} routed through MOCKFX alone, with no rate`, async () => {
+        // Registered before it exists: the teardown deletes whatever this step got to create.
+        ownedFxQuotes.push(quote);
+        await resetReservedPair(page, quote, 'precondition');
+        await createMockFxRoute(page, quote);
+        expect(await storedRoutes(page, quote), `precondition: EUR-${quote} has its MOCKFX route and no other`).toEqual([mockFxRoute(quote)]);
+    });
+}
+
+/**
+ * `GET /fx/providers` answered in the browser for EUR-`quote`: MOCKFX, the provider of the pair's stored route, native
+ * EUR→`quote`, and MOCKFX_FAIL, a second direct route to add, native `quote`→EUR. The picker's DFS walks an edge both
+ * ways, so it offers EUR→`quote` through either.
+ *
+ * Never two providers in the same direction: the picker's currency graph is graphology's default export, the plain
+ * `Graph` (mixed, not multi — whatever its local name `MultiDirectedGraph` in `currencyGraph.ts`), which refuses a
+ * second edge between the same two currencies in the same direction. `buildCurrencyGraph` then throws, and the picker
+ * shows nothing but its error: this setup's first run did exactly that, both providers declared EUR→`quote`.
+ *
+ * Both are registered test providers (`test_only`), which is why the real list never names them: without this answer
+ * the picker could neither show the stored MOCKFX route nor remove it. Answered here, it also keeps ECB's and SNB's
+ * currency discovery off the network. Registered before the page is opened: the page builds its graph once and keeps
+ * it (`currencyGraphStore`). Every other request goes on.
+ */
+async function answerProviderCatalog(page: Page, quote: string): Promise<void> {
+    const native: ReadonlyArray<readonly [code: string, base: string, target: string]> = [
+        ['MOCKFX', 'EUR', quote],
+        ['MOCKFX_FAIL', quote, 'EUR'],
+    ];
+    const catalog = native.map(([code, base, target]) => schemas.FXProviderInfo.parse({code, name: `Owned ${code} fixture`, base_currency: base, base_currencies: [base], target_currencies: [target], description: 'Browser-local deterministic fixture'}));
+    const directions = catalog.flatMap((provider) => provider.base_currencies.flatMap((base) => (provider.target_currencies ?? []).map((target) => `${base}→${target}`)));
+    if (new Set(directions).size !== directions.length) throw new Error(`answerProviderCatalog: two providers share a direction (${directions.join(', ')}); the picker's graph is not multi and would refuse the second edge`);
+    await page.route(
+        (url) => url.pathname === FX_PROVIDERS_PATH,
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            await route.fulfill({json: catalog});
+        },
+    );
+}
+
+/** The editor's row of one selected route, found by its key (`EUR-X:PROVIDER`), never by its position. */
+function selectedRoute(modal: Locator, key: string): Locator {
+    return modal.locator(`[data-testid="fx-route-selected"][data-route-key="${key}"]`);
+}
+
+/** What a reported text says, without its stack frames: minified, they say where, not what. */
+function whatItSays(text: string): string {
+    const lines = text.split('\n').filter((line) => !/^\s+at /.test(line));
+    return lines.join(' ⏎ ').slice(0, 600);
+}
+
+/**
+ * What the page reports as broken from now on — its `console.error` lines, with where they come from, and its uncaught
+ * exceptions — as a note for the message of a precondition: the first run of this setup failed on «element(s) not found»
+ * while the page had logged why. Diagnostics only, never the subject of an assertion: a console message is an edge, so
+ * the watch is armed before the navigation it explains.
+ */
+function watchPageErrors(page: Page): () => string {
+    const reported: string[] = [];
+    page.on('console', (message) => {
+        if (message.type() !== 'error') return;
+        const where = message.location().url.replace(/^https?:\/\/[^/]+/, '');
+        reported.push(`console.error: ${whatItSays(message.text())}${where ? ` (${where})` : ''}`);
+    });
+    page.on('pageerror', (error) => reported.push(`uncaught: ${whatItSays(error.stack ?? `${error.name}: ${error.message}`)}`));
+    return () => (reported.length === 0 ? ' (the page reported nothing broken)' : `\nWhat the page reported as broken since it was opened:\n${reported.map((line) => `  - ${line}`).join('\n')}`);
+}
+
+/**
+ * `assertion` retried until it passes or `timeout` runs out, with its message's `note` rebuilt at every attempt from
+ * what the page has reported so far: the last attempt's message is the red's, and it lists what was logged until then.
+ */
+async function expectExplained(note: () => string, assertion: (note: string) => Promise<void>, timeout = 10_000): Promise<void> {
+    await expect(async () => assertion(note())).toPass({timeout});
+}
+
+/**
+ * EUR-`quote`'s page, and its provider editor (the FxPairAddModal in edit mode) opened on it: returned once the editor
+ * shows the pair's one stored route, MOCKFX, selected at priority 1 and alone. A precondition that fails says what the
+ * page reported as broken (`watchPageErrors`).
+ */
+async function openProviderEditor(page: Page, quote: string): Promise<Locator> {
+    const pair = `EUR-${quote}`;
+    const reported = watchPageErrors(page);
+    await goToFxDetailPage(page, pair);
+    await expect(page.getByTestId('fx-detail-page'), 'the page shows the pair this test created').toHaveAttribute('data-chart-pair', pair);
+    // Enabled once the page has loaded a provider other than MANUAL for the pair — the MOCKFX route.
+    const syncBtn = page.getByTestId('fx-detail-sync-btn');
+    await expectExplained(reported, (note) => expect(syncBtn, `precondition: the page sees the MOCKFX route${note}`).toBeEnabled({timeout: 1_000}));
+    await page.getByTestId('fx-detail-provider-btn').click();
+    const modal = page.getByTestId('fx-add-pair-modal');
+    await expect(modal).toBeVisible();
+    // Edit mode loads the pair's stored routes and maps them onto the routes the picker computed from the catalogue.
+    const stored = selectedRoute(modal, `${pair}:MOCKFX`);
+    await expectExplained(reported, (note) => expect(stored, `the editor shows the stored MOCKFX route${note}`).toBeVisible({timeout: 1_000}));
+    await expect(stored).toHaveAttribute('data-priority', '1');
+    await expect(modal.getByTestId('fx-route-selected'), 'and no other route').toHaveCount(1);
+    return modal;
+}
+
+/**
+ * The pair page's provider editor (the FxPairAddModal in edit mode) writes the pair's new configuration in one POST that
+ * replaces its routes (X-R75): `POST /fx/providers/routes?replace=true`, which keeps exactly the routes posted for the
+ * pair, atomically; nothing is deleted first. With every route removed it posts the MANUAL route, priority 999: the
+ * pair is kept, manual, as the user guide says.
+ *
+ * Each test brings a pair of its own, EUR-X with one MOCKFX route and no rate, set up and removed as the sync test's
+ * (`ownedFxQuotes`, see the section above the first describe), on a currency reserved per test and per project
+ * (`EDITOR_QUOTE`). Only `GET /fx/providers` is answered in the browser (`answerProviderCatalog`), and in the first test
+ * the editor's POST: every other request, the routes' reads and writes included, reaches the backend, and what the pair
+ * holds is read back through the API.
+ *
+ * Red before the cure, where the editor DELETEs the whole pair and then POSTs: «a failed save …» — the DELETE went
+ * through and the refused POST left the pair with no route; «removing every route …» — with no route picked there is no
+ * POST at all, and the pair is gone. Green once cured: the first on the editor's cure alone (its one POST is refused in
+ * the browser), the second once the backend honours `replace` too.
+ */
+test.describe('FX pair page — the provider editor replaces the pair’s routes in one write (X-R75)', () => {
+    // A ceiling, never a delay: sign-in, the pair's setup, the page, the editor, a reload and the teardown.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a failed save keeps the pair’s route', async ({page, ownedFxQuotes}) => {
+        const quote = editorQuote('failedSave');
+        const pair = `EUR-${quote}`;
+        await setUpOwnedMockFxPair(page, ownedFxQuotes, quote);
+        try {
+            await answerProviderCatalog(page, quote);
+            const modal = await openProviderEditor(page, quote);
+
+            // The edit: MOCKFX_FAIL added after the stored MOCKFX route.
+            await modal.getByTestId('fx-route-picker-toggle').click();
+            await modal.getByTestId('fx-route-picker').getByTestId('fx-route-direct-MOCKFX_FAIL').click();
+            await expect(selectedRoute(modal, `${pair}:MOCKFX`)).toHaveAttribute('data-priority', '1');
+            await expect(selectedRoute(modal, `${pair}:MOCKFX_FAIL`)).toHaveAttribute('data-priority', '2');
+
+            // From here every write to the routes is recorded, and a POST is refused in the browser with a 500, as a
+            // server error would refuse it. Everything else, a DELETE included, reaches the backend.
+            const writes: string[] = [];
+            const refusePost = async (route: Route) => {
+                const request = route.request();
+                if (request.method() === 'GET') return route.fallback();
+                writes.push(`${request.method()} ${new URL(request.url()).search || '(no query)'}`);
+                if (request.method() !== 'POST') return route.fallback();
+                await route.fulfill({status: 500, json: {detail: REFUSED_ROUTE_WRITE}});
+            };
+            await page.route(isFxRoutesUrl, refusePost);
+            try {
+                const refused = armed(page.waitForRequest((request) => request.method() === 'POST' && isFxRoutesUrl(new URL(request.url())), {timeout: 10_000}));
+                await modal.getByTestId('fx-add-pair-save').click();
+                await refused;
+
+                // The failure is reported on the editor, which stays open on its draft, ready to save again.
+                const banner = modal.getByTestId('info-banner-error');
+                await expect(banner, 'the editor shows the refusal').toBeVisible({timeout: 10_000});
+                await expect(banner).toContainText(REFUSED_ROUTE_WRITE);
+                await expect(modal).toBeVisible();
+                await expect(modal.getByTestId('fx-add-pair-save')).toBeEnabled();
+                await expect(selectedRoute(modal, `${pair}:MOCKFX_FAIL`), 'the draft is kept').toHaveAttribute('data-priority', '2');
+            } finally {
+                // Stop refusing: from here on the page talks to the backend again.
+                await page.unroute(isFxRoutesUrl, refusePost);
+            }
+
+            // A fresh page, on what the backend holds.
+            await page.reload();
+            const detail = page.getByTestId('fx-detail-page');
+            await expect(detail).toBeVisible({timeout: 15_000});
+            await waitForSettled(detail, 20_000);
+
+            expect(await storedRoutes(page, quote), `the failed save left ${pair} its MOCKFX route — what the save sent: ${writes.join(', ')}`).toEqual([mockFxRoute(quote)]);
+            // Enabled once the page has loaded a provider other than MANUAL for the pair: the MOCKFX route is still there.
+            await expect(page.getByTestId('fx-detail-sync-btn'), 'the page still offers to sync the pair').toBeEnabled({timeout: 10_000});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('removing every route keeps the pair, manual', async ({page, ownedFxQuotes}) => {
+        const quote = editorQuote('removeAll');
+        const pair = `EUR-${quote}`;
+        await setUpOwnedMockFxPair(page, ownedFxQuotes, quote);
+        try {
+            await answerProviderCatalog(page, quote);
+            const modal = await openProviderEditor(page, quote);
+
+            // The edit: the only route removed. The picker offers the catalogue's routes again, none of them selected.
+            await selectedRoute(modal, `${pair}:MOCKFX`).getByTestId('fx-route-remove').click();
+            await expect(modal.getByTestId('fx-route-picker-toggle'), 'the editor offers routes to add').toBeVisible();
+            await expect(modal.getByTestId('fx-route-selected'), 'no route is left selected').toHaveCount(0);
+
+            const since = await eventSeq(page);
+            await modal.getByTestId('fx-add-pair-save').click();
+            const updated = await waitForEvent(page, 'fx.pair.updated', {since});
+            expect(updated.detail, 'the editor saved this pair, with no provider').toMatchObject({slug: pair, hasRealProvider: false});
+            await expect(modal).toBeHidden();
+
+            expect(await storedRoutes(page, quote), `${pair} is still configured, with exactly its MANUAL route`).toEqual([manualRoute(quote)]);
+            // After the save the page reloads its providers: the sync control, enabled while MOCKFX served the pair (the
+            // editor's precondition), is disabled now that only MANUAL is left — `isManualOnly`, MANUAL being no provider.
+            await expect(page.getByTestId('fx-detail-sync-btn'), 'the page shows the pair as manual').toBeDisabled({timeout: 10_000});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+});
+
+// ============================================================================
+// X-R16 — an invalid backend signal result must not cost the pair page its rates
+// ============================================================================
+// With a backend signal configured, the page asks for the rates of its range and for the signal results in one
+// `POST /fx/currencies/convert` (`signals` on the item, `signal_results` on the answer). An invalid result in
+// `signal_results[request_index 0].signals` must cost the signal side alone — no result applied, and the
+// `signal-backend-error` banner saying the signal results are unavailable — while the rates stay on the chart and
+// «All» resolves its start to the first rate date.
+//
+// Today the invalid result throws, and no branch of the catch resolves «All»: the `withSignals` one never calls
+// `resolveMaxStartFromChartData()`. Read statically, the throw does not come from the page's own
+// `parseBackendSignalResults` (~563, called ~856) but earlier, from the API client: `zodiosApi` validates every JSON
+// answer (`validate: 'response'`, `lib/api/zodios-client.ts`), and `FXSignalQueryResult.signals` is
+// `z.array(SignalResult)`, the very schema the page parses with. The whole answer is rejected before its rates reach
+// the store, so the catch finds none to keep (`chartData = []`, the client's message in the page's error banner), and
+// the page's own parse only ever sees answers the client has already accepted. A try/catch around that parse alone
+// therefore leaves both REDs below red: they turn green once the answer is read with signal isolation, as the asset
+// page reads its own (`queryAssetPricesBulkWithSignalIsolation` → `parseAssetPriceQueryWithSignalIsolation`).
+//
+// The pair is the seeded EUR-USD, read and never written: its rates (60 daily rates ending yesterday), its signal
+// catalog (RSI alone, the definition «persists distinct primary scales and the semantic RSI scale across reload»
+// serves) and its signal results all come from route mocks. The RSI signal is stored in this context's localStorage,
+// where the chart settings live. «All» is opened by URL (`?start=min&end=max`, the form the page writes itself), so the
+// first load is the «All» load, signal included. Nothing reaches the database: there is nothing to clean up.
+// ============================================================================
+test.describe('X-R16 FX detail: an invalid signal result keeps the rates and the All range', () => {
+    // A ceiling, never a delay: a sign-in, the stored signal, a page load and the round trips each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** The seeded pair, canonical: read, never written — every rate on screen comes from the route below. */
+    const PAIR = 'EUR-USD';
+    /** The RSI signal stored on the pair: the page asks for it under this `instance_id`. */
+    const RSI_ID = 'x-r16-rsi';
+    /** The FX signal catalog the page loads: RSI alone, without parameters, so the stored signal needs none. */
+    const RSI_DEFINITION = {
+        signal_code: 'RSI',
+        implementation_version: '1.0.0',
+        category: 'momentum',
+        display_name_key: 'signals.rsi',
+        description_key: 'signals.rsi.description',
+        semantic_id: 'technical.rsi',
+        semantic_description: 'Relative Strength Index.',
+        icon: '📊',
+        params_schema: {type: 'object', properties: {}},
+        default_params: {},
+        input_requirements: {price_fields: ['close'], data_policy: 'strict_contiguous', minimum_coverage: 1},
+        output_specs: [
+            {
+                key: 'rsi',
+                label_key: 'signals.rsi.value',
+                semantic_id: 'technical.rsi.value',
+                semantic_description: 'Relative Strength Index values.',
+                unit: 'index',
+                axis: {key: 'rsi', role: 'independent', minimum: 0, maximum: 100},
+                view_transform: 'none',
+                kind: 'line',
+                aggregation_profile: 'last_with_range',
+            },
+        ],
+        compatible_domains: ['fx'],
+    };
+    /** The RSI series of a valid answer, without its points. */
+    const RSI_SERIES = {key: 'rsi', label_key: 'signals.rsi.value', semantic_id: 'technical.rsi.value', semantic_description: 'Relative Strength Index values.', unit: 'index', axis: {key: 'rsi', role: 'independent', minimum: 0, maximum: 100}, view_transform: 'none', kind: 'line'};
+
+    /** The fields of a `/fx/currencies/convert` item these tests read. */
+    type ConvertAsk = {from_amount?: {code?: string}; to?: string; date_range?: {start?: string; end?: string | null}; signals?: Array<{instance_id?: string; signal_code?: string}>};
+    /** An item the route has answered: logged once its answer is delivered, not when it is asked. */
+    type DeliveredAsk = {start: string | null; signalCodes: string[]};
+    /** How the route answers each signal asked: with a result the schema rejects, or with an RSI series over the rates it answers. */
+    type SignalAnswer = 'invalid' | 'valid';
+
+    /** Stores the RSI signal on the pair where the page reads it: this context's localStorage, under the signed-in user's key. */
+    async function storeRsiSignal(page: Page): Promise<void> {
+        const me = await page.request.get('/api/v1/auth/me');
+        expect(me.ok(), `GET /api/v1/auth/me answered HTTP ${me.status()}`).toBe(true);
+        const userId = ((await me.json()) as {user?: {id?: unknown}}).user?.id;
+        if (typeof userId !== 'number' || !Number.isSafeInteger(userId)) throw new Error('GET /api/v1/auth/me returned no user id, and the chart settings are stored under it');
+        const settings = (signals: object[]) => ({colorByBaseline: true, areaFill: true, gridLines: true, staleGradient: true, axisScales: {absolute: {mode: 'auto'}, percentage: {mode: 'include0'}, secondary: {}}, signals});
+        const rsi = {id: RSI_ID, signalType: 'rsi', params: {}, style: {color: '#7c3aed', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null}};
+        await page.evaluate(({key, value}) => localStorage.setItem(key, value), {key: `lf_${userId}_chartSettingsStore`, value: JSON.stringify({version: 3, globalSettings: settings([]), pairOverrides: [[PAIR, settings([rsi])]]})});
+    }
+
+    /** The FX signal catalog, RSI alone. */
+    async function routeRsiCatalog(page: Page): Promise<void> {
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/currencies/signals',
+            (route) => route.fulfill({status: 200, contentType: 'application/json', json: {items: [RSI_DEFINITION]}}),
+        );
+    }
+
+    /**
+     * Serves the pair's conversions: 60 daily rates ending yesterday, those inside each item's range, and for an item
+     * that asks for signals its `signal_results` group, answered as `answer` says. Returns the items delivered, the date
+     * of the first rate and the last rate as the page publishes it (`data-chart-last-rate`).
+     */
+    async function routePairRates(page: Page, answer: SignalAnswer) {
+        const history = Array.from({length: 60}, (_, index) => daysAgoIso(60 - index));
+        const rateAt = (index: number) => (1.1 + index / 1000).toFixed(4);
+        const delivered: DeliveredAsk[] = [];
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/currencies/convert',
+            async (route) => {
+                // postDataJSON throws on an empty or non-JSON body, and nobody awaits a route callback: read it as no item.
+                let asks: ConvertAsk[] = [];
+                try {
+                    const body: unknown = route.request().postDataJSON();
+                    asks = Array.isArray(body) ? body.filter((ask): ask is ConvertAsk => ask !== null && typeof ask === 'object') : [];
+                } catch {
+                    asks = [];
+                }
+                const results: object[] = [];
+                const signalResults: object[] = [];
+                asks.forEach((ask, requestIndex) => {
+                    const from = ask.from_amount?.code ?? 'EUR';
+                    const to = ask.to ?? 'USD';
+                    // FB-7b: the sentinel `min` is the pair's first stored day, as the server resolves it
+                    const start = ask.date_range?.start === 'min' ? history[0] : (ask.date_range?.start ?? '');
+                    const end = ask.date_range?.end ?? start;
+                    const days = history.flatMap((date, index) => (date >= start && date <= end ? [{date, rate: rateAt(index)}] : []));
+                    for (const day of days) results.push({from_amount: {code: from, amount: '1'}, to_amount: {code: to, amount: day.rate}, conversion_date: day.date, rate: day.rate, backward_fill_info: null});
+                    const asked = ask.signals ?? [];
+                    if (asked.length === 0) return;
+                    signalResults.push({
+                        request_index: requestIndex,
+                        from_currency: from,
+                        to_currency: to,
+                        date_range: {start, end},
+                        signals: asked.map((signal) => {
+                            const identity = {instance_id: signal.instance_id ?? RSI_ID, signal_code: signal.signal_code ?? 'RSI'};
+                            if (answer === 'invalid') return {...identity, status: 'not-a-status'};
+                            if (days.length === 0) return {...identity, status: 'unavailable'};
+                            return {...identity, implementation_version: '1.0.0', normalized_params: {}, status: 'ok', series: [{...RSI_SERIES, points: days.map((day, index) => ({date: day.date, value: 40 + (index % 20)}))}]};
+                        }),
+                    });
+                });
+                await route.fulfill({status: 200, contentType: 'application/json', json: {results, success_count: results.length, signal_results: signalResults}});
+                for (const ask of asks) delivered.push({start: ask.date_range?.start ?? null, signalCodes: (ask.signals ?? []).map((signal) => signal.signal_code ?? '')});
+            },
+        );
+        return {delivered, firstRateDate: history[0], lastRate: String(Number(rateAt(history.length - 1)))};
+    }
+
+    /** Opens the pair page on «All» by URL and verifies, rather than assumes, that «All» is the range on screen; returns the page's root and the start field of the range. */
+    async function openPairOnAll(page: Page): Promise<{root: Locator; startInput: Locator}> {
+        await navigateTo(page, `/fx/${PAIR}?start=min&end=max`);
+        const root = page.getByTestId('fx-detail-page');
+        await expect(root, 'the pair page renders once its URL has landed').toBeVisible({timeout: 10_000});
+        await waitForSettled(root, 20_000);
+        // By design the page keeps the generic sentinel in its URL for as long as «All» is selected.
+        await expect(page, '«All» is selected: the URL keeps its min sentinel').toHaveURL(/[?&]start=min(?:&|$)/, {timeout: 30_000});
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        return {root, startInput: picker.getByTestId('date-range-input-start')};
+    }
+
+    /**
+     * The first load was the «All» one with the stored signal: the rates were asked for from the `min` sentinel (FB-7b: the
+     * server resolves it to the pair's first stored day; the page no longer asks from a made-up 2000-01-01) together with
+     * RSI, and answered. The page builds that request only from the catalog's RSI definition — with the catalog failed it
+     * falls back to the local definitions, which hold no RSI — so this also proves the catalog loaded.
+     */
+    async function expectRsiAskedOverAll(delivered: DeliveredAsk[]): Promise<void> {
+        await expect.poll(() => delivered.some((ask) => ask.start === 'min' && ask.signalCodes.includes('RSI')), {message: 'the page asked for the «All» rates from the min sentinel together with the stored RSI signal, and the route answered', timeout: 15_000}).toBe(true);
+    }
+
+    /** Unfolds the signals panel, and returns it once it lists the stored RSI signal. */
+    async function openSignalsPanel(page: Page): Promise<Locator> {
+        const toggle = page.getByTestId('fx-detail-signals-toggle');
+        const panel = page.getByTestId('fx-detail-signals-panel');
+        await expect(toggle).toBeVisible({timeout: 10_000});
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+        await expect(toggle, 'the toggle publishes open').toHaveAttribute('aria-expanded', 'true');
+        await expect(panel).toBeVisible();
+        await expect(panel.getByTestId(`signal-card-${RSI_ID}`), 'the panel lists the stored RSI signal').toBeVisible({timeout: 10_000});
+        return panel;
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // RED — pins the «All» half on the pair page. Before the cure toHaveValue times out on the picker's pending label
+    // (`Received: "Finding…"` in English): no branch of the catch resolves «All». Green once the answer is read with
+    // signal isolation and the rates go on — not with a try/catch around the page's own parse alone (see above).
+    test('X-R16 RED FX: an invalid signal result still lets All resolve its start to the first rate date', async ({page}) => {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const rates = await routePairRates(page, 'invalid');
+        const {startInput} = await openPairOnAll(page);
+        await expectRsiAskedOverAll(rates.delivered);
+
+        await expect(startInput, '«All» resolves its start to the first rate').toHaveValue(rates.firstRateDate, {timeout: 10_000});
+    });
+
+    // RED — pins the rates half: the rates of the answer stay on the chart. Before the cure the attribute is empty
+    // (`Received: ""`): the API client rejects the whole answer before its rates reach the store, so the catch has none
+    // to keep. Asserted apart from the start field, so each RED pins one of the two things the invalid result costs.
+    test('X-R16 RED FX: an invalid signal result still leaves the rates on the chart', async ({page}) => {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const rates = await routePairRates(page, 'invalid');
+        const {root} = await openPairOnAll(page);
+        await expectRsiAskedOverAll(rates.delivered);
+
+        await expect(root, 'the chart ends on the last rate answered').toHaveAttribute('data-chart-last-rate', rates.lastRate, {timeout: 10_000});
+    });
+
+    // GUARD — the intended part, green before the cure and after it: the signal side fails, and says so. The banner can
+    // only be the signal results one: the request carried RSI, so the catalog loaded (expectRsiAskedOverAll), and the
+    // catalog banner needs the catalog failed. Asserted by its test id, never by its sentence.
+    test('X-R16 GUARD FX: an invalid signal result shows the signal results banner', async ({page}) => {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const rates = await routePairRates(page, 'invalid');
+        await openPairOnAll(page);
+        await expectRsiAskedOverAll(rates.delivered);
+
+        const panel = await openSignalsPanel(page);
+        await expect(panel.getByTestId('signal-backend-error'), 'the panel says the signal results are unavailable').toBeVisible({timeout: 10_000});
+    });
+
+    // GUARD — the same flow with a valid RSI answer, green before the cure and after it: «All» resolves to the first
+    // rate, the rates stay on the chart, and no banner shows — absent once the panel and the signal's card are on screen.
+    test('X-R16 GUARD FX: with a valid signal result, All resolves, the rates stay and no banner shows', async ({page}) => {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const rates = await routePairRates(page, 'valid');
+        const {root, startInput} = await openPairOnAll(page);
+        await expectRsiAskedOverAll(rates.delivered);
+
+        await expect(startInput, '«All» resolves its start to the first rate').toHaveValue(rates.firstRateDate, {timeout: 10_000});
+        await expect(root, 'the chart ends on the last rate answered').toHaveAttribute('data-chart-last-rate', rates.lastRate, {timeout: 10_000});
+        const panel = await openSignalsPanel(page);
+        await expect(panel.getByTestId('signal-backend-error'), 'a valid answer raises no banner').toHaveCount(0);
+    });
+});
+
+// ============================================================================
+// FB-7b — FX pair detail: «All» starts at the pair's first stored rate
+// ============================================================================
+// «All» used to ask the rates from a placeholder start, the 2000-01-01 sentinel, and adopt the first point it got back as
+// the real start: a pair whose rates begin before 2000 showed from 2000 on, and «All» hid its older rates. The backend
+// now takes `date_range: {start: 'min', end}` on `POST /fx/currencies/convert` (the pair's first stored rate day); the
+// page asks with it while «All» is pending and its first day is unknown, and adopts the first date of the answer.
+//
+// Served by the real backend. Each test owns a pair EUR-X with a MANUAL route (no provider, so nothing syncs by itself)
+// and manual rates on 1985-03-01, 1985-03-04, 1999-12-31 and in the last weeks, deleted and verified gone afterwards
+// (`ownedFxQuotes`). The three tests are one contract in three halves, so a red names its half:
+//   · the range on screen starts on the first stored rate (the picker's FROM field — compact, so an ISO date);
+//   · the request carries the `min` sentinel (the subject here is the request itself, so it is waited for on the wire);
+//   · a second visit, in the same page session, still starts there and does not ask for the `min` start again.
+// The request that carries `min` together with a stored signal is pinned by `expectRsiAskedOverAll` (X-R16 block above).
+// ============================================================================
+test.describe('FB-7b FX detail: All starts at the first stored rate', () => {
+    // A ceiling, never a delay: a sign-in, an API seeding and the page loads each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** The first stored rate, 15 years before the 2000-01-01 sentinel the page used to ask from. */
+    const FIRST_RATE_DAY = '1985-03-01';
+
+    /**
+     * The quote of each test's pair, per test and per Playwright project, because FX routes and rates are global rows.
+     * As for `RESERVED_QUOTE`: none is used by any seed, spec or other E2E test (grep of the whole worktree), and each
+     * sorts after EUR, so the pair is stored as EUR-X.
+     */
+    const QUOTE: Readonly<Record<string, Readonly<Record<'allStart' | 'minRequest' | 'secondVisit', string>>>> = {
+        desktop: {allStart: 'LAK', minRequest: 'KHR', secondVisit: 'MMK'},
+        mobile: {allStart: 'LKR', minRequest: 'MNT', secondVisit: 'MWK'},
+    };
+
+    function quoteFor(owner: 'allStart' | 'minRequest' | 'secondVisit'): string {
+        const project = test.info().project.name;
+        const quote = QUOTE[project]?.[owner];
+        if (!quote) throw new Error(`No currency is reserved for the FB-7b ${owner} test on project "${project}": reserve one that sorts after EUR and that no seed, spec or test uses`);
+        return quote;
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    /**
+     * EUR-`quote` with a MANUAL route and manual rates whose history begins in 1985: two that March, one on the last day of
+     * 1999 (still before the sentinel), and three in the last weeks. Registered for the teardown before it exists; the
+     * precondition is verified, not inferred: the pair's first stored rate, read through the API, is the 1985 one.
+     */
+    async function seedOldRatePair(page: Page, ownedFxQuotes: string[], quote: string): Promise<void> {
+        await test.step(`setup: EUR-${quote} with a manual route and rates from ${FIRST_RATE_DAY}`, async () => {
+            ownedFxQuotes.push(quote);
+            await resetReservedPair(page, quote, 'precondition');
+            const route = {base: 'EUR', quote, priority: 999, chain_steps: [{from: 'EUR', to: quote, provider: 'MANUAL'}]};
+            schemas.FXConversionRouteItem.parse(route);
+            const routeResponse = await page.request.post(FX_ROUTES_PATH, {data: [route]});
+            expect(routeResponse.status(), `create the EUR-${quote} MANUAL route: ${await routeResponse.text()}`).toBe(201);
+            const days = [FIRST_RATE_DAY, '1985-03-04', '1999-12-31', daysAgoIso(35), daysAgoIso(10), daysAgoIso(3)];
+            const rates = await page.request.post(FX_RATE_PATH, {data: days.map((date, index) => ({date, base: 'EUR', quote, rate: [1.1, 1.11, 1.2, 1.3, 1.4, 1.5][index], source: 'MANUAL'}))});
+            expect(rates.ok(), `store the EUR-${quote} rates: HTTP ${rates.status()} ${await rates.text()}`).toBe(true);
+            // `min` resolves to the first stored day: the answer's first point is the 1985 rate, whatever the page does.
+            const first = await page.request.post(FX_CONVERT_PATH, {data: [{from_amount: {code: 'EUR', amount: '1'}, to: quote, date_range: {start: 'min', end: todayIso()}}]});
+            const conversion = schemas.FXConvertResponse.parse(await jsonFrom(first, `convert 1 EUR to ${quote} from min`));
+            expect(conversion.results[0]?.conversion_date, `precondition: EUR-${quote} begins on ${FIRST_RATE_DAY}`).toBe(FIRST_RATE_DAY);
+        });
+    }
+
+    /** The items of a convert request that concern EUR-`quote`: `[]` for any other request, or one with no readable body. */
+    function convertAsksFor(request: Request, quote: string): Array<{start: string | null}> {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== FX_CONVERT_PATH) return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        if (!Array.isArray(body)) return [];
+        const asks: Array<{start: string | null}> = [];
+        for (const raw of body) {
+            if (raw === null || typeof raw !== 'object') continue;
+            const item = raw as {from_amount?: {code?: unknown}; to?: unknown; date_range?: {start?: unknown}};
+            if (item.to !== quote && item.from_amount?.code !== quote) continue;
+            const start = item.date_range?.start;
+            asks.push({start: typeof start === 'string' ? start : null});
+        }
+        return asks;
+    }
+
+    /** Opens EUR-`quote` on «All» by URL and verifies, rather than assumes, that «All» is the range on screen; returns the page's root and the start field of the range. */
+    async function openPairOnAllOf(page: Page, quote: string): Promise<{root: Locator; picker: Locator; startInput: Locator}> {
+        const root = await openSyntheticDetail(page, `/fx/EUR-${quote}?start=min&end=max`, 'fx-detail-page');
+        await expect(root, 'the page shows the pair this test created').toHaveAttribute('data-chart-pair', `EUR-${quote}`);
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        return {root, picker, startInput: picker.getByTestId('date-range-input-start')};
+    }
+
+    // The visible half. Red while the page asks from 2000-01-01: the first rate it is handed is one of the recent ones,
+    // so the field reads the oldest of those and the 1985 and 1999 rates are not on the chart at all.
+    test('FB-7b the range of All starts on the first stored rate, even when it is before 2000', async ({page, ownedFxQuotes}) => {
+        const quote = quoteFor('allStart');
+        await seedOldRatePair(page, ownedFxQuotes, quote);
+        const {root, startInput} = await openPairOnAllOf(page, quote);
+
+        await expect(root, 'the rates are drawn').not.toHaveAttribute('data-chart-last-rate', '', {timeout: 10_000});
+        await expect(startInput, `«All» starts on the first stored rate (${FIRST_RATE_DAY}), not on a later one`).toHaveValue(FIRST_RATE_DAY, {timeout: 10_000});
+    });
+
+    // The wire half. Red while the page asks from the 2000-01-01 placeholder. Armed before the navigation: the request is
+    // sent while the page loads, and a listener armed after it would wait for one that already went by.
+    test('FB-7b the first rates request of All carries the min start', async ({page, ownedFxQuotes}) => {
+        const quote = quoteFor('minRequest');
+        await seedOldRatePair(page, ownedFxQuotes, quote);
+        const asked = armed(page.waitForRequest((request) => convertAsksFor(request, quote).length > 0, {timeout: 30_000}));
+        await openPairOnAllOf(page, quote);
+
+        const first = convertAsksFor(await asked, quote)[0];
+        expect(first?.start, 'the first rates request for this pair on «All» asks from the min sentinel').toBe('min');
+    });
+
+    // The memory half. In-app navigation keeps the page's in-memory stores, a reload empties them: the way away is the
+    // sidebar and the way back is the browser's back, both client-side. After the way back the page has released its busy
+    // flag and drawn the rates, so a `min` request that was going to be sent has been sent. The requests are taken from the
+    // moment of the way back, and only those the page sent while it was on this pair's detail (the FX list asks for its
+    // cards in between).
+    test('FB-7b a second visit to All still starts on the first stored rate and does not ask for min again', async ({page, ownedFxQuotes}) => {
+        const quote = quoteFor('secondVisit');
+        const pair = `EUR-${quote}`;
+        await seedOldRatePair(page, ownedFxQuotes, quote);
+        const asks: Array<{start: string | null; pageUrl: string}> = [];
+        page.on('request', (request) => {
+            // Read synchronously: the page URL is the page that sent the request, not the one it will be on later.
+            const pageUrl = page.url();
+            asks.push(...convertAsksFor(request, quote).map((ask) => ({...ask, pageUrl})));
+        });
+        const {startInput} = await openPairOnAllOf(page, quote);
+        await expect(startInput, 'first visit: «All» starts on the first stored rate').toHaveValue(FIRST_RATE_DAY, {timeout: 10_000});
+
+        // Away, in-app.
+        await openMobileMenu(page);
+        await page.getByTestId('nav-fx').click();
+        await expect(page).toHaveURL(/\/fx(?:[?#]|$)/, {timeout: 15_000});
+        const list = page.getByTestId('fx-page');
+        await expect(list).toBeVisible({timeout: 15_000});
+        await waitForSettled(list, 30_000);
+        await expect(page.getByTestId('fx-detail-page'), 'the detail really unmounted: otherwise nothing is remounted on the way back').toHaveCount(0);
+
+        // Back, in-app.
+        const mark = asks.length;
+        await page.goBack();
+        await expect(page, 'back on the detail of this pair').toHaveURL(new RegExp(`/fx/${pair}(?:[?#]|$)`), {timeout: 15_000});
+        const detail = page.getByTestId('fx-detail-page');
+        await expect(detail).toBeVisible({timeout: 15_000});
+        await waitForSettled(detail, 30_000);
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is still the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        await expect(detail, 'the rates are drawn').not.toHaveAttribute('data-chart-last-rate', '', {timeout: 10_000});
+        await expect(picker.getByTestId('date-range-input-start'), 'second visit: «All» still starts on the first stored rate').toHaveValue(FIRST_RATE_DAY, {timeout: 10_000});
+
+        const onDetail = asks.slice(mark).filter((ask) => ask.pageUrl.includes(`/fx/${pair}`));
+        expect(
+            onDetail.filter((ask) => ask.start === 'min'),
+            'the first day is remembered for the session: the detail does not ask the rates from min again',
+        ).toEqual([]);
+    });
+});
+
+// ============================================================================
+// FB-7c — FX pair detail: «All» with an asset comparison that starts LATER than the pair
+// ============================================================================
+// With «All» (`?start=min&end=max`) and an asset-comparison signal, the range starts at the oldest first day of the pair
+// and the comparison. This pins the direction where the comparison starts later: the pair's first stored rate is in 1985,
+// the compared asset's first close is in 2015, and the range must still begin on the pair's 1985 day (the asset's later
+// start must neither move the range nor fail the page). The other direction (the comparison older than the pair) waits on
+// a design decision and is not pinned here.
+//
+// The pair is the seeded EUR-USD, read and never written: its rates come from a route mock on `POST /fx/currencies/convert`
+// (the `min` sentinel resolves to the first of them, as the server does), so no currency has to be reserved and the first
+// rate can be 1985 whatever the seed holds. The compared asset is real: a USD asset of this test's own, with closes in 2015
+// and after, deleted afterwards. The asset's line is drawn on the pair's date axis, so the mocked rates include every day
+// the asset has a close on. The comparison is saved in this context's localStorage, which writes nothing shared. «Drawn» is
+// read from the series the chart handed ECharts (the one named after the asset, never a translated word).
+// ============================================================================
+test.describe('FB-7c FX detail: All starts at the pair first rate when the asset comparison starts later', () => {
+    // A ceiling, never a delay: a sign-in, an API seeding, the page load and the comparison load each test waits for by name.
+    test.describe.configure({timeout: 90_000});
+
+    /** The seeded pair, canonical: read, never written — every rate on screen comes from the route below. */
+    const PAIR = 'EUR-USD';
+    const CHART = 'fx-detail-chart';
+    /** The signal id of the saved comparison, and the days the pair and the compared asset begin on. */
+    const SIGNAL_ID = 'e2e-fb7c-fx-peer';
+    const PAIR_FIRST_DAY = '1985-03-01';
+    const ASSET_FIRST_DAY = '2015-06-01';
+    const ASSET_FIRST_CLOSE = 100;
+
+    let owned: Owned = {assetIds: [], brokerIds: []};
+
+    test.beforeEach(async ({page}) => {
+        owned = {assetIds: [], brokerIds: []};
+        await login(page, TEST_USER);
+    });
+
+    test.afterEach(async ({page}) => {
+        // The routes are the page's own: leaving the page first, so that no request still goes through them while the asset is deleted.
+        await deleteOwned(page, owned);
+    });
+
+    /** What the chart draws of the series named after one asset: its values, the first and last date it has one on, and how many entries are not finite numbers (a NaN or an infinity, never a gap). */
+    type NamedLine = {points: number; firstDate: string | null; lastDate: string | null; values: number[]; notFinite: number};
+
+    /** The line the chart `chartTestId` draws for the asset named `assetName`, the longest if several series carry its name; none reads as 0 points. */
+    async function readNamedLine(page: Page, chartTestId: string, assetName: string): Promise<NamedLine> {
+        return page.evaluate(
+            ({testId, wanted}): NamedLine => {
+                type ChartHost = HTMLElement & {__lfChart?: {getOption: () => {series?: unknown; xAxis?: unknown}}};
+                const none: NamedLine = {points: 0, firstDate: null, lastDate: null, values: [], notFinite: 0};
+                const root = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+                if (!root) return none;
+                const candidates = [root, ...root.querySelectorAll<HTMLElement>('*')];
+                const host = candidates.find((candidate) => typeof (candidate as ChartHost).__lfChart?.getOption === 'function') as ChartHost | undefined;
+                const option = host?.__lfChart?.getOption();
+                if (!option || !Array.isArray(option.series)) return none;
+                const axis = Array.isArray(option.xAxis) ? (option.xAxis[0] as {data?: unknown} | undefined) : undefined;
+                const dates: unknown[] = Array.isArray(axis?.data) ? axis.data : [];
+                const valueOf = (datum: unknown): unknown => (Array.isArray(datum) ? datum[1] : datum !== null && typeof datum === 'object' ? (datum as {value?: unknown}).value : datum);
+                let best = none;
+                for (const raw of option.series) {
+                    const series = raw as {name?: unknown; data?: unknown};
+                    if (typeof series.name !== 'string' || !series.name.includes(wanted) || !Array.isArray(series.data)) continue;
+                    const filled: number[] = [];
+                    const values: number[] = [];
+                    let notFinite = 0;
+                    series.data.forEach((datum, index) => {
+                        const value = valueOf(datum);
+                        if (typeof value !== 'number') return;
+                        if (!Number.isFinite(value)) notFinite += 1;
+                        else {
+                            filled.push(index);
+                            values.push(value);
+                        }
+                    });
+                    if (filled.length > best.points) {
+                        const first = dates[filled[0]];
+                        const last = dates[filled[filled.length - 1]];
+                        best = {points: filled.length, firstDate: typeof first === 'string' ? first.slice(0, 10) : null, lastDate: typeof last === 'string' ? last.slice(0, 10) : null, values, notFinite};
+                    }
+                }
+                return best;
+            },
+            {testId: chartTestId, wanted: assetName},
+        );
+    }
+
+    /** The days the pair has a rate on: 1985, 1999, and every day the compared asset has a close on. */
+    const assetDays = () => [ASSET_FIRST_DAY, '2015-06-02', '2015-06-03', '2020-01-02', daysAgoIso(35), daysAgoIso(20), daysAgoIso(10), daysAgoIso(3)];
+    const pairDays = () => [PAIR_FIRST_DAY, '1985-03-04', '1999-12-31', ...assetDays()];
+
+    /** Serves the pair's conversions from `pairDays()`: those inside each item's range, `min` being the first of them. */
+    async function routePairRates(page: Page): Promise<void> {
+        const history = pairDays();
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/currencies/convert',
+            async (route) => {
+                // postDataJSON throws on an empty or non-JSON body, and nobody awaits a route callback: read it as no item.
+                let asks: Array<{from_amount?: {code?: string}; to?: string; date_range?: {start?: string; end?: string | null}}> = [];
+                try {
+                    const body: unknown = route.request().postDataJSON();
+                    asks = Array.isArray(body) ? body.filter((ask): ask is (typeof asks)[number] => ask !== null && typeof ask === 'object') : [];
+                } catch {
+                    asks = [];
+                }
+                const results: object[] = [];
+                for (const ask of asks) {
+                    const from = ask.from_amount?.code ?? 'EUR';
+                    const to = ask.to ?? 'USD';
+                    const start = ask.date_range?.start === 'min' ? history[0] : (ask.date_range?.start ?? '');
+                    const end = ask.date_range?.end && ask.date_range.end !== 'max' ? ask.date_range.end : todayIso();
+                    history.forEach((date, index) => {
+                        if (date < start || date > end) return;
+                        const rate = (1.1 + index / 1000).toFixed(4);
+                        results.push({from_amount: {code: from, amount: '1'}, to_amount: {code: to, amount: rate}, conversion_date: date, rate, backward_fill_info: null});
+                    });
+                }
+                await route.fulfill({status: 200, contentType: 'application/json', json: {results, success_count: results.length, signal_results: []}});
+            },
+        );
+    }
+
+    /** The USD asset of this test's own with its first close on `ASSET_FIRST_DAY`, and the comparison with it saved on the pair. */
+    async function seedLaterAssetComparison(page: Page): Promise<{assetId: number; assetName: string}> {
+        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+        await routePairRates(page);
+        const closes = assetDays().map((date, index) => ({date, close: ASSET_FIRST_CLOSE + index}));
+        const asset = await createOwnedAsset(page, owned, {label: 'E2E FB-7c fx peer', closes});
+        const answer = await page.request.post('/api/v1/assets/prices/query', {data: [{asset_id: asset.id, date_range: {start: 'min', end: todayIso()}, include_price: true, include_events: false}]});
+        expect(answer.ok(), `query the prices of asset ${asset.id} from min: HTTP ${answer.status()}`).toBe(true);
+        const body = (await answer.json()) as {items: Array<{asset_id: number; prices?: Array<{date: string}>}>};
+        expect(body.items.find((item) => item.asset_id === asset.id)?.prices?.[0]?.date, `precondition: the compared asset begins on ${ASSET_FIRST_DAY}, after the pair`).toBe(ASSET_FIRST_DAY);
+        await seedChartComparisons(page, [[PAIR, [assetComparison(SIGNAL_ID, asset.id)]]]);
+        return {assetId: asset.id, assetName: asset.name};
+    }
+
+    test('FB-7c FX: All starts on the pair first rate, the later asset comparison is drawn from its own first day, in Abs and in %', async ({page}) => {
+        const {assetName} = await seedLaterAssetComparison(page);
+        await navigateTo(page, `/fx/${PAIR}?start=min&end=max`);
+        const root = page.getByTestId('fx-detail-page');
+        await expect(root, 'the pair page renders once its URL has landed').toBeVisible({timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        const chart = page.getByTestId(CHART);
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        const startInput = picker.getByTestId('date-range-input-start');
+
+        await expect(chart, 'the rates are drawn, the page is not in a failed state').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await expect(startInput, `«All» starts on the pair first rate (${PAIR_FIRST_DAY}), not on the asset's later day`).toHaveValue(PAIR_FIRST_DAY, {timeout: 10_000});
+        await expect.poll(async () => (await readNamedLine(page, CHART, assetName)).points, {message: 'the asset comparison line is drawn', timeout: 15_000}).toBeGreaterThan(0);
+
+        // The comparison card is listed and raises no banner: the presence of the card is the barrier of the absence below.
+        const toggle = page.getByTestId('fx-detail-signals-toggle');
+        await expect(toggle).toBeVisible({timeout: 10_000});
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+        const panel = page.getByTestId('fx-detail-signals-panel');
+        await expect(panel.getByTestId(`signal-card-${SIGNAL_ID}`), 'the panel lists the saved comparison').toBeVisible({timeout: 10_000});
+        await expect(panel.getByTestId('signal-backend-error'), 'the comparison raises no banner').toHaveCount(0);
+
+        // Absolute, then percentage. Over 41 years the chart draws weekly or monthly points, each dated within its bucket and valued by its last close.
+        await chart.getByTestId('chart-view-absolute').click();
+        await expect(chart, 'the rates are shown in absolute').toHaveAttribute('data-view-mode', 'absolute');
+        await expect.poll(async () => (await readNamedLine(page, CHART, assetName)).firstDate?.slice(0, 7), {message: 'in Abs the comparison begins in the month of its first day', timeout: 10_000}).toBe(ASSET_FIRST_DAY.slice(0, 7));
+        const absolute = await readNamedLine(page, CHART, assetName);
+        expect((absolute.firstDate ?? '') >= ASSET_FIRST_DAY, 'the comparison is not drawn before its own first day').toBe(true);
+        expect(absolute.values[0], 'in Abs the comparison begins at one of its first closes').toBeGreaterThanOrEqual(ASSET_FIRST_CLOSE);
+        expect(absolute.values[0], 'in Abs the comparison begins at one of its first closes').toBeLessThanOrEqual(ASSET_FIRST_CLOSE + 2);
+        expect(absolute.notFinite, 'no NaN or infinity in the Abs line').toBe(0);
+
+        await chart.getByTestId('chart-view-percentage').click();
+        await expect(chart, 'the rates are shown in percent').toHaveAttribute('data-view-mode', 'percentage');
+        await expect.poll(async () => (await readNamedLine(page, CHART, assetName)).values[0], {message: 'in % the comparison begins at 0', timeout: 10_000}).toBeCloseTo(0, 6);
+        const percentage = await readNamedLine(page, CHART, assetName);
+        expect(percentage.firstDate, 'the % line is drawn from the same first point').toBe(absolute.firstDate);
+        expect(percentage.notFinite, 'no NaN or infinity in the % line').toBe(0);
+        await expect(chart, 'still drawn, not failed, after the switch').toHaveAttribute('data-series-state', 'ready');
+        await expect(startInput, '«All» still starts on the pair first rate after the switch').toHaveValue(PAIR_FIRST_DAY);
+        await expect(page.getByTestId('toast-error'), 'no error toast was raised').toHaveCount(0);
+    });
+});
+
+// ============================================================================
+// N64 — FX pair detail: a signal result already answered is not asked again
+// ============================================================================
+// The pair page keeps a client cache of the backend's signal results beside its rate cache. Before N64 every load with a
+// backend indicator configured re-posted `/api/v1/fx/currencies/convert`, even for a period the page had already
+// answered with that very indicator. Now the return to such a period asks nothing, and the Refresh button — which empties
+// the caches — still does.
+//
+// The pair is the seeded EUR-USD, read and never written: its rates (130 daily rates ending yesterday), its signal catalog
+// (RSI alone, as in the X-R16 block above) and its signal results come from route mocks, so that every request is
+// answered the same way and the period change is a cache question, not a data one. The RSI signal is stored in this
+// context's localStorage, where the chart settings live: Playwright gives each test a context of its own, so the signal
+// never reaches another test, and nothing reaches the database — there is nothing to clean up.
+//
+// The requests are counted by a listener armed right before the last action and removed right after it. «Drawn» is read
+// from the number of series the chart's ECharts option holds, never from the points of a series: the chart re-chooses its
+// resolution (daily, weekly, monthly) with hysteresis, so the same range can legitimately draw another number of points.
+// ============================================================================
+test.describe('N64 FX detail: a signal result already answered is not asked again', () => {
+    // A ceiling, never a delay: a sign-in, the stored signal, a page load and the round trips each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** The seeded pair, canonical: read, never written — every rate on screen comes from the route below. */
+    const PAIR = 'EUR-USD';
+    /** The RSI signal stored on the pair: the page asks for it under this `instance_id`. */
+    const RSI_ID = 'n64-rsi';
+    const CONVERT_PATH = '/api/v1/fx/currencies/convert';
+    /** The FX signal catalog the page loads: RSI alone, without parameters, so the stored signal needs none (as in the X-R16 block above). */
+    const RSI_DEFINITION = {
+        signal_code: 'RSI',
+        implementation_version: '1.0.0',
+        category: 'momentum',
+        display_name_key: 'signals.rsi',
+        description_key: 'signals.rsi.description',
+        semantic_id: 'technical.rsi',
+        semantic_description: 'Relative Strength Index.',
+        icon: '📊',
+        params_schema: {type: 'object', properties: {}},
+        default_params: {},
+        input_requirements: {price_fields: ['close'], data_policy: 'strict_contiguous', minimum_coverage: 1},
+        output_specs: [
+            {
+                key: 'rsi',
+                label_key: 'signals.rsi.value',
+                semantic_id: 'technical.rsi.value',
+                semantic_description: 'Relative Strength Index values.',
+                unit: 'index',
+                axis: {key: 'rsi', role: 'independent', minimum: 0, maximum: 100},
+                view_transform: 'none',
+                kind: 'line',
+                aggregation_profile: 'last_with_range',
+            },
+        ],
+        compatible_domains: ['fx'],
+    };
+    /** The RSI series of a valid answer, without its points. */
+    const RSI_SERIES = {key: 'rsi', label_key: 'signals.rsi.value', semantic_id: 'technical.rsi.value', semantic_description: 'Relative Strength Index values.', unit: 'index', axis: {key: 'rsi', role: 'independent', minimum: 0, maximum: 100}, view_transform: 'none', kind: 'line'};
+
+    /** The fields of a `/fx/currencies/convert` item these tests read. */
+    type ConvertAsk = {from_amount?: {code?: string}; to?: string; date_range?: {start?: string; end?: string | null}; signals?: Array<{instance_id?: string; signal_code?: string}>};
+    /** An item the route has answered: logged once its answer is delivered, not when it is asked. */
+    type DeliveredAsk = {start: string | null; signalCodes: string[]};
+
+    /** Stores the RSI signal on the pair where the page reads it: this context's localStorage, under the signed-in user's key. */
+    async function storeRsiSignal(page: Page): Promise<void> {
+        const me = await page.request.get('/api/v1/auth/me');
+        expect(me.ok(), `GET /api/v1/auth/me answered HTTP ${me.status()}`).toBe(true);
+        const userId = ((await me.json()) as {user?: {id?: unknown}}).user?.id;
+        if (typeof userId !== 'number' || !Number.isSafeInteger(userId)) throw new Error('GET /api/v1/auth/me returned no user id, and the chart settings are stored under it');
+        const settings = (signals: object[]) => ({colorByBaseline: true, areaFill: true, gridLines: true, staleGradient: true, axisScales: {absolute: {mode: 'auto'}, percentage: {mode: 'include0'}, secondary: {}}, signals});
+        const rsi = {id: RSI_ID, signalType: 'rsi', params: {}, style: {color: '#7c3aed', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null}};
+        await page.evaluate(({key, value}) => localStorage.setItem(key, value), {key: `lf_${userId}_chartSettingsStore`, value: JSON.stringify({version: 3, globalSettings: settings([]), pairOverrides: [[PAIR, settings([rsi])]]})});
+    }
+
+    /** The FX signal catalog, RSI alone. */
+    async function routeRsiCatalog(page: Page): Promise<void> {
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/currencies/signals',
+            (route) => route.fulfill({status: 200, contentType: 'application/json', json: {items: [RSI_DEFINITION]}}),
+        );
+    }
+
+    /**
+     * Serves the pair's conversions: 130 daily rates ending yesterday, those inside each item's range, and for an item that
+     * asks for signals its `signal_results` group with a valid RSI series over the rates it answers. Returns the items
+     * delivered — logged once their answer is out, not when they are asked.
+     */
+    async function routePairRates(page: Page): Promise<DeliveredAsk[]> {
+        const history = Array.from({length: 130}, (_, index) => daysAgoIso(130 - index));
+        const rateAt = (index: number) => (1.1 + index / 1000).toFixed(4);
+        const delivered: DeliveredAsk[] = [];
+        await page.route(
+            (url) => url.pathname === CONVERT_PATH,
+            async (route) => {
+                // postDataJSON throws on an empty or non-JSON body, and nobody awaits a route callback: read it as no item.
+                let asks: ConvertAsk[] = [];
+                try {
+                    const body: unknown = route.request().postDataJSON();
+                    asks = Array.isArray(body) ? body.filter((ask): ask is ConvertAsk => ask !== null && typeof ask === 'object') : [];
+                } catch {
+                    asks = [];
+                }
+                const results: object[] = [];
+                const signalResults: object[] = [];
+                asks.forEach((ask, requestIndex) => {
+                    const from = ask.from_amount?.code ?? 'EUR';
+                    const to = ask.to ?? 'USD';
+                    const start = ask.date_range?.start ?? '';
+                    const end = ask.date_range?.end ?? start;
+                    const days = history.flatMap((date, index) => (date >= start && date <= end ? [{date, rate: rateAt(index)}] : []));
+                    for (const day of days) results.push({from_amount: {code: from, amount: '1'}, to_amount: {code: to, amount: day.rate}, conversion_date: day.date, rate: day.rate, backward_fill_info: null});
+                    const asked = ask.signals ?? [];
+                    if (asked.length === 0) return;
+                    signalResults.push({
+                        request_index: requestIndex,
+                        from_currency: from,
+                        to_currency: to,
+                        date_range: {start, end},
+                        signals: asked.map((signal) => {
+                            const identity = {instance_id: signal.instance_id ?? RSI_ID, signal_code: signal.signal_code ?? 'RSI'};
+                            if (days.length === 0) return {...identity, status: 'unavailable'};
+                            return {...identity, implementation_version: '1.0.0', normalized_params: {}, status: 'ok', series: [{...RSI_SERIES, points: days.map((day, index) => ({date: day.date, value: 40 + (index % 20)}))}]};
+                        }),
+                    });
+                });
+                await route.fulfill({status: 200, contentType: 'application/json', json: {results, success_count: results.length, signal_results: signalResults}});
+                for (const ask of asks) delivered.push({start: ask.date_range?.start ?? null, signalCodes: (ask.signals ?? []).map((signal) => signal.signal_code ?? '')});
+            },
+        );
+        return delivered;
+    }
+
+    /** True for a `/fx/currencies/convert` POST one of whose items asks for the RSI signal. */
+    function asksForRsi(request: Request): boolean {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== CONVERT_PATH) return false;
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return false;
+        }
+        return Array.isArray(body) && body.some((item) => item !== null && typeof item === 'object' && ((item as ConvertAsk).signals ?? []).some((signal) => signal.signal_code === 'RSI'));
+    }
+
+    /** The `/fx/currencies/convert` POSTs the page sends from now until `stop()`. Armed before the action it measures, so none it sends is missed. */
+    function watchConvertPosts(page: Page) {
+        const sent: Request[] = [];
+        const onRequest = (request: Request) => {
+            if (request.method() === 'POST' && new URL(request.url()).pathname === CONVERT_PATH) sent.push(request);
+        };
+        page.on('request', onRequest);
+        return {sent, stop: () => page.off('request', onRequest)};
+    }
+
+    /** How many series the pair chart's ECharts option holds: the rates, the indicators, the event markers. 0 while no chart is mounted. */
+    async function readSeriesCount(page: Page): Promise<number> {
+        return page.evaluate((): number => {
+            type ChartHost = HTMLElement & {__lfChart?: {getOption: () => {series?: unknown}}};
+            const root = document.querySelector<HTMLElement>('[data-testid="fx-detail-chart"]');
+            if (!root) return 0;
+            const candidates = [root, ...root.querySelectorAll<HTMLElement>('*')];
+            const host = candidates.find((candidate) => typeof (candidate as ChartHost).__lfChart?.getOption === 'function') as ChartHost | undefined;
+            const series = host?.__lfChart?.getOption().series;
+            return Array.isArray(series) ? series.length : 0;
+        });
+    }
+
+    /**
+     * Opens the pair with its stored RSI on the page's default period and waits until the first load has asked for the
+     * indicator, been answered and released the page token. 1M and 3M are core presets of the picker, drawn at any width.
+     */
+    async function openPairWithRsi(page: Page) {
+        await storeRsiSignal(page);
+        await routeRsiCatalog(page);
+        const delivered = await routePairRates(page);
+        await goToFxDetailPage(page, PAIR);
+        await expect.poll(() => delivered.some((ask) => ask.signalCodes.includes('RSI')), {message: 'the first load asked for the stored RSI signal, and the route answered', timeout: 15_000}).toBe(true);
+        const refresh = page.getByTestId('fx-detail-refresh-btn');
+        await expect(refresh, 'the first load has released the page token').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        const startInput = picker.getByTestId('date-range-input-start');
+        const shortPeriod = picker.getByTestId('date-preset-1m');
+        const longPeriod = picker.getByTestId('date-preset-3m');
+        // The stored RSI is on the chart beside the rates: more than one series, or the returns below could not tell it was drawn.
+        await expect.poll(() => readSeriesCount(page), {message: 'the stored RSI is drawn beside the rates', timeout: 10_000}).toBeGreaterThan(1);
+
+        /** A period nothing has answered yet: the click asks the server, with the indicator, and the page is waited on until it is quiet again. */
+        const pickPeriodAsked = async (period: Locator): Promise<string> => {
+            await period.click();
+            await expect(period, 'the period is selected').toHaveAttribute('data-active', 'true');
+            const start = await startInput.inputValue();
+            await expect.poll(() => delivered.some((ask) => ask.start === start && ask.signalCodes.includes('RSI')), {message: `the page asked for the RSI over the rates from ${start}, and the route answered`, timeout: 15_000}).toBe(true);
+            await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+            await expect.poll(() => readSeriesCount(page), {message: 'the RSI is drawn over this period', timeout: 10_000}).toBeGreaterThan(1);
+            return start;
+        };
+        return {refresh, startInput, shortPeriod, longPeriod, pickPeriodAsked};
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    // The pair's own version of the developer's test: with a backend indicator configured, period A, period B, period A.
+    // Before N64 every load with a signal re-posted the conversion; the return to A now asks nothing.
+    test('N64 returning to a period already answered, with an indicator configured, posts no conversion request', async ({page}) => {
+        const {refresh, startInput, shortPeriod, longPeriod, pickPeriodAsked} = await openPairWithRsi(page);
+        const root = page.getByTestId('fx-detail-page');
+        const shortStart = await pickPeriodAsked(shortPeriod);
+        const seriesOfShortPeriod = await readSeriesCount(page);
+        const longStart = await pickPeriodAsked(longPeriod);
+        expect(longStart, 'the second period is another range, or the return below proves nothing').not.toBe(shortStart);
+
+        // The return: asked and answered once, so it comes from the cache — rates and indicator alike.
+        const converts = watchConvertPosts(page);
+        await shortPeriod.click();
+        await expect(shortPeriod, 'the period is selected again').toHaveAttribute('data-active', 'true');
+        await expect(startInput, 'the range is the first period again').toHaveValue(shortStart);
+        await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        await expect.poll(() => readSeriesCount(page), {message: 'the cached period draws its indicator again', timeout: 10_000}).toBe(seriesOfShortPeriod);
+        converts.stop();
+
+        expect(
+            converts.sent.map((request) => request.postData() ?? ''),
+            'the return to a period already answered posts no conversion request',
+        ).toEqual([]);
+    });
+
+    // GUARD — the cache must not make the page deaf: Refresh empties the caches, so it still asks, with the indicator.
+    test('N64 the Refresh button still posts a conversion request after a period was served from the cache', async ({page}) => {
+        const {refresh, shortPeriod, longPeriod, pickPeriodAsked} = await openPairWithRsi(page);
+        await pickPeriodAsked(shortPeriod);
+        await pickPeriodAsked(longPeriod);
+        await shortPeriod.click();
+        await expect(shortPeriod, 'the period is selected again').toHaveAttribute('data-active', 'true');
+        await expect(refresh).toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+
+        const refreshAsked = page.waitForRequest(asksForRsi, {timeout: 15_000});
+        refreshAsked.catch(() => undefined);
+        await refresh.click();
+        await refreshAsked;
+        await expect(refresh, 'the page token of the refresh is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+    });
+
+    // N64b — an asset compared on the pair page: the price series of the peer are kept too. The peer is asked once per period;
+    // the return to a period already seen asks nothing and takes no page token. Served by the real backend (the seeded
+    // EUR-USD compared with the seeded Apple asset); no route mock here, and the comparison is seeded in this context's
+    // localStorage, so nothing shared is written.
+    const PRICE_QUERY_PATH = '/api/v1/assets/prices/query';
+    /** The fields of a `/assets/prices/query` item the peer's comparison request is read by. */
+    type PeerAsk = {asset_id?: number; date_range?: {start?: string; end?: string}; include_price?: boolean; include_events?: boolean};
+
+    /** The items of a `/assets/prices/query` POST that ask for `peerId`. */
+    function peerAsksOf(request: Request, peerId: number): PeerAsk[] {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== PRICE_QUERY_PATH) return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        return Array.isArray(body) ? body.filter((item): item is PeerAsk => item !== null && typeof item === 'object' && (item as PeerAsk).asset_id === peerId) : [];
+    }
+
+    /** The items asking for `peerId` the page sends from now until `stop()`. Armed before the action it measures, so none it sends is missed. */
+    function watchPeerAsks(page: Page, peerId: number) {
+        const sent: PeerAsk[] = [];
+        const onRequest = (request: Request) => void sent.push(...peerAsksOf(request, peerId));
+        page.on('request', onRequest);
+        return {sent, stop: () => page.off('request', onRequest)};
+    }
+
+    /** Arms an in-page observer for what a cached return must never show: the Refresh button publishing `data-busy="true"`, even for one render pass. Read and removed by `stopRefreshBusyWatch`. */
+    async function armRefreshBusyWatch(page: Page): Promise<void> {
+        await page.evaluate(() => {
+            type BusyWatch = {stop: () => boolean};
+            const host = window as Window & {__lfN64bRefreshWatch?: BusyWatch};
+            host.__lfN64bRefreshWatch?.stop();
+            let seen = false;
+            const note = (records: MutationRecord[]) => {
+                for (const record of records) {
+                    if (record.target instanceof Element && record.target.getAttribute('data-testid') === 'fx-detail-refresh-btn' && (record.oldValue === 'true' || record.target.getAttribute('data-busy') === 'true')) seen = true;
+                }
+            };
+            const observer = new MutationObserver(note);
+            observer.observe(document.body, {subtree: true, attributes: true, attributeFilter: ['data-busy'], attributeOldValue: true});
+            host.__lfN64bRefreshWatch = {
+                stop: () => {
+                    note(observer.takeRecords());
+                    observer.disconnect();
+                    return seen;
+                },
+            };
+        });
+    }
+
+    /** Whether the Refresh button published busy since `armRefreshBusyWatch`, and removes the watch. Fails loudly when none was armed. */
+    async function stopRefreshBusyWatch(page: Page): Promise<boolean> {
+        return page.evaluate(() => {
+            const watch = (window as Window & {__lfN64bRefreshWatch?: {stop: () => boolean}}).__lfN64bRefreshWatch;
+            if (!watch) throw new Error('no Refresh busy watch was armed');
+            return watch.stop();
+        });
+    }
+
+    test('N64b a comparison peer is asked once per period: the return to a period seen asks nothing and takes no page token, Refresh asks again', async ({page}) => {
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        await seedChartComparisons(page, [[PAIR, [assetComparison('e2e-n64b-peer', appleId)]]]);
+
+        // A full load on the page's default period (3M): the first load asks the peer, and is not the subject.
+        const firstLoad = watchPeerAsks(page, appleId);
+        await goToFxDetailPage(page, PAIR);
+        await expect.poll(() => firstLoad.sent.length, {message: 'the first load asked for the saved comparison peer', timeout: 15_000}).toBeGreaterThan(0);
+        firstLoad.stop();
+
+        const root = page.getByTestId('fx-detail-page');
+        const refresh = page.getByTestId('fx-detail-refresh-btn');
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        const startInput = picker.getByTestId('date-range-input-start');
+        const firstPeriod = picker.getByTestId('date-preset-1m');
+        const secondPeriod = picker.getByTestId('date-preset-6m');
+        await expect(refresh, 'the first load has released the page token').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        const seenStarts = new Set<string>([await startInput.inputValue()]);
+
+        /** A period nothing has answered yet: the click asks the peer exactly once, for this period, and the page is waited on until it is quiet again. */
+        const pickPeriodAsked = async (period: Locator, options: {seenBefore?: boolean} = {}): Promise<string> => {
+            const asked = watchPeerAsks(page, appleId);
+            await period.click();
+            await expect(period, 'the period is selected').toHaveAttribute('data-active', 'true');
+            const start = await startInput.inputValue();
+            // `seenBefore`: a period a Refresh made the page forget, so asking again is exactly what is proved.
+            if (!options.seenBefore) expect(seenStarts.has(start), 'a period not seen before, or the ask below proves nothing').toBe(false);
+            seenStarts.add(start);
+            await expect.poll(() => asked.sent.length, {message: `the page asked for the comparison peer over the period from ${start}`, timeout: 15_000}).toBeGreaterThan(0);
+            await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+            await waitForSettled(root, 20_000);
+            asked.stop();
+            expect(asked.sent, 'a new period asks the peer once').toHaveLength(1);
+            expect(asked.sent[0].date_range?.start, 'the peer is asked over the period on screen').toBe(start);
+            expect(asked.sent[0].include_events, 'the comparison asks for the peer events').toBe(true);
+            expect(asked.sent[0].include_price, 'the comparison asks for the peer prices (the flag is true or absent)').not.toBe(false);
+            return start;
+        };
+        const firstStart = await pickPeriodAsked(firstPeriod);
+        const seriesOfFirstPeriod = await readSeriesCount(page);
+        await pickPeriodAsked(secondPeriod);
+
+        // The return: asked and answered once, so it comes from the cache, in the same tick — no request for the peer, no page token.
+        const returned = watchPeerAsks(page, appleId);
+        await armRefreshBusyWatch(page);
+        await firstPeriod.click();
+        await expect(firstPeriod, 'the period is selected again').toHaveAttribute('data-active', 'true');
+        await expect(startInput, 'the range is the first period again').toHaveValue(firstStart);
+        await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        await expect.poll(() => readSeriesCount(page), {message: 'the cached period draws the comparison again', timeout: 10_000}).toBe(seriesOfFirstPeriod);
+        returned.stop();
+        const refreshWasBusy = await stopRefreshBusyWatch(page);
+        expect(returned.sent, 'the return to a period already answered does not ask the comparison peer').toEqual([]);
+        expect(refreshWasBusy, 'the return takes no page token (the Refresh button stays not busy)').toBe(false);
+
+        // GUARD — Refresh is a forced load: the period on screen asks the peer again, whatever was kept for it.
+        const refreshAsked = page.waitForRequest((request) => peerAsksOf(request, appleId).length > 0, {timeout: 15_000});
+        refreshAsked.catch(() => undefined);
+        await refresh.click();
+        await refreshAsked;
+        await expect(refresh, 'the page token of the refresh is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await waitForSettled(root, 20_000);
+
+        // And it forgets the other periods too: the one seen before the Refresh is asked again, not served from the cache.
+        await pickPeriodAsked(secondPeriod, {seenBefore: true});
+    });
+});
+
+// ============================================================================
+// Y-41 — FX pair detail: a compared pair is drawn
+// ============================================================================
+// A saved `fx-pair` signal on another pair than the page's own reads its rates from the FX store, which the detail page
+// filled only from its Refresh and Sync handlers. Opening the page and changing the period asked the server for nothing
+// of the compared pair, so its card said «no data» and no line was drawn. The chart publishes no overlay count (a list
+// card does): «drawn» is read from the series the chart handed ECharts (`fixtures/pairLine.ts`), the one named after the
+// pair's two currency codes, with values.
+//
+// The signal is seeded in this browser's storage and the rates are the seeded mock data's (EUR-GBP, daily, years back):
+// nothing shared is written.
+// ============================================================================
+test.describe('Y-41 FX detail: a compared pair is drawn', () => {
+    test.describe.configure({timeout: 90_000});
+
+    /** The pair the page shows, and the one compared with it. */
+    const OWN = 'EUR-USD';
+    const OTHER = 'EUR-GBP';
+    const CHART = 'fx-detail-chart';
+    /** The period the page opens on, and a longer one: both end yesterday, like the neighbouring periods. */
+    const narrow = () => ({start: daysAgoIso(30), end: daysAgoIso(1)});
+    const wide = () => ({start: daysAgoIso(180), end: daysAgoIso(1)});
+    /** The wide period's first day plus room for the chart's resolution and a weekend: still a line from the part the narrow period lacked. */
+    const reachesWideStart = () => daysAgoIso(135);
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        await seedChartComparisons(page, [[OWN, [pairComparison('e2e-y41-fx-pair', OTHER)]]]);
+    });
+
+    /** A full load of the pair over `range`: the FX store is cold and the page owes the compared pair its rates. */
+    async function openOwnPair(page: Page, range: {start: string; end: string}): Promise<Locator> {
+        await navigateTo(page, `/fx/${OWN}?start=${range.start}&end=${range.end}`);
+        const root = page.getByTestId('fx-detail-page');
+        await expect(root).toBeVisible({timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        return root;
+    }
+
+    test('Y-41 a saved comparison with another pair is drawn on a clean load', async ({page}) => {
+        await openOwnPair(page, narrow());
+
+        await expectPairLineDrawn(page, CHART, OTHER, `the saved ${OTHER} comparison is drawn once the ${OWN} detail has loaded`);
+    });
+
+    test('Y-41 the compared pair covers the period after it grows', async ({page}) => {
+        const root = await openOwnPair(page, narrow());
+
+        // The precondition, from the path that always loaded the pair (Refresh): the line is drawn over the short period.
+        const refresh = page.getByTestId('fx-detail-refresh-btn');
+        await expect(refresh).toBeEnabled();
+        await refresh.click();
+        await expectPairLineDrawn(page, CHART, OTHER, `the ${OTHER} comparison is drawn over the short period`);
+        await expect(refresh, 'the refresh has released the page').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        const startInput = picker.getByTestId('date-range-input-start');
+        const endInput = picker.getByTestId('date-range-input-end');
+        const period = wide();
+        await startInput.fill(period.start);
+        await expect(startInput).toHaveValue(period.start);
+        await endInput.fill(period.end);
+        await expect(endInput).toHaveValue(period.end);
+        await endInput.press('Enter');
+        await expect(picker).toHaveAttribute('data-open', 'false');
+        await waitForSettled(root, 20_000);
+
+        await expectPairLineReaches(page, CHART, OTHER, reachesWideStart(), `the ${OTHER} line reaches back into the part the longer period added`);
     });
 });

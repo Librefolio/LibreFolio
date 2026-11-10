@@ -83,7 +83,6 @@
     "swapDirection": "Invertir dirección",
     "sync": "Sincronizar",
     "syncing": "Sincronizando...",
-    "totalValue": "Valor Total",
     "type": "Tipo",
     "amount": "Importe",
     "description": "Descripción",
@@ -91,7 +90,7 @@
     "undoAll": "Deshacer Todo",
     "updated": "Actualizado",
     "value": "Valor",
-    "broker": "Broker",
+    "broker": "Bróker",
     "provider": "Proveedor",
     "active": "Activo",
     "providers": "Proveedores",
@@ -118,7 +117,36 @@
     "user": "Usuario",
     "backToDefault": "Volver al predeterminado",
     "createForex": "Crear forex…",
-    "unknownError": "error desconocido"
+    "unknownError": "error desconocido",
+    "decimalPlacesExceeded": "{max, plural, =0 {Solo números enteros} one {Como máximo # decimal} other {Como máximo # decimales}}",
+    "decimalExponentOutOfRange": "Escribe el número completo: la notación científica solo se lee sola, con un exponente de hasta ±{max}",
+    "bulkRefusal": {
+      "tooManyItems": "No se han podido cargar algunos valores: el servidor acepta como máximo {max, number} elementos por solicitud, y esta tenía {count, number}.",
+      "tooManyDays": "No se han podido cargar algunos valores: el servidor genera como máximo {max, number} valores diarios por solicitud, y esta necesitaba más. Elige un periodo más corto."
+    },
+    "nonIsoCurrency": {
+      "suggestion": "{value} no es un código ISO: equivale a {suggestion}",
+      "candidates": "{value} no es un código ISO: puede equivaler a {candidates}",
+      "unknown": "{value} no es un código de divisa ISO"
+    },
+    "writeRefusal": {
+      "dateOutOfRange": "{count, plural, one {# fecha es posterior} other {# fechas son posteriores}} al {max}: {dates}. No se ha guardado nada.",
+      "currencyMismatch": "{count, plural, one {# precio está} other {# precios están}} en {found}, no en la moneda del activo {expected}: {dates}. No se ha guardado nada.",
+      "notSaved": "{count, plural, one {# valor no se ha guardado} other {# valores no se han guardado}}: {items}",
+      "more": "y {n} más",
+      "reason": {
+        "ohlc_inconsistent": "cierre fuera de mínimo–máximo",
+        "date_out_of_range": "fecha fuera de rango",
+        "value_not_storable": "valor demasiado grande o demasiado pequeño para guardarlo",
+        "rate_not_storable": "tipo demasiado grande o demasiado pequeño para guardarlo",
+        "same_currency": "la misma moneda en ambos lados",
+        "invalid_rate": "tipo no válido",
+        "internal_error": "error del servidor",
+        "other": "rechazado por el servidor"
+      },
+      "tooManyItems": "No se ha guardado nada: el servidor acepta como máximo {max, number} valores por guardado, y este contenía {count, number}. Guárdalos en varias partes."
+    },
+    "errorWithRequestId": "{message} (código: {requestId})"
   },
   "csvImport": {
     "title": "Importar datos CSV",
@@ -153,7 +181,11 @@
       "invalidNumber": "Número no válido en \"{column}\": \"{value}\"",
       "invalidValue": "Valor no válido en \"{column}\": \"{value}\"",
       "duplicate": "Valor duplicado para {label}: {key}"
-    }
+    },
+    "statusValidRows": "{count, plural, one {# fila válida} other {# filas válidas}}",
+    "statusErrors": "{count, plural, one {# error} other {# errores}}",
+    "statusDuplicates": "{label} duplicado",
+    "duplicatesShort": "duplicados"
   },
   "dataEditor": {
     "staleTooltip": "Ocultar filas rellenadas hacia atrás (⚠️ obsoletas). Son puntos de relleno copiados del dato real más cercano.",
@@ -184,7 +216,22 @@
       "edited": "Modificado",
       "deleted": "Eliminado",
       "appended": "Nuevo"
-    }
+    },
+    "counter": {
+      "edited": "{n, plural, one {# modificado} other {# modificados}}",
+      "deleted": "{n, plural, one {# eliminado} other {# eliminados}}",
+      "appended": "{n, plural, one {# nuevo} other {# nuevos}}"
+    },
+    "staleShow": "{n, plural, one {Mostrar # fila obsoleta} other {Mostrar # filas obsoletas}}",
+    "staleHide": "{n, plural, one {Ocultar # fila obsoleta} other {Ocultar # filas obsoletas}}",
+    "importProviderEventsLeftOut": "{n, plural, one {# evento marcado PROVIDER se omitió} other {# eventos marcados PROVIDER se omitieron}}: sincroniza el activo para {n, plural, one {cargarlo} other {cargarlos}}.",
+    "savePartial": "Ya guardado: {saved, plural, one {# precio escrito} other {# precios escritos}}, {deleted, plural, one {# precio eliminado} other {# precios eliminados}}. Corrige la causa y guarda de nuevo para el resto.",
+    "exportCsv": "Exportar",
+    "exportChoose": "Elige el formato del archivo.",
+    "exportAction": "Exportar",
+    "exportPrices": "Exportar los precios",
+    "exportEvents": "Exportar los eventos",
+    "exportRates": "Exportar las tasas"
   },
   "datePicker": {
     "presets": {
@@ -269,7 +316,12 @@
   },
   "nav": {
     "dashboard": "Panel",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "toggleMenu": "Abrir o cerrar el menú",
+    "checkingAuthentication": "Comprobando el acceso…",
+    "closeSidebar": "Cerrar el menú",
+    "expandSidebar": "Expandir el menú",
+    "collapseSidebar": "Contraer el menú"
   },
   "prices": {
     "sync": {
@@ -304,7 +356,12 @@
     "syncAll": "Sinc. Todo",
     "refreshAll": "Recargar Todo",
     "settings": "Ajustes",
-    "syncSelection": "Sinc. selección"
+    "syncSelection": "Sinc. selección",
+    "settingsHint": "Cambia el aspecto de los gráficos y los indicadores y comparaciones que dibujan. Se aplica a todos los gráficos de la lista.",
+    "syncAllHint": "Pide a los proveedores de datos los datos nuevos y los guarda en LibreFolio.",
+    "refreshAllHint": "Recarga lo que ves desde LibreFolio, sin consultar a los proveedores de datos.",
+    "viewGrid": "Mostrar como tarjetas",
+    "viewTable": "Mostrar como tabla"
   },
   "table": {
     "columns": "Columnas",
@@ -320,7 +377,8 @@
       "empty": "Sin opciones"
     },
     "confirmBulkAction": "¿Estás seguro de querer realizar esta acción en",
-    "filterLabel": "Filtro"
+    "filterLabel": "Filtro",
+    "resetLayout": "Restablecer disposición"
   },
   "date": {
     "today": "Hoy",

@@ -13,11 +13,13 @@ from backend.app.schemas.risk import (
     RiskOutputKind,
     RiskReturnBasis,
     RiskScopeKind,
+    RiskWarning,
 )
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs, RiskUnavailableError
 from backend.app.services.risk.metrics import drawdown_episodes
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class DrawdownSummaryParams(BaseModel):
@@ -30,7 +32,10 @@ class DrawdownSummaryAnalytic(RiskAnalytic):
     # 1.1.0 — the reported numbers are unchanged; the payload additionally carries the
     # dated underwater curve, so a client can tell a genuinely flat series apart from a
     # server that predates the field.
-    algorithm_version = "1.1.0"
+    # 1.2.0 (P19, CP-13a) — numbers unchanged; the payload additionally carries
+    # maximum_drawdown_trough_to_peak_ratio, and remaining_to_peak_ratio is null for a total loss,
+    # announced by the non-degrading warning total_loss_no_recovery.
+    algorithm_version = "1.2.0"
     name_i18n_key = "risk.analytics.drawdownSummary.name"
     description_i18n_key = "risk.analytics.drawdownSummary.description"
     output_kind = RiskOutputKind.DRAWDOWN
@@ -60,6 +65,17 @@ class DrawdownSummaryAnalytic(RiskAnalytic):
         # ``report.drawdowns`` spans (baseline, *dates); the baseline entry is always
         # 0.0 by construction, so the dated series drops it, as RiskComparisonPoint does.
         underwater_series = [RiskDrawdownPoint(date=observed, drawdown=min(0.0, value)) for observed, value in zip(dates, report.drawdowns[1:], strict=True)]
+        warnings: tuple[RiskWarning, ...] = ()
+        if report.maximum_drawdown_trough_to_peak_ratio is None or report.remaining_to_peak_ratio is None:
+            # A total loss (P19): the drawdown itself is exact, only the gain that would recover it is undefined.
+            warnings = (
+                RiskWarning(
+                    code="total_loss_no_recovery",
+                    message_i18n_key="risk.warnings.total_loss_no_recovery",
+                    message="The value fell to zero: no gain can bring it back to its peak, so the recovery needed is not shown.",
+                    degrades_result=False,
+                ),
+            )
         return RiskComputation(
             output=RiskDrawdownOutput(
                 current_drawdown=report.current_drawdown,
@@ -72,6 +88,7 @@ class DrawdownSummaryAnalytic(RiskAnalytic):
                 maximum_drawdown_recovery_date=report.maximum_drawdown_recovery_date,
                 maximum_drawdown_duration_days=report.maximum_drawdown_duration_days,
                 maximum_drawdown_recovered_ratio=report.maximum_drawdown_recovered_ratio,
+                maximum_drawdown_trough_to_peak_ratio=report.maximum_drawdown_trough_to_peak_ratio,
                 remaining_to_peak_ratio=report.remaining_to_peak_ratio,
                 available_start=report.available_start,
                 available_end=report.available_end,
@@ -83,4 +100,5 @@ class DrawdownSummaryAnalytic(RiskAnalytic):
             ),
             method=calculation_basis,
             return_basis=context.primary_return_basis,
+            warnings=warnings,
         )

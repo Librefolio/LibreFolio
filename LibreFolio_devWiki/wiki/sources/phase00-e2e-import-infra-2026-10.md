@@ -18,7 +18,7 @@ related:
 
 ## Summary
 
-One plan (~290 lines), shipped in train 10 (commits `860c934ac`, `abfcdf2be`, `ffdcacc2f`, `cc15441e6`) and archived on
+One plan (~290 lines), shipped in train 10 (commits `b9b127028`, `7b2879701`, `fd614d8b0`) and archived on
 2026-10-09. It made the import E2E specs deterministic — and, checking whether their leftovers could happen in
 production, found two real defects that plan 34 then fixed: [[problems/account-deletion-orphaned-brokers]] (A) and
 [[problems/reused-ids-after-delete]] (B).

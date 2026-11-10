@@ -1,0 +1,665 @@
+// @vitest-environment jsdom
+/**
+ * PositionsReturnChart — component test (Vitest + jsdom), Y5-2 (#48).
+ *
+ * The chart under the Dashboard's holdings table: one line per selected position plus the portfolio
+ * line, in the «absolute» (P&L) or «percentage» (base 100) view, with a legend that switches each line
+ * on and off and a toggle for the view. The component is controlled: it never decides the view or the
+ * hidden set, it calls `onviewchange(view)` / `ontoggle(id)` and draws the props it is given.
+ *
+ * ## What is replaced, and why
+ *
+ * - `echarts`: a recorder, not a renderer (jsdom has no canvas). It answers every call a chart makes on
+ *   an instance and keeps each `setOption` payload; the assertions read the OPTION the component handed
+ *   over, never pixels. As in `AllocationHistoryChart.test.ts` / `GrowthChart.test.ts`.
+ * - `getClientRects`: jsdom lays nothing out, and the dashboard charts draw only into a container that has
+ *   a client rect. Every element answers with one rect for the duration of the file.
+ *
+ * ## What is NOT asserted
+ *
+ * Translated words (the only text compared is the `note` string this file passes in as a prop), pixel
+ * geometry, class names. Everything is found by `data-testid` / `data-*` / `aria-pressed`.
+ *
+ * ## How the option is read
+ *
+ * Series are identified by `id` (= the line id). A datum may be a bare number, a `[date, value]` pair or
+ * `{value}` — `datumValue` reads the value out of any of them. The colour of a series is read from
+ * `lineStyle.color`, then `itemStyle.color`, then `color`. The reference line (100 in the percentage view,
+ * 0 in the absolute one) is a `markLine` somewhere in the series, found by its value alone.
+ */
+import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+
+const {chartInstances, echartsModule} = vi.hoisted(() => {
+    interface SetOptionCall {
+        option: Record<string, unknown>;
+        opts: unknown;
+    }
+
+    interface FakeChart {
+        setOptionCalls: SetOptionCall[];
+        setOption: (option: Record<string, unknown>, opts?: unknown) => void;
+        getOption: () => Record<string, unknown>;
+        getDom: () => unknown;
+        getWidth: () => number;
+        getHeight: () => number;
+        on: (event: string, handler: () => void) => void;
+        off: (event: string, handler?: () => void) => void;
+        dispatchAction: (action: unknown) => void;
+        resize: () => void;
+        clear: () => void;
+        isDisposed: () => boolean;
+        dispose: () => void;
+    }
+
+    const chartInstances: FakeChart[] = [];
+
+    function createFakeChart(dom: unknown): FakeChart {
+        let disposed = false;
+        const chart: FakeChart = {
+            setOptionCalls: [],
+            setOption(option, opts) {
+                chart.setOptionCalls.push({option, opts});
+            },
+            getOption: () => ({}),
+            getDom: () => dom,
+            getWidth: () => 800,
+            getHeight: () => 400,
+            on: () => {},
+            off: () => {},
+            dispatchAction: () => {},
+            resize: () => {},
+            clear: () => {},
+            isDisposed: () => disposed,
+            dispose: () => {
+                disposed = true;
+            },
+        };
+        chartInstances.push(chart);
+        return chart;
+    }
+
+    return {
+        chartInstances,
+        echartsModule: {
+            init: (dom: unknown) => createFakeChart(dom),
+            format: {
+                getTextRect(text: string) {
+                    return {x: 0, y: 0, width: text.length * 7, height: 14};
+                },
+            },
+        },
+    };
+});
+
+vi.mock('echarts', () => echartsModule);
+
+// F-1: the marquee that scrolls a long name in the tooltip is attached to the chart's element; the test sees the attach and the stop.
+const marquee = vi.hoisted(() => {
+    const stop = vi.fn();
+    return {stop, attach: vi.fn((_container: HTMLElement) => stop)};
+});
+vi.mock('$lib/actions/scrollOnOverflow', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/actions/scrollOnOverflow')>()), attachOverflowMarqueeToDescendants: marquee.attach}));
+
+vi.mock('$lib/api', () => ({
+    zodiosApi: new Proxy(
+        {},
+        {
+            get() {
+                return vi.fn(async () => ({items: []}));
+            },
+        },
+    ),
+}));
+
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import PositionsReturnChart from './PositionsReturnChart.svelte';
+import type {PositionLine, PositionsChartView} from './positionsSeries';
+
+// =============================================================================
+// Fixtures
+// =============================================================================
+
+const NOTE = 'NOTE-SENTINEL-not-a-translation';
+
+/** Colours the chart must take from `colorOf`: distinct, and unlike anything a theme would pick. */
+const COLORS: Record<string, string> = {
+    '12-3': 'rgb(11, 22, 33)',
+    '7-0': 'rgb(44, 55, 66)',
+    '5-1': 'rgb(77, 88, 99)',
+    portfolio: 'rgb(101, 102, 103)',
+};
+const colorOf = (id: string): string => COLORS[id] ?? 'rgb(1, 1, 1)';
+
+function line(id: string, values: Array<number | null>, overrides: Partial<PositionLine> = {}): PositionLine {
+    return {
+        id,
+        label: `Label ${id}`,
+        points: values.map((value, i) => ({date: `2026-01-0${i + 1}`, value})),
+        closedOn: null,
+        complete: true,
+        kind: 'position',
+        ...overrides,
+    };
+}
+
+const A = () => line('12-3', [1, 2, 3]);
+const B = () => line('7-0', [10, null, 30]);
+const PORTFOLIO = () => line('portfolio', [0, 5, 4], {kind: 'portfolio', label: 'Portfolio'});
+
+type Props = {
+    lines: PositionLine[];
+    view: PositionsChartView;
+    onviewchange?: (view: PositionsChartView) => void;
+    hiddenIds?: ReadonlySet<string>;
+    ontoggle?: (id: string) => void;
+    colorOf: (id: string) => string;
+    currency: string;
+    loading?: boolean;
+    failed?: boolean;
+    portfolioLabel?: string;
+    note?: string;
+};
+
+function props(overrides: Partial<Props> = {}): Props {
+    return {lines: [PORTFOLIO(), A(), B()], view: 'absolute', colorOf, currency: 'EUR', note: NOTE, ...overrides};
+}
+
+// =============================================================================
+// Reading what the chart handed ECharts
+// =============================================================================
+
+type Json = Record<string, unknown>;
+
+function lastSeries(): Json[] | undefined {
+    for (const chart of chartInstances) {
+        for (let i = chart.setOptionCalls.length - 1; i >= 0; i--) {
+            const series = chart.setOptionCalls[i].option.series;
+            if (Array.isArray(series)) return series as Json[];
+        }
+    }
+    return undefined;
+}
+
+/** Every drawn line series (the ones whose id is a line id), whatever else the option carries. */
+function lineSeries(knownIds: string[]): Json[] {
+    return (lastSeries() ?? []).filter((s) => typeof s.id === 'string' && knownIds.includes(s.id as string));
+}
+
+function seriesIds(knownIds: string[]): string[] {
+    return lineSeries(knownIds)
+        .map((s) => s.id as string)
+        .sort();
+}
+
+function datumValue(datum: unknown): unknown {
+    if (Array.isArray(datum)) return datum[datum.length - 1];
+    if (datum && typeof datum === 'object' && 'value' in (datum as Json)) return datumValue((datum as Json).value);
+    return datum;
+}
+
+function dataValues(series: Json): unknown[] {
+    return ((series.data as unknown[]) ?? []).map(datumValue);
+}
+
+function seriesColor(series: Json): unknown {
+    const ls = series.lineStyle as Json | undefined;
+    const is = series.itemStyle as Json | undefined;
+    return ls?.color ?? is?.color ?? series.color;
+}
+
+/** Every number a markLine of any series draws a horizontal line at. */
+function markLineLevels(): number[] {
+    const levels: number[] = [];
+    for (const s of lastSeries() ?? []) {
+        const markLine = s.markLine as Json | undefined;
+        if (!markLine) continue;
+        for (const item of (markLine.data as Json[]) ?? []) {
+            if (typeof item.yAxis === 'number') levels.push(item.yAxis);
+            else if (typeof item.value === 'number') levels.push(item.value);
+        }
+    }
+    return levels;
+}
+
+const root = () => screen.getByTestId('positions-return-chart');
+
+beforeAll(async () => {
+    await setupI18n();
+});
+
+let restoreLayout: (() => void) | undefined;
+beforeAll(() => {
+    // jsdom lays nothing out: every element gets the one client rect it would have on screen.
+    const spy = vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(() => [{x: 0, y: 0, top: 0, left: 0, width: 800, height: 400, right: 800, bottom: 400}] as unknown as DOMRectList);
+    restoreLayout = () => spy.mockRestore();
+});
+
+afterAll(() => {
+    restoreLayout?.();
+});
+
+beforeEach(() => {
+    chartInstances.length = 0;
+});
+
+afterEach(() => {
+    document.documentElement.classList.remove('dark');
+});
+
+/** Mounts the chart and waits until it has handed ECharts a series list. */
+async function mountReady(overrides: Partial<Props> = {}) {
+    const p = props(overrides);
+    const view = render(PositionsReturnChart, {props: p});
+    await waitFor(() => expect(lastSeries(), 'the chart never handed ECharts a series list').toBeDefined(), {timeout: 5_000});
+    return {view, props: p};
+}
+
+const ALL_IDS = ['12-3', '7-0', '5-1', 'portfolio'];
+
+// =============================================================================
+// Root attributes and states
+// =============================================================================
+
+describe('PositionsReturnChart — root attributes and states', () => {
+    it('ready: data-state ready, the view and the number of lines drawn', async () => {
+        await mountReady();
+        expect(root()).toHaveAttribute('data-state', 'ready');
+        expect(root()).toHaveAttribute('data-view', 'absolute');
+        expect(root()).toHaveAttribute('data-line-count', '3');
+    });
+
+    it('data-view follows the view prop', async () => {
+        const {view} = await mountReady({view: 'percentage'});
+        expect(root()).toHaveAttribute('data-view', 'percentage');
+        await view.rerender({...props({view: 'absolute'})});
+        await waitFor(() => expect(root()).toHaveAttribute('data-view', 'absolute'));
+    });
+
+    it('loading: data-state loading', () => {
+        render(PositionsReturnChart, {props: props({loading: true})});
+        expect(root()).toHaveAttribute('data-state', 'loading');
+    });
+
+    it('failed: data-state failed', () => {
+        render(PositionsReturnChart, {props: props({failed: true})});
+        expect(root()).toHaveAttribute('data-state', 'failed');
+    });
+
+    it('empty: no lines at all', () => {
+        render(PositionsReturnChart, {props: props({lines: []})});
+        expect(root()).toHaveAttribute('data-state', 'empty');
+        expect(root()).toHaveAttribute('data-line-count', '0');
+    });
+
+    it('empty: lines that have no point', () => {
+        render(PositionsReturnChart, {props: props({lines: [line('12-3', []), line('portfolio', [], {kind: 'portfolio'})]})});
+        expect(root()).toHaveAttribute('data-state', 'empty');
+        expect(root()).toHaveAttribute('data-line-count', '0');
+    });
+
+    it('empty: lines whose points are all null', () => {
+        render(PositionsReturnChart, {props: props({lines: [line('12-3', [null, null])]})});
+        expect(root()).toHaveAttribute('data-state', 'empty');
+        expect(root()).toHaveAttribute('data-line-count', '0');
+    });
+
+    it('a line with at least one non-null point counts as drawn; an all-null one does not', async () => {
+        await mountReady({lines: [A(), line('7-0', [null, null, null]), line('5-1', [null, 4, null])]});
+        expect(root()).toHaveAttribute('data-line-count', '2');
+        expect(root()).toHaveAttribute('data-state', 'ready');
+    });
+
+    it('a hidden line is not counted', async () => {
+        await mountReady({hiddenIds: new Set(['7-0'])});
+        expect(root()).toHaveAttribute('data-line-count', '2');
+    });
+
+    it('every line hidden: nothing drawn, so empty', async () => {
+        render(PositionsReturnChart, {props: props({hiddenIds: new Set(['portfolio', '12-3', '7-0'])})});
+        expect(root()).toHaveAttribute('data-line-count', '0');
+        expect(root()).toHaveAttribute('data-state', 'empty');
+    });
+});
+
+// =============================================================================
+// View toggle
+// =============================================================================
+
+describe('PositionsReturnChart — view toggle', () => {
+    it('aria-pressed marks the current view only', () => {
+        render(PositionsReturnChart, {props: props({view: 'percentage'})});
+        expect(screen.getByTestId('positions-chart-view-percentage')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('positions-chart-view-absolute')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('a click calls onviewchange with the clicked view', async () => {
+        const onviewchange = vi.fn();
+        render(PositionsReturnChart, {props: props({view: 'absolute', onviewchange})});
+        await fireEvent.click(screen.getByTestId('positions-chart-view-percentage'));
+        expect(onviewchange).toHaveBeenCalledTimes(1);
+        expect(onviewchange).toHaveBeenCalledWith('percentage');
+    });
+
+    it('the component is controlled: a click alone does not change the pressed view', async () => {
+        const onviewchange = vi.fn();
+        render(PositionsReturnChart, {props: props({view: 'absolute', onviewchange})});
+        await fireEvent.click(screen.getByTestId('positions-chart-view-percentage'));
+        expect(screen.getByTestId('positions-chart-view-absolute')).toHaveAttribute('aria-pressed', 'true');
+        expect(root()).toHaveAttribute('data-view', 'absolute');
+    });
+
+    it('works without a callback', async () => {
+        render(PositionsReturnChart, {props: props()});
+        await fireEvent.click(screen.getByTestId('positions-chart-view-percentage'));
+        expect(root()).toHaveAttribute('data-state', 'ready');
+    });
+});
+
+// =============================================================================
+// Legend
+// =============================================================================
+
+describe('PositionsReturnChart — legend', () => {
+    it('one legend button per line, hidden or not', async () => {
+        render(PositionsReturnChart, {props: props({hiddenIds: new Set(['7-0'])})});
+        for (const id of ['portfolio', '12-3', '7-0']) expect(screen.getByTestId(`positions-chart-legend-${id}`)).toBeInTheDocument();
+    });
+
+    it('aria-pressed is whether the line is visible', () => {
+        render(PositionsReturnChart, {props: props({hiddenIds: new Set(['7-0'])})});
+        expect(screen.getByTestId('positions-chart-legend-12-3')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('positions-chart-legend-portfolio')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('positions-chart-legend-7-0')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('a click calls ontoggle with the line id', async () => {
+        const ontoggle = vi.fn();
+        render(PositionsReturnChart, {props: props({ontoggle})});
+        await fireEvent.click(screen.getByTestId('positions-chart-legend-12-3'));
+        expect(ontoggle).toHaveBeenCalledTimes(1);
+        expect(ontoggle).toHaveBeenCalledWith('12-3');
+        await fireEvent.click(screen.getByTestId('positions-chart-legend-portfolio'));
+        expect(ontoggle).toHaveBeenLastCalledWith('portfolio');
+    });
+
+    it('the component is controlled: a click alone does not hide the line', async () => {
+        const ontoggle = vi.fn();
+        render(PositionsReturnChart, {props: props({ontoggle})});
+        await fireEvent.click(screen.getByTestId('positions-chart-legend-12-3'));
+        expect(screen.getByTestId('positions-chart-legend-12-3')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('the swatch of each line wears colorOf(id)', () => {
+        render(PositionsReturnChart, {props: props()});
+        for (const id of ['portfolio', '12-3', '7-0']) {
+            const swatch = screen.getByTestId(`positions-chart-swatch-${id}`);
+            expect(swatch.getAttribute('style') ?? '', `swatch of ${id}`).toContain(colorOf(id));
+        }
+    });
+
+    it('the swatch is a child of its legend button', () => {
+        render(PositionsReturnChart, {props: props()});
+        expect(screen.getByTestId('positions-chart-legend-12-3')).toContainElement(screen.getByTestId('positions-chart-swatch-12-3'));
+    });
+
+    it('the portfolio line’s entry is marked data-kind=portfolio; a position’s is not', () => {
+        render(PositionsReturnChart, {props: props()});
+        expect(screen.getByTestId('positions-chart-legend-portfolio')).toHaveAttribute('data-kind', 'portfolio');
+        expect(screen.getByTestId('positions-chart-legend-12-3').getAttribute('data-kind')).not.toBe('portfolio');
+    });
+
+    it('the label scrolls when it is too long (F-1): a marquee span, capped in width, holding the whole name', () => {
+        const longName = 'Amundi MSCI Semiconductors UCITS ETF Acc · Broker With A Long Name';
+        render(PositionsReturnChart, {props: props({lines: [PORTFOLIO(), line('12-3', [1, 2, 3], {label: longName})]})});
+        const name = screen.getByTestId('positions-chart-legend-name-12-3');
+        expect(screen.getByTestId('positions-chart-legend-12-3')).toContainElement(name);
+        expect(name).toHaveTextContent(longName);
+        // The marker class is what `scrollOnOverflow` and the design system share; `max-w-*` is what makes it overflow at all.
+        expect(name.className).toContain('overflow-scroll-marquee');
+        expect(name.className).toMatch(/\bmax-w-/);
+        // Not an ellipsis: the tail must stay reachable by the scroll.
+        expect(name.className).not.toContain('truncate');
+    });
+
+    it('the note is shown with the portfolio line (the text it was given)', () => {
+        render(PositionsReturnChart, {props: props()});
+        expect(screen.getByTestId('positions-chart-note')).toHaveTextContent(NOTE);
+    });
+
+    it('a line with closedOn is marked data-closed=true; an open one is not', () => {
+        render(PositionsReturnChart, {props: props({lines: [PORTFOLIO(), A(), line('7-0', [10, 20], {closedOn: '2026-01-02'})]})});
+        expect(screen.getByTestId('positions-chart-legend-7-0')).toHaveAttribute('data-closed', 'true');
+        expect(screen.getByTestId('positions-chart-legend-12-3').getAttribute('data-closed')).not.toBe('true');
+        expect(screen.getByTestId('positions-chart-legend-portfolio').getAttribute('data-closed')).not.toBe('true');
+    });
+});
+
+// =============================================================================
+// The option handed to ECharts
+// =============================================================================
+
+describe('PositionsReturnChart — the option', () => {
+    it('one series per drawn line, with the line id as series id', async () => {
+        await mountReady();
+        expect(seriesIds(ALL_IDS)).toEqual(['12-3', '7-0', 'portfolio']);
+    });
+
+    it('every series carries the values of its line, in order', async () => {
+        await mountReady();
+        const byId = new Map(lineSeries(ALL_IDS).map((s) => [s.id as string, s]));
+        expect(dataValues(byId.get('12-3')!)).toEqual([1, 2, 3]);
+        expect(dataValues(byId.get('portfolio')!)).toEqual([0, 5, 4]);
+    });
+
+    it('a null point stays null in the data, so the line breaks (never 0)', async () => {
+        await mountReady();
+        const values = dataValues(lineSeries(ALL_IDS).find((s) => s.id === '7-0')!);
+        expect(values.filter((v) => v !== null && v !== undefined)).toEqual([10, 30]);
+        expect(values.some((v) => v === null)).toBe(true);
+        expect(values).not.toContain(0);
+    });
+
+    it('a hidden line is not in the option', async () => {
+        await mountReady({hiddenIds: new Set(['7-0'])});
+        expect(seriesIds(ALL_IDS)).toEqual(['12-3', 'portfolio']);
+    });
+
+    it('a line with no point at all is not a series', async () => {
+        await mountReady({lines: [A(), line('7-0', [])]});
+        expect(seriesIds(ALL_IDS)).toEqual(['12-3']);
+    });
+
+    it('the colours come from colorOf', async () => {
+        await mountReady();
+        for (const s of lineSeries(ALL_IDS)) expect(seriesColor(s), `colour of ${s.id}`).toBe(colorOf(s.id as string));
+    });
+
+    it('the absolute view draws its reference at 0', async () => {
+        await mountReady({view: 'absolute'});
+        expect(markLineLevels()).toContain(0);
+        expect(markLineLevels()).not.toContain(100);
+    });
+
+    it('the percentage view draws its reference at 100', async () => {
+        await mountReady({view: 'percentage', lines: [line('12-3', [100, 105, 112]), line('portfolio', [100, 101, 99], {kind: 'portfolio'})]});
+        expect(markLineLevels()).toContain(100);
+        expect(markLineLevels()).not.toContain(0);
+    });
+
+    it('hiding a line redraws without it; showing it brings it back', async () => {
+        const {view} = await mountReady();
+        expect(seriesIds(ALL_IDS)).toContain('7-0');
+
+        await view.rerender({...props({hiddenIds: new Set(['7-0'])})});
+        await waitFor(() => expect(seriesIds(ALL_IDS)).toEqual(['12-3', 'portfolio']));
+
+        await view.rerender({...props({hiddenIds: new Set<string>()})});
+        await waitFor(() => expect(seriesIds(ALL_IDS)).toEqual(['12-3', '7-0', 'portfolio']));
+    });
+
+    it('a new set of lines redraws: a line that joins is drawn, one that leaves is gone', async () => {
+        const {view} = await mountReady({lines: [PORTFOLIO(), A()]});
+        expect(seriesIds(ALL_IDS)).toEqual(['12-3', 'portfolio']);
+
+        await view.rerender({...props({lines: [PORTFOLIO(), line('5-1', [3, 2, 1])]})});
+        await waitFor(() => expect(seriesIds(ALL_IDS)).toEqual(['5-1', 'portfolio']));
+        expect(root()).toHaveAttribute('data-line-count', '2');
+    });
+
+    it('a view change redraws with the new lines’ values', async () => {
+        const {view} = await mountReady({view: 'absolute', lines: [line('12-3', [1, 2, 3])]});
+        expect(dataValues(lineSeries(ALL_IDS)[0])).toEqual([1, 2, 3]);
+
+        await view.rerender({...props({view: 'percentage', lines: [line('12-3', [101, 102, 103])]})});
+        await waitFor(() => expect(dataValues(lineSeries(ALL_IDS)[0])).toEqual([101, 102, 103]));
+        expect(markLineLevels()).toContain(100);
+    });
+});
+
+// =============================================================================
+// FB-12 · Abs/% on the chart, the note under it
+// =============================================================================
+
+describe('PositionsReturnChart — the view toggle is on the chart and the note under it (FB-12)', () => {
+    it('Abs / % sit inside the plot area, not in the title row', async () => {
+        render(PositionsReturnChart, {props: props({lines: [PORTFOLIO()]})});
+        const plot = await screen.findByTestId('positions-chart-plot');
+        expect(within(plot).getByTestId('positions-chart-view-absolute')).toBeInTheDocument();
+        expect(within(plot).getByTestId('positions-chart-view-percentage')).toBeInTheDocument();
+    });
+
+    it('the view toggle is made of icons, as the Assets list’s is (F-3), and the label stays as tooltip and accessible name', async () => {
+        render(PositionsReturnChart, {props: props()});
+        const absolute = screen.getByTestId('positions-chart-view-absolute');
+        const rolling = screen.getByTestId('positions-chart-view-rolling');
+        expect(within(absolute).getByTestId('positions-chart-view-absolute-icon')).toBeInTheDocument();
+        expect(within(rolling).getByTestId('positions-chart-view-rolling-icon')).toBeInTheDocument();
+        // No word drawn inside the buttons: «%» is the one symbol of the Assets list too.
+        expect(rolling.textContent?.trim()).toBe('');
+        expect(absolute.textContent?.trim()).toBe('');
+        expect(screen.getByTestId('positions-chart-view-percentage').textContent?.trim()).toBe('%');
+        for (const option of ['absolute', 'percentage', 'rolling']) {
+            const button = screen.getByTestId(`positions-chart-view-${option}`);
+            const name = button.getAttribute('aria-label') ?? '';
+            expect(name, `${option}: an accessible name`).not.toBe('');
+            expect(name).not.toContain('dashboard.');
+            expect(button.getAttribute('title') ?? '', `${option}: the label is in the tooltip`).toContain(name);
+        }
+    });
+
+    it('the note comes after the plot, below the chart', async () => {
+        render(PositionsReturnChart, {props: props({lines: [PORTFOLIO()]})});
+        const plot = await screen.findByTestId('positions-chart-plot');
+        const note = screen.getByTestId('positions-chart-note');
+        expect(plot.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+});
+
+// =============================================================================
+// FB-15 · the third view: the rolling return of the asset's price
+// =============================================================================
+
+describe('PositionsReturnChart — the Rolling view (FB-15)', () => {
+    it('offers Abs, %, Rolling, and a click on Rolling reports it', async () => {
+        const onviewchange = vi.fn();
+        render(PositionsReturnChart, {props: props({onviewchange})});
+        for (const option of ['absolute', 'percentage', 'rolling']) expect(screen.getByTestId(`positions-chart-view-${option}`)).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('positions-chart-view-rolling'));
+
+        expect(onviewchange).toHaveBeenCalledWith('rolling');
+    });
+
+    it('marks the Rolling view as the pressed one when it is the view', () => {
+        render(PositionsReturnChart, {props: props({view: 'rolling', lines: [A()]})});
+        expect(screen.getByTestId('positions-chart-view-rolling')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('positions-return-chart')).toHaveAttribute('data-view', 'rolling');
+    });
+
+    it('draws the percentage points as they are, with the reference at 0', async () => {
+        await mountReady({view: 'rolling', lines: [line('12-3', [1.5, -2, 4])]});
+        const byId = new Map(lineSeries(['12-3']).map((s) => [s.id as string, s]));
+        expect(dataValues(byId.get('12-3')!)).toEqual([1.5, -2, 4]);
+        expect(markLineLevels()).toContain(0);
+        expect(markLineLevels()).not.toContain(100);
+    });
+
+    it('writes the axis in percent', async () => {
+        await mountReady({view: 'rolling', lines: [line('12-3', [1.5, -2, 4])]});
+        const option = [...chartInstances]
+            .reverse()
+            .flatMap((chart) => [...chart.setOptionCalls].reverse())
+            .find((call) => call.option.yAxis)?.option as Json;
+        const formatter = ((option.yAxis as Json).axisLabel as Json).formatter as (value: number) => string;
+        expect(formatter(2.5)).toContain('%');
+    });
+
+    it('has no portfolio line in this view, so no note about it', async () => {
+        render(PositionsReturnChart, {props: props({view: 'rolling', lines: [A()], note: NOTE})});
+        expect(screen.queryByTestId('positions-chart-note')).toBeNull();
+    });
+});
+
+// =============================================================================
+// B8 · the same asset at two brokers: one colour, two patterns
+// =============================================================================
+
+describe('PositionsReturnChart — two brokers holding one asset (B8)', () => {
+    const SAME = () => [line('22-1', [1, 2, 3]), line('22-2', [1, 2, 3]), line('7-0', [4, 5, 6])];
+    const dashOfSeries = (id: string) => (lineSeries(['22-1', '22-2', '7-0']).find((entry) => entry.id === id)?.lineStyle as Json | undefined)?.type;
+
+    it('the lines of one asset take different patterns, the first solid; a line alone is solid', async () => {
+        await mountReady({lines: SAME(), colorOf: () => 'rgb(9, 9, 9)'});
+        expect(dashOfSeries('22-1')).toBe('solid');
+        expect(dashOfSeries('22-2')).toBe('dashed');
+        expect(dashOfSeries('7-0')).toBe('solid');
+    });
+
+    it('the legend says the pattern of each line', async () => {
+        await mountReady({lines: SAME(), colorOf: () => 'rgb(9, 9, 9)'});
+        expect(screen.getByTestId('positions-chart-legend-22-1')).toHaveAttribute('data-dash', 'solid');
+        expect(screen.getByTestId('positions-chart-legend-22-2')).toHaveAttribute('data-dash', 'dashed');
+    });
+
+    it('hiding the first line does not change the pattern of the second (it is the broker’s, not the position in the drawn list)', async () => {
+        await mountReady({lines: SAME(), hiddenIds: new Set(['22-1']), colorOf: () => 'rgb(9, 9, 9)'});
+        expect(dashOfSeries('22-2')).toBe('dashed');
+    });
+});
+
+// =============================================================================
+// F-1 · a long name in the tooltip scrolls
+// =============================================================================
+
+describe('PositionsReturnChart — the tooltip scrolls a long name (F-1)', () => {
+    const LONG = 'Amundi MSCI Semiconductors UCITS ETF Acc · A broker with a very long name';
+
+    function tooltipFormatter(): (params: unknown) => string {
+        const call = [...chartInstances[0].setOptionCalls].reverse().find(({option}) => option.tooltip !== undefined);
+        return (call!.option.tooltip as Json).formatter as (params: unknown) => string;
+    }
+
+    it('each row of the tooltip holds the whole name in a marquee, never an ellipsis, with the value beside it', async () => {
+        await mountReady({lines: [line('12-3', [1, 2, 3], {label: LONG}), B()], view: 'absolute'});
+        const html = tooltipFormatter()([
+            {seriesId: '12-3', value: ['2026-01-02', 2]},
+            {seriesId: '7-0', value: ['2026-01-02', 10]},
+        ]);
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        const names = [...host.querySelectorAll<HTMLElement>('.overflow-scroll-marquee')];
+        expect(names.map((entry) => entry.textContent)).toEqual(expect.arrayContaining([LONG, 'Label 7-0']));
+        expect(html, 'the label gives way by scrolling, not by an ellipsis').not.toContain('text-overflow');
+        expect(host.querySelectorAll('[data-tooltip-row]')).toHaveLength(2);
+    });
+
+    it('the chart’s element is watched for the marquee while it lives, and released when it goes', async () => {
+        marquee.attach.mockClear();
+        marquee.stop.mockClear();
+        const {view} = await mountReady();
+        expect(marquee.attach).toHaveBeenCalledTimes(1);
+        expect(marquee.attach.mock.calls[0][0]).toBe(screen.getByTestId('positions-chart-canvas'));
+        view.unmount();
+        expect(marquee.stop).toHaveBeenCalled();
+    });
+});

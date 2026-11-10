@@ -35,6 +35,18 @@ type WorkspaceIntent =
   | { type: 'import'; items: TXCreateItem[] };
 ```
 
+> 2026-11-07 lint: the type above does not match the code. In `TransactionBulkModal.svelte` it is exported as
+> ```typescript
+> export type WorkspaceIntent =
+>   | {action: 'create'} | {action: 'import'}
+>   | {action: 'edit'; txIds: number[]} | {action: 'delete'; txIds: number[]} | {action: 'clone'; txIds: number[]};
+> ```
+> and passed as the `intent` prop that **opens** the modal (the declarative replacement of the old `mode` prop). Rows
+> then read their originals from `txStore` by id. `{action: 'import'}` opens the Import Wizard; its results arrive
+> through `onImportBatch(creates: Array<{tx, todos}>)` and each `TransactionCreateItem` becomes a `create` op via
+> `txCreateItemToPendingOp()`. The `PendingOp[]` lives in the modal's own state; `txStore` holds only the saved rows.
+> The steps below are kept as first written.
+
 ## How It Works
 
 1. User triggers an intent (e.g., clicks "Edit" on a row, or confirms import in `ImportWizardModal`)
@@ -44,7 +56,7 @@ type WorkspaceIntent =
 
 ## Relationship to `ImportTodo`
 
-When `type: 'import'` is dispatched, the `TXCreateItem[]` may contain `field_todos` (see [[concepts/import-todo-signals]]). These become `ImportTodo[]` on the `MergedTransaction` rows — visible warnings/blockers shown in Step 4 of the Import Wizard. They never leave the wizard scope; by the time items arrive in `BulkModal` via `onImportBatch`, they have been resolved or accepted.
+When `type: 'import'` is dispatched, the `TXCreateItem[]` may contain `field_todos` (see [[concepts/import-todo-signals]]). These become `ImportTodo[]` on the `MergedTransaction` rows (type `MergedTx` in `frontend/src/lib/features/transactions/import/importTypes.ts`) — visible warnings/blockers shown in Step 4 of the Import Wizard. They never leave the wizard scope; by the time items arrive in `BulkModal` via `onImportBatch`, they have been resolved or accepted.
 
 ## Why Important
 
@@ -54,6 +66,7 @@ Before `WorkspaceIntent` was introduced, BulkModal had a `mode` prop (`'create' 
 
 | Role | Path |
 |------|------|
-| BulkModal (primary) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| txStore | `frontend/src/lib/stores/transactions/txStore.svelte.ts` |
+| BulkModal (primary) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| txStore | `frontend/src/lib/features/transactions/txStore.svelte.ts` |
+| Import merge types (`MergedTx`, `ImportTodo[]`) | `frontend/src/lib/features/transactions/import/importTypes.ts` |
 | mkdocs (transaction draft state) | `mkdocs_src/docs/developer/frontend/state/transaction-draft.md` |

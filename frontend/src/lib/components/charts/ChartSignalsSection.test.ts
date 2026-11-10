@@ -32,9 +32,16 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
     getCurrencyInfo: vi.fn(() => ({flag_emoji: ''})),
 }));
 
+// The comparison picker groups assets by what the asset store knows is held now, and the section asks the store to load: no server here.
+vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('$lib/stores/reference/assetStore')>()),
+    ensureAssetsLoaded: vi.fn(async () => undefined),
+}));
+
 import ChartSignalsSection, {type SignalDataSummary} from './ChartSignalsSection.svelte';
 import ChartAestheticsSection from './ChartAestheticsSection.svelte';
 import type {SignalConfig, SignalDefinition, SignalProblem} from '$lib/charts/signals';
+import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
 
 /** A configured signal whose summary says "no data" (pointCount 0 → severity error). */
 const SIGNAL: SignalConfig = {
@@ -96,6 +103,11 @@ const INSUFFICIENT_HISTORY_PROBLEM: SignalProblem = {
     selectedStartDate: null,
     selectedEndDate: null,
     excludedPoints: null,
+    unavailablePoints: null,
+    unavailableStart: null,
+    unavailableEnd: null,
+    resyncStart: null,
+    resyncEnd: null,
     message: null,
 };
 
@@ -731,5 +743,274 @@ describe('ChartAestheticsSection — the y-axis scale is labelled from the catal
         const {min, max} = mountMarkedBounds();
 
         expect(boundCaptions(min, max)).toEqual([marked('common.min'), marked('common.max')]);
+    });
+});
+
+describe('ChartSignalsSection — the asset-comparison selector scrolls a long asset name with the project marquee (Y-38)', () => {
+    /*
+     * What it protects: the asset-comparison selector of the signals panel sits in a 192 px box, and both its closed
+     * field and the rows of its list cut the asset's name with an ellipsis: a name is almost never readable whole
+     * (developer's request, 20/10). Decision (a): the field AND the rows scroll, with the marquee the rest of the
+     * project uses for asset names.
+     *
+     * The contract: in the closed field, and in each row of the open list, the option's label (the asset's display
+     * name) sits in ONE element carrying the marquee's marker, as its text
+     * and as its `title`. Nothing else changes: the closed field still shows the name, once.
+     *
+     * How it is read: the selector is `signal-param-<card id>-assetId-select`, its closed field `<selector>-trigger`,
+     * read while closed (with the inline search, an open selector draws its search input there instead), and a row is
+     * `search-select-option-<asset id>` inside the listbox. A marquee is found by `OVERFLOW_MARQUEE_SELECTOR`, the
+     * marker the marquee itself is keyed on: a functional hook, not a style. jsdom has no layout, so nothing ever
+     * overflows here: the contract is the element and its marker, not the motion.
+     *
+     * Red today: the field and the rows draw the label in a span that truncates it; no element carries the marker.
+     */
+    const LONG_NAME = 'Synthetic comparison asset with a deliberately long display name that never fits a 192 px field';
+    /** The asset the card under test compares against: the long name, shown in its closed field. */
+    const SELECTED = {id: 3801, display_name: LONG_NAME};
+    /** The asset the panel's other comparison card holds: the list of the card under test marks it as used elsewhere. */
+    const PINNED = {id: 3802, display_name: 'Synthetic peer asset already held by the other comparison card of the panel'};
+    /** An asset no card holds: its label carries no suffix. */
+    const FREE = {id: 3803, display_name: 'Synthetic free peer'};
+    const ASSETS = [SELECTED, PINNED, FREE];
+    /**
+     * Each asset's label in the list of the card under test. Since Y5-F4 the list is the shared asset panel's: the
+     * label is the asset's name alone (the old select appended ' ✓', ' 📌' and ' 👑'; the panel marks the current
+     * asset with a check, an asset another card holds with a warning, and the chart's own asset as read-only).
+     */
+    const LABELS: Record<number, string> = {
+        [SELECTED.id]: SELECTED.display_name,
+        [PINNED.id]: PINNED.display_name,
+        [FREE.id]: FREE.display_name,
+    };
+    const comparisonStyle: SignalConfig['style'] = {color: '#0ea5e9', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null};
+    /** The card under test. */
+    const CARD: SignalConfig = {id: 'y38-comparison', signalType: 'asset-comparison', params: {assetId: String(SELECTED.id)}, style: comparisonStyle};
+    /** The panel's other comparison card, holding PINNED. */
+    const OTHER_CARD: SignalConfig = {id: 'y38-other-comparison', signalType: 'asset-comparison', params: {assetId: String(PINNED.id)}, style: comparisonStyle};
+    const SELECT_ID = `signal-param-${CARD.id}-assetId-select`;
+
+    beforeEach(async () => {
+        await setupI18n();
+    });
+
+    function normalize(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** Every marquee of an asset's name inside `scope`, read as the text it shows and the title it carries. The row's type badge scrolls its own long label (Y2 FB-10): not a name. */
+    function marqueeReadings(scope: HTMLElement): Array<{text: string; title: string | null}> {
+        return [...scope.querySelectorAll<HTMLElement>(OVERFLOW_MARQUEE_SELECTOR)].filter((marquee) => !marquee.closest('[data-testid*="-type-"]')).map((marquee) => ({text: normalize(marquee.textContent), title: marquee.getAttribute('title')}));
+    }
+
+    /** Mount the panel with its two comparison cards: the selector of the card under test, and its closed field after checking it is closed. */
+    function mountSelector(): {select: HTMLElement; field: HTMLElement} {
+        render(ChartSignalsSection, {signals: [CARD, OTHER_CARD], definitions: [ASSET_COMPARISON_DEFINITION], availableAssets: ASSETS});
+        const select = screen.getByTestId(SELECT_ID);
+        const field = within(select).getByTestId(`${SELECT_ID}-trigger`);
+        expect(field, 'barrier: the field is closed (an open selector draws its search input there instead)').toHaveAttribute('aria-expanded', 'false');
+        return {select, field};
+    }
+
+    /** Open the list from the closed field: each asset's row, after checking it shows the asset's name. */
+    async function openRows(select: HTMLElement, field: HTMLElement): Promise<Array<{id: number; row: HTMLElement}>> {
+        await fireEvent.click(field);
+        const listbox = await within(select).findByRole('listbox');
+        return ASSETS.map(({id, display_name}) => {
+            const row = within(listbox).getByTestId(`search-select-option-${id}`);
+            expect(row, `barrier: the row of asset ${id} shows its name`).toHaveTextContent(display_name);
+            return {id, row};
+        });
+    }
+
+    it('the closed field holds the selected asset’s whole label in one marquee, as its text and its title', () => {
+        // Today: the field draws the label in a span that truncates it, so the long name ends in an ellipsis; no
+        // element of the field carries the marquee's marker.
+        const {field} = mountSelector();
+        expect(field, 'barrier: the closed field shows the selected asset').toHaveTextContent(LONG_NAME);
+
+        expect(marqueeReadings(field), 'the closed field holds no marquee with the whole label: a long asset name is cut by an ellipsis instead of scrolling').toEqual([{text: LABELS[SELECTED.id], title: LABELS[SELECTED.id]}]);
+    });
+
+    it('each row of the open list holds its asset’s whole label in one marquee, as its text and its title', async () => {
+        // Today: every row draws its label in a span that truncates it; no element of a row carries the marquee's
+        // marker.
+        const {select, field} = mountSelector();
+        const rows = await openRows(select, field);
+
+        const readings = Object.fromEntries(rows.map(({id, row}) => [id, marqueeReadings(row)]));
+        expect(readings, 'a row of the list holds no marquee with its whole label: a long asset name is cut by an ellipsis instead of scrolling').toEqual(Object.fromEntries(ASSETS.map(({id}) => [id, [{text: LABELS[id], title: LABELS[id]}]])));
+    });
+
+    it('the closed field shows the selected asset’s whole name exactly once (guard)', () => {
+        // Green today and after: the field's text holds the whole display name once. The marquee must neither drop it
+        // (the name left to a title alone) nor duplicate it (a second copy for a seamless loop).
+        const {field} = mountSelector();
+
+        expect(normalize(field.textContent).split(LONG_NAME).length - 1, 'the closed field does not show the selected asset’s whole name exactly once: the marquee dropped or duplicated it').toBe(1);
+    });
+});
+
+describe('ChartSignalsSection — the comparison asset is picked with the shared asset panel (Y5-F4)', () => {
+    /*
+     * What it protects: the comparison-asset field of a signal card used to be an inline select with emoji suffixes
+     * (crown, check, pin). It is now the panel the risk comparison uses (`AssetPickerPanel`, single mode): a search,
+     * the type and currency filters, rows that say each asset's type and currency, the benchmarks first, the chart's
+     * own asset listed read-only, an asset another comparison already holds still choosable but flagged.
+     *
+     * The contract, read from the DOM and never from a translated word:
+     *  - the ids of the old select stay: the root `signal-param-<card>-assetId-select`, `…-trigger`, `…-search`, the
+     *    rows `search-select-option-<asset id>`; choosing a row stores `params.assetId` as the STRING of the id;
+     *  - once open, the panel's `…-select-filters` and `…-select-filter-currency-button` exist (the old select had none);
+     *  - each `availableAssets` entry reaches the panel with its name, currency, type and icon;
+     *  - `mainPairSlug` (`asset-<id>`) names an asset the card cannot compare against itself: its row sits in the
+     *    panel's blocked group (`…-select-blocked`), disabled, `data-level="ineligible"`, and choosing it does nothing;
+     *  - an asset held by ANOTHER comparison card is a normal row with `data-level="warning"`; the card's own asset is not;
+     *  - `is_benchmark` assets sit under `search-select-header-__section:benchmark`, the rest under `…:__rest`.
+     *
+     * Red today (on the inline select): no filters, no currency or type on the rows, no blocked group, no levels, no headers.
+     */
+    const MAIN = {id: 4101, display_name: 'Y5F4 main chart asset', currency: 'EUR', asset_type: 'ETF', icon_url: null};
+    const BENCH = {id: 4102, display_name: 'Y5F4 benchmark index', currency: 'USD', asset_type: 'STOCK', icon_url: '/icons/y5f4-bench.svg', is_benchmark: true};
+    const PINNED = {id: 4103, display_name: 'Y5F4 held by the other card', currency: 'CHF', asset_type: 'ETF', icon_url: null};
+    const OWN = {id: 4104, display_name: 'Y5F4 held by this card', currency: 'EUR', asset_type: 'BOND', icon_url: null};
+    const FREE = {id: 4105, display_name: 'Y5F4 free peer', currency: 'EUR', asset_type: 'ETF', icon_url: '/icons/y5f4-free.svg'};
+    const ASSETS = [MAIN, BENCH, PINNED, OWN, FREE];
+    const cardStyle: SignalConfig['style'] = {color: '#0ea5e9', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null};
+    const CARD: SignalConfig = {id: 'y5f4-card', signalType: 'asset-comparison', params: {assetId: String(OWN.id)}, style: cardStyle};
+    const OTHER_CARD: SignalConfig = {id: 'y5f4-other-card', signalType: 'asset-comparison', params: {assetId: String(PINNED.id)}, style: cardStyle};
+    const SELECT_ID = `signal-param-${CARD.id}-assetId-select`;
+
+    beforeEach(async () => {
+        await setupI18n();
+    });
+
+    /** Mount the section with two comparison cards and open the picker of the first; returns the emitted-changes spy. */
+    async function mountAndOpen() {
+        const onchange = vi.fn();
+        render(ChartSignalsSection, {signals: [CARD, OTHER_CARD], definitions: [ASSET_COMPARISON_DEFINITION], availableAssets: ASSETS, mainPairSlug: `asset-${MAIN.id}`, onchange});
+        const trigger = within(screen.getByTestId(SELECT_ID)).getByTestId(`${SELECT_ID}-trigger`);
+        await fireEvent.click(trigger);
+        // Barrier: the list is open when a row that is always choosable is on screen.
+        await screen.findByTestId(`search-select-option-${FREE.id}`);
+        return {onchange, trigger};
+    }
+
+    it('groups the assets after the benchmarks like the Assets list — yours, other users’, watched — by what the asset store says is held now (Y2 FB-10)', async () => {
+        const {mergeAssets, resetAssetStore} = await import('$lib/stores/reference/assetStore');
+        resetAssetStore();
+        mergeAssets([
+            {id: PINNED.id, display_name: PINNED.display_name, currency: PINNED.currency, held_by_me: false, held_by_others: true},
+            {id: FREE.id, display_name: FREE.display_name, currency: FREE.currency, held_by_me: true, held_by_others: false},
+            {id: BENCH.id, display_name: BENCH.display_name, currency: BENCH.currency, is_benchmark: true, held_by_me: false, held_by_others: false},
+        ]);
+        await mountAndOpen();
+        const root = screen.getByTestId(SELECT_ID);
+        const order = within(root)
+            .getAllByTestId(/^search-select-(header|option)-/)
+            .map((element) => (element.getAttribute('data-testid') ?? '').replace('search-select-', ''))
+            .filter((id) => !id.startsWith(`option-${MAIN.id}`));
+        expect(order).toEqual([
+            'header-__section:benchmark',
+            `option-${BENCH.id}`,
+            'header-__section:scope-own',
+            `option-${FREE.id}`,
+            'header-__section:scope-others',
+            `option-${PINNED.id}`,
+            // OWN is not in the store: its holder is unknown, so it stays in the rest, under the title the list had before.
+            'header-__section:__rest',
+            `option-${OWN.id}`,
+        ]);
+        resetAssetStore();
+    });
+
+    it('asks the asset store to load when it mounts: a detail page does not load it, and without it nobody is grouped (Y2 FB-10)', async () => {
+        const {ensureAssetsLoaded} = await import('$lib/stores/reference/assetStore');
+        vi.mocked(ensureAssetsLoaded).mockClear();
+        await mountAndOpen();
+        expect(ensureAssetsLoaded).toHaveBeenCalled();
+    });
+
+    it('keeps the old ids and shows the type and currency filters once open', async () => {
+        await mountAndOpen();
+
+        expect(screen.getByTestId(`${SELECT_ID}-search`)).toBeInTheDocument();
+        expect(screen.getByTestId(`${SELECT_ID}-filters`), 'the panel draws its filter row').toBeInTheDocument();
+        expect(screen.getByTestId(`${SELECT_ID}-filter-type-button`)).toBeInTheDocument();
+        expect(screen.getByTestId(`${SELECT_ID}-filter-currency-button`)).toBeInTheDocument();
+    });
+
+    it('offers the currencies of the compared assets in the currency filter', async () => {
+        await mountAndOpen();
+
+        await fireEvent.click(screen.getByTestId(`${SELECT_ID}-filter-currency-button`));
+        for (const currency of new Set(ASSETS.map((asset) => asset.currency))) {
+            expect(await screen.findByTestId(`${SELECT_ID}-filter-currency-${currency}`), `the currency menu lists ${currency}`).toBeInTheDocument();
+        }
+    });
+
+    it('describes each asset to the panel with its name, currency, type and icon', async () => {
+        await mountAndOpen();
+
+        for (const asset of [BENCH, PINNED, FREE]) {
+            const row = screen.getByTestId(`search-select-option-${asset.id}`);
+            expect(row, `the row of ${asset.id} shows its name`).toHaveTextContent(asset.display_name);
+            expect(row, `the row of ${asset.id} shows its currency`).toHaveTextContent(asset.currency);
+            expect(row, `the row of ${asset.id} shows its type, as the catalogue words it`).toHaveTextContent(get(t)(`assets.types.${asset.asset_type}`));
+            if (asset.icon_url) expect(row.querySelector('img'), `the row of ${asset.id} shows its own icon`).toHaveAttribute('src', asset.icon_url);
+        }
+    });
+
+    it('lists the chart’s own asset read-only in the blocked group, not as a choosable row', async () => {
+        const {onchange} = await mountAndOpen();
+
+        const blocked = screen.getByTestId(`${SELECT_ID}-blocked`);
+        const row = within(blocked).getByTestId(`search-select-option-${MAIN.id}`);
+        expect(row).toHaveAttribute('data-level', 'ineligible');
+        expect(row, 'a blocked row cannot be pressed').toBeDisabled();
+        for (const choosable of [BENCH, PINNED, OWN, FREE]) {
+            expect(within(blocked).queryByTestId(`search-select-option-${choosable.id}`), `${choosable.id} is not blocked`).toBeNull();
+        }
+
+        await fireEvent.click(row);
+        expect(onchange, 'choosing the chart’s own asset changes nothing').not.toHaveBeenCalled();
+        expect(screen.getByTestId(`${SELECT_ID}-trigger`)).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('keeps an asset held by another comparison choosable and flags it with a warning; the card’s own asset carries none', async () => {
+        await mountAndOpen();
+
+        const pinned = screen.getByTestId(`search-select-option-${PINNED.id}`);
+        expect(pinned).toHaveAttribute('data-level', 'warning');
+        expect(pinned).not.toBeDisabled();
+        expect(screen.getByTestId(`search-select-option-${OWN.id}`)).not.toHaveAttribute('data-level', 'warning');
+        expect(screen.getByTestId(`search-select-option-${FREE.id}`)).not.toHaveAttribute('data-level', 'warning');
+    });
+
+    it('groups the benchmarks under their own section header, the rest under the other one', async () => {
+        await mountAndOpen();
+
+        const benchHeader = screen.getByTestId('search-select-header-__section:benchmark');
+        const restHeader = screen.getByTestId('search-select-header-__section:__rest');
+        const before = (first: Element, second: Element) => Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+        const bench = screen.getByTestId(`search-select-option-${BENCH.id}`);
+        expect(before(benchHeader, bench), 'the benchmark follows its header').toBe(true);
+        expect(before(bench, restHeader), 'the benchmark comes before the other-assets header').toBe(true);
+        for (const other of [PINNED, OWN, FREE]) {
+            expect(before(restHeader, screen.getByTestId(`search-select-option-${other.id}`)), `${other.id} sits under the other-assets header`).toBe(true);
+        }
+    });
+
+    it('choosing a row stores the id as a string and emits the change', async () => {
+        const {onchange} = await mountAndOpen();
+
+        await fireEvent.click(screen.getByTestId(`search-select-option-${FREE.id}`));
+
+        await waitFor(() => expect(onchange).toHaveBeenCalledTimes(1));
+        const emitted = onchange.mock.calls[0][0] as SignalConfig[];
+        const card = emitted.find((signal) => signal.id === CARD.id);
+        expect(card?.params.assetId).toBe(String(FREE.id));
+        expect(emitted.find((signal) => signal.id === OTHER_CARD.id)?.params.assetId, 'the other card is untouched').toBe(String(PINNED.id));
     });
 });

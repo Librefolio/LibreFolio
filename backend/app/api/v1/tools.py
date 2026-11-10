@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -15,11 +15,16 @@ from starlette.types import Message, Receive, Scope
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.schemas.tools import ToolCatalogResponse, ToolComputeBatchRequest, ToolComputeBatchResponse, ToolDiagnosticsResponse, ToolPlatformPolicy
+from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolExecutionError
 from backend.app.services.tools.catalog import effective_catalog_entries
 from backend.app.services.tools.catalog import get_tool_catalog as build_tool_catalog
 from backend.app.services.tools.executor import get_tool_executor
+from backend.app.services.tools.settings import bound_settings_for_batch
 from backend.app.services.tools.wire import parse_json, validate_json_value
+
+# Request budget of the catalogue and diagnostics routes, capped by the platform's request_timeout_ms.
+_READ_ROUTE_TIMEOUT_MS = 20_000
 
 
 def _validate_envelope_strings(value: object, max_depth: int) -> None:
@@ -66,7 +71,7 @@ class _ToolRequest(Request):
             self._has_decoded = True
         return self._decoded
 
-    def begin_execution(self, timeout_ms: int = 20_000) -> None:
+    def begin_execution(self, timeout_ms: int = _READ_ROUTE_TIMEOUT_MS) -> None:
         bounded_timeout_ms = min(timeout_ms, self.policy.request_timeout_ms)
         remaining = self.started + bounded_timeout_ms / 1000 - time.monotonic()
         if remaining <= 0:
@@ -77,10 +82,15 @@ class _ToolRequest(Request):
 class ToolRoute(APIRoute):
     def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
         handler = super().get_route_handler()
+        # The ingress window bounds receiving and validating a request body, and the dependencies resolved with it.
+        # A route without a body has no ingress phase: it opens directly under its own request budget, so its
+        # authentication cannot exhaust a window sized for a body it never reads.
+        has_body = self.body_field is not None
 
         async def bounded_handler(request: Request) -> Response:
             policy = get_tool_executor().policy
             started = time.monotonic()
+            opening_window_ms = policy.ingress_timeout_ms if has_body else min(_READ_ROUTE_TIMEOUT_MS, policy.request_timeout_ms)
             content_length = request.headers.get("content-length")
             if content_length is not None:
                 if not content_length.isascii() or not content_length.isdecimal():
@@ -89,7 +99,7 @@ class ToolRoute(APIRoute):
                 if len(significant_length) > len(str(policy.max_request_bytes)) or int(significant_length) > policy.max_request_bytes:
                     raise HTTPException(status_code=413, detail="Tool request body limit exceeded")
             try:
-                async with asyncio.timeout(policy.ingress_timeout_ms / 1000) as timeout:
+                async with asyncio.timeout(opening_window_ms / 1000) as timeout:
                     bounded_request = _ToolRequest(request.scope, request.receive, policy=policy, started=started, timeout=timeout)
                     response = await handler(bounded_request)
                     if request.method == "POST" and len(response.body) > policy.max_response_bytes:
@@ -107,7 +117,7 @@ class ToolRoute(APIRoute):
 router = APIRouter(prefix="/tools", tags=["Tools"], route_class=ToolRoute)
 
 
-def _execution_request(request: Request, *, timeout_ms: int = 20_000) -> _ToolRequest:
+def _execution_request(request: Request, *, timeout_ms: int = _READ_ROUTE_TIMEOUT_MS) -> _ToolRequest:
     if not isinstance(request, _ToolRequest):
         raise RuntimeError("Tool endpoints require their bounded transport route")
     request.begin_execution(timeout_ms)
@@ -121,8 +131,8 @@ async def _client_disconnected(request: Request) -> None:
             return
 
 
-async def _compute_until_disconnect(batch: ToolComputeBatchRequest, request: _ToolRequest, principal_key: str) -> ToolComputeBatchResponse | Response:
-    work = asyncio.create_task(get_tool_executor().compute(batch, principal_key=principal_key, request_started=request.started))
+async def _compute_until_disconnect(batch: ToolComputeBatchRequest, request: _ToolRequest, principal_key: str, settings: Mapping[str, BoundSettings] | None = None) -> ToolComputeBatchResponse | Response:
+    work = asyncio.create_task(get_tool_executor().compute(batch, principal_key=principal_key, request_started=request.started, settings=settings))
     disconnect = asyncio.create_task(_client_disconnected(request))
     try:
         completed, _pending = await asyncio.wait((work, disconnect), return_when=asyncio.FIRST_COMPLETED)
@@ -154,7 +164,9 @@ async def compute_tools(batch: ToolComputeBatchRequest, request: Request, curren
     if current_user.id is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        return await _compute_until_disconnect(batch, bounded_request, str(current_user.id))
+        # The values of the tools' settings are resolved here, in the parent, for the user who asks (CP12): the worker has no database.
+        settings = await bound_settings_for_batch(batch, user_id=current_user.id)
+        return await _compute_until_disconnect(batch, bounded_request, str(current_user.id), settings)
     except ToolExecutionError as exc:
         status_code = 429 if exc.code == "queue_full" else 503
         raise HTTPException(status_code=status_code, detail={"code": exc.code, "retryable": exc.retryable}) from exc

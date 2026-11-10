@@ -5,7 +5,7 @@ status: resolved
 date: 2026-05-10
 updated: 2026-10-12
 tags: [frontend, svelte5, tanstack, table, adapter]
-related_features: [F-075]
+related: [features/F-075]
 ---
 
 # Problem: TanStack Table v8 — Svelte 5 Incompatibility
@@ -23,7 +23,7 @@ A custom Svelte 5 adapter was created at `frontend/src/lib/tanstack-table/`. Thi
 **[[F-075]]** — When TanStack Table v9 releases a stable official Svelte adapter, migrate to it and delete the custom adapter.
 
 ## Resolution (verified in git, 2026-10-12)
-Resolved by removal, not by the migration: commit `52c8d0d70` (2026-08-05, the code audit, bands S1–S3) deleted the
+Resolved by removal, not by the migration: commit `cd7b24bb4` (2026-08-05, the code audit, bands S1–S3) deleted the
 vendored `tanstack-table/`, "absorbed by the project's own table implementation", and dropped `@tanstack/table-core`
 from `frontend/package.json`. Nothing is left to migrate, so [[F-075]] is superseded.
 
@@ -31,7 +31,7 @@ from `frontend/package.json`. Nothing is left to migrate, so [[F-075]] is supers
 Before adopting a UI library adapter, verify it explicitly supports the target framework version (Svelte 5 runes in this case).
 
 ## Affected files
-- `frontend/src/lib/tanstack-table/` (custom adapter — workaround)
+- `frontend/src/lib/tanstack-table/` (custom adapter — workaround; removed in `cd7b24bb4`)
 - All `DataTable` usages in `frontend/src/lib/components/table/`
 
 ## Source files

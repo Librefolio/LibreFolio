@@ -34,7 +34,7 @@ valued positions. The user saw no defect.
 
 ## Solution
 
-Commit `9e495c305` ("fix(ai-export): probe accepts an unavailable HHI", train 56), approved by the developer for 1.2
+Commit `b9e40fe21` ("fix(ai-export): probe accepts an unavailable HHI", train 56), approved by the developer for 1.2
 («Sì, nella 1.2: la cura della sonda più i test rossi»):
 
 - a raw `None` HHI is accepted only when the same record carries `largest_position_weight_percent`, also `None`; it is
@@ -63,6 +63,9 @@ the legitimate exceptions, rather than drop them or let them fail the run.
 - **T-U7**: the HHI is computed twice in AI Export (`broker_financial.py` and `broker_concentration_context.py`); its
   home is `financial_math`, after 1.2. In the same item, a NAV ≤ 0 makes the service use 1 as the weight denominator,
   which would push the HHI above 10 000 — the probe would flag it, rightly.
+  *2026-11-07 lint: done — both components now call `financial_math.weights.concentration`, and in the same module
+  `share_of()` returns no share when the total is not positive (commit `1c1407d71`, «one home for weights, no share of
+  a non-positive total»).*
 - **T-U9**: the comparison's `reason_code` reads `broker_summary_unavailable` also when the summary exists but has no
   holdings; changing it changes the contract, so a v2.
 
@@ -72,6 +75,7 @@ the legitimate exceptions, rather than drop them or let them fail the run.
 |------|------|
 | The probe (`audit_snapshot_semantics`, `build_quality_summary`) | `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py` |
 | The probe's tests | `backend/test_scripts/test_utilities/test_ai_export_real_prompt_probe.py` |
+| HHI home (`concentration`) | `backend/app/services/financial_math/weights.py` |
 | The two components that emit the HHI | `backend/app/services/ai_export/components/broker_financial.py`, `backend/app/services/ai_export/components/broker_concentration_context.py` |
 | The renderer's `null` legend | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
 | C-55 analysis, decision and implementation | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |

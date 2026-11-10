@@ -14,10 +14,10 @@ from functools import lru_cache
 from typing import Annotated, Literal, Optional
 
 import pycountry
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
 from backend.app.db.models import OnboardingFlow, OnboardingStatus
-from backend.app.schemas.common import BaseListResponse
+from backend.app.schemas.common import BaseListResponse, IsoCurrencyCode
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # ============================================================================
@@ -25,22 +25,64 @@ from backend.app.utils.datetime_utils import UTCDateTime
 # ============================================================================
 
 
+#: The themes the web app knows. ``auto`` is a value, not a source: the user's browser decides, from the system's light or
+#: dark preference.
+ThemePreference = Literal["light", "dark", "auto"]
+#: The shapes a chart line can take (FB-3): straight segments, steps, a smooth curve that never leaves its neighbours.
+ChartLineShape = Literal["segments", "steps", "spline"]
+
+#: The largest ``user_settings.ui_preferences`` a write may leave, as JSON text: a guard against a column grown by hand.
+UI_PREFERENCES_MAX_BYTES = 2048
+
+
+class UIPreferences(BaseModel):
+    """The user's own interface preferences; a key left out follows the administrator's global default."""
+
+    # Kept as JSON in user_settings.ui_preferences. Every key is optional; an absent key follows the global default
+    # (UIPreferenceDefaults). A response lists only the keys the user chose. In a PUT /settings/user it is a partial
+    # write: only the keys it names change, and a key sent as null is removed, so it follows the global default again.
+    # A new preference is one more field here, then ./dev.py api sync: no migration. The docstring stays on one line
+    # without backticks: it becomes the client's .describe() text (test_openapi_client_text.py).
+
+    theme: Optional[ThemePreference] = Field(None, description="UI theme; auto lets the browser follow the system")
+    chart_line_shape: Optional[ChartLineShape] = Field(None, description="Shape of the chart lines that have none of their own")
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_serializer(mode="wrap")
+    def _own_keys_only(self, handler: SerializerFunctionWrapHandler):  # noqa: ANN202 — no return type: the schema stays the model's
+        """Only the keys the user chose: a key the response leaves out follows the global default."""
+        return {key: value for key, value in handler(self).items() if value is not None}
+
+
+class UIPreferenceDefaults(BaseModel):
+    """The value each interface preference takes when the user has not chosen it: the instance's global settings."""
+
+    theme: ThemePreference = Field(..., description="The global default_theme")
+    chart_line_shape: ChartLineShape = Field(..., description="The global default_chart_line_shape")
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class UserSettingsRead(BaseModel):
     """User settings response schema."""
 
     language: str = Field(..., description="Preferred language (en, it, fr, es)")
     base_currency: str = Field(..., description="Base currency for display (ISO 4217)")
-    theme: Literal["light", "dark", "auto"] = Field(..., description="UI theme")
     avatar_url: Optional[str] = Field(None, description="URL to user avatar image")
+    ui_preferences: UIPreferences = Field(default_factory=UIPreferences, description="The interface preferences the user chose; a key left out follows ui_preference_defaults")
+    ui_preference_defaults: UIPreferenceDefaults = Field(..., description="The global default of every interface preference")
 
 
 class UserSettingsUpdate(BaseModel):
-    """User settings update request. All fields optional."""
+    """User settings update request. All fields optional; ``ui_preferences`` merges key by key, ``null`` removes a key."""
 
     language: Optional[str] = Field(None, min_length=2, max_length=5)
-    base_currency: Optional[str] = Field(None, min_length=3, max_length=3)
-    theme: Optional[Literal["light", "dark", "auto"]] = None
+    base_currency: Optional[IsoCurrencyCode] = Field(None, min_length=3, max_length=3)
     avatar_url: Optional[str] = Field(None, max_length=500, description="URL to user avatar image")
+    ui_preferences: Optional[UIPreferences] = Field(None, description="The interface preferences to change: a key sent with a value is set, a key sent as null is removed, a key left out is kept")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 # ============================================================================
@@ -93,7 +135,7 @@ class OnboardingWelcomeSettings(BaseModel):
     """Preferences committed atomically when the welcome flow finishes."""
 
     language: Literal["en", "it", "fr", "es"]
-    base_currency: str = Field(..., min_length=3, max_length=3)
+    base_currency: IsoCurrencyCode = Field(..., min_length=3, max_length=3)
     avatar_url: Optional[str] = Field(None, max_length=500)
 
     model_config = ConfigDict(extra="forbid")
@@ -174,6 +216,10 @@ class SchedulerJobStateInfo(BaseModel):
     last_status: Optional[str] = Field(None, description="Outcome of the last run: ok, partial, or error")
     last_items_ok: int = Field(..., description="Items processed successfully in the last run")
     last_items_err: int = Field(..., description="Items that failed in the last run")
+    last_items_deferred: int = Field(0, description="Items a provider's pause after too many requests deferred in the last run: neither ok nor failed")
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred items are retried, before the regular round; null when none")
+    consecutive_failures: int = Field(0, description="Runs in a row that raised")
+    next_attempt_at: Optional[str] = Field(None, description="ISO-8601 datetime before which the job does not run again after a run that raised; null when none")
 
 
 class SchedulerStateResponse(BaseModel):
@@ -194,6 +240,8 @@ class SchedulerLogCurrentPriceItem(BaseModel):
     ok: bool
     icon_url: Optional[str] = None
     error: Optional[str] = None
+    deferred: bool = Field(False, description="The provider was paused after too many requests: the item is retried later, neither ok nor failed")
+    retry_after: Optional[float] = Field(None, description="With deferred: seconds of the provider's pause, when known")
 
 
 class SchedulerLogHistoryAssetItem(BaseModel):
@@ -208,6 +256,8 @@ class SchedulerLogHistoryAssetItem(BaseModel):
     prices_changed: Optional[int] = None
     events_changed: Optional[int] = None
     points_changed: Optional[int] = Field(None, description="Legacy field name used by log entries written before prices_changed/events_changed existed")
+    deferred: bool = Field(False, description="The provider was paused after too many requests: the item is retried later, neither ok nor failed")
+    retry_after: Optional[float] = Field(None, description="With deferred: seconds of the provider's pause, when known")
 
 
 class SchedulerLogHistoryFxItem(BaseModel):
@@ -220,6 +270,8 @@ class SchedulerLogHistoryFxItem(BaseModel):
     errors: Optional[list[str]] = None
     provider: Optional[str] = None
     points_changed: int
+    deferred: bool = Field(False, description="The provider was paused after too many requests: the pair is retried later, neither ok nor failed")
+    retry_after: Optional[float] = Field(None, description="With deferred: seconds of the provider's pause, when known")
 
 
 class SchedulerLogCurrentPriceSummary(BaseModel):
@@ -227,6 +279,7 @@ class SchedulerLogCurrentPriceSummary(BaseModel):
 
     ok: int
     err: int
+    deferred: int = Field(0, description="Items deferred by a provider's pause, counted in neither ok nor err")
 
 
 class SchedulerLogHistorySyncSummary(BaseModel):
@@ -236,6 +289,8 @@ class SchedulerLogHistorySyncSummary(BaseModel):
     assets_err: int
     fx_ok: int
     fx_err: int
+    assets_deferred: int = Field(0, description="Assets deferred by a provider's pause, counted in neither assets_ok nor assets_err")
+    fx_deferred: int = Field(0, description="FX pairs deferred by a provider's pause, counted in neither fx_ok nor fx_err")
 
 
 class SchedulerLogCurrentPriceEntry(BaseModel):
@@ -246,6 +301,7 @@ class SchedulerLogCurrentPriceEntry(BaseModel):
     duration_s: float
     status: str
     summary: SchedulerLogCurrentPriceSummary
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred items are retried; null when none")
     items: list[SchedulerLogCurrentPriceItem]
 
 
@@ -257,6 +313,7 @@ class SchedulerLogHistorySyncEntry(BaseModel):
     duration_s: float
     status: str
     summary: SchedulerLogHistorySyncSummary
+    retry_at: Optional[str] = Field(None, description="ISO-8601 datetime when the deferred items are retried; null when none")
     assets: list[SchedulerLogHistoryAssetItem]
     fx: list[SchedulerLogHistoryFxItem]
 
@@ -285,12 +342,16 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "int",
         "description": "Session cookie TTL in hours (default: 24)",
     },
-    "enable_registration": {
-        "value": "true",
-        "type": "bool",
-        "description": "Allow new user registration",
+    # Who may create an account; LIBREFOLIO_REGISTRATION, when set, pins it and the row is read-only. A new install
+    # starts by invitation (decision 36): its first account can always be created, and an install upgraded with
+    # accounts but no row keeps registration open (the data migration registration_invite_default).
+    "registration_mode": {
+        "value": "invite",
+        "type": "str",
+        "description": "Who may create an account: open, invite or disabled",
     },
-    # placeholder — email verification not implemented (see TODO_FUTURI email server)
+    # Read by services/email/verification.py (workstream E, developer decision 44): every account but the first waits for
+    # an emailed link before it can sign in. It turns on only while an email with a link can go out.
     "require_email_verification": {
         "value": "false",
         "type": "bool",
@@ -301,6 +362,24 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "value": "10",
         "type": "int",
         "description": "Max file upload size in MB",
+    },
+    # Backup clean-up (FB-24): the kept backups, by total size and by age; 0 switches a rule off. A managed instance
+    # gives rows nobody saved 250 MB and 30 days (global_settings_service), and refuses 0 MB.
+    "backup_cleanup_max_mb": {
+        "value": "0",
+        "type": "int",
+        "description": "Most megabytes the kept backups may take; the oldest go first, the latest is always kept (0 = no limit)",
+    },
+    "backup_cleanup_max_days": {
+        "value": "0",
+        "type": "int",
+        "description": "Days a kept backup stays before it is removed, the latest is always kept (0 = keep for ever)",
+    },
+    # Space of the instance (FB-29): the limit of the space bar; 0 = no limit. LIBREFOLIO_STORAGE_LIMIT_MB wins over it.
+    "storage_limit_mb": {
+        "value": "0",
+        "type": "int",
+        "description": "Most megabytes the instance may take, for the space bar of the Files page (0 = no limit)",
     },
     # Market Data Scheduler
     "scheduler_enabled": {
@@ -347,7 +426,12 @@ GLOBAL_SETTINGS_DEFAULTS = {
     "default_theme": {
         "value": "auto",
         "type": "str",
-        "description": "Default theme for new users (light, dark, auto)",
+        "description": "Theme of every user who has not chosen one (light, dark, auto)",
+    },
+    "default_chart_line_shape": {
+        "value": "segments",
+        "type": "str",
+        "description": "Chart line shape of every user who has not chosen one (segments, steps, spline)",
     },
 }
 
@@ -372,6 +456,9 @@ class SettingConstraint:
 GLOBAL_SETTINGS_CONSTRAINTS: dict[str, SettingConstraint] = {
     "session_ttl_hours": SettingConstraint(min=1, max=8760),
     "max_file_upload_mb": SettingConstraint(min=1, max=1024),
+    "backup_cleanup_max_mb": SettingConstraint(min=0, max=1048576),
+    "backup_cleanup_max_days": SettingConstraint(min=0, max=3650),
+    "storage_limit_mb": SettingConstraint(min=0, max=10485760),
     "scheduler_current_price_frequency_minutes": SettingConstraint(min=1, max=1440),
     "scheduler_history_sync_times": SettingConstraint(format="hhmm_list"),
     "scheduler_history_sync_days": SettingConstraint(format="weekday_list"),
@@ -380,6 +467,8 @@ GLOBAL_SETTINGS_CONSTRAINTS: dict[str, SettingConstraint] = {
     "default_currency": SettingConstraint(format="currency"),
     "default_language": SettingConstraint(choices=("en", "it", "fr", "es")),
     "default_theme": SettingConstraint(choices=("light", "dark", "auto")),
+    "default_chart_line_shape": SettingConstraint(choices=("segments", "steps", "spline")),
+    "registration_mode": SettingConstraint(choices=("open", "invite", "disabled")),
 }
 
 _BOOL_WORDS = {"true": "true", "1": "true", "yes": "true", "on": "true", "false": "false", "0": "false", "no": "false", "off": "false"}
@@ -533,7 +622,7 @@ class SETTINGS_REGISTRY:
 
         BASE_CURRENCY = SettingSpec(key="base_currency", location="user", value_type="str", description="Base currency for display (ISO 4217)")
         LANGUAGE = SettingSpec(key="language", location="user", value_type="str", description="Preferred language (en, it, fr, es)")
-        THEME = SettingSpec(key="theme", location="user", value_type="str", description="UI theme (light, dark, auto)")
+        UI_PREFERENCES = SettingSpec(key="ui_preferences", location="user", value_type="json", description="Interface preferences the user chose (UIPreferences); an absent key follows its global default")
         AVATAR_URL = SettingSpec(key="avatar_url", location="user", value_type="str", description="URL to user avatar image")
 
         @classmethod
@@ -546,10 +635,15 @@ class SETTINGS_REGISTRY:
 
         # Authentication & Security
         SESSION_TTL_HOURS = _global_spec("session_ttl_hours")
-        ENABLE_REGISTRATION = _global_spec("enable_registration")
+        REGISTRATION_MODE = _global_spec("registration_mode")
         REQUIRE_EMAIL_VERIFICATION = _global_spec("require_email_verification")
         # File Upload
         MAX_FILE_UPLOAD_MB = _global_spec("max_file_upload_mb")
+        # Backup clean-up
+        BACKUP_CLEANUP_MAX_MB = _global_spec("backup_cleanup_max_mb")
+        BACKUP_CLEANUP_MAX_DAYS = _global_spec("backup_cleanup_max_days")
+        # Space of the instance
+        STORAGE_LIMIT_MB = _global_spec("storage_limit_mb")
         # Market Data Scheduler
         SCHEDULER_ENABLED = _global_spec("scheduler_enabled")
         SCHEDULER_CURRENT_PRICE_FREQUENCY_MINUTES = _global_spec("scheduler_current_price_frequency_minutes")
@@ -561,6 +655,7 @@ class SETTINGS_REGISTRY:
         DEFAULT_CURRENCY = _global_spec("default_currency")
         DEFAULT_LANGUAGE = _global_spec("default_language")
         DEFAULT_THEME = _global_spec("default_theme")
+        DEFAULT_CHART_LINE_SHAPE = _global_spec("default_chart_line_shape")
 
         @classmethod
         def all(cls) -> tuple[SettingSpec, ...]:

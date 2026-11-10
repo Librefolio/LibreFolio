@@ -16,8 +16,8 @@ related:
 
 # Decision: plugins as folders, translations split by subsystem
 
-> **Update (step D of the historian, 2026-10-12, at `145502a39`): U-1 is in the code.** `2eed3d26c` («one folder per
-> plugin», merged in train 61, `bd8ee8e4d`) moved the 84 first-party plugins with `git mv` (82 renames at 100 %, 2 at
+> **Update (step D of the historian, 2026-10-12, at `a9d29b51d`): U-1 is in the code.** `0848f26bf` («one folder per
+> plugin», merged in train 61, `029fa39d3`) moved the 84 first-party plugins with `git mv` (82 renames at 100 %, 2 at
 > 99 %) to `<family>/<name>/plugin.py`, each beside an `__init__.py` that is only its docstring — «the code is in
 > ``plugin.py``, which the registry loads; this package re-exports nothing». Discovery loads `plugin.py` as
 > `<namespace>.<name>.plugin` (`PLUGIN_MODULE_NAME` in `provider_registry.py`); the family helpers (`_brim_io.py`,
@@ -26,8 +26,12 @@ related:
 > U-2 (a catalogue built from sources) and U-3 (one catalogue per subsystem and plugin) are later steps of plan 45, and
 > `frontend/src/lib/i18n/` still holds one catalogue per language.
 
-> **Update (train 71, 2026-10-12, at `c57acf510`): U-2 is in the code — the catalogue is built from its sources.**
-> `1b31f9057` («feat(i18n): build the catalogue from its sources»):
+*Update 2026-10-17 (CP-10b):* the signal contract left the family root for `services/signals/base.py`, the signals
+runtime package. A family root now keeps only `__init__.py` and its `_*.py` helpers, and the layout gate no longer
+allows a `base.py` there.
+
+> **Update (train 71, 2026-10-12, at `91b3be2bc`): U-2 is in the code — the catalogue is built from its sources.**
+> `651143e03` («feat(i18n): build the catalogue from its sources»):
 >
 > - **Generated, never edited.** The catalogue the app loads, `frontend/src/lib/i18n/<lang>.json`, is generated and
 >   ignored by git, with its stamp `.generated`. Its sources are `frontend/src/lib/i18n/base/<lang>.json` (the four
@@ -60,7 +64,7 @@ related:
 > - *Train 72*: I's batch 48, written against the old catalogue paths, reached `base/` at the merge — the pure rename
 >   did its job ([[sources/phase00-ui-polish-2026-10]]).
 
-> **Update (train 74, 2026-10-12, at `bcd502912`): U-3 is in the code — the catalogue is split.** `f2a394a0f`
+> **Update (train 74, 2026-10-12, at `e23a6d5ce`): U-3 is in the code — the catalogue is split.** `e47f45c98`
 > («refactor(i18n): catalogue per subsystem and plugin»):
 >
 > - **Three kinds of source, as decided.** `base/` keeps 288 generic keys; 17 subsystem folders, each with its
@@ -79,17 +83,17 @@ related:
 > - **Still to come**: U-4, the documentation (after T's CP3, which writes M-18's rule in the same page), and U-5,
 >   the final gates and the handoff.
 
-> **Update (train 78, 2026-10-13, at `1c710c7a8`): U-4 is in — the documentation.** `c120086d2` rewrote the developer
-> pages and the plugin skills around the plugin folders and the translation sources; `bb3772324` gave
+> **Update (train 78, 2026-10-13, at `ad7cf9325`): U-4 is in — the documentation.** `1391a9bb5` rewrote the developer
+> pages and the plugin skills around the plugin folders and the translation sources; `def7d1229` gave
 > `developer/frontend/i18n.md` the catalogue's sources, `where`, `add` and the two gates. Backlog: U-B7 — without
 > `--into`, `dev.py i18n add` puts a new plugin key in the subsystem that declares its prefix, silently, and only the
 > ownership gate notices; the guides say to pass `--into`. U-B5's devWiki part was done in step D (below). U-5, the
 > final gates and the handoff, remains.
 >
 > *Train 79*: the first keys added after U-3 — eight, with `dev.py i18n add` for T-EN — went by their prefix to the
-> `charts` and `assets` subsystems (`f31bd6cfd`).
+> `charts` and `assets` subsystems (`e051fa684`).
 
-> **Update (train 80, 2026-10-13, at `cea8a478d`): U-5 is in, and plan 45 is closed** (`6a3b87d1c`). Its four
+> **Update (train 80, 2026-10-13, at `db6ee71d3`): U-5 is in, and plan 45 is closed** (`ad7cf9325`). Its four
 > findings (§10):
 >
 > - a staleness probe whose `except Exception` turned an error into «no build needed» — «Found on the way», above;
@@ -102,7 +106,11 @@ related:
 > Backlog: U-B5 is closed (its devWiki part was step D); U-B2 — the subsystems' sources beside their code — waits for
 > after 1.2.
 
-> **Planned, not in the code.** Decided on 2026-10-12; at `e7d698c4d` (train 56) nothing of it is implemented and
+*2026-11-07 lint:* the subsystem folders are 22 today — `backup`, `email`, `instance`, `liveUpdates` and `pluginSettings`
+joined the 17 of U-3, each with its `prefixes.txt`.
+
+> **Planned, not in the code** *(historical — the state at train 56; U-1 to U-5 are delivered, see the updates
+> above)*. Decided on 2026-10-12; at `2c8135ba0` (train 56) nothing of it is implemented and
 > workstream U's plan (45) is not in the target yet. The decisions are quoted from the coordinator's diary, which is
 > not in the repository, as the coordinator relayed them.
 
@@ -178,7 +186,7 @@ plugins may grow over time or be imported "dynamically" by linking folders in th
 - A plugin mounted at runtime has no translations in the frontend until the image is rebuilt: an accepted limit,
   consistent with "not a hot-plug system".
 - When U lands, about 84 citations of plugin paths in 47 wiki pages will need realigning, as after T-1 — assigned to
-  the historian when the lot enters the target. *Done in step D (2026-10-12, at `145502a39`): 112 citations in 54
+  the historian when the lot enters the target. *Done in step D (2026-10-12, at `a9d29b51d`): 112 citations in 54
   pages moved to `<name>/plugin.py`; 8 left as written, because they are history (five in the log, a quoted old
   import, a past-tense account, a dated residual).*
 - U-2 moved the four catalogues to `base/`: the wiki's citations of `frontend/src/lib/i18n/<lang>.json` were realigned

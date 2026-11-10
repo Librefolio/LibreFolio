@@ -38,6 +38,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date as Date
 from decimal import Decimal
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import Field, model_validator
 
@@ -53,6 +54,7 @@ from backend.app.services.ai_export.components.resources import BROKER_REPORT_RE
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
+from backend.app.services.financial_math.weights import concentration, percent_of, slice_percents
 
 # Whole-portfolio (unfiltered) report resource used only by the comparator. It is
 # a *different* cache slot from `broker.report` (the broker-filtered load), so the
@@ -61,7 +63,9 @@ _BROKER_WHOLE_PORTFOLIO_REPORT_RESOURCE: ResourceKey[PortfolioReportResponse] = 
 
 # Machine-readable reasons the comparator carries no comparison metrics.
 REASON_BROKER_EMPTY = "broker_summary_unavailable"
+REASON_BROKER_NO_POSITIONS = "broker_has_no_positions"
 REASON_PORTFOLIO_EMPTY = "portfolio_summary_unavailable"
+REASON_PORTFOLIO_NO_POSITIONS = "portfolio_has_no_positions"
 REASON_PORTFOLIO_LOAD_FAILED = "portfolio_report_load_failed"
 
 
@@ -88,19 +92,15 @@ def _require_broker_scope(context: BuildContext) -> BuildScope:
 def concentration_metrics(summary: PortfolioSummary | None) -> tuple[Decimal | None, Decimal | None, int]:
     """Largest position weight and Herfindahl points over the *entire* holding set.
 
-    Mirrors `broker_financial._concentration_metrics` exactly (no top-N
-    truncation) so the context/comparator numbers reconcile 1:1 with the frozen
+    The same function as `broker_financial._concentration_metrics`,
+    `financial_math.weights.concentration` (no top-N truncation), so the
+    context/comparator numbers reconcile 1:1 with the frozen
     `broker.allocation_concentration` section.
     """
     if summary is None:
         return None, None, 0
-    weights = [holding.nav_weight_percent for holding in summary.holdings if holding.nav_weight_percent is not None]
-    position_count = len(summary.holdings)
-    if not weights:
-        return None, None, position_count
-    largest = max(abs(weight) for weight in weights)
-    herfindahl = sum(weight * weight for weight in weights)
-    return largest, herfindahl, position_count
+    largest, herfindahl = concentration(holding.nav_weight_percent for holding in summary.holdings if holding.nav_weight_percent is not None)
+    return largest, herfindahl, len(summary.holdings)
 
 
 def _holding_native_currency(holding: PortfolioHolding) -> str | None:
@@ -170,9 +170,10 @@ class BrokerConcentrationContextPayload(StrictModel):
 
 
 def _map_slices(items: Sequence, *, currency_code: str) -> list[AllocationSlice]:
-    """Maps engine allocation items 1:1 and sorts deterministically (desc percent, then name)."""
+    """Maps engine allocation items 1:1 and sorts deterministically (desc percent, then name; a slice without a percent
+    — a sum at or below zero — sorts as 0)."""
     slices = [map_allocation_slice(item, currency_code=currency_code) for item in items]
-    return sorted(slices, key=lambda slice_: (-slice_.percent, slice_.name))
+    return sorted(slices, key=lambda slice_: (-(slice_.percent if slice_.percent is not None else Decimal("0")), slice_.name))
 
 
 def build_currency_allocation(summary: PortfolioSummary | None, *, currency_code: str) -> tuple[list[CurrencyAllocationSlice], ConcentrationCoverage]:
@@ -208,16 +209,14 @@ def build_currency_allocation(summary: PortfolioSummary | None, *, currency_code
     covered_total = sum(covered_amounts.values(), Decimal("0"))
     valued_total = covered_total + unknown_amount
 
-    def _percent(value: Decimal) -> Decimal | None:
-        if valued_total == 0:
-            return None
-        return value / valued_total * Decimal("100")
+    # One rule for every allocation (MF-C2): the slices, the unknown bucket included, as shares of their sum.
+    percents = slice_percents({**covered_amounts, None: unknown_amount})
 
     slices: list[CurrencyAllocationSlice] = [
         CurrencyAllocationSlice(
             currency=code,
             amount=Currency(code=currency_code, amount=amount),
-            percent=_percent(amount),
+            percent=percents[code],
             position_count=covered_counts[code],
         )
         for code, amount in covered_amounts.items()
@@ -229,7 +228,7 @@ def build_currency_allocation(summary: PortfolioSummary | None, *, currency_code
             CurrencyAllocationSlice(
                 currency=None,
                 amount=Currency(code=currency_code, amount=unknown_amount),
-                percent=_percent(unknown_amount),
+                percent=percents[None],
                 position_count=unknown_count,
             )
         )
@@ -302,6 +301,10 @@ class BrokerConcentrationComparisonPayload(StrictModel):
 
     broker_id: int
     target_currency: CurrencyCode
+    amounts_basis: Literal["all_brokers_whole"] = Field(
+        "all_brokers_whole",
+        description="Both sides count every broker whole, as the broker page does (R11): the portfolio side is not the Dashboard's portfolio, where an owner's share reduces each broker.",
+    )
 
     broker_position_count: int | None = Field(None, ge=0)
     portfolio_position_count: int | None = Field(None, ge=0)
@@ -387,17 +390,22 @@ async def _build_broker_concentration_comparison(context: BuildContext, dependen
     scope = _require_broker_scope(context)
     broker_report = await load_portfolio_report(context, scope, BROKER_REPORT_RESOURCE)
     broker_summary = broker_report.summary
-    if broker_summary is None or not broker_summary.holdings:
-        return _unavailable_comparison(scope, reason_code=REASON_BROKER_EMPTY, message="This broker has no valued positions in the selected period, so there is nothing to compare against the whole portfolio.")
+    if broker_summary is None:
+        return _unavailable_comparison(scope, reason_code=REASON_BROKER_EMPTY, message="The broker report carries no summary for the selected period, so there is nothing to compare against the whole portfolio.")
+    if not broker_summary.holdings:
+        return _unavailable_comparison(scope, reason_code=REASON_BROKER_NO_POSITIONS, message="This broker has no valued positions in the selected period, so there is nothing to compare against the whole portfolio.")
 
     portfolio_scope = _whole_portfolio_scope(scope)
     try:
-        portfolio_report = await load_portfolio_report(context, portfolio_scope, _BROKER_WHOLE_PORTFOLIO_REPORT_RESOURCE)
+        # R11: the broker is whole, so the portfolio it is compared with counts every broker whole too (one basis for the share).
+        portfolio_report = await load_portfolio_report(context, portfolio_scope, _BROKER_WHOLE_PORTFOLIO_REPORT_RESOURCE, apply_ownership_share=False)
     except ResourceLoadError:
         return _unavailable_comparison(scope, reason_code=REASON_PORTFOLIO_LOAD_FAILED, message="The whole-portfolio report could not be loaded for the selected period, so the concentration comparison is unavailable.")
     portfolio_summary = portfolio_report.summary
-    if portfolio_summary is None or not portfolio_summary.holdings:
-        return _unavailable_comparison(scope, reason_code=REASON_PORTFOLIO_EMPTY, message="The whole portfolio has no valued positions in the selected period, so the concentration comparison is unavailable.")
+    if portfolio_summary is None:
+        return _unavailable_comparison(scope, reason_code=REASON_PORTFOLIO_EMPTY, message="The whole-portfolio report carries no summary for the selected period, so the concentration comparison is unavailable.")
+    if not portfolio_summary.holdings:
+        return _unavailable_comparison(scope, reason_code=REASON_PORTFOLIO_NO_POSITIONS, message="The whole portfolio has no valued positions in the selected period, so the concentration comparison is unavailable.")
 
     broker_largest, broker_hhi, broker_count = concentration_metrics(broker_summary)
     portfolio_largest, portfolio_hhi, portfolio_count = concentration_metrics(portfolio_summary)
@@ -405,8 +413,8 @@ async def _build_broker_concentration_comparison(context: BuildContext, dependen
     broker_market_value = broker_summary.market_value
     portfolio_market_value = portfolio_summary.market_value
     broker_share: Decimal | None = None
-    if broker_market_value is not None and portfolio_market_value is not None and portfolio_market_value.amount != 0:
-        broker_share = broker_market_value.amount / portfolio_market_value.amount * Decimal("100")
+    if broker_market_value is not None and portfolio_market_value is not None:
+        broker_share = percent_of(broker_market_value.amount, portfolio_market_value.amount)
 
     return BrokerConcentrationComparisonPayload(
         status=ConcentrationComparisonStatus.OK,
@@ -433,7 +441,7 @@ async def _build_broker_concentration_comparison(context: BuildContext, dependen
 
 BROKER_CONCENTRATION_CONTEXT_COMPONENT = ComponentSpec(
     component_id="broker.concentration_context",
-    version=1,
+    version=2,  # v2 (MF-C2, T-U9): null slice percents; currency shares through slice_percents
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerConcentrationContextPayload,
     builder=_build_broker_concentration_context,
@@ -443,7 +451,7 @@ BROKER_CONCENTRATION_CONTEXT_COMPONENT = ComponentSpec(
 
 BROKER_CONCENTRATION_COMPARISON_COMPONENT = ComponentSpec(
     component_id="broker.concentration_comparison",
-    version=1,
+    version=2,  # v2 (T-U9): the share through percent_of; distinct reason_code for a summary without positions
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerConcentrationComparisonPayload,
     builder=_build_broker_concentration_comparison,
@@ -461,8 +469,10 @@ __all__ = [
     "BROKER_CONCENTRATION_COMPONENTS",
     "BROKER_CONCENTRATION_CONTEXT_COMPONENT",
     "REASON_BROKER_EMPTY",
+    "REASON_BROKER_NO_POSITIONS",
     "REASON_PORTFOLIO_EMPTY",
     "REASON_PORTFOLIO_LOAD_FAILED",
+    "REASON_PORTFOLIO_NO_POSITIONS",
     "BrokerConcentrationComparisonPayload",
     "BrokerConcentrationContextPayload",
     "BrokerConcentrationContextScopeError",

@@ -4,7 +4,7 @@ Date and time utilities for LibreFolio.
 Provides timezone-aware datetime helpers and date manipulation functions.
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from pydantic import BeforeValidator, PlainSerializer
@@ -97,6 +97,58 @@ def today_date() -> date:
         True
     """
     return datetime.now(UTC).date()
+
+
+def server_today() -> date:
+    """Today by the server's calendar: its local date, as ``date.today()`` reads it (``today_date()`` above is UTC's).
+
+    The day ``latest_range_end()`` follows. A broker import that keeps only settled rows compares with it (N74, the plugin
+    guide's rule «the operation date, and only settled rows»): a row whose value date comes after it has not settled yet, and arrives with the next
+    export.
+    """
+    return date.today()
+
+
+def latest_range_end() -> date:
+    """The latest day a requested date range may reach: tomorrow, by the server's calendar (R13-SEC7-1).
+
+    Portfolio, lots and AI Export ranges are walked day by day, so an end far in the future held the instance for
+    minutes. One day past today is the slack for a user east of the server, whose today is already the server's
+    tomorrow; a later day holds no data. It is read where a range enters: ``PortfolioCalculationEngine.calculate``,
+    ``PortfolioService.get_summary`` / ``get_report``, ``LotsAnalysisService.get_lots_analysis``, risk's portfolio scope
+    (``risk.scope.load_scope_inputs``) and ``AiExportSnapshotService.prepare_request``.
+
+    The server's local date, like ``date.today()`` in those modules (``today_date()`` above is UTC's): ``server_today()``
+    plus one day.
+    """
+    return server_today() + timedelta(days=1)
+
+
+def shift_date(value: date, days: int) -> date:
+    """``value`` moved by ``days``, held at the calendar's ends (``date.min``, ``date.max``) instead of raising
+    ``OverflowError`` (W-B71).
+
+    For a window around a date a request or a parsed report names — the promote and event suggestions (± a tolerance),
+    the days around a report set's coverage and checkpoints — whose date may sit at an edge of the calendar: such a date
+    is refused when a transaction is saved (N74), but a suggestion or a check reads it, and
+    ``date(1, 1, 1) - timedelta(days=1)`` raised (a 500).
+    """
+    try:
+        return value + timedelta(days=days)
+    except OverflowError:
+        return date.max if days > 0 else date.min
+
+
+def day_before(day: date) -> date | None:
+    """The calendar day before ``day``; None for ``date.min`` (0001-01-01), which has none (MF-SEC8-2b).
+
+    Not ``shift_date(day, -1)``: saturating would answer ``date.min`` itself, and a caller asking what was held at the
+    end of the day before would count the movements of ``date.min`` as already held then. Use ``shift_date`` for a
+    window's edge, which may stop at the calendar's end; use ``day_before`` where "the day before" must exist — the
+    holdings an income or a cost on that day is allocated to (FIFO economic events, Yield on Cost), read as nothing held
+    when it does not. A row stored on ``date.min`` by an older version made ``day - timedelta(days=1)`` raise.
+    """
+    return None if day == date.min else day - timedelta(days=1)
 
 
 def parse_ISO_date(v) -> date:

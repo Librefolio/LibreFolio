@@ -49,7 +49,7 @@ Esta sección responde a la pregunta *¿cuáles de estos se mueven juntos?* — 
 
 **Cómo leerlo**
 
-- **Un cuadrado por par**: azul cuando los dos activos se mueven juntos, rojo cuando se mueven en direcciones opuestas, pálido cuando se mueven de forma independiente. Pasa el cursor o toca para ver el valor en palabras.
+- **Un cuadrado por par**: azul cuando los dos activos se mueven juntos, rojo cuando se mueven en direcciones opuestas, gris cuando se mueven de forma independiente. Pasa el cursor o toca para ver el valor en palabras.
 - **Empieza por las dos listas**: **Los más parecidos** nombra los pares que son casi la misma exposición, **Los que se compensan** los pares que se amortiguan mutuamente. Una lista vacía es un hallazgo. Haz clic en un par para encontrarlo en la matriz.
 - **Un guion no es un cero**: el par no se pudo medir — demasiado poca historia, o un precio que nunca se movió.
 - **Los botones de orden** reorganizan la matriz; nunca cambian un valor.
@@ -155,6 +155,7 @@ Cuando algo va mal con los datos, la pestaña lo indica una vez, justo debajo de
 **Cómo leerlo**
 
 - **El banner de calidad de datos** enumera lo que hay que corregir, cada problema con su acción, como **Sincronizar precios** o **Sincronizar tipos de cambio**. Haz clic en él para abrir la lista.
+- **Un par de divisas sin ruta de cambio** tiene su propio botón en ese banner, uno por par (información sobre herramientas **Añadir par FX**): abre enseguida la ventana **Añadir Par de Divisas**, ya rellenada con ese par, y el análisis se recalcula solo cuando el par se guarda y se descargan sus tipos → [Añadir un par de divisas](../fx/add-pair.md)
 - **El aviso** debajo nombra los resultados **parciales** y su causa. Un resultado parcial sigue mostrando sus cifras: léelas teniendo en cuenta esa causa.
 - **El banner ámbar propio de una sección** significa que un resultado no se obtuvo en absoluto, a menudo porque el periodo es demasiado corto: elige uno más largo o sincroniza los precios.
 - **¿Qué pasa si…?** informa de sus propios problemas dentro de su sección.

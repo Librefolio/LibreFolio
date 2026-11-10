@@ -34,14 +34,14 @@ The editor proposed such pairs: `findPromoteMatch` compared only the signs (`qA 
 The coordinator's decision D1 = (a), on P's recommendation (2026-10-10); the developer had already said that a defect
 confirmed by a red test enters 1.2:
 
-- **Backend** (`7f8233c47`, train 34): for a TRANSFER pair, `_validate_linked_pair` refuses different assets
+- **Backend** (`ff449bffe`, train 34): for a TRANSFER pair, `_validate_linked_pair` refuses different assets
   (`pairAssetMismatch`) and quantities that are not exactly opposite in `Decimal` (`pairQuantityMismatch`, with `qtyA` and
   `qtyB`). Both keys exist in the four catalogues.
 - **The editor's rule**: in `findPromoteMatch`, «opposite» means `qA !== 0 && qA === -qB`, so −3/+5 is no longer
   proposed, locally or with saved rows.
 - **Exact decimals where it matters**: the banner pairs securities with `assetQuantitiesCancel` and cash with
   `cashAmountsCancel`, both in exact decimal arithmetic since this lot (`cashAmountsCancel` lost its `Number` tolerance
-  of 1e-9). The selection bar followed on 2026-10-11 (C-46, `bdec709d2`, train 37): `-123456789012.123456` and
+  of 1e-9). The selection bar followed on 2026-10-11 (C-46, `25210ff16`, train 37): `-123456789012.123456` and
   `+123456789012.123457` are the same double but not the same decimal, and the bar offered them.
 - **Scope**: only TRANSFER. The other declared constraints — CASH_TRANSFER (opposite amount, same currency),
   FX_CONVERSION (different currencies, same broker) — went to backlog C-42: forms and imports already respect them, so
@@ -53,6 +53,9 @@ confirmed by a red test enters 1.2:
   «exact at large magnitudes» block of `promoteHelpers.test.ts`; PC5 in `tx-bulk-promote-cost-basis.spec.ts` for the bar.
 - Open, with C-42: an API update that changes the quantity of only one leg of a saved TRANSFER is not checked —
   `validate_updated_pairs` looks only at description and tags ([[decisions/pair-description-tags-validation]]).
+  *2026-11-07 lint:* the CASH_TRANSFER and FX_CONVERSION half of C-42 is closed for a pair being created —
+  `_validate_linked_pair` refuses a CASH_TRANSFER on one broker, in two currencies or with amounts not exactly opposite,
+  and an FX_CONVERSION in one currency (W6-7, `9189857d1`, 2026-10-28). The update path is still as described.
 - Reported, not changed: the grid's quantity cell shows `parseFloat(qty)`, so the two sides of PC5's pair look equal and
   the user cannot see why they do not merge.
 
@@ -69,12 +72,12 @@ confirmed by a red test enters 1.2:
 
 | Role | Path |
 |------|------|
-| `_validate_linked_pair` | `backend/app/services/transaction_service.py` |
-| `findPromoteMatch` | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
-| `cashAmountsCancel` | `frontend/src/lib/utils/transactions/promoteHelpers.ts` |
-| `assetQuantitiesCancel` | `frontend/src/lib/utils/transactions/promoteSuggest.ts` |
-| The selection bar (`selectedForPromote`) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| `_validate_linked_pair` | `backend/app/services/transactions/validation.py` |
+| `findPromoteMatch` | `frontend/src/lib/features/transactions/transactionTypeStore.ts` |
+| `cashAmountsCancel` | `frontend/src/lib/features/transactions/bulk/promoteHelpers.ts` |
+| `assetQuantitiesCancel` | `frontend/src/lib/features/transactions/bulk/promoteSuggest.ts` |
+| The selection bar (`selectedForPromote`; its button in `frontend/src/lib/features/transactions/bulk/TxBulkToolbar.svelte`) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | R42a, R42b, G42 | `backend/test_scripts/test_api/test_transactions_batch_split_promote.py` |
-| The editor's rule, tested | `frontend/src/lib/stores/transactions/transactionTypeStore.test.ts` |
+| The editor's rule, tested | `frontend/src/lib/features/transactions/transactionTypeStore.test.ts` |
 | PC5 | `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` |
 | Plan 42 | `LibreFolio_developer_journal/Release_2/Phase_0/42_promotePairChecks/plan-phase00PromotePairChecks.prompt.md` |

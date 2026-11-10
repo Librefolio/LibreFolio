@@ -12,8 +12,9 @@ from backend.app.schemas.risk import (
     RiskOutputKind,
     RiskReturnBasis,
     RiskScopeKind,
+    RiskWarning,
 )
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_scope_series,
     require_joint_baseline,
@@ -21,6 +22,7 @@ from backend.app.services.risk.analytic_helpers import (
 )
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext
 from backend.app.services.risk.metrics import drawdown_episodes
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class AssetSetDrawdownParams(BaseModel):
@@ -53,7 +55,10 @@ class AssetSetDrawdownAnalytic(RiskAnalytic):
     """
 
     analytic_code = "asset_set_drawdown"
-    algorithm_version = "1.0.0"
+    # 1.1.0 (P19, CP-13a) — the reported numbers are unchanged; each item additionally carries
+    # maximum_drawdown_trough_to_peak_ratio, and remaining_to_peak_ratio is null for a total loss,
+    # announced by the non-degrading warning total_loss_no_recovery.
+    algorithm_version = "1.1.0"
     name_i18n_key = "risk.analytics.assetSetDrawdown.name"
     description_i18n_key = "risk.analytics.assetSetDrawdown.description"
     output_kind = RiskOutputKind.DRAWDOWN_SET
@@ -80,8 +85,11 @@ class AssetSetDrawdownAnalytic(RiskAnalytic):
         calculation_basis = "price_only_close"
 
         items: list[RiskAssetSetDrawdownItem] = []
+        total_losses: list[int] = []
         for asset_id, dates, returns in series:
             report = drawdown_episodes(returns, dates=dates, baseline_date=baseline)
+            if report.maximum_drawdown_trough_to_peak_ratio is None or report.remaining_to_peak_ratio is None:
+                total_losses.append(asset_id)
             items.append(
                 RiskAssetSetDrawdownItem(
                     asset_id=asset_id,
@@ -95,11 +103,24 @@ class AssetSetDrawdownAnalytic(RiskAnalytic):
                     maximum_drawdown_recovery_date=report.maximum_drawdown_recovery_date,
                     maximum_drawdown_duration_days=report.maximum_drawdown_duration_days,
                     maximum_drawdown_recovered_ratio=report.maximum_drawdown_recovered_ratio,
+                    maximum_drawdown_trough_to_peak_ratio=report.maximum_drawdown_trough_to_peak_ratio,
                     remaining_to_peak_ratio=report.remaining_to_peak_ratio,
                 )
             )
 
         joint_dates = require_joint_return_dates(context)
+        warnings: tuple[RiskWarning, ...] = ()
+        if total_losses:
+            # A total loss (P19): the drawdown itself is exact, only the gain that would recover it is undefined.
+            warnings = (
+                RiskWarning(
+                    code="total_loss_no_recovery",
+                    message_i18n_key="risk.warnings.total_loss_no_recovery_assets",
+                    message="One or more assets fell to zero: no gain can bring them back to the peak, so the recovery needed is not shown.",
+                    details={"asset_ids": total_losses},
+                    degrades_result=False,
+                ),
+            )
         return RiskComputation(
             output=RiskAssetSetDrawdownOutput(
                 available_start=joint_dates[0],
@@ -114,4 +135,5 @@ class AssetSetDrawdownAnalytic(RiskAnalytic):
             annualization_factor=prepared.annualization_factor if prepared else None,
             coverage=prepared.calendar_coverage if prepared else 0,
             return_basis=RiskReturnBasis.PRICE_ONLY,
+            warnings=warnings,
         )

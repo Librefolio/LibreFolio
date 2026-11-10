@@ -8,7 +8,7 @@
  *  - Translatable pages: URL is the source of truth.
  *      • Explicit lang prefix (/it/, /fr/, /es/) → sync localStorage to URL.
  *      • Default URL (no prefix = en) + stored preference ≠ en → redirect.
- *  - EN-only pages (Developer, POC UX): readonly English, localStorage untouched.
+ *  - EN-only pages (Developer): readonly English, localStorage untouched.
  *  - Selector click: navigate to target lang URL + update localStorage.
  */
 (function () {
@@ -48,7 +48,7 @@
         var segs = [
             '/gallery/', '/developer/', '/user/', '/admin/',
             '/getting-started/', '/tutorials/', '/financial-theory/',
-            '/POC_UX/', '/community/'
+            '/community/'
         ];
         for (var i = 0; i < segs.length; i++) {
             var idx = pathname.indexOf(segs[i]);
@@ -107,7 +107,7 @@
 
     function isEnOnlyPage() {
         var p = window.location.pathname;
-        return p.includes('/developer/') || p.includes('/POC_UX/');
+        return p.includes('/developer/');
     }
 
     // ── Language state ──────────────────────────────────────────
@@ -201,6 +201,12 @@
         } else {
             var headerInner = document.querySelector('.md-header__inner');
             if (headerInner) headerInner.appendChild(selector);
+        }
+        // The theme toggle goes right before the language selector, as in the app's header (theme, then language).
+        // Material's palette component keeps its listeners on the form, so moving the node is safe.
+        var palette = document.querySelector('.md-header__inner [data-md-component="palette"]');
+        if (palette && selector.parentNode) {
+            selector.parentNode.insertBefore(palette, selector);
         }
     }
 

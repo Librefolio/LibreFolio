@@ -41,6 +41,12 @@ min(OWNER, null)   = none    → view only (locked partner)
 ### Backend Enforcement
 `_check_paired_access()` added to `_update_single` and `_delete_single` — verifies EDITOR role on both brokers for paired mutations. The `pairDeleteIncomplete` validation (existing) requires both halves in delete batch.
 
+> *2026-11-07 lint:* `_check_paired_access()`, `_update_single` and `_delete_single` no longer exist (removed with the
+> WAC inline pipeline, `d3100fb44`). Access is now checked once per batch: every referenced row is loaded and its broker
+> joins the touched brokers, each of which needs EDITOR (`transaction_batch_stages.py`, `access.py::_enforce_batch_access`);
+> `pairDeleteIncomplete` (`batch_edits.py`) still requires both halves of a pair in a delete, so a pair delete needs
+> EDITOR on both brokers. Whether a one-sided update checks the partner's broker was not verified by the lint.
+
 ### GET /brokers LEFT JOIN
 Changed from INNER JOIN to LEFT JOIN so the response includes ALL brokers with `user_role=null` for inaccessible ones. Enables UI to show broker names in locked placeholders. `brokerStore` exposes `getEditableBrokers()` for form dropdowns.
 
@@ -59,8 +65,11 @@ New field in `TXReadItem` — batch lookup of partner broker IDs for tooltip and
 | Broker role helpers | `frontend/src/lib/utils/broker/brokerRoleHelpers.ts` |
 | Broker store | `frontend/src/lib/stores/reference/brokerStore.ts` |
 | BrokerBadge (showRole) | `frontend/src/lib/components/ui/display/BrokerBadge.svelte` |
-| Transaction service | `backend/app/services/transaction_service.py` |
-| Transaction schemas | `backend/app/schemas/transactions.py` |
-| Delete flow (TransactionDeleteModal removed 2026-09-03: single-row delete routes through the bulk workspace) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| Broker service | `backend/app/services/broker_service.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
+| Batch access stage (touched brokers, EDITOR) | `backend/app/services/transactions/transaction_batch_stages.py` |
+| Access helpers | `backend/app/services/transactions/access.py` |
+| `pairDeleteIncomplete` | `backend/app/services/transactions/batch_edits.py` |
+| Transaction schemas | `backend/app/schemas/transactions/transactions.py` |
+| Delete flow (TransactionDeleteModal removed 2026-09-03: single-row delete routes through the bulk workspace) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| Broker service | `backend/app/services/brokers/broker_service.py` |
 

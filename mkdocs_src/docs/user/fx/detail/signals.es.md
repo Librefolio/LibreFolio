@@ -19,6 +19,8 @@ gráfico de FX. LibreFolio calcula los indicadores a partir de los tipos de camb
 
 Las señales que añadas se guardan con los [ajustes del gráfico](../chart-settings.md) de este par.
 
+En el modo [Rendimiento móvil](chart.md#rolling-return) del gráfico, el panel ofrece solo las comparaciones de **Par FX**, cada una de las cuales dibuja su propio rendimiento móvil; tus demás señales siguen guardadas y vuelven con **Precios**.
+
 ---
 
 ## 🧮 Indicadores técnicos — 9 para FX
@@ -48,11 +50,11 @@ un cuadro de búsqueda en la parte superior: escribe para filtrar todas las fami
 
 ---
 
-## 💱 Comparación de datos
+## 💱 Comparación de datos {: #data-comparison }
 
 - 💱 **Par FX** — otro de tus pares FX, p. ej. GBP/USD junto a EUR/USD. En la lista, 👑 marca el
   par de esta página y 📌 un par ya usado por otra señal.
-- ↔️ **Comparación de activo** — el precio de un activo junto al tipo de cambio.
+- ↔️ **Comparación de activo** — el precio de un activo junto al tipo de cambio, elegido en el mismo panel que la comparación de riesgo (cuadro de búsqueda, filtros **Tipo** y **Divisa**, los benchmarks primero). Uno ya usado por otra comparación lleva una marca de advertencia, pero aun así se puede elegir.
 
 Una tarjeta de comparación tiene botones para sincronizar el par o el activo comparados y para abrir su página. En la vista %
 ambas curvas empiezan en 0 %, por lo que sus movimientos se comparan directamente.

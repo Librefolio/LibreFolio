@@ -8,6 +8,7 @@ related:
   - features/F-024
   - features/F-025
   - sources/phase07-part4-round6-planc2-bugfix-pair-validation
+  - decisions/api-routes-removed-without-deprecation
 ---
 
 # Decision: Remove Auto-Populate — Metadata Flow is Frontend-Driven
@@ -33,18 +34,25 @@ related:
 3. User approves/declines each field
 4. Frontend sends explicit `PATCH /assets/{id}` with only approved changes
 
+> **2026-11-07 lint:** step 1 changed route. `refresh_assets_from_provider()` (`POST /assets/provider/refresh`) was
+> removed with no deprecation in `d5e467847` (04/11); the frontend reads what a provider would set from
+> `POST /assets/provider/probe` (`backend/app/api/v1/assets/providers.py`) — see
+> [[decisions/api-routes-removed-without-deprecation]]. The principle (no implicit write, the user approves each field,
+> `PATCH` is the only write) is unchanged.
+
 ## Consequences
 
 - `bulk_assign_providers()` reduced to simple assignment + result building (no provider fetch, no metadata mutation)
 - Race condition eliminated structurally (no implicit write path)
 - User has full control over metadata changes
-- Provider probing still works via explicit `refresh_assets_from_provider()` endpoint
+- Provider probing still works via explicit `refresh_assets_from_provider()` endpoint (since `d5e467847`: `POST /assets/provider/probe`)
 - 6 new tests verify the decoupled behavior: assign doesn't modify, refresh returns fields, PATCH is the only write path
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Asset source service | `backend/app/services/asset_source.py` |
+| Asset source service | `backend/app/services/assets/provider_management.py` |
 | Test assign/refresh | `backend/test_scripts/test_services/test_asset_source.py` |
+| Provider probe route (successor of the refresh route) | `backend/app/api/v1/assets/providers.py` |
 

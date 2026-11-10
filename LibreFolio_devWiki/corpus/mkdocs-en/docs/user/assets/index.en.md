@@ -1,1 +1,0 @@
-../../../../../../mkdocs_src/docs/user/assets/index.en.md

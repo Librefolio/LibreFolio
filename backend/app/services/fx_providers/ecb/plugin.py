@@ -13,8 +13,9 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
-from backend.app.services.provider_registry import FXProviderRegistry, register_provider
+from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateLimitedError, FXRateProvider, FXServiceError, raise_if_fx_rate_limited
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
 
@@ -39,6 +40,56 @@ class ECBProvider(FXRateProvider):
     FREQUENCY = "D"  # Daily
     REFERENCE_AREA = "EUR"  # Base currency
     SERIES = "SP00"  # Series variation (spot rate)
+
+    # What the discovery below returned on 2026-11-05 (44 currencies plus EUR). The catalog lists it while the first
+    # discovery after a restart is slow or fails; the live list replaces it as soon as one arrives.
+    FALLBACK_CURRENCIES = (
+        "ARS",
+        "AUD",
+        "BGN",
+        "BRL",
+        "CAD",
+        "CHF",
+        "CNY",
+        "CYP",
+        "CZK",
+        "DKK",
+        "DZD",
+        "EEK",
+        "EUR",
+        "GBP",
+        "GRD",
+        "HKD",
+        "HRK",
+        "HUF",
+        "IDR",
+        "ILS",
+        "INR",
+        "ISK",
+        "JPY",
+        "KRW",
+        "LTL",
+        "LVL",
+        "MAD",
+        "MTL",
+        "MXN",
+        "MYR",
+        "NOK",
+        "NZD",
+        "PHP",
+        "PLN",
+        "RON",
+        "RUB",
+        "SEK",
+        "SGD",
+        "SIT",
+        "SKK",
+        "THB",
+        "TRY",
+        "TWD",
+        "USD",
+        "ZAR",
+    )
 
     @property
     def code(self) -> str:
@@ -90,6 +141,10 @@ class ECBProvider(FXRateProvider):
             "AUD",  # Australian Dollar
             "EUR",  # Euro (base currency)
         ]
+
+    @property
+    def fallback_currencies(self) -> list[str]:
+        return list(self.FALLBACK_CURRENCIES)
 
     async def get_supported_currencies(self) -> list[str]:
         """
@@ -146,6 +201,7 @@ class ECBProvider(FXRateProvider):
                 return sorted(currencies)
 
         except httpx.HTTPError as e:
+            raise_if_fx_rate_limited(e, self.provider_code)
             logger.exception(f"Failed to fetch available currencies from ECB: {e}")
             raise FXServiceError(f"ECB API error: {e}") from e
         except (KeyError, ValueError) as e:
@@ -222,13 +278,20 @@ class ECBProvider(FXRateProvider):
                             for obs_idx, obs_value in obs_data.items():
                                 idx = int(obs_idx)
                                 rate_date_str = time_periods[idx]["id"]
-                                ecb_rate = Decimal(str(obs_value[0]))
+                                try:
+                                    ecb_rate = Decimal(str(obs_value[0]))
+                                except ArithmeticError:
+                                    # A value that is no number (a null included) loses its day only, never the whole
+                                    # currency, as BOE, SNB and FED skip a line (X-R52, X-R50)
+                                    logger.debug(f"ECB: skipping a value that is no number for {currency} on {rate_date_str}: {obs_value[0]!r}")
+                                    continue
                                 rate_date = date.fromisoformat(rate_date_str)
                                 observations.append((rate_date, self.base_currency, currency, ecb_rate))
 
                     return currency, observations
 
             except httpx.HTTPError as e:
+                raise_if_fx_rate_limited(e, self.provider_code)
                 logger.exception(f"Failed to fetch FX rates for {currency}: {e}")
                 raise FXServiceError(f"ECB API error for {currency}: {e}") from e
             except (KeyError, IndexError, ValueError) as e:
@@ -240,6 +303,8 @@ class ECBProvider(FXRateProvider):
             try:
                 _, observations = await _fetch_one(currency)
                 results[currency] = observations
+            except FXRateLimitedError:
+                raise  # refused for too many requests: stop here, the core pauses the provider
             except Exception as e:
                 logger.warning(f"ECB fetch failed for {currency}, skipping: {e}")
                 results[currency] = []

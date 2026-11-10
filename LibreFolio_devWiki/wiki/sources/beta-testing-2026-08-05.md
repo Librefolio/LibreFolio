@@ -3,7 +3,7 @@ title: "Beta testing 2026-08-05 — the tester report and its taxonomy"
 category: source
 source_type: journal
 date_ingested: 2026-08-31
-original_path: LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/
+original_path: LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/
 tags: [beta-testing, brim, credit-agricole, import, reconciliation, product-defect, bonds]
 related:
   - concepts/characterisation-test-latch
@@ -14,7 +14,7 @@ related:
 
 ## Summary
 
-The first external beta session: one tester (Marco), three Crédit Agricole XLSX
+The first external beta session: one tester, three Crédit Agricole XLSX
 exports, one working day. The output was a report, a taxonomy of **34 findings**,
 and a full reconciliation of one real portfolio against the bank's own figures.
 
@@ -50,9 +50,10 @@ same security, and coupon rows carry **ISIN + `NOMINALE`**:
 
 | purchase (truncated by the export) | coupon | ISIN | nominal |
 |---|---|---|---:|
-| `BTP 1/3/32 1,65%` | `BTP 1/3/32 1,65%` | IT0005094088 | 50 000 |
-| `BTP 01/03/35 3,35%` | `BTP 01/03/35 3,35%` | IT0005358806 | 50 000 |
-| `BTP PIU 25-2-33 CU` | `BTP PIU 25-2-33 CUM` | IT0005634792 | 15 000 |
+| `BTP A 1,65%` | `BTP A 1,65%` | the bond's ISIN | its nominal |
+| `BTP PIU …-CU` (cut) | `BTP PIU …-CUM` | the bond's ISIN | its nominal |
+
+*(Illustrative rows: the tester's securities and amounts are not reproduced — 2026-11-07 lint.)*
 
 So for bonds the plugin can resolve **quantity and ISIN automatically**, asking
 the user nothing.
@@ -73,9 +74,10 @@ commission:
 
 | security | cash out | book value | difference |
 |---|---:|---:|---:|
-| BTP 1/3/32 1,65 % | 46 603,73 | 46 177,79 | **425,94** |
-| BTP 01/03/35 3,35 % | 50 683,13 | 50 018,11 | **665,02** |
-| BTP PIU 25-2-33 | 15 000,00 | 15 000,00 | 0,00 *(issued at par)* |
+| a BTP bought between coupons | 10 096,00 | 10 000,00 | **96,00** (accrued interest + fee) |
+| a BTP bought at issue | 10 000,00 | 10 000,00 | 0,00 *(issued at par)* |
+
+*(Illustrative figures, not the tester's — 2026-11-07 lint.)*
 
 Booking everything into the purchase makes our cost basis **higher** than the
 bank's by the accrued interest. Acceptable as a fallback — but it has to be
@@ -109,12 +111,12 @@ already in the taxonomy or belongs to the feature pages. They are listed in
 
 ## Drift check (2026-10-12, historical folder H6)
 
-The folder moved from `Release_2/Phase_0/` to `Release_2/phases/06_betaTestingReportAndFixing/` (`91e88b8d1`); the
+The folder moved from `Release_2/Phase_0/` to `Release_2/phases/06_betaTestingReportAndFixing/` (`519a359ab`); the
 three reports ingested here moved without changes, the folder's `INDEX.md` was edited. Eleven files were never
 ingested: the F1–F17 feedback classification and ten plans (asset identity and identifiers, asset lifecycle, Crédit
 Agricole trades, engine accounting and signals, frontend coverage, i18n and docs assets, the import flow and wizard,
 the test-runner migration, transactions UX). Their topics already have pages — for example
-[[decisions/credit-agricole-securities-only-cash-neutral-brim]] — and their delivery is mostly `0e07359b4`; a
+[[decisions/credit-agricole-securities-only-cash-neutral-brim]] — and their delivery is mostly `db7620f01`; a
 content-level check of each plan was not done in this step.
 
 ## Content check of the plans (2026-10-13, C-64 last part)

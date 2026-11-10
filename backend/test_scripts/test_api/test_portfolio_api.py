@@ -1,44 +1,44 @@
 """Portfolio API tests for active /api/v1/portfolio endpoints."""
 
-import json
 import uuid
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 from fastapi import FastAPI, HTTPException
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1 import portfolio_api
 from backend.app.api.v1.auth import get_current_user
 from backend.app.config import get_settings
-from backend.app.db.models import UserRole
+from backend.app.db.models import Asset, Transaction, TransactionType, UserSettings
 from backend.app.db.session import get_async_engine, get_session_generator
-from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceProvenance,
     PortfolioPlannerSourceResponse,
     PortfolioPlannerSourceSnapshot,
 )
-from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
-from backend.app.services import user_service
-from backend.app.services.portfolio_allocation_source import (
+from backend.app.services.accounts import user_service
+from backend.app.services.pac_allocator.source.portfolio_allocation_source import (
     PortfolioPlannerSourceAccessError,
     PortfolioPlannerSourceAssetNotFoundError,
     PortfolioPlannerSourceBrokerNotFoundError,
 )
-from backend.test_scripts.test_db_config import verify_test_database
+from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_services._lots_steps import expand_steps
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
-SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
+SOLE_ADMIN_DELETE_DETAIL = {"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"}
 
 
 # ---------------------------------------------------------------------------
@@ -581,16 +581,19 @@ class TestPortfolioHistoryEndpoint:
 
 @pytest.mark.asyncio
 class TestPortfolioReportEndpoint:
-    async def test_report_response_has_exactly_twelve_sections(self, test_server):
-        """The report wire shape is exactly these twelve sections.
+    async def test_report_response_has_exactly_fourteen_sections(self, test_server):
+        """The report wire shape is exactly these fourteen sections: the twelve of before, plus ``range`` and
+        ``mwrr_line`` of the series in steps (D-P4, cure B).
 
         A section removed from the report must leave the wire, not linger as a null
         key. The API serializes every unrequested section as null, so the default
         request is enough to see the complete set of top-level keys.
         """
-        print_section("Portfolio Report: exactly twelve sections")
+        print_section("Portfolio Report: exactly fourteen sections")
         expected_sections = {
             "metadata",
+            "range",
+            "mwrr_line",
             "summary",
             "history",
             "allocation_history",
@@ -1286,9 +1289,13 @@ class TestLotsAnalysisEndpoint:
             assert resp.status_code == 200, resp.text
             data = resp.json()
 
+            # J5-5 (steps, contract MF-P4b §1.3): a row holds from `date` to `through`, and the answer carries the `range` the rows lie in.
+            # 10 Jan (ROI 0, no TWRR yet) and 11 Jan (ROI and TWRR 0.1) are different figures, so they are two steps of one day each.
+            assert data["range"] == {"start": "2026-01-10", "end": "2026-01-11"}
             assert data["performance_history"] is not None
             assert len(data["performance_history"]) == 2
-            assert set(data["performance_history"][0]) == {"date", "roi", "twrr"}
+            assert set(data["performance_history"][0]) == {"date", "through", "roi", "twrr"}
+            assert [(row["date"], row["through"]) for row in data["performance_history"]] == [("2026-01-10", "2026-01-10"), ("2026-01-11", "2026-01-11")]
             assert Decimal(data["performance_history"][0]["roi"]) == Decimal("0")
             assert data["performance_history"][0]["twrr"] is None
             assert Decimal(data["performance_history"][1]["roi"]) == Decimal("0.1")
@@ -1307,6 +1314,68 @@ class TestLotsAnalysisEndpoint:
             )
             assert resp.status_code in (400, 404, 422)
         print_success(f"Nonexistent asset rejected with {resp.status_code}")
+
+    async def test_market_price_history_continues_after_the_last_sale(self, test_server):
+        """Y-30 (N89): MARKET_PRICE_HISTORY, the market price line independent of the lots, alone.
+
+        An EUR asset never quoted: BUY 10 for 1000 EUR on 10 Jan 2026, SELL all 10 for 1100 EUR on 15 Jan, read up to
+        20 Jan. 200, and ``market_price_history`` is a list with a point on every day from the BUY to ``date_to`` — after
+        the sale too, when no lot is open: the BUY's 100 on 10–14 Jan, the SELL's 110 on 15–20 Jan, each in EUR and
+        estimated (a trade's mark, no quote). Nothing else was asked for, so ``price_history`` and ``lots`` are null. EUR
+        only: the API cannot own the absence of a rate, so no FX here (the gaps are in the service tests).
+
+        Today: 422 — 'MARKET_PRICE_HISTORY' is not a valid LotAnalysisType.
+
+        The test's own user, broker and asset, deleted at the end (the broker with its transactions).
+        """
+        print_section("Lots Analysis: MARKET_PRICE_HISTORY after the last sale")
+        broker_id: int | None = None
+        asset_id: int | None = None
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                broker_id = await create_broker(client, f"Y30 Market Price {uuid.uuid4().hex}")
+                asset_id = await create_asset(client, currency="EUR")
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2026-01-15", "quantity": "-10", "cash": {"code": "EUR", "amount": "1100"}},
+                    ],
+                )
+
+                resp = await client.post(
+                    f"{API_BASE}/portfolio/lots/analysis",
+                    json={"asset_id": asset_id, "requested_analyses": ["MARKET_PRICE_HISTORY"], "target_currency": "EUR", "date_range": {"end": "2026-01-20"}},
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, resp.text
+                data = resp.json()
+
+                assert isinstance(data["market_price_history"], list), data
+                # J5-5 (steps): the line is two steps, the BUY's mark held 10-14 Jan and the SELL's 15-20 Jan; the days a client reads
+                # from them (`expand_steps`: each step repeated from `date` to `through`) are the ones the test has always named.
+                assert data["range"] == {"start": "2026-01-10", "end": "2026-01-20"}
+                assert [(step["date"], step["through"], Decimal(step["market_price"])) for step in data["market_price_history"]] == [("2026-01-10", "2026-01-14", Decimal("100")), ("2026-01-15", "2026-01-20", Decimal("110"))]
+                line = [(point["date"], Decimal(point["market_price"]), point["currency"], point["estimated"]) for point in expand_steps(data["market_price_history"], None)]
+                expected = [(f"2026-01-{day:02d}", Decimal("100"), "EUR", True) for day in range(10, 15)] + [(f"2026-01-{day:02d}", Decimal("110"), "EUR", True) for day in range(15, 21)]
+                assert line == expected
+                assert (data["price_history"], data["lots"]) == (None, None)
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                    broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
+                    assert broker_results[broker_id]["success"] is True, cleanup_broker.text
+                if asset_id is not None:
+                    cleanup_asset = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+                    assert cleanup_asset.status_code == 200, cleanup_asset.text
+                    asset_results = {item["asset_id"]: item for item in cleanup_asset.json()["results"]}
+                    assert asset_results[asset_id]["success"] is True, cleanup_asset.text
+                await delete_current_test_user(client, user_id)
+        print_success("MARKET_PRICE_HISTORY: a point a day from the BUY to date_to, after the sale too")
 
 
 # ---------------------------------------------------------------------------
@@ -1333,37 +1402,90 @@ class _ApiRows:
         return _ApiScalars(self._values)
 
 
-class _WacApiSession:
-    """Two-read WAC boundary: Broker access first, Asset identities second."""
+# ---------------------------------------------------------------------------
+# TestPositionsSeriesEndpoint — POST /portfolio/positions-series (J5-1, #48)
+# ---------------------------------------------------------------------------
 
-    def __init__(
-        self,
-        *,
-        broker_id: int,
-        accessible: bool,
-        access_role: UserRole | None = None,
-        accessible_ids=None,
-        assets=(),
-    ):
-        self.broker_id = broker_id
-        self.accessible = accessible
-        self.access_role = access_role
-        self.accessible_ids = (
-            list(accessible_ids)
-            if accessible_ids is not None
-            else ([broker_id] if accessible else [])
-        )
-        self.assets = list(assets)
-        self.statements = []
 
-    async def execute(self, statement):
-        self.statements.append(statement)
-        if len(self.statements) == 1:
-            assert "broker_user_access.role" not in str(statement)
-            return _ApiRows(self.accessible_ids)
-        if len(self.statements) == 2:
-            return _ApiRows(self.assets)
-        raise AssertionError("WAC endpoint performed an unexpected read")
+async def post_positions_series(client: httpx.AsyncClient, body: dict) -> httpx.Response:
+    return await client.post(f"{API_BASE}/portfolio/positions-series", json=body, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+class TestPositionsSeriesEndpoint:
+    async def test_unauthenticated(self, test_server):
+        """POST /portfolio/positions-series without auth -> 401."""
+        print_section("Positions series: unauthenticated")
+        async with httpx.AsyncClient() as client:
+            resp = await post_positions_series(client, {"positions": [{"asset_id": 1}]})
+        assert resp.status_code == 401
+
+    async def test_the_positions_asked_for_are_required_and_capped(self, test_server):
+        print_section("Positions series: validation")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                empty = await post_positions_series(client, {"positions": []})
+                too_many = await post_positions_series(client, {"positions": [{"asset_id": index} for index in range(1, 52)]})
+                unknown_field = await post_positions_series(client, {"positions": [{"asset_id": 1}], "include_everything": True})
+            finally:
+                await delete_current_test_user(client, user_id)
+        assert (empty.status_code, too_many.status_code, unknown_field.status_code) == (422, 422, 422)
+
+    async def test_the_series_of_a_position_ends_where_the_reports_contribution_row_does(self, test_server):
+        """One position bought and sold out: the series is steps (``date``..``through``) contiguous from the window's first day to the day it
+        closed, the response carries the window as ``range``, and the last step's pnl is the report's ``period_pnl`` for the same position
+        and window. It owns and deletes its user, broker, asset, three transactions and
+        one price, broker first (as the report's date-aware test does)."""
+        print_section("Positions series: end to end")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            broker_id: int | None = None
+            asset_id: int | None = None
+            try:
+                broker_id = await create_broker(client)
+                asset_id = await create_asset(client)
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-01-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2025-02-15", "quantity": "-10", "cash": {"code": "EUR", "amount": "1200"}},
+                    ],
+                )
+                price_resp = await client.post(f"{API_BASE}/assets/prices", json=[{"asset_id": asset_id, "prices": [{"date": "2025-01-31", "close": "110.00", "currency": "EUR"}]}], timeout=TIMEOUT)
+                assert price_resp.status_code == 200, price_resp.text
+                window = {"start": "2025-01-31", "end": "2025-02-28"}
+                series_resp = await post_positions_series(client, {"date_range": window, "positions": [{"asset_id": asset_id, "broker_id": broker_id}]})
+                report_resp = await post_portfolio_report(client, {"include_summary": False, "include_history": False, "include_allocation_history": False, "include_positions_contribution": True, "date_range": window})
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                if asset_id is not None:
+                    cleanup_asset = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+                    assert cleanup_asset.status_code == 200, cleanup_asset.text
+                await delete_current_test_user(client, user_id)
+
+        assert series_resp.status_code == 200, series_resp.text
+        body = series_resp.json()
+        assert (body["currency"], body["date_from"], body["date_to"]) == ("EUR", "2025-01-31", "2025-02-28")
+        assert body["range"] == {"start": "2025-01-31", "end": "2025-02-28"}
+        [series] = body["series"]
+        assert (series["first_date"], series["last_date"], series["closed_on"], series["held_at_start"], series["held_at_end"]) == ("2025-01-31", "2025-02-15", "2025-02-15", True, False)
+        points = series["points"]
+        # Contiguous steps from first_date to last_date (16 calendar days) with fewer steps than days; the last one is the day it closed.
+        assert (points[0]["date"], points[-1]["through"]) == ("2025-01-31", "2025-02-15")
+        for before, after in zip(points, points[1:], strict=False):
+            assert date.fromisoformat(after["date"]) == date.fromisoformat(before["through"]) + timedelta(days=1)
+        assert all(date.fromisoformat(point["date"]) <= date.fromisoformat(point["through"]) for point in points)
+        assert sum((date.fromisoformat(point["through"]) - date.fromisoformat(point["date"])).days + 1 for point in points) == 16
+        assert len(points) < 16
+        [row] = report_resp.json()["positions_contribution"]["positions"]
+        assert Decimal(points[-1]["pnl"]) == Decimal(row["period_pnl"])
+        assert (points[-1]["quantity"], points[-1]["market_value"]) == ("0", "0")
 
 
 def _focused_portfolio_app(
@@ -1385,9 +1507,7 @@ def _focused_portfolio_app(
     app.dependency_overrides[get_session_generator] = override_session
     app.dependency_overrides[get_current_user] = override_current_user
     if current_user is not None:
-        app.dependency_overrides[
-            portfolio_api._get_allocation_source_user
-        ] = override_current_user
+        app.dependency_overrides[portfolio_api._get_allocation_source_user] = override_current_user
     return app
 
 
@@ -1465,10 +1585,7 @@ async def test_allocation_source_post_returns_typed_uncached_response(
     builder.assert_awaited_once()
     assert builder.await_args.args == (session,)
     assert builder.await_args.kwargs["user_id"] == 41
-    assert (
-        builder.await_args.kwargs["request"].model_dump(mode="json")
-        == _planner_source_payload()
-    )
+    assert builder.await_args.kwargs["request"].model_dump(mode="json") == _planner_source_payload()
 
 
 @pytest.mark.asyncio
@@ -1534,9 +1651,7 @@ async def test_allocation_source_maps_focused_domain_errors(
 async def test_allocation_source_anonymous_is_401_before_service(
     monkeypatch,
 ):
-    builder = AsyncMock(
-        side_effect=AssertionError("Anonymous request reached source service")
-    )
+    builder = AsyncMock(side_effect=AssertionError("Anonymous request reached source service"))
     monkeypatch.setattr(
         portfolio_api,
         "build_portfolio_planner_source",
@@ -1565,9 +1680,7 @@ async def test_allocation_source_anonymous_is_401_before_service(
 async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
     monkeypatch,
 ):
-    builder = AsyncMock(
-        side_effect=PortfolioPlannerSourceAccessError("forbidden")
-    )
+    builder = AsyncMock(side_effect=PortfolioPlannerSourceAccessError("forbidden"))
     monkeypatch.setattr(
         portfolio_api,
         "build_portfolio_planner_source",
@@ -1588,263 +1701,9 @@ async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
         )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == (
-        "portfolio_planner_source_broker_forbidden"
-    )
+    assert response.json()["detail"]["code"] == ("portfolio_planner_source_broker_forbidden")
     assert response.headers.get("cache-control") == "no-store"
     assert builder.await_args.kwargs["user_id"] == 91
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "role",
-    [
-        pytest.param(UserRole.VIEWER, id="viewer"),
-        pytest.param(UserRole.EDITOR, id="editor"),
-        pytest.param(UserRole.OWNER, id="owner"),
-    ],
-)
-async def test_legacy_wac_allows_every_authenticated_broker_access_role(role):
-    broker_id = 7
-    session = _WacApiSession(
-        broker_id=broker_id,
-        accessible=True,
-        access_role=role,
-    )
-    app = _focused_portfolio_app(
-        current_user=SimpleNamespace(id=41, is_superuser=False),
-        session=session,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": broker_id,
-                        "asset_id": 11,
-                    }
-                ]
-            },
-        )
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "results": [
-            {
-                "broker_id": broker_id,
-                "asset_id": 11,
-                "currency": "USD",
-                "series": [],
-                "missing_fx_pairs": [],
-            }
-        ]
-    }
-    assert len(session.statements) == 2
-    assert session.access_role == role
-
-
-@pytest.mark.asyncio
-async def test_legacy_wac_superuser_without_access_is_403_before_asset_read():
-    session = _WacApiSession(
-        broker_id=7,
-        accessible=False,
-    )
-    app = _focused_portfolio_app(
-        current_user=SimpleNamespace(id=91, is_superuser=True),
-        session=session,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": 7,
-                        "asset_id": 11,
-                    }
-                ]
-            },
-        )
-
-    assert response.status_code == 403
-    assert response.json() == {
-        "detail": {
-            "code": "portfolio_wac_broker_forbidden",
-        }
-    }
-    assert len(session.statements) == 1
-
-
-@pytest.mark.asyncio
-async def test_legacy_wac_mixed_access_scope_fails_atomically_before_asset_read():
-    session = _WacApiSession(
-        broker_id=7,
-        accessible=True,
-        accessible_ids=[7],
-    )
-    app = _focused_portfolio_app(
-        current_user=SimpleNamespace(id=41, is_superuser=False),
-        session=session,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": 7,
-                        "asset_id": 11,
-                    },
-                    {
-                        "broker_id": 99,
-                        "asset_id": 12,
-                    },
-                ]
-            },
-        )
-
-    assert response.status_code == 403
-    assert response.json() == {
-        "detail": {
-            "code": "portfolio_wac_broker_forbidden",
-        }
-    }
-    assert len(session.statements) == 1
-
-
-@pytest.mark.asyncio
-async def test_legacy_wac_anonymous_is_401_before_any_portfolio_read():
-    session = _WacApiSession(
-        broker_id=7,
-        accessible=True,
-    )
-    app = _focused_portfolio_app(
-        current_user=None,
-        session=session,
-    )
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": 7,
-                        "asset_id": 11,
-                    }
-                ]
-            },
-        )
-
-    assert response.status_code == 401
-    assert session.statements == []
-
-
-@pytest.mark.asyncio
-async def test_legacy_wac_response_remains_byte_and_semantically_compatible(
-    monkeypatch,
-):
-    broker_id = 7
-    asset_id = 11
-    session = _WacApiSession(
-        broker_id=broker_id,
-        accessible=True,
-        assets=[SimpleNamespace(id=asset_id, currency="EUR")],
-    )
-    compute = AsyncMock(
-        return_value=WACPreviewResultItem(
-            wac=Currency(code="EUR", amount=Decimal("12.3400")),
-            wac_qualifying_txs=[
-                WACQualifyingTX(
-                    tx_id=101,
-                    type="BUY",
-                    date=date(2026, 1, 2),
-                    quantity=Decimal("2.500"),
-                    unit_cost=Decimal("12.3400"),
-                    currency="EUR",
-                    effect="add",
-                    running_wac=Decimal("12.3400"),
-                )
-            ],
-            wac_missing_pairs=[],
-        )
-    )
-    monkeypatch.setattr(
-        portfolio_api,
-        "compute_wac_iterative",
-        compute,
-    )
-    app = _focused_portfolio_app(
-        current_user=SimpleNamespace(id=41, is_superuser=False),
-        session=session,
-    )
-    expected = {
-        "results": [
-            {
-                "broker_id": broker_id,
-                "asset_id": asset_id,
-                "currency": "EUR",
-                "series": [
-                    {
-                        "date": "2026-01-02",
-                        "wac": "12.3400",
-                        "pool_qty": "2.500",
-                        "effect": "add",
-                    }
-                ],
-                "missing_fx_pairs": [],
-            }
-        ]
-    }
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/v1/portfolio/wac",
-            json={
-                "queries": [
-                    {
-                        "broker_id": broker_id,
-                        "asset_id": asset_id,
-                        "date_range": {
-                            "end": "2026-01-31",
-                        },
-                    }
-                ]
-            },
-        )
-
-    assert response.status_code == 200
-    assert response.json() == expected
-    assert response.content == json.dumps(
-        expected,
-        separators=(",", ":"),
-    ).encode()
-    compute.assert_awaited_once_with(
-        session=session,
-        broker_id=broker_id,
-        asset_id=asset_id,
-        as_of_date=date(2026, 1, 31),
-        asset_currency="EUR",
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -2211,3 +2070,434 @@ class TestIssue32PurchaseCostInReportCurrency:
         assert response.status_code == 200, response.text
         assert Decimal(response.json()["summary"]["open_cost_basis"]["amount"]) == Decimal("60000")
         print_success("60000 UZS = 100×150 + 150×140 + 150×160")
+
+
+# ---------------------------------------------------------------------------
+# MF-PAV-L1 — transactions dated before 1900: no data-quality warning, the history starts on the first row
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestRowsBefore1900StartTheHistory:
+    """POST /portfolio/report on a scope with transactions dated before 1 January 1900 (MF-PAV-L1; MF-SEC8-2a before it).
+
+    The engine replays such a row on its own date and, since L1, starts the history on it: ``range.start`` and the first
+    ``history`` step are the earliest row's day, and ``data_quality`` holds no ``TRANSACTIONS_BEFORE_FLOOR`` warning (the
+    code is gone). Proven on the HTTP pass-through, both ways ``data_quality`` is built: with the summary (``get_summary``:
+    ``summary.data_quality``, repeated as the top-level ``data_quality``) and without it (``get_report`` builds the
+    top-level ``data_quality`` itself).
+
+    The rows before 1900 are seeded with the ORM, in the lane's test database only: the API still refuses dates before
+    1900 (the write floor ``transaction_date_bounds``, until its own lot), so such rows exist only for books written
+    before that rule.
+
+    One new user, two new brokers, reported in EUR (the rows' currency: no rate is asked), whole history up to 1900-12-31.
+    ``floor``: a DEPOSIT on 1900-01-01 through the API, then two DEPOSITs seeded on 1899-12-15 and 1899-03-01 (the earliest
+    written last). ``control``: only the API DEPOSIT on 1900-01-01 — its history starts there. Cleanup: the seeded rows by
+    id with the ORM, then both brokers (force: their API rows), then the user.
+
+    RED on HEAD 962810da1: ``floor``'s ``range.start`` and first history step are 1900-01-01 (the engine's floor), not 1899-03-01,
+    and each of its three ``data_quality`` sections holds the ``TRANSACTIONS_BEFORE_FLOOR`` warning. GREEN on HEAD: the control
+    scope (no row before 1900: no warning, history from its first row).
+    """
+
+    FLOOR_DAY = "1900-01-01"
+    SEEDED = ((date(1899, 12, 15), "500"), (date(1899, 3, 1), "250"))  # (day, EUR amount), in writing order
+    WHERE = ("summary.data_quality", "data_quality with the summary", "data_quality without the summary")
+
+    @staticmethod
+    def _lane_engine():
+        """The engine of the runner's test database, never another: the seeded rows bypass every API check."""
+        is_test_db, database_url = verify_test_database()
+        assert is_test_db, f"Refusing to write transactions outside the test database ({database_url})"
+        engine = get_async_engine()
+        assert engine.url.database and Path(engine.url.database).resolve() == get_test_db_path().resolve(), f"Refusing to write through a non-test engine ({engine.url})"
+        return engine
+
+    async def _seed_before_floor(self, broker_id: int, marker: str) -> list[int]:
+        """Write ``SEEDED`` on ``broker_id`` — the dates the API refuses; their ids, once committed."""
+        async with AsyncSession(self._lane_engine()) as session:
+            rows = [Transaction(broker_id=broker_id, type=TransactionType.DEPOSIT, date=day, quantity=Decimal("0"), amount=Decimal(amount), currency="EUR", description=marker) for day, amount in self.SEEDED]
+            session.add_all(rows)
+            await session.flush()
+            ids = [row.id for row in rows]
+            await session.commit()
+        return ids
+
+    async def _delete_seeded(self, ids: list[int]) -> int:
+        """Delete the seeded rows by id; how many went."""
+        async with AsyncSession(self._lane_engine()) as session:
+            result = await session.execute(delete(Transaction).where(Transaction.id.in_(ids)))
+            deleted = result.rowcount
+            await session.commit()
+        return deleted
+
+    async def _cleanup(self, client: httpx.AsyncClient, seeded_ids: list[int], broker_ids: list[int], cleanup_errors: list[str]) -> None:
+        """The seeded rows first, then the brokers (force: their API rows). A failure is recorded, never raised, so the
+        brokers and the user are still deleted."""
+        if seeded_ids:
+            try:
+                deleted = await self._delete_seeded(seeded_ids)
+            except Exception as exc:  # recorded: the test fails on it after the rest of the cleanup ran
+                cleanup_errors.append(f"seeded rows {seeded_ids}: {exc!r}")
+            else:
+                if deleted != len(seeded_ids):
+                    cleanup_errors.append(f"seeded rows {seeded_ids}: {deleted} deleted")
+        if broker_ids:
+            response = await client.delete(f"{API_BASE}/brokers", params={"ids": broker_ids, "force": True}, timeout=TIMEOUT)
+            if response.status_code != 200 or not all(row["success"] for row in response.json()["results"]):
+                cleanup_errors.append(f"brokers {broker_ids}: {response.status_code} {response.text}")
+
+    async def _report(self, client: httpx.AsyncClient, broker_id: int) -> dict[str, object]:
+        """The scope's whole-history report, both ways: the ``data_quality`` sections keyed as ``WHERE`` and the history's first
+        day (``range.start`` and ``history[0].date``), read on the report that has the summary."""
+        found: dict[str, object] = {}
+        for include_summary in (True, False):
+            response = await post_portfolio_report(
+                client,
+                {
+                    "broker_ids": [broker_id],
+                    "target_currency": "EUR",
+                    "date_range": {"end": "1900-12-31"},
+                    "include_summary": include_summary,
+                    "include_history": True,
+                    "include_allocation_history": False,
+                },
+            )
+            assert response.status_code == 200, response.text
+            report = response.json()
+            assert report["history"], "presence barrier: the scope's rows were replayed, the history has steps"
+            if include_summary:
+                found["summary.data_quality"] = report["summary"]["data_quality"]
+                found["data_quality with the summary"] = report["data_quality"]
+                found["range.start"] = report["range"]["start"]
+                found["history[0].date"] = report["history"][0]["date"]
+                found["computed_date_from"] = report["metadata"]["computed_date_from"]
+            else:
+                assert report["summary"] is None, "include_summary=False built a summary: the report's own data_quality path is not reached"
+                found["data_quality without the summary"] = report["data_quality"]
+        return found
+
+    @staticmethod
+    def _floor_issues(quality: dict | None) -> list[str] | None:
+        """The ``TRANSACTIONS_BEFORE_FLOOR`` issues of a section, as their codes (None: no section)."""
+        if quality is None:
+            return None
+        return [issue["code"] for issue in quality["issues"] if issue["code"] == "TRANSACTIONS_BEFORE_FLOOR"]
+
+    async def test_rows_before_1900_start_the_history_and_raise_no_warning(self, test_server):
+        """RED on HEAD 962810da1: the floor scope's history starts on 1900-01-01 and each ``data_quality`` section holds one
+        TRANSACTIONS_BEFORE_FLOOR. After L1: ``range.start``, ``history[0].date`` and ``metadata.computed_date_from`` are the
+        earliest row's day (1899-03-01), no section holds the warning; the control scope starts on 1900-01-01 and has none."""
+        print_section("Portfolio Report: transactions before 1900 (MF-PAV-L1)")
+        marker = f"MF-PAV-L1 {uuid.uuid4().hex}"
+        cleanup_errors: list[str] = []
+        broker_ids: list[int] = []
+        seeded_ids: list[int] = []
+        floor_report: dict[str, object] = {}
+        control_report: dict[str, object] = {}
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                floor_id = await create_broker(client, f"Floor {uuid.uuid4().hex[:12]}")
+                broker_ids.append(floor_id)
+                control_id = await create_broker(client, f"Floor control {uuid.uuid4().hex[:12]}")
+                broker_ids.append(control_id)
+                await commit_batch(client, creates=[{"broker_id": broker_id, "type": "DEPOSIT", "date": self.FLOOR_DAY, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}} for broker_id in broker_ids])
+                seeded_ids = await self._seed_before_floor(floor_id, marker)
+
+                floor_report = await self._report(client, floor_id)
+                control_report = await self._report(client, control_id)
+            finally:
+                await self._cleanup(client, seeded_ids, broker_ids, cleanup_errors)
+                await delete_current_test_user(client, user_id)
+        assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+
+        earliest = min(day for day, _ in self.SEEDED).isoformat()
+        for name, report in (("floor", floor_report), ("control", control_report)):
+            assert {where: self._floor_issues(report[where]) for where in self.WHERE} == {where: [] for where in self.WHERE}, f"{name}: no data_quality section holds TRANSACTIONS_BEFORE_FLOOR"
+        assert {key: floor_report[key] for key in ("range.start", "history[0].date", "computed_date_from")} == dict.fromkeys(("range.start", "history[0].date", "computed_date_from"), earliest), "floor: the history starts on the earliest row, before 1900"
+        assert {key: control_report[key] for key in ("range.start", "history[0].date", "computed_date_from")} == dict.fromkeys(("range.start", "history[0].date", "computed_date_from"), self.FLOOR_DAY), "control: the history starts on its first row, 1900-01-01"
+        print_success(f"{len(self.SEEDED)} rows before 1900: history from {earliest}, no TRANSACTIONS_BEFORE_FLOOR in any data_quality section")
+
+
+# ---------------------------------------------------------------------------
+# E-19b2 — currencies stored as no ISO 4217 code, named in the report's data quality
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestNonIsoCurrencyDataQuality:
+    """POST /portfolio/report names a currency of its scope stored as no ISO 4217 code, instead of asking for an FX pair
+    that cannot exist (E-19b2).
+
+    Since E-18 a write takes only ISO 4217 alphabetic codes; an older version stored a numeric code or a name as written.
+    Every conversion such a code needs fails, and the report listed ``978/EUR`` as a MISSING_FX_MARKET ``978-EUR`` whose
+    «Add FX pair» gets a 422. Now each such value is one WARNING ``NON_ISO_CURRENCY`` — key and params by what the value
+    stands for (``978``: the suggestion EUR; the report's own currency: ``dataQuality.nonIsoReportCurrency``), the held
+    assets stored in it by id and name, no CTA, no pair, group ``non_iso_currency:<value>`` — and no MISSING_FX_* issue
+    names a pair with such a side, while the raw ``missing_fx_pairs`` keeps every pair. ``PortfolioService`` lists the held
+    assets from the facts it already reads (``_non_iso_currency_assets``) and passes ``report_currency=base_currency``, at
+    both report call sites: proven on the HTTP pass-through, both ways the report builds ``data_quality`` — with the
+    summary (``summary.data_quality``, repeated as the top-level one) and without it —, as
+    ``TestTransactionsBeforeFloorDataQuality`` does. The other rules of the issue are pinned without a server, in
+    ``test_data_quality_report.py::TestNonIsoCurrencyIssue``.
+
+    The stored codes are written with the ORM, in the lane's test database only and on rows the test owns: since E-18 the
+    API refuses them (asset, transaction, settings). Each test: one new user, its own brokers and EUR assets, reported over
+    2025. Cleanup undoes the ORM writes first (the seeded rows deleted by id, the asset's currency and the base currency put
+    back to EUR), then the brokers (force: their API rows), the assets, the user.
+
+    Red on HEAD 8938d6b69: no section holds a ``NON_ISO_CURRENCY`` issue, and MISSING_FX_MARKET lists ``978-EUR``; the
+    barriers and the control are green there too.
+    """
+
+    START, END = "2025-01-01", "2025-12-31"
+    DEPOSIT_DAY, BUY_DAY = "2025-03-01", "2025-03-03"
+    #: The day of the cash deposited in the stored code: inside the period, after the purchase.
+    STORED_CASH_DAY = date(2025, 4, 1)
+    #: EUR's numeric code, as an older version stored it.
+    STORED = "978"
+    WHERE = ("summary.data_quality", "data_quality with the summary", "data_quality without the summary")
+    FIELDS = ("domain", "severity", "message_i18n_key", "message_params", "count", "affected_asset_ids", "affected_asset_names", "affected_fx_pairs", "cta_action", "cta_target", "group_key")
+
+    @staticmethod
+    def _lane_engine():
+        """The engine of the runner's test database, never another: the seeded values bypass every API check."""
+        is_test_db, database_url = verify_test_database()
+        assert is_test_db, f"Refusing to write outside the test database ({database_url})"
+        engine = get_async_engine()
+        assert engine.url.database and Path(engine.url.database).resolve() == get_test_db_path().resolve(), f"Refusing to write through a non-test engine ({engine.url})"
+        return engine
+
+    async def _create_assets(self, client: httpx.AsyncClient, roles: tuple[str, ...], created_ids: list[int]) -> dict[str, tuple[int, str]]:
+        """One EUR asset per role, in one request, found back by name: ``{role: (asset id, name)}``; every id created goes
+        into ``created_ids`` first, for the cleanup."""
+        marker = uuid.uuid4().hex
+        names = {role: f"E-19b2 {role} {marker}" for role in roles}
+        payload = [{"display_name": name, "currency": "EUR", "asset_type": "STOCK"} for name in names.values()]
+        resp = await client.post(f"{API_BASE}/assets", json=payload, timeout=TIMEOUT)
+        created = {row["display_name"]: row["asset_id"] for row in resp.json().get("results", []) if row.get("success")} if resp.status_code in (200, 201) else {}
+        created_ids.extend(created.values())
+        assert set(created) == set(names.values()), f"setup: every asset created: {resp.status_code} {resp.text}"
+        return {role: (created[name], name) for role, name in names.items()}
+
+    async def _buy(self, client: httpx.AsyncClient, broker_id: int, asset_id: int) -> None:
+        """10 000 EUR deposited, then 10 of ``asset_id`` bought for 1 000 EUR: ISO codes, through the API."""
+        await commit_batch(
+            client,
+            creates=[
+                {"broker_id": broker_id, "type": "DEPOSIT", "date": self.DEPOSIT_DAY, "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": self.BUY_DAY, "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+            ],
+        )
+
+    async def _seed_stored_asset_and_cash(self, asset_id: int, broker_id: int, marker: str) -> list[int]:
+        """The asset's currency set to ``978``, and 500 deposited in ``978`` on the broker, with the ORM, in one commit: as
+        an older version could store them. The seeded row's id, once committed."""
+        async with AsyncSession(self._lane_engine()) as session:
+            written = await session.execute(update(Asset).where(Asset.id == asset_id).values(currency=self.STORED))
+            assert written.rowcount == 1, f"setup: asset {asset_id}: {written.rowcount} row(s)"
+            row = Transaction(broker_id=broker_id, type=TransactionType.DEPOSIT, date=self.STORED_CASH_DAY, quantity=Decimal("0"), amount=Decimal("500"), currency=self.STORED, description=marker)
+            session.add(row)
+            await session.flush()
+            seeded = [row.id]
+            await session.commit()
+        return seeded
+
+    async def _seed_base_currency(self, client: httpx.AsyncClient, user_id: int) -> None:
+        """The user's base currency set to ``978`` with the ORM, as an older version could store it; the settings row is
+        created first, through the API (its GET creates it)."""
+        response = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+        assert response.status_code == 200, f"setup: GET /settings/user: {response.status_code} {response.text}"
+        async with AsyncSession(self._lane_engine()) as session:
+            written = await session.execute(update(UserSettings).where(UserSettings.user_id == user_id).values(base_currency=self.STORED))
+            assert written.rowcount == 1, f"setup: user {user_id} has {written.rowcount} settings row(s)"
+            await session.commit()
+
+    async def _data_quality(self, client: httpx.AsyncClient, broker_ids: list[int], target_currency: str | None, held: set[int], reported_in: str) -> dict[str, dict | None]:
+        """The scope's ``data_quality`` sections, keyed as ``WHERE``: one report with the summary, one without. Without a
+        ``target_currency`` the report converts to the user's base currency."""
+        found: dict[str, dict | None] = {}
+        for include_summary in (True, False):
+            body = {"broker_ids": broker_ids, "date_range": {"start": self.START, "end": self.END}, "include_summary": include_summary, "include_history": False, "include_allocation_history": False}
+            if target_currency is not None:
+                body["target_currency"] = target_currency
+            response = await post_portfolio_report(client, body)
+            assert response.status_code == 200, response.text
+            report = response.json()
+            # Presence barriers: the engine ran to the period's end, in the currency meant, and the summary holds exactly the assets held there.
+            assert (report["metadata"]["computed_date_to"], report["metadata"]["target_currency"]) == (self.END, reported_in), report["metadata"]
+            if include_summary:
+                assert {holding["asset_id"] for holding in report["summary"]["holdings"]} == held, report["summary"]["holdings"]
+                found["summary.data_quality"] = report["summary"]["data_quality"]
+                found["data_quality with the summary"] = report["data_quality"]
+            else:
+                assert report["summary"] is None, "include_summary=False built a summary: the report's own data_quality path is not reached"
+                found["data_quality without the summary"] = report["data_quality"]
+        return found
+
+    def _non_iso_issues(self, quality: dict | None) -> list[dict] | None:
+        """The ``NON_ISO_CURRENCY`` issues of a section, reduced to the contract's fields (None: no section)."""
+        if quality is None:
+            return None
+        return [{field: issue.get(field) for field in self.FIELDS} for issue in quality["issues"] if issue["code"] == "NON_ISO_CURRENCY"]
+
+    @staticmethod
+    def _fx_issues_naming(quality: dict | None, value: str) -> list[tuple[str, str]] | None:
+        """(code, slug) of every pair a MISSING_FX_* issue of a section lists or targets with ``value`` as a side (None: no
+        section)."""
+        if quality is None:
+            return None
+        named: list[tuple[str, str]] = []
+        for issue in quality["issues"]:
+            if issue["code"] not in ("MISSING_FX_MARKET", "MISSING_FX_RATES"):
+                continue
+            for slug in [*issue["affected_fx_pairs"], *([issue["cta_target"]] if issue["cta_target"] else [])]:
+                if value in slug.replace("/", "-").split("-"):
+                    named.append((issue["code"], slug))
+        return named
+
+    @staticmethod
+    def _raw_pairs_naming(quality: dict | None, value: str) -> list[str] | None:
+        """The raw ``missing_fx_pairs`` of a section (``FROM/TO``, the codes as stored) with ``value`` as a side (None: no
+        section)."""
+        if quality is None:
+            return None
+        return [item["pair"] for item in quality["missing_fx_pairs"] if value in item["pair"].split("/")]
+
+    async def _undo_orm_writes(self, seeded_ids: list[int], stored_asset_ids: list[int], settings_user_id: int | None, cleanup_errors: list[str]) -> None:
+        """The seeded rows deleted by id, the asset's currency and the base currency put back to EUR, in one commit. A
+        failure is recorded, never raised."""
+        try:
+            async with AsyncSession(self._lane_engine()) as session:
+                if seeded_ids:
+                    deleted = (await session.execute(delete(Transaction).where(Transaction.id.in_(seeded_ids)))).rowcount
+                    if deleted != len(seeded_ids):
+                        cleanup_errors.append(f"seeded rows {seeded_ids}: {deleted} deleted")
+                if stored_asset_ids:
+                    await session.execute(update(Asset).where(Asset.id.in_(stored_asset_ids)).values(currency="EUR"))
+                if settings_user_id is not None:
+                    await session.execute(update(UserSettings).where(UserSettings.user_id == settings_user_id).values(base_currency="EUR"))
+                await session.commit()
+        except Exception as exc:  # recorded: the test fails on it after the rest of the cleanup ran
+            cleanup_errors.append(f"ORM writes (rows {seeded_ids}, assets {stored_asset_ids}, settings of user {settings_user_id}): {exc!r}")
+
+    async def _cleanup(self, client: httpx.AsyncClient, seeded_ids: list[int], stored_asset_ids: list[int], settings_user_id: int | None, broker_ids: list[int], asset_ids: list[int], cleanup_errors: list[str]) -> None:
+        """The ORM writes undone first, then the brokers (force: their API rows), then the assets. A failure is recorded,
+        never raised, so the rest, and the user, still go."""
+        if seeded_ids or stored_asset_ids or settings_user_id is not None:
+            await self._undo_orm_writes(seeded_ids, stored_asset_ids, settings_user_id, cleanup_errors)
+        if broker_ids:
+            response = await client.delete(f"{API_BASE}/brokers", params={"ids": broker_ids, "force": True}, timeout=TIMEOUT)
+            if response.status_code != 200 or not all(row["success"] for row in response.json()["results"]):
+                cleanup_errors.append(f"brokers {broker_ids}: {response.status_code} {response.text}")
+        if asset_ids:
+            response = await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
+            if response.status_code != 200 or not all(row["success"] for row in response.json()["results"]):
+                cleanup_errors.append(f"assets {asset_ids}: {response.status_code} {response.text}")
+
+    async def test_a_held_asset_and_cash_stored_in_978_give_one_warning_and_no_fx_pair(self, test_server):
+        """RED until E-19b2: the ``stored`` scope, reported in EUR — its held asset's currency stored as 978, and 500
+        deposited in 978 — gets in each data_quality section one NON_ISO_CURRENCY for 978: the suggestion EUR, the asset by
+        id and name, count 1, no CTA, no pair; and no MISSING_FX_* issue names 978, while the raw ``missing_fx_pairs`` does
+        (the barrier: those conversions did fail). The ``control`` scope, ISO codes only, gets none."""
+        print_section("Portfolio Report: a held asset and cash stored in 978 (E-19b2)")
+        marker = f"E-19b2 {uuid.uuid4().hex}"
+        cleanup_errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_ids: list[int] = []
+        stored_asset_ids: list[int] = []
+        seeded_ids: list[int] = []
+        assets: dict[str, tuple[int, str]] = {}
+        stored_quality: dict[str, dict | None] = {}
+        control_quality: dict[str, dict | None] = {}
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                assets = await self._create_assets(client, ("stored", "control"), asset_ids)
+                for role in ("stored", "control"):
+                    broker_id = await create_broker(client, f"E-19b2 {role} {uuid.uuid4().hex[:12]}")
+                    broker_ids.append(broker_id)
+                    await self._buy(client, broker_id, assets[role][0])
+                stored_broker_id, control_broker_id = broker_ids
+                stored_asset_ids.append(assets["stored"][0])
+                seeded_ids.extend(await self._seed_stored_asset_and_cash(assets["stored"][0], stored_broker_id, marker))
+
+                stored_quality = await self._data_quality(client, [stored_broker_id], "EUR", {assets["stored"][0]}, "EUR")
+                control_quality = await self._data_quality(client, [control_broker_id], "EUR", {assets["control"][0]}, "EUR")
+            finally:
+                await self._cleanup(client, seeded_ids, stored_asset_ids, None, broker_ids, asset_ids, cleanup_errors)
+                await delete_current_test_user(client, user_id)
+        assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+
+        # Barrier: the scope's conversions from 978 did fail, so each section's raw list names the code the issues must not ask for.
+        assert {where: bool(self._raw_pairs_naming(quality, self.STORED)) for where, quality in stored_quality.items()} == dict.fromkeys(self.WHERE, True), {where: quality and quality["missing_fx_pairs"] for where, quality in stored_quality.items()}
+        stored_id, stored_name = assets["stored"]
+        expected = {
+            "domain": "portfolio",
+            "severity": "warning",
+            "message_i18n_key": "dataQuality.nonIsoCurrencySuggestion",
+            "message_params": {"value": self.STORED, "suggestion": "EUR"},
+            "count": 1,
+            "affected_asset_ids": [stored_id],
+            "affected_asset_names": [stored_name],
+            "affected_fx_pairs": [],
+            "cta_action": None,
+            "cta_target": None,
+            "group_key": f"non_iso_currency:{self.STORED}",
+        }
+        assert {where: self._non_iso_issues(quality) for where, quality in stored_quality.items()} == {where: [expected] for where in self.WHERE}
+        assert {where: self._fx_issues_naming(quality, self.STORED) for where, quality in stored_quality.items()} == {where: [] for where in self.WHERE}
+        assert {where: self._non_iso_issues(quality) for where, quality in control_quality.items()} == {where: [] for where in self.WHERE}
+        print_success("A held asset and cash stored in 978: one NON_ISO_CURRENCY naming 978 with the asset in every data_quality section, no FX pair asked for; none for the control")
+
+    async def test_a_base_currency_stored_as_978_gives_the_report_currency_warning(self, test_server):
+        """RED until E-19b2: the user's base currency stored as 978, a report without ``target_currency`` converts to 978 —
+        every conversion of the scope's EUR into it fails — and each data_quality section gets one NON_ISO_CURRENCY for 978
+        with the report currency's key, ``dataQuality.nonIsoReportCurrency``, and the suggestion EUR: no asset (the one held
+        is in EUR), count None. No MISSING_FX_* issue names 978, while the raw ``missing_fx_pairs`` does (the barrier):
+        ``report_currency`` reaches both call sites."""
+        print_section("Portfolio Report: a base currency stored as 978 (E-19b2)")
+        cleanup_errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_ids: list[int] = []
+        settings_user_id: int | None = None
+        quality_by_where: dict[str, dict | None] = {}
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                assets = await self._create_assets(client, ("euro",), asset_ids)
+                broker_id = await create_broker(client, f"E-19b2 base {uuid.uuid4().hex[:12]}")
+                broker_ids.append(broker_id)
+                await self._buy(client, broker_id, assets["euro"][0])
+                settings_user_id = user_id
+                await self._seed_base_currency(client, user_id)
+
+                quality_by_where = await self._data_quality(client, [broker_id], None, {assets["euro"][0]}, self.STORED)
+            finally:
+                await self._cleanup(client, [], [], settings_user_id, broker_ids, asset_ids, cleanup_errors)
+                await delete_current_test_user(client, user_id)
+        assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+
+        # Barrier: every conversion into 978 did fail, so each section's raw list names the code the issues must not ask for.
+        assert {where: bool(self._raw_pairs_naming(quality, self.STORED)) for where, quality in quality_by_where.items()} == dict.fromkeys(self.WHERE, True), {where: quality and quality["missing_fx_pairs"] for where, quality in quality_by_where.items()}
+        expected = {
+            "domain": "portfolio",
+            "severity": "warning",
+            "message_i18n_key": "dataQuality.nonIsoReportCurrency",
+            "message_params": {"value": self.STORED, "suggestion": "EUR"},
+            "count": None,
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "cta_action": None,
+            "cta_target": None,
+            "group_key": f"non_iso_currency:{self.STORED}",
+        }
+        assert {where: self._non_iso_issues(quality) for where, quality in quality_by_where.items()} == {where: [expected] for where in self.WHERE}
+        assert {where: self._fx_issues_naming(quality, self.STORED) for where, quality in quality_by_where.items()} == {where: [] for where in self.WHERE}
+        print_success("A base currency stored as 978: one NON_ISO_CURRENCY with the report currency's key in every data_quality section, no FX pair asked for")

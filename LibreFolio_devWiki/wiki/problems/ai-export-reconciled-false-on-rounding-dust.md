@@ -32,7 +32,7 @@ largest residual of 1e-24, both before and after F — F only changed which five
 
 ## Solution
 
-Commit `876d2b430` (2026-10-12, workstream T, train 47), approved by the developer for release 1.2:
+Commit `9bc377cf5` (2026-10-12, workstream T, train 47), approved by the developer for release 1.2:
 
 - `reconciled = abs(residual_amount) < CONVERSION_DUST` in both builders, `CONVERSION_DUST` (1e-9) imported from
   `financial_math/native_cash.py` ([[entities/native-cash]]) — the same threshold that hides conversion dust in the
@@ -47,6 +47,9 @@ Tests written red first: 10 of 22 backend cases failed for the expected reason (
 against a forgotten `<=` or `abs`, −99); on the frontend, 4 of 403 failed because v2 fell to YAML. Injecting the dust
 into the canonical JSON reproduced the prompt line before the fix (`|reconciled|false|` beside `|residual.amount|0|`)
 and showed it fixed after.
+
+*2026-11-07 lint: the comparison has since moved to one shared helper, `is_reconciled()` in
+`financial_math/portfolio/period.py` (same rule, `abs(residual) < CONVERSION_DUST`), which both builders call.*
 
 ## Prevention
 
@@ -68,5 +71,6 @@ would print `0` next to `reconciled: false`.
 | Versions (v2) | `backend/app/services/ai_export/components/catalog.py` |
 | Compact map `{1, 2}` | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
 | `CONVERSION_DUST` | `backend/app/services/financial_math/native_cash.py` |
+| `is_reconciled` (shared rule) | `backend/app/services/financial_math/portfolio/period.py` |
 | Doc paragraph | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
 | Analysis and implementation notes | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |

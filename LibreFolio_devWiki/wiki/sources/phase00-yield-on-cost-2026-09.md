@@ -17,9 +17,9 @@ related:
 ## Summary
 
 One plan (~1 050 lines) and a README, archived on 2026-10-09. It defined Yield on Cost from the user's transaction
-ledger, per `(asset, broker)`, and shipped it as a column of the Dashboard positions (`74afcebce`, 2026-09-11,
-merged as `d7d40c0ec`). The plan's long middle is the definition's case analysis — partial sales, same-day trades,
-transfers, splits, missing FX — and its rejected alternatives; the code at `586a4f0ea` follows it, with one later
+ledger, per `(asset, broker)`, and shipped it as a column of the Dashboard positions (`2fe4758d4`, 2026-09-11,
+merged as `016773da9`). The plan's long middle is the definition's case analysis — partial sales, same-day trades,
+transfers, splits, missing FX — and its rejected alternatives; the code at `b0635b0cf` follows it, with one later
 change: since #32 the denominator comes from the single average-cost function.
 
 ## Key takeaways
@@ -46,5 +46,5 @@ I-08 — the YOC theory page exists only in English.
 | README | `LibreFolio_developer_journal/Release_2/phases/19_yieldOnCost/README.md` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/19_yieldOnCost/plan-phase00YieldOnCost.prompt.md` |
 | Calculation | `backend/app/services/financial_math/yield_on_cost.py` |
-| Cell | `frontend/src/lib/components/dashboard/YieldOnCostCell.svelte` |
+| Cell | `frontend/src/lib/features/dashboard/YieldOnCostCell.svelte` |
 | Theory page | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.en.md` |

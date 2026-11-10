@@ -2,15 +2,15 @@
 Tests for utilities API endpoints.
 
 Tests the /api/v1/utilities endpoints:
-- GET /utilities/sectors - List standard financial sectors
+- GET /utilities/sectors - List standard financial sectors, with the allocation buckets and the fallback emoji
 - GET /utilities/countries - List all countries with ISO codes and flag emoji
-- GET /utilities/currencies/normalize - Normalize currency name/code/symbol
 """
 
 import httpx
 import pytest
 
 from backend.app.config import get_settings
+from backend.app.utils.asset.sector import ALLOCATION_BUCKETS, SECTOR_EMOJI, SECTOR_EMOJI_FALLBACK
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success
 
@@ -65,6 +65,33 @@ def test_server():
 # ============================================================
 
 
+def _assert_emoji_from_shared_map(items: list[dict]) -> None:
+    """Every listed sector wears the glyph of SECTOR_EMOJI.
+
+    The endpoint and the portfolio engine read that one map, so a sector shows the same glyph in the
+    allocation history (fed by this list) and in the dashboard pie (fed by the engine's allocation view).
+    """
+    for item in items:
+        assert item["key"] in SECTOR_EMOJI, f"{item['key']!r} has no entry in SECTOR_EMOJI"
+        assert item["emoji"] == SECTOR_EMOJI[item["key"]], f"{item['key']}: the endpoint says {item['emoji']!r}, SECTOR_EMOJI says {SECTOR_EMOJI[item['key']]!r}"
+
+
+def _assert_buckets_and_fallback(data: dict) -> None:
+    """The allocation buckets and the fallback glyph come with the sectors, and the buckets stay out of the sectors.
+
+    The frontend keeps no emoji map of its own (DV-2): from this response it reads the glyph of every sector, of the two
+    buckets the portfolio engine adds beside them (the cash, the holdings without a sector) and of a key outside both
+    lists. The buckets are never a sector an asset can be classified in, so they never reach ``items``, which feeds the
+    sector selects.
+    """
+    assert "buckets" in data, f"no 'buckets' in the response: {sorted(data)}"
+    assert data["buckets"] == [{"key": bucket, "emoji": SECTOR_EMOJI[bucket]} for bucket in ALLOCATION_BUCKETS]
+    assert "fallback_emoji" in data, f"no 'fallback_emoji' in the response: {sorted(data)}"
+    assert data["fallback_emoji"] == SECTOR_EMOJI_FALLBACK, f"the endpoint's fallback is {data['fallback_emoji']!r}, SECTOR_EMOJI_FALLBACK is {SECTOR_EMOJI_FALLBACK!r}"
+    leaked = [item["key"] for item in data["items"] if item["key"] in ALLOCATION_BUCKETS]
+    assert not leaked, f"allocation buckets listed among the sectors: {leaked}"
+
+
 @pytest.mark.asyncio
 async def test_list_sectors_with_other(test_server):
     """Test 1: GET /utilities/sectors - Include 'Other'."""
@@ -104,6 +131,8 @@ async def test_list_sectors_with_other(test_server):
 
         assert items_by_key["Corporate Bonds"]["emoji"] == "🏢"
         assert items_by_key["Government Bonds"]["emoji"] == "🏛️"
+        _assert_emoji_from_shared_map(data["items"])
+        _assert_buckets_and_fallback(data)
 
         print_info(f"  Found {len(data['items'])} sectors")
         print_success("✓ Sectors list with Other returned correctly")
@@ -126,6 +155,8 @@ async def test_list_sectors_without_other(test_server):
         assert "Other" not in items_by_key
         assert items_by_key["Corporate Bonds"]["emoji"] == "🏢"
         assert items_by_key["Government Bonds"]["emoji"] == "🏛️"
+        _assert_emoji_from_shared_map(data["items"])
+        _assert_buckets_and_fallback(data)
 
         print_info(f"  Found {len(data['items'])} sectors (excluding Other)")
         print_success("✓ Sectors list without Other returned correctly")
@@ -191,71 +222,6 @@ async def test_list_countries_italian(test_server):
 
         print_info(f"  Found {len(countries)} countries (Italian names)")
         print_success("✓ Countries list with Italian names")
-
-
-# ============================================================
-# GET /utilities/currencies/normalize Tests
-# ============================================================
-
-
-@pytest.mark.asyncio
-async def test_normalize_currency_iso_code(test_server):
-    """Test 10: GET /utilities/currencies/normalize - ISO code."""
-    print_section("Test 10: Normalize Currency - ISO Code")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        response = await client.get(f"{API_BASE}/utilities/currencies/normalize", params={"name": "USD"}, timeout=TIMEOUT)
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["query"] == "USD"
-        assert "USD" in data["iso_codes"]
-        assert data["match_type"] == "exact"
-
-        print_info(f"  USD -> {data['iso_codes']}")
-        print_success("✓ Currency ISO code normalized correctly")
-
-
-@pytest.mark.asyncio
-async def test_normalize_currency_symbol(test_server):
-    """Test 11: GET /utilities/currencies/normalize - Currency symbol."""
-    print_section("Test 11: Normalize Currency - Symbol")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        response = await client.get(f"{API_BASE}/utilities/currencies/normalize", params={"name": "€"}, timeout=TIMEOUT)
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["query"] == "€"
-        # Symbol may resolve to the symbol itself or EUR depending on implementation
-        assert len(data["iso_codes"]) > 0
-
-        print_info(f"  € -> {data['iso_codes']}")
-        print_success("✓ Currency symbol normalized correctly")
-
-
-@pytest.mark.asyncio
-async def test_normalize_currency_passthrough(test_server):
-    """Test 12: GET /utilities/currencies/normalize - Unknown input is passed through."""
-    print_section("Test 12: Normalize Currency - Passthrough")
-
-    async with httpx.AsyncClient() as client:
-        await create_user_and_login(client)
-        response = await client.get(f"{API_BASE}/utilities/currencies/normalize", params={"name": "xyznotacurrency123"}, timeout=TIMEOUT)
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["query"] == "xyznotacurrency123"
-        # API returns the input uppercased as "exact" match (passthrough behavior)
-        assert len(data["iso_codes"]) >= 0  # may or may not find a match
-
-        print_info(f"  xyznotacurrency123 -> match_type={data['match_type']}, codes={data['iso_codes']}")
-        print_success("✓ Unknown currency handled correctly")
 
 
 class TestListCurrenciesEndpoint:

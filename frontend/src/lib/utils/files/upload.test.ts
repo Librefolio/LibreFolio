@@ -1,5 +1,5 @@
 /**
- * formatBytes — a file size in the UI language (M-18 CP1).
+ * upload.ts — formatBytes, a file size in the UI language (M-18 CP1); and the scope of an upload (decision 36).
  *
  * Numbers follow the UI language (the developer's rule of 2026-10-12). `formatBytes` printed the number
  * with `toFixed(1)` — `1.5 KB` for an Italian reader, who writes `1,5 KB` — and now writes it through
@@ -17,20 +17,29 @@
  *
  * The browser. The default locale is the UI language regionalised by `navigator.language` when the two
  * agree (uiLocale.test.ts). Node's follows the host's ICU locale, so it is pinned to en-US before any
- * import, as jsdom's always is. `$lib/api` is stubbed: `uploadFile` lives in the same module and is not
- * this file's subject.
+ * import, as jsdom's always is.
+ *
+ * The scope of an uploaded file (decision 36, CP-U2) lives in this module too, and is observed at the API
+ * boundary, the one thing stubbed here: `uploadFile(file, description?, scope?)` puts `scope` in the form
+ * only when it is given — without it the server decides (images common, the rest personal) — and
+ * `setUploadScope(fileId, scope)` is the PATCH that changes it, answering the updated file.
  */
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, expectTypeOf, it, vi} from 'vitest';
 
 vi.hoisted(() => {
     vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
 });
 
-vi.mock('$lib/api', () => ({axiosInstance: {post: vi.fn()}}));
+const api = vi.hoisted(() => ({post: vi.fn(), patch: vi.fn()}));
+vi.mock('$lib/api', () => ({
+    axiosInstance: {post: api.post},
+    zodiosApi: {update_file_api_v1_uploads__file_id__patch: api.patch},
+}));
 
 import {waitLocale} from 'svelte-i18n';
 import {currentLanguage} from '$lib/stores/app/language';
-import {formatBytes} from './upload';
+import type {UploadedFile, UploadScope} from '$lib/types/files';
+import {formatBytes, setUploadScope, uploadFile} from './upload';
 
 type UiLanguage = 'en' | 'it' | 'fr' | 'es';
 
@@ -120,5 +129,128 @@ describe('formatBytes — the number in the UI language, the unit from translate
             fr: `${oneDecimal('fr', 1.5)} [[common.kilobytes]]`,
             en: '1.5 [[common.kilobytes]]',
         });
+    });
+});
+
+/** What the upload endpoint answers: the stored file, whose url `uploadFile` hands back. */
+function uploaded(url: string) {
+    return {data: {success: true, file: {url}}};
+}
+
+/** The form `uploadFile` posted, with the path it posted it to. */
+function postedForm(): {path: string; form: FormData} {
+    expect(api.post, 'uploadFile posts once').toHaveBeenCalledTimes(1);
+    const [path, form] = api.post.mock.calls[0] as [string, unknown];
+    expect(form, 'the body is a multipart form').toBeInstanceOf(FormData);
+    return {path, form: form as FormData};
+}
+
+describe('uploadFile — the scope travels in the form only when it is given (decision 36)', () => {
+    beforeEach(() => {
+        api.post.mockReset();
+    });
+
+    it('without a scope the form carries no scope field: the server decides (control: today’s form)', async () => {
+        api.post.mockResolvedValueOnce(uploaded('/api/v1/uploads/u-none'));
+        const file = new File(['plain text'], 'notes.txt', {type: 'text/plain'});
+
+        await expect(uploadFile(file, 'a note')).resolves.toBe('/api/v1/uploads/u-none');
+
+        const {path, form} = postedForm();
+        expect(path).toBe('/api/v1/uploads');
+        expect((form.get('file') as File).name).toBe('notes.txt');
+        expect(form.get('description')).toBe('a note');
+        expect(form.has('scope'), 'no scope field at all, not an empty one').toBe(false);
+    });
+
+    it.each(['common', 'personal'] as const)('with scope %s the form carries exactly that scope, beside the file', async (scope) => {
+        api.post.mockResolvedValueOnce(uploaded(`/api/v1/uploads/u-${scope}`));
+        const file = new File(['png bytes'], 'logo.png', {type: 'image/png'});
+
+        await expect(uploadFile(file, undefined, scope)).resolves.toBe(`/api/v1/uploads/u-${scope}`);
+
+        const {path, form} = postedForm();
+        expect(path).toBe('/api/v1/uploads');
+        expect((form.get('file') as File).name).toBe('logo.png');
+        expect(form.getAll('scope'), `scope=${scope}, once`).toEqual([scope]);
+        expect(form.has('description'), 'no description was given').toBe(false);
+    });
+});
+
+describe('setUploadScope — the PATCH that changes who sees an uploaded file (decision 36)', () => {
+    beforeEach(() => {
+        api.patch.mockReset();
+    });
+
+    it('is exported, with the signature (fileId, scope) → the updated file', () => {
+        // Type-level (svelte-check): the scope type lives beside UploadedFile, and is its `scope`.
+        expectTypeOf<UploadScope>().toEqualTypeOf<UploadedFile['scope']>();
+        expectTypeOf(setUploadScope).toEqualTypeOf<(fileId: string, scope: UploadScope) => Promise<UploadedFile>>();
+        // Runtime: the module exports it.
+        expect(setUploadScope, 'upload.ts exports setUploadScope').toBeTypeOf('function');
+    });
+
+    it.each(['common', 'personal'] as const)('asks the PATCH alias for scope %s on that file, and answers what it answers', async (scope) => {
+        const updated: UploadedFile = {
+            id: 'file-1',
+            original_name: 'logo.png',
+            mime_type: 'image/png',
+            size_bytes: 1536,
+            uploaded_at: '2026-10-15T12:00:00Z',
+            uploaded_by_user_id: 7,
+            scope,
+            can_delete: true,
+            url: '/api/v1/uploads/file-1',
+        };
+        api.patch.mockResolvedValueOnce(updated);
+
+        await expect(setUploadScope('file-1', scope)).resolves.toBe(updated);
+
+        expect(api.patch).toHaveBeenCalledExactlyOnceWith({scope}, {params: {file_id: 'file-1'}});
+    });
+
+    it('rejects with the error of the PATCH, so its caller can tell the user', async () => {
+        const refused = new Error('403 Cannot change files uploaded by other users');
+        api.patch.mockRejectedValueOnce(refused);
+
+        await expect(setUploadScope('file-2', 'common')).rejects.toBe(refused);
+        expect(api.patch).toHaveBeenCalledExactlyOnceWith({scope: 'common'}, {params: {file_id: 'file-2'}});
+    });
+});
+
+describe('uploadFile — a file the space limit refused (C8)', () => {
+    const refusal = (extra: Record<string, unknown> = {}) => ({isAxiosError: true, response: {status: 507, data: {detail: {code: 'storage_limit_exceeded', message: 'The space limit would be passed', required_mb: 120, disk_missing_bytes: 0, limit_locked: false, ...extra}}}});
+
+    beforeEach(() => api.post.mockReset());
+
+    it('throws an Error whose message is the interface’s own sentence with the limit to raise, the refusal kept as its cause', async () => {
+        await uiLanguage('en');
+        const error = refusal();
+        api.post.mockRejectedValueOnce(error);
+
+        const raised = await uploadFile(new File(['x'], 'a.txt')).catch((caught: unknown) => caught);
+
+        expect(raised).toBeInstanceOf(Error);
+        expect((raised as Error).message).not.toBe('The space limit would be passed');
+        expect((raised as Error).message, 'the limit to raise, written as a size').toContain('120');
+        expect((raised as Error).cause).toBe(error);
+    });
+
+    it('a limit fixed by the hosting provider asks whoever hosts the instance', async () => {
+        await uiLanguage('en');
+        api.post.mockRejectedValueOnce(refusal({limit_locked: true}));
+        const locked = await uploadFile(new File(['x'], 'a.txt')).catch((caught: Error) => caught.message);
+
+        api.post.mockRejectedValueOnce(refusal({limit_locked: false}));
+        const open = await uploadFile(new File(['x'], 'a.txt')).catch((caught: Error) => caught.message);
+
+        expect(locked).not.toBe(open);
+    });
+
+    it('any other failure is rethrown as it is', async () => {
+        const other = {isAxiosError: true, response: {status: 413, data: {detail: 'File too large'}}};
+        api.post.mockRejectedValueOnce(other);
+
+        await expect(uploadFile(new File(['x'], 'a.txt'))).rejects.toBe(other);
     });
 });

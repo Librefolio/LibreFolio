@@ -124,7 +124,7 @@ Gli importatori senza etichetta sono ben testati e affidabili per i formati che 
     <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon di Fineco">
     <span class="card-title" style="margin: 0;">Fineco</span>
     </div>
-    <span class="card-desc">🧪 Beta · L'esportazione CSV "Movimenti Dossier Titoli"</span>
+    <span class="card-desc">L'elenco titoli "Ordini e contabili", salvato come CSV</span>
     </a>
     <a href="intesa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -278,7 +278,8 @@ Le copie tra i file che importi insieme sono gestite allo stesso modo, e il pass
 
 Se un broker ha una **data di apertura**, le righe datate prima non possono essere importate; il giorno di apertura
 stesso va bene. Se la data è sbagliata, correggila nel passaggio
-[Revisione](how-to.md#opening-date) e le righe vengono ricontrollate.
+[Revisione](how-to.md#opening-date) e le righe vengono ricontrollate. Qualunque sia la data di apertura,
+le date delle transazioni possono risalire fino all'anno 1 e arrivare a domani: una riga datata prima del 1900 chiede una conferma (di solito è un refuso), una riga datata dopo domani è rifiutata quando salvi le righe importate, con un messaggio come *Data: Non oltre il 2026-10-18*, se oggi è il 17 ottobre 2026.
 
 ---
 

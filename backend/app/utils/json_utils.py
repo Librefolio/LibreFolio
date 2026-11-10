@@ -7,7 +7,7 @@ Two deliberately different semantics live side by side:
   JSON-serializable and raises ``ValueError`` otherwise. Used by Pydantic
   ``field_validator``s on contract boundaries (signals, AI Export payloads) where
   a non-JSON value means the producer is broken and must be rejected.
-- ``_json_safe_details`` in ``backend.app.services.asset_source`` — **sanitizer**:
+- ``_json_safe_details`` in ``backend.app.services.assets.core`` — **sanitizer**:
   stringifies anything non-primitive and never raises. Kept local to that module
   because it exists for one field (``AssetSourceError.details``), preserves
   ``None``/empty as "omit the field", and only sanitizes one list level deep —

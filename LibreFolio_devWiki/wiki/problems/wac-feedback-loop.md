@@ -1,15 +1,14 @@
 ---
 title: "WAC Feedback Loop — Infinite Recalculation Cycle"
-category: Problem
+category: problem
 status: resolved
+date: 2026-05-28
 date_encountered: 2026-05-28
 date_resolved: 2026-05-28
 updated: 2026-10-07
 severity: critical
 tags: [frontend, wac, reactivity, infinite-loop, svelte5, bulkModal]
-related_features: [F-097, F-048]
-related_decisions: [decisions/wac-inline-validate-commit, decisions/financial-math-single-average-cost]
-related_problems: [problems/svelte5-effect-read-write-loop]
+related: [features/F-097, features/F-048, decisions/wac-inline-validate-commit, decisions/financial-math-single-average-cost, problems/svelte5-effect-read-write-loop]
 ---
 
 # WAC Feedback Loop — Infinite Recalculation Cycle
@@ -77,10 +76,10 @@ The position grows but the average cost doesn't change. This is the correct PMC 
 
 | Role | Path |
 |------|------|
-| Backend WAC pending schema | `backend/app/schemas/transactions.py` |
+| Backend WAC pending schema | `backend/app/schemas/transactions/transactions.py` |
 | Backend average-cost math (since 2026-10-07; replaces the math engine that held `add_at_wac`) | `backend/app/services/financial_math/average_cost.py` |
-| Backend WAC iterative | `backend/app/services/transaction_service.py` |
-| Frontend BulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Backend WAC iterative | `backend/app/services/transactions/auto_cost.py` |
+| Frontend BulkModal | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | E2E WAC tests | `frontend/e2e/transactions/tx-wac-bulk.spec.ts` |
 
 > Until 2026-10-07 the math-engine row cited `backend/app/utils/financial_utils.py`, where `add_at_wac` was written.

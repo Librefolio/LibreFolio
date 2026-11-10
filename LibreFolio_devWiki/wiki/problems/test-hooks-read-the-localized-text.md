@@ -25,18 +25,18 @@ Twice on 2026-10-13, after figures and dates started following the interface lan
 ## Root Cause
 
 Both hooks were the text shown to the user. `data-dist-pct` had held the displayed, localized string since
-`5b2aad5c4` (M-18's first checkpoint), and the probe rows had no identity other than their wording. A text that
+`1837b77da` (M-18's first checkpoint), and the probe rows had no identity other than their wording. A text that
 follows the language is a moving target for a test, by design.
 
 ## Solution
 
 One split, applied to each case:
 
-- `dfc4f9ccc` (T-CL): `formatDistribution` in `ProviderComparisonModal.svelte` returns the localized `pct` for the
+- `d9aa8be8f` (T-CL): `formatDistribution` in `ProviderComparisonModal.svelte` returns the localized `pct` for the
   screen and a `hook`, the value times 100 with two decimals and a dot, which the attribute publishes — `60.00%` in
   every language. Neither
   the gallery nor the tests changed.
-- `8684d29fe` (the T-ISO probe repair, train 90): each `provider-test-result` row publishes `data-operation` — the
+- `cc515c1fe` (the T-ISO probe repair, train 90): each `provider-test-result` row publishes `data-operation` — the
   backend's own operation names, `current_price` and `history`, or `probe` when the call itself failed — and
   `data-status`; the test matches the rows by operation. T's plan: «La cura: ogni riga pubblica `data-operation`, e il
   testo resta nella lingua della UI.»

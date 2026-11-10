@@ -8,9 +8,9 @@ mkdocs: "developer/backend/scheduler.md"
 
 # Domain: SCHEDULER
 
-> **Corrected 2026-10-09 (checked at `586a4f0ea`).** This page was written as a design ("under active development").
+> **Corrected 2026-10-09 (checked at `b0635b0cf`).** This page was written as a design ("under active development").
 > The scheduler shipped in Phase 08 ([[sources/phase08-scheduler-backend]], [[entities/market-data-scheduler]]): code in
-> `backend/app/services/scheduler/`, admin endpoints `GET /api/v1/settings/scheduler/state` and `/log`, configuration
+> `backend/app/services/platform/scheduler/`, admin endpoints `GET /api/v1/settings/scheduler/state` and `/log`, configuration
 > in the admin Global settings (`SchedulerConfigModal.svelte`). History-sync times are in the configured **scheduler
 > timezone**, not server time ([[decisions/scheduler-converts-at-decision]]). The narrative below is kept.
 
@@ -23,6 +23,11 @@ LibreFolio's manual sync model (user clicks "Sync" on an asset or FX pair) is su
 The scheduler is embedded in the FastAPI process rather than being a separate service. It uses the asyncio native event loop — a 1-minute tick that checks the current time and configured schedules, then dispatches to the existing asset sync and FX sync service methods. Settings are read from `GlobalSetting` on every tick, meaning an admin can change the sync frequency or disable the scheduler without restarting the application.
 
 Multi-worker deployment (multiple uvicorn workers) requires leader election to avoid duplicate syncs. The design uses `psutil` to enumerate running workers, elects the lowest-PID process as leader, and re-evaluates leadership on every tick. This is self-healing: if the leader process dies, the next tick's election promotes a new leader. No locks, no Redis, no external coordination.
+
+> 2026-11-07 lint: superseded on POSIX by a lock. Since `3bcef3cf4` (2026-10-17, Z-11, decision N71) every worker has
+> its own loop and a run takes `<data_dir>/.scheduler.lock` with `flock` before it reads the state, so a second worker
+> waits and finds the jobs not due; the psutil election (`leader.py`) is only the fallback where `fcntl` is missing
+> (Windows). See `backend/app/services/platform/scheduler/run_lock.py` and [[entities/market-data-scheduler]].
 
 The admin can configure and monitor the scheduler via the Scheduler Settings UI (F-053): toggle enabled/disabled, set frequencies, see the last-run time and next scheduled run for each job type. The scheduler state is written atomically to `scheduler_state.json` (write-then-rename) and survives application restarts.
 
@@ -48,8 +53,8 @@ graph TD
     AssetSync -->|skip if inactive| ActiveFilter[Asset.active = True]
     FXSync -->|skip if inactive| FXActiveFilter[FxPair.active = True]
     Dispatch -->|atomic write| StateFile[scheduler_state.json<br/>last_run, next_run]
-    AdminUI[F-053 Scheduler Settings UI] -->|PATCH /settings/global| GlobalSettings
-    AdminUI -->|GET /admin/scheduler/state| StateFile
+    AdminUI[F-053 Scheduler Settings UI] -->|PATCH /settings/global/bulk| GlobalSettings
+    AdminUI -->|GET /settings/scheduler/state| StateFile
 ```
 
 ## Key decisions that shaped this domain
@@ -61,6 +66,7 @@ graph TD
 ## Known problems / limitations
 
 No open problems — this domain is not yet implemented. The design is fully specified and waiting for Phase 8 capacity.
+*2026-11-07 lint: stale since Phase 08 — implemented (see the banner at the top).*
 
 ## What comes next
 
@@ -69,6 +75,9 @@ This entire domain is Phase 8. The implementation order will be:
 2. Backend endpoint `GET /api/v1/admin/scheduler/state`
 3. F-053: Scheduler Settings UI in the admin settings page
 
+*2026-11-07 lint: all three shipped in Phase 08; the endpoint is `GET /api/v1/settings/scheduler/state` (plus `/log`),
+not `/admin/...`, and the UI is `frontend/src/lib/features/settings/SchedulerConfigModal.svelte`.*
+
 Once the scheduler is running, [[F-091]] Multi-Worker Cache Server (planned idea) will be re-evaluated: the current in-process cache works for single-instance deployments, but a shared cache (Redis) may be needed if multiple hosts are added.
 
 ## Source files
@@ -76,8 +85,11 @@ Once the scheduler is running, [[F-091]] Multi-Worker Cache Server (planned idea
 | Role | Path |
 |------|------|
 | Global settings API (scheduler config) | `backend/app/api/v1/settings.py` |
-| Global settings service | `backend/app/services/global_settings_service.py` |
-| Asset sync service (called by scheduler) | `backend/app/services/asset_source.py` |
-| FX sync service (called by scheduler) | `backend/app/services/fx.py` |
-| Scheduler module (planned) | `backend/app/services/scheduler/scheduler.py` (not yet created) |
+| Global settings service | `backend/app/services/accounts/global_settings_service.py` |
+| Asset sync service (called by scheduler) | `backend/app/services/assets/refresh.py` |
+| FX sync service (called by scheduler) | `backend/app/services/fx/sync.py` |
+| Scheduler module | `backend/app/services/platform/scheduler/scheduler.py` |
+| Run lock across workers (primary since 2026-10-17) | `backend/app/services/platform/scheduler/run_lock.py` |
+| Leader election (fallback without `fcntl`) | `backend/app/services/platform/scheduler/leader.py` |
+| Scheduler configuration modal | `frontend/src/lib/features/settings/SchedulerConfigModal.svelte` |
 | Settings page (admin) | `frontend/src/routes/(app)/settings/+page.svelte` |

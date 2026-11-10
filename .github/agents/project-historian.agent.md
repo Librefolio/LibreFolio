@@ -29,7 +29,7 @@ This agent operates on `LibreFolio_devWiki/` — the persistent knowledge layer.
 | `LibreFolio_devWiki/log.md` | Append-only chronological log — update after every ingest or lint |
 | `LibreFolio_devWiki/raw/ingest-registry.md` | Git-hash registry of ingested sources — enables drift detection |
 | `LibreFolio_devWiki/wiki/features/registry.md` | Authoritative feature catalog (F-001–F-096) — start here for feature queries |
-| `LibreFolio_devWiki/graphify-out/graph.json` | Persistent knowledge graph (948 nodes, 1292 edges, 71 communities) |
+| `LibreFolio_devWiki/graphify-out/graph.json` | Persistent knowledge graph of docs and code (its size: see `GRAPH_REPORT.md`) |
 | `LibreFolio_devWiki/graphify-out/GRAPH_REPORT.md` | God nodes, surprising connections, suggested questions |
 
 > ⚠️ **Session isolation**: this agent runs while the rest of the project is frozen.
@@ -44,13 +44,13 @@ This agent operates on `LibreFolio_devWiki/` — the persistent knowledge layer.
 
 ## Graphify Knowledge Graph
 
-The wiki is backed by a persistent knowledge graph built from all 526 corpus files (246 wiki pages, 185 roadmap plans, 95 mkdocs-en docs). **Always prefer graph queries over manual index.md scanning** — the graph is 330x more token-efficient.
+The wiki is backed by a persistent knowledge graph built from **docs and code**. graphify scans the **repository root**, filtered by the allow-list in `/.graphifyignore` (devWiki pages, English MkDocs pages, `backend/app`, `backend/alembic/versions`, `frontend/src/lib`, `frontend/src/routes`), and writes to `LibreFolio_devWiki/graphify-out/` through `GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out`. Journal plans live outside the repository, so they are not in the graph. Read the current size — nodes, edges, communities, files — from `graphify-out/GRAPH_REPORT.md`, never from prose. **Always prefer graph queries over manual index.md scanning** — the graph is 330x more token-efficient.
 
 ### Graph location and interpreter
 
 ```bash
-GRAPHIFY_DIR=/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki
-PYTHON=$(cat $GRAPHIFY_DIR/graphify-out/.graphify_python)
+GRAPHIFY_DIR="$(git rev-parse --show-toplevel)/LibreFolio_devWiki"
+PYTHON=$(cat "$GRAPHIFY_DIR"/graphify-out/.graphify_python)
 ```
 
 ### Query the graph (BFS — broad context)
@@ -154,26 +154,28 @@ for nb in G.neighbors(nid):
 
 ### Update the graph (after ingest/file operations)
 
-After creating new wiki pages or ingesting plans, update the graph:
+After creating new wiki pages or ingesting plans, update the graph. Code changes need only
+`./dev.py graph update` (AST, no LLM). New or changed `.md` pages need the semantic pass, run from the
+**repository root** (scan path `.`) with `GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out`:
 
 ```bash
-cd $GRAPHIFY_DIR
-$PYTHON -c "
+cd "$(git rev-parse --show-toplevel)"
+GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out "$PYTHON" -c "
 from graphify.detect import detect_incremental
 from pathlib import Path
-import json
-result = detect_incremental(Path('corpus/'))
+result = detect_incremental(Path('.'))
 new_total = result.get('new_total', 0)
 deleted = list(result.get('deleted_files', []))
 if new_total == 0 and not deleted:
     print('Graph up to date — no --update needed')
 else:
     print(f'{new_total} changed files, {len(deleted)} deleted')
-    print('Run: graphify corpus/ --update')
+    print('Run the graphify --update pipeline')
 "
 ```
 
-If changes detected, run the graphify `--update` pipeline (see graphify SKILL.md for full steps).
+If changes detected, run the graphify `--update` pipeline (see `wiki-file` Step 6 and the graphify SKILL.md for
+full steps): repository root, scan path `.`, `GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out`, `PYTHONHASHSEED=0`.
 
 ### When to update the graph
 
@@ -183,7 +185,8 @@ If changes detected, run the graphify `--update` pipeline (see graphify SKILL.md
 | Ingesting a batch of plans | Yes, run --update after batch |
 | Lint pass that creates pages | Yes, run --update after repairs |
 | Read-only query | No |
-| Full re-ingest of corpus | Use full graphify pipeline (not --update) |
+| Code changes only | `./dev.py graph update` (AST, no LLM) |
+| Full rebuild, docs and code | Use full graphify pipeline (not --update) |
 
 ---
 
@@ -210,7 +213,7 @@ If changes detected, run the graphify `--update` pipeline (see graphify SKILL.md
   - `developer/backend/fx/`, `developer/backend/assets/`, `developer/backend/brim/` — domain backends
   - `developer/frontend/components/`, `developer/frontend/state/` — frontend
   - `developer/test-walkthrough/` — test coverage
-- **Graph nodes from roadmap/mkdocs-en**: the graph shows which source files are referenced in which context
+- **Graph nodes from code and English MkDocs pages**: code files are in the graph (AST), so a node's `source_file` points at the file; the doc-to-code edges are few, so confirm the link on the filesystem
 - **Direct browse**: `backend/app/`, `frontend/src/lib/`, `frontend/src/routes/`
 - **GitHub instructions**: `.github/instructions/*.instructions.md` — already map features to file paths
 
@@ -223,10 +226,10 @@ Add a `## Source files` section at the bottom of every page:
 
 | Role | Path |
 |------|------|
-| Abstract base | `backend/app/services/fx.py` |
+| Abstract base | `backend/app/services/fx/base.py` |
 | ECB provider | `backend/app/services/fx_providers/ecb/plugin.py` |
 | FED provider | `backend/app/services/fx_providers/fed/plugin.py` |
-| API endpoints | `backend/app/api/v1/fx.py` |
+| API endpoints | `backend/app/api/v1/fx/` |
 | mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |
 ```
 
@@ -553,10 +556,10 @@ Add a `## Source files` section at the bottom of every page:
 
 | Role | Path |
 |------|------|
-| Abstract base | `backend/app/services/fx.py` |
+| Abstract base | `backend/app/services/fx/base.py` |
 | ECB provider | `backend/app/services/fx_providers/ecb/plugin.py` |
 | FED provider | `backend/app/services/fx_providers/fed/plugin.py` |
-| API endpoints | `backend/app/api/v1/fx.py` |
+| API endpoints | `backend/app/api/v1/fx/` |
 | mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |
 ```
 

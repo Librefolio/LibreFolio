@@ -64,13 +64,18 @@ answers 422. Endpoints: `POST /api/v1/brokers/import/sets/preview`, `…/sets/co
 The rest of the current contract is:
 
 - `GET /api/v1/brokers/import/files` accepts repeated `broker_ids` query parameters and
-  returns only brokers accessible to a non-superuser.
+  returns only brokers accessible to a non-superuser; each item carries `can_delete`
+  (`BRIMFileListItem`, decision 36 of release 1.3).
 - `POST /api/v1/brokers/import/files/{file_id}/parse` receives JSON
-  `{ plugin_code, broker_id }`. The wizard supplies the file's stored broker assignment.
+  `{ plugin_code, broker_id }`. The wizard supplies the file's stored broker assignment. Since
+  1.3 the caller must be `EDITOR` or `OWNER` of that `broker_id` too, as on `/duplicates`.
 - Upload, parse, and delete require `EDITOR` or `OWNER`; read, preview, and download require
-  access to the file's target broker.
-- Legacy metadata without `target_broker_id` is still discoverable for backward
-  compatibility, but new uploads always carry a broker.
+  access to the file's target broker. A `file_id` that is not a canonical lower-case UUID is a
+  404 before any lookup (W-B4).
+- Legacy metadata without `target_broker_id` is still read for backward compatibility, but since
+  1.3 only its uploader and the administrator reach it (until then any signed-in user could:
+  W-B3); new uploads always carry a broker. Details: `mkdocs_src/docs/developer/backend/brim/architecture.md`,
+  «Who reaches a report file».
 
 ## Generic CSV Boundary
 
@@ -110,9 +115,9 @@ invent balancing rows.
 | Role | Path |
 |------|------|
 | Upload, list, access, parse, and duplicate endpoints | `backend/app/api/v1/brokers.py` |
-| File metadata and broker-specific storage | `backend/app/services/brim_provider.py` |
+| File metadata and broker-specific storage | `backend/app/services/brim/brim_provider.py` |
 | Upload/parse DTOs and fake-ID contract | `backend/app/schemas/brim.py` |
-| Multi-file broker assignment UI | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| Multi-file broker assignment UI | `frontend/src/lib/features/transactions/import/UploadStep.svelte` (the state and handlers in `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte`) |
 | Generic CSV parser | `backend/app/services/brim_providers/broker_generic_csv/plugin.py` |
 | Import wizard developer guide | `mkdocs_src/docs/developer/frontend/components/features/import-wizard.md` |
 | Generic CSV developer guide | `mkdocs_src/docs/developer/backend/brim/generic_csv.md` |

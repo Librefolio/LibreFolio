@@ -17,8 +17,8 @@ related:
 
 ## Summary
 
-Two plans, integrated by merge `514582a47` (2026-09-10; checkpoint `74bfd9cf0`, reconciled with the runtime lanes
-in `d9e8f6d3b`) plus the compact-toast fix `00c469c3f`, archived on 2026-10-09. Group B of the Release 2 feedback
+Two plans, integrated by merge `1e94d4011` (2026-09-10; checkpoint `62b78d93b`, reconciled with the runtime lanes
+in `5367676b6`) plus the compact-toast fix `b1bcd13a8`, archived on 2026-10-09. Group B of the Release 2 feedback
 tightened several API contracts and migrated three settings components to Svelte 5 Runes; its bug-fix round (R1)
 made FX pair creation close at once and sync in background, and put safe entity links in success toasts.
 

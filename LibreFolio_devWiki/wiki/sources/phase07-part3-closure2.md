@@ -1,6 +1,9 @@
 ---
 type: source
 title: "Phase 07 — Part 3 Closure_2: Batch 4 + BlockG test coverage (G1..G7)"
+category: source
+source_type: plan
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure_2.prompt.md
 date_ingested: 2026-04-24
 date_updated: 2026-04-25
 git_hash: a61b0dfa
@@ -75,13 +78,14 @@ via `CHANGED_POINTS_PAYLOAD_CAP`). Semantics:
 - list with up to 500 deltas when ≤ cap
 - `None` when above cap (frontend falls back to full series reload)
 
-Backend implementation in `backend/app/schemas/refresh.py` + `backend/app/services/asset_source.py`.
+Backend implementation in `backend/app/schemas/refresh.py` + `backend/app/services/asset_source.py` (today
+`backend/app/services/assets/refresh.py`).
 Frontend's live-poll now merges the polled point directly into the chart store
-without triggering a full series reload (commit `93a88be2c` — "silent-sync detour
+without triggering a full series reload (commit `6a9c41b47` — "silent-sync detour
 removed"). The previous "silent sync" pattern compared the provider fetch with the
 freshly-written DB row and produced spurious `changed_points=None`.
 
-### 4.g — #9 ErasableNumberCell `null` semantics (commit `c64217c95`)
+### 4.g — #9 ErasableNumberCell `null` semantics (commit `9e56a28b5`)
 
 `ErasableNumberCell` was rendering "0" instead of the empty placeholder when a
 draft value was cleared. Fix: declare the draft as `$state<number | null>` (not
@@ -115,7 +119,7 @@ Full backend test coverage for Phase 07 Part 3. Scope after audit:
 
 Trigger: a full coverage run after G-batch5 closed showed **8 production functions
 still at 0% coverage** despite contracts shipped. G-batch6 added 17 tests in three
-new files (commit `bf0234145`):
+new files (commit `ef8b93e0c`):
 
 | Test file | Area | Tests |
 |-----------|------|-------|
@@ -128,7 +132,7 @@ and `backup_fx_rates` from 0% to ~95–100%, plus `services/asset_source.py::wip
 
 ### 🐛 Production bug #1 — discovered & fixed in G-batch6
 
-`backend/app/api/v1/assets.py` — both `market_data_summary` and `wipe_market_data`
+`backend/app/api/v1/assets.py` (split into the `backend/app/api/v1/assets/` package in `37d8273a9`) — both `market_data_summary` and `wipe_market_data`
 caught `AssetSourceError` and read `e.code`, but the exception class only exposes
 `e.error_code`. Result: any failure path raised `AttributeError`, masking real
 errors as **HTTP 500** instead of the intended 404.
@@ -137,7 +141,7 @@ errors as **HTTP 500** instead of the intended 404.
 - **Filed as**: [[problems/assets-wipe-error-attr-mismatch]]
 - **Test that caught it**: `test_market_data_wipe.py::test_wipe_unknown_asset_returns_404`
 
-## G-batch7 — Audit-driven gap-fill (2026-04-25, commit `4ddf7797a`)
+## G-batch7 — Audit-driven gap-fill (2026-04-25, commit `ac40b75bd`)
 
 After G-batch6, an audit identified 6 partially-covered production hotspots worth
 covering (high value/cost ratio). 22 new tests added across 6 suites, taking
@@ -154,7 +158,7 @@ coverage **85.34% → 87.06%**.
 
 ### 🐛 Production bug #2 — discovered & fixed in G-batch7
 
-`backend/app/utils/currency_utils.py::normalize_currency` was relying on
+`backend/app/utils/currency_utils.py::normalize_currency` (today `backend/app/utils/fx/currency.py`) was relying on
 `babel.numbers.get_currency_symbol(code)`, which **echoes the input back** for
 unknown codes (so `get_currency_symbol("ZZZZZZ")` returns `"ZZZZZZ"`). The
 function therefore reported any garbage string as a valid currency.
@@ -202,11 +206,11 @@ with matching currency instead.
 |------|------|
 | saveWithRetry helper | `frontend/src/lib/utils/trySave.ts` (renamed from saveWithRetry.ts on 2026-05-21; the helper is now `trySave`) |
 | AssetModal | `frontend/src/lib/components/assets/AssetModal.svelte` |
-| BrokerImportFilesModal | `frontend/src/lib/components/brokers/BrokerImportFilesModal.svelte` |
-| BrokerSharingModal | `frontend/src/lib/components/brokers/BrokerSharingModal.svelte` |
+| BrokerImportFilesModal | `frontend/src/lib/features/brokers/BrokerImportFilesModal.svelte` |
+| BrokerSharingModal | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte` |
 | CsvEditor | `frontend/src/lib/components/ui/data-editor/CsvEditor.svelte` |
 | Transaction validate test | `backend/test_scripts/test_api/test_transactions_validate.py` |
-| Events suggest test | `backend/test_scripts/test_api/test_events_suggest.py` |
+| Events suggest test — removed with its route `POST /transactions/events/suggest` in `d5e467847` ([[decisions/api-routes-removed-without-deprecation]]) | `test_events_suggest.py` (removed) |
 | OHLC sentinel test | `backend/test_scripts/test_api/test_ohlc_sentinel.py` |
 | Prices currency coherence test | `backend/test_scripts/test_api/test_prices_currency_coherence.py` |
 | Asset currency change test | `backend/test_scripts/test_api/test_asset_currency_change.py` |

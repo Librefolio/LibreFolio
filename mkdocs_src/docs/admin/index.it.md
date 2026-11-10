@@ -1,81 +1,99 @@
-# 🛡️ Manuale di amministrazione
+# 🛡️ Manuale per amministratori
 
-Questo manuale è destinato a chi installa ed esegue LibreFolio. La maggior parte delle operazioni di amministrazione avviene dalla riga di comando, tramite variabili d'ambiente o nella scheda **Amministrazione** delle impostazioni dell'app.
+Per chi installa e gestisce LibreFolio. Quasi tutto si fa in uno di tre posti: da **riga di comando**, nel file **`.env`** (variabili d'ambiente) o nelle schede **Impostazioni › Amministrazione** dell'app.
 
 ---
 
 ## 📚 Guide
 
 ### 🐳 Distribuzione ed esposizione
-- 📦 **[Installazione sull'host](host_installation.md)**: Configurazione manuale usando Python, Node.js e Pipenv direttamente sulla macchina host.
-- 🐳 **[Docker avanzato](docker_advanced.md)**: Distribuzione containerizzata tramite Docker Compose, binding dei volumi e configurazione della proprietà GID/UID dell'utente.
-- 🌐 **[Esposizione sicura](service_exposure.md)**: Esponi in modo sicuro la tua istanza privata di LibreFolio su Internet.
-- 🔍 **[Verificare la sicurezza della connessione](connection_checks.md)**: Verifica che i tuoi utenti si connettano in sicurezza, e correggi il cookie di sessione o il reverse proxy quando non è così.
+- 📦 **[Installazione sull'host](host_installation.md)**: Python, Node.js e Pipenv direttamente sulla macchina host.
+- 🐳 **[Docker avanzato](docker_advanced.md)**: Docker Compose, volumi e proprietà dei file tramite GID/UID.
+- 🌐 **[Esposizione sicura](service_exposure.md)**: la tua istanza privata con Tailscale, senza aprire porte sul router: VPN per i tuoi dispositivi o router di sottorete per l'intera rete domestica.
+    - 🌍 **[Esposizione sicura: accesso pubblico con Funnel](service_exposure_funnel.md)**: un indirizzo HTTPS pubblico con Tailscale Funnel, uno per LibreFolio o uno per ciascun servizio con Docker.
+- 🔍 **[Verifica della sicurezza della connessione](connection_checks.md)**: la lista di controllo, l'indicatore, la vista del server e il cookie di sessione; cosa fare quando un controllo fallisce.
+    - 🧰 **[Verifica della sicurezza della connessione: dietro un proxy inverso](connection_proxy.md)**: Nginx, Caddy, Traefik o Tailscale: le intestazioni da inviare, il proxy di fiducia e l'indirizzo del visitatore.
 
-### ⚙️ Configurazione del sistema
-- 📝 **[Variabili d'ambiente](configuration.md)**: Elenco completo delle variabili `.env` supportate (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, ecc.) e precedenza di risoluzione delle variabili.
-- ⚙️ **[Impostazioni globali](settings.md)**: Configura le impostazioni di runtime a livello di sistema (TTL sessione, limiti di caricamento, intervalli di sincronizzazione dei dati di mercato).
+### ⚙️ Configurazione di sistema
+- 📝 **[Variabili d'ambiente](configuration.md)**: il file `.env` e le variabili principali (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, ecc.), con la precedenza tra i valori.
+    - 🔐 **[Configurazione: segreti e impostazioni dei plugin](configuration_secrets.md)**: segreti letti da file (come i segreti Docker), chiave dell'istanza, impostazioni e chiavi API dei plugin.
+    - 🛡️ **[Configurazione: controlli e protezioni](configuration_security.md)**: i controlli all'avvio, la Content-Security-Policy, la protezione dai frame e l'arresto del server.
+    - 👥 **[Configurazione: account e ricerca degli asset](configuration_accounts.md)**: chi può registrarsi, limiti su account e accessi non riusciti, amministratore iniziale, ordine dei provider di prezzi.
+- 📧 **[Email](email.md)**: SMTP opzionale: le variabili, esempi per i server più comuni, la scheda **Email** di Impostazioni › Amministrazione e l'email di prova.
+    - 📬 **[Email: link e messaggi](email_flows.md)**: inviti e reimpostazioni della password, password dimenticate e relativi limiti, verifica dell'email, avviso di modifica dell'email.
+    - 🛠️ **[Email: quando non funziona](email_troubleshooting.md)**: gli errori, cosa dice il log, note di sicurezza SMTP.
+- ⚙️ **[Impostazioni globali](settings.md)**: le impostazioni di runtime (TTL della sessione, limiti di caricamento, intervalli di sincronizzazione dei dati di mercato), le schede **Amministrazione** e i controlli **Sicurezza** dell'istanza.
+- 👥 **[Utenti e inviti](users.md)**: la scheda **Utenti** dell'app: inviti, link di reimpostazione della password, diritti di amministratore, disattivazione ed eliminazione.
 
 ### 🧹 Manutenzione e operazioni
-- 🛠️ **[Strumenti di amministrazione CLI](cli_tools.md)**: Come usare lo script `dev.py` per attività amministrative (gestione utenti, aggiornamenti del database).
-- 📂 **[Struttura del filesystem](filesystem.md)**: Dettagli su dove vengono archiviati database, log, caricamenti e cartelle temporanee, e su come eseguire backup.
+- 🛠️ **[Strumenti di amministrazione CLI](cli_tools.md)**: lo script `dev.py` per gestione utenti, aggiornamenti del database e backup dell'istanza.
+- 💾 **[Backup, ripristino e trasferimento](backup_restore.md)**: un unico archivio con l'intera istanza, da Impostazioni › Amministrazione › Backup o da riga di comando: crealo, verificalo, ripristinalo, sposta LibreFolio tra due installazioni.
+- 📂 **[Struttura del filesystem](filesystem.md)**: dove stanno database, log, caricamenti e cartelle temporanee, e come eseguire i backup.
 
 ---
 
 ## 🔔 Notifiche di aggiornamento {: #update-notifications }
 
-Quando un amministratore accede, LibreFolio controlla su GitHub se è disponibile una versione **stabile** più recente. Se esiste, la finestra **Nuova versione disponibile** mostra la tua versione e quella più recente affiancate, con un link **Come aggiornare** alla [guida all'aggiornamento](../user/installation.md#updating) e un link **Note di rilascio su GitHub**.
+Quando un amministratore accede, LibreFolio controlla su GitHub se esiste una versione **stabile** più recente. Se esiste, la finestra **Nuova versione disponibile** mostra la tua versione e la più recente affiancate, con i link **Come aggiornare** ([guida all'aggiornamento](../user/installation.md#updating)) e **Note di rilascio su GitHub**.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="Modale di aggiornamento disponibile con versione corrente e più recente">
+    <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="Finestra modale di aggiornamento disponibile con la versione corrente e la più recente">
 </div>
 
-- **Ricordamelo dopo** chiude la finestra fino a un accesso successivo.
-- **Salta questa versione** interrompe la richiesta automatica per quella versione; una più recente viene annunciata
-  di nuovo.
-- Una versione viene annunciata solo quando la sua immagine Docker può essere scaricata, e la finestra attende che
-  nessun'altra finestra o guida sia aperta.
-- Senza accesso a Internet, il controllo automatico fallisce silenziosamente: nessun errore, nessun banner.
-- Per controllare subito, usa **Verifica aggiornamenti** nel
-  [changelog](../user/settings/about.md#changelog-modal): segnala gli errori e anche le versioni che
-  hai saltato.
+| Pulsante | Effetto |
+| --- | --- |
+| **Ricordamelo più tardi** | Chiude la finestra fino a un accesso successivo. |
+| **Salta questa versione** | Nessun avviso automatico per quella versione; una ancora più recente verrà annunciata. |
 
-??? note "👥 Altri utenti — quando qualcuno che non è un amministratore esegue il controllo"
+- Un rilascio è annunciato solo quando la sua immagine Docker può essere scaricata; la finestra attende che non ci siano altre finestre o guide aperte.
+- Senza accesso a Internet il controllo fallisce in silenzio: nessun errore, nessun banner.
+- Per controllare subito: **Verifica aggiornamenti** nella [cronologia delle modifiche](../user/settings/about.md#changelog-modal). Segnala gli errori e anche le versioni saltate.
 
-    Per gli utenti che non sono amministratori, non viene eseguito alcun controllo all'accesso. Se uno di loro esegue
-    **Verifica aggiornamenti** ed esiste una versione più recente, la
-    finestra di dialogo **Aggiornamento disponibile — contatta un amministratore** elenca gli amministratori, con i loro
-    indirizzi e-mail quando disponibili, così sanno a chi rivolgersi.
+??? note "👥 Altri utenti — quando il controllo viene eseguito da chi non è amministratore"
+
+    Per chi non è amministratore, all'accesso non viene eseguito alcun controllo. Se uno di loro esegue **Verifica aggiornamenti** ed esiste un rilascio più recente, la finestra **Aggiornamento disponibile — contatta un amministratore** elenca gli amministratori, con i relativi indirizzi email quando disponibili.
 
 ---
 
 ## 🔐 Mantieni gli utenti connessi dopo un riavvio {: #session-persistence }
 
-LibreFolio firma ogni sessione di login con una chiave segreta, `JWT_SECRET`.
+`JWT_SECRET` è la chiave che firma ogni sessione di accesso.
 
-- **Non impostata** (impostazione predefinita): viene creata una nuova chiave casuale a ogni avvio, quindi tutti devono accedere
-  di nuovo dopo un riavvio o un aggiornamento.
-- **Impostata**: le sessioni sopravvivono ai riavvii. Impostala anche se diversi server LibreFolio separati condividono
-  gli stessi utenti dietro un load balancer.
+- **Non impostata** (predefinito): nuova chiave casuale a ogni avvio, quindi tutti accedono di nuovo dopo un riavvio o un aggiornamento.
+- **Impostata**: le sessioni sopravvivono ai riavvii. Impostala anche quando più server LibreFolio condividono gli stessi utenti dietro un bilanciatore di carico.
 
-### 🔑 1. Genera una chiave
+Per impostarla:
 
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
-```
+1. Genera una chiave. **Da terminale**, sull'host:
 
-Non c'è Python sull'host? Esegui invece il comando all'interno del container:
+    ```bash
+    python3 -c "import secrets; k = secrets.token_urlsafe(64); print(f'JWT_SECRET={k}'); print(k)"
+    ```
 
-```bash
-docker exec librefolio python -c "import secrets; print(secrets.token_urlsafe(64))"
-```
+    Ottieni due righe: la prima, `JWT_SECRET=…`, è pronta da incollare nel `.env`; la seconda è la sola chiave, per quando la tieni in un file (`JWT_SECRET_FILE`, più sotto). Senza Python sull'host, esegui il comando **nel container**:
 
-### 📝 2. Aggiungila al file `.env` e riavvia
+    ```bash
+    docker exec librefolio python -c "import secrets; k = secrets.token_urlsafe(64); print(f'JWT_SECRET={k}'); print(k)"
+    ```
 
-```bash
-JWT_SECRET=paste-the-generated-value-here
-```
+2. Incolla la prima riga **nel file `.env` di LibreFolio**:
 
-Riavvia LibreFolio (con Docker Compose: `docker compose up -d`). Mantieni la chiave privata: chiunque la conosca può falsificare una sessione.
+    ```bash
+    JWT_SECRET=paste-the-generated-value-here
+    ```
 
-I worker di un singolo `./dev.py server --workers …` condividono una chiave tra loro. La durata di una sessione è la **Durata sessione** in [Impostazioni globali](settings.md). Per i dettagli, consulta la pagina per sviluppatori [Architettura di sicurezza](../developer/architecture/security.md).
+3. Riavvia LibreFolio. Con Docker Compose, esegui `docker compose up -d`.
+
+    Da qui in avanti, un riavvio non disconnette nessuno.
+
+!!! warning "🔒 Mantieni segreta la chiave"
+
+    Chiunque la conosca può falsificare una sessione.
+
+??? tip "🐳 Tieni la chiave fuori da `.env` — `JWT_SECRET_FILE`"
+
+    Salva la chiave in un file, ad esempio un segreto Docker, e imposta `JWT_SECRET_FILE` sul suo percorso invece di `JWT_SECRET`: per esempio `JWT_SECRET_FILE=/run/secrets/jwt_secret`. Le regole e un esempio di Docker Compose sono in [Segreti](configuration_secrets.md#secrets).
+
+- I worker di un singolo `./dev.py server --workers …` condividono da soli un'unica chiave.
+- La durata di una sessione è la **Durata della sessione** in [Impostazioni globali](settings.md).
+- Dettagli per sviluppatori: [Architettura della sicurezza](../developer/architecture/security.md).

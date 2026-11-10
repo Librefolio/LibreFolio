@@ -39,7 +39,7 @@ graph TD
 
 The database is organized into four logical subsystems. Each has its own detailed page:
 
-- 👤 **[Users & Access](users_access.md)** — Authentication, user settings, onboarding progress, and broker sharing (RBAC)
+- 👤 **[Users & Access](users_access.md)** — Authentication, user settings, onboarding progress, broker sharing (RBAC), and the plugin settings
 - 🏦 **[Brokers & Transactions](brokers_transactions.md)** — The core financial data structure
 - 📊 **[Assets & Pricing](assets_pricing.md)** — Global financial instruments and provider assignments
 - 💱 **[FX Rates & Routes](fx_rates.md)** — Currency exchange rates and routing configuration
@@ -50,23 +50,169 @@ The database is organized into four logical subsystems. Each has its own detaile
 2. ✅ **Strict Constraints**:
     - `CHECK` constraints ensure logical consistency.
     - Foreign Keys are enforced (`PRAGMA foreign_keys=ON`).
+    - The schema's own SQL (a `CHECK`, a `DEFAULT`, an index's expression) may call only the functions SQLite marks innocuous (`PRAGMA trusted_schema=OFF` first on every SQLAlchemy connection, and `PRAGMA writable_schema=RESET` last, so that SQLite reads the schema again once SQLAlchemy has registered its functions; lot H-51): a restored archive's schema cannot run the Python functions SQLAlchemy registers on each connection ([`trusted_schema` Off in the Server's Engines](../security.md#trusted-schema-server)).
 3. 📦 **JSON for Flexibility**: Used for `classification_params` and `provider_params` to allow schema-less extension.
+
+## 🔢 Decimal Columns {: #decimal-columns }
+
+SQLite keeps the value of a `NUMERIC` column as a double (`REAL`; `INTEGER` for a whole
+value) and ignores the declared precision: the model's column type decides how the value
+is read back (`backend/app/db/models.py`; C-97, issue #43).
+
+| Columns | Type | Decimal places | Digits before the point |
+|---------|------|----------------|-------------------------|
+| `transactions.quantity` | `RealDecimal(22, 10)` | 10 | 15 |
+| `price_history`: `open`, `high`, `low`, `close`, `adjusted_close`; `transactions.cost_basis_override`, a per-unit price | `RealDecimal(24, 12)` | 12 | 12 |
+| `transactions.amount`, `asset_events.value` | `RealDecimal(18, 6)` | 6 | 15 for the amount, 12 for the event value |
+| `fx_rates.rate` | `RealDecimal(24, 10)` | 10 | 14 |
+| `price_history.volume` | `RealDecimal(24, 0)` | 0 | 24 |
+
+- **Read.** `Numeric` reads through `'%.<scale>f'`: at scale 6, `0.12345678` reads
+  `0.123457` (a quantity, before C-97), and a wider scale shows the double's noise
+  (`65000.123456` at scale 12 reads `65000.123456000001`), as does scale 6 from about 11
+  digits before the point (`123456789012.345` reads `123456789012.345001`,
+  `-99999999999999.9` reads `-99999999999999.906250`: an amount, before W-B60). `RealDecimal`
+  (`backend/app/db/real_decimal.py`) writes the same double and reads back the shortest
+  decimal that represents it (its `repr`), at most 15 significant digits
+  (`REAL_SIGNIFICANT_DIGITS`), rounded to the scale when it has more decimals and padded to
+  6 decimals (`READ_MIN_SCALE`) when it has fewer: `10` reads `10.000000`, as with
+  `Numeric(18, 6)`. `RealDecimal`'s read never raises (W-B58; before, it raised on a
+  stored ±inf and on any value from 1e54 up): one row that cannot be read would take down
+  every listing that loads it, for every user. A stored double that is not finite (±inf,
+  written before the size limits or by hand), or a stored value that is no number at all,
+  reads `None`, logged once per process: the row loads, and can be deleted. A finite
+  double of any size reads back exactly, even past its column's digits before the point:
+  a release 1.2 database never enforced them, and reading such a quantity as `None` would
+  erase a position. Writing a value a double cannot hold, such as `Decimal("1E+400")`,
+  raises `ValueError` (*not finite as a double*) in `process_bind_param()`, whoever writes
+  it: no ±inf reaches a `RealDecimal` column any more. Amounts and event values have been
+  `RealDecimal(18, 6)` since W-B60, with the same declaration and DDL (`NUMERIC(18, 6)`, no
+  migration): they read back as written, always with 6 decimals as before (`-100` reads
+  `-100.000000`), and these guards cover them. An amount that release 1.2 stored with more
+  than 15 significant digits (10 or more digits before the point, plus decimals; since the
+  C-97 input limits, no new amount has more than 15) now reads rounded at the 15th: at most
+  0.000005 from what 1.2 read with 10 digits before the point, about ten times more for
+  each further one. `price_history.volume` and `fx_rates.rate` have been `RealDecimal` since
+  W-B63, with the same declaration and DDL (`NUMERIC(24, 0)`, `NUMERIC(24, 10) NOT NULL`, no
+  migration): a value past a double's range is refused on write, and a REAL ±inf stored by an
+  older version or by hand reads back `None`, not `Decimal('Infinity')`. A whole volume reads
+  padded to six decimals, equal to what was written (`1234567` reads `1234567.000000`). The
+  ±inf already stored are not cleaned up (an external script, if a real database holds one);
+  the conversions skip a rate stored that way (X-R38, below).
+- **Input limits.** A value sent in — a transaction's quantity, cash amount or per-unit
+  cost basis (manual, or the one a promotion resolves), a manual price or event value —
+  over its column's decimal places, over 15 significant digits, or over its column's
+  digits before the decimal point, is refused, never rounded (`decimal_limit_issue()` in
+  `backend/app/db/precision.py`; trailing zeros do not count). It checks them in that
+  order and answers the first one failed, with its maximum: `decimalPlacesExceeded`,
+  `significantDigitsExceeded` or `integerDigitsExceeded`, the last also for a value that
+  is not finite. The digits before the point are `max_integer_digits()`'s: 15 for
+  `transactions.quantity` and `transactions.amount`, as many as a REAL gives back
+  (decision N63: a thousand billion VND or IDR is a real amount, and release 1.2, which
+  never enforced the declarations on SQLite, may already hold one), otherwise what the
+  column declares, precision − scale. It counts the value's own digits, never through a
+  decimal context, so nothing rounds, overflows or underflows: `1E+60`, one digit and no
+  decimals, is refused for its size, and `1E+1000000` and `1E-2000000` are refused, never
+  a 500 or a zero. A manual volume is checked for its size only
+  (`integer_digits_issue()`): its decimals pass, and read back rounded. See
+  [Decimal limits](../../backend/transactions/service.md#decimal-limits),
+  [Asset Architecture](../../backend/assets/architecture.md) for prices and
+  [Asset Events](../../backend/assets/events.md) (`EVENT_TOO_MANY_DIGITS`). A provider's
+  prices are truncated instead: `truncate_priceHistory()` keeps 12 decimal places, then 15
+  significant digits, both rounded down; a provider's event value likewise keeps 6 decimal
+  places, then 15 significant digits (`storable_value()`, W-B68), so it reads back as written.
+  A provider's value that no truncation makes fit
+  is skipped, never written: `storable_value()` answers `None` for a value that is not
+  finite or past its column's digits before the point, and `storable_price()` also for a
+  non-zero close that truncates to 0; a provider's event whose value is past 12 digits
+  before the point, or not finite, is dropped too (`storable_value()`). A BRIM
+  plugin rounds a value it computes, never one it reads from the file, with
+  `round_computed_value()` (see
+  [Decimal places](../patterns/brim_plugin_guide.md#decimal-places)).
+- **Exponent bound.** Above the columns' limits, an input is also bounded by its exponent,
+  at the boundary (R13-SEC7-3): `check_decimal_exponent()` (`backend/app/schemas/common.py`)
+  refuses a value whose exponent, `Decimal.adjusted()`, is outside ±100
+  (`MAX_DECIMAL_EXPONENT`), a zero included (`0E-999999999`). Every `Currency` amount goes
+  through it (`Currency.validate_amount()`): a 422 where a request schema reads the value; a
+  `value_error` issue on its field (`cash.amount`, no `params`) where the transaction
+  batch's lenient parse does, and that batch is not committed. No column comes near ±100
+  (24 digits before the decimal point at most, 12 after), so below the bound the limits
+  above still decide (`integerDigitsExceeded`, W-B58). The bound only keeps a finite value
+  such as `1E+999999999`, which pydantic accepts, from a fixed-point expansion (a billion
+  digits on the event loop) or a decimal context's arithmetic.
+- **Exchange rates.** `fx_rates.rate` keeps 10 decimal places and 14 digits before the point
+  (X-R38, the FX side of W-B58). `storable_fx_rate()` gives a rate as the column keeps it
+  (`truncate_fx_rate()`, rounded down), or `None` when it is not finite, has more than 14 digits
+  before the point, or is 0 once truncated (below `1E-10`): a rate is never 0, since its inverse
+  and the conversions divide by it. It also refuses a rate whose double, once truncated, reaches
+  `1E+14` (X-R50): `99999999999999.995` has 14 digits before the point, but SQLite would store it
+  as `1E+14`, which the reads skip. It counts the digits as `decimal_limit_issue()` does, so
+  `1E+1000000` and `1E-2000000` are refused, never an overflow or a zero; decimals are never
+  refused. A manual rate (`POST /api/v1/fx/currencies/rate`) is checked as it will be stored, its
+  pair in alphabetical order and the rate inverted when needed, and refused naming its pair, date
+  and the limits; a provider's rate is skipped, with one warning per pair; the conversions read
+  only the rates from `1E-10` up to below `1E+14` (`usable_fx_rate_bounds()`), so an infinite, 0
+  or 20-digit rate an older release stored is a missing rate. See
+  [FX Configuration & Routing](../../backend/fx/configuration.md#chain-dates-writes-and-counters)
+  and [FX Architecture](../../backend/fx/architecture.md#convert-bulk-window).
+- **Never `SUM` in SQL.** A `SUM` adds the stored doubles, not the decimals. Sum the values
+  read back in Python, with `financial_math` (`position_quantities()`, `native_balances()`),
+  as the [balance queries](../../backend/transactions/service.md#balance-queries) do.
+- **Older databases.** `001_initial` declares `NUMERIC(22, 10)` and `NUMERIC(24, 12)`; a
+  database created before keeps `NUMERIC(18, 6)`, on purpose: SQLite ignores the
+  declaration, so both read the same. The release 1.3 migration's docstring
+  (`005_release_1_3_0_schema.py`, «Not a step») gives the reasoning.
+
+## 🕒 Timestamps {: #timestamps }
+
+Every timestamp column (`created_at`, `updated_at`, `fetched_at`, `expires_at`,
+`email_verified_at`, `last_fetch_at`…) holds **UTC without an offset**: SQLite has no
+timezone type, and the text on disk reads `2026-10-22 10:00:00.123456`.
+`price_history.fetched_at` is the time of the row's last change, not of its last read: a live
+quote equal to today's row stamps nothing
+([Current Quotes and Today's OHLC](../../backend/assets/architecture.md#current-quotes-and-todays-ohlc), MF-FA).
+
+- **Write.** The application writes `utcnow()` (`backend/app/utils/datetime_utils.py`), an
+  aware UTC datetime. The plain `DateTime` column drops the offset when it binds the value:
+  an aware datetime in another zone would be stored as its local wall-clock time, so convert
+  it to UTC first.
+- **Read.** A value read back is naive. Treat it as UTC: `ensure_utc()` adds the offset, and
+  the API schemas' `UTCDateTime` type serializes it with `Z`.
+- **Declare the column.** Every `datetime` field of a model sets `sa_type=DateTime`. Since
+  SQLModel 0.0.48 a field without it maps to SQLModel's `UTCDateTime`, which refuses a naive
+  value on write and in a filter, and reads every value back aware: the same column would
+  then answer differently from the rest of the schema. A new timestamp field follows the
+  same pattern:
+
+    ```python
+    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    ```
+
+- **Moving to aware datetimes** (backlog D-UTC, release 1.4) needs no migration: both
+  mappings store the same text and declare the same `DATETIME` column. What changes is
+  every naive value written or compared by the tests, and the API fields that format a
+  stored value with `isoformat()`.
 
 ## 🧬 Migrations {: #migrations }
 
 Schema changes ship as Alembic revisions in `backend/alembic/versions/` (workflow:
-[Database Migrations](../patterns/alembic.md)). At startup, `ensure_database_exists()` in
-`backend/app/main.py` builds a missing, empty or table-less database from scratch, and runs
-`alembic upgrade head` when the revision stored in `alembic_version` is not the head of the scripts.
+[Database Migrations](../patterns/alembic.md)). At startup, the `database` step of the
+[lifespan](../overview.md#server-startup) runs `ensure_database_exists()`
+(`backend/app/services/platform/database_bootstrap.py`), which builds a missing, empty or table-less
+database from scratch, and runs `alembic upgrade head` when the revision stored in `alembic_version`
+is not the head of the scripts. The head comes from `alembic_head_revision()`
+(`backend/app/services/platform/readiness.py`), the reader
+[`GET /system/ready`](../security.md#system-info-and-readiness) uses too.
 
 The chain is linear:
 
 | File | Revision id | Revises | Change |
 |------|-------------|---------|--------|
-| `001_initial.py` | `001_initial` | — | Squashed baseline: the 12 original tables with their indexes and constraints |
+| `001_initial.py` | `001_initial` | — | Squashed baseline: the 12 original tables with their indexes and constraints. `005_release_1_3_0_schema` drops 13 of these indexes; the file stays as released |
 | `002_identifier_other_json_list.py` | `002_identifier_other_json_list` | `001_initial` | Data only: `assets.identifier_other` becomes a JSON list |
 | `003_scheduler_timezone.py` | `5b1333fa6b07` | `002_identifier_other_json_list` | Data only: the stored scheduler sync times move from UTC to `scheduler_timezone` wall-clock time |
 | `004_release_1_2_0_schema.py` | `004_release_1_2_0_schema` | `5b1333fa6b07` | `assets.is_benchmark` and the two onboarding progress tables |
+| `005_release_1_3_0_schema.py` | `005_release_1_3_0_schema` | `004_release_1_2_0_schema` | The whole of release 1.3, in seven steps that each check before they act, so a run that stopped half way can run again: (1) four [`users`](users_access.md#user) columns, `session_version`, `email_verified_at`, `last_seen_version` and `is_instance_owner` (`BOOLEAN NOT NULL DEFAULT 0`: the owner of a managed instance), with plain `ALTER TABLE ADD COLUMN`, never a batch, and the partial unique index `ux_users_instance_owner ON users (is_instance_owner) WHERE is_instance_owner = 1` (at most one owner; the owner query plans `SEARCH users USING COVERING INDEX ux_users_instance_owner`); (2) the [`account_tokens`](users_access.md#account-token) table of single-use account links, with its two indexes and a `ck_account_tokens_purpose` that accepts `invite`, `password_reset`, `email_verification`, `admin_setup` and `email_change`; (3) data only: the global setting `enable_registration` becomes [`registration_mode`](users_access.md#global-setting), `open` when the old value read as true (`true`, `1`, `yes`, `on`, any case), `disabled` otherwise; (4) the [`plugin_system_settings`](users_access.md#plugin-system-setting) and [`plugin_user_settings`](users_access.md#plugin-user-setting) tables, created empty; (5) data only: where `registration_mode` is missing and `users` holds an account, `open` is written, the earlier default (decision 36); (6) the unique index `ux_users_email_lower` on `lower(email)`, so that an [email address](users_access.md#user) belongs to one account whatever its A–Z case, after a check that stops the upgrade when two accounts already share one; (7) 13 indexes of `001_initial` that no query needs, dropped with `DROP INDEX IF EXISTS` ([Indexes: Only the Ones a Query Uses](../patterns/alembic.md#indexes)). The downgrade goes back step by step: the 13 indexes again with their `001` definitions, and `enable_registration` again (`true` for `open`, `false` for `invite` and `disabled`); the tokens, the plugin settings and the values of the new columns are lost |
 
 !!! warning "The revision id is the contract, not the filename"
 
@@ -77,6 +223,23 @@ The chain is linear:
     (`down_revision`), never from a filename, and keep the graph linear — two revisions with the same
     `down_revision` create two heads, and `alembic upgrade head` refuses to choose between them.
 
+!!! warning "Retired revision ids"
+
+    Release 1.3 ships one migration, as release 1.2 ships `004`
+    ([One Migration per Release](../patterns/alembic.md#one-migration-per-release)). The revisions written
+    during the 1.3 cycle were in no released tag, and are gone: `005_accounts_invites`,
+    `006_registration_mode`, `007_plugin_settings`, `008_registration_invite_default`,
+    `009_email_unique_ignoring_case`, `010_provider_reported_currency`,
+    `011_provider_exchange_timezone` and `006_owner_email_change`. The first five and the last are steps 1 to 6 of `005_release_1_3_0_schema`;
+    `010` is not kept (`asset_provider_assignments` has no `reported_currency` column), and `011` had
+    been removed before. A database stamped with one of these ids comes from an unreleased build, and
+    no code handles it: the server does not start on it (`alembic upgrade head` cannot locate the
+    revision, the `database` step logs *Failed to apply database migrations* and exits), and a backup
+    archive at one is refused as from a newer LibreFolio
+    ([Restoring a Backup](../security.md#backup-restore)). A developer brings such a database forward
+    by hand, with the `sqlite3` procedure of the developer journal (the plan of workstream H, section
+    «Procedura manuale»).
+
 ### 🩹 Post-migration fixes {: #post-migration-fixes }
 
 Some repairs cannot be Alembic revisions. Rebuilding a table that others reference with
@@ -84,31 +247,45 @@ Some repairs cannot be Alembic revisions. Rebuilding a table that others referen
 listener turns foreign keys on, and dropping the old table would then empty the tables that point
 at it. These repairs live in `backend/app/db/post_migration/` as ordered `PostMigrationFix`
 subclasses (`FIXES`: a new fix is appended, never inserted before an older one). Right after
-`ensure_database_exists()`, the lifespan calls `run_post_migration_fixes_at_startup()`, which never
-lets an error stop the startup. `run_post_migration_fixes()` works on a direct `sqlite3`
-connection:
+the `database` step, the `post-migration-fixes` step of the lifespan runs
+`run_post_migration_fixes_at_startup()` (`backend/app/services/platform/database_bootstrap.py`) in a
+worker thread; it never lets an error stop the startup. `run_post_migration_fixes()` works on a
+direct `sqlite3` connection, with `trusted_schema` off before anything else (lot B-37):
 
 1. It holds an exclusive `fcntl.flock` on `<db file>.post-migration.lock`, beside the database,
    from the integrity check to the cleanup, dry runs included: the workers of a multi-worker server
    and the offline script take turns, and the later runs find nothing to do. The lock file is never
-   deleted. On a non-POSIX system the runs are not serialised.
+   deleted. It is opened with `O_NOFOLLOW` and, when missing, created `0600`: a symbolic link in its
+   place raises `OSError` before the database is opened, and nothing behind the link is created or
+   locked. At startup that is logged as the WARNING *Post-migration fixes could not run; starting
+   normally* (`error`) and the server starts without the fixes; the offline script does not catch
+   it and ends with the traceback, exit code `1`. On a non-POSIX system the runs are not serialised.
 2. It touches nothing unless `PRAGMA integrity_check` answers `ok`.
 3. Every fix `detect()`s its anomaly without writing: nothing found, nothing written or logged.
 4. It checkpoints the WAL (`wal_checkpoint(TRUNCATE)`) and copies the database with SQLite's
    backup API to `<db file>.pre-<fix ids>-<UTC %Y%m%dT%H%M%SZ>.bak`. No copy, no fix.
 5. Each pending fix runs `prepare()` outside the transaction (filesystem work to undo on failure),
    then, with `foreign_keys = OFF` (SQLite switches it only outside a transaction),
-   `BEGIN IMMEDIATE`, `apply()`, `verify()` and the common checks — `PRAGMA foreign_key_check`
-   empty, the row count of every table unchanged — before `COMMIT`. Any problem rolls back.
-   `finish()` runs after either outcome, and a failed fix stops the ones after it.
+   `BEGIN IMMEDIATE`, `apply()`, `verify()` and the common checks — no `PRAGMA foreign_key_check`
+   row that was not there just before the fix, the row count of every table unchanged but for the
+   changes the fix declares (`row_count_changes()`, `{table: delta}`, checked exactly) — before
+   `COMMIT`. Any problem rolls back. `finish()` runs after either outcome, and a failed fix stops
+   the ones after it. A broken reference the database already held is not the fix's to judge: it
+   stays, and the run logs those it found once, as the WARNING *Foreign key violations already in
+   the database, left as they are* (`count`, and up to 20 of the rows `foreign_key_check` gives).
 6. All applied: the backup is deleted and *Post-migration fixes applied and verified* is logged.
    Otherwise the backup is kept and *Post-migration fix failed: the database was left as it was*
    gives its path and the errors. Both lines carry `seconds`.
 
 `python -m backend.app.db.post_migration [--db PATH] [--data-dir PATH] [--dry-run]`
-(`__main__.py`) runs the same function with the server stopped, which it does not check. Each fix
-reports `clean`, `would_apply` (dry run), `applied` or `failed` (`PostMigrationReport`); the exit
-code is `1` when a fix or the integrity check failed.
+(`__main__.py`) runs the same function with the server stopped, which it does not check, then,
+as at startup, the step for the [lone giving legs](#lone-transfer-legs). Each fix reports
+`clean`, `would_apply` (dry run), `applied` or `failed` (`PostMigrationReport`); the exit code
+is `1` when a fix, the integrity check or that step failed. Run that way, it also logs what the
+server logs at startup — the warnings, each fix's own lines and the step's, the closing line with
+`seconds` — on the console only (`configure_logging(LOG_LEVEL, enable_file_logging=False)`, as
+JSON on stdout between its summary lines), so it writes no log file in the data directory;
+`main()` called from code configures nothing.
 
 The first fix, `autoincrement` (`autoincrement.py`), gives `AUTOINCREMENT` to the id of the tables
 whose ids leave the backend (`AUTOINCREMENT_TABLES`: `users`, `brokers`, `assets`, `transactions`,
@@ -130,7 +307,137 @@ databases get it from `001_initial.py`; the fix converts existing ones, once.
   once the fix is verified, renamed back if it fails: the first broker created afterwards may
   reuse `<n>` once, and must not inherit them.
 
+The second fix, `orphan_pair_halves` (`orphan_pair_halves.py`), converts the half of a pair whose
+partner is gone. Until 1.3, deleting a broker left the other half of each pair it had with another
+broker as a `TRANSFER`, `CASH_TRANSFER` or `FX_CONVERSION` without its partner: its link cleared
+(`related_transaction_id` NULL) or, when foreign keys were off, naming a row that no longer exists.
+The FIFO lots refuse such a `TRANSFER` (`TRANSFER_PAIR_MISSING`), and the Dashboard counts it as
+capital at its market value on its date. Since 1.3, `delete_by_broker()` converts that half as it
+deletes the broker ([Broker Deletion](../../backend/transactions/service.md#broker-deletion)); this
+fix converts, once, the halves already in a database.
+
+- `detect()` writes nothing. It selects the rows of the three paired types whose link is NULL or
+  names a missing row, and the rows of any other type whose link names a missing row. A row whose
+  partner exists is never selected.
+- It converts a half as a split of the pair leaves it (`STANDALONE_TYPES`, the values of
+  `TransactionService.SPLIT_TYPE_MAP`). A received `TRANSFER` (positive quantity) becomes an
+  `ADJUSTMENT` with its quantity, asset, cost basis and its currency. When no cost basis was
+  recorded it stays without one, since the sender is gone: `MISSING_COST_BASIS` until the user
+  enters it (the 1.3 deletion writes the sender's Auto cost instead). A `CASH_TRANSFER` or
+  `FX_CONVERSION` becomes a `WITHDRAWAL` when its amount is negative, a `DEPOSIT` otherwise, without
+  asset. The link goes, `updated_at` moves to now, every other column stays.
+- It leaves the giving leg of a `TRANSFER` (negative quantity) to the step after the fixes:
+  counted, not changed (see [Lone giving legs](#lone-transfer-legs)). It
+  also leaves a row whose quantity or amount sign cannot be read, and the rows of other types (an
+  `ADJUSTMENT` can carry a link). Each of these keeps its type, and loses its link only when that
+  link names a missing row, so that the run's `foreign_key_check` can pass.
+- Its own checks, on top of the common ones: no convertible half left, and each row it changed has
+  its expected type and no link.
+- Its detection logs whenever it finds such a row, dry runs included, even with nothing to change: a
+  WARNING with `count` (every row found), `conversions` (the ids per `TYPE->TYPE`),
+  `without_cost_basis`, `unlinked_only`, `left_giving_transfer_legs` and `left_unreadable_sign`.
+  It comes back at every start while a giving leg, or a row of unreadable sign, remains — a giving
+  leg remains only when the step after the fixes did not run or failed; with nothing left to
+  change, the outcome is `clean`. After the commit, `finish()` logs one INFO line
+  per row changed — *Transaction without its pair converted* or *… unlinked* — with
+  `transaction_id`, `broker_id`, `date`, `from_type`, `to_type`, `quantity`, `amount`, `currency`,
+  `asset_id`, `cost_basis`, `cost_basis_currency`, `missing_cost_basis` and `former_partner_id`
+  (the missing row the link named, `null` when the link was already cleared). The offline script
+  prints them too, on the console.
+
+`./dev.py test db post-migration-orphan-pairs`
+(`backend/test_scripts/test_db/test_post_migration_orphan_pairs.py`) pins this contract.
+
+The fix `event_types` (`event_types.py`) repairs the asset events stored with a type the app does
+not know. Until 1.3 an event type was saved as it came — a CSV written by hand could store `dividend`
+or `dividendo` — while the column is the `AssetEventType` enum: every later read of that asset's
+events failed (`LookupError`, a 500) and none of them was shown. Since 1.3 `FAAssetEventPoint`
+trims and upper-cases the type on the way in and refuses one that is still unknown (422); this fix
+repairs the rows already stored, once (decision 23 of release 1.3).
+
+- `detect()` writes nothing. It selects the events whose `type` is not exactly one of the enum's
+  values.
+- A type that becomes valid once trimmed and upper-cased (Python's `str.strip().upper()`, the
+  schema's own rule) is corrected in place: the event keeps its id, and its transactions stay
+  linked.
+- Any other event is deleted, a provider's included (they are not shown already). Its transactions
+  are unlinked first — `asset_event_id` NULL, `updated_at` now — and stay, without their event.
+- It declares its deletions (`row_count_changes()` → `{"asset_events": -n}`), so the framework checks
+  that exactly those rows went; its own `verify()` wants no unknown type left, each correction in
+  place, each deleted event gone and named by no transaction.
+- Logs: the detection WARNING (dry runs included) with `count`, `corrections` (ids per
+  `stored->CORRECTED`), `deletions` (ids per stored type) and `unlinked_transactions`; after the
+  commit, one INFO line per corrected event (*Asset event type corrected*), per unlinked transaction
+  (*Transaction unlinked from an asset event of unknown type*) and per deleted event (*Asset event of
+  unknown type deleted*, with its date, value, currency, `is_auto` and the transactions unlinked).
+
+`./dev.py test db post-migration-event-types`
+(`backend/test_scripts/test_db/test_post_migration_event_types.py`) pins this contract and the
+declared row counts.
+
 The admin side (log lines, the offline run) is in [Command-Line Tools](../../../admin/cli_tools.md).
+
+#### 📤 Lone giving legs, after the fixes {: #lone-transfer-legs }
+
+Until 1.3, deleting a broker also left the giving leg of each `TRANSFER` it had received units
+through as a `TRANSFER` without its partner. Since 1.3 the deletion turns such a leg into an
+`ADJUSTMENT` taking its units out, and such an `ADJUSTMENT` has no value: its units only leave the
+quantity, and the FIFO lots and the Dashboard realize their cost as a loss (decision 47 of release
+1.3, as the developer changed it on 21/10/2026, N78-1; until then the leg left at the Auto cost of
+its own broker; see [Broker Deletion](../../backend/transactions/service.md#broker-deletion)). The
+legs already in a database get the same from
+`backend/app/services/transactions/lone_transfer_legs.py`, a step that runs right after the fixes,
+in two places:
+
+- **At startup**, as the `lone-transfer-legs` step of the lifespan, right after
+  `post-migration-fixes`. `convert_lone_giving_legs_at_startup()` does not read the fixes' report:
+  it opens its own session on the configured engine and first looks for one lone giving leg. With
+  none, it returns at once and checks nothing, so the common case costs one query. Otherwise the
+  database must pass `PRAGMA quick_check` first: any answer but `ok` leaves every row as it is, with
+  the WARNING *Lone transfer legs left as they are: the database failed its quick check*. Then it
+  converts and commits. It never stops the startup: a failure is logged as the WARNING *Lone
+  transfer legs could not be converted; starting normally*, every row stays as it was, and the
+  next start tries again.
+- **In `python -m backend.app.db.post_migration`**, after the fixes, only when their integrity
+  check passed and no fix failed: `run_lone_giving_legs(db_path, dry_run=...)`, on the same file
+  through an engine of its own.
+
+So neither path touches a damaged database, as the fixes never do. One difference remains: after
+a fix that failed on a database that passes the check, the startup step still runs, and the
+offline script does not.
+
+Both call `convert_lone_giving_legs(session, *, dry_run=False)`:
+
+- **Selection.** A `TRANSFER` with a negative quantity is lone when its link is NULL or names a row
+  that no longer exists: the fix clears such a link first, and a dry run, which applies no fix,
+  still sees the leg. SQLite reads the sign (`quantity < 0` in the query), so a row whose quantity
+  it cannot read as a number is never selected. A lone receiving leg (the fix's) and a linked
+  `TRANSFER` are never touched.
+- **Conversion.** Every lone giving leg found becomes an `ADJUSTMENT` (`make_standalone()`: the same
+  quantity, asset, date, description and tags, no link, a new `updated_at`), and its
+  `cost_basis_override` and `cost_basis_currency` are cleared. No cost is computed, so no leg needs a
+  rate or a readable pool, and every one is converted.
+- **Transaction.** The function commits nothing: its caller commits, or rolls back after a dry run,
+  which changes nothing. Outside a dry run it first calls `begin_writes(session, Transaction)`,
+  which takes the write lock: of several workers starting together, the first converts and the
+  next find nothing to convert.
+- **Answer and logs.** It returns one `LoneLeg` per lone giving leg found (`id`, `broker_id`,
+  `date`, `quantity`, `asset_id`). Each leg gets an INFO line with `transaction_id`, `broker_id`,
+  `date`, `quantity` and `asset_id`: *Lone transfer leg converted to an ADJUSTMENT-out without a
+  value* (on a dry run, *Lone transfer leg would become an ADJUSTMENT-out without a value*).
+
+After the fixes' lines, the offline script prints one line per lone giving leg
+(`LoneLeg.describe()`), *became* instead of *would become* on a real run:
+
+```text
+Lone transfer leg <id> (broker <id>, <date>, quantity <quantity>, asset <id>): would become an ADJUSTMENT-out without a value
+```
+
+When the step itself raises, the script prints `Error: lone transfer legs: <error>` and exits with
+`1`.
+
+`./dev.py test services lone-transfer-legs`
+(`backend/test_scripts/test_services/test_lone_transfer_legs.py`) pins this contract.
 
 ### 📏 `asset_type` and `transactions.type` lengths {: #enum-column-length }
 
@@ -147,7 +454,7 @@ lengths gets `VARCHAR(32)`.
 
 ## 📂 Data Directory on Disk {: #data-directory }
 
-`get_data_dir()` (`backend/app/config.py`) picks the root: in test mode `LIBREFOLIO_TEST_DATA_DIR`
+`get_data_dir()` (`backend/app/config/__init__.py`) picks the root: in test mode `LIBREFOLIO_TEST_DATA_DIR`
 (default `backend/data/test`), otherwise `LIBREFOLIO_DATA_DIR` (default `backend/data/prod`); a
 relative path resolves from the project root. At every startup `ensure_data_dirs()` creates
 `sqlite/`, `custom-uploads/`, `broker_reports/{uploaded,parsed,failed}/` and `logs/` and, outside
@@ -158,11 +465,14 @@ The admin view of the same layout is [Filesystem Structure](../../../admin/files
 | Path | Written by (under `backend/app/`) | Content |
 |------|-----------------------------------|---------|
 | `sqlite/app.db` (+ `-wal`, `-shm`) | the engines of `db/session.py` | The database; every connection sets `journal_mode=WAL` and `foreign_keys=ON` |
-| `sqlite/app.db.post-migration.lock` | `db/post_migration/` | Empty lock of the [post-migration fixes](#post-migration-fixes), never deleted |
+| `sqlite/app.db.post-migration.lock` | `db/post_migration/` | Empty lock of the [post-migration fixes](#post-migration-fixes), created `0600` and opened with `O_NOFOLLOW`, never deleted |
 | `sqlite/app.db.pre-<fix ids>-<UTC>.bak` | `db/post_migration/` | Backup kept after a failed fix |
-| `custom-uploads/<uuid>.<ext>` + `<uuid>.json` | `services/static_uploads.py` | Uploaded file and its sidecar: `id`, `original_name`, `extension`, `mime_type`, `size_bytes`, `uploaded_at`, `uploaded_by_user_id`, `description` ([File Upload](../../frontend/components/core-ui/file-upload.md)) |
-| `custom-uploads/.avatars_seeded` | `seed_default_avatars()` in `services/static_uploads.py` | Marker: the PNGs of `backend/staticResources/Avatars/` were copied, uploader `0` (system); without it the next start copies them again |
-| `broker_reports/` | `services/brim_provider.py` | Reports and sidecars by status and broker, plus `.locks/` ([File Lifecycle](../../backend/brim/architecture.md#file-lifecycle)) |
+| `custom-uploads/<uuid>.<ext>` + `<uuid>.json` | `services/files/static_uploads.py` | Uploaded file and its sidecar: `id`, `original_name`, `extension`, `mime_type`, `size_bytes`, `uploaded_at`, `uploaded_by_user_id`, `description` and `scope`, absent from older sidecars and from the seeded avatars' ([Uploaded Files: Common and Personal](../security.md#upload-scope)); the sidecar is written to a temporary file, then renamed ([File Upload](../../frontend/components/core-ui/file-upload.md)) |
+| `custom-uploads/.avatars_seeded` | `seed_default_avatars()` in `services/files/static_uploads.py` | Marker: the PNGs of `backend/staticResources/Avatars/` were copied, uploader `0` (system); without it the next start copies them again |
+| `broker_reports/` | `services/brim/brim_provider.py` | Reports and sidecars by status and broker, plus `.locks/` ([File Lifecycle](../../backend/brim/architecture.md#file-lifecycle)) |
 | `logs/librefolio.log` | `logging_config.py` | structlog `JSONRenderer` lines; `TimedRotatingFileHandler` (`when="W0"`, `utc=True`, `backupCount=52`) whose rotator gzips each archive to `librefolio.log.<date>.gz` |
-| `scheduler_state.json` | `services/scheduler/state.py` | Last run of the `current_price` and `history_sync` jobs, written then renamed; a missing or corrupt file means a fresh state |
+| `scheduler_state.json` | `services/platform/scheduler/state.py` | Last run of the `current_price` and `history_sync` jobs, with the count of items a provider's pause deferred (`last_items_deferred`) and their `retry_at`, and the failures in a row (`consecutive_failures`) and `next_attempt_at`, the end of the wait after them ([Provider Pauses and Failures](../../backend/scheduler.md#pauses-and-failures)); written then renamed; a missing or corrupt file means a fresh state |
+| `.scheduler.lock` | `services/platform/scheduler/run_lock.py` | Empty lock that serialises the scheduler's runs across the worker processes ([Several Workers](../../backend/scheduler.md#cross-process-lock)): an exclusive `flock`, the file created `0600` by the first run that takes it and opened with `O_NOFOLLOW`, never deleted. Safe to leave in place; never delete it while LibreFolio runs. Not used where Python has no `fcntl` |
+| `secrets/instance.key` | `services/platform/instance_key.py` | The [instance key](../security.md#instance-key), only when neither `LIBREFOLIO_INSTANCE_KEY` nor `LIBREFOLIO_INSTANCE_KEY_FILE` is set. Created by the first `derive_key()` call, not by `ensure_data_dirs()`: `secrets.token_urlsafe(32)` and a newline (43 characters, 44 bytes), folder `0700`, file `0600`. Published with a hard link so that the first key wins, then never rewritten; a file that goes missing is generated again, see the [known limitation](../security.md#instance-key). `validate_test_data_dir()` keeps a test root from aliasing it |
+| `cache/pdf-fonts/<package>/<file>` | `services/files/pdf_fonts.py` (`cache_dir()`) | The PDF viewer's CJK fonts, fetched once by the server and kept only when their sha256 matches `pdf_font_hashes.json` ([The PDF Viewer's CJK Fonts](../security.md#pdf-fonts)): written to a temporary name in the same folder, then renamed; a file of the wrong size is fetched again. Safe to delete, never archived by a backup (`ARCHIVED_FOLDERS` of `services/platform/instance_backup/paths.py` does not hold it); `validate_test_data_dir()` keeps a test root from aliasing it |
 | `scenario_catalog/{historical,hypothetical}/` | the administrator | Optional host scenarios ([Scenario Catalogue](../../backend/risk/architecture.md#scenario-catalog)) |

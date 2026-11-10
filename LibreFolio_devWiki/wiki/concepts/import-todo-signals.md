@@ -44,8 +44,8 @@ Backend BRIM plugins emit `field_todos` inside `BRIMParseResponse` for each row 
 
 ## Lifecycle in the Import Wizard
 
-1. **Backend parse** (Step 3): `POST /brim/parse` returns `BRIMParseResponse[]` with `field_todos` per row
-2. **Step 4 merge**: `ParsedFileResult.response.transactions` are merged into `MergedTransaction[]`, each with `todos: ImportTodo[]`
+1. **Backend parse** (Step 3): `POST /brim/parse` (*2026-11-07 lint:* the route is `POST /api/v1/brokers/import/files/{file_id}/parse`, `parse_file()` in `brokers.py`) returns `BRIMParseResponse[]` with `field_todos` per row
+2. **Step 4 merge**: `ParsedFileResult.response.transactions` are merged into `MergedTransaction[]` (*2026-11-07 lint:* the type is `MergedTx`, `importTypes.ts`, built by `buildMergedTransactions()` in `importMerge.ts`), each with `todos: ImportTodo[]`
 3. **Step 4 display**: Rows with blockers show a red badge; warnings show amber. Import button disabled if any `severity='blocker'` remains unresolved.
 4. **User review**: User can edit the row's field directly in the review grid, or accept the warning.
 5. **On import**: `onImportBatch(creates: Array<{tx, todos}>)` hands the corrected items to the bulk editor **with their remaining todos**, which keep gating and guiding there (see the Definition).
@@ -63,11 +63,11 @@ Backend BRIM plugins emit `field_todos` inside `BRIMParseResponse` for each row 
 
 | Role | Path |
 |------|------|
-| Import Wizard Modal | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Bulk editor (banners, save gate) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| Todo wording resolver | `frontend/src/lib/utils/transactions/resolveBrimNotice.ts` |
-| Parse merge (`field_todos` → `ImportTodo`) | `frontend/src/lib/utils/transactions/importMerge.ts` |
-| Todo clearing | `frontend/src/lib/utils/transactions/bulkTodos.ts` |
+| Import Wizard Modal | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| Bulk editor (save gate; the banners in `frontend/src/lib/features/transactions/bulk/TxBulkBanners.svelte`) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| Todo wording resolver | `frontend/src/lib/features/transactions/resolveBrimNotice.ts` |
+| Parse merge (`field_todos` → `ImportTodo`) | `frontend/src/lib/features/transactions/import/importMerge.ts` |
+| Todo clearing | `frontend/src/lib/features/transactions/bulk/bulkTodos.ts` |
 | BRIM API schemas | `backend/app/schemas/brim.py` |
 | BRIM parse API | `backend/app/api/v1/brokers.py` |
 | Coinbase plugin (example) | `backend/app/services/brim_providers/broker_coinbase/plugin.py` |

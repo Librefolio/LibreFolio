@@ -34,7 +34,7 @@
     <p>{$t('tools.pacAllocator.planner.conflict.intro', {default: 'You asked to copy again. These facts are different now:'})}</p>
     <ul class="space-y-3">
         {#each conflicts as conflict (conflict.id)}
-            <li class="space-y-1 rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-planner-conflict-row" data-kind={conflict.kind}>
+            <li class="space-y-1 rounded-lg border border-lf-subtle p-3" data-testid="pac-planner-conflict-row" data-kind={conflict.kind}>
                 <p class="font-medium">{conflict.label} · {conflict.currency}</p>
                 <dl class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
                     <dt>{$t('tools.pacAllocator.planner.conflict.cashPrevious', {default: 'Balance copied in the draft · {date}', values: {date: copiedAt(conflict.previousStamp)}})}</dt>

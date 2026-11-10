@@ -2,22 +2,19 @@
 Portfolio API endpoints for LibreFolio.
 
 Provides read-only portfolio calculations on committed data:
-- POST /portfolio/wac           — WAC time series per (broker, asset)
 - POST /portfolio/report        — UNIFIED: summary+history+allocation+contribution+data_quality
+- POST /portfolio/positions-series — the daily P&L / value series of the chosen positions (#48)
 - POST /portfolio/lots/analysis — FifoLotEngine bulk multi-analysis (lots, Gantt, histories, WAC)
 
 Legacy standalone endpoints (/summary, /history, /allocation-history) removed —
 all data is available via /report with include_* flags.
 """
 
-from datetime import date as date_type
-
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.models import Asset, BrokerUserAccess, User
+from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.portfolio import (
@@ -27,18 +24,16 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceResponse,
     PortfolioReportQuery,
     PortfolioReportResponse,
-    WACAnalyticsRequest,
-    WACAnalyticsResponse,
-    WACAnalyticsResultItem,
-    WACSeriesPoint,
+    PositionsSeriesQuery,
+    PositionsSeriesResponse,
 )
 from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_allocation_source import (
+from backend.app.services.pac_allocator.source.portfolio_allocation_source import (
     PortfolioPlannerSourceAccessError,
     PortfolioPlannerSourceAssetNotFoundError,
     build_portfolio_planner_source,
 )
-from backend.app.services.portfolio_service import PortfolioService, compute_wac_iterative
+from backend.app.services.portfolio_service import PortfolioService
 
 logger = get_logger(__name__)
 
@@ -59,124 +54,6 @@ async def _get_allocation_source_user(
                 "Cache-Control": "no-store",
             }
         raise
-
-
-@portfolio_router.post(
-    "/wac",
-    response_model=WACAnalyticsResponse,
-    summary="WAC time series",
-    description="Compute WAC (Weighted Average Cost) time series for committed transactions. Returns point-per-transaction data where WAC changes — useful for chart overlays and P&L.",
-)
-async def get_portfolio_wac(
-    body: WACAnalyticsRequest,
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> WACAnalyticsResponse:
-    """Compute WAC time series for each (broker, asset) query."""
-    results: list[WACAnalyticsResultItem] = []
-
-    # The WAC helper accepts raw Broker ids and performs no authorization itself.
-    # Validate the complete requested set before reading Assets or transactions.
-    requested_broker_ids = {query.broker_id for query in body.queries}
-    accessible_broker_ids = set(
-        (
-            await session.execute(
-                select(BrokerUserAccess.broker_id).where(
-                    BrokerUserAccess.user_id == current_user.id,
-                    BrokerUserAccess.broker_id.in_(requested_broker_ids),
-                )
-            )
-        ).scalars()
-    )
-    if accessible_broker_ids != requested_broker_ids:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "portfolio_wac_broker_forbidden"},
-        )
-
-    # P0-5b (audit 08): no N+1 — preload every queried asset in ONE SELECT
-    # instead of one session.get() per query. The identity map keeps the
-    # per-query lookup on the same instances a plain get() would return.
-    queried_asset_ids = [query.asset_id for query in body.queries]
-    asset_rows = (await session.execute(select(Asset).where(Asset.id.in_(queried_asset_ids)))).scalars().all() if queried_asset_ids else []
-    assets_by_id = {asset.id: asset for asset in asset_rows}
-
-    for query in body.queries:
-        # Determine as_of_date: use query end date or today
-        as_of_date = query.date_range.end if query.date_range and query.date_range.end else date_type.today()
-
-        # Get asset currency
-        asset = assets_by_id.get(query.asset_id)
-        if asset is None:
-            results.append(
-                WACAnalyticsResultItem(
-                    broker_id=query.broker_id,
-                    asset_id=query.asset_id,
-                    currency="USD",
-                    series=[],
-                    missing_fx_pairs=[],
-                )
-            )
-            continue
-
-        asset_currency = asset.currency or "USD"
-
-        # Compute full WAC with qualifying_txs
-        wac_result = await compute_wac_iterative(
-            session=session,
-            broker_id=query.broker_id,
-            asset_id=query.asset_id,
-            as_of_date=as_of_date,
-            asset_currency=asset_currency,
-        )
-
-        # If FX errors, return empty series with missing_fx_pairs
-        if wac_result.wac_missing_pairs:
-            results.append(
-                WACAnalyticsResultItem(
-                    broker_id=query.broker_id,
-                    asset_id=query.asset_id,
-                    currency=asset_currency,
-                    series=[],
-                    missing_fx_pairs=wac_result.wac_missing_pairs,
-                )
-            )
-            continue
-
-        # Build series from qualifying_txs (each has running_wac)
-        # Apply start date filter if provided
-        start_date = query.date_range.start if query.date_range and query.date_range.start else None
-        target_currency = wac_result.wac.code if wac_result.wac else asset_currency
-
-        series: list[WACSeriesPoint] = []
-        # Track running pool_qty from qualifying txs
-        pool_qty_running = 0
-        for qtx in wac_result.wac_qualifying_txs:
-            pool_qty_running += qtx.quantity
-            # Apply date filter
-            if start_date and qtx.date < start_date:
-                continue
-            if qtx.running_wac is not None:
-                series.append(
-                    WACSeriesPoint(
-                        date=qtx.date,
-                        wac=qtx.running_wac,
-                        pool_qty=pool_qty_running,
-                        effect=qtx.effect,
-                    )
-                )
-
-        results.append(
-            WACAnalyticsResultItem(
-                broker_id=query.broker_id,
-                asset_id=query.asset_id,
-                currency=target_currency,
-                series=series,
-                missing_fx_pairs=[],
-            )
-        )
-
-    return WACAnalyticsResponse(results=results)
 
 
 # =============================================================================
@@ -230,7 +107,7 @@ async def get_portfolio_report(
     current_user: User = Depends(get_current_user),
 ) -> PortfolioReportResponse:
     """Return a complete portfolio report from a single engine run."""
-    from backend.app.services.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+    from backend.app.services.platform.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
 
     # Resolve min/max sentinels before passing to service
     if body.date_range and body.date_range.has_sentinels():
@@ -238,6 +115,31 @@ async def get_portfolio_report(
 
     service = PortfolioService(session)
     return await service.get_report(user_id=current_user.id, query=body)
+
+
+@portfolio_router.post(
+    "/positions-series",
+    response_model=PositionsSeriesResponse,
+    summary="Daily series of the chosen positions",
+    description=(
+        "The daily series of the positions asked for, and only those: for each calendar day its quantity, market value, cost, "
+        "result since the window's start (the Performance table's period P&L at that day) and the percent on the capital deployed, "
+        "in the report currency and at the owner's share. A position of a broker the user cannot read comes back empty. The "
+        "frontend draws the lines of the positions chart from it and computes nothing."
+    ),
+)
+async def get_positions_series(
+    body: PositionsSeriesQuery,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> PositionsSeriesResponse:
+    """Return the daily series of the chosen positions from one engine run with the position frames."""
+    from backend.app.services.platform.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+
+    if body.date_range and body.date_range.has_sentinels():
+        body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
+
+    return await PortfolioService(session).get_positions_series(user_id=current_user.id, query=body)
 
 
 @portfolio_router.post(
@@ -258,7 +160,7 @@ async def get_lots_analysis(
     current_user: User = Depends(get_current_user),
 ) -> LotsAnalysisResponse:
     """Return a bulk FIFO lots analysis from a single FifoLotEngine run."""
-    from backend.app.services.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+    from backend.app.services.platform.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
 
     # Resolve min/max sentinels before passing to service
     if body.date_range and body.date_range.has_sentinels():

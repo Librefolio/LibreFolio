@@ -14,6 +14,7 @@ related:
   - features/F-083
   - features/F-105
   - decisions/onboarding-guide-observes-never-acts
+  - workflows/brim-import-flow
 mkdocs: "developer/frontend/components/features/import-wizard.md"
 ---
 
@@ -28,13 +29,22 @@ collects explicit corrections, rechecks duplicates on the corrected data, and ha
 selected rows to `TransactionBulkModal`.
 
 The modal is still presented as four numbered product stages, but the implementation is
-a conditional seven-state machine:
+a conditional state machine (`StepId` in `wizardTypes.ts`):
 
 ```text
-upload → select → analyze → [assets] → [fix] → [duplicates] → review
+upload → select → analyze → [assets] → [fix] → [duplicates] → review → [gapFix]
 ```
 
-`assets`, `fix`, and `duplicates` appear only when their predicates require user work.
+`assets`, `fix`, and `duplicates` appear only when their predicates require user work. `gapFix` («Align with the
+bank») opens after review only when a report set brings truth points with something to show
+(`gapFixHasSomethingToShow()`); otherwise review hands off to the editor directly (`handOffToEditor()`).
+(2026-11-07 lint: the diagram showed seven states; the eighth, `gapFix`, exists since 2026-10-01.)
+
+## Location
+
+`frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` (one component per step beside it:
+`UploadStep`, `SelectFilesStep`, `AnalyzeStep`, `AssetGroupStep`, `FixFlaggedStep`, `DuplicatesStep`, `ReviewStep`,
+`GapFixStep`), opened by `TransactionBulkModal.svelte`.
 
 ## Key Interfaces
 
@@ -47,7 +57,7 @@ pendingDeleteTxIds?: number[]
 onImportBatch: (creates: Array<{
     tx: TransactionCreateItem
     todos: ImportTodo[]
-}>) => void
+}>, guideProgress?: {current: number; total: number}) => void
 ```
 
 `defaultBrokerId` is only a preselection; the user can still assign a different broker
@@ -205,22 +215,23 @@ transaction payload; the wizard never commits directly.
 
 | Role | Path |
 |------|------|
-| Wizard orchestration | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Parse-to-merge and placeholder remapping | `frontend/src/lib/utils/transactions/importMerge.ts` |
-| Wizard transaction and resolution types | `frontend/src/lib/utils/transactions/importTypes.ts` |
-| Final duplicate request shaping | `frontend/src/lib/utils/transactions/duplicateRecheckPayload.ts` |
-| Firm collision rule, compare target | `frontend/src/lib/utils/transactions/importDedup.ts` |
-| Carrying resolver choices | `frontend/src/lib/utils/transactions/importDuplicateResolver.ts` |
+| Wizard orchestration | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| Step markup (upload, select, analyze, duplicates, review, footer) and the types the steps share | `frontend/src/lib/features/transactions/import/` |
+| Parse-to-merge and placeholder remapping | `frontend/src/lib/features/transactions/import/importMerge.ts` |
+| Wizard transaction and resolution types | `frontend/src/lib/features/transactions/import/importTypes.ts` |
+| Final duplicate request shaping | `frontend/src/lib/features/transactions/import/duplicateRecheckPayload.ts` |
+| Firm collision rule, compare target | `frontend/src/lib/features/transactions/import/importDedup.ts` |
+| Carrying resolver choices | `frontend/src/lib/features/transactions/import/importDuplicateResolver.ts` |
 | Full asset edit loader | `frontend/src/lib/components/assets/assetEditData.ts` |
 | Classification PATCH diff | `frontend/src/lib/components/assets/assetPayload.ts` |
 | Asset create/edit and nested modal orchestration | `frontend/src/lib/components/assets/AssetModal.svelte` |
-| Backend classification PATCH semantics | `backend/app/services/asset_source.py` |
+| Backend classification PATCH semantics | `backend/app/services/assets/crud.py` |
 | BRIM routes and final duplicate endpoint | `backend/app/api/v1/brokers.py` |
 | BRIM DTOs and positive fake-ID range | `backend/app/schemas/brim.py` |
-| Local candidate matching | `backend/app/services/brim_provider.py` |
+| Local candidate matching | `backend/app/services/brim/brim_provider.py` |
 | Generic CSV parser | `backend/app/services/brim_providers/broker_generic_csv/plugin.py` |
-| Bulk handoff, stable drafts, and display sorting | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| Bulk issue mapping and chronological comparator | `frontend/src/lib/utils/transactions/bulkDisplay.ts` |
+| Bulk handoff, stable drafts, and display sorting | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| Bulk issue mapping and chronological comparator | `frontend/src/lib/features/transactions/bulk/bulkDisplay.ts` |
 | Sorted visible-row navigation | `frontend/src/lib/components/table/DataTable.svelte` |
 | Import wizard developer guide | `mkdocs_src/docs/developer/frontend/components/features/import-wizard.md` |
 | Generic CSV developer guide | `mkdocs_src/docs/developer/backend/brim/generic_csv.md` |

@@ -10,12 +10,14 @@ import struct
 import threading
 import time
 import uuid
+from collections.abc import Mapping
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from multiprocessing.connection import Connection
 
 from pydantic import ValidationError
 
+from backend.app.logging_config import get_logger
 from backend.app.schemas.tools import (
     ToolBatchMetrics,
     ToolComputeBatchRequest,
@@ -33,6 +35,7 @@ from backend.app.schemas.tools import (
     ToolPoolSnapshot,
     ToolResourceCapabilities,
 )
+from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolDefinitionError, ToolExecutionError
 from backend.app.services.tools.catalog import effective_operation
 from backend.app.services.tools.process_tree import OwnedProcessTree
@@ -40,6 +43,41 @@ from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistry
 from backend.app.services.tools.resources import ToolResourceController
 from backend.app.services.tools.wire import decode_json, encode_json, plain_json_object
 from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob, execute_tool_job
+
+logger = get_logger(__name__)
+
+# A crashed worker's pipe closes a moment before the process can be reaped, longer under load: the most the parent waits
+# to read its exit status. ``join`` returns as soon as the worker exits, so only a worker still alive waits it all.
+_EXIT_GRACE_SECONDS = 0.5
+
+
+def _crashed_exit_code(job: _OwnedJob) -> int | None:
+    """The crashed worker's own exit status (J-19), read before the cleanup that may signal it: an exit code, or the
+    negative number of the signal that ended it; None while it still runs, or when it cannot be read."""
+    process = getattr(job.tree, "process", None)
+    if process is None:
+        return None
+    try:
+        process.join(timeout=_EXIT_GRACE_SECONDS)
+        return process.exitcode
+    except (OSError, ValueError, AssertionError):
+        return None
+
+
+def _log_worker_crash(job: _OwnedJob) -> None:
+    """One structured line for a crashed worker (J-19): its identity, exit status, memory and time — never its input
+    or output."""
+    memory = job.metrics.resources.memory if job.metrics.resources is not None else None
+    logger.warning(
+        "Tool worker crashed",
+        execution_id=job.spec.execution_id,
+        tool_code=job.spec.tool_code,
+        exit_code=job.metrics.worker_exit_code,
+        peak_observed_bytes=memory.peak_observed_bytes if memory is not None else None,
+        memory_limit_bytes=memory.limit_bytes if memory is not None else None,
+        memory_mode=memory.mode if memory is not None else None,
+        execution_ms=job.metrics.execution_ms,
+    )
 
 
 def _milliseconds(started: float) -> int:
@@ -151,7 +189,8 @@ def _accept_result(frame: dict[str, object], job: _OwnedJob) -> tuple[object, To
     if set(frame) != expected or frame.get("status") not in ("success", "error"):
         raise ToolExecutionError("worker_crashed")
     child_metrics = ToolItemMetrics.model_validate(frame["metrics"])
-    job.metrics = child_metrics.model_copy(update={"queue_wait_ms": job.metrics.queue_wait_ms, "startup_ms": job.metrics.startup_ms})
+    # The parent owns the worker's exit status (J-19): a value the worker sends is dropped.
+    job.metrics = child_metrics.model_copy(update={"queue_wait_ms": job.metrics.queue_wait_ms, "startup_ms": job.metrics.startup_ms, "worker_exit_code": None})
     if success:
         encode_json(frame["result"], max_depth=job.spec.max_json_depth, max_bytes=job.spec.max_result_bytes, limit_code="output_limit_exceeded")
         return frame["result"], None
@@ -238,6 +277,8 @@ def _run_owned_job(
         finally:
             job.metrics = job.metrics.model_copy(update={"execution_ms": _milliseconds(job.granted_at)})
             if job.tree is not None:
+                if error is not None and error.code == "worker_crashed":
+                    job.metrics = job.metrics.model_copy(update={"worker_exit_code": _crashed_exit_code(job)})
                 cleaned = _finish_physical_job(job, cancellation, job.cleanup_timeout_ms if cleanup_ms is None else cleanup_ms)
             else:
                 cleaned = job.tree is None
@@ -248,6 +289,8 @@ def _run_owned_job(
     elif job.tree is not None and job.tree.memory_limit_exceeded:
         error = _error("memory_limit")
         value = None
+    if error is not None and error.code == "worker_crashed":
+        _log_worker_crash(job)
     return _Outcome(value, error, job.metrics, cleaned)
 
 
@@ -385,12 +428,15 @@ class ToolExecutor:
                     job.quarantined = True
             raise
 
-    async def _run_item(self, item: ToolComputeItem, snapshot: ToolRegistrySnapshot, ticket: _ItemTicket, admitted_at: float, request_deadline: float) -> ToolComputeResult:
+    async def _run_item(self, item: ToolComputeItem, snapshot: ToolRegistrySnapshot, ticket: _ItemTicket, admitted_at: float, request_deadline: float, bound: BoundSettings | None = None) -> ToolComputeResult:
         job: _OwnedJob | None = None
         lane: int | None = None
         queued = False
         try:
             operation = self._operation(item, snapshot)
+            if bound is not None and bound.missing:
+                # A required field of the tool has no value: nothing is started for it (the other items of the batch run).
+                raise ToolExecutionError("service_unavailable")
             try:
                 parameters = encode_json(item.parameters, max_depth=self.policy.max_json_depth, max_bytes=operation.max_parameter_bytes)
             except ValueError as exc:
@@ -405,7 +451,7 @@ class ToolExecutor:
                 queued = False
             if time.monotonic() >= queue_deadline:
                 raise ToolExecutionError("queue_timeout", retryable=True)
-            job = self._start_job(item, operation, parameters, ticket.principal_key, lane, admitted_at, request_deadline)
+            job = self._start_job(item, operation, parameters, ticket.principal_key, lane, admitted_at, request_deadline, bound)
             ticket.job = job
             outcome = await self._await_job(job)
             identity = _identity(item, job.spec.execution_id, outcome.metrics)
@@ -437,6 +483,7 @@ class ToolExecutor:
         lane: int,
         admitted_at: float,
         request_deadline: float,
+        bound: BoundSettings | None = None,
     ) -> _OwnedJob:
         with self._lock:
             if self._closed:
@@ -460,6 +507,7 @@ class ToolExecutor:
             max_json_depth=self.policy.max_json_depth,
             engine_timeout_ms=operation.engine_timeout_ms,
             memory_limit_bytes=operation.memory_limit_bytes,
+            settings=bound,
         )
         job = _OwnedJob(spec, principal_key, lane, admitted_at, granted_at, operation.cleanup_timeout_ms, metrics=ToolItemMetrics(queue_wait_ms=_milliseconds(admitted_at)))
         with self._lock:
@@ -468,7 +516,7 @@ class ToolExecutor:
         job.io_task.add_done_callback(lambda task: self._job_finished(job, task))
         return job
 
-    async def compute(self, batch: ToolComputeBatchRequest, *, principal_key: str, request_started: float | None = None) -> ToolComputeBatchResponse:
+    async def compute(self, batch: ToolComputeBatchRequest, *, principal_key: str, request_started: float | None = None, settings: Mapping[str, BoundSettings] | None = None) -> ToolComputeBatchResponse:
         started = time.monotonic() if request_started is None else request_started
         snapshot = await asyncio.to_thread(self.registry_class.get_snapshot)
         admitted_at = self._admit(principal_key, len(batch.items))
@@ -476,7 +524,7 @@ class ToolExecutor:
         tasks: list[asyncio.Task[ToolComputeResult]] = []
         for item in batch.items:
             ticket = _ItemTicket(principal_key)
-            task = asyncio.create_task(self._run_item(item, snapshot, ticket, admitted_at, deadline))
+            task = asyncio.create_task(self._run_item(item, snapshot, ticket, admitted_at, deadline, settings.get(item.tool_code) if settings else None))
             with self._lock:
                 self._items[task] = ticket
             task.add_done_callback(self._item_finished)

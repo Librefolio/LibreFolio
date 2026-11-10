@@ -36,7 +36,7 @@ developer asked to bring it all home:
 - on risk, signals and PAC: «la matematica comune deve essere ripresa dal modulo, ma per il resto vive bene dovè»
   ("the common math must come from the module, but otherwise they live well where they are").
 
-Workstream T's inventory (plan 43 §1, at `b20eac99`) counted about 6 600 lines to move — the portfolio engine (2 837),
+Workstream T's inventory (plan 43 §1, at `b7055625`) counted about 6 600 lines to move — the portfolio engine (2 837),
 the FIFO engine (1 604), Yield on Cost (856), `roi_utils` (437, plus a lazy barrel of 75), `price_resolver` (298),
 `valuation_utils` (26) — plus about 800 lines of pure math inside `lots_analysis_service.py`. The import surface was
 small: about 27 lines in the app, 50 references in 35 test files, 5 in the test runner. One fact decided the
@@ -79,6 +79,12 @@ D-1 … D-11 were approved by the developer as recommended on 2026-10-11 (plan 4
 | `portfolio/` — `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `engine` | daily portfolio state and its views | `services/portfolio_engine.py` |
 | `lots/` — `prices`, `conversions`, `economic_events`, `histories`, `average_cost_lines` | lots analysis math | the pure methods of `LotsAnalysisService` |
 
+*2026-11-07 lint:* the table is the home of 12/10. Modules added since, on the same rule: `change_days.py`,
+`fx_rates.py`, `holding_window.py`, `interest.py`, `ledger_totals.py`, `series_steps.py`, `splits.py`,
+`trade_amount.py`, `weights.py`; `lots/` gained `change_days`, `scope_boundary`, `summary`, and `portfolio/` gained
+`contributions`, `period`, `position_series`. The live map is the layer's `__init__.py` docstring and the «Financial
+Math — One Home» table of `backend.instructions.md`.
+
 `utils/financial/` is gone. `lots_analysis_service.py` stays as orchestration (loading, DTOs, data quality),
 `fx.py` stays as FX infrastructure (`convert_bulk` is the primitive). Risk, signals and PAC ([[features/F-107]]) stay where they are and
 take the common math from the layer.
@@ -96,16 +102,16 @@ take the common math from the layer.
 
 ### The method — renames first, the cut second
 
-- **Commit A, `1cc9cd8f5`** ("refactor(math): move engines into financial_math"): whole files moved, imports
+- **Commit A, `5dcfdec4f`** ("refactor(math): move engines into financial_math"): whole files moved, imports
   rewritten in 43 files, nothing else. Git sees renames: the portfolio engine changed 12 lines in the move,
   `roi_utils` lost 9 (`ROIResult`, alive only through the deleted barrel's `__all__`).
-- **Commit B, `a57a43fbd`** ("refactor(math): split engines and lots math"): the sub-modules of `fifo/`,
+- **Commit B, `94901d98a`** ("refactor(math): split engines and lots math"): the sub-modules of `fifo/`,
   `portfolio/` and `lots/`, 53 files.
 - **Why the order matters**: `git log --follow backend/app/services/financial_math/portfolio/engine.py` still reaches
-  the engine's first commit (`77b976ebc`, 2026-06-19, 39 commits), and a branch that touched a moved file re-applies
+  the engine's first commit (`35c61f98b`, 2026-06-19, 39 commits), and a branch that touched a moved file re-applies
   on the rename. Git does not follow a file split into many: a module carved out by B, such as
   `portfolio/daily_state.py`, starts at B, and its lines are found with `git blame -C -C`. A was committed alone on
-  T's branch; A and B reached `dev_release2` together in train 45 (merge `76a7b099b`).
+  T's branch; A and B reached `dev_release2` together in train 45 (merge `d0d7e5e9f`).
 
 ### The guard
 
@@ -130,14 +136,19 @@ take the common math from the layer.
 - **Rules and docs**: D-11 (`.github/instructions/financial-math.instructions.md`), the «Financial Math — One Home»
   table in `backend.instructions.md`, one line in `frontend.instructions.md`, the new developer page
   `developer/backend/financial_math.md` (nav between Scheduler and Risk Engine) and 13 developer pages realigned.
-  The devWiki's 58 «Source files» rows were repointed in `09c089147`; the old paths left in the prose (T-W1) were
+  The devWiki's 58 «Source files» rows were repointed in `aea95390d`; the old paths left in the prose (T-W1) were
   realigned on 2026-10-12 by the step-3 ingest.
 - **Left untouched on purpose**: contract identifiers that contain an old module name —
   `source_ref="portfolio_engine.PortfolioCalculationEngine"`, `Literal["portfolio_engine_market_value"]`,
   `"valuation_source": "portfolio_engine"`, `requires_lots_analysis_service` — and the historical test file names.
 - **After release 1.2**: T-R1, private names across the boundary (`risk/service.py` calls
   `PortfolioService._get_configured_fx_pair_sets()`; `portfolio_service` imports `_compute_tx_fingerprint` from the
-  engine); a further cut of `DailyStateBuilder` (`daily_state.py`, about 1 250 lines); the test tree mirror (T-TS1).
+  engine; *2026-10-16, CP-9a:* the risk half is closed, `risk/data_quality.py` reads the routes with
+  `load_configured_fx_pair_sets(db)` from the home); a further cut of `DailyStateBuilder` (`daily_state.py`, about 1 250 lines); the test tree mirror (T-TS1).
+- *2026-10-17, CP-14a (U10, D-8):* the day count conventions and simple interest of the Scheduled Investment provider
+  moved into the home, `financial_math/interest.py`; guard rule (e) of `test_layer_boundaries.py` keeps them defined
+  there once. P-10 (decision 27) added `costless_incoming_split_adjustments` to `splits.py`: the event store asks it
+  before letting a SPLIT change type, and never names the SPLIT type itself (guard (d)).
 - The same layering question for `utils/` was answered the next day: [[decisions/utils-leaf-functions-only]].
 
 ## Links
@@ -145,6 +156,8 @@ take the common math from the layer.
 - [[decisions/financial-math-single-average-cost]] — the layer's first function and first rule
 - [[decisions/utils-leaf-functions-only]] — D-P7: what stays in `utils/`
 - [[concepts/backend-only-calculations]] — the frontend side of the same rule
+- [[problems/act-act-lost-a-day-per-year-end]], [[problems/maturity-settlement-counted-the-final-coupon-twice]] — interest
+  maths defects: ACT/ACT fixed in this layer (`interest.py`), the maturity settlement in the scheduled-investment plugin
 - [[entities/portfolio-engine]], [[entities/fifo-lot-engine]], [[entities/lots-analysis-service]],
   [[entities/native-cash]] — the moved and the new modules
 - Source: [[sources/phase00-financial-math-home-2026-10]]
@@ -158,6 +171,7 @@ take the common math from the layer.
 | FIFO package | `backend/app/services/financial_math/fifo/engine.py` |
 | Lots math package | `backend/app/services/financial_math/lots/histories.py` |
 | Returns, valuation, price marks | `backend/app/services/financial_math/returns.py`, `backend/app/services/financial_math/valuation.py`, `backend/app/services/financial_math/price_marks.py` |
+| Day count and simple interest (U10) | `backend/app/services/financial_math/interest.py` |
 | The guard | `backend/test_scripts/test_services/test_financial_math/test_layer_boundaries.py` |
 | Rules of the layer (D-11) | `.github/instructions/financial-math.instructions.md` |
 | Map of where each calculation lives | `.github/instructions/backend.instructions.md` |

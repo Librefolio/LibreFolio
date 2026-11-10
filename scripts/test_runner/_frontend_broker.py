@@ -11,7 +11,10 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
     """Run Broker unit tests (Vitest) — brokerHelpers (getBrokerIconUrl fallback chain),
     brokerIconChain (the reactive icon chain, jsdom), BrokerIcon (which <img> it draws and the URL an
     <img> event belongs to, jsdom), assetPanelUrl (broker panel deep-link parsing),
-    tabUrl (tab query-param sync, shared with dashboard)."""
+    tabUrl (tab query-param sync, shared with dashboard), LotCustodyModal (the opening value read
+    from the backend's original_cost, not computed as quantity × price, jsdom), LotAnalysisFailedNotice
+    (a FAILED lots analysis: one row per blocking issue with the broker's name, the date and a link to
+    the transaction to fix, jsdom)."""
     print_section("Frontend Broker Unit Tests (Vitest)")
     cmd = [
         "npx",
@@ -19,9 +22,12 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
         "run",
         "src/lib/utils/__tests__/brokerHelpers.test.ts",
         "src/lib/utils/broker/__tests__/brokerIconChain.test.ts",
-        "src/lib/components/brokers/BrokerIcon.test.ts",
+        "src/lib/components/ui/display/BrokerIcon.test.ts",
         "src/lib/utils/broker/__tests__/assetPanelUrl.test.ts",
         "src/lib/utils/url/__tests__/tabUrl.test.ts",
+        "src/lib/features/brokers/lots/LotCustodyModal.test.ts",
+        "src/lib/features/brokers/lots/LotAnalysisFailedNotice.test.ts",
+        "src/lib/features/brokers/lots/LotDataQualityBanner.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Broker Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -41,17 +47,71 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
 def front_broker_list(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run broker list & CRUD E2E tests."""
     print_section("Frontend Broker List & CRUD Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("brokers/brokers.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_broker_detail(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run broker detail page E2E tests."""
     print_section("Frontend Broker Detail Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("brokers/brokers-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_broker_tx_actions(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the broker page's Transactions tab edit surface (FB-17): selection bar, row actions, viewer guard."""
+    print_section("Frontend Broker Transactions Actions Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-transactions-actions.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_broker_page_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the broker page's per-role E2E: owner, editor and viewer (shared, share 0) see what their role allows."""
+    print_section("Frontend Broker Page Roles Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-page-roles.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_broker_page_banners(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the broker page's data-quality banner E2E: shown to every role, its sync buttons send one request, the report asks for this broker only."""
+    print_section("Frontend Broker Page Banners Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-page-banners.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_broker_transactions_period(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the broker page's Transactions tab period E2E: rows, request and the link to the Transactions page keep to the toolbar's period."""
+    print_section("Frontend Broker Transactions Period Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-transactions-period.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_broker_whole_amounts(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the broker page's whole-broker amounts E2E (MF6-3, D4): apply_ownership_share=false on the broker page only."""
+    print_section("Frontend Broker Whole Amounts Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-whole-amounts.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_broker_recovery(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -94,14 +154,61 @@ def front_broker_all(verbose: bool = False, ui: bool = False, headed: bool = Fal
 def populate_registry(registry: dict) -> None:
     """Register all frontend broker test entries."""
     from ._common import add_test, make_category
-    cat = make_category(
-        help_text="Frontend broker tests: unit (brokerHelpers) + E2E (list, CRUD, detail page)",
-        description="""Frontend Broker Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "broker-unit", front_broker_unit, test_names=False, name="Broker Unit Tests (Vitest)", desc="Unit tests: getBrokerIconUrl fallback chain, reactive broker icon chain (jsdom), BrokerIcon <img> events (jsdom), assetPanelUrl deep-link parsing, tabUrl tab-state sync", tests="vitest")
+
+    cat = make_category(help_text="Frontend broker tests: unit (brokerHelpers) + E2E (list, CRUD, detail page)", description="""Frontend Broker Tests\n\nOptions: --ui, --headed, --debug""")
+    add_test(
+        cat,
+        "broker-unit",
+        front_broker_unit,
+        test_names=False,
+        name="Broker Unit Tests (Vitest)",
+        desc="Unit tests: getBrokerIconUrl fallback chain, reactive broker icon chain (jsdom), BrokerIcon <img> events (jsdom), assetPanelUrl deep-link parsing, tabUrl tab-state sync, LotCustodyModal's opening value read from the backend's original_cost, not computed as quantity × price (jsdom), LotAnalysisFailedNotice's rows for a FAILED lots analysis (jsdom)",
+        tests="vitest",
+    )
     add_test(cat, "list", front_broker_list, name="Broker List & CRUD Tests", desc="Broker list page, create/edit/delete", prereq="Login working", tests="brokers/brokers.spec.ts")
     add_test(cat, "detail", front_broker_detail, name="Broker Detail Tests", desc="Detail page sections, edit/import modals", prereq="Login working, brokers exist", tests="brokers/brokers-detail.spec.ts")
+    add_test(
+        cat,
+        "broker-tx-actions",
+        front_broker_tx_actions,
+        name="Broker Transactions Actions Tests",
+        desc="Transactions tab on the broker page: selection bar (Edit/Clone/Delete) and row actions for who can edit, none for a viewer, no Split, rows the user cannot edit left out with a warning",
+        tests="brokers/broker-transactions-actions.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-page-roles",
+        front_broker_page_roles,
+        name="Broker Page Roles Tests",
+        desc="Broker page per role (owner, editor, viewer shared with share 0): the shared broker opens and its overview loads, header edit/share buttons, Transactions bar (import and new transaction only for who can edit), Info sharing section",
+        tests="brokers/broker-page-roles.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-page-banners",
+        front_broker_page_banners,
+        name="Broker Page Banners Tests",
+        desc="Broker page data-quality banner for every role (owner, viewer shared with share 0): the MISSING_FX_RATES and STALE_PRICE sync buttons send one request, the page is busy while it runs, the report asks for this broker only",
+        tests="brokers/broker-page-banners.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-transactions-period",
+        front_broker_transactions_period,
+        name="Broker Transactions Period Tests",
+        desc="Broker page Transactions tab keeps to the toolbar's period: rows in and out of the period, the request carries broker_id and the dates, the link to the Transactions page carries the period",
+        tests="brokers/broker-transactions-period.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-whole-amounts",
+        front_broker_whole_amounts,
+        name="Broker Whole Amounts Tests",
+        desc="The broker page counts the broker whole (apply_ownership_share=false), the Dashboard keeps the owner share",
+        prereq="Login working, e2e_test_user co-owner of the first mock broker",
+        tests="brokers/broker-whole-amounts.spec.ts",
+    )
     add_test(cat, "broker-recovery", front_broker_recovery, name="Broker Recovery Tests", desc="Owned empty/cascade deletion success, failure notifications and preserved recovery dialog", tests="brokers/broker-recovery.spec.ts")
     add_test(cat, "broker-create-feedback", front_broker_create_feedback, name="Broker Create Feedback Tests", desc="Real duplicate failure, close/discard/reopen reset and confirmed creation feedback on desktop/mobile", tests="brokers/broker-create-feedback.spec.ts")
     add_test(cat, "all", front_broker_all, test_names=False, name="All Broker Tests", desc="Run all broker tests (unit + E2E)")
     registry["front-broker"] = cat
-

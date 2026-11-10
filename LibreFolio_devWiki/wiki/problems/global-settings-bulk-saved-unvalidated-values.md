@@ -17,7 +17,7 @@ boolean: all accepted with 200. The batch was also not atomic: an unknown key an
 had already been saved (per the plan's analysis).
 
 The damage surfaced later and far away: the read side (`_convert_value()` in
-`backend/app/services/global_settings_service.py`) turns an unreadable `int` into **0**, an unrecognised `bool`
+`backend/app/services/global_settings_service.py`, today `backend/app/services/accounts/global_settings_service.py`) turns an unreadable `int` into **0**, an unrecognised `bool`
 into **False** and broken JSON into `{}` — silently. A typo in the admin tab became a zero timeout or a disabled
 feature, with nothing in the logs.
 
@@ -27,12 +27,12 @@ The service wrote each item as it came, one key at a time, with no type or range
 a valid value for a global setting. The per-key limits (`SettingConstraint`, `GLOBAL_SETTINGS_CONSTRAINTS` — e.g.
 `session_ttl_hours` 1…8760, `max_file_upload_mb` 1…1024) were introduced by the fix.
 
-## Solution (2026-10-09, `84d9e3360`)
+## Solution (2026-10-09, `910bbb0e7`)
 
 - `validate_global_setting_value(key, value, value_type)` (`backend/app/schemas/settings.py`) checks the storage
   type first, then the key's entry in `GLOBAL_SETTINGS_CONSTRAINTS`, and normalises what cannot change meaning:
   booleans as `true`/`false`, integers as plain digits, currencies upper-case, whitespace trimmed.
-- `update_global_settings()` (`backend/app/services/settings_service.py`) is **all or nothing**: unknown keys are
+- `update_global_settings()` (`backend/app/services/settings_service.py`, today under `services/accounts/`) is **all or nothing**: unknown keys are
   checked first (`GlobalSettingNotFoundError` → **404**), then every value (`GlobalSettingValueError`, listing
   **every** refusal → **422**); only then are the values written, in one commit.
 - 363 lines of API tests in `test_settings_api.py`.
@@ -56,15 +56,16 @@ complained about cannot happen on this endpoint.
 
 Admin-only, latent: an invalid value would have degraded a global setting to a zero/false default without warning.
 Backlog 38 keeps **P-4** (the timezone check `_check_timezone` runs only when the server has the IANA database,
-and `tzdata` is not in the `Pipfile`). Source: [[sources/phase00-wac-unification-2026-10]].
+and `tzdata` is not in the `Pipfile`). Source: [[sources/phase00-wac-unification-2026-10]]. *2026-11-07 lint: P-4's cause
+is gone — `tzdata` is an explicit `Pipfile` dependency since `cab7df759` (2026-10-28, H6-4).*
 
 ## Source files
 
 | Role | Path |
 |------|------|
 | `validate_global_setting_value`, `GLOBAL_SETTINGS_CONSTRAINTS` | `backend/app/schemas/settings.py` |
-| `update_global_settings` (all or nothing) | `backend/app/services/settings_service.py` |
+| `update_global_settings` (all or nothing) | `backend/app/services/accounts/settings_service.py` |
 | `PATCH /settings/global/bulk` (404 / 422) | `backend/app/api/v1/settings.py` |
-| Read-side coercion `_convert_value` | `backend/app/services/global_settings_service.py` |
+| Read-side coercion `_convert_value` | `backend/app/services/accounts/global_settings_service.py` |
 | API tests | `backend/test_scripts/test_api/test_settings_api.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/30_wacUnification/plan-phase00SettingsBulkValidation.prompt.md` |

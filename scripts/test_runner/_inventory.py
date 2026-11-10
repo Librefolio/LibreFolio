@@ -161,21 +161,14 @@ def _collecting(sink):  # noqa: C901 — TODO(P2-refactor): nested module×attr 
 
     # Modules import these symbols by value, so patching the defining module is
     # not enough: every module that already bound them must be patched too.
-    targets = [_common, _frontend_common] + [
-        mod
-        for name, mod in sys.modules.items()
-        if name.startswith("scripts.test_runner._") or name.startswith("test_runner._")
-    ]
+    targets = [_common, _frontend_common] + [mod for name, mod in sys.modules.items() if name.startswith("scripts.test_runner._") or name.startswith("test_runner._")]
 
     saved: list = []
     real_sp_run = subprocess.run
     real_unlink = Path.unlink
 
     def guarded_unlink(self, *args, **kwargs):
-        raise RuntimeError(
-            f"dry-run collection tried to delete {self}. "
-            "Add the owning action to SIDE_EFFECTING in _inventory.py."
-        )
+        raise RuntimeError(f"dry-run collection tried to delete {self}. " "Add the owning action to SIDE_EFFECTING in _inventory.py.")
 
     try:
         Path.unlink = guarded_unlink
@@ -315,6 +308,25 @@ def classify(engine: str, path: str, declared: str = None) -> str:  # noqa: C901
     return WRITE_GLOBAL
 
 
+def declared_isolation(category: str, action: str) -> str | None:
+    """The isolation class the catalogue declares for one action; ``None`` when it declares none.
+
+    ``exclusive_because`` *is* the WRITE_GLOBAL declaration — the class and its justification are one statement, not
+    a flag with a comment beside it. Written this way a category default cannot silently promote a unit that somebody
+    has already explained must not be promoted. Otherwise the action's own ``isolation``, then its category's
+    ``default_isolation``. Where this answers ``None``, ``classify()`` falls back to its static scan.
+    """
+    from ._registry import TEST_REGISTRY  # noqa: PLC0415 — read at call time, as collect_launches and build_inventory do
+
+    category_entry = TEST_REGISTRY.get(category, {})
+    entry = category_entry.get(action) if action != "_meta" else None
+    if not entry:  # an action the catalogue does not have declares nothing, whatever its category's default
+        return None
+    if entry.get("exclusive_because"):
+        return WRITE_GLOBAL
+    return entry.get("isolation") or category_entry.get("_meta", {}).get("default_isolation") or None
+
+
 def build_inventory() -> tuple:
     """Derive the full inventory of test units. Returns ``(units, errors)``."""
     from ._registry import TEST_REGISTRY
@@ -323,14 +335,7 @@ def build_inventory() -> tuple:
     units = []
     for (cat, action), items in sorted(launches.items()):
         entry = TEST_REGISTRY.get(cat, {}).get(action, {})
-        # `exclusive_because` *is* the WRITE_GLOBAL declaration — the class and
-        # its justification are one statement, not a flag with a comment beside
-        # it. Written this way a category default cannot silently promote a unit
-        # that somebody has already explained must not be promoted.
-        if entry.get("exclusive_because"):
-            declared = WRITE_GLOBAL
-        else:
-            declared = entry.get("isolation") or TEST_REGISTRY.get(cat, {}).get("_meta", {}).get("default_isolation")
+        declared = declared_isolation(cat, action)
         for engine, path, _project in items:
             units.append(
                 TestUnit(
@@ -362,20 +367,9 @@ def on_disk() -> dict:
     """Every test file that exists, by engine, in the same shape as the units."""
     frontend = PROJECT_ROOT / "frontend"
     return {
-        "playwright": sorted(
-            f.name
-            for f in (frontend / "e2e").rglob("*.spec.ts")
-            if f.name not in EXCLUDED_SPECS
-        ),
-        "vitest": sorted(
-            str(f.relative_to(frontend)).replace("\\", "/")
-            for f in (frontend / "src").rglob("*.test.ts")
-        ),
-        "pytest": sorted(
-            str(f.relative_to(PROJECT_ROOT / "backend" / "test_scripts")).replace("\\", "/")
-            for d in BACKEND_SUITE_DIRS
-            for f in (PROJECT_ROOT / "backend" / "test_scripts" / d).rglob("test_*.py")
-        ),
+        "playwright": sorted(f.name for f in (frontend / "e2e").rglob("*.spec.ts") if f.name not in EXCLUDED_SPECS),
+        "vitest": sorted(str(f.relative_to(frontend)).replace("\\", "/") for f in (frontend / "src").rglob("*.test.ts")),
+        "pytest": sorted(str(f.relative_to(PROJECT_ROOT / "backend" / "test_scripts")).replace("\\", "/") for d in BACKEND_SUITE_DIRS for f in (PROJECT_ROOT / "backend" / "test_scripts" / d).rglob("test_*.py")),
     }
 
 

@@ -10,9 +10,9 @@ The **Brokers** page shows one card per broker, with its value (**NAV**) in the 
 
 **Gain/Loss** is the NAV minus the capital that went into the broker: your deposits minus withdrawals, plus the cost of securities you brought in without cash, plus what you moved in from your other brokers minus what you moved out, each move valued on the day it arrived. So moving money or securities between two of your brokers is not a gain on one card and a loss on the other, and while a transfer is on its way, its value stays on the sending broker's card. Cash held in another currency is valued at the latest exchange rate, so what the rate does to it counts in Gain/Loss, not in the capital. The percentage in brackets is the gain over that capital: it shows 0.00% when that capital is zero or less, for example when the broker has sent out more than it received. → [Internal transfers](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
-!!! note "Shared brokers show your share"
+!!! note "Shared brokers show your share on the card"
 
-    On a broker you co-own, the values on its card and in its **Overview** tab are **scaled by your ownership share**: a 50% Owner sees half of the account. Editors and Viewers always see the full amounts. See [Broker Sharing](sharing.md).
+    On a broker you co-own, the values on its card are **scaled by your ownership share**: a 50% Owner sees half of the account. Editors and Viewers see the full amounts. The broker's own page shows the whole account to everyone — see [The broker page is the Dashboard on one broker](#broker-page-is-dashboard). See [Broker Sharing](sharing.md).
 
 ---
 
@@ -46,23 +46,24 @@ The **Brokers** page shows one card per broker, with its value (**NAV**) in the 
 ## ✏️ Edit or delete a broker
 
 - **Edit** — the pencil on the broker card, or **Edit** in the broker's toolbar. Owners and Editors can edit a broker.
-- **Delete** — the bin on the broker card. Only an Owner can delete a broker. If it still holds transactions, LibreFolio says how many and offers **Go to transactions** or **Delete broker and transactions**, which deletes them as well.
+- **Delete** — the bin on the broker card. Only an Owner can delete a broker. If it still holds transactions, LibreFolio says how many and offers **Go to transactions** or **Delete broker and transactions**, which deletes them as well. Assets it transferred to another broker, a shared one included, stay there as an opening position at their transfer cost, starting on the transfer date: that broker's gain then also counts what they gained before the transfer. Assets another broker transferred to it leave that broker as an adjustment that takes the units out: it has no value, so the units only leave the quantity and their cost counts as a realized loss there ([Outgoing Adjustments](../../financial-theory/instruments/transaction-types/adjustment.md#outgoing-adjustments)). Cash transfers with another broker become a deposit or a withdrawal there.
 
 ---
 
 ## 🗂️ Inside a broker
 
-A broker's card opens its detail page on the **Overview** tab:
+A broker's card opens its page on the **Overview** tab:
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-The toolbar at the top applies to every tab:
+At the top, the header shows the broker's name, its icon and, as a badge, your role and your ownership share. The toolbar below applies to every tab:
 
-- the **date range** and the **Currency** of the figures;
-- **Edit**, **Share Broker** (it opens the **Info** tab) and **Refresh**;
-- **AI Export**, which copies a ready-made prompt about this broker to your clipboard — see [Broker AI Export](../ai-export/broker.md).
+- the **date range** and the **Currency** of the figures, with the same list as on the Dashboard, **Create forex** included;
+- **Edit** (Owners and Editors) and **Share Broker**, which opens the **Info** tab;
+- **AI Export**, which copies a ready-made prompt about this broker to your clipboard — see [Broker AI Export](../ai-export/broker.md);
+- **Refresh**, which recalculates the page on demand.
 
 Below it, five tabs:
 
@@ -74,12 +75,30 @@ Below it, five tabs:
 
 ---
 
+## 🧭 The broker page is the Dashboard on one broker {: #broker-page-is-dashboard }
+
+A broker's page is the [Dashboard](../dashboard/index.md) with that broker already chosen, plus the broker's own **Info** tab. The controls, the tabs and their panels work as described in the Dashboard pages; there is no broker filter, because the page is one broker.
+
+What is the same as on the Dashboard:
+
+- **Period, currency and buttons.** The date range, the **Currency** menu, **AI Export** and **Refresh** are the Dashboard's. When you have not used the page for two minutes, the **Refresh** button shows a pause icon and a greyer tone, and its tooltip says the updates are paused: click it to update the prices again (see **Live prices** on the [Assets](../assets/index.md) page).
+- **Cash balances follow the period.** They show the cash at the end of the period you picked.
+- **Lots.** **Analyze Lots** opens the lot detail below the list; the browser's **Back** button closes it. **See all →** opens the Assets page on the same period.
+- **Data-quality banner.** Old prices and missing or old exchange rates are reported here too, with the same **Sync prices** and **Sync rates** buttons ([Data Quality Banner](../dashboard/index.md#data-quality-banner)). Every role sees them, a Viewer included: they update shared prices and exchange rates, not the broker.
+
+What is different:
+
+- **The whole broker.** Every amount on the page, Risk included, is the broker's **whole** amount (100%), also when you own less than 100% of it. The badge in the header shows your role and share. The Dashboard filtered on the same broker shows your share of it.
+- **Transactions follow the period.** The Transactions tab lists the transactions of the date range chosen in the toolbar, and **View in Transactions** opens the [Transactions](../transactions/index.md) page with the same period. **Import**, **Add Transaction**, **Edit**, **Clone**, **Delete** and the selection bar are for Owners and Editors; a Viewer sees the table, the import history and **View in Transactions**.
+
+---
+
 ## 📈 Overview tab
 
 The **Overview** answers "how is this account doing?" with the same blocks as the [Dashboard Overview](../dashboard/index.md), limited to this broker:
 
 - **KPI cards** — **Period P&L**, **Returns** and **Net Worth** ([KPI Cards](../dashboard/kpi-cards.md)).
-- **Cash Balances** — the cash held here, per currency.
+- **Cash Balances** — the cash held here at the end of the period, per currency.
 - **Growth chart** — the **Abs**, **%** and **P&L** views, with P&L as **Line**, **Candles** or **Income** ([Portfolio Growth Chart](../dashboard/charts.md#portfolio-growth-chart), [P&L mode](../dashboard/charts.md#pnl-mode)). The view you pick is shared with the Dashboard.
 - **Allocation** — by type, sector and geography ([Allocation Panel](../dashboard/charts.md#allocation-panel)).
 

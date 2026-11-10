@@ -362,3 +362,32 @@ test.describe('TransactionsTable (main read-view)', () => {
         await page.keyboard.press('Escape');
     });
 });
+
+// ---------------------------------------------------------------------------
+// W-B76 — the row opened with `?highlight=<id>` stays marked
+// ---------------------------------------------------------------------------
+
+test.describe('TransactionsTable — the highlighted row keeps its mark (W-B76)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('the row of `?highlight=<id>` carries data-highlighted after the pulse is over, and nowhere else', async ({page}) => {
+        // Any transaction on the first page of the list: the id is read from the row, never named.
+        await goToTransactions(page);
+        const rowIds = await page.locator('[data-testid="tx-table"] tbody tr[data-row-id^="tx-"]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
+        const id = rowIds.map((rowId) => Number(rowId.replace('tx-', ''))).find((value) => Number.isInteger(value) && value > 0);
+        if (id === undefined) throw new Error(`The transactions list shows no row with a tx-<id> row id (rows: ${rowIds.join(', ')}): check populate_mock_data.py`);
+
+        await navigateTo(page, `/transactions?highlight=${id}`);
+        await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+        const row = page.locator(`[data-testid="tx-table"] tr[data-row-id="tx-${id}"]`);
+
+        // The pulse comes and goes (a class on the row)…
+        await expect(row).toHaveAttribute('data-highlighted', 'true', {timeout: 15_000});
+        await expect(row, 'the pulse is a class that goes away').not.toHaveClass(/tx-row-highlight/, {timeout: 10_000});
+        // …the mark does not: neither the user nor a test would otherwise know which row was opened.
+        await expect(row).toHaveAttribute('data-highlighted', 'true');
+        await expect(page.locator('[data-testid="tx-table"] tr[data-highlighted="true"]'), 'exactly one row is marked').toHaveCount(1);
+    });
+});

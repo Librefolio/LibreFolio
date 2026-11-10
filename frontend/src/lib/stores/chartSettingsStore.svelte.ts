@@ -6,15 +6,22 @@
  * - **Pair overrides**: per-pair customizations stored in localStorage and cleared
  *   when matching global settings are saved.
  *
- * NOT persisted to backend — settings live in user-scoped localStorage and survive refresh.
+ * NOT persisted to backend — settings live in user-scoped localStorage and survive refresh. One exception, the shape of the
+ * lines of every chart (FB-3): an interface preference of the user (lot UIP), kept by the server in the user settings with
+ * the administrator's default for a user who did not choose it, and read here from the user settings store. A chart's own
+ * shape stays in this browser.
  *
  * @module stores/chartSettingsStore
  */
 
 import {browser} from '$app/environment';
 import type {SignalConfig} from '$lib/charts/signals';
-import {DEFAULT_CALENDAR_RETURN_WINDOW, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
+import {DEFAULT_CALENDAR_RETURN_WINDOW, largestCalendarReturnPresetFor, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
+import {DEFAULT_LINE_SHAPE, isLineShape, type LineShape} from '$lib/components/charts/lineShape';
 import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {isFallbackUserSettings, userSettings} from '$lib/stores/app/settings';
+import {effectiveUiPreference, ownUiPreference} from '$lib/stores/app/uiPreferences';
+import type {UserSettings} from '$lib/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -34,6 +41,14 @@ export interface ChartAxisSettings {
     secondary: Record<string, AxisScaleSettings>;
 }
 
+/**
+ * The view a chart opens in (Y-40): its prices, their change in percent, or the rolling return over the calendar window.
+ * The list's top bar and the global settings set it for a scope, a card's button and the detail page for one chart.
+ */
+export type ChartPrimaryView = 'absolute' | 'percentage' | 'calendar-return';
+
+export const CHART_PRIMARY_VIEWS: readonly ChartPrimaryView[] = ['absolute', 'percentage', 'calendar-return'];
+
 export interface ChartSettings {
     /** Color line by baseline: green above, red below (in % mode) */
     colorByBaseline: boolean;
@@ -47,6 +62,18 @@ export interface ChartSettings {
     axisScales: ChartAxisSettings;
     /** Last Calendar Return window for this asset. Ignored by non-asset charts. */
     calendarReturnWindow: CalendarReturnWindowSelection;
+    /**
+     * True until the user chooses a window: the window in force is then the largest preset that fits the period on screen
+     * (`effectiveCalendarReturnWindow`), not `calendarReturnWindow`.
+     */
+    calendarReturnWindowAuto: boolean;
+    /** The view the chart opens in (Y-40). */
+    primaryView: ChartPrimaryView;
+    /**
+     * The shape of this chart's lines when it is not the global one (FB-3). Absent means the chart follows the global shape
+     * (`getGlobalLineShape`); read it through `resolveLineShape`.
+     */
+    lineShape?: LineShape;
     /** Overlay signal configurations */
     signals: SignalConfig[];
 }
@@ -70,6 +97,8 @@ export const DEFAULT_CHART_SETTINGS: ChartSettings = {
         secondary: {},
     },
     calendarReturnWindow: {...DEFAULT_CALENDAR_RETURN_WINDOW},
+    calendarReturnWindowAuto: true,
+    primaryView: 'percentage',
     signals: [],
 };
 
@@ -82,12 +111,17 @@ function deepClone<T>(obj: T): T {
     return JSON.parse(JSON.stringify(obj));
 }
 
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 const STORAGE_BASE_KEY = 'chartSettingsStore';
 const STORAGE_WRITE_DELAY_MS = 250;
 
 interface PersistedChartSettings {
-    version: 1 | typeof STORAGE_VERSION;
+    version: typeof STORAGE_VERSION;
+    /**
+     * The shape of the lines of every chart as this browser kept it before lot UIP moved it to the user settings: read once,
+     * adopted by the server when it holds none (`adoptLegacyLineShape`), then dropped. Never written again.
+     */
+    lineShape?: LineShape;
     globalSettings: ChartSettings;
     pairOverrides: Array<[string, ChartSettings]>;
 }
@@ -156,18 +190,50 @@ function sanitizeAxisSettings(value: Record<string, unknown>): ChartAxisSettings
     };
 }
 
-function sanitizeSettings(value: unknown): ChartSettings {
-    if (!isRecord(value)) return deepClone(DEFAULT_CHART_SETTINGS);
+function isPrimaryView(value: unknown): value is ChartPrimaryView {
+    return CHART_PRIMARY_VIEWS.includes(value as ChartPrimaryView);
+}
 
-    return {
+function sameWindow(left: CalendarReturnWindowSelection, right: CalendarReturnWindowSelection): boolean {
+    return left.kind === right.kind && left.preset === right.preset && left.customAmount === right.customAmount && left.customUnit === right.customUnit;
+}
+
+/** The view a scope opens in until it is set (Y-40): the FX list on absolute rates, as before; every other chart in percent. */
+function scopeDefaultView(scope?: string): ChartPrimaryView {
+    return scope === 'fx' ? 'absolute' : DEFAULT_CHART_SETTINGS.primaryView;
+}
+
+/** The scope a stored key belongs to: a scope's own settings, an asset's, else an FX pair's. */
+function scopeOfKey(key: string): string | undefined {
+    if (key.startsWith('__global_')) return key.slice('__global_'.length, -2);
+    if (key.startsWith('__')) return undefined;
+    return key.startsWith('asset-') ? 'assets' : 'fx';
+}
+
+/** Settings the store falls back on for a scope that has none of its own: the base ones, opening on the scope's view. */
+function forScope(settings: ChartSettings, scope?: string): ChartSettings {
+    return scope === 'fx' ? {...settings, primaryView: scopeDefaultView(scope)} : settings;
+}
+
+function sanitizeSettings(value: unknown, defaultView: ChartPrimaryView = DEFAULT_CHART_SETTINGS.primaryView): ChartSettings {
+    if (!isRecord(value)) return {...deepClone(DEFAULT_CHART_SETTINGS), primaryView: defaultView};
+    const calendarReturnWindow = sanitizeCalendarReturnWindow(value.calendarReturnWindow);
+
+    const sanitized: ChartSettings = {
         colorByBaseline: typeof value.colorByBaseline === 'boolean' ? value.colorByBaseline : DEFAULT_CHART_SETTINGS.colorByBaseline,
         areaFill: typeof value.areaFill === 'boolean' ? value.areaFill : DEFAULT_CHART_SETTINGS.areaFill,
         gridLines: typeof value.gridLines === 'boolean' ? value.gridLines : DEFAULT_CHART_SETTINGS.gridLines,
         staleGradient: typeof value.staleGradient === 'boolean' ? value.staleGradient : DEFAULT_CHART_SETTINGS.staleGradient,
         axisScales: sanitizeAxisSettings(value),
-        calendarReturnWindow: sanitizeCalendarReturnWindow(value.calendarReturnWindow),
+        calendarReturnWindow,
+        // Stored before Y-40: a window other than the shipped default was chosen by the user.
+        calendarReturnWindowAuto: typeof value.calendarReturnWindowAuto === 'boolean' ? value.calendarReturnWindowAuto : sameWindow(calendarReturnWindow, DEFAULT_CALENDAR_RETURN_WINDOW),
+        primaryView: isPrimaryView(value.primaryView) ? value.primaryView : defaultView,
         signals: normalizeSignalConfigs(value.signals),
     };
+    // A shape that is not one of ours is no choice: the chart follows the global one.
+    if (isLineShape(value.lineShape)) sanitized.lineShape = value.lineShape;
+    return sanitized;
 }
 
 function normalizeSignalConfigs(value: unknown): SignalConfig[] {
@@ -178,8 +244,8 @@ function normalizeSignalConfigs(value: unknown): SignalConfig[] {
     });
 }
 
-function sanitizeStoredSettings(value: unknown): ChartSettings {
-    const sanitized = sanitizeSettings(value);
+function sanitizeStoredSettings(value: unknown, defaultView?: ChartPrimaryView): ChartSettings {
+    const sanitized = sanitizeSettings(value, defaultView);
     sanitized.signals = sanitized.signals.map((signal) => {
         const {_resolvedData: _discarded, ...serializableParams} = signal.params;
         return {
@@ -190,22 +256,70 @@ function sanitizeStoredSettings(value: unknown): ChartSettings {
     return sanitized;
 }
 
+// Version 3 (decision 29): the Rolling Return over N observations (RISK_ROLLING_RETURN) left the catalogue; a saved
+// one becomes the calendar Rolling Return (ASSET_CALENDAR_ROLLING_RETURN) over the same number of days.
+const REMOVED_ROLLING_RETURN_TYPE = 'risk-rolling-return';
+const CALENDAR_ROLLING_RETURN_TYPE = 'asset-calendar-rolling-return';
+const REMOVED_ROLLING_RETURN_AXIS = 'independent:risk_return';
+const CALENDAR_ROLLING_RETURN_AXIS = 'independent:calendar_return';
+
+function migrateRollingReturnSignal(signal: unknown): unknown {
+    if (!isRecord(signal) || signal.signalType !== REMOVED_ROLLING_RETURN_TYPE) return signal;
+    const migrated: Record<string, unknown> = {...signal, signalType: CALENDAR_ROLLING_RETURN_TYPE};
+    if (isRecord(signal.params) && 'window' in signal.params) {
+        const {window: observations, ...params} = signal.params;
+        migrated.params = {...params, window_days: observations};
+    }
+    if (isRecord(signal.componentStyles) && 'rolling_return' in signal.componentStyles) {
+        const {rolling_return: outputStyle, ...componentStyles} = signal.componentStyles;
+        migrated.componentStyles = {...componentStyles, calendar_return: outputStyle};
+    }
+    return migrated;
+}
+
+function migrateRollingReturnSettings(settings: unknown): unknown {
+    if (!isRecord(settings)) return settings;
+    const migrated: Record<string, unknown> = {...settings};
+    if (Array.isArray(settings.signals)) migrated.signals = settings.signals.map(migrateRollingReturnSignal);
+    const scales = settings.axisScales;
+    if (isRecord(scales) && isRecord(scales.secondary) && REMOVED_ROLLING_RETURN_AXIS in scales.secondary) {
+        const {[REMOVED_ROLLING_RETURN_AXIS]: scale, ...secondary} = scales.secondary;
+        migrated.axisScales = {...scales, secondary: CALENDAR_ROLLING_RETURN_AXIS in secondary ? secondary : {...secondary, [CALENDAR_ROLLING_RETURN_AXIS]: scale}};
+    }
+    return migrated;
+}
+
+/**
+ * Bring stored settings of an earlier version (1 or 2) to the current one, without touching the parsed input.
+ * Version 3 turns every saved observation Rolling Return into the calendar one; anything else passes as it is.
+ */
+export function migratePersistedChartSettings(parsed: unknown): unknown {
+    if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== 2)) return parsed;
+    return {
+        ...parsed,
+        version: STORAGE_VERSION,
+        globalSettings: migrateRollingReturnSettings(parsed.globalSettings),
+        pairOverrides: Array.isArray(parsed.pairOverrides) ? parsed.pairOverrides.map((entry) => (Array.isArray(entry) && entry.length === 2 ? [entry[0], migrateRollingReturnSettings(entry[1])] : entry)) : parsed.pairOverrides,
+    };
+}
+
 function parsePersistedSettings(raw: string | null): PersistedChartSettings | null {
     if (!raw) return null;
     try {
-        const parsed: unknown = JSON.parse(raw);
-        if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== STORAGE_VERSION)) return null;
+        const parsed: unknown = migratePersistedChartSettings(JSON.parse(raw));
+        if (!isRecord(parsed) || parsed.version !== STORAGE_VERSION) return null;
 
         const overrides = new Map<string, ChartSettings>();
         if (Array.isArray(parsed.pairOverrides)) {
             for (const entry of parsed.pairOverrides) {
                 if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') continue;
-                overrides.set(entry[0], sanitizeStoredSettings(entry[1]));
+                overrides.set(entry[0], sanitizeStoredSettings(entry[1], scopeDefaultView(scopeOfKey(entry[0]))));
             }
         }
 
         return {
             version: STORAGE_VERSION,
+            ...(isLineShape(parsed.lineShape) ? {lineShape: parsed.lineShape} : {}),
             globalSettings: sanitizeStoredSettings(parsed.globalSettings),
             pairOverrides: [...overrides.entries()],
         };
@@ -220,6 +334,10 @@ function parsePersistedSettings(raw: string | null): PersistedChartSettings | nu
 
 let globalSettings: ChartSettings = deepClone(DEFAULT_CHART_SETTINGS);
 let pairOverrides = new Map<string, ChartSettings>();
+/** The user settings the line shape of every chart is read from (lot UIP). */
+let lineShapeSettings: UserSettings | null = null;
+/** The line shape this browser kept before lot UIP, until the server adopts it or holds one of its own. */
+let legacyLineShape: LineShape | undefined;
 let hydratedStorageKey: string | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -246,6 +364,7 @@ function loadFromStorage(): void {
     const persisted = parsePersistedSettings(raw);
     globalSettings = persisted ? deepClone(persisted.globalSettings) : deepClone(DEFAULT_CHART_SETTINGS);
     pairOverrides = new Map(persisted?.pairOverrides ?? []);
+    legacyLineShape = persisted?.lineShape;
     hydratedStorageKey = storageKey;
     if (persisted) {
         const sanitizedRaw = JSON.stringify(persisted);
@@ -265,6 +384,7 @@ function persistNow(): void {
     const storageKey = getStorageKey();
     const payload: PersistedChartSettings = {
         version: STORAGE_VERSION,
+        ...(legacyLineShape ? {lineShape: legacyLineShape} : {}),
         globalSettings: sanitizeStoredSettings(globalSettings),
         pairOverrides: [...pairOverrides.entries()].map(([key, settings]) => [key, sanitizeStoredSettings(settings)] as [string, ChartSettings]),
     };
@@ -277,8 +397,23 @@ function persistNow(): void {
     }
 }
 
+let pagehideBound = false;
+
+/** A write the debounce still holds is done when the page goes away for good: a reload, a close, a navigation away (Y-40). */
+function flushOnPagehide(): void {
+    if (pagehideBound || typeof window === 'undefined') return;
+    pagehideBound = true;
+    window.addEventListener('pagehide', () => {
+        if (!saveTimer) return;
+        clearTimeout(saveTimer);
+        saveTimer = null;
+        persistNow();
+    });
+}
+
 function schedulePersist(): void {
     if (!browser) return;
+    flushOnPagehide();
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
         saveTimer = null;
@@ -304,7 +439,7 @@ export function getGlobalSettings(scope?: string): ChartSettings {
         const scoped = pairOverrides.get(`__global_${scope}__`);
         if (scoped) return deepClone(scoped);
     }
-    return deepClone(globalSettings);
+    return forScope(deepClone(globalSettings), scope);
 }
 
 /**
@@ -322,7 +457,26 @@ export function getSettingsForPair(slug: string, scope?: string): ChartSettings 
         const scoped = pairOverrides.get(`__global_${scope}__`);
         if (scoped) return deepClone(scoped);
     }
-    return deepClone(globalSettings);
+    return forScope(deepClone(globalSettings), scope);
+}
+
+/** The shape of the lines of every chart that has none of its own (FB-3): the user's own, else the administrator's default (lot UIP). */
+export function getGlobalLineShape(): LineShape {
+    // Access _version to register reactive dependency
+    void _version;
+    const shape = effectiveUiPreference(lineShapeSettings, 'chart_line_shape');
+    return isLineShape(shape) ? shape : DEFAULT_LINE_SHAPE;
+}
+
+/** Whether the shape of every chart follows the administrator's default: the user has not chosen one (lot UIP). */
+export function lineShapeFollowsGlobal(): boolean {
+    void _version;
+    return ownUiPreference(lineShapeSettings, 'chart_line_shape') === undefined;
+}
+
+/** The shape a chart draws its lines in: the one in its settings, else the global one (FB-3). */
+export function resolveLineShape(settings?: Pick<ChartSettings, 'lineShape'> | null): LineShape {
+    return settings?.lineShape ?? getGlobalLineShape();
 }
 
 /**
@@ -345,9 +499,9 @@ export function getSettingsVersion(): number {
  */
 export function setGlobalSettings(settings: ChartSettings, scope?: string): void {
     loadFromStorage();
-    const sanitized = sanitizeSettings(settings);
+    const sanitized = withWindowChoice(sanitizeSettings(settings), scope ? (pairOverrides.get(scopeKey(scope)) ?? globalSettings) : globalSettings);
     if (scope) {
-        pairOverrides.set(`__global_${scope}__`, deepClone(sanitized));
+        pairOverrides.set(scopeKey(scope), deepClone(sanitized));
         // Clear per-item overrides for this scope only
         for (const key of [...pairOverrides.keys()]) {
             if (key.startsWith('__global_')) continue; // Don't clear scoped globals
@@ -371,9 +525,138 @@ export function setGlobalSettings(settings: ChartSettings, scope?: string): void
  */
 export function setPairSettings(slug: string, settings: ChartSettings): void {
     loadFromStorage();
-    pairOverrides.set(slug, deepClone(sanitizeSettings(settings)));
+    pairOverrides.set(slug, deepClone(withWindowChoice(sanitizeSettings(settings), pairOverrides.get(slug) ?? globalSettings)));
     bump();
     schedulePersist();
+}
+
+/**
+ * The shape of the lines of every chart (FB-3): the welcome tour's choice. Every chart follows it, the ones that had chosen
+ * a shape of their own included; nothing else they saved is touched. Written to the user's interface preferences (lot UIP):
+ * applied at once, kept by the server, so it follows the user to another browser.
+ */
+export function setGlobalLineShape(shape: LineShape): Promise<boolean> {
+    loadFromStorage();
+    if (!isLineShape(shape)) return Promise.resolve(false);
+    const written = userSettings.updateUiPreference('chart_line_shape', shape);
+    applySavedGlobalLineShape();
+    return written;
+}
+
+/**
+ * A line shape for every chart, already written to the server (UIP-2): the Preferences tab saves it with its own PUT and
+ * hands the answer to `userSettings`, which this store follows. Here every chart drops the shape of its own, so they all
+ * draw the new one at once, without a reload; nothing else they saved is touched.
+ */
+export function applySavedGlobalLineShape(): void {
+    loadFromStorage();
+    const {lineShape: _own, ...baseSettings} = globalSettings;
+    globalSettings = baseSettings as ChartSettings;
+    for (const [key, settings] of pairOverrides) {
+        const {lineShape: _chosen, ...rest} = settings;
+        pairOverrides.set(key, rest as ChartSettings);
+    }
+    bump();
+    schedulePersist();
+}
+
+/**
+ * The line shape this browser kept before lot UIP, handed to the server once (lot UIP): only when the server holds none for
+ * the user, and only a shape other than the old default — a browser wrote `segments` whether the user chose it or not, and
+ * pinning it would stop the administrator's default from reaching a user who never chose. Then it is dropped from storage.
+ * Never from the built-in settings the store falls back to when the server could not be read.
+ */
+function adoptLegacyLineShape(settings: UserSettings | null): void {
+    if (!browser || !settings || isFallbackUserSettings(settings)) return;
+    loadFromStorage();
+    if (!legacyLineShape) return;
+    const legacy = legacyLineShape;
+    legacyLineShape = undefined;
+    schedulePersist();
+    if (ownUiPreference(settings, 'chart_line_shape') === undefined && legacy !== DEFAULT_LINE_SHAPE) {
+        void userSettings.updateUiPreference('chart_line_shape', legacy);
+    }
+}
+
+userSettings.subscribe((settings) => {
+    lineShapeSettings = settings;
+    adoptLegacyLineShape(settings);
+    bump();
+});
+
+function scopeKey(scope: string): string {
+    return `__global_${scope}__`;
+}
+
+/** Whether `key` is the override of one chart of `scope` (the same partition `setGlobalSettings` clears). */
+function inScope(key: string, scope: string): boolean {
+    if (key.startsWith('__')) return false;
+    return scope === 'assets' ? key.startsWith('asset-') : scope === 'fx' ? !key.startsWith('asset-') : false;
+}
+
+/** A saved window other than the one stored before is a window the user chose, whoever saves it (Y-40). */
+function withWindowChoice(next: ChartSettings, previous: ChartSettings): ChartSettings {
+    return sameWindow(next.calendarReturnWindow, previous.calendarReturnWindow) ? next : {...next, calendarReturnWindowAuto: false};
+}
+
+/**
+ * The view of a whole scope (Y-40, V-3 a): the list's top bar and its global settings. Every chart of the scope is reset to
+ * it, keeping everything else it saved; the other scope is not touched.
+ */
+export function setScopePrimaryView(view: ChartPrimaryView, scope: string): void {
+    loadFromStorage();
+    if (!isPrimaryView(view)) return;
+    const key = scopeKey(scope);
+    pairOverrides.set(key, {...deepClone(pairOverrides.get(key) ?? globalSettings), primaryView: view});
+    for (const [slug, settings] of pairOverrides) {
+        if (inScope(slug, scope)) pairOverrides.set(slug, {...settings, primaryView: view});
+    }
+    bump();
+    schedulePersist();
+}
+
+/**
+ * The view of one chart (Y-40, V-1 a and V-2 a): a card's button. An override it creates starts from the scope's settings.
+ *
+ * It rebuilds the override from the store's own copy: what a page wrote into the settings it holds — a comparison's
+ * `_resolvedData` in its signal configs — is not in it. A page that holds such settings saves its view with them instead:
+ * `setPairSettings(slug, {...settings, primaryView, signals})`, as the asset detail page does.
+ */
+export function setItemPrimaryView(slug: string, view: ChartPrimaryView, scope?: string): void {
+    loadFromStorage();
+    if (!isPrimaryView(view)) return;
+    const current = pairOverrides.get(slug) ?? (scope ? pairOverrides.get(scopeKey(scope)) : undefined) ?? globalSettings;
+    pairOverrides.set(slug, {...deepClone(current), primaryView: view});
+    bump();
+    schedulePersist();
+}
+
+/** The view a card's button turns to (Y-40, the developer's order): percent → rolling return → absolute → percent. */
+export function nextCardPrimaryView(view: ChartPrimaryView): ChartPrimaryView {
+    return view === 'percentage' ? 'calendar-return' : view === 'calendar-return' ? 'absolute' : 'percentage';
+}
+
+/**
+ * How the asset detail page opens a view (Y-40): the rolling return is its `calendar-return` mode, the two others its price
+ * mode in that view. The rolling return keeps the detail's percent view underneath, as today.
+ */
+export function detailModesForPrimaryView(view: ChartPrimaryView): {primaryMode: 'price' | 'calendar-return'; viewMode: 'absolute' | 'percentage'} {
+    if (view === 'calendar-return') return {primaryMode: 'calendar-return', viewMode: 'percentage'};
+    return {primaryMode: 'price', viewMode: view};
+}
+
+/** The view the detail page saves when its user changes mode or view (Y-40, V-2 a). */
+export function primaryViewForDetailModes(primaryMode: 'price' | 'calendar-return', viewMode: 'absolute' | 'percentage'): ChartPrimaryView {
+    return primaryMode === 'calendar-return' ? 'calendar-return' : viewMode;
+}
+
+/**
+ * The rolling-return window in force for `rangeDays` on screen: the one the user chose, else the largest preset of the
+ * selector that fits the period (the developer's decision for the first start, 20/10).
+ */
+export function effectiveCalendarReturnWindow(settings: Pick<ChartSettings, 'calendarReturnWindow' | 'calendarReturnWindowAuto'>, rangeDays: number): CalendarReturnWindowSelection {
+    if (!settings.calendarReturnWindowAuto) return {...settings.calendarReturnWindow};
+    return {...settings.calendarReturnWindow, kind: 'preset', preset: largestCalendarReturnPresetFor(rangeDays)};
 }
 
 registerClientSessionReset('chartSettingsStore', () => {

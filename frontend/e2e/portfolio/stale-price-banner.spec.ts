@@ -2,7 +2,7 @@
  * STALE_PRICE banner on the dashboard — decision D8 (30/09), R2 step 13 item 9.
  *
  * Written RED-FIRST, before the fix. `get_summary` never passes `stale_prices_dto` (not since
- * the engine rewrite 77b976ebc), so a holding whose market price has been carried forward for
+ * the engine rewrite 35c61f98b), so a holding whose market price has been carried forward for
  * more than 7 days never reaches the «prezzi non aggiornati» banner. Until the backend half
  * lands this spec stops at the report assertion; the backend contract is specified in
  * `test_portfolio_service.py::TestStalePriceDataQuality`.

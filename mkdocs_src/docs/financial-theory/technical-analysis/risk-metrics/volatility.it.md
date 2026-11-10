@@ -82,7 +82,7 @@ La volatilità implicita è prospettica ma disponibile solo per asset su cui esi
 
 ## 🔄 Volatilità a Finestra Mobile {: #rolling-window-volatility }
 
-Invece di calcolare un singolo valore di volatilità per l'intero periodo, la **volatilità a finestra mobile** calcola $\sigma$ su una finestra scorrevole (ad esempio, 30 giorni), producendo una serie temporale che mostra come la volatilità evolve:
+Invece di calcolare un singolo valore di volatilità per l'intero periodo, la **volatilità a finestra mobile** calcola $\sigma$ su una finestra scorrevole di $w$ osservazioni di rendimento — una per ogni giorno di quotazione con un rendimento, ad esempio $w = 30$ — producendo una serie temporale che mostra come la volatilità evolve:
 
 $$
 \sigma_t^{(w)} = \text{StdDev}(R_{t-w+1}, R_{t-w+2}, \ldots, R_t)

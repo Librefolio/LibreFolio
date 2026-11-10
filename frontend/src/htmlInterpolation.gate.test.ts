@@ -137,7 +137,7 @@
  *     the catalog check never reads it;
  *   - a label bundle is known by its name, not by its content: a `…Labels` object that also carried
  *     user text would be let through — keep bundles to translations;
- *   - a number formatter is known by its name too: a function called `formatFixed` or `formatPercent`
+ *   - a number formatter is known by its name too: a function called `formatFixed`, `formatPercent` or `formatPrice`
  *     that wrote its first argument as text would have a computed read let through there — keep those
  *     names for the shared formatters and the local wrappers that hand them a number.
  * When the rule grows, grow the forms in the same change.
@@ -198,18 +198,20 @@ const NUMERIC_FORMATS = new Set(['toFixed', 'toLocaleString']);
 
 /**
  * The same number formats, called as functions: `formatFixed`, the localized `toFixed`
- * (`$lib/utils/core/formatFixed.ts`), and `formatPercent`, the percent formatter
+ * (`$lib/utils/core/formatFixed.ts`), `formatPercent`, the percent formatter
  * (`$lib/utils/core/formatPercent.ts`) — what M-18 made of `x.toFixed(n)`, so that every figure is written
- * in the interface language. Their output is digits, the locale's separators, a sign and a unit: of their
+ * in the interface language — and `formatPrice`, the price formatter of C-97c (`formatFixed.ts`), which
+ * keeps a small price's significant digits and writes `''` for a value that is not a finite number, never
+ * the value itself. Their output is digits, the locale's separators, a sign and a unit: of their
  * first argument they write only its value as a number. So a read through a computed key that is their
  * FIRST argument — `formatFixed(x[k], 4)`, or through a fallback, `formatPercent(x[k] ?? 0, …)` — is let
  * through by the computed-key rule exactly as `x[k].toFixed(4)` is. Only that argument: the others are
  * digits and options, and `formatPercent`'s `empty` and `suffix` are text the caller supplies, so a
- * computed read there is still reported. Only those two names: `someOtherFn(x[k])` keeps its finding.
+ * computed read there is still reported. Only those three names: `someOtherFn(x[k])` keeps its finding.
  * And only that rule: `formatFixed(row.display_name, 2)` keeps the name rule's, as
  * `row.display_name.toLocaleString()` does.
  */
-const NUMERIC_FORMAT_CALLS = new Set(['formatFixed', 'formatPercent']);
+const NUMERIC_FORMAT_CALLS = new Set(['formatFixed', 'formatPercent', 'formatPrice']);
 
 /**
  * Helpers whose FIRST parameter is HTML by contract. `buildTooltipRow(label, …)`,
@@ -784,8 +786,8 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
     it('rejects the local escapers that leave quotes alone, whatever they escape', () => {
         // `esc` and `escHtml` stop `<` but not `"`: in `title="${esc(raw)}"` a quote still closes the
         // attribute. So the call is the finding even when its argument is no text field at all.
-        expect(caught('src/lib/utils/transactions/importCompare.ts', 'const h = `<span>${escHtml(label)}</span>`;')).toEqual(['1  escHtml(label)']);
-        expect(caught('src/lib/components/transactions/modals/ImportWizardModal.svelte', '<script lang="ts">\n    const h = `<b title="${esc(raw)}">${esc(file.name)}</b>`;\n</script>')).toEqual(['2  esc(raw)', '2  esc(file.name)']);
+        expect(caught('src/lib/features/transactions/import/importCompare.ts', 'const h = `<span>${escHtml(label)}</span>`;')).toEqual(['1  escHtml(label)']);
+        expect(caught('src/lib/features/transactions/import/ImportWizardModal.svelte', '<script lang="ts">\n    const h = `<b title="${esc(raw)}">${esc(file.name)}</b>`;\n</script>')).toEqual(['2  esc(raw)', '2  esc(file.name)']);
         // The same call on a value no HTML ever sees is not a finding.
         expect(caught('a.ts', 'const plain = `${esc(raw)} (${count})`;')).toEqual([]);
     });
@@ -849,6 +851,25 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
         ]);
     });
 
+    // C-97c-3 (D-C97c-1, 17/10): a price keeps its significant digits, through `formatPrice`
+    // (`$lib/utils/core/formatFixed.ts`), which writes its first argument as a number — digits, the locale's marks
+    // and a sign, never its input echoed — exactly as `formatFixed` does. The chart tooltips' band row hands it a
+    // computed read (LineChart's `bandSignal.bandData.upper[dataIdx]`), so the gate must let that first argument
+    // through as it does `formatFixed`'s. Red until `formatPrice` joins `NUMERIC_FORMAT_CALLS`: both reads are
+    // reported today.
+    it('lets a computed read through as the first argument of formatPrice, the price formatter, directly or through a fallback (C-97c-3)', () => {
+        expect(
+            caught('a.ts', 'const h = `<span>${formatPrice(bandSignal.bandData.upper[dataIdx], {minDecimals: 4})}</span><b>${formatPrice(r.values[k] ?? 0, {minDecimals: 4, signed: true})}</b>`;'),
+            'formatPrice is not a number format to the gate yet: its first argument is reported like any function’s',
+        ).toEqual([]);
+    });
+
+    // Guard, green before and after the cure (C-97c-3): `formatPrice` is trusted with that read and nothing more — a
+    // named text field handed to it keeps the name rule's finding, and a computed read among its options keeps its own.
+    it('keeps the name rule on formatPrice’s first argument, and the computed-key rule on its options (C-97c-3, guard)', () => {
+        expect(caught('a.ts', 'const h = `<u>${formatPrice(row.display_name)}</u><i>${formatPrice(price, {locale: locales[k]})}</i>`;')).toEqual(['1  formatPrice(row.display_name)', '1  formatPrice(price, {locale: locales[k]})']);
+    });
+
     it('checks the first argument of a helper that takes HTML there, as it checks an interpolation', () => {
         // GrowthChart's shapes: the helper is called for its return value, inside a callback, and is
         // never itself interpolated — the call is the finding, wherever it stands.
@@ -902,7 +923,7 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
 
         // The walk reaches the files that build HTML by hand: a scan of the wrong directory, or a
         // parser that silently reads nothing, would report them clean too.
-        expect(files).toEqual(expect.arrayContaining(['src/lib/components/assets/AssetTable.svelte', 'src/lib/components/table/DataTable.svelte', 'src/lib/utils/providerHelpers.ts', 'src/lib/components/transactions/modals/ImportWizardModal.svelte']));
+        expect(files).toEqual(expect.arrayContaining(['src/lib/components/assets/AssetTable.svelte', 'src/lib/components/table/DataTable.svelte', 'src/lib/utils/providerHelpers.ts', 'src/lib/features/transactions/import/ImportWizardModal.svelte']));
         const markupTemplatesIn = (file: string): number => templates.filter((t) => t.file === file && t.markup).length;
         expect(markupTemplatesIn('src/lib/components/assets/AssetTable.svelte')).toBeGreaterThan(0);
         expect(markupTemplatesIn('src/lib/utils/providerHelpers.ts')).toBeGreaterThan(0);
@@ -955,7 +976,7 @@ interface ReviewedMarkup {
 
 /**
  * Translations that carry markup on purpose (item 10). All three are validation errors produced only by
- * `resolveIssueMessage()` in `src/lib/utils/transactions/resolveValidationMessage.ts`, as
+ * `resolveIssueMessage()` in `src/lib/features/transactions/resolveValidationMessage.ts`, as
  * `transactions.errors.<code>`, and every caller of `resolveIssueMessage` renders its result through
  * `{@html sanitizeHtml(…)}`: TransactionFormModal, TransactionBulkModal, ParseDetailModal. Never in a
  * tooltip. Add a key only with such a consumer.

@@ -3,7 +3,7 @@ Test Suite: POST /transactions/validate (dry-run mixed batch)
 
 Covers Phase 7 Part 3 Blocco C.1 + Blocco G.3.
 
-Contract under test (see ``backend/app/services/transaction_service.py``
+Contract under test (see ``backend/app/services/transactions/transaction_service.py``
 L558 ``validate_batch`` + ``backend/app/api/v1/transactions.py`` L228):
 
 - **Pure dry-run**: applies deletes → updates → creates in ONE session
@@ -532,3 +532,43 @@ async def test_validate_update_typeswap_without_sign_flip_rejected(test_server):
         )
         assert match is not None, body["issues"]
         print_success("✓ DEPOSIT→WITHDRAWAL without sign flip rejected with cashSignNegative")
+
+
+# ============================================================================
+# W-B38 — several rule violations on one create reach the user rendered
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_validate_create_multiple_rule_errors_rendered(test_server):
+    """W-B38: a create breaking two business rules gets one issue per rule, each text rendered.
+
+    A BUY with no asset_id and quantity 0, otherwise valid, on a broker this test owns: ``TXCreateItem`` packs both
+    violations into one ``multipleBusinessRuleErrors``, which the batch unpacks into one ``TXValidationIssue`` each.
+    Its ``error`` is the text the user reads, so it must name the type and carry no unresolved placeholder, as a single
+    violation's does; code and params stay as they are. Red before W-B38: the pack carried each ``message_template``
+    and the user read "{type} requires asset_id".
+    """
+    print_section("G.3.13 — two rule violations on one create reach the user rendered")
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        broker_id = await _create_broker(client, allow_cash_overdraft=True)
+        try:
+            body = await _validate(
+                client,
+                creates=[{"broker_id": broker_id, "type": "BUY", "date": date.today().isoformat(), "quantity": "0", "cash": {"code": "EUR", "amount": "-100"}}],
+            )
+            assert body["committed"] is False, body
+            mine = sorted(
+                ((issue["code"], issue["error"], issue["params"]) for issue in body["issues"] if issue["operation"] == "create" and issue["index"] == 0),
+                key=lambda issue: issue[0],
+            )
+            assert [(code, params) for code, _, params in mine] == [("assetRequired", {"type": "BUY"}), ("qtyPositive", {"type": "BUY"})], f"A BUY with no asset and quantity 0 must get one issue per broken rule, with its code and params; got {body['issues']}"
+            unreadable = [error for _, error, _ in mine if "{" in error or "BUY" not in error]
+            assert unreadable == [], f"Each issue's error is what the user reads, so it must be rendered and name the type BUY (W-B38): the user would read {unreadable}"
+            print_success(f"✓ Two violations reach the user rendered: {[error for _, error, _ in mine]}")
+        finally:
+            cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id]}, timeout=TIMEOUT)
+            assert cleanup_broker.status_code == 200, cleanup_broker.text
+            broker_results = {item["id"]: item for item in cleanup_broker.json()["results"]}
+            assert broker_results[broker_id]["success"] is True, cleanup_broker.text

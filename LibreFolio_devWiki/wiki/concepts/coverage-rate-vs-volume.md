@@ -108,11 +108,11 @@ useful than showing a delta that would not hold.
 
 | area | uncovered | coverage | files |
 |---|---|---|---|
-| `components/transactions` | **1 542** | 69,9 % | 29 |
+| `features/transactions` | **1 542** | 69,9 % | 29 |
 | **routes (pages)** | **1 074** | 67,8 % | 21 |
 | `components/ui` | 947 | 75,5 % | 53 |
 | `components/assets` | 720 | 69,3 % | 18 |
-| `components/brokers` | **672** | 75,5 % | 17 — *never had a lane* |
+| `features/brokers` | **672** | 75,5 % | 17 — *never had a lane* |
 | `components/charts` | 618 | 74,6 % | 31 |
 | `components/table` | 440 | 67,2 % | 7 |
 
@@ -124,7 +124,7 @@ useful than showing a delta that would not hold.
 | Python coverage config | `.coveragerc` |
 | JS coverage merge (istanbul) | `frontend/scripts/js-coverage-report.js` |
 | JS instrumentation | `frontend/vite.config.ts`, `frontend/vitest.config.ts` |
-| Report outputs | `htmlcov-backend/`, `htmlcov-backend-e2e/`, `htmlcov-frontend/` |
+| Report outputs (generated, gitignored — not in the tree) | htmlcov-backend/ and htmlcov-backend-e2e/ (Python, `scripts/test_runner/_coverage.py`); frontend/coverage-js/ (JS, `JS_COVERAGE_DIR`). *2026-11-07 lint:* the htmlcov-frontend/ cited here before never existed in the code |
 
 > **Path note (2026-09-01)**: this table cited `frontend/mcr.config.js`. **That file
 > has never existed** — it was proposal B.3 of `plan-p7-js-coverage.md:227`, and the

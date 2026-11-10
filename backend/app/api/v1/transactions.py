@@ -26,26 +26,12 @@ from backend.app.db.models import TransactionType, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.transactions import (
-    EVENT_TYPE_METADATA,
-    TX_TYPE_METADATA,
-    TXBatchResponse,
-    TXCreateItem,
-    TXEventSuggestRequestItem,
-    TXEventSuggestResultItem,
-    TXMixedBatch,
-    TXPromoteBatchItem,
-    TXPromoteSuggestInput,
-    TXPromoteSuggestResponse,
-    TXQueryParams,
-    TXReadItem,
-    TXSplitBatchItem,
-    TXTransferPromoteRequest,
-    TXTransferPromoteResponse,
-    TXTypesResponse,
-    TXUpdateItem,
-)
-from backend.app.services.transaction_service import TransactionService
+from backend.app.schemas.transactions.batch import TXBatchResponse, TXMixedBatch, TXPromoteBatchItem, TXSplitBatchItem
+from backend.app.schemas.transactions.event_suggest import TXEventReconciliationItem
+from backend.app.schemas.transactions.promotion import TXPromoteSuggestInput, TXPromoteSuggestResponse
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXReadItem, TXUpdateItem
+from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse
+from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
 
 logger = get_logger(__name__)
@@ -192,6 +178,7 @@ async def commit_transactions(
 async def query_transactions(
     broker_id: Optional[int] = Query(None, gt=0, description="Filter by broker"),
     asset_id: Optional[int] = Query(None, gt=0, description="Filter by asset"),
+    asset_event_id: Optional[int] = Query(None, gt=0, description="Only transactions linked to this asset event (reverse lookup)"),
     types: Optional[List[TransactionType]] = Query(None, description="Filter by types"),
     date_start: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     date_end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
@@ -212,7 +199,8 @@ async def query_transactions(
 
     When `ids` is provided, results are returned in the exact input order
     (useful for preserving client-side sort); other filters besides access
-    are ignored.
+    are ignored. `asset_event_id` is the reverse lookup of an asset event:
+    the transactions linked to it.
     """
     date_range = None
     if date_start:
@@ -223,6 +211,7 @@ async def query_transactions(
     params = TXQueryParams(
         broker_id=broker_id,
         asset_id=asset_id,
+        asset_event_id=asset_event_id,
         types=types,
         date_range=date_range,
         tags=tags,
@@ -254,22 +243,25 @@ async def get_transaction_types(_current_user: User = Depends(get_current_user))
 # =============================================================================
 
 
-@tx_router.post("/events/suggest", response_model=List[TXEventSuggestResultItem])
-async def suggest_events(
-    requests: List[TXEventSuggestRequestItem],
+@tx_router.get("/event-reconciliation", response_model=List[TXEventReconciliationItem])
+async def event_reconciliation(
+    broker_id: Optional[int] = Query(None, gt=0, description="Only this broker"),
+    asset_id: Optional[int] = Query(None, gt=0, description="Only this asset"),
     session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
-) -> List[TXEventSuggestResultItem]:
+    current_user: User = Depends(get_current_user),
+) -> List[TXEventReconciliationItem]:
     """
-    For each `(asset_id, date, type)` return candidate `AssetEvent`s whose
-    type maps to the tx type and whose date is within `±tolerance_days`.
+    The transactions that could link an asset event and have none (`asset_event_id` NULL, type DIVIDEND, INTEREST or
+    ADJUSTMENT, with an asset), on the brokers where the caller is at least EDITOR, newest first.
 
-    Asset events are global, so no broker access check is needed — the
-    caller only has to be authenticated. Results preserve input order and
-    each list of candidates is sorted by ascending distance (days).
+    Each item carries the events it could be linked to: same asset, **same date**, the event type that corresponds
+    (no window of dates). `status` is `unique` for one candidate, `none` for no event that day, `several` for more than
+    one. Nothing is written and nothing is linked automatically: link with `POST /transactions/commit`
+    (`updates: [{id, asset_event_id}]`). After a currency change deletes an asset's events, this lists the transactions
+    that lost their link.
     """
     service = TransactionService(session)
-    return await service.suggest_events_bulk(requests)
+    return await service.event_reconciliation(current_user.id, broker_id=broker_id, asset_id=asset_id)
 
 
 # =============================================================================
@@ -287,7 +279,7 @@ async def promote_suggest(
     """Find DB transactions compatible for promote with each input TX.
 
     Each input can have a real ID (>0) or a fake ID (<0, unsaved).
-    Results are keyed by the input ID.
+    Results are keyed by the input ID. Candidates come only from brokers the user can edit (OWNER or EDITOR).
     """
     service = TransactionService(session)
     return await service.promote_suggest_bulk(inputs, tolerance_days, user_id=current_user.id)
@@ -296,44 +288,3 @@ async def promote_suggest(
 # =============================================================================
 # TRANSFER PROMOTION (Block H.4)
 # =============================================================================
-
-
-@tx_router.post("/transfers/promote", response_model=TXTransferPromoteResponse)
-async def promote_transfer(
-    req: TXTransferPromoteRequest,
-    session: AsyncSession = Depends(get_session_generator),
-    current_user: User = Depends(get_current_user),
-) -> TXTransferPromoteResponse:
-    """
-    Promote a DEPOSIT/WITHDRAWAL pair into TRANSFER or FX_CONVERSION.
-
-    Atomic: deletes the original pair and creates the new pair in the same
-    session. Any failure rolls back the whole operation. `type` being
-    immutable on PATCH means this is the only way to change a cash pair
-    into a typed asset transfer or currency conversion.
-    """
-    user_id = current_user.id
-    logger.info(
-        "Promote transfer %s+%s -> %s",
-        req.from_tx_id,
-        req.to_tx_id,
-        req.new_type.value,
-        user_id=user_id,
-    )
-
-    service = TransactionService(session)
-    response = await service.promote_transfer(req, user_id=user_id)
-
-    if not response.rolled_back:
-        await session.commit()
-        logger.info(
-            "Promoted transfer: new ids %s,%s",
-            response.new_from_tx_id,
-            response.new_to_tx_id,
-            user_id=user_id,
-        )
-    else:
-        await session.rollback()
-        logger.warning("Promote transfer rolled back: %s", response.errors, user_id=user_id)
-
-    return response

@@ -12,6 +12,13 @@ related:
 
 # Decision: AI Export news-driver analysis separates movement evidence from causality
 
+> **2026-11-07 lint — current state:** the principle stands, the analysis ID does not. The focused V3 catalog
+> (`5fa147532`, 04/08) published `portfolio.performance_market_drivers` and `broker.performance_market_drivers`
+> (required dataset `*.overview_and_history`), and `7f4f59bc7` (05/08) removed `portfolio.market_events_review`
+> with the legacy runtime (`test_ai_export_api.py` asserts it is gone). The link labels are now five: `supported`,
+> `plausible`, `inferred`, `speculative`, `unexplained` (`PERFORMANCE_MARKET_DRIVER_STEPS` in `sharedInstructions.ts`).
+> The sections below describe the decision as taken on 03/08.
+
 ## Context
 
 Users need one Portfolio Analysis that can explain material security movements by
@@ -55,4 +62,4 @@ violations.
 | Analysis instructions | `frontend/src/lib/features/ai-export/templates/sharedInstructions.ts` |
 | Response contract | `frontend/src/lib/features/ai-export/templates/responseContracts.ts` |
 | Frontend catalog IDs | `frontend/src/lib/features/ai-export/catalog/shared.ts` |
-| Real prompt evidence | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/real_prompt_probe/20260803T100412.057382Z/` |
+| Real prompt evidence | run `20260803T100412.057382Z` (probe output, not tracked in the journal) |

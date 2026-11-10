@@ -9,6 +9,7 @@ related:
   - decisions/native-cash-daily-revaluation
   - decisions/broker-last-owner-guard
   - sources/beta-testing-2026-08-05
+  - decisions/one-colour-rank-per-asset
 ---
 
 # Problem: the numbers depended on the role and the share, the cache keys did not
@@ -35,15 +36,26 @@ percentage, with 0 % a valid share. Two defects came out of the work:
 
 Two commits of 01/09/2026, both titled «fix: consolidate beta user feedback (F1–F17)» and both shipped in 1.1.0:
 
-- **role-aware scaling** (`3e3f9c41f`): an owner's share scales the broker's contribution (0 % contributes nothing);
+- **role-aware scaling** (`d1ae2fb49`): an owner's share scales the broker's contribution (0 % contributes nothing);
   an editor or a viewer always scales by 1. Today the rule has one home, `effective_share()` in
   `financial_math/native_cash.py` (see [[decisions/native-cash-daily-revaluation]]);
-- an **access fingerprint** (`f32e460ca`), the sorted `(broker_id, role, share)` of every access in scope, enters **both** cache
+- an **access fingerprint** (`9c5809792`), the sorted `(broker_id, role, share)` of every access in scope, enters **both** cache
   keys, so a changed share or role misses the cache by itself, without any explicit invalidation. The role is read as
   `getattr(role, "value", role)`, because a model built in the session may carry it as a plain string.
 
 `TestAccessFingerprintCacheBust` edits a share and a role and expects new numbers; with the fingerprint removed from
 the key it turns red.
+
+## Seen again: asset metadata (07/11/2026, `e1a84026f`)
+
+Wave 8 put each asset's icon and type in the allocation pie (see [[decisions/one-colour-rank-per-asset]]). An edit of
+an asset's name, icon, type, currency or classification changes no transaction, price or rate, so the report cache
+(30 minutes) kept serving the old icon and name. The report cache key (`l2_key` in `portfolio_service.py`) now ends with
+an **asset fingerprint**: a SHA-256 of `(id, display_name, icon_url, asset_type, currency, classification_params)` of
+every asset in the scope's transactions, sorted by id (`"no_assets"` when there is none). `test_portfolio_l2_asset_edit.py`
+edits each field and expects a miss; `8f8655ff9` names the key's offsets in the existing tests.
+
+Same lesson, a third input: the key held the data rows and the reader, not the descriptive fields the report also shows.
 
 ## Prevention
 
@@ -59,4 +71,5 @@ the key it turns red.
 | Report cache key | `backend/app/services/portfolio_service.py` |
 | Share rule | `backend/app/services/financial_math/native_cash.py` (`effective_share`) |
 | Regression test | `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` (`TestAccessFingerprintCacheBust`) |
+| Regression test, asset fingerprint | `backend/test_scripts/test_services/test_financial/test_portfolio_l2_asset_edit.py` |
 | Feedback classification | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/03_feedback_utenti_F1-F17_classificazione_e_fix.md` |

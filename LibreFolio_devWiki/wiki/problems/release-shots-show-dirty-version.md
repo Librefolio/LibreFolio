@@ -32,21 +32,27 @@ The coordinator's diagnosis (2026-10-13), consistent with the code:
 
 Workstream M's batch 34 (train 80):
 
-- **One frozen version** (`741310647`): right after the checkout the workflow writes `LF_APP_VERSION` from `VERSION`,
+- **One frozen version** (`47c505081`): right after the checkout the workflow writes `LF_APP_VERSION` from `VERSION`,
   and Vite shows it when it is set, asking git only otherwise.
 - **The tree checked**: four «[CHECK] Checkout after …» steps run `scripts/ci/warn_if_tree_changed.sh`, which warns
   when a step has changed tracked files.
-- **No needless rewrite**: the icons are redrawn only when the logo's hash changes (`428bf27d1`,
+- **No needless rewrite**: the icons are redrawn only when the logo's hash changes (`c7c372fd3`,
   `frontend/generated-icons.json`).
 - The image does not build the frontend: it copies `frontend/build/`, so it shows the version frozen at the build.
-- Tests: `test_release_image_contract.py` pins the version and a clean tree (`b816adc6c`).
+- Tests: `test_release_image_contract.py` pins the version and a clean tree (`8752c3fab`).
 
 *Resolved in the code; to verify on the first nightly after the push.* Left in the backlog: M-25 (low) — a local
 `dev.py docker build` can reuse a frontend built for another version.
 
 *Verified on 2026-10-13* (the coordinator): the first pipeline after the push, run 77 on the merge of PR #42 into
-`main` (commit 1ee978788), reports `v1.1.0-1648-g1ee978788` — `git describe` of that merge — without `-dirty`.
+`main` (commit 6fd90d7ee), reports `v1.1.0-1648-g1ee978788` — `git describe` of that merge — without `-dirty`.
 The developer's question 11 is closed.
+
+*2026-11-07 lint*: M-25 is closed too — CP7a of workstream H (`bf6fd84ae`, in `dev_release2` with `934f09dba`, 19/10):
+`_docker_ensure_assets_built()` freezes the version once, writes it to `frontend/build/.build-version`
+(`FRONTEND_BUILD_VERSION_MARKER` in `dev.py`), and rebuilds a frontend of another version. The backend side of the
+same family, a leftover `VERSION` in a checkout, was fixed by `50f9faaa6`
+([[problems/stale-version-file-shadows-git-describe]]).
 
 ## Source files
 

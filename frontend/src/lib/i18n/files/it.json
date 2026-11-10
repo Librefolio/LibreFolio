@@ -76,9 +76,73 @@
     "uploader": "Caricato da",
     "uploaderHint": "Utente che ha caricato il file.",
     "noUploader": "Utente non indicato",
-    "uploaderLookupFailed": "Impossibile caricare i nomi degli utenti. I file restano disponibili con gli ID utente."
+    "uploaderLookupFailed": "Impossibile caricare i nomi degli utenti. I file restano disponibili con gli ID utente.",
+    "scope": {
+      "column": "Visibilità",
+      "columnHint": "I file condivisi li vede ogni utente; quelli personali solo chi li ha caricati e gli amministratori.",
+      "common": "Condiviso",
+      "personal": "Personale",
+      "share": "Condividi con tutti",
+      "makePersonal": "Rendi personale",
+      "makePersonalConfirm": "Gli altri utenti non vedranno più questo file, neanche dove fa da icona o da foto.",
+      "nowShared": "{name} ora è visibile a ogni utente",
+      "nowPersonal": "{name} ora è visibile solo a chi l'ha caricato e agli amministratori",
+      "changeFailed": "Non è stato possibile cambiare la visibilità del file",
+      "sharedOnPick": "{name} era personale: ora è visibile a ogni utente, perché tutti lo vedano qui"
+    },
+    "deleteSkipped": "I file che non puoi eliminare sono rimasti al loro posto",
+    "backups": "Backup",
+    "systemUploader": "Sistema"
   },
   "files": {
     "deleteFailed": "Impossibile eliminare il file"
+  },
+  "storage": {
+    "title": "Spazio occupato",
+    "parts": {
+      "database": "Database",
+      "uploads": "File caricati",
+      "brokerReports": "Report dei broker",
+      "backups": "Backup",
+      "dataOther": "Altri file di LibreFolio",
+      "disk": "Altro sul disco",
+      "free": "Libero",
+      "restore": "Ripristino in attesa"
+    },
+    "summary": {
+      "limit": "{used} usati su {limit}",
+      "volume": "LibreFolio usa {used} di un disco da {total}",
+      "data": "LibreFolio usa {used}"
+    },
+    "overLimit": "Il limite di spazio è superato: elimina backup o file, oppure alza il limite.",
+    "limit": {
+      "label": "Spazio totale di LibreFolio (MB)",
+      "hint": "Lo spazio massimo che LibreFolio può occupare in tutto: database, file, report, backup e un ripristino in attesa (l'archivio caricato e la sua versione aperta). Oltre, i file, i report e i backup fatti a mano vengono rifiutati; i tuoi dati e i backup automatici non si fermano mai. Inserisci 0 per nessun limite.",
+      "locked": "Il limite di spazio lo imposta chi ospita questa istanza.",
+      "save": "Salva",
+      "saved": "Salvato.",
+      "errors": {
+        "invalid": "Inserisci un numero intero da 0 in su.",
+        "forbidden": "Solo gli amministratori possono cambiarlo.",
+        "locked": "Il limite di spazio lo imposta chi ospita questa istanza: qui non si può cambiare.",
+        "network": "Nessuna risposta dal server. Riprova.",
+        "unexpected": "Non è stato possibile salvare il limite. Riprova."
+      },
+      "exceeded": {
+        "raise": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Porta lo spazio totale ad almeno {required} in Impostazioni › Amministrazione › Impostazioni Globali, oppure elimina file o backup.",
+        "locked": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Chiedi a chi ospita questa istanza di portare il limite ad almeno {required}, oppure elimina file o backup.",
+        "disk": "Anche il disco deve avere liberi almeno altri {missing}.",
+        "member": "Spazio insufficiente: così LibreFolio supererebbe il suo spazio totale. Libera almeno {free} eliminando file o report, oppure chiedi a un amministratore di alzare il limite."
+      },
+      "openSettings": "Apri le impostazioni",
+      "marker": "Limite {limit}"
+    },
+    "errors": {
+      "load": "Non è stato possibile caricare lo spazio occupato. Riprova."
+    },
+    "retry": "Riprova",
+    "advanced": {
+      "title": "Avanzate"
+    }
   }
 }

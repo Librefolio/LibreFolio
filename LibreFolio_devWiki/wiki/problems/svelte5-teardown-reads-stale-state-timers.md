@@ -48,7 +48,7 @@ red test had to mount and unmount with Svelte's own `mount`/`unmount`, without a
 - Rejected: adding `afterEach(cleanup)` to the blamed test file — the `svelteTesting()` setup already unmounts after
   every test; the bug was in the components.
 
-Commits `4b5feb227` (Tooltip, 2026-10-01) and `2575aeaf2` (TreeSelect, 2026-10-06).
+Commits `ea07b0e7e` (Tooltip, 2026-10-01) and `2ecfb4589` (TreeSelect, 2026-10-06).
 
 ## The rule
 
@@ -59,10 +59,13 @@ callback reach for the global `document`. Use `$state` only for what the templat
 ## Still open (backlog 38)
 
 - **K-12** — handles still held in `$state`: `touchTimerId` in `DataTable.svelte` and `reloadTimer` on the Dashboard
-  page (verified at `083ed26dc`).
+  page (verified at `111c2c8f3`).
 - **C-13** — `SearchSelect.svelte` defers four `setTimeout`s it never cancels and uses the global
   `document.querySelectorAll`.
 - A suite-wide "no timer alive at the end of a file" check is still only an idea.
+- 2026-11-07 lint: both residuals still stand. `touchTimerId` is still `$state` in `DataTable.svelte`; the Dashboard's
+  `reloadTimer` moved with the page body into `PortfolioView.svelte` (`61ec8c3ab`, 03/11), still as `$state`; and
+  `SearchSelect.svelte` still defers uncancelled `setTimeout`s and reads the global `document.querySelectorAll`.
 
 ## Impact
 
@@ -78,7 +81,8 @@ read ([[concepts/load-only-red-is-a-product-defect]]). In production: callbacks 
 | TreeSelect (`pendingSteps`, `defer`, `entryElement`) | `frontend/src/lib/components/ui/select/TreeSelect.svelte` |
 | TreeSelect teardown tests | `frontend/src/lib/components/ui/select/TreeSelect.test.ts` |
 | Residual K-12 | `frontend/src/lib/components/table/DataTable.svelte` |
-| Residual K-12 (Dashboard) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Residual K-12 (Dashboard; `reloadTimer` there until `61ec8c3ab`) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Residual K-12 (`reloadTimer` since 03/11) | `frontend/src/lib/features/portfolio-view/PortfolioView.svelte` |
 | Residual C-13 | `frontend/src/lib/components/ui/select/SearchSelect.svelte` |
 | Plan (step 14) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep14TooltipTeardownFixture.prompt.md` |
 | Plan (step 16, round 1) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep16Round1-TreeSelectTeardown.prompt.md` |

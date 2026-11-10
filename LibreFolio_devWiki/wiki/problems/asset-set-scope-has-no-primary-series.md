@@ -78,7 +78,7 @@ commensurable. *"The fan-out was not expensive: it was wrong."*
 prepares the joint series **once per request, before any analytic runs** (the benchmark, when
 asked for, joins that same preparation); each analytic answers with one row per asset.
 
-- **Backend — `d3afb92b6`** (workstream P): five auto-discovered plugins — `asset_set_kpi`,
+- **Backend — `e7cf6c524`** (workstream P): five auto-discovered plugins — `asset_set_kpi`,
   `asset_set_var`, `asset_set_drawdown`, `asset_set_risk_return`, `asset_set_comparison` — each
   declaring one scope (`ASSET_SET`) and one mode (`HISTORICAL`). `asset_set_kpi` publishes, per
   asset, volatility, max drawdown and its duration, Sharpe, Sortino, worst realization, DaR, CDaR
@@ -86,7 +86,7 @@ asked for, joins that same preparation); each analytic answers with one row per 
   questions rather than one, and publishes n rows."* New payload shapes (`RiskAssetSet*Output`)
   rather than new fields on the singular outputs; `RiskAssetSetReturnOutput` has no field for a
   set-level aggregate, so a capital market line cannot come back through the data.
-- **Frontend — `032b86959`** (workstream A): L1° and L3° as tables of one row per selected asset —
+- **Frontend — `e75b1e2c1`** (workstream A): L1° and L3° as tables of one row per selected asset —
   *"the ruler becomes the columns, the assets become the rows"*. The five analytics travel in
   **one request** for the two levels, the benchmark in the same one; a selected asset that
   cannot be measured keeps its row, with null cells. The helpers take no currency. (The
@@ -106,7 +106,9 @@ cancelled the first plan is unchanged.
 
 | Role | Path |
 |------|------|
-| Builds the scope; empty values for an asset set; one preparation per request; observation gate counts the prepared set for `asset_set_*` | `backend/app/services/risk/service.py` |
+| Builds the scope; empty values for an asset set | `backend/app/services/risk/scope.py` |
+| One preparation per request | `backend/app/services/risk/service.py` |
+| Observation gate counts the prepared set for `asset_set_*` | `backend/app/services/risk/results.py` |
 | Supports ASSET_SET; consumes many series | `backend/app/services/risk_plugins/correlation/plugin.py` |
 | Supports ASSET_SET; returns no amount without weights | `backend/app/services/risk_plugins/stress/plugin.py` |
 | Scope and payload schemas; `RiskAssetSet*Output` | `backend/app/schemas/risk.py` |
@@ -117,6 +119,6 @@ cancelled the first plan is unchanged.
 | Per-asset beta/correlation against one benchmark | `backend/app/services/risk_plugins/asset_set_comparison/plugin.py` |
 | Still `ASSET` + `PORTFOLIO` only | `backend/app/services/risk_plugins/historical_kpi/plugin.py` |
 | Backend tests of the family | `backend/test_scripts/test_services/test_risk_asset_set.py` |
-| One request for L1° and L3° | `frontend/src/lib/components/risk/AssetSetComparisonLevels.svelte` |
-| Row assembly, no currency parameter | `frontend/src/lib/components/risk/assetSetLevels.ts` |
+| One request for L1° and L3° | `frontend/src/lib/features/risk/AssetSetComparisonLevels.svelte` |
+| Row assembly, no currency parameter | `frontend/src/lib/features/risk/assetSetLevels.ts` |
 | Clause ⓪ — why the fan-out was rejected | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/A-contratto-asset-set.md` |

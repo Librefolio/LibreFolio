@@ -110,7 +110,8 @@ export function getAiExportSuccessMessages(t: AiExportTranslate, result: Pick<Pr
 function problemMessage(t: AiExportTranslate, problem: AiExportProblemDetail): string {
     if (problem.code === 'version_mismatch') return t('aiExport.contractMismatch');
     if (problem.code === 'unsupported_selection') return t('aiExport.catalogUnavailable');
-    if (problem.code === 'selection_not_applicable') return t('aiExport.selectionNotApplicable');
+    // J-50: the selection reads more days of prices over this period than one request may build — a shorter period helps.
+    if (problem.code === 'selection_not_applicable') return t(problem.reason_code === 'too_many_price_days' ? 'aiExport.tooManyPriceDays' : 'aiExport.selectionNotApplicable');
     if (problem.code === 'broker_access_denied' || problem.code === 'entity_not_found') return t('aiExport.entityNotFound');
     return t('aiExport.sourceUnavailable');
 }

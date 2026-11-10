@@ -21,6 +21,8 @@ import {extractErrorMessage, extractStatusCode, extractValidationIssues, formatV
 
 const {errorToast} = vi.hoisted(() => ({errorToast: vi.fn()}));
 vi.mock('$lib/stores/app/toastStore.svelte', () => ({toasts: {error: errorToast}}));
+// The space limit's sentence (C8) is built from the interface's catalogue, which storageLimit.test.ts pins: here only that it wins.
+vi.mock('$lib/utils/files/storageLimit', () => ({storageLimitMessageOfError: (error: {response?: {data?: {detail?: {code?: string}}}}) => (error?.response?.data?.detail?.code === 'storage_limit_exceeded' ? 'THE SPACE LIMIT SENTENCE' : null)}));
 
 /** An axios-shaped rejection: the only error shape the backend produces. */
 function axiosError(status: number, data: unknown, statusText = 'Bad Request'): unknown {
@@ -35,6 +37,10 @@ beforeEach(() => {
 describe('extractErrorMessage', () => {
     it('falls back when there is no error at all', () => {
         expect(extractErrorMessage(null, 'nothing happened')).toBe('nothing happened');
+    });
+
+    it('says a refusal of the space limit in the interface’s own words, not with the English message of the detail (C8)', () => {
+        expect(extractErrorMessage(axiosError(507, {detail: {code: 'storage_limit_exceeded', message: 'The space limit would be passed'}}))).toBe('THE SPACE LIMIT SENTENCE');
     });
 
     describe('the FastAPI detail, which wins over everything else', () => {

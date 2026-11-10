@@ -22,7 +22,6 @@
       "quoteCurrency": "Valuta Quotata",
       "providerDisabledHint": "Seleziona prima entrambe le valute",
       "providerInfoBanner": "I provider recuperano automaticamente i tassi di cambio dalle banche centrali. Senza un provider, dovrai inserire i tassi manualmente.",
-      "noProviderWarning": "Nessun provider configurato. Dovrai inserire manualmente i tassi di cambio per ogni data.",
       "createIntermediatePairs": "Crea anche le coppie intermedie",
       "createIntermediatePairsHint": "Ogni passaggio delle catene selezionate verrà salvato come coppia autonoma con il suo provider, così da poterle sincronizzare indipendentemente.",
       "titleEdit": "Modifica Provider Coppia",
@@ -46,7 +45,8 @@
       "timeoutAfter": "Timeout dopo {seconds} s",
       "requestTimedOut": "La richiesta è scaduta dopo {seconds} s. Aumenta il timeout e riprova.",
       "failed": "Sincronizzazione non riuscita",
-      "retryFailed": "{n, plural, one {Riprova quello non riuscito} other {Riprova i # non riusciti}}"
+      "retryFailed": "{n, plural, one {Riprova quello non riuscito} other {Riprova i # non riusciti}}",
+      "overwriteWarning": "{existing, plural, one {# su {total} ha già} other {# su {total} hanno già}} dati salvati in questo intervallo: la sincronizzazione li sostituisce con i valori del provider, modifiche manuali comprese."
     },
     "route": {
       "title": "Percorsi di Conversione",
@@ -57,6 +57,7 @@
       "unusableHint": "Questi provider non hanno un percorso di conversione automatico per questa coppia di valute.",
       "steps": "passi",
       "noRoutesAvailable": "Nessun percorso di conversione automatico trovato per questa coppia. Puoi comunque salvare senza provider e inserire i tassi manualmente.",
+      "providersUnavailable": "Percorsi di conversione non disponibili al momento. Chiudi questa finestra e riaprila fra poco.",
       "chainWarning": "Le catene richiedono che TUTTI i passaggi intermedi riescano durante il sync. Se un provider fallisce, l'intera catena fallisce per quella data.",
       "searchPlaceholder": "Cerca provider, valute, paesi…",
       "noSearchResults": "Nessun percorso corrisponde alla ricerca",
@@ -99,6 +100,7 @@
     "savedCount": "{n, plural, one {# salvato} other {# salvati}}",
     "deletedCount": "{n, plural, one {# eliminato} other {# eliminati}}",
     "skippedCount": "{n, plural, one {# ignorato (non valido)} other {# ignorati (non validi)}}",
-    "saveFailed": "Salvataggio dei tassi FX non riuscito: {error}"
+    "saveFailed": "Salvataggio dei tassi FX non riuscito: {error}",
+    "refusedCount": "{n, plural, one {# rifiutato} other {# rifiutati}}"
   }
 }

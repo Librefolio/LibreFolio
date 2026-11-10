@@ -6,6 +6,7 @@ date: 2026-03-31
 tags: [backend, architecture, async, database, bulk-operations]
 related_features: [F-017, F-027]
 related_problems: [asset-sync-transaction-closed]
+related: [features/F-017, features/F-027, problems/asset-sync-transaction-closed, sources/phase06-step2c-sync-refactor]
 ---
 
 # Decision: 3-Phase Pipeline for Bulk Operations
@@ -138,6 +139,7 @@ Phase 3 — PERSIST (per-task session, parallel)
 ### Semaphore in Phase 2
 
 **Asset providers**: Added `asyncio.Semaphore(10)` to limit concurrent network calls. Without limit, 100 assets → 100 simultaneous HTTP requests → provider throttling or local resource exhaustion.
+*2026-11-07 lint:* today the bound is the `concurrency` argument of `bulk_refresh_prices()`, default 5.
 
 **FX providers**: Already grouped by provider (ECB serves 10 currencies in 1 call), so natural batching limits concurrency.
 
@@ -199,7 +201,7 @@ Phase 3 — PERSIST (per-task session, parallel)
 
 | Role | Path |
 |------|------|
-| FX sync (Phase 1-3) | `backend/app/services/fx.py` (sync_pairs_bulk) |
-| Asset sync (Phase 1-3) | `backend/app/services/asset_source.py` (bulk_refresh_prices) |
+| FX sync (Phase 1-3) | `backend/app/services/fx/sync.py` (sync_pairs_bulk) |
+| Asset sync (Phase 1-3) | `backend/app/services/assets/refresh.py` (bulk_refresh_prices) |
 | Asset sync tests | `backend/test_scripts/test_services/test_asset_source_refresh.py` |
 | Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step2/plan-phase06Step2cSyncDeleteRefactor.prompt.md` |

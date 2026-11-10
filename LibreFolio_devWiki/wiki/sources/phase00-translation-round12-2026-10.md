@@ -30,7 +30,7 @@ release-pipeline working files (`b12_devwiki_stamps_hide_stale_translations.md`,
 `b14_devwiki_raw_html_paths_in_translations.md`, `b15_devwiki_fr_typography_hook.md`) and handed over by the
 coordinator as step 3 of the historian's work (journal §11, point 1). Second, the journal of round 12, §10: batch 19,
 backlog M-13, the gallery probes that ignored their timeout. The notes were filed nearly as written, after checking
-every path, symbol and commit against `5d0585595`; two notes lacked a «Source files» table, now added.
+every path, symbol and commit against `4bc7be91b`; two notes lacked a «Source files» table, now added.
 
 ## Key takeaways
 
@@ -45,7 +45,7 @@ every path, symbol and commit against `5d0585595`; two notes lacked a «Source f
 - **A green gallery run can miss shots**: in Playwright 1.61 `isVisible({timeout})` does not wait and
   `isEnabled({timeout})` waits only for the element to exist: [[problems/playwright-probes-ignore-timeout]].
 - **Placement of the commits checked on the history**, not taken from the journal: the hook was built on train 37 but
-  reached `dev_release2` with train 38 (`9245ffb6f`); the raw-HTML fixes with train 37; the gallery probes with train 46.
+  reached `dev_release2` with train 38 (`2914f11b9`); the raw-HTML fixes with train 37; the gallery probes with train 46.
 
 ## Wiki pages created or updated
 
@@ -56,17 +56,17 @@ every path, symbol and commit against `5d0585595`; two notes lacked a «Source f
 
 ## Batches 23 and 24 (2026-10-12, added in step B8)
 
-The plan grew after this page was first written (registered at `dfd8284f3`):
+The plan grew after this page was first written (registered at `ae4ecbc8a`):
 
 - **Batch 23 — two pages reviewed in a live preview.** `dev.py mkdocs serve` stayed up while the developer read the
-  Italian pages and sent corrections, applied live in four languages (`11339afa6`). The Scalable import page lost its
+  Italian pages and sent corrections, applied live in four languages (`30ca24392`). The Scalable import page lost its
   example-name column and the custom icon URL, gained larger icons, «❓ Why two brokers?» as a heading, the exporter's
   link on its name and a bold recommendation of «our extension»: «vista la pagina di scalable, approvata a pieni
   voti». The connection-security guide became three pros-and-cons tables ([[features/F-102]]). Two CSS traps of
   Material's tables surfaced: [[problems/mkdocs-material-tables-resist-styling]]. Checking one sentence of the guide
   found M-20: [[problems/copy-buttons-without-http-fallback]].
 - **Batch 24 — M-19.** Seen in the preview's log: nested pages looked for the local MathJax in their own folder, so
-  they used jsDelivr and showed no formula offline; fixed in `8d47c28c0`, proved on 34 pages —
+  they used jsDelivr and showed no formula offline; fixed in `ae4ecbc8a`, proved on 34 pages —
   [[problems/docs-mathjax-looked-in-the-page-folder]]. M-21 (a local site not rebuilt after a JS- or CSS-only change)
   stays in the backlog.
 - **The CHANGELOG's translation**, approved by the developer the same day («si ma fai anche la traduzione delle cose
@@ -79,9 +79,9 @@ MathJax fonts ([[problems/mathjax-fonts-missing-from-local-copy]]), the CHANGELO
 ([[decisions/changelog-translated-by-chapter]]), and M-23 ([[decisions/fr-typography-at-build-time]]). Batch 28 (§17)
 closed two items that had waited for the shared runner file and for T's CP1 of M-18:
 
-- **The M-19 spec registered** (`0fe5195e8`): the spec parked outside the repository since batch 25 is now
+- **The M-19 spec registered** (`3a577f63e`): the spec parked outside the repository since batch 25 is now
   `front-utility docs-offline-math` — [[problems/docs-mathjax-looked-in-the-page-folder]].
-- **The gallery's price guard follows M-18** (`e8d5a5668`): since CP1 the asset cards write prices in the interface's
+- **The gallery's price guard follows M-18** (`b6ee99781`): since CP1 the asset cards write prices in the interface's
   locale, so the guard writes the expected figure in the shot's locale, behind a control that can fail —
   [[problems/gallery-price-guard-expected-tofixed-text]], a consequence of
   [[decisions/figures-in-the-interface-language]].
@@ -90,24 +90,24 @@ closed two items that had waited for the shared runner file and for T's CP1 of M
 
 - **The translation round before the tag** (§18): the debt was zero on train 70 — an empty `translate --dry-run`, a
   scan of the EN changes that ignores the cache, the stamp audit. S1 moved `day-count`'s plugin path to
-  `scheduled_investment/plugin.py` in the four languages (`18e872872`, after U-1); the rest of the round waits for
+  `scheduled_investment/plugin.py` in the four languages (`df3f5a3e0`, after U-1); the rest of the round waits for
   I's batch 48, T's CP2 of M-18 and the CHANGELOG's [1.2.0] chapter.
 
 ## Batches 30–32 (2026-10-12, added at the train-74 ingest)
 
 - **I2** (§19): the figures quoted in it/fr/es written as the interface writes them since M-18, by rules per page and
-  figure; `translate-validate` now accepts a localized percentage in a code span (`31b6063c4`); the preferences page
+  figure; `translate-validate` now accepts a localized percentage in a code span (`dc6c2fa3f`); the preferences page
   says that numbers and dates follow the interface language.
 - **I1** (§20): the wrong-broker modal's new labels ported; the CHANGELOG's lines of train 72 ported by hand and
-  stamped; the header of `galleryLocale.ts` rewritten after M-18 (`172211a89`) —
+  stamped; the header of `galleryLocale.ts` rewritten after M-18 (`9e0dd6ac0`) —
   [[problems/gallery-price-guard-expected-tofixed-text]].
 - **I5 prepared** (§21): the gallery's shot of the security panel, which `parkPointer` exposes to the 30 s —
   [[decisions/security-details-close-after-30-seconds]]; applied once T's CP3 is in the target.
 
 ## Batch 33 (2026-10-13, added at the train-78 ingest)
 
-- **I5, part one**: the gallery keeps the security details open for their shot (`2d0ca1660`); the header of
-  `galleryLocale.ts` says what the locale pin reaches (`1e4a3ecd5`); M-24 (low) — the pin does not reach
+- **I5, part one**: the gallery keeps the security details open for their shot (`72955b906`); the header of
+  `galleryLocale.ts` says what the locale pin reaches (`6e492723d`); M-24 (low) — the pin does not reach
   `navigator.language`, which `uiLocale()` reads — [[problems/playwright-probes-ignore-timeout]].
 - The release shots of 1.1 read `v1.1.0-dirty` — [[problems/release-shots-show-dirty-version]] (open, M's lot 34).
 - *Batch 34 (train 80)*: the version frozen once per release run, the tree checked after each step, the icons
@@ -116,42 +116,42 @@ closed two items that had waited for the shared runner file and for T's CP1 of M
 ## Batches 35–38 (2026-10-13, added at the train-91 ingest)
 
 - **Batch 35** (train 84): the [1.2.0] chapter went through the translation pipeline again, all 54 pieces
-  (`4a1714658`). The pipeline undid earlier review fixes and missed UI names — toolbar labels, the risk questions,
+  (`524cc70e3`). The pipeline undid earlier review fixes and missed UI names — toolbar labels, the risk questions,
   *What if…?*, the T-EN labels — so 136 fixes, each a value from the generated catalogues, were applied and checked
   line by line by M's scripts (kept outside the repository); settings paths name the UI segment by segment. In the
   gallery, group A of the full run turned out to be ours, a mark on the favicon URLs —
-  [[problems/schwab-favicon-blocked-by-orb]] (`6bb79fecd`); groups C and D, fixed waits, now wait for the providers'
+  [[problems/schwab-favicon-blocked-by-orb]] (`ae7da021c`); groups C and D, fixed waits, now wait for the providers'
   chips and give the login page 30 s; V's settled wait before `tx-table` went to 15 sites. Targeted rerun: 42 of 42.
 - **Batch 36** (train 86): the data-quality banner's **Sync prices** and **Sync rates** read the same word in
-  Italian, French and Spanish; the coordinator: one label for two buttons is a UI defect, to fix now (`b4b76ab2b`,
+  Italian, French and Spanish; the coordinator: one label for two buttons is a UI defect, to fix now (`3103cbfd9`,
   `frontend/src/lib/i18n/dataQuality/`), with 21 fixes in the texts that name them. M-27, the rule (coordinator,
   13/10): where a text names a control the user clicks, it uses the catalogue's label; «Holdings» stays where it names
-  the content (`810deabf9`). M-26: the runner docs name `trackTransactionWrites()` and both cleanup conditions
-  (`dd91ca2f5`). Found: the cleanup checks only the HTTP status — V-34.
+  the content (`4d5a7f169`). M-26: the runner docs name `trackTransactionWrites()` and both cleanup conditions
+  (`7c498a785`). Found: the cleanup checks only the HTTP status — V-34.
 - **Batch 37** (trains 88–89): M-29, the runner docs give the browser workers as half the logical cores and the shared
-  backend ⌈n/2⌉ uvicorn workers (`ab6c17401`). M-28 (`89440c353`): 56 Spanish values «tasa(s)» became «tipo(s) de
+  backend ⌈n/2⌉ uvicorn workers (`8e80a0d43`). M-28 (`24beb9cbd`): 56 Spanish values «tasa(s)» became «tipo(s) de
   cambio», and 8 stay because they are not exchange rates (interest, growth, risk-free, money-weighted). The width was
   measured because the new words are longer: at 360 px most values grow by about 70 px, and the tightest place, the FX
   page's empty state, still fits without a short form. The width sweep passed 15 of 15 after a first-run red in French:
   `setLanguage` waited the default 3 s for `<html lang>` under load — the clock, not M-28, reported to the coordinator.
-- **Batch 38** (train 90): one more English line ported (`b15c78a9b`).
+- **Batch 38** (train 90): one more English line ported (`c7b5f0ceb`).
 - M-26 to M-29 are closed in 1.2. Left: two code comments named by M-27, and a docstring in the runner that names a
   renamed function.
 
 ## Batches 39–42 and the final gallery (2026-10-13, added at the train-99 ingest)
 
-- **Batch 39** (`61c1468ab`): the Tool platform and the PAC are «stable and still being refined» in the user and
+- **Batch 39** (`30eee804c`): the Tool platform and the PAC are «stable and still being refined» in the user and
   developer docs — the developer's answer to question 14, «da rifinire ma stabili» ([[features/F-106]]).
 - **Batches 40–41**: CHANGELOG lines ported to Italian, French and Spanish — the risk API out of beta, Scalable's
   exporter version, the transaction form's refused date and false *valid* ([[problems/transaction-form-saved-a-refused-date]]).
-- **The final gallery** (2026-10-13, 20:40–21:46, on `baabbf7a2`, frontend built as `v1.2.0`): **251 passed, 0
+- **The final gallery** (2026-10-13, 20:40–21:46, on `f5bb8ec7d`, frontend built as `v1.2.0`): **251 passed, 0
   failed, 1 skipped**, 2 825 screenshots. Left over: the Growth chart's last axis label, cut on phones — handed to
   I's lot 52 ([[concepts/echarts-chart-gotchas]]).
 - **Batch 42**, after lot 52: the nine groups whose shots it changes — the main dashboard, the Growth chart's P&L
   modes, the allocation charts, the FIFO lots on the dashboard and on a broker's page, the broker detail, privacy
   mode, the two data-quality banners, the connection indicator — redone: **20 passed, 0 failed**, the last labels
-  whole. The broker detail shot now picks its broker by name (`21571006e`) and sits in the brokers page's «Inside a
-  broker» section (`0e0f1c1ea`); M-31 and M-32 closed. Left: M-30, the allocation-history stacks that stopped short of
+  whole. The broker detail shot now picks its broker by name (`bf6d57ef0`) and sits in the brokers page's «Inside a
+  broker» section (`e4779fc0b`); M-31 and M-32 closed. Left: M-30, the allocation-history stacks that stopped short of
   100 % — [[problems/gallery-fixture-normalizer-scaled-ratios]].
 
 ## Not ingested

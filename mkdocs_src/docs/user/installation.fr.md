@@ -4,6 +4,8 @@ Ce guide installe LibreFolio avec l'image Docker officielle pré-construite : la
 
 Vous avez seulement besoin de Docker : pas de Python, Node.js ni Pipenv, et rien à compiler.
 
+🍓 L'image officielle est publiée pour `amd64` et `arm64` : elle s'exécute donc nativement, sans émulation, sur un Raspberry Pi 4/5 (OS 64 bits) et sur les Mac Apple Silicon (l'ARM 32 bits n'est pas publié).
+
 ---
 
 ## ✅ Prérequis
@@ -108,6 +110,7 @@ La stack exécute l'image officielle depuis le GitHub Container Registry (GHCR) 
         environment:
           - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
           - HOST=0.0.0.0
+          - PORT=6040
         healthcheck:
           test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
           interval: 30s
@@ -132,7 +135,7 @@ Docker télécharge l'image officielle depuis GHCR et démarre LibreFolio. Le ta
 
 Ouvrez votre navigateur à l'adresse **`http://localhost:6040`**.
 
-Lors de votre première visite, LibreFolio affiche la page d'inscription : le premier compte que vous créez devient automatiquement **administrateur**.
+Lors de votre première visite, LibreFolio affiche la page de connexion : cliquez sur **Inscrivez-vous ici** pour créer votre compte. Le premier compte devient automatiquement **administrateur** ; pour laisser entrer d'autres personnes, envoyez-leur un [lien d'invitation](../admin/users.md#invitations).
 
 ??? tip "🖥️ Surveiller l'état et les logs (facultatif)"
 
@@ -223,6 +226,7 @@ Les migrations de base de données s'exécutent automatiquement au démarrage du
 
 - Avec le tag `latest`, vous obtenez toujours la dernière version, avec tous les changements qu'elle apporte.
 - Pour ne mettre à jour que lorsque vous le décidez, épinglez une version au lieu de `latest` : `ghcr.io/librefolio/librefolio:1.1.0` (variante full) ou `ghcr.io/librefolio/librefolio:1.1.0-light` (variante light). Voir [Variantes d'image](#image-variants-full-and-light).
+- Après la mise à jour, chaque utilisateur voit une fois ce qui a changé depuis la version qu'il a utilisée en dernier : voir [Nouveautés après une mise à jour](settings/about.md#whats-new).
 
 ### 🛠️ 1. Mise à jour manuelle {: #manual-update }
 

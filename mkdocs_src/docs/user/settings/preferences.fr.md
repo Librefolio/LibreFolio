@@ -10,7 +10,7 @@ L'onglet **Préférences** contrôle **l'apparence et le comportement de l'appli
 |---------|----------|-------------|
 | **Langue** | 🌍 Affichage | Langue de l'interface — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. S'applique dès que vous l'enregistrez, et décide aussi de l'écriture des nombres et des dates |
 | **Devise par défaut** | 💰 Devise | Votre propre devise de référence. Le Tableau de bord, la page Courtiers et la page de chaque courtier, ainsi que l'onglet **Corrélation** de la page Actifs s'ouvrent dans cette devise, et l'export IA d'une paire de devises l'utilise aussi ; une devise que vous choisissez sur le Tableau de bord reste valable pour la session. Elle est également proposée lorsque vous créez quelque chose de nouveau — un actif, le premier solde de trésorerie d'un nouveau courtier, un plan PAC. Ce menu liste toutes les devises |
-| **Thème** | 🎨 Apparence | ☀️ Clair / 🌙 Sombre / 🖥️ Auto (suit votre système d'exploitation) |
+| **Thème** | 🎨 Apparence | ☀️ Clair / 🌙 Sombre / 🖥️ Auto (suit votre système d'exploitation). Conservé avec votre compte, il vous suit dans chaque navigateur et sur chaque appareil. Tant que vous n'en choisissez pas un, il suit la valeur par défaut de l'administrateur et un badge **Global** s'affiche à côté ; le bouton **↺** à côté d'un thème que vous avez choisi revient à cette valeur, comme toute modification, une fois **Enregistrer** pressé. Le bouton soleil/lune de l'en-tête ne change toujours que ce navigateur |
 
 <style>
 /* Keep the first two columns on one line (long setting names would wrap otherwise) */
@@ -28,6 +28,10 @@ article table:first-of-type td:nth-child(-n + 2) {
     Le navigateur n'ajoute que sa région, et seulement s'il utilise la même langue : en anglais, un navigateur réglé
     sur l'anglais américain écrit `14,788.01` et `Oct 12, 2026`, et un navigateur dans une autre langue reçoit le format
     britannique, `14,788.01` et `12 Oct 2026`.
+
+!!! tip "Forme des lignes des graphiques"
+
+    **Préférences** contient aussi la **Forme des lignes** de chaque graphique — segments, marches ou courbe lissée. Elle est conservée avec votre compte et s'applique une fois **Enregistrer** pressé, comme les autres champs. Tant que vous n'en choisissez pas une, elle suit la valeur par défaut de l'administrateur (un badge **Global** s'affiche à côté) ; **↺** revient à cette valeur, une fois enregistré. Comment les formes se présentent : **[Graphiques du Tableau de bord](../dashboard/charts.md#line-shape)**.
 
 Choisissez une catégorie dans la barre latérale — sur un téléphone, dans le menu **Catégorie** — pour n'afficher que ses paramètres ;
 **Tous les paramètres** affiche tout.
@@ -64,6 +68,7 @@ y accédez.
 | **Courtiers** | Vue d'ensemble des courtiers, Guide du courtier, Guide des détails d'un courtier |
 | **FX** | Vue d'ensemble FX, Guide FX, Guide des détails d'une paire FX |
 | **Actifs** | Vue d'ensemble des actifs, Guide de l'actif, Guide des détails d'un actif |
+| **Outils** | Page Outils |
 
 ### 🔁 Relancer un guide
 

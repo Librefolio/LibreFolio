@@ -22,10 +22,10 @@ falls back to the plugin's English text when the key is missing.
 
 | Text | Key | Since |
 |------|-----|-------|
-| Plugin name and description | `brimPlugins.<code>.name`, `brimPlugins.<code>.description` — every plugin, 33 today, brands identical in every language | plan 37, step 12b (`2046b7419`, 2026-10-10) |
+| Plugin name and description | `brimPlugins.<code>.name`, `brimPlugins.<code>.description` — every plugin, 33 today, brands identical in every language | plan 37, step 12b (`0b5644ab5`, 2026-10-10) |
 | Notices | `importWizard.brimNotice.<code>` (`resolveBrimNotice.ts`) | before plan 37; Scalable added twelve codes |
 | Evidence captions | `importWizard.brimEvidence.<code>`; an empty caption in the plugin means «use the interface's» | step 12b |
-| Refusal reasons | `importWizard.parseRefusal.<code>` (`resolveParseRefusalMessage`) | step 10, with [[decisions/import-wizard-default-plugin-check]] |
+| Refusal reasons | `importWizard.parseRefusal.<code>` (`resolveParseRefusalMessage`) | step 10, with [[decisions/import-wizard-default-plugin-check]]; the Generic CSV's and DEGIRO's codes, five of them shared by any plugin, since release 1.3 (workstream W, lot K2a) |
 
 - `utils/brim/pluginText.ts`, on `translateOr`, serves the plugin select, the report-set card, the About tab and the
   import wizard. Brands get a key too, because svelte-i18n warns in the console for every missing key.
@@ -41,13 +41,19 @@ Backlog C-39 split the catalogues by namespace after 1.2, starting with `brimPlu
 goes further: seventeen subsystem catalogues plus a `base`, and each plugin's translations in its own folder —
 [[decisions/plugin-folders-and-split-i18n]].
 
+> *2026-11-07 lint:* shipped. `651143e03` and `e47f45c98` (2026-10-12) build the catalogue from its sources: a `base`
+> plus one folder per subsystem under `frontend/src/lib/i18n/` (22 today), and each BRIM plugin's `brimPlugins.<code>`
+> keys in its own `backend/app/services/brim_providers/<plugin>/i18n/<lang>.json`; `en.json`… are the generated
+> catalogue (skill `devpy-i18n`).
+
 ## Source files
 
 | Role | Path |
 |------|------|
 | Plugin names and descriptions | `frontend/src/lib/utils/brim/pluginText.ts` |
-| Notices and evidence captions | `frontend/src/lib/utils/transactions/resolveBrimNotice.ts` |
-| Refusals | `frontend/src/lib/utils/brim/defaultPluginCheck.ts` |
-| The catalogue | `frontend/src/lib/i18n/base/en.json` |
+| Notices and evidence captions | `frontend/src/lib/features/transactions/resolveBrimNotice.ts` |
+| Refusals | `frontend/src/lib/features/transactions/import/defaultPluginCheck.ts` |
+| The catalogue (base source) | `frontend/src/lib/i18n/base/en.json` |
+| A plugin's own translations (example) | `backend/app/services/brim_providers/broker_scalable/i18n/en.json` |
 | `TestPluginTextCatalogues` | `backend/test_scripts/test_external/test_brim_providers.py` |
 | `TestWhatTheWizardWords` | `backend/test_scripts/test_external/test_brim_scalable.py` |

@@ -7,13 +7,14 @@
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
-    import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
+    import AssetPickerPanel from '$lib/components/ui/select/AssetPickerPanel.svelte';
+    import {assetSelectOrder} from '$lib/components/ui/select/assetPicker';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {assetStoreVersion, ensureAssetsLoaded, getAllAssets, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {AddedAssetFacts} from '../assetRead.svelte';
     import {CategoryLabels} from '../categoryLabels.svelte';
-    import {draftAssetFromInfo, domainAssetKey, setPriceManual} from '../copies';
+    import {draftAssetFromInfo, domainAssetKey, isIndexAssetClass, setPriceManual} from '../copies';
     import {compareDecimal} from '../decimal';
     import {EXPOSURE_DIMENSIONS, type DraftAsset, type DraftExposure, type ExposureDimension, type PlannerDraft, type RemovalImpact} from '../draft.svelte';
     import {formatPlannerDate, formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from '../format';
@@ -48,6 +49,12 @@
     let searchValue = $state<number | null>(null);
 
     const inDraft = $derived(new Set(draft.data.assets.map((asset) => asset.key)));
+    let catalogueLoading = $state(true);
+    /** What the search offers: the Assets of LibreFolio the plan does not hold yet, without the indices, in the Risk picker's order. */
+    const catalogue = $derived.by(() => {
+        void $assetStoreVersion;
+        return assetSelectOrder(getAllAssets().filter((info) => !isIndexAssetClass(info.asset_type) && !inDraft.has(domainAssetKey(info.id))));
+    });
 
     $effect(() => {
         const language = $currentLanguage;
@@ -56,12 +63,15 @@
 
     // Assets restored with the draft, or left mid-read when the step was closed, are read once here.
     onMount(() => {
+        // The picker lists the cache: a failed load leaves it empty, the manual Asset stays available.
+        void ensureAssetsLoaded()
+            .catch(() => {})
+            .finally(() => (catalogueLoading = false));
         const pending = reader.pending(draft);
         if (pending.length > 0) readFacts(pending);
     });
 
-    function addFromSearch(id: number | null): void {
-        if (id === null) return;
+    function addFromSearch(id: number): void {
         const info = getAssetInfo(id);
         if (info && !inDraft.has(domainAssetKey(id))) {
             draft.addAsset(draftAssetFromInfo(info));
@@ -150,7 +160,7 @@
 <div class="space-y-4" data-testid="pac-planner-assets" aria-busy={reader.busy} data-busy={reader.busy ? 'true' : 'false'}>
     <div class="flex flex-wrap items-center gap-2">
         <div class="w-full max-w-sm">
-            <AssetSelect bind:value={searchValue} filter={(info) => !inDraft.has(domainAssetKey(info.id))} placeholder={$t(`${KEY}.search`, {default: 'Search Asset'})} testid="pac-planner-asset-search" onchange={addFromSearch} />
+            <AssetPickerPanel mode="single" assets={catalogue} blockedLabel={$t('risk.benchmark.blocked')} bind:value={searchValue} placeholder={$t(`${KEY}.search`, {default: 'Search Asset'})} loading={catalogueLoading} testId="pac-planner-asset-search" onchange={addFromSearch} />
         </div>
         <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-owned-assets-open" onclick={() => (owning = true)}>
             <Briefcase class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.ownedAssets.open', {default: 'Your Assets'})}
@@ -200,10 +210,10 @@
                         <div class="flex min-w-0 flex-1 basis-56 items-center gap-2.5">
                             <AssetIcon iconUrl={asset.iconUrl} assetType={asset.assetClass.toUpperCase()} altText="" size="md" />
                             <div class="min-w-0 flex-1">
-                                <h3 class="min-w-0 font-semibold text-gray-900 dark:text-gray-100" data-testid="pac-planner-asset-title">
+                                <h3 class="min-w-0 font-semibold text-lf-primary" data-testid="pac-planner-asset-title">
                                     <span use:scrollOnOverflow class={overflowScrollTextClass} title={title(asset)}>{title(asset) || '—'}</span>
                                 </h3>
-                                <p class="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                <p class="flex flex-wrap items-center gap-1.5 text-xs text-lf-muted">
                                     <span data-testid="pac-planner-asset-type">{typeText(asset)}</span>
                                     {#if asset.origin === 'manual'}<OriginBadge origin="manual" testid="pac-planner-asset-origin" />{/if}
                                     {#if !asset.active}<span class={BADGE.warning}>{$t('tools.pacAllocator.planner.scope.inactive', {default: 'Inactive'})}</span>{/if}
@@ -224,7 +234,7 @@
                     </div>
 
                     <dl class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-2 text-sm">
-                        <dt class="text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})}</dt>
+                        <dt class="text-lf-muted">{$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})}</dt>
                         <dd class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                             {#if asset.priceManual && asset.price}
                                 <span class="flex flex-wrap items-center gap-2" data-testid="pac-planner-asset-price-manual">
@@ -237,7 +247,7 @@
                                 </span>
                             {:else if asset.price}
                                 <span class="flex flex-wrap items-center gap-2" data-testid="pac-planner-asset-price">
-                                    <span class="tabular-nums text-gray-900 dark:text-gray-100">
+                                    <span class="tabular-nums text-lf-primary">
                                         {$t(`${KEY}.priceLine`, {
                                             default: '{price} / {units} {count, plural, one {unit} other {units}}',
                                             values: {price: formatPlannerPricePlain(asset.price.amount, asset.price.currency), units: formatPlannerPlainDecimal(asset.price.quoteBaseQuantity), count: plannerPlainDecimalCount(asset.price.quoteBaseQuantity)},
@@ -253,7 +263,7 @@
                                 </span>
                             {:else if priceNotStored}
                                 <span class="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="pac-planner-asset-no-price">
-                                    <span class="text-amber-800 dark:text-amber-200">{$t(`${KEY}.priceNotStored`, {default: 'LibreFolio has no stored price for this Asset: add one on its page, or switch to «Manual» and type it. In «Auto» it is read again just before the calculation.'})}</span>
+                                    <span class="text-lf-warning-on-soft">{$t(`${KEY}.priceNotStored`, {default: 'LibreFolio has no stored price for this Asset: add one on its page, or switch to «Manual» and type it. In «Auto» it is read again just before the calculation.'})}</span>
                                     {#if asset.sourceAssetId !== null}
                                         <a class={BUTTON_LINK} href="/assets/{asset.sourceAssetId}" target="_blank" rel="noopener noreferrer" data-testid="pac-planner-asset-open-page">
                                             {$t(`${KEY}.openAssetPage`, {default: 'Open the Asset page'})}<ExternalLink class="h-3.5 w-3.5" aria-hidden="true" />
@@ -261,7 +271,7 @@
                                     {/if}
                                 </span>
                             {:else}
-                                <span class="text-amber-800 dark:text-amber-200" data-testid="pac-planner-asset-no-price">{$t(`${KEY}.priceMissing`, {default: 'Price missing: it stays in the draft, the calculation will ask for it.'})}</span>
+                                <span class="text-lf-warning-on-soft" data-testid="pac-planner-asset-no-price">{$t(`${KEY}.priceMissing`, {default: 'Price missing: it stays in the draft, the calculation will ask for it.'})}</span>
                             {/if}
                             {#if asset.sourceAssetId !== null}
                                 <span class="ml-auto">
@@ -270,7 +280,7 @@
                             {/if}
                         </dd>
 
-                        <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
+                        <dt class="flex items-center gap-0.5 text-lf-muted">
                             {$t(`${KEY}.composition`, {default: 'Composition'})}
                             <HelpTip
                                 label={$t(`${KEY}.composition`, {default: 'Composition'})}
@@ -286,8 +296,8 @@
                                 {#each COMPOSITION_DIMENSIONS as dimension (dimension)}
                                     {@const rows = rowsOf(asset, dimension)}
                                     {@const whole = isWhole(rows)}
-                                    <p class="text-gray-900 dark:text-gray-100" data-testid="pac-planner-asset-dimension" data-dimension={dimension} data-state={rows.length > 0 ? 'set' : lacking.includes(dimension) ? 'not-stored' : 'missing'}>
-                                        <span class="text-gray-500 dark:text-gray-400">{dimensionName(dimension)}:</span>
+                                    <p class="text-lf-primary" data-testid="pac-planner-asset-dimension" data-dimension={dimension} data-state={rows.length > 0 ? 'set' : lacking.includes(dimension) ? 'not-stored' : 'missing'}>
+                                        <span class="text-lf-muted">{dimensionName(dimension)}:</span>
                                         {#if rows.length > 0}
                                             {rows
                                                 .slice(0, VISIBLE_CATEGORIES)
@@ -306,9 +316,9 @@
                                                 </Tooltip>
                                             {/if}
                                         {:else if lacking.includes(dimension)}
-                                            <span class="text-gray-500 dark:text-gray-400">{$t(`${KEY}.dimensionNotStored`, {default: 'no data in LibreFolio'})}</span>
+                                            <span class="text-lf-muted">{$t(`${KEY}.dimensionNotStored`, {default: 'no data in LibreFolio'})}</span>
                                         {:else}
-                                            <span class="text-gray-500 dark:text-gray-400">{$t(`${KEY}.dimensionNone`, {default: '{dimension, select, geography {not indicated} other {not indicated}}', values: {dimension}})}</span>
+                                            <span class="text-lf-muted">{$t(`${KEY}.dimensionNone`, {default: '{dimension, select, geography {not indicated} other {not indicated}}', values: {dimension}})}</span>
                                         {/if}
                                     </p>
                                 {/each}

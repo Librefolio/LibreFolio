@@ -60,7 +60,7 @@ from backend.app.services.ai_export.temporal.policy import (  # noqa: E402
     BucketDetailLevel,
     BucketingPolicy,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry  # noqa: E402
+from backend.app.services.signals.registry import SignalPluginRegistry  # noqa: E402
 from backend.test_scripts.diagnostics import (  # noqa: E402
     ai_export_technical_density_probe as baseline_helpers,
 )
@@ -75,7 +75,7 @@ REQUIRED_SELECTIONS = (
     "portfolio.technical",
 )
 FX_SELECTION = "fx.market_technical"
-DEFAULT_BASELINE = REPOSITORY_ROOT / "LibreFolio_developer_journal" / "Release_2" / "Phase_0" / "01_signalMigration" / "02_aiExport" / "probe-phase00AiExportTechnicalDensity.json"
+DEFAULT_BASELINE = REPOSITORY_ROOT.parent / "LibreFolio_developer_journal" / "Release_2" / "Phase_0" / "01_signalMigration" / "02_aiExport" / "probe-phase00AiExportTechnicalDensity.json"
 TEMPORAL_CLASS_ORDER = (
     SignalTemporalClass.VERY_FAST,
     SignalTemporalClass.FAST,

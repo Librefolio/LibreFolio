@@ -17,7 +17,7 @@ Covers Phase 7 Part 3 Blocco G.11:
   parsed back (semicolon delimiter + extra columns tolerated) and
   re-upserted via ``POST /api/v1/assets/prices`` producing the same
   OHLC rows — this is the primary justification for the semicolon
-  delimiter switch in ``backup_service.stream_rows_as_csv``.
+  delimiter switch in ``series_export.stream_rows_as_csv``.
 
 Plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`` §G.11.
 """
@@ -34,9 +34,9 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.schemas.assets import FAAssetCreateItem, FABulkAssetCreateResponse
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FABulkAssetCreateResponse
 from backend.app.schemas.prices import FAPricePoint, FAUpsert
-from backend.app.services.backup_service import PRICE_COLUMNS
+from backend.app.services.platform.series_export import PRICE_COLUMNS
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 

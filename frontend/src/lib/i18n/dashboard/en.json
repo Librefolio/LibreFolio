@@ -28,7 +28,7 @@
     "unrealizedDelta": "Unrealized change",
     "unrealizedDeltaTooltip": "Change in unrealized gain/loss on positions still open.",
     "realizedSales": "Sales",
-    "realizedSalesTooltip": "Realized gain or loss from sales in the period, calculated against average cost basis.",
+    "realizedSalesTooltip": "Realized gain or loss from sales in the period, and from holdings handed over at a cost (for example to a broker LibreFolio does not track), calculated against average cost basis.",
     "income": "Dividends & interest",
     "incomeTooltip": "Income received in the period from dividends, interest or coupons.",
     "feesAndTaxes": "Fees & taxes",
@@ -128,7 +128,8 @@
       "missingFx": "The exchange rate required for a payment is unavailable.",
       "missingWac": "The average purchase price (WAC) is unavailable.",
       "nonPositiveWac": "The average purchase price (WAC) is zero or negative.",
-      "missingFxDetails": "The {pair} exchange rate required for the calculation is missing on {date}."
+      "missingFxDetails": "The {pair} exchange rate required for the calculation is missing on {date}.",
+      "negativeNetIncome": "Corrections exceed the income of the last year."
     },
     "yieldOnCostValue": "Yield on Cost",
     "yieldOnCostPeriod": "Period",
@@ -147,6 +148,30 @@
     "unrealizedAssetEffect": "Assets in {currency}",
     "unrealizedFxEffect": "{from} → {to} rate",
     "unrealizedUnsplit": "{currency}, not split",
-    "fxOnCash": "FX on cash"
+    "fxOnCash": "FX on cash",
+    "allocationNegativeCash": "Negative cash: {amount}",
+    "startValueTooltip": "The position's value at the start of the period, worked out as the Value column of the Portfolio; 0 if the position did not exist yet. It is the base of the period's percentages.",
+    "endValueTooltip": "The position's value at the end of the period, worked out as the Value column of the Portfolio; 0 if the position was already closed.",
+    "transfersAtMarketValue": "Transfers at market value",
+    "assetAllocation": "By Asset",
+    "positionsChart": {
+      "title": "Return of the positions",
+      "viewAbsolute": "Abs",
+      "viewPercentage": "%",
+      "viewAbsoluteHint": "Profit or loss in money, from the start of the period",
+      "viewPercentageHint": "Return, base 100 at the start of the period",
+      "portfolio": "Portfolio (Dashboard return)",
+      "portfolioNote": "The portfolio line is the return the Dashboard measures, not the profit of the positions on the capital they employed: the two can differ.",
+      "hint": "Tick rows in the table to compare their return with the portfolio.",
+      "failed": "The series of the positions could not be loaded.",
+      "closedOn": "Closed on {date}",
+      "incomplete": "Some values are missing (a price or a rate): the line leaves them out.",
+      "rowSelect": "Select the row to draw its return",
+      "viewRolling": "Rolling",
+      "viewRollingHint": "Percent the price of the asset moved over a window that rolls along the period: to compare assets with each other"
+    },
+    "allocationNoShares": "No percentages to show: the slices add up to zero or less (for example, an overdraft that cancels your holdings). The amounts are listed below.",
+    "allocationHistoryNoShares": "No percentages to show: on these days the slices add up to zero or less.",
+    "pnlDeltaDayTooltip": "Today's change of the total P&L, and that change as a percentage of yesterday's portfolio value."
   }
 }

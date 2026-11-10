@@ -5,6 +5,7 @@ date: 2026
 status: resolved
 tags: [fx, providers, backend, sentinel]
 related_features: [F-019, F-015]
+related: [features/F-019, features/F-015]
 ---
 
 # Decision: MANUAL FX Provider as Sentinel
@@ -44,5 +45,5 @@ The sentinel prevents the degenerate "pair with no provider" state while remaini
 | Role | Path |
 |------|------|
 | MANUAL provider | `backend/app/services/fx_providers/manual/plugin.py` |
-| FX service (sentinel logic) | `backend/app/services/fx.py` |
+| FX service (sentinel logic) | `backend/app/services/fx/sync.py` |
 | mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |

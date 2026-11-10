@@ -65,7 +65,7 @@ librefolio:librefolio` then resolves the name correctly. Single-line
 change.
 
 ## Resolution (verified on the code, 2026-10-12)
-Fixed another way, in commit `f32e460ca` (2026-09-01): the container no longer needs the group's *name*.
+Fixed another way, in commit `9c5809792` (2026-09-01): the container no longer needs the group's *name*.
 `entrypoint.sh` works off the numeric ids — `TARGET_IDS="${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}"`, then
 `chown -R "$TARGET_IDS"` and `gosu "$TARGET_IDS"` — and the `Dockerfile` keeps the named `groupadd`/`useradd` only
 as a best-effort convenience, with a comment on the collision. A GID that the base image already uses can no longer
@@ -82,7 +82,7 @@ container, but not a real fix.
 
 ## How it was found
 Discovered while verifying the fix in
-[[problems/docker-system-info-missing-deps]] on a Mac host — unrelated to
+[[problems/docker-system-info-missing-deps]] on a macOS host (primary GID 20) — unrelated to
 that task, flagged separately per the "report, don't silently fix
 unrelated bugs" workflow rule rather than folding an unrelated Dockerfile
 change into that PR.
@@ -91,6 +91,6 @@ change into that PR.
 
 | Role | Path |
 |------|------|
-| Group/user creation (best-effort since `f32e460ca`) | `Dockerfile` (`groupadd -g ${GID} librefolio`) |
-| Runtime chown (numeric ids since `f32e460ca`) | `entrypoint.sh` (`chown -R "$TARGET_IDS" "$DATA_DIR"`) |
+| Group/user creation (best-effort since `9c5809792`) | `Dockerfile` (`groupadd -g ${GID} librefolio`) |
+| Runtime chown (numeric ids since `9c5809792`) | `entrypoint.sh` (`chown -R "$TARGET_IDS" "$DATA_DIR"`) |
 | UID/GID build args source | `dev.py` (`docker build`/`docker rebuild` commands), `docker-compose.yml` (`build.args`) |

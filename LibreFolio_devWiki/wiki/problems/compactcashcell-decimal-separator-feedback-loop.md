@@ -32,7 +32,7 @@ server and reproduced in jsdom with a parent-loop harness.
   (validation already rejects empty/zero).
 - Related decision (different layer, blur-time no-op detection):
   [[decisions/blur-detection-format-string-comparison]].
-- Regression coverage: `frontend/src/lib/components/ui/display/CompactCashCell.test.ts`
+- Regression coverage: `frontend/src/lib/features/transactions/form/CompactCashCell.test.ts`
   (parent-loop via `rerender`, char-by-char `12,5` survives; external update still syncs).
 
 > Trap for test authors: `locator.isVisible({timeout})` does NOT wait — it answers
@@ -47,7 +47,7 @@ server and reproduced in jsdom with a parent-loop harness.
 
 | Role | Path |
 |------|------|
-| Fix (sync effect) | `frontend/src/lib/components/ui/display/CompactCashCell.svelte` |
-| Quantity default | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| Fix (sync effect) | `frontend/src/lib/features/transactions/form/CompactCashCell.svelte` |
+| Quantity default | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | Normalizer | `frontend/src/lib/utils/core/parseDecimalInput.ts` |
-| Component test | `frontend/src/lib/components/ui/display/CompactCashCell.test.ts` |
+| Component test | `frontend/src/lib/features/transactions/form/CompactCashCell.test.ts` |

@@ -77,7 +77,7 @@ def _db_create_body(verbose: bool = False) -> bool:
     print_info("The backend server is NOT used in this test")
 
     # The precondition is checked *before* the destructive step, not by the
-    # migration that follows it. `dev.sh db:upgrade` refuses to run while a
+    # migration that follows it. `dev.py db upgrade` refuses to run while a
     # server holds the test port — correct, but by then the file would already be
     # gone, and the run would continue against a database with no tables.
     # Measured on `all-backend`: 13 failures and 116 `no such table: users`
@@ -102,11 +102,7 @@ def _db_create_body(verbose: bool = False) -> bool:
     _reset_test_file_store()
 
     print("\nCreating fresh test database from migrations...")
-    success = run_command(
-        [sys.executable, "dev.py", "db", "upgrade", str(test_db_path)],
-        "Create database via Alembic migrations",
-        verbose=verbose
-        )
+    success = run_command([sys.executable, "dev.py", "db", "upgrade", str(test_db_path)], "Create database via Alembic migrations", verbose=verbose)
 
     if success:
         if test_db_path.exists():
@@ -134,9 +130,7 @@ def db_validate(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Schema validation", verbose=verbose)
 
 
-def db_populate(verbose: bool = False, force: bool = False,
-                clean: bool = False, with_static: bool = False,
-                with_reports: bool = False) -> bool:
+def db_populate(verbose: bool = False, force: bool = False, clean: bool = False, with_static: bool = False, with_reports: bool = False) -> bool:
     """Populate database with mock data for testing."""
     print_section("Database Mock Data Population")
     print_info(f"This test operates on: {get_test_db_path()}")
@@ -218,14 +212,63 @@ def db_autoincrement_schema(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "AUTOINCREMENT schema tests", verbose=verbose)
 
 
+def db_post_migration_event_types(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the post-migration fix event_types, and the row-count changes a fix declares, on temporary databases at head (E1c)."""
+    print_section("DB Test: Post-Migration Fix — Event Types")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: declared row-count changes checked exactly, event types corrected when trimming and upper-casing makes them valid, deleted otherwise with their transactions unlinked, outcome and checks, dry run and its warning, one log line per row, rollback")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration_event_types.py", test_names)
+    return run_command(cmd, "Post-migration event types tests", verbose=verbose)
+
+
 def db_post_migration(verbose: bool = False, test_names: list = None) -> bool:
     """Test the post-migration fixes on temporary databases (a 1.1 install upgraded to head)."""
     print_section("DB Test: Post-Migration Fixes")
     print_info("This test works on temporary databases and data dirs only: the test database is not touched")
-    print_info("Testing: detection, backup, AUTOINCREMENT conversion, orphan broker folders, rollback, dry run, offline script, concurrent runs, duration in the log")
+    print_info("Testing: detection, backup, AUTOINCREMENT conversion, orphan broker folders, rollback, dry run, offline script, concurrent runs, duration in the log, lock file (no link followed, created 0o600)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration.py", test_names)
     return run_command(cmd, "Post-migration fix tests", verbose=verbose)
+
+
+def db_integrity_check(verbose: bool = False, test_names: list = None) -> bool:
+    """Test dev.py db check --integrity on temporary databases (B6-1, B-56)."""
+    print_section("DB Test: Database Integrity Check")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: integrity, foreign keys, text that is not UTF-8 by table and rowid (never the content), the revision, exit codes, read-only, the dev.py wiring")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_db_integrity_check.py", test_names)
+    return run_command(cmd, "Database integrity check tests", verbose=verbose)
+
+
+def db_post_migration_orphan_pairs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the post-migration fix orphan_pair_halves on temporary databases at head (N1b-2)."""
+    print_section("DB Test: Post-Migration Fix — Orphan Pair Halves")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: lone halves converted as a split leaves them, giving TRANSFER legs and unreadable rows left, outcome and checks, dry run and its warning, one log line per row, rollback")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration_orphan_pairs.py", test_names)
+    return run_command(cmd, "Post-migration orphan pair halves tests", verbose=verbose)
+
+
+def db_migration_005(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 005_release_1_3_0_schema, the 1.3 migrations in one (H-57), on temporary databases only."""
+    print_section("DB Test: Migration 005 (release 1.3 schema)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: equal to the retired chain's frozen schema; 1.2 data upgraded; duplicate addresses stop it before the email index, and set-email works; 13 redundant indexes gone, every UNIQUE refusing; models = migration; downgrade; idempotence")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_005_release_1_3.py", test_names)
+    return run_command(cmd, "Migration 005 tests", verbose=verbose)
+
+
+def db_session_pragmas(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the pragmas every SQLAlchemy engine's connection gets (set_sqlite_pragma, H-51): trusted_schema off first, the schema reset last."""
+    print_section("DB Test: Session Pragmas (trusted_schema off)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: trusted_schema 0 on sync and async connections, an archive's DEFAULT calling SQLAlchemy's Python regexp or floor refused at the insert and a CHECK calling regexp at the first statement, built-ins and top-level SQL unchanged, the other pragmas as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_session_pragmas.py", test_names)
+    return run_command(cmd, "Session pragma tests", verbose=verbose)
 
 
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
@@ -270,9 +313,25 @@ def db_all(verbose: bool = False) -> bool:
     from ._registry import TEST_REGISTRY
 
     db_order = [
-        "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
-        "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
-        ]
+        "post-migration-event-types",  # temporary databases only: needs none of the steps below
+        "session-pragmas",  # temporary databases only too
+        "create",
+        "validate",
+        "numeric-truncation",
+        "populate",
+        "populate-reset",
+        "autoincrement-schema",
+        "post-migration",
+        "post-migration-orphan-pairs",
+        "integrity-check",
+        "migration-005",
+        "referential-integrity",
+        "fx-rates",
+        "brim",
+        "brim-bulk",
+        "asset-merge",
+        "model-validators",
+    ]
 
     tests = []
     for action in db_order:
@@ -293,10 +352,10 @@ def db_all(verbose: bool = False) -> bool:
             "Testing the database layer (SQLite file)",
             "Backend server is NOT required for these tests",
             f"Target: {get_test_db_path()}",
-            ],
+        ],
         summary_title="Database Test Summary",
-            resume=_common._RESUME_MODE,
-        )
+        resume=_common._RESUME_MODE,
+    )
 
 
 def populate_registry(registry: dict) -> None:
@@ -316,40 +375,72 @@ Tests for the SQLite database layer:
   • Referential integrity (CASCADE, RESTRICT, UNIQUE, CHECK)
 
 Note: No backend server required. Tests operate directly on test DB.
-""")
-    add_test(cat, "create", db_create, test_names=False, name="Create Database",
-             desc="Create fresh test database from migrations", prereq="None")
-    add_test(cat, "validate", db_validate, name="Validate Schema",
-             desc="Check tables, foreign keys, constraints, indexes", prereq="Database created")
-    add_test(cat, "populate", db_populate, test_names=False, name="Populate Mock Data",
-             desc="Insert test data (use --force to recreate)", prereq="Database created",
-             note="Use --force --clean for fresh state")
-    add_test(cat, "fx-rates", db_fx_rates, name="FX Rates Persistence",
-             desc="Test rate fetching and DB persistence", prereq="Database created")
-    add_test(cat, "brim", db_brim, name="BRIM DB Tests",
-             desc="Asset candidate search, duplicate detection", prereq="Database populated")
-    add_test(cat, "brim-bulk", db_brim_bulk, name="BRIM Bulk Candidates",
-             desc="Bulk candidate search matches the per-asset one", prereq="Database created",
-             tests="4 equivalence tests")
-    add_test(cat, "populate-reset", db_populate_reset, name="Populate Resets Broker Reports",
-             desc="populate --force empties broker_reports under the deleted DB's data dir, nothing else",
-             prereq="None (temporary directories)")
-    add_test(cat, "autoincrement-schema", db_autoincrement_schema, name="AUTOINCREMENT Schema",
-             desc="A fresh schema, the models and create_all give AUTOINCREMENT exactly to the census tables",
-             prereq="None (temporary databases)")
-    add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
-             desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback",
-             prereq="None (temporary databases)")
-    add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
-             desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",
-             tests="12 merge tests")
-    add_test(cat, "numeric-truncation", db_numeric_truncation, name="Numeric Truncation",
-             desc="Test Numeric column precision behavior", prereq="Database created")
-    add_test(cat, "referential-integrity", db_test_referential_integrity, name="Referential Integrity",
-             desc="CASCADE, RESTRICT, UNIQUE, CHECK constraints", prereq="Database populated",
-             tests="17 integrity tests")
-    add_test(cat, "model-validators", db_model_validators, name="Model Validators",
-             desc="Pydantic/SQLModel field validators", prereq="None")
-    add_test(cat, "all", db_all, test_names=False, name="All DB Tests",
-             desc="Run all database tests in order")
+""",
+    )
+    add_test(cat, "create", db_create, test_names=False, name="Create Database", desc="Create fresh test database from migrations", prereq="None")
+    add_test(cat, "validate", db_validate, name="Validate Schema", desc="Check tables, foreign keys, constraints, indexes", prereq="Database created")
+    add_test(cat, "populate", db_populate, test_names=False, name="Populate Mock Data", desc="Insert test data (use --force to recreate)", prereq="Database created", note="Use --force --clean for fresh state")
+    add_test(cat, "fx-rates", db_fx_rates, name="FX Rates Persistence", desc="Test rate fetching and DB persistence", prereq="Database created")
+    add_test(cat, "brim", db_brim, name="BRIM DB Tests", desc="Asset candidate search, duplicate detection", prereq="Database populated")
+    add_test(cat, "brim-bulk", db_brim_bulk, name="BRIM Bulk Candidates", desc="Bulk candidate search matches the per-asset one", prereq="Database created", tests="4 equivalence tests")
+    add_test(cat, "populate-reset", db_populate_reset, name="Populate Resets Broker Reports", desc="populate --force empties broker_reports under the deleted DB's data dir, nothing else", prereq="None (temporary directories)")
+    add_test(cat, "autoincrement-schema", db_autoincrement_schema, name="AUTOINCREMENT Schema", desc="A fresh schema, the models and create_all give AUTOINCREMENT exactly to the census tables", prereq="None (temporary databases)")
+    add_test(
+        cat,
+        "post-migration-event-types",
+        db_post_migration_event_types,
+        name="Post-Migration Event Types",
+        desc="event_types: asset event types corrected when trimming and upper-casing makes them valid, deleted otherwise with their transactions unlinked; declared row-count changes checked exactly; dry run, log lines, rollback",
+        prereq="None (temporary databases)",
+    )
+    add_test(
+        cat,
+        "post-migration",
+        db_post_migration,
+        name="Post-Migration Fixes",
+        desc='Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback; the run lock refuses a symlink and is created 0o600; B-36 (17): table names a database brings quoted (x"y, a" WHERE 1 --): the pending fix applied, its row counts holding them, no OperationalError',
+        prereq="None (temporary databases)",
+    )
+    add_test(
+        cat,
+        "integrity-check",
+        db_integrity_check,
+        name="Database Integrity Check",
+        desc="db check --integrity: integrity_check, foreign_key_check, text that is not UTF-8 named by table and rowid, the Alembic revision; exit 0/1/2; the file untouched",
+        prereq="None (temporary databases)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "post-migration-orphan-pairs",
+        db_post_migration_orphan_pairs,
+        name="Post-Migration Orphan Pair Halves",
+        desc="orphan_pair_halves: the lone halves older broker deletions left become standalone rows; giving TRANSFER legs and unreadable rows left; dry run, log lines, rollback",
+        prereq="None (temporary databases)",
+    )
+    # PURE: every database is a private file under tmp_path. Alembic runs in-process with -x sqlalchemy.url= pointing at
+    # it, and a connect listener refuses any other file while it runs: no lane database, no server, nothing shared.
+    add_test(
+        cat,
+        "migration-005",
+        db_migration_005,
+        name="Migration 005 Release 1.3 Schema",
+        desc="005_release_1_3_0_schema (H-57: the unreleased 1.3 migrations in one, variant V4): equal to the schema the retired chain left (frozen); 1.2 data upgraded; duplicate addresses stop it before the unique index, as the retired 009 did, and the remedy works; the 13 redundant indexes gone, every UNIQUE still refusing; models = migration; downgrade; idempotence",
+        prereq="None (temporary databases)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "session-pragmas",
+        db_session_pragmas,
+        name="Session Pragmas",
+        desc="H-51: set_sqlite_pragma (db/session.py, every SQLAlchemy engine of the process) turns trusted_schema off first and resets the schema last (writable_schema=RESET, read again once SQLAlchemy has registered its Python regexp and floor): an archive's DEFAULT calling regexp or floor refused at the insert, a CHECK calling regexp at the first statement, instead of running them; built-ins in the schema (lower() of ux_users_email_lower), a database at the head and top-level SQL unchanged; foreign_keys, WAL and busy_timeout as before; sync and async engines",
+        prereq="None (temporary databases)",
+        isolation="pure",
+    )
+    add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge", desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created", tests="12 merge tests")
+    add_test(cat, "numeric-truncation", db_numeric_truncation, name="Numeric Truncation", desc="Test Numeric column precision behavior", prereq="Database created")
+    add_test(cat, "referential-integrity", db_test_referential_integrity, name="Referential Integrity", desc="CASCADE, RESTRICT, UNIQUE, CHECK constraints", prereq="Database populated", tests="17 integrity tests")
+    add_test(cat, "model-validators", db_model_validators, name="Model Validators", desc="Pydantic/SQLModel field validators", prereq="None")
+    add_test(cat, "all", db_all, test_names=False, name="All DB Tests", desc="Run all database tests in order")
     registry["db"] = cat

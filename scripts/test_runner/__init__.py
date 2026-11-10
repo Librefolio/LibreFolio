@@ -47,4 +47,3 @@ from ._frontend_common import _ensure_test_users
 
 # Also export for direct script execution
 from ._registry import TEST_REGISTRY
-

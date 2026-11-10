@@ -31,7 +31,7 @@ from backend.app.services.ai_export.components.technical_shared import (
 from backend.app.services.ai_export.components.types import DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.ai_export.temporal import ObservedPoint, uniform_observed_buckets
-from backend.app.services.provider_registry import SignalPluginRegistry
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 _ASSET_CONTEXT_EVENT_KEYS = frozenset(
     {

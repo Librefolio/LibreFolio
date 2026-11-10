@@ -50,12 +50,14 @@ The contract frozen on 2026-09-16 (Step 4, «copie dominio»), with the review r
 ## Consequences
 
 - A coupled fix: `POST /api/v1/portfolio/wac`, which the copies reuse, now requires authentication (401/403/200).
+  *2026-11-07 lint:* that route was removed in `d5e467847` (2026-11-04, [[decisions/api-routes-removed-without-deprecation]]); the copies reach
+  `compute_wac_iterative()` directly, through `pac_allocator/source/wac.py`.
 - Late answers are dropped by account generation, request sequence and an `AbortController`
   (`sourceLoad.svelte.ts`); the 2026-10-05 mapping note records that this guard has no dedicated unit test.
 - Defects found on the way: a copy whose rows were all in conflict was pruned, and «Aggiorna» then stamped rows
   pointing to a copy that no longer existed (`CopyOutcome.copy`, Round 5); the saved distribution parser now
   accepts Pydantic's decimal text and the geographic key `"Other"` (R7.4); the distribution help pointed to an
-  «Allocation page» that does not exist and was reworded in four languages (`dbedcc822`, row 13).
+  «Allocation page» that does not exist and was reworded in four languages (`378d7d9e1`, row 13).
 - The copies replaced P1's report branch, which the final P1 removal deleted ([[decisions/pac-p1-prototype-removed]]).
 
 ## Source files
@@ -63,7 +65,7 @@ The contract frozen on 2026-09-16 (Step 4, «copie dominio»), with the review r
 | Role | Path |
 |------|------|
 | Endpoint | `backend/app/api/v1/portfolio_api.py` |
-| Snapshot service (owner check, saved facts) | `backend/app/services/portfolio_allocation_source.py` |
+| Snapshot service (owner check, saved facts) | `backend/app/services/pac_allocator/source/portfolio_allocation_source.py` |
 | Snapshot DTOs | `backend/app/schemas/portfolio.py` |
 | Planner client and copy merge | `frontend/src/lib/features/tools/pac-allocator/planner/source.ts`, `frontend/src/lib/features/tools/pac-allocator/planner/copies.ts` |
 | Stale-answer guard | `frontend/src/lib/features/tools/pac-allocator/planner/sourceLoad.svelte.ts` |

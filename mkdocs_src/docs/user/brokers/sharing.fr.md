@@ -50,7 +50,7 @@ La part détermine ce qui compte dans vos chiffres :
 
 - Le **Tableau de bord** ne compte que les courtiers que vous **possédez** avec une part supérieure à 0 %, et ajuste leurs montants selon votre part : avec 50 %, vous voyez la moitié de la valeur, des revenus et du P&L du courtier.
 - L'onglet **Risque** du Tableau de bord couvre les mêmes courtiers : ceux que vous possédez avec une part supérieure à 0 % (voir [Onglet Risque](../dashboard/index.md#risk-tab)).
-- Les courtiers pour lesquels vous êtes Lecteur ou Éditeur, ou que vous possédez à 0 %, ne figurent pas sur votre Tableau de bord. Leur propre page les affiche : les Lecteurs et les Éditeurs voient les montants **complets**, les Propriétaires leur part.
+- Les courtiers pour lesquels vous êtes Lecteur ou Éditeur, ou que vous possédez à 0 %, ne figurent pas sur votre Tableau de bord. Leur propre page les affiche, et elle montre le courtier **entier** (100 %) à chaque rôle, y compris à un Propriétaire dont la part est plus petite.
 
 ---
 

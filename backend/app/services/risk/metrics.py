@@ -9,10 +9,12 @@ from datetime import date
 
 import numpy as np
 
+from backend.app.services.financial_math.returns import positive_annualization_factor, required_recovery_return
+
 ZERO_TOLERANCE = 1e-15
 """Absolute tolerance below which a dispersion statistic counts as exactly zero.
 
-Public because the vectorised rolling helpers in :mod:`backend.app.services.risk.signal_helpers`
+Public because the vectorised rolling helpers in :mod:`backend.app.services.signals.risk_adapters`
 must test the *same* threshold on the *same* statistic. A metric is undefined when its
 denominator vanishes, and the scalar and vectorised paths have to agree on where that
 boundary lies — otherwise one of them emits a number where the other emits ``None``,
@@ -45,6 +47,11 @@ class DrawdownEpisodeReport:
     ``(baseline_date, *dates)`` and has ``len(returns) + 1`` entries. Its first
     entry is the baseline and is always ``0.0`` by construction, which is why a
     caller rendering a dated series normally drops it.
+
+    ``remaining_to_peak_ratio`` (from the current drawdown) and
+    ``maximum_drawdown_trough_to_peak_ratio`` (from the maximum, open or recovered) are the gain that
+    takes a value back to its peak, from ``financial_math.returns.required_recovery_return``: ``0.0``
+    with nothing to recover, None for a total loss.
     """
 
     current_drawdown: float
@@ -57,7 +64,8 @@ class DrawdownEpisodeReport:
     maximum_drawdown_recovery_date: date | None
     maximum_drawdown_duration_days: int
     maximum_drawdown_recovered_ratio: float | None
-    remaining_to_peak_ratio: float
+    maximum_drawdown_trough_to_peak_ratio: float | None
+    remaining_to_peak_ratio: float | None
     available_start: date
     available_end: date
     n_observations: int
@@ -93,6 +101,20 @@ class HistoricalTailRisk:
 
 
 @dataclass(frozen=True, slots=True)
+class WorstHorizonWindow:
+    """The worst compounded stretch a series actually went through, over one horizon.
+
+    ``start_index`` and ``end_index`` are positions in the **return** series, both inclusive:
+    the first and the last return the window compounds (``end_index - start_index + 1`` is the
+    horizon in observations). A caller holding the dates of the returns reads the dates there.
+    """
+
+    compounded_return: float
+    start_index: int
+    end_index: int
+
+
+@dataclass(frozen=True, slots=True)
 class ReturnHistogram:
     """Uniform-width histogram of a signed return series with one edge pinned.
 
@@ -115,13 +137,6 @@ def _finite_values(
     normalized = tuple(float(value) for value in values)
     if any(not math.isfinite(value) for value in normalized):
         raise ValueError(f"{name} must be finite")
-    return normalized
-
-
-def _positive_annualization_factor(annualization_factor: float) -> float:
-    normalized = float(annualization_factor)
-    if normalized <= 0 or not math.isfinite(normalized):
-        raise ValueError("annualization_factor must be finite and positive")
     return normalized
 
 
@@ -167,7 +182,7 @@ def annualized_volatility(
     annualization_factor: float,
 ) -> float:
     """Annualize sample volatility with the observed factor."""
-    return sample_standard_deviation(returns) * math.sqrt(_positive_annualization_factor(annualization_factor))
+    return sample_standard_deviation(returns) * math.sqrt(positive_annualization_factor(annualization_factor))
 
 
 def annualized_expected_return(
@@ -202,7 +217,7 @@ def annualized_expected_return(
     values = _finite_values(returns, name="returns")
     if not values:
         raise ValueError("expected return requires at least one observation")
-    return math.fsum(values) / len(values) * _positive_annualization_factor(annualization_factor)
+    return math.fsum(values) / len(values) * positive_annualization_factor(annualization_factor)
 
 
 def daily_risk_free_rate(annual_rate: float, periods_per_year: float) -> float:
@@ -219,7 +234,7 @@ def daily_risk_free_rate(annual_rate: float, periods_per_year: float) -> float:
     """
     if not math.isfinite(annual_rate) or annual_rate <= -1.0:
         raise ValueError("annual risk-free rate must be finite and greater than -1")
-    return math.expm1(math.log1p(annual_rate) / _positive_annualization_factor(periods_per_year))
+    return math.expm1(math.log1p(annual_rate) / positive_annualization_factor(periods_per_year))
 
 
 def annualized_sharpe(
@@ -229,7 +244,7 @@ def annualized_sharpe(
     annual_risk_free_rate: float = 0.0,
 ) -> float | None:
     """Return annualized Sharpe, or None when sample volatility is zero."""
-    annualization_factor = _positive_annualization_factor(annualization_factor)
+    annualization_factor = positive_annualization_factor(annualization_factor)
     volatility = sample_standard_deviation(returns)
     if math.isclose(volatility, 0.0, rel_tol=0.0, abs_tol=ZERO_TOLERANCE):
         return None
@@ -248,7 +263,7 @@ def annualized_sortino(
     values = _finite_values(returns, name="returns")
     if len(values) < 2:
         raise ValueError("Sortino requires at least two observations")
-    annualization_factor = _positive_annualization_factor(annualization_factor)
+    annualization_factor = positive_annualization_factor(annualization_factor)
     target_daily = daily_risk_free_rate(annual_target_return, annualization_factor)
     downside_variance = math.fsum(min(value - target_daily, 0.0) ** 2 for value in values) / len(values)
     downside_deviation = math.sqrt(downside_variance)
@@ -389,7 +404,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
     current_underwater = current_drawdown < -ZERO_TOLERANCE
     current_peak_date = grid_dates[peak_index]
     current_drawdown_duration_days = (grid_dates[last] - grid_dates[peak_index]).days if current_underwater else 0
-    remaining_to_peak_ratio = max(0.0, -current_drawdown / (1.0 + current_drawdown)) if current_underwater else 0.0
+    remaining_to_peak_ratio = required_recovery_return(current_drawdown) if current_underwater else 0.0
 
     best: tuple[int, int, int | None] | None = None
     best_depth = 0.0
@@ -411,6 +426,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
             maximum_drawdown_recovery_date=None,
             maximum_drawdown_duration_days=0,
             maximum_drawdown_recovered_ratio=None,
+            maximum_drawdown_trough_to_peak_ratio=0.0,
             remaining_to_peak_ratio=remaining_to_peak_ratio,
             available_start=observation_dates[0],
             available_end=observation_dates[-1],
@@ -450,6 +466,7 @@ def drawdown_episodes(  # noqa: C901 — TODO(P2-refactor): episode state machin
         maximum_drawdown_recovery_date=recovery_date,
         maximum_drawdown_duration_days=maximum_duration_days,
         maximum_drawdown_recovered_ratio=recovered_ratio,
+        maximum_drawdown_trough_to_peak_ratio=required_recovery_return(maximum_drawdown),
         remaining_to_peak_ratio=remaining_to_peak_ratio,
         available_start=observation_dates[0],
         available_end=observation_dates[-1],
@@ -593,7 +610,7 @@ def risk_contributions_from_covariance(
     annualization_factor: float = 1.0,
 ) -> ContributionSummary:
     """Return MCTR, CCTR, and PCTR from one common covariance matrix."""
-    annualization_factor = _positive_annualization_factor(annualization_factor)
+    annualization_factor = positive_annualization_factor(annualization_factor)
     normalized_weights = _finite_values(weights, name="weights")
     size = len(normalized_weights)
     matrix = [tuple(_finite_values(row, name="covariance row")) for row in covariance]
@@ -703,7 +720,7 @@ def comparison_summary(
         raise ValueError("comparison inputs must have the same length")
     if len(primary) < 2:
         raise ValueError("comparison requires at least two observations")
-    annualization_factor = _positive_annualization_factor(annualization_factor)
+    annualization_factor = positive_annualization_factor(annualization_factor)
     active = [left - right for left, right in zip(primary, comparison, strict=True)]
     active_std = sample_standard_deviation(active)
     tracking_error = active_std * math.sqrt(annualization_factor)
@@ -728,19 +745,6 @@ def comparison_summary(
     )
 
 
-def calendar_days_to_observations(calendar_days: int, per_year: float) -> int:
-    """Return how many observations a span of calendar days holds at an observed frequency.
-
-    The inverse of observed annualization: a series observed ``per_year`` times a
-    year holds ``calendar_days × per_year / 365`` observations over the span, and
-    never fewer than one. So a month is 30 calendar days on every series — 21
-    observations of one quoted on trading days, 30 of one quoted every day.
-    """
-    if isinstance(calendar_days, bool) or calendar_days <= 0:
-        raise ValueError("calendar_days must be a positive integer")
-    return max(1, round(calendar_days * _positive_annualization_factor(per_year) / 365))
-
-
 def horizon_compounded_returns(
     returns: Sequence[float],
     horizon_observations: int,
@@ -752,6 +756,22 @@ def horizon_compounded_returns(
     if horizon_observations > len(values):
         return []
     return [compounded_return(values[start : start + horizon_observations]) for start in range(len(values) - horizon_observations + 1)]
+
+
+def worst_horizon_window(horizon_returns: Sequence[float], horizon_observations: int) -> WorstHorizonWindow | None:
+    """Locate the lowest of the overlapping compounded returns of :func:`horizon_compounded_returns`.
+
+    The monthly VaR is the mean of the worst 5 % of the windows, a figure no single month ever
+    printed; this is the one window the series really lived through, which the reader can look up.
+    ``horizon_returns[i]`` compounds the returns ``i … i + horizon_observations - 1``. A tie keeps the
+    earliest window; an empty input has no worst window.
+    """
+    if isinstance(horizon_observations, bool) or horizon_observations <= 0:
+        raise ValueError("horizon_observations must be a positive integer")
+    if not horizon_returns:
+        return None
+    start = min(range(len(horizon_returns)), key=lambda index: (horizon_returns[index], index))
+    return WorstHorizonWindow(compounded_return=float(horizon_returns[start]), start_index=start, end_index=start + horizon_observations - 1)
 
 
 def historical_var_cvar(
@@ -950,7 +970,6 @@ __all__ = [
     "annualized_sortino",
     "annualized_volatility",
     "beta",
-    "calendar_days_to_observations",
     "comparison_summary",
     "compounded_return",
     "correlation_matrix",

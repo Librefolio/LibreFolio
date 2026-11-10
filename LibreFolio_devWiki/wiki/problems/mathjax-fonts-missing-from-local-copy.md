@@ -9,11 +9,12 @@ related:
   - features/F-069
   - features/F-062
   - sources/phase00-translation-round12-2026-10
+  - decisions/mermaid-elk-layout-and-node-text-colour
 ---
 
 # Problem: the script came without the fonts it loads
 
-> Written from workstream M's note for the devWiki (batch 25, 2026-10-12), checked against the code at `b91d6d902`.
+> Written from workstream M's note for the devWiki (batch 25, 2026-10-12), checked against the code at `334704cd5`.
 
 ## Symptom
 
@@ -33,7 +34,7 @@ shipped degraded formulas in 1.2, in the image and on the public site. A 200 on 
 
 ## Solution
 
-`92fb9c83e` («fix(docs): ship MathJax fonts with the docs»):
+`69aa0c4eb` («fix(docs): ship MathJax fonts with the docs»):
 
 - **Companions** in `scripts/update_js_cache.py`: a cached `js` library lists the files it loads from beside itself.
   For MathJax the names come from the cached script's own text (`MathJax_[A-Za-z0-9-]+\.woff`, 22 files, 321 KB) and the
@@ -54,11 +55,15 @@ shipped degraded formulas in 1.2, in the image and on the public site. A 200 on 
 - Check what a page draws, not that a file answers 200: the M-19 spec now also checks the font answers, the MJX faces
   and the absence of `typesetPromise` errors. It waited outside the repository until the shared runner file was free,
   since an unregistered spec turns `check-orphans` red; run once in M's lane, it passed, and a negative control without
-  the fonts went red on the font assertion. *Update (train 70)*: registered in M's batch 28 (`0fe5195e8`) as
+  the fonts went red on the font assertion. *Update (train 70)*: registered in M's batch 28 (`3a577f63e`) as
   `front-utility docs-offline-math`.
 - **Still open — M-22** (medium, after 1.2): Mermaid is imported only from jsDelivr (`mermaid.mjs`), with no local copy
   and no fallback, so without internet — as in the full image — 74 pages show their diagrams as code. The cure is
   MathJax's: a copy in `vendor/` and a loader with a fallback.
+  2026-11-07 lint: M-22 closed by H6-3 (`34d5849a7`, 30/10): `mermaid.mjs` is gone; Mermaid 11.17.2 is pinned by
+  SHA-256 in `scripts/update_js_cache.py` (copied into `vendor/mermaid/` by `./dev.py cache js`) and defined by
+  `mermaid-early.js` before Material's bundle, with the same pinned file from the CDN as fallback; spec
+  `docs-offline-mermaid.spec.ts`. See also [[decisions/mermaid-elk-layout-and-node-text-colour]].
 - M-21 now names the vendor files too: a local `dev.py docker build` over an already-built site does not take them
   without `dev.py mkdocs build`.
 
@@ -71,5 +76,6 @@ shipped degraded formulas in 1.2, in the image and on the public site. A 200 on 
 | `typesetPromise` guard | `mkdocs_src/docs/javascripts/mathjax.js` |
 | Loader (M-19) | `mkdocs_src/docs/javascripts/lib-loader.js` |
 | Regression spec (the fonts, the faces, `typesetPromise`) | `frontend/e2e/layout/docs-offline-math.spec.ts` |
-| Mermaid from the CDN only (M-22) | `mkdocs_src/docs/javascripts/mermaid.mjs` |
+| Local Mermaid, defined before Material's bundle (H6-3; it replaced `mermaid.mjs`, from the CDN only, removed in `34d5849a7`) | `mkdocs_src/docs/javascripts/mermaid-early.js` |
+| Offline Mermaid spec (H6-3) | `frontend/e2e/layout/docs-offline-mermaid.spec.ts` |
 | Journal (step 8) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` |

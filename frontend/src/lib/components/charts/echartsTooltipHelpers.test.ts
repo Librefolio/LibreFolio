@@ -31,6 +31,7 @@ import {
     buildDot,
     buildFittedTooltipRow,
     buildGridColors,
+    buildMarqueeTooltipBlockRow,
     buildTooltipByThreshold,
     buildTooltipDivider,
     buildTooltipHeader,
@@ -90,6 +91,13 @@ describe('HTML fragment builders', () => {
         const html = buildTooltipHeader('2026-07-23', '#123456');
         expect(html).toContain('2026-07-23');
         expect(html).toContain('#123456');
+    });
+
+    it('publishes the days a header stands for when it is told them, and nothing otherwise (Y2-I63)', () => {
+        expect(buildTooltipHeader('Mon 2 Mar', '#123456')).not.toContain('data-tooltip');
+        const html = buildTooltipHeader('Week', '#123456', {from: '2026-03-02', to: '2026-03-08'});
+        expect(html).toContain('data-tooltip-from="2026-03-02"');
+        expect(html).toContain('data-tooltip-to="2026-03-08"');
     });
 
     it('includes a dot only when a colour is given', () => {
@@ -633,5 +641,38 @@ describe('buildFittedTooltipRow / fitTooltipToWidth — truncate the label, neve
                 expect(html, `the helper escaped something itself: found "${escaped}"`).not.toContain(escaped);
             }
         });
+    });
+});
+
+describe('buildMarqueeTooltipBlockRow (F-1, B8)', () => {
+    const host = (html: string) => {
+        const element = document.createElement('div');
+        element.innerHTML = html;
+        return element;
+    };
+
+    it('is one row: the dot and the label on the left, the value on the right', () => {
+        const row = host(buildMarqueeTooltipBlockRow('Alpha', '<i>+1,0%</i>', '#112233')).querySelector('[data-tooltip-row]')!;
+        expect(row.querySelector('b')?.textContent).toBe('+1,0%');
+        expect(row.textContent).toContain('Alpha');
+        expect(row.querySelector('span span')?.getAttribute('style') ?? '').toContain('#112233');
+    });
+
+    it('the label is the project’s marquee, one clipped line that scrolls — no ellipsis', () => {
+        const html = buildMarqueeTooltipBlockRow('A name that is far too long for the box', '1');
+        const label = host(html).querySelector<HTMLElement>('.overflow-scroll-marquee')!;
+        expect(label.textContent).toBe('A name that is far too long for the box');
+        expect(label.getAttribute('style')).toContain('overflow:hidden');
+        expect(label.getAttribute('style')).toContain('white-space:nowrap');
+        expect(html).not.toContain('text-overflow');
+    });
+
+    it('the value keeps its whole width: it never shrinks', () => {
+        expect(host(buildMarqueeTooltipBlockRow('x', '12')).querySelector('b')?.getAttribute('style')).toContain('flex-shrink:0');
+    });
+
+    it('works without a dot', () => {
+        const html = buildMarqueeTooltipBlockRow('x', '1');
+        expect(html).not.toContain('border-radius:50%');
     });
 });

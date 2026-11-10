@@ -47,6 +47,8 @@ A Transfer is stored as two `TRANSFER` rows, one per broker, each linked to the 
 | **Split** (unlink) | Transfer → two independent Adjustments |
 | **Promote** (link) | Two Adjustments → Transfer |
 
+**Cost basis on split and promote**: on a split, the incoming Adjustment keeps its cost basis, and the outgoing one has none: it has no value, so on the sending broker its units only leave the quantity and their cost counts as a realized loss (see [Outgoing Adjustments](adjustment.md#outgoing-adjustments)). On a promote, any cost basis stored on the outgoing Adjustment is dropped, since the sending side of a Transfer carries none.
+
 **Promote constraints**: same asset, different brokers, opposite quantities, and neither row linked to an asset event (a split, for instance), since a transfer cannot carry that link.
 
 ---

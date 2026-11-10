@@ -14,7 +14,7 @@ related:
 
 ## Symptom
 
-Refreshing the Risk branch from `dev_release2` (merge `f829cd76b`, 2026-09-21), `scripts/test_runner/_frontend_utility.py`
+Refreshing the Risk branch from `dev_release2` (merge `01e8daec6`, 2026-09-21), `scripts/test_runner/_frontend_utility.py`
 conflicted for the fourth time. The first three times the recipe had been a line-by-line union of both sides; this time
 that union would have made the incoming `onboarding-component-unit` action disappear without any error (register entry
 R2-116).

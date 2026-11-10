@@ -53,11 +53,13 @@ $$
 \text{Ganancia requerida} = \frac{1}{1 + DD} - 1 = \frac{-DD}{1 + DD}
 $$
 
-Las dos formas son la misma expresión — la segunda es la primera con la fracción combinada — y [Caída máxima](max-drawdown.md) explica la asimetría que esto crea, con los valores desarrollados.
+Las dos formas son la misma expresión — la segunda es la primera con la fracción combinada — y [Caída máxima](max-drawdown.md) explica la asimetría que esto crea, con los valores desarrollados. La segunda forma es la que se evalúa: en una caída pequeña mantiene precisa la ganancia, mientras que la primera pierde dígitos al restar $1$ de un número muy cercano a $1$. La cifra restante para el máximo y la [ganancia de mínimo a máximo](max-drawdown.md#recovery-time) de la caída máxima se calculan con una sola función compartida, de modo que las dos nunca pueden seguir fórmulas distintas.
+
+Una pérdida total no tiene una ganancia de recuperación finita: con $DD = -100\%$ el denominador $1 + DD$ es cero. La cifra restante para el máximo se deja entonces sin número en lugar de recibir uno infinito, y el resultado lleva un aviso que explica el motivo.
 
 !!! warning "La misma fórmula, aplicada a una pregunta diferente"
 
-    Esa asimetría es una lección general, y se enseña en la página de caída máxima. La cantidad calculada aquí la aplica a la caída **actual** en su lugar, y la diferencia no es cosmética:
+    Esa asimetría es una lección general, y se enseña en la página de caída máxima. La cantidad calculada aquí la aplica a la caída **actual** en su lugar, mientras que la ganancia de mínimo a máximo la aplica a la caída **máxima**, y la diferencia no es cosmética:
 
     - aplicada al **máximo**, es una afirmación histórica — *cuánto habría hecho falta para recuperarse, en el peor punto jamás alcanzado*;
     - aplicada a la caída **actual**, es una afirmación presente — *cuánto hace falta para recuperarse desde donde se encuentra la cartera hoy*.

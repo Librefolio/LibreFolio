@@ -43,8 +43,12 @@ the entry point for whoever resumes Risk after release 1.2 (D382). The full reco
 | D384 | The broker preset in the Lab asks once |
 | 1.2 CHANGELOG | In the Lab only percentages, and no verdict on the selection as a whole; what cannot be measured shows a dash that says why, never a zero |
 
-Checked on the code at `e3a55b85f`: D374 (`RISK_DISCARD_ATTEMPTS = 3` in `riskStore.svelte.ts`), D380–D381
-(`metrics.py`, `3ceac8f83`, `f22141e63`). The open items these decisions leave are on the feature pages, «Still open
+> 2026-11-07 lint: D71's open point — whether the colours match across charts — was settled for the Dashboard on
+> 2026-11-06: one rank function per asset, read by the pie, the allocation history and the positions lines
+> ([[decisions/one-colour-rank-per-asset]]).
+
+Checked on the code at `102edada4`: D374 (`RISK_DISCARD_ATTEMPTS = 3` in `riskStore.svelte.ts`), D380–D381
+(`metrics.py`, `e860de140`, `9236ab804`). The open items these decisions leave are on the feature pages, «Still open
 (paused, after 1.2 — D382)».
 
 ## Source files
@@ -53,5 +57,5 @@ Checked on the code at `e3a55b85f`: D374 (`RISK_DISCARD_ATTEMPTS = 3` in `riskSt
 |------|------|
 | The list (README, «Decisioni che vincolano il lavoro») | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/README.md` |
 | The full decision records | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md` |
-| D374 | `frontend/src/lib/stores/risk/riskStore.svelte.ts` |
+| D374 | `frontend/src/lib/features/risk/riskStore.svelte.ts` |
 | D380, D381 | `backend/app/services/risk/metrics.py` |

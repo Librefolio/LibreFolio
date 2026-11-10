@@ -1,12 +1,12 @@
 # 📥 Transazioni del broker
 
-La scheda **Transazioni** di un broker elenca tutte le sue transazioni, dalla più recente alla più vecchia. Mostra sempre l'intera cronologia del broker: l'intervallo di date nella barra degli strumenti non la filtra.
+La scheda **Transazioni** di un broker elenca le sue transazioni, dalla più recente alla più vecchia, per l'intervallo di date scelto nella barra degli strumenti. Per vedere l'intera cronologia, scegli lì **Tutti**.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Scheda Transazioni del broker">
 </div>
 
-Sopra l'elenco trovi **Report caricati**, **Vedi in Transazioni** e il selettore di colonne. I proprietari e gli editor hanno anche **Importa** e **Aggiungi transazione**.
+Sopra l'elenco trovi **Report caricati**, **Vedi in Transazioni** e il selettore di colonne. I proprietari e gli editor hanno anche **Importa**, **Aggiungi transazione** e, una volta spuntate delle righe, la barra per modificarle, clonarle o eliminarle. Un visualizzatore vede la tabella, i report caricati e **Vedi in Transazioni**.
 
 ---
 
@@ -23,7 +23,8 @@ Nulla viene salvato prima di **Salva tutto**: fino ad allora puoi aggiungere alt
 ## 🔎 Aprire, modificare o eliminare transazioni
 
 - **Fai doppio clic** su una riga per aprirla in sola lettura.
-- Per modificare, clonare o eliminare righe, fai clic su **Vedi in Transazioni**: si apre la pagina [Transazioni](../transactions/index.md), filtrata su questo broker e sui filtri di colonna che hai impostato qui.
+- I proprietari e gli editor possono modificare, clonare o eliminare righe qui: usa le azioni di una riga, oppure spunta delle righe e usa la barra sopra la tabella.
+- **Vedi in Transazioni** apre la pagina [Transazioni](../transactions/index.md), filtrata su questo broker, sul periodo della barra degli strumenti e sui filtri di colonna che hai impostato qui.
 
 ---
 
@@ -54,3 +55,5 @@ La stessa procedura guidata si apre dalla voce **Importa** nella pagina [Transaz
 - **Gestisci tutti i file** apre la pagina [File e caricamenti](../files/index.md#broker-reports), filtrata su questo broker.
 
 Caricare ed eliminare report richiede l'accesso al broker come Proprietario o Editor.
+
+I report che una versione precedente di LibreFolio ha salvato senza broker non sono in questo elenco: chi li ha caricati e gli amministratori li trovano nella pagina [File e caricamenti](../files/index.md#broker-reports).

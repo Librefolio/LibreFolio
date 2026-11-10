@@ -66,8 +66,8 @@ predictions were written; no record of their execution exists.
 
 ## ⚠️ Verification (2026-09-23 — reading, not execution)
 
-The recorded premise does not match the code, at S5's baseline `7d75a9c6c` or at
-`f1047f766` (neither `auth.ts` nor `clientSession.ts` changed in between):
+The recorded premise does not match the code, at S5's baseline `eb006c9b6` or at
+`9d87ad80e` (neither `auth.ts` nor `clientSession.ts` changed in between):
 
 - `(app)/+layout.svelte` renders `<slot />` only inside `{:else if $isAuthenticated}`.
   `{#if $i18nLoading}` is indeed the only top-level `{#if}` — but it is the head of a chain,
@@ -88,7 +88,7 @@ range ends today); the axios response interceptor classifies that as a portfolio
 [[concepts/discard-the-answer-not-the-question]] recorded this mechanism for the risk
 catalogue on 2026-08-31. **Whether it was the trigger of R2-62 was never measured.**
 
-## Solution (S5, passo 1c, 18/09 — verified at `f1047f766`)
+## Solution (S5, passo 1c, 18/09 — verified at `9d87ad80e`)
 
 The guard was **not** touched: discarding another account's answer is correct. What changed
 is that the discard can now say so.
@@ -129,9 +129,9 @@ new section and in the legacy one. No wrong number reached the screen — a wron
 
 | Role | Path |
 |------|------|
-| `queryRisk` returns `null` on discard; `invalidateRisk` registered as session reset and portfolio-mutation listener | `frontend/src/lib/stores/risk/riskStore.svelte.ts` |
-| `loadBase` — discard vs empty, re-ask once, `loadDiscarded`; `catalogState` precedent | `frontend/src/lib/stores/risk/riskPanelController.svelte.ts` |
-| Fifth branch `risk-correlation-discarded` + `risk-correlation-retry` | `frontend/src/lib/components/risk/AssetSetCorrelationSection.svelte` |
+| `queryRisk` returns `null` on discard; `invalidateRisk` registered as session reset and portfolio-mutation listener | `frontend/src/lib/features/risk/riskStore.svelte.ts` |
+| `loadBase` — discard vs empty, re-ask once, `loadDiscarded`; `catalogState` precedent | `frontend/src/lib/features/risk/riskPanelController.svelte.ts` |
+| Fifth branch `risk-correlation-discarded` + `risk-correlation-retry` | `frontend/src/lib/features/risk/AssetSetCorrelationSection.svelte` |
 | Generation bump on the first identity resolution, resetters skipped | `frontend/src/lib/stores/app/clientSession.ts` |
 | `checkAuth` / `login` — transition before `user` is set; `isAuthenticated` | `frontend/src/lib/stores/app/auth.ts` |
 | Markup guard `{:else if $isAuthenticated}` around `<slot />` | `frontend/src/routes/(app)/+layout.svelte` |
@@ -139,8 +139,8 @@ new section and in the legacy one. No wrong number reached the screen — a wron
 | `POST /api/v1/assets/prices/current` from the client | `frontend/src/lib/services/livePriceService.ts` |
 | Response interceptor → `notifyPortfolioMutation` | `frontend/src/lib/api/zodios-client.ts` |
 | Which requests count as portfolio mutations | `frontend/src/lib/stores/portfolio/portfolioMutation.ts` |
-| Unit tests — stale discard, first-identity order | `frontend/src/lib/stores/risk/riskStore.test.ts` |
-| Unit tests — re-ask, discard vs empty | `frontend/src/lib/stores/risk/riskPanelController.test.ts` |
+| Unit tests — stale discard, first-identity order | `frontend/src/lib/features/risk/riskStore.test.ts` |
+| Unit tests — re-ask, discard vs empty | `frontend/src/lib/features/risk/riskPanelController.test.ts` |
 | Diagnosis (reperto R2) and repair (passo 1c) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/S5-esecuzione.md` |
 | The 23/09 reading of the same race (F-2) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-laboratorio-postmerge.md` |
 | Registry — R2-62, R2-66, R2-93, R2-95, R2-101 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/REGISTRO.md` |

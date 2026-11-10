@@ -54,6 +54,12 @@ request carrying 14 quotes fits the list page; the asset-detail poll sends a sin
 stops when the page is left, the range stops including today, or the server goes away — not when
 anyone stops looking.
 
+2026-11-07 lint: the poll changed after filing. Since `305850522` (15/10, decision 31) the Assets list polls every
+60 s (`ASSET_LIST_LIVE_INTERVAL_MS`) through `startActivePolling`, which pauses while the tab is hidden and after two
+minutes without input (`LIVE_UPDATES_IDLE_MS`), and resumes by itself; the asset detail sends one request every 30 s
+under the same rule. A forgotten, idle tab now stops writing within about two minutes; a visible tab still in use
+keeps writing, so the method below still holds.
+
 ## Solution (as recorded)
 
 - **Stopping the server is not hygiene: it is the remedy.**
@@ -100,11 +106,12 @@ What browser writes into measured lanes cost this campaign, during the look and 
 
 | Role | Path |
 |------|------|
-| Live-price `$effect` — on mount, then every 30 s while the range ends today | `frontend/src/routes/(app)/assets/+page.svelte` |
+| Live-price `$effect` — on mount, then every 30 s while the range ends today (every 60 s, paused when hidden or idle, since `305850522`) | `frontend/src/routes/(app)/assets/+page.svelte` |
+| The poller that pauses on a hidden tab or after two idle minutes; the cadences | `frontend/src/lib/features/live-updates/activePolling.ts`, `frontend/src/lib/features/live-updates/cadence.ts` |
 | `POST /api/v1/assets/prices/current` from the client | `frontend/src/lib/services/livePriceService.ts` |
-| The endpoint | `backend/app/api/v1/assets.py` |
-| The `/prices/current` writer — F.2 bootstrap, F.3 intra-day extend (`_extend_ohlc_bounds`); the log lines above | `backend/app/services/asset_sources/price_query.py` |
-| The equivalent bounds merge R2-64 cited (bulk upserts); every write stamps `fetched_at` | `backend/app/services/asset_sources/price_store.py` |
+| The endpoint | `backend/app/api/v1/assets/prices.py` |
+| The `/prices/current` writer — F.2 bootstrap, F.3 intra-day extend (`_extend_ohlc_bounds`); the log lines above | `backend/app/services/assets/price_query.py` |
+| The equivalent bounds merge R2-64 cited (bulk upserts); every write stamps `fetched_at` | `backend/app/services/assets/price_store.py` |
 | Rule Ⓓ, the order, the gate | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/_comune.md` |
 | The measurement — passo 1e, *Fuori pista* 1 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/S5-esecuzione.md` |
 | Registry — R2-64, R2-68, R2-74, R2-98, R2-101, R2-111, R2-115 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/REGISTRO.md` |

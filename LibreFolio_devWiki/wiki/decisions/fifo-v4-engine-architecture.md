@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-07-22
 tags: [backend, fifo, architecture, fx, audit]
-related: [fifo-v4-cost-allocation-ladder, fifo-v4-income-eligibility-d1, entities/fifo-lot-engine, entities/lots-analysis-service]
+related: [decisions/fifo-v4-cost-allocation-ladder, decisions/fifo-v4-income-eligibility-d1, entities/fifo-lot-engine, entities/lots-analysis-service]
 ---
 
 # Decision: FIFO v4 engine architecture — one canonical path, native+target events, inline audit
@@ -43,7 +43,8 @@ fee/income share.
   pooling/allocation; no parallel legacy income/cost path is allowed to coexist after the merge.
 - Every `EconomicEvent` carries both native and target-currency amounts (Option B); the engine is
   "target-value aware" for comparisons but "FX-mechanism agnostic" — it never resolves FX itself, the service
-  layer does, using the existing `_FxRateResolver`.
+  layer does, using the existing `_FxRateResolver` (since `94901d98a`, 12/10: `FxRateResolver` in
+  `financial_math/lots/conversions.py`; 2026-11-07 lint).
 - The native pool is canonical; the target total is derived by converting the native pool exactly once per
   pool; per-event target amounts exist only for intra-pool weighting and audit display.
 - Every allocation (cost or income) is recorded as a 3-level inline audit trail, always present in the API
@@ -78,4 +79,5 @@ fee/income share.
 | Executable plan | `.../v4-fee_tax_integration/implementation-plan-v5.md` §1.1, §3, §7.3-§7.4, Fase 2-8 |
 | Engine | `backend/app/services/financial_math/fifo/engine.py` |
 | Orchestration service | `backend/app/services/lots_analysis_service.py` |
+| FX resolver of a lots analysis (`FxRateResolver`) | `backend/app/services/financial_math/lots/conversions.py` |
 | Public DTO | `backend/app/schemas/portfolio.py` |

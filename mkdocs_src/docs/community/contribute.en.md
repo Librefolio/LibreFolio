@@ -88,14 +88,6 @@ A simple but powerful way to help: **star the repository** on GitHub! It increas
 
 ---
 
-## :globe_with_meridians: What's Next — LibreFolio Cloud
-
-For those who want to use LibreFolio but don't have the time, skills, or infrastructure to self-host, we're planning a **hosted platform** — **LibreFolio Cloud**. It will offer all the same powerful features without any technical setup, plus upcoming **AI-powered analytics** to help you make smarter investment decisions.
-
-To sustain the infrastructure, maintenance, and ongoing development, the cloud platform will be offered as a **subscription service** — pricing to be determined later.
-
----
-
 !!! tip "Thank you!"
 
     Every form of support — code, ideas, bug reports, or donations — is deeply appreciated. Together we can build the best self-hosted portfolio tracker! :rocket:

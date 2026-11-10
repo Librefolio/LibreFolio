@@ -5,6 +5,7 @@ status: resolved
 date: 2026-04-10
 tags: [backend, providers, lifecycle, architecture]
 related_features: [F-059, F-060, F-025]
+related: [features/F-059, features/F-060, features/F-025, problems/justetf-websocket-disconnect]
 ---
 
 # Decision: Generic Provider Shutdown Mechanism
@@ -43,7 +44,7 @@ class JustETFProvider(AssetSourceProvider):
 
 `AbstractProviderRegistry.shutdown_all_providers()` iterates all registered providers and calls `shutdown()` — no `hasattr` checks needed.
 
-`main.py` lifespan now calls:
+The lifespan now calls, in its `providers` shutdown step (`services/platform/app_lifespan.py` since CP2b of 1.3.0):
 ```python
 AssetProviderRegistry.shutdown_all_providers()
 FXProviderRegistry.shutdown_all_providers()
@@ -63,5 +64,5 @@ BRIMProviderRegistry.shutdown_all_providers()
 | Role | Path |
 |------|------|
 | Provider registry | `backend/app/services/provider_registry.py` |
-| Asset service (thread isolation) | `backend/app/services/asset_source.py` |
-| FastAPI app lifecycle | `backend/app/main.py` |
+| Asset service (thread isolation) | `backend/app/services/assets/core.py` |
+| FastAPI app lifecycle | `backend/app/services/platform/app_lifespan.py` |

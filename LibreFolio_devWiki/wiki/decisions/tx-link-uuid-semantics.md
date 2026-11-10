@@ -1,10 +1,12 @@
 ---
 title: "Transaction Link UUID Semantics (TRANSFER/DEPOSIT/WITHDRAWAL/FX_CONVERSION)"
+category: decision
 date: 2026-04-21
 status: resolved
 tags: [transactions, transfer, linking, link_uuid]
 related_features: [F-046, F-051]
 related_sources: [sources/phase07-part3-api-consolidation]
+related: [features/F-046, features/F-051, sources/phase07-part3-api-consolidation, decisions/cash-transfer-split-promote, decisions/pair-description-tags-validation, decisions/transfer-pair-same-asset-opposite-quantity]
 ---
 
 # Decision: Transaction link_uuid Semantics
@@ -30,6 +32,9 @@ FX_CONVERSION (currency swap on a multi-currency account, e.g., Revolut) stays
 intra-broker by design. No restriction added — two FX_CONVERSION legs on the same
 broker are valid.
 
+*2026-11-07 lint:* today the two legs **must** be on one broker, and (W6-7, `9189857d1`, 2026-10-28) in two different
+currencies — `_validate_linked_pair` in `validation.py`.
+
 ### 3. DEPOSIT/WITHDRAWAL soft linking
 
 Cash transfers between brokers ("I moved 5k EUR from Fineco to IBKR") are represented
@@ -41,6 +46,10 @@ a bidirectional `related_transaction_id` reference.
 - No effect on balance calculations (DEPOSIT in + WITHDRAWAL out already balance)
 - Adds cognitive overhead for limited benefit
 - The link is purely a UI/refinement hint
+
+*2026-11-07 lint:* superseded on 2026-04-30: `CASH_TRANSFER` became a first-class type (`6f3b4a123`), and a cash move between
+two brokers is a linked CASH_TRANSFER pair with distinct brokers, one currency and exactly opposite amounts —
+[[decisions/cash-transfer-split-promote]].
 
 ### 4. Transfer suggest: no dedicated endpoint
 
@@ -65,6 +74,10 @@ validate pair → delete pair → create pair with new type + link_uuid
 Uses the same `create_bulk` logic internally. Useful during BRIM refinement when an
 imported DEPOSIT/WITHDRAWAL pair is later recognized as an inter-broker transfer.
 
+*2026-11-07 lint:* a promote goes through the batch pipeline (`POST /transactions/commit` with `promotes[]`) since plan D1
+([[decisions/cash-transfer-split-promote]]); the `transfers/promote` route was removed in `d5e467847` (2026-11-04) —
+[[decisions/api-routes-removed-without-deprecation]].
+
 ## Type pairing rules (summary)
 
 | Type | Must link to | Same broker? |
@@ -74,10 +87,19 @@ imported DEPOSIT/WITHDRAWAL pair is later recognized as an inter-broker transfer
 | DEPOSIT | WITHDRAWAL | ✅ or ❌ |
 | WITHDRAWAL | DEPOSIT | ✅ or ❌ |
 
+*2026-11-07 lint:* the table is the April state. Today both legs share one type (`_validate_linked_pair`): TRANSFER and
+CASH_TRANSFER need distinct brokers, FX_CONVERSION one broker; a cash move between brokers is a CASH_TRANSFER pair.
+
+## Links
+
+- [[decisions/cash-transfer-split-promote]] — CASH_TRANSFER, and split/promote through the batch pipeline
+- [[decisions/pair-description-tags-validation]] — the two legs share description and tags
+- [[decisions/transfer-pair-same-asset-opposite-quantity]] — a TRANSFER pair is one asset in opposite quantities
+
 ## Source files
 
 | Role | Path |
 |------|------|
-| Transaction service (link_uuid validation) | `backend/app/services/transaction_service.py` |
+| Batch stage (link_uuid validation) | `backend/app/services/transactions/batch_creates.py` |
 | Transaction API | `backend/app/api/v1/transactions.py` |
-| Transfer promote endpoint | `backend/app/api/v1/transactions.py` |
+| Transfer promote endpoint (removed in `d5e467847`) | `backend/app/api/v1/transactions.py` |

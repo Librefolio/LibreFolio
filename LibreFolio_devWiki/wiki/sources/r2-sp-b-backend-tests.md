@@ -3,7 +3,7 @@ title: "R2 SP-B — Backend Tests WAC + Mock Data"
 category: source
 source_type: plan
 date_ingested: 2026-06-01
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/PlanD_SplitPromoteFullStack/R2-WalktestFeedback/plan-R2-SP-B-BackendTests.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-R2/SP-B-BackendTests/plan-R2-SP-B-BackendTests.prompt.md
 tags: [phase07, transactions, wac, testing, backend, mock-data, fx]
 related:
   - sources/r2-walktest-feedback-master
@@ -15,7 +15,7 @@ related:
 # Source: R2 SP-B — Backend Tests WAC + Mock Data
 
 ## Summary
-Test coverage plan (✅ completed, commit `fb6d28606`) for the WAC feature. Creates `test_transactions_wac.py` with 13 API tests (WAC-1→WAC-13) covering the new Currency schema, auto-calc WAC, FX cross-currency, recalc-wac endpoint, and validation error cases. Self-contained tests — each creates its own user+broker+asset via API.
+Test coverage plan (✅ completed, commit `ccb7c52c2`) for the WAC feature. Creates `test_transactions_wac.py` with 13 API tests (WAC-1→WAC-13) covering the new Currency schema, auto-calc WAC, FX cross-currency, recalc-wac endpoint, and validation error cases. Self-contained tests — each creates its own user+broker+asset via API.
 
 ## Key Takeaways
 

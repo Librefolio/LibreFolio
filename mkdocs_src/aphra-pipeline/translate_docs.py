@@ -31,6 +31,7 @@ from pathlib import Path
 
 # Sibling modules: dev.py and a standalone run both put this directory on sys.path.
 import changelog as cl
+import page_equivalence as pe
 from code_blocks import code_line_mask, restore_code_indent
 
 # ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ SOURCE_LANG = "en"
 FALLBACK_TARGETS = ["it", "fr", "es"]
 
 # EN-only nav sections (not translated)
-EN_ONLY_SECTIONS = {"💻 Developer Manual", "POC UX"}
+EN_ONLY_SECTIONS = {"💻 Developer Manual"}
 
 # Aphra model configuration (overridable per-role via .env)
 DEFAULT_APHRA_MODEL = "google/gemini-2.5-flash"
@@ -86,6 +87,7 @@ DEFAULT_DOUBLEWORD_FETCH_RETRY_DELAY = 2.0  # seconds between re-fetch attempts
 # Language detection from frontend
 # ---------------------------------------------------------------------------
 
+
 def _detect_target_languages() -> list[str]:
     """
     Parse frontend/src/lib/i18n/index.ts to extract SUPPORTED_LOCALES,
@@ -110,6 +112,7 @@ def _detect_target_languages() -> list[str]:
 # ---------------------------------------------------------------------------
 # Nav parsing — extract translatable file paths from mkdocs.yml
 # ---------------------------------------------------------------------------
+
 
 def _extract_nav_paths(nav_items: list, skip_sections: set[str]) -> list[str]:
     """
@@ -155,7 +158,7 @@ def get_translatable_files() -> list[str]:
     _SafeIgnoreLoader.add_multi_constructor(
         "tag:yaml.org,2002:python/",
         lambda loader, suffix, node: None,
-        )
+    )
 
     with open(MKDOCS_YML, "r", encoding="utf-8") as f:
         config = yaml.load(f, Loader=_SafeIgnoreLoader)
@@ -167,6 +170,7 @@ def get_translatable_files() -> list[str]:
 # ---------------------------------------------------------------------------
 # Hash cache for incremental translation
 # ---------------------------------------------------------------------------
+
 
 def _load_hashes() -> dict:
     """Load translation hash cache, migrating old format if needed.
@@ -233,6 +237,7 @@ def _read_source(filepath: Path) -> tuple[str, str]:
 # Before them, an analysis moved ``md5`` to the new source and kept ``langs_done``: a language that then failed, or was
 # never reached (interrupted run, ``--lang`` subset), stayed «done» and its stale translation was never offered again.
 
+
 def _needs_translation(entry: dict | None, source_md5: str, lang: str, force: bool = False) -> bool:
     """Whether ``lang`` must be (re)translated: forced, never done, or done from another version of the source."""
     if force or not entry:
@@ -289,6 +294,7 @@ def _cache_stamp(entry: dict, source_md5: str, langs: list[str], now: str) -> di
 # ---------------------------------------------------------------------------
 # Aphra config.toml generation
 # ---------------------------------------------------------------------------
+
 
 def _is_local_mode() -> bool:
     """Check if using a local LLM backend (Ollama, llama.cpp, etc.).
@@ -425,7 +431,7 @@ def _cleanup_config_toml() -> None:
 # Post-processing — clean Aphra translation artifacts
 # ---------------------------------------------------------------------------
 
-_INNER_SPACES = re.compile(r'(?<=\S) {2,}(?=\S)')
+_INNER_SPACES = re.compile(r"(?<=\S) {2,}(?=\S)")
 
 
 def _collapse_inner_spaces(text: str) -> str:
@@ -434,11 +440,8 @@ def _collapse_inner_spaces(text: str) -> str:
     Leading indentation (nested lists, admonition and content-tab bodies), Markdown hard
     breaks (two trailing spaces) and every line of a fenced code block are left alone.
     """
-    lines = text.split('\n')
-    return '\n'.join(
-        line if in_code else _INNER_SPACES.sub(' ', line)
-        for line, in_code in zip(lines, code_line_mask(text), strict=True)
-    )
+    lines = text.split("\n")
+    return "\n".join(line if in_code else _INNER_SPACES.sub(" ", line) for line, in_code in zip(lines, code_line_mask(text), strict=True))
 
 
 def _clean_translation(text: str) -> str:
@@ -457,16 +460,13 @@ def _clean_translation(text: str) -> str:
     10. Admonition body indentation (1 space → 4 spaces for MkDocs)
     """
     # 1. Strip <translation> / </translation> tags (Aphra wraps output in these)
-    text = re.sub(r'</?translation>', '', text)
+    text = re.sub(r"</?translation>", "", text)
 
     # 2. Remove "Translator's Notes" trailing section (any language variant)
     #    Matches: ---\n### Note del Traduttore, ### Translator's Notes,
     #    ### Notes du Traducteur, ### Notas del Traductor, etc.
     #    Also matches without the --- separator.
-    _NOTES_KW = (
-        r"(?:Note?\s+(?:del|du)\s+Trad\w+|Translator['\u2019]?s?\s+Notes?"
-        r"|Notas?\s+del?\s+Trad\w+)"
-    )
+    _NOTES_KW = r"(?:Note?\s+(?:del|du)\s+Trad\w+|Translator['\u2019]?s?\s+Notes?" r"|Notas?\s+del?\s+Trad\w+)"
     translator_notes_patterns = [
         # With --- separator (most common)
         rf"\n---\s*\n+\s*###?\s*{_NOTES_KW}.*",
@@ -483,30 +483,30 @@ def _clean_translation(text: str) -> str:
         rf"\n<h[1-6]>\s*{_NOTES_KW}\s*</h[1-6]>.*",
     ]
     for pattern in translator_notes_patterns:
-        text = re.sub(pattern, '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(pattern, "", text, flags=re.DOTALL | re.IGNORECASE)
 
     # 3. Remove glossary block at the end
     #    Scan backwards: remove lines that are blank or start with [N]
-    lines = text.split('\n')
+    lines = text.split("\n")
     while lines:
         stripped = lines[-1].strip()
-        if stripped == '' or re.match(r'^\[\d+\]', stripped):
+        if stripped == "" or re.match(r"^\[\d+\]", stripped):
             lines.pop()
         else:
             break
-    text = '\n'.join(lines)
+    text = "\n".join(lines)
 
     # 4. Remove inline [N] markers — but NOT markdown links [text](url)
     #    [N] followed by ( is a markdown link → keep. Everything else → strip.
-    text = re.sub(r'\[(\d+)\](?!\()', '', text)
+    text = re.sub(r"\[(\d+)\](?!\()", "", text)
 
     # 5. Remove footnote definitions [^N]: ... (LLM translator notes disguised as footnotes)
     #    These are NOT standard markdown footnotes from the source — the EN source has none.
     #    They appear only in translations as "Translator Notes" in footnote format.
-    text = re.sub(r'^\[\^\d+\]:.*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r"^\[\^\d+\]:.*$", "", text, flags=re.MULTILINE)
 
     # 6. Remove inline footnote references [^N] (not markdown links)
-    text = re.sub(r'\[\^\d+\]', '', text)
+    text = re.sub(r"\[\^\d+\]", "", text)
 
     # 7. Clean up double/triple spaces left by removed markers. Only between words and
     #    outside fenced code: collapsing every run of spaces in the whole document used to
@@ -515,7 +515,7 @@ def _clean_translation(text: str) -> str:
     text = _collapse_inner_spaces(text)
 
     # 8. Collapse 3+ consecutive blank lines to 2 (left by removed footnotes)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
 
     # 9. Normalize internal .md links to language-independent form
     #    MkDocs i18n plugin resolves [text](page.md) to the correct language.
@@ -523,33 +523,33 @@ def _clean_translation(text: str) -> str:
     #    which is wrong. Strip language suffixes from internal .md links.
     #    Matches: .en.md, .it.md, .fr.md, .es.md (and any 2-letter code)
     #    Preserves anchors: page.en.md#section → page.md#section
-    text = re.sub(r'(\([^)]*?)\.[a-z]{2}\.md([)#])', r'\1.md\2', text)
+    text = re.sub(r"(\([^)]*?)\.[a-z]{2}\.md([)#])", r"\1.md\2", text)
 
     # 10. Fix admonition body indentation (safety net)
     #     Pads `!!!` admonition body lines from 1 space to the 4 spaces MkDocs
     #     Material requires: pattern !!! type "title"\n\n <body>. Most 1-space
     #     bodies came from the old step 7 collapsing every run of spaces, not
     #     from the LLM; step 7 no longer touches indentation, so this rarely fires.
-    lines = text.split('\n')
+    lines = text.split("\n")
     in_admonition = False
     after_blank = False
     fixed_lines: list[str] = []
     for line in lines:
-        if re.match(r'^!!! \w+', line):
+        if re.match(r"^!!! \w+", line):
             in_admonition = True
             after_blank = False
             fixed_lines.append(line)
             continue
-        if in_admonition and line.strip() == '':
+        if in_admonition and line.strip() == "":
             after_blank = True
             fixed_lines.append(line)
             continue
         if in_admonition and after_blank:
-            if re.match(r'^ [^ ]', line):
+            if re.match(r"^ [^ ]", line):
                 # 1 space → 4 spaces
-                fixed_lines.append('   ' + line)
+                fixed_lines.append("   " + line)
                 continue
-            elif re.match(r'^    ', line) or line.strip() == '':
+            elif re.match(r"^    ", line) or line.strip() == "":
                 fixed_lines.append(line)
                 continue
             else:
@@ -563,10 +563,10 @@ def _clean_translation(text: str) -> str:
         in_admonition = False
         after_blank = False
         fixed_lines.append(line)
-    text = '\n'.join(fixed_lines)
+    text = "\n".join(fixed_lines)
 
     # Ensure file ends with single newline
-    text = text.rstrip() + '\n'
+    text = text.rstrip() + "\n"
 
     return text
 
@@ -585,51 +585,52 @@ def _finalize_translation(source_text: str, translated: str) -> tuple[str, int]:
 # Structural diff — objective comparison between source and translation
 # ---------------------------------------------------------------------------
 
+
 def _extract_md_structure(text: str) -> dict:
     """
     Extract structural elements from a markdown document.
 
     Returns a dict with counts and lists of structural elements.
     """
-    lines = text.split('\n')
+    lines = text.split("\n")
 
     # ── Headings ──
     headings = []
     for line in lines:
-        m = re.match(r'^(#{1,6})\s+(.*)', line)
+        m = re.match(r"^(#{1,6})\s+(.*)", line)
         if m:
             headings.append({"level": len(m.group(1)), "text": m.group(2).strip()})
 
     # ── Code blocks (fenced) ──
-    code_blocks = re.findall(r'^```(\w*)', text, re.MULTILINE)
+    code_blocks = re.findall(r"^```(\w*)", text, re.MULTILINE)
 
     # ── Links [text](url) — exclude images ![alt](url) ──
-    links = re.findall(r'(?<!!)\[([^\]]*)\]\(([^)]+)\)', text)
+    links = re.findall(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)", text)
 
     # ── Images ![alt](url) ──
-    images = re.findall(r'!\[([^\]]*)\]\(([^)]+)\)', text)
+    images = re.findall(r"!\[([^\]]*)\]\(([^)]+)\)", text)
 
     # ── Admonitions (MkDocs Material: !!! or ???) ──
-    admonitions = re.findall(r'^(!!!|\?\?\?)\s+(\w+)', text, re.MULTILINE)
+    admonitions = re.findall(r"^(!!!|\?\?\?)\s+(\w+)", text, re.MULTILINE)
 
     # ── Horizontal rules ──
-    hr_count = len(re.findall(r'^\s*---\s*$', text, re.MULTILINE))
+    hr_count = len(re.findall(r"^\s*---\s*$", text, re.MULTILINE))
 
     # ── Lists ──
-    bullets = re.findall(r'^\s*[-*+]\s', text, re.MULTILINE)
-    numbered = re.findall(r'^\s*\d+\.\s', text, re.MULTILINE)
+    bullets = re.findall(r"^\s*[-*+]\s", text, re.MULTILINE)
+    numbered = re.findall(r"^\s*\d+\.\s", text, re.MULTILINE)
 
     # ── Tables (pipe-delimited rows) ──
-    table_rows = re.findall(r'^\s*\|.+\|\s*$', text, re.MULTILINE)
+    table_rows = re.findall(r"^\s*\|.+\|\s*$", text, re.MULTILINE)
 
     # ── Bold markers ──
-    bold_count = len(re.findall(r'\*\*[^*]+\*\*', text))
+    bold_count = len(re.findall(r"\*\*[^*]+\*\*", text))
 
     # ── URLs used in links (for URL preservation check) ──
     # Normalize: strip language suffixes (.en.md, .it.md → .md)
     # so structural diff doesn't flag language-variant links as differences
-    _norm_lang_re = re.compile(r'\.[a-z]{2}\.md')
-    link_urls = [_norm_lang_re.sub('.md', url) for _, url in links]
+    _norm_lang_re = re.compile(r"\.[a-z]{2}\.md")
+    link_urls = [_norm_lang_re.sub(".md", url) for _, url in links]
     image_urls = [url for _, url in images]
 
     return {
@@ -653,17 +654,15 @@ def _extract_md_structure(text: str) -> dict:
     }
 
 
-def _per_line_count_detail(source_text: str, translated_text: str,
-                           pattern: re.Pattern, *,
-                           max_mismatches: int = 8) -> list[str]:
+def _per_line_count_detail(source_text: str, translated_text: str, pattern: re.Pattern, *, max_mismatches: int = 8) -> list[str]:
     """Return per-line detail for a regex-count discrepancy.
 
     Compares each line pair (by line number) and lists lines where the
     match count for *pattern* differs between source and translation.
     Returns a list of formatted strings ready to be appended to an issue.
     """
-    src_lines = source_text.split('\n')
-    trn_lines = translated_text.split('\n')
+    src_lines = source_text.split("\n")
+    trn_lines = translated_text.split("\n")
     diffs: list[str] = []
     found = 0
     for i in range(max(len(src_lines), len(trn_lines))):
@@ -684,11 +683,12 @@ def _per_line_count_detail(source_text: str, translated_text: str,
                 break
     return diffs
 
+
 # Pre-compiled patterns for per-line checks
-_RE_BOLD = re.compile(r'\*\*[^*]+\*\*')
-_RE_LINK = re.compile(r'(?<!!)\[[^\]]*\]\([^)]+\)')
-_RE_BULLET = re.compile(r'^\s*[-*+]\s')
-_RE_NUMBERED = re.compile(r'^\s*\d+\.\s')
+_RE_BOLD = re.compile(r"\*\*[^*]+\*\*")
+_RE_LINK = re.compile(r"(?<!!)\[[^\]]*\]\([^)]+\)")
+_RE_BULLET = re.compile(r"^\s*[-*+]\s")
+_RE_NUMBERED = re.compile(r"^\s*\d+\.\s")
 
 
 # ---------------------------------------------------------------------------
@@ -697,15 +697,15 @@ _RE_NUMBERED = re.compile(r'^\s*\d+\.\s')
 
 # Match $$...$$ (block) first, then $...$ (inline, non-greedy)
 # Escaped \$ is explicitly excluded from acting as a delimiter
-_RE_LATEX_BLOCK = re.compile(r'\$\$(.+?)\$\$', re.DOTALL)
-_RE_LATEX_INLINE = re.compile(r'(?<![\\\$])\$(?!\$)(.+?)(?<![\\\$])\$(?!\$)')
+_RE_LATEX_BLOCK = re.compile(r"\$\$(.+?)\$\$", re.DOTALL)
+_RE_LATEX_INLINE = re.compile(r"(?<![\\\$])\$(?!\$)(.+?)(?<![\\\$])\$(?!\$)")
 # Strip <script>...</script> blocks to avoid JS regex $-signs being detected as LaTeX
-_RE_SCRIPT_BLOCK = re.compile(r'<script[^>]*>.*?</script>', re.DOTALL | re.IGNORECASE)
+_RE_SCRIPT_BLOCK = re.compile(r"<script[^>]*>.*?</script>", re.DOTALL | re.IGNORECASE)
 
 
 def _strip_script_blocks(text: str) -> str:
     """Remove <script>...</script> blocks to prevent JS $ signs from matching as LaTeX."""
-    return _RE_SCRIPT_BLOCK.sub('', text)
+    return _RE_SCRIPT_BLOCK.sub("", text)
 
 
 def _extract_latex_formulas(text: str) -> list[str]:
@@ -716,7 +716,7 @@ def _extract_latex_formulas(text: str) -> list[str]:
     for m in _RE_LATEX_BLOCK.finditer(text):
         formulas.append(m.group(0))
     # Remove block formulas to avoid double-matching inline
-    text_no_block = _RE_LATEX_BLOCK.sub('', text)
+    text_no_block = _RE_LATEX_BLOCK.sub("", text)
     for m in _RE_LATEX_INLINE.finditer(text_no_block):
         formulas.append(m.group(0))
     return formulas
@@ -729,7 +729,7 @@ def _extract_latex_with_lines(text: str) -> list[tuple[str, int]]:
     """
     text = _strip_script_blocks(text)
     results = []
-    lines = text.split('\n')
+    lines = text.split("\n")
 
     # Track which char offset corresponds to which line
     line_starts = [0]
@@ -770,15 +770,15 @@ def _validate_latex_syntax(formula: str) -> list[str]:
     in text context, orphan backslashes, balanced \\begin/\\end.
     """
     # Strip outer $/$$ delimiters for analysis
-    inner = formula.strip('$').strip()
+    inner = formula.strip("$").strip()
     errors = []
 
     # 1. Balanced curly braces
     depth = 0
     for ch in inner:
-        if ch == '{':
+        if ch == "{":
             depth += 1
-        elif ch == '}':
+        elif ch == "}":
             depth -= 1
         if depth < 0:
             break
@@ -786,20 +786,20 @@ def _validate_latex_syntax(formula: str) -> list[str]:
         errors.append(f"unbalanced braces (depth={depth:+d})")
 
     # 2. Balanced \left / \right
-    lefts = len(re.findall(r'\\left[\s({[\|.]', inner + ' '))
-    rights = len(re.findall(r'\\right[\s)}\]|.]', inner + ' '))
+    lefts = len(re.findall(r"\\left[\s({[\|.]", inner + " "))
+    rights = len(re.findall(r"\\right[\s)}\]|.]", inner + " "))
     if lefts != rights:
         errors.append(f"\\left/{lefts} vs \\right/{rights}")
 
     # 3. Balanced \begin{X} / \end{X}
-    begins = re.findall(r'\\begin\{(\w+)\}', inner)
-    ends = re.findall(r'\\end\{(\w+)\}', inner)
+    begins = re.findall(r"\\begin\{(\w+)\}", inner)
+    ends = re.findall(r"\\end\{(\w+)\}", inner)
     if begins != ends:
         errors.append(f"\\begin/{begins} vs \\end/{ends}")
 
     # 4. Orphan backslash (single \ not followed by a letter, another \, or valid symbols)
     # Valid after \: letters (commands), \, {, }, space, !, ,, ;, :, > (spacing), %, &, #, _, ^, $
-    orphans = re.findall(r'(?<!\\)\\(?![a-zA-Z\\{} !,;:>%&#_^$\n])', inner)
+    orphans = re.findall(r"(?<!\\)\\(?![a-zA-Z\\{} !,;:>%&#_^$\n])", inner)
     if orphans:
         errors.append(f"orphan backslash(es): {len(orphans)}")
 
@@ -839,25 +839,13 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
     src_outline_levels = [h["level"] for h in src["headings"]]
     trn_outline_levels = [h["level"] for h in trn["headings"]]
     if src_outline_levels != trn_outline_levels:
-        issues.append(
-            f"HEADING_STRUCTURE: heading level sequence differs.\n"
-            f"  Source:     {src_outline_levels}\n"
-            f"  Translated: {trn_outline_levels}"
-        )
+        issues.append(f"HEADING_STRUCTURE: heading level sequence differs.\n" f"  Source:     {src_outline_levels}\n" f"  Translated: {trn_outline_levels}")
 
     # ── 3. Code blocks ──
     if len(src["code_blocks"]) != len(trn["code_blocks"]):
-        issues.append(
-            f"CODE_BLOCKS: source={len(src['code_blocks'])}, "
-            f"translated={len(trn['code_blocks'])} "
-            f"(Δ{len(trn['code_blocks']) - len(src['code_blocks']):+d})"
-        )
+        issues.append(f"CODE_BLOCKS: source={len(src['code_blocks'])}, " f"translated={len(trn['code_blocks'])} " f"(Δ{len(trn['code_blocks']) - len(src['code_blocks']):+d})")
     elif src["code_blocks"] != trn["code_blocks"]:
-        issues.append(
-            f"CODE_BLOCK_LANGS: language tags differ.\n"
-            f"  Source:     {src['code_blocks']}\n"
-            f"  Translated: {trn['code_blocks']}"
-        )
+        issues.append(f"CODE_BLOCK_LANGS: language tags differ.\n" f"  Source:     {src['code_blocks']}\n" f"  Translated: {trn['code_blocks']}")
 
     # ── 4. Link URLs preservation ──
     src_urls = sorted(src["link_urls"])
@@ -878,63 +866,37 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
         detail_str = ""
         if link_detail:
             detail_str = "\n" + "\n".join(link_detail)
-        issues.append(
-            f"LINK_COUNT: source={len(src['links'])}, "
-            f"translated={len(trn['links'])} "
-            f"(Δ{len(trn['links']) - len(src['links']):+d})"
-            f"{detail_str}"
-        )
+        issues.append(f"LINK_COUNT: source={len(src['links'])}, " f"translated={len(trn['links'])} " f"(Δ{len(trn['links']) - len(src['links']):+d})" f"{detail_str}")
 
     # ── 6. Images ──
     if len(src["images"]) != len(trn["images"]):
-        issues.append(
-            f"IMAGE_COUNT: source={len(src['images'])}, "
-            f"translated={len(trn['images'])} "
-            f"(Δ{len(trn['images']) - len(src['images']):+d})"
-        )
+        issues.append(f"IMAGE_COUNT: source={len(src['images'])}, " f"translated={len(trn['images'])} " f"(Δ{len(trn['images']) - len(src['images']):+d})")
     src_img_urls = sorted(src["image_urls"])
     trn_img_urls = sorted(trn["image_urls"])
     if src_img_urls != trn_img_urls:
-        issues.append(
-            f"IMAGE_URLS: image URL set differs.\n"
-            f"  Source:     {src_img_urls}\n"
-            f"  Translated: {trn_img_urls}"
-        )
+        issues.append(f"IMAGE_URLS: image URL set differs.\n" f"  Source:     {src_img_urls}\n" f"  Translated: {trn_img_urls}")
 
     # ── 7. Admonitions (MkDocs Material) ──
     if len(src["admonitions"]) != len(trn["admonitions"]):
-        issues.append(
-            f"ADMONITIONS: source={len(src['admonitions'])}, "
-            f"translated={len(trn['admonitions'])} "
-            f"(Δ{len(trn['admonitions']) - len(src['admonitions']):+d})"
-        )
+        issues.append(f"ADMONITIONS: source={len(src['admonitions'])}, " f"translated={len(trn['admonitions'])} " f"(Δ{len(trn['admonitions']) - len(src['admonitions']):+d})")
 
     # ── 7b. Admonition empty line (Prettier-safe) ──
     # Each !!!/??? directive MUST be followed by an empty line before the
     # indented body.  Without it, Prettier strips the 4-space indent.
-    _adm_re = re.compile(r'^(?:!!!|[?]{3})\s+\w+')
+    _adm_re = re.compile(r"^(?:!!!|[?]{3})\s+\w+")
     tr_lines = translated_text.splitlines()
     bad_adm_lines = []
     for i, line in enumerate(tr_lines):
         if _adm_re.match(line):
-            if i + 1 < len(tr_lines) and tr_lines[i + 1].strip() != '':
-                if tr_lines[i + 1].startswith('    '):
+            if i + 1 < len(tr_lines) and tr_lines[i + 1].strip() != "":
+                if tr_lines[i + 1].startswith("    "):
                     bad_adm_lines.append(i + 1)
     if bad_adm_lines:
-        issues.append(
-            f"ADMONITION_EMPTY_LINE: {len(bad_adm_lines)} admonition(s) missing "
-            f"empty line after directive (lines {bad_adm_lines}). "
-            f"Add a blank line between the !!! directive and the indented body — "
-            f"without it Prettier will strip the indentation and break the box."
-        )
+        issues.append(f"ADMONITION_EMPTY_LINE: {len(bad_adm_lines)} admonition(s) missing " f"empty line after directive (lines {bad_adm_lines}). " f"Add a blank line between the !!! directive and the indented body — " f"without it Prettier will strip the indentation and break the box.")
 
     # ── 8. Horizontal rules ──
     if src["hr_count"] != trn["hr_count"]:
-        issues.append(
-            f"HORIZONTAL_RULES: source={src['hr_count']}, "
-            f"translated={trn['hr_count']} "
-            f"(Δ{trn['hr_count'] - src['hr_count']:+d})"
-        )
+        issues.append(f"HORIZONTAL_RULES: source={src['hr_count']}, " f"translated={trn['hr_count']} " f"(Δ{trn['hr_count'] - src['hr_count']:+d})")
 
     # ── 9. Lists ──
     if src["bullet_count"] != trn["bullet_count"]:
@@ -942,31 +904,17 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
         detail_str = ""
         if bullet_detail:
             detail_str = "\n" + "\n".join(bullet_detail)
-        issues.append(
-            f"BULLET_LIST: source={src['bullet_count']}, "
-            f"translated={trn['bullet_count']} "
-            f"(Δ{trn['bullet_count'] - src['bullet_count']:+d})"
-            f"{detail_str}"
-        )
+        issues.append(f"BULLET_LIST: source={src['bullet_count']}, " f"translated={trn['bullet_count']} " f"(Δ{trn['bullet_count'] - src['bullet_count']:+d})" f"{detail_str}")
     if src["numbered_count"] != trn["numbered_count"]:
         num_detail = _per_line_count_detail(source_text, translated_text, _RE_NUMBERED)
         detail_str = ""
         if num_detail:
             detail_str = "\n" + "\n".join(num_detail)
-        issues.append(
-            f"NUMBERED_LIST: source={src['numbered_count']}, "
-            f"translated={trn['numbered_count']} "
-            f"(Δ{trn['numbered_count'] - src['numbered_count']:+d})"
-            f"{detail_str}"
-        )
+        issues.append(f"NUMBERED_LIST: source={src['numbered_count']}, " f"translated={trn['numbered_count']} " f"(Δ{trn['numbered_count'] - src['numbered_count']:+d})" f"{detail_str}")
 
     # ── 10. Tables ──
     if src["table_row_count"] != trn["table_row_count"]:
-        issues.append(
-            f"TABLE_ROWS: source={src['table_row_count']}, "
-            f"translated={trn['table_row_count']} "
-            f"(Δ{trn['table_row_count'] - src['table_row_count']:+d})"
-        )
+        issues.append(f"TABLE_ROWS: source={src['table_row_count']}, " f"translated={trn['table_row_count']} " f"(Δ{trn['table_row_count'] - src['table_row_count']:+d})")
 
     # ── 11. Bold markers ──
     if src["bold_count"] != trn["bold_count"]:
@@ -974,21 +922,12 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
         detail_str = ""
         if bold_detail:
             detail_str = "\n" + "\n".join(bold_detail)
-        issues.append(
-            f"BOLD_MARKERS: source={src['bold_count']}, "
-            f"translated={trn['bold_count']} "
-            f"(Δ{trn['bold_count'] - src['bold_count']:+d})"
-            f"{detail_str}"
-        )
+        issues.append(f"BOLD_MARKERS: source={src['bold_count']}, " f"translated={trn['bold_count']} " f"(Δ{trn['bold_count'] - src['bold_count']:+d})" f"{detail_str}")
 
     # ── 12. Block count delta: content dropped or truncated (wrap-insensitive, see "block_count") ──
     delta_blocks = trn["block_count"] - src["block_count"]
     if abs(delta_blocks) > max(3, src["block_count"] * 0.15):
-        issues.append(
-            f"LINE_COUNT: source={src['block_count']} blocks ({src['line_count']} lines), "
-            f"translated={trn['block_count']} blocks ({trn['line_count']} lines) "
-            f"(Δ{delta_blocks:+d} blocks, >{15}% difference)"
-        )
+        issues.append(f"LINE_COUNT: source={src['block_count']} blocks ({src['line_count']} lines), " f"translated={trn['block_count']} blocks ({trn['line_count']} lines) " f"(Δ{delta_blocks:+d} blocks, >{15}% difference)")
 
     # ── 13. LaTeX formulas — count + syntax validation ──
     src_formulas = _extract_latex_formulas(source_text)
@@ -997,14 +936,11 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
     trn_formulas_lines = _extract_latex_with_lines(translated_text)
     if len(src_formulas) != len(trn_formulas):
         # Build a compact side-by-side showing line numbers
-        detail_lines = [
-            f"LATEX_COUNT: source={len(src_formulas)}, "
-            f"translated={len(trn_formulas)} "
-            f"(Δ{len(trn_formulas) - len(src_formulas):+d})"
-        ]
+        detail_lines = [f"LATEX_COUNT: source={len(src_formulas)}, " f"translated={len(trn_formulas)} " f"(Δ{len(trn_formulas) - len(src_formulas):+d})"]
+
         # Truncate formulas for display (single line, max 60 chars)
         def _short(f: str, maxlen: int = 60) -> str:
-            s = f.replace('\n', ' ').strip()
+            s = f.replace("\n", " ").strip()
             return s if len(s) <= maxlen else s[:maxlen] + "…"
 
         detail_lines.append("  EN formulas:")
@@ -1020,14 +956,14 @@ def _structural_diff(source_text: str, translated_text: str) -> str:
         errs = _validate_latex_syntax(tf)
         if errs:
             src_f = src_formulas_lines[idx][0] if idx < len(src_formulas_lines) else "(no source)"
-            broken.append(f"  #{idx + 1} (TRN L{tline}): {', '.join(errs)}\n"
-                          f"    EN:  {src_f}\n"
-                          f"    TRN: {tf}")
+            broken.append(f"  #{idx + 1} (TRN L{tline}): {', '.join(errs)}\n" f"    EN:  {src_f}\n" f"    TRN: {tf}")
     if broken:
-        issues.append(
-            f"LATEX_SYNTAX: {len(broken)} formula(s) with broken LaTeX:\n"
-            + "\n".join(broken)
-        )
+        issues.append(f"LATEX_SYNTAX: {len(broken)} formula(s) with broken LaTeX:\n" + "\n".join(broken))
+
+    # ── 13b. What a reader must still find: diagrams, tabs, tables, identifiers, code, admonitions, anchors ──
+    for check in (pe.check_mermaid, pe.check_tabs, pe.check_tables, pe.check_identifiers, pe.check_code_content, pe.check_admonition_sequence, pe.check_heading_anchors):
+        for difference in check(source_text, translated_text):
+            issues.append(f"{difference.check.upper().replace('-', '_')}: {difference.message}")
 
     # ── 14. Source heading outline (for critic reference) ──
     info.append("SOURCE_OUTLINE (for reference):")
@@ -1062,6 +998,7 @@ def _structural_diff_report(source_path: Path, translated_path: Path) -> str:
     source_text = source_path.read_text(encoding="utf-8")
     translated_text = translated_path.read_text(encoding="utf-8")
     return _structural_diff(source_text, translated_text)
+
 
 def _estimate_tokens(char_count: int) -> dict:
     """
@@ -1098,6 +1035,7 @@ def _format_tokens(total: int) -> str:
 # ---------------------------------------------------------------------------
 # Terminology glossary — per-language term mappings
 # ---------------------------------------------------------------------------
+
 
 def _load_glossary(target_lang: str) -> str:
     """
@@ -1161,17 +1099,20 @@ DEFAULT_RATE_LIMIT_PAUSE = 90  # seconds between retries
 
 class RateLimitError(Exception):
     """Raised when the LLM API returns HTTP 429 and all retries are exhausted."""
+
     pass
 
 
 class AuthError(Exception):
     """Raised when the LLM API returns HTTP 401 (key disabled/invalid)."""
+
     pass
 
 
 # ---------------------------------------------------------------------------
 # Time formatting helpers
 # ---------------------------------------------------------------------------
+
 
 def _now() -> str:
     """Return current local time as HH:MM:SS."""
@@ -1228,7 +1169,7 @@ def _strip_think_blocks(text: str) -> str:
     if not text:
         return text
     # Remove all <think>...</think> blocks (greedy, may span many lines)
-    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
     return cleaned.strip()
 
 
@@ -1247,6 +1188,7 @@ def _apply_client_timeout(model_client) -> None:
     timeout_s = _get_step_timeout()
     try:
         import httpx
+
         model_client.client.timeout = httpx.Timeout(
             float(timeout_s),
             connect=10.0,
@@ -1260,12 +1202,10 @@ def _is_rate_limit_error(e: Exception) -> bool:
     """Check if an exception is a rate limit (HTTP 429) error."""
     err_type = type(e).__name__.lower()
     err_str = str(e).lower()
-    return any(term in err_str or term in err_type
-               for term in ('ratelimit', 'rate_limit', '429', 'rate limit', 'too many requests'))
+    return any(term in err_str or term in err_type for term in ("ratelimit", "rate_limit", "429", "rate limit", "too many requests"))
 
 
-def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RATE_LIMIT_RETRIES,
-               log_buf: list[str] | None = None, **kwargs):
+def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RATE_LIMIT_RETRIES, log_buf: list[str] | None = None, **kwargs):
     """
     Call an Aphra workflow step with proper error handling.
 
@@ -1287,6 +1227,7 @@ def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RA
       - Timeout → raises TimeoutError
       - Connection refused → raises ConnectionError
     """
+
     def _log(msg: str) -> None:
         if log_buf is not None:
             log_buf.append(msg)
@@ -1304,7 +1245,7 @@ def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RA
             err_str = err_str_raw.lower()
             err_type = type(e).__name__
 
-            if '401' in err_str or 'unauthorized' in err_str or 'user not found' in err_str or 'authenticationerror' in err_type.lower():
+            if "401" in err_str or "unauthorized" in err_str or "user not found" in err_str or "authenticationerror" in err_type.lower():
                 raise AuthError(
                     f"{step_name}: API key invalid or disabled (HTTP 401).\n"
                     f"       OpenRouter sometimes disables keys (especially with free models).\n"
@@ -1318,8 +1259,7 @@ def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RA
             if _is_rate_limit_error(e):
                 if attempt < rate_limit_retries:
                     remaining = rate_limit_retries - attempt
-                    _log(f"       🛑 Rate limit (429). "
-                         f"Pausing {pause_s}s, then retry ({remaining} attempts left)...")
+                    _log(f"       🛑 Rate limit (429). " f"Pausing {pause_s}s, then retry ({remaining} attempts left)...")
                     # Countdown display
                     for sec in range(pause_s, 0, -30):
                         time.sleep(min(30, sec))
@@ -1328,35 +1268,22 @@ def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RA
                     _log(f"       🔄 [{_now()}] Retry {step_name}...")
                     continue
                 else:
-                    raise RateLimitError(
-                        f"{step_name}: rate limit hit (HTTP 429) after {rate_limit_retries} retries.\n"
-                        f"       Progress is saved in cache — completed translations won't be redone.\n"
-                        f"       Re-run the same command when the rate limit resets."
-                    ) from e
+                    raise RateLimitError(f"{step_name}: rate limit hit (HTTP 429) after {rate_limit_retries} retries.\n" f"       Progress is saved in cache — completed translations won't be redone.\n" f"       Re-run the same command when the rate limit resets.") from e
 
             err_type = type(e).__name__
             err_str = str(e).lower()
 
             # ── Timeout (HTTP-level — connection was actually closed) ──
-            if 'timeout' in err_type.lower() or 'timeout' in err_str or 'timed out' in err_str:
+            if "timeout" in err_type.lower() or "timeout" in err_str or "timed out" in err_str:
                 timeout_s = _get_step_timeout()
-                raise TimeoutError(
-                    f"{step_name} timed out after {timeout_s}s. "
-                    f"The request was cancelled and the model stopped. "
-                    f"Set APHRA_STEP_TIMEOUT in .env to increase (current: {timeout_s}s)."
-                ) from e
+                raise TimeoutError(f"{step_name} timed out after {timeout_s}s. " f"The request was cancelled and the model stopped. " f"Set APHRA_STEP_TIMEOUT in .env to increase (current: {timeout_s}s).") from e
 
             # ── Connection refused / unreachable ──
-            if any(term in err_str for term in ('connect', 'refused', 'unreachable', 'no route')):
+            if any(term in err_str for term in ("connect", "refused", "unreachable", "no route")):
                 custom_url = _get_base_url()
                 if custom_url:
                     ollama_url = custom_url.replace("/v1", "")
-                    raise ConnectionError(
-                        f"{step_name}: cannot connect to LLM backend at {custom_url}.\n"
-                        f"       Is Ollama running? Start it with:\n"
-                        f"         ollama serve\n"
-                        f"       Then verify with: curl {ollama_url}/api/tags"
-                    ) from e
+                    raise ConnectionError(f"{step_name}: cannot connect to LLM backend at {custom_url}.\n" f"       Is Ollama running? Start it with:\n" f"         ollama serve\n" f"       Then verify with: curl {ollama_url}/api/tags") from e
                 else:
                     raise ConnectionError(
                         f"{step_name}: cannot connect to OpenRouter (https://openrouter.ai/api/v1).\n"
@@ -1371,10 +1298,7 @@ def _call_step(func, *args, step_name: str, rate_limit_retries: int = DEFAULT_RA
             raise
 
 
-def _robust_refine(workflow, context, source_text: str, *,
-                   translation: str, glossary: str, critique: str,
-                   max_retries: int = 2,
-                   log_buf: list[str] | None = None) -> str:
+def _robust_refine(workflow, context, source_text: str, *, translation: str, glossary: str, critique: str, max_retries: int = 2, log_buf: list[str] | None = None) -> str:
     """
     Step 5 Refine with retry and fallback parsing.
 
@@ -1385,6 +1309,7 @@ def _robust_refine(workflow, context, source_text: str, *,
 
     Returns translated text, or empty string on total failure.
     """
+
     def _log(msg: str) -> None:
         if log_buf is not None:
             log_buf.append(msg)
@@ -1394,8 +1319,12 @@ def _robust_refine(workflow, context, source_text: str, *,
     for attempt in range(max_retries + 1):
         try:
             raw_output = _call_step(
-                workflow.refine, context, source_text,
-                translation=translation, glossary=glossary, critique=critique,
+                workflow.refine,
+                context,
+                source_text,
+                translation=translation,
+                glossary=glossary,
+                critique=critique,
                 step_name="Refine",
                 log_buf=log_buf,
             )
@@ -1624,14 +1553,10 @@ def _create_doubleword_client(api_key: str, models: dict):
             try:
                 result = asyncio.run(asyncio.wait_for(_call(), timeout=timeout_s))
             except TimeoutError:
-                raise TimeoutError(
-                    f"Doubleword flex queue timeout after {_format_elapsed(timeout_s)}. "
-                    f"Increase DOUBLEWORD_QUEUE_TIMEOUT in .env (current: {timeout_s}s)."
-                )
+                raise TimeoutError(f"Doubleword flex queue timeout after {_format_elapsed(timeout_s)}. " f"Increase DOUBLEWORD_QUEUE_TIMEOUT in .env (current: {timeout_s}s).")
             if result and "<think>" in result:
                 result = _strip_think_blocks(result)
             return result
-
 
     return DoublewordClient()
 
@@ -1670,7 +1595,7 @@ def _create_model_client(api_key: str, models: dict):
 
     def _patched_call(*args, **kwargs):
         result = original_call(*args, **kwargs)
-        if result and '<think>' in result:
+        if result and "<think>" in result:
             result = _strip_think_blocks(result)
         return result
 
@@ -1698,14 +1623,14 @@ def _analyze_source(source_text: str, model_client, models: dict):
     workflow_config = workflow.load_config(global_config_path=str(CONFIG_TOML))
 
     # Ensure prompts_dir is set for step1 append files
-    if 'prompts_dir' not in workflow_config:
-        workflow_config['prompts_dir'] = str(PROMPTS_DIR)
+    if "prompts_dir" not in workflow_config:
+        workflow_config["prompts_dir"] = str(PROMPTS_DIR)
 
     # Store prompts_dir on workflow instance so self.get_prompt() uses overrides
-    workflow._prompts_dir = workflow_config.get('prompts_dir')
+    workflow._prompts_dir = workflow_config.get("prompts_dir")
 
     # Use analyzer model (reasoning) for analysis step
-    workflow_config['writer'] = models['analyzer']
+    workflow_config["writer"] = models["analyzer"]
 
     context = TranslationContext(
         model_client=model_client,
@@ -1720,8 +1645,13 @@ def _analyze_source(source_text: str, model_client, models: dict):
 
 
 def _translate_one_lang(
-    source_text: str, source_path: Path, target_lang: str,
-    workflow, workflow_config: dict, model_client, models: dict,
+    source_text: str,
+    source_path: Path,
+    target_lang: str,
+    workflow,
+    workflow_config: dict,
+    model_client,
+    models: dict,
     analysis: str,
     log_buf: list[str] | None = None,
 ) -> dict:
@@ -1781,7 +1711,7 @@ def _translate_one_lang(
     context.set_workflow_config(workflow_config)
 
     # Ensure prompts_dir is set on workflow for step3/4/5 append files
-    workflow._prompts_dir = workflow_config.get('prompts_dir', str(PROMPTS_DIR))
+    workflow._prompts_dir = workflow_config.get("prompts_dir", str(PROMPTS_DIR))
 
     web_search = _load_env_var("APHRA_WEB_SEARCH", "false").lower() in ("true", "1", "yes")
 
@@ -1800,11 +1730,13 @@ def _translate_one_lang(
         _log(f"       [2/5] 🔍 Search    ... skipped")
 
     # Step 3: Translate (writer model — generation)
-    workflow_config['writer'] = models['writer']
+    workflow_config["writer"] = models["writer"]
     t2 = time.time()
     try:
         translation = _call_step(
-            workflow.translate, context, source_text,
+            workflow.translate,
+            context,
+            source_text,
             step_name="Translate",
             log_buf=log_buf,
         )
@@ -1829,8 +1761,7 @@ def _translate_one_lang(
     struct_diff = _structural_diff(source_text, translation)
     struct_issues = 0
     if struct_diff:
-        struct_issues = sum(1 for line in struct_diff.splitlines()
-                            if re.match(r'^\d+\.', line.strip()))
+        struct_issues = sum(1 for line in struct_diff.splitlines() if re.match(r"^\d+\.", line.strip()))
         _log(f"       [3.5]  📐 StructDiff ... {struct_issues} issue{'s' if struct_issues != 1 else ''}")
     else:
         _log(f"       [3.5]  📐 StructDiff ... clean ✓")
@@ -1850,7 +1781,11 @@ def _translate_one_lang(
     t3 = time.time()
     try:
         critique = _call_step(
-            workflow.critique, context, source_text, translation, glossary_combined,
+            workflow.critique,
+            context,
+            source_text,
+            translation,
+            glossary_combined,
             step_name="Critique",
             log_buf=log_buf,
         )
@@ -1874,8 +1809,12 @@ def _translate_one_lang(
     t4 = time.time()
     try:
         translated = _robust_refine(
-            workflow, context, source_text,
-            translation=translation, glossary=glossary_combined, critique=critique,
+            workflow,
+            context,
+            source_text,
+            translation=translation,
+            glossary=glossary_combined,
+            critique=critique,
             log_buf=log_buf,
         )
     except AuthError:
@@ -1907,6 +1846,7 @@ def _translate_one_lang(
 # ---------------------------------------------------------------------------
 # Pipeline worker — thread-safe wrappers for parallel mode
 # ---------------------------------------------------------------------------
+
 
 def _pipeline_analyze(
     source_path: Path,
@@ -1995,6 +1935,7 @@ def _pipeline_worker(
 # Main orchestration
 # ---------------------------------------------------------------------------
 
+
 def _run_translate_pages(args) -> int:
     """Translate the nav pages (or the ``--file`` ones): the page half of ``run_translate``."""
     global DEFAULT_RATE_LIMIT_RETRIES  # noqa: PLW0603
@@ -2024,7 +1965,7 @@ def _run_translate_pages(args) -> int:
                 resolved_paths.extend(Path(m).resolve() for m in cwd_matches)
             elif docs_matches:
                 resolved_paths.extend(Path(m).resolve() for m in docs_matches)
-            elif '*' in f or '?' in f or '[' in f:
+            elif "*" in f or "?" in f or "[" in f:
                 # Glob pattern that matched nothing
                 print(f"  ⚠️  No files matching glob: {f}", file=sys.stderr)
                 print(f"       (searched CWD: {Path.cwd() / f})", file=sys.stderr)
@@ -2057,7 +1998,7 @@ def _run_translate_pages(args) -> int:
             if p in seen:
                 continue
             seen.add(p)
-            if not p.name.endswith('.en.md'):
+            if not p.name.endswith(".en.md"):
                 continue  # skip non-source files silently
             # Cache key: relative to docs/ when possible, otherwise filename
             try:
@@ -2116,8 +2057,7 @@ def _run_translate_pages(args) -> int:
             total_est["output"] += est["output"]
             total_est["total"] += est["total"]
 
-        print(f"\n📊 Estimated tokens: {_format_tokens(total_est['total'])} "
-              f"(in: {_format_tokens(total_est['input'])}, out: {_format_tokens(total_est['output'])})")
+        print(f"\n📊 Estimated tokens: {_format_tokens(total_est['total'])} " f"(in: {_format_tokens(total_est['input'])}, out: {_format_tokens(total_est['output'])})")
         print(f"🔍 Dry run — no files translated.")
         return 0
 
@@ -2141,7 +2081,7 @@ def _run_translate_pages(args) -> int:
     else:
         print(f"   Analyzer:  {models['analyzer']}  (analyze + critique)")
         print(f"   Writer:    {models['writer']}  (translate + refine)")
-        if models['searcher'] not in (models['writer'], models['analyzer']):
+        if models["searcher"] not in (models["writer"], models["analyzer"]):
             print(f"   Searcher:  {models['searcher']}")
     web_search = _load_env_var("APHRA_WEB_SEARCH", "false").lower() in ("true", "1", "yes")
     print(f"   Web search: {'ON' if web_search else 'OFF (skipped)'}")
@@ -2155,6 +2095,7 @@ def _run_translate_pages(args) -> int:
 
     # ── Group plan by source file for shared analysis ──
     from collections import OrderedDict
+
     file_groups: OrderedDict[tuple[str, Path], list[str]] = OrderedDict()
     for cache_key, source_path, lang in plan:
         key = (cache_key, source_path)
@@ -2198,10 +2139,10 @@ def _run_translate_pages(args) -> int:
             #   analyze:   ("analyze", cache_key, source_path, langs_list)
             #   translate: ("translate", cache_key, source_path, lang, log_buf)
             pending = {}
-            file_lang_expected = {}    # cache_key -> set of expected langs
-            file_lang_order = {}       # cache_key -> list of langs (original order)
-            file_source_paths = {}     # cache_key -> source_path
-            file_completed = {}        # cache_key -> {lang: (result, log_buf)}
+            file_lang_expected = {}  # cache_key -> set of expected langs
+            file_lang_order = {}  # cache_key -> list of langs (original order)
+            file_source_paths = {}  # cache_key -> source_path
+            file_completed = {}  # cache_key -> {lang: (result, log_buf)}
             printed_files = set()
             auth_stopped = False
 
@@ -2263,8 +2204,7 @@ def _run_translate_pages(args) -> int:
 
                         # ── Analyze succeeded → save to cache & spawn translate tasks ──
                         try:
-                            analysis_serialized = json.dumps(analyze_result["analysis"], ensure_ascii=False) \
-                                if not isinstance(analyze_result["analysis"], str) else analyze_result["analysis"]
+                            analysis_serialized = json.dumps(analyze_result["analysis"], ensure_ascii=False) if not isinstance(analyze_result["analysis"], str) else analyze_result["analysis"]
                         except (TypeError, ValueError):
                             analysis_serialized = str(analyze_result["analysis"])
                         _cache_mark_analyzed(hashes, cache_key, analyze_result["source_md5"], analysis_serialized, models["analyzer"])
@@ -2309,9 +2249,7 @@ def _run_translate_pages(args) -> int:
                         file_completed.setdefault(cache_key, {})[lang] = (result, log_buf)
 
                         # When ALL languages of a file are done → build & print full block
-                        if (cache_key not in printed_files
-                                and cache_key in file_lang_expected
-                                and set(file_completed[cache_key].keys()) >= file_lang_expected[cache_key]):
+                        if cache_key not in printed_files and cache_key in file_lang_expected and set(file_completed[cache_key].keys()) >= file_lang_expected[cache_key]:
                             printed_files.add(cache_key)
                             src_path = file_source_paths[cache_key]
 
@@ -2338,20 +2276,25 @@ def _run_translate_pages(args) -> int:
                                     success_count += 1
                                     completed_translations.append((cache_key, src_path, output_path, lang_p))
 
-                                    _cache_mark_translated(hashes, cache_key, lang_p, {
-                                        "models": r.get("models", {}),
-                                        "critique": r.get("critique", ""),
-                                        "structural_diff": r.get("structural_diff", ""),
-                                        "structural_issues": r.get("structural_issues", 0),
-                                        "elapsed_s": elapsed_s,
-                                    }, datetime.now(timezone.utc).isoformat())
+                                    _cache_mark_translated(
+                                        hashes,
+                                        cache_key,
+                                        lang_p,
+                                        {
+                                            "models": r.get("models", {}),
+                                            "critique": r.get("critique", ""),
+                                            "structural_diff": r.get("structural_diff", ""),
+                                            "structural_issues": r.get("structural_issues", 0),
+                                            "elapsed_s": elapsed_s,
+                                        },
+                                        datetime.now(timezone.utc).isoformat(),
+                                    )
                                 else:
                                     fail_count += 1
                                     reason = r.get("failure_reason", "Unknown")
                                     block.append(f"  │  ❌ Failed: {reason}")
                                     failed_translations.append((cache_key, lang_p, reason))
-                                    _cache_mark_failed(hashes, cache_key, lang_p, reason, r.get("models", {}),
-                                                       datetime.now(timezone.utc).isoformat())
+                                    _cache_mark_failed(hashes, cache_key, lang_p, reason, r.get("models", {}), datetime.now(timezone.utc).isoformat())
 
                             block.append(f"  └─")
                             _save_hashes(hashes)
@@ -2361,7 +2304,6 @@ def _run_translate_pages(args) -> int:
 
                     if auth_stopped:
                         break
-
 
             executor.shutdown(wait=True)
 
@@ -2381,7 +2323,9 @@ def _run_translate_pages(args) -> int:
                 print(f"     [1/5] 📝 Analyze   ... ", end="", flush=True)
                 try:
                     workflow, workflow_config, analysis = _analyze_source(
-                        source_text, model_client, models,
+                        source_text,
+                        model_client,
+                        models,
                     )
                     analysis_elapsed = time.time() - t0
                     print(f"({_format_elapsed(analysis_elapsed)}) [{models['analyzer'].split('/')[-1]}]", flush=True)
@@ -2444,21 +2388,26 @@ def _run_translate_pages(args) -> int:
                         success_count += 1
                         completed_translations.append((cache_key, source_path, output_path, lang))
 
-                        _cache_mark_translated(hashes, cache_key, lang, {
-                            "models": result.get("models", {}),
-                            "critique": result.get("critique", ""),
-                            "structural_diff": result.get("structural_diff", ""),
-                            "structural_issues": result.get("structural_issues", 0),
-                            "elapsed_s": round(elapsed, 1),
-                        }, datetime.now(timezone.utc).isoformat())
+                        _cache_mark_translated(
+                            hashes,
+                            cache_key,
+                            lang,
+                            {
+                                "models": result.get("models", {}),
+                                "critique": result.get("critique", ""),
+                                "structural_diff": result.get("structural_diff", ""),
+                                "structural_issues": result.get("structural_issues", 0),
+                                "elapsed_s": round(elapsed, 1),
+                            },
+                            datetime.now(timezone.utc).isoformat(),
+                        )
                         _save_hashes(hashes)
                     else:
                         fail_count += 1
                         reason = result.get("failure_reason", "Unknown")
                         print(f"     ❌ Failed: {reason}")
                         failed_translations.append((cache_key, lang, reason))
-                        _cache_mark_failed(hashes, cache_key, lang, reason, result.get("models", {}),
-                                           datetime.now(timezone.utc).isoformat())
+                        _cache_mark_failed(hashes, cache_key, lang, reason, result.get("models", {}), datetime.now(timezone.utc).isoformat())
                         _save_hashes(hashes)
 
                 if rate_limited:
@@ -2479,8 +2428,7 @@ def _run_translate_pages(args) -> int:
         for cache_key, source_path, output_path, lang in completed_translations:
             report = _structural_diff_report(source_path, output_path)
             if report:
-                issue_count = sum(1 for line in report.splitlines()
-                                  if re.match(r'^\d+\.', line.strip()))
+                issue_count = sum(1 for line in report.splitlines() if re.match(r"^\d+\.", line.strip()))
                 post_warnings.append((cache_key, lang, issue_count, report))
                 # Update hash cache with final structural diff
                 if cache_key in hashes and "langs" in hashes[cache_key] and lang in hashes[cache_key]["langs"]:
@@ -2491,7 +2439,7 @@ def _run_translate_pages(args) -> int:
             if cache_key not in checked_sources:
                 checked_sources.add(cache_key)
                 src_text = source_path.read_text(encoding="utf-8")
-                bad_links = re.findall(r'\[([^\]]*)\]\(([^)]*\.en\.md[^)]*)\)', src_text)
+                bad_links = re.findall(r"\[([^\]]*)\]\(([^)]*\.en\.md[^)]*)\)", src_text)
                 if bad_links:
                     examples = [f"[{text}]({url})" for text, url in bad_links[:5]]
                     source_link_warnings.append((cache_key, examples))
@@ -2546,11 +2494,10 @@ def _run_translate_pages(args) -> int:
         # Each report has lines like: "1. BOLD_MARKERS: source=15 ..."
         by_category: dict[str, list[tuple[str, str, str]]] = {}  # category -> [(cache_key, lang, detail)]
         for cache_key, lang, issue_count, report in post_warnings:
-            issue_lines = [line.strip() for line in report.splitlines()
-                           if re.match(r'^\d+\.', line.strip())]
+            issue_lines = [line.strip() for line in report.splitlines() if re.match(r"^\d+\.", line.strip())]
             for line in issue_lines:
                 # Extract category: "1. BOLD_MARKERS: source=15 ..." → "BOLD_MARKERS"
-                m = re.match(r'^\d+\.\s+(\w+):\s*(.*)', line)
+                m = re.match(r"^\d+\.\s+(\w+):\s*(.*)", line)
                 if m:
                     cat = m.group(1)
                     detail = m.group(2)
@@ -2585,9 +2532,7 @@ def _run_translate_pages(args) -> int:
             if len(examples) >= 5:
                 print(f"       ... (showing first 5)")
         # Build the fix command
-        affected_paths = " ".join(
-            f'"{DOCS_DIR / ck}"' for ck, _ in source_link_warnings
-        )
+        affected_paths = " ".join(f'"{DOCS_DIR / ck}"' for ck, _ in source_link_warnings)
         print(f"\n  💡 Fix with:")
         print(f"     sed -i '' 's/\\.en\\.md/.md/g' {affected_paths}")
         print()
@@ -2603,6 +2548,7 @@ def _run_translate_pages(args) -> int:
 # CHANGELOG.md sits at the project root, two levels above DOCS_DIR (mkdocs_src/docs/), and its translations beside it
 # as CHANGELOG.<lang>.md. Taking the path from DOCS_DIR at call time keeps every run that points DOCS_DIR elsewhere —
 # the tests' sandboxes — away from the repository's CHANGELOG.
+
 
 def _changelog_source() -> Path:
     return DOCS_DIR.parent.parent / cl.SOURCE.name
@@ -2677,9 +2623,7 @@ def _changelog_misfits(units, located: dict, new: dict, translations: dict, lang
     than it has pieces. Each piece fits on its own, so the cause is at a seam (a code fence left open, say)."""
     bodies, rebuilt = _changelog_bodies(units, located, new, translations, lang)
     fresh = new.get(lang, {})
-    return [(unit, parts) for unit in rebuilt
-            if unit.split and any(piece.key in fresh for piece in unit.pieces)
-            for parts in [len(cl.cut_parts(bodies[unit.name]))] if parts != len(unit.pieces)]
+    return [(unit, parts) for unit in rebuilt if unit.split and any(piece.key in fresh for piece in unit.pieces) for parts in [len(cl.cut_parts(bodies[unit.name]))] if parts != len(unit.pieces)]
 
 
 def _changelog_rebuild(units, located: dict, translations: dict, lang: str) -> str | None:
@@ -2693,8 +2637,7 @@ def _changelog_file_text(lang: str, source: Path) -> str | None:
     return cl.read_text(path) if path.exists() else None
 
 
-def _changelog_write(units, located: dict, new: dict, infos: dict, translations: dict, hashes: dict,
-                     lang: str, source: Path, now: str) -> list[str]:
+def _changelog_write(units, located: dict, new: dict, infos: dict, translations: dict, hashes: dict, lang: str, source: Path, now: str) -> list[str]:
     """Write ``CHANGELOG.<lang>.md`` (only when its text changes) and record each rebuilt piece's position. A chapter is
     rebuilt only when every piece of it has a translation, new or found; otherwise its old text stays as it was.
     Returns the units rebuilt."""
@@ -2744,13 +2687,11 @@ def _run_translate_changelog(args) -> int:
     if not plan:
         # Nothing for the model, but a section removed or moved in the English still leaves the files behind: the
         # chapters are rebuilt from the parts found, with no model call.
-        outdated = [lang for lang in target_langs
-                    if _changelog_rebuild(units, located, translations, lang) not in (None, _changelog_file_text(lang, source))]
+        outdated = [lang for lang in target_langs if _changelog_rebuild(units, located, translations, lang) not in (None, _changelog_file_text(lang, source))]
         if not outdated:
             print(f"✅ {cl.KEY}: every piece is up to date, nothing to translate.")
             return 0
-        print(f"📋 {cl.KEY}: nothing to translate; {', '.join(f'CHANGELOG.{lang}.md' for lang in outdated)} to rebuild"
-              " (sections removed or moved in the English)")
+        print(f"📋 {cl.KEY}: nothing to translate; {', '.join(f'CHANGELOG.{lang}.md' for lang in outdated)} to rebuild" " (sections removed or moved in the English)")
         if dry_run:
             return 0
         now = datetime.now(timezone.utc).isoformat()
@@ -2761,11 +2702,11 @@ def _run_translate_changelog(args) -> int:
         return 0
 
     from collections import OrderedDict
+
     pieces: OrderedDict[str, tuple] = OrderedDict()
     for unit, piece, lang in plan:
         pieces.setdefault(piece.key, (unit, piece, []))[2].append(lang)
-    print(f"\n📋 {cl.KEY}: {len(pieces)} piece(s), {len(plan)} translation(s) ({cl.PIECE_THRESHOLD:,} characters"
-          f" or less is one piece; a longer chapter is cut at its ### and #### lines)")
+    print(f"\n📋 {cl.KEY}: {len(pieces)} piece(s), {len(plan)} translation(s) ({cl.PIECE_THRESHOLD:,} characters" f" or less is one piece; a longer chapter is cut at its ### and #### lines)")
     for note in notes:
         print(f"   ⚠️  {note}")
     total = {"input": 0, "output": 0, "total": 0}
@@ -2774,8 +2715,7 @@ def _run_translate_changelog(args) -> int:
         for k in total:
             total[k] += est[k]
         print(f"  • {piece.key} → {lang}  ({_format_tokens(est['total'])})")
-    print(f"\n📊 Estimated tokens: {_format_tokens(total['total'])} "
-          f"(in: {_format_tokens(total['input'])}, out: {_format_tokens(total['output'])})")
+    print(f"\n📊 Estimated tokens: {_format_tokens(total['total'])} " f"(in: {_format_tokens(total['input'])}, out: {_format_tokens(total['output'])})")
     if dry_run:
         print("🔍 Dry run — the CHANGELOG was not translated.")
         return 0
@@ -2790,6 +2730,7 @@ def _run_translate_changelog(args) -> int:
     try:
         model_client = _create_model_client(api_key, models)
         with tempfile.TemporaryDirectory(prefix="lf-changelog-") as tmp:
+
             def work(index: int, piece, langs: list[str]):
                 path = Path(tmp) / f"piece-{index:03d}.en.md"
                 path.write_text(piece.text, encoding="utf-8")
@@ -2798,8 +2739,7 @@ def _run_translate_changelog(args) -> int:
                 for lang in langs:
                     t0 = time.time()
                     try:
-                        result = _translate_one_lang(piece.text, path, lang, workflow, dict(workflow_config),
-                                                     model_client, models, analysis, log_buf=[])
+                        result = _translate_one_lang(piece.text, path, lang, workflow, dict(workflow_config), model_client, models, analysis, log_buf=[])
                     except AuthError:
                         raise
                     except Exception as e:  # one language failing does not lose the others
@@ -2811,9 +2751,9 @@ def _run_translate_changelog(args) -> int:
                 return analysis, results
 
             from concurrent.futures import ThreadPoolExecutor, as_completed
+
             with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = {executor.submit(work, n, piece, langs): (unit, piece, langs)
-                           for n, (unit, piece, langs) in enumerate(pieces.values())}
+                futures = {executor.submit(work, n, piece, langs): (unit, piece, langs) for n, (unit, piece, langs) in enumerate(pieces.values())}
                 for future in as_completed(futures):
                     unit, piece, langs = futures[future]
                     now = datetime.now(timezone.utc).isoformat()
@@ -2884,7 +2824,7 @@ def _run_translate_changelog(args) -> int:
                 continue
             report = _structural_diff(unit.text(), unit.text(body))
             if report:
-                count = sum(1 for line in report.splitlines() if re.match(r'^\d+\.', line.strip()))
+                count = sum(1 for line in report.splitlines() if re.match(r"^\d+\.", line.strip()))
                 print(f"  ⚠️  {cl.KEY}#{unit.name} → {lang}: {count} structural issue(s)")
     done = sum(len(v) for v in new.values())
     print(f"\n{'=' * 50}")
@@ -2898,6 +2838,7 @@ def _run_translate_changelog(args) -> int:
 # ---------------------------------------------------------------------------
 # Check / diagnostics
 # ---------------------------------------------------------------------------
+
 
 def run_check(args) -> int:
     """
@@ -2918,6 +2859,7 @@ def run_check(args) -> int:
     print("1️⃣  Aphra module ...", end=" ", flush=True)
     try:
         from aphra import translate as _  # noqa: F401
+
         print("✅ importabile")
     except ImportError:
         print("❌ NON trovato")
@@ -2960,7 +2902,7 @@ def run_check(args) -> int:
     models = _load_models()
     if len(set(models.values())) == 1:
         # All roles use the same model
-        m = models['writer']
+        m = models["writer"]
         src = "(default)" if m == DEFAULT_APHRA_MODEL else "(da .env)"
         print(f"✅ {m} {src}")
     else:
@@ -3008,17 +2950,19 @@ def run_check(args) -> int:
         try:
             import urllib.request
             import urllib.error
+
             # Ollama health check (strip /v1 to get base Ollama URL)
             ollama_url = base_url.replace("/v1", "") if base_url else DEFAULT_OLLAMA_URL.replace("/v1", "")
             req = urllib.request.Request(f"{ollama_url}/api/tags")
             with urllib.request.urlopen(req, timeout=5) as resp:
                 if resp.status == 200:
                     import json as _json
+
                     data = _json.loads(resp.read())
                     model_names = [m.get("name", "?") for m in data.get("models", [])]
                     print(f"✅ connesso — {len(model_names)} modelli disponibili")
                     # Check if configured model is available
-                    configured = models['writer']
+                    configured = models["writer"]
                     found = any(configured in n or n.startswith(configured.split(":")[0]) for n in model_names)
                     if not found:
                         print(f"     ⚠️  Modello '{configured}' non trovato in Ollama")
@@ -3035,11 +2979,12 @@ def run_check(args) -> int:
             try:
                 import urllib.request
                 import urllib.error
+
                 models_url = f"{base_url.rstrip('/')}/models" if base_url else ""
                 req = urllib.request.Request(
                     models_url,
                     headers={"Authorization": f"Bearer {api_key}"},
-                    )
+                )
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     if resp.status == 200:
                         print("✅ connessione OK")
@@ -3058,10 +3003,11 @@ def run_check(args) -> int:
             try:
                 import urllib.request
                 import urllib.error
+
                 req = urllib.request.Request(
                     "https://openrouter.ai/api/v1/models",
                     headers={"Authorization": f"Bearer {api_key}"},
-                    )
+                )
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     if resp.status == 200:
                         print("✅ connessione OK")
@@ -3089,6 +3035,7 @@ def run_check(args) -> int:
 # ---------------------------------------------------------------------------
 # Structural diff — standalone command
 # ---------------------------------------------------------------------------
+
 
 def run_diff(args) -> int:
     """
@@ -3131,7 +3078,7 @@ def run_diff(args) -> int:
             if p in seen:
                 continue
             seen.add(p)
-            if not p.name.endswith('.en.md'):
+            if not p.name.endswith(".en.md"):
                 continue
             try:
                 cache_key = str(p.relative_to(DOCS_DIR))
@@ -3172,8 +3119,7 @@ def run_diff(args) -> int:
 
             if report:
                 files_with_issues += 1
-                issue_count = sum(1 for line in report.splitlines()
-                                  if re.match(r'^\d+\.', line.strip()))
+                issue_count = sum(1 for line in report.splitlines() if re.match(r"^\d+\.", line.strip()))
                 total_issues += issue_count
                 print(f"  ⚠️  {cache_key} → {lang}  ({issue_count} issue{'s' if issue_count != 1 else ''})")
                 if verbose:
@@ -3234,7 +3180,7 @@ def _diff_changelog(target_langs: list[str], verbose: bool, issues_only: bool) -
                 if not issues_only:
                     print(f"  ✅ {label}")
                 continue
-            count = sum(1 for line in report.splitlines() if re.match(r'^\d+\.', line.strip()))
+            count = sum(1 for line in report.splitlines() if re.match(r"^\d+\.", line.strip()))
             if counted:
                 with_issues += 1
                 issue_total += count
@@ -3251,6 +3197,7 @@ def _diff_changelog(target_langs: list[str], verbose: bool, issues_only: bool) -
 # ---------------------------------------------------------------------------
 # Inspect — view saved artifacts from hash cache
 # ---------------------------------------------------------------------------
+
 
 def run_inspect(args) -> int:
     """
@@ -3361,38 +3308,119 @@ def run_inspect(args) -> int:
 # CLI / dev.py integration
 # ---------------------------------------------------------------------------
 
+
 def _add_arguments(parser: argparse.ArgumentParser) -> None:
     """Add translate-specific arguments to a parser."""
     target_langs = _detect_target_languages()
 
-    parser.add_argument("--lang", action="extend", nargs="+", choices=target_langs, metavar="LANG", help=f"Target language(s). Detected from frontend: {target_langs}", )
-    parser.add_argument("--file", action="extend", nargs="+", metavar="PATH", help="File(s) or glob pattern(s) to translate (e.g. faq.en.md, user/*.en.md, 'user/**/*.en.md')", )
-    parser.add_argument("--force", action="store_true", help="Re-translate all files (ignore MD5 cache)", )
-    parser.add_argument("--dry-run", action="store_true", help="Show plan without translating", )
-    parser.add_argument("--rate-limit-retries", type=int, default=DEFAULT_RATE_LIMIT_RETRIES, metavar="N", help=f"Max retries on rate limit (429), with {DEFAULT_RATE_LIMIT_PAUSE}s pause between (default: {DEFAULT_RATE_LIMIT_RETRIES})", )
-    parser.add_argument("--workers", type=int, default=1, metavar="N", help="Number of parallel workers (default: 1 = sequential). For the pages, each worker runs one analysis or one language's translation; for the CHANGELOG, one piece (its analysis, then its languages). Use with caution on free-tier models that may have rate limits.", )
+    parser.add_argument(
+        "--lang",
+        action="extend",
+        nargs="+",
+        choices=target_langs,
+        metavar="LANG",
+        help=f"Target language(s). Detected from frontend: {target_langs}",
+    )
+    parser.add_argument(
+        "--file",
+        action="extend",
+        nargs="+",
+        metavar="PATH",
+        help="File(s) or glob pattern(s) to translate (e.g. faq.en.md, user/*.en.md, 'user/**/*.en.md')",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-translate all files (ignore MD5 cache)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show plan without translating",
+    )
+    parser.add_argument(
+        "--rate-limit-retries",
+        type=int,
+        default=DEFAULT_RATE_LIMIT_RETRIES,
+        metavar="N",
+        help=f"Max retries on rate limit (429), with {DEFAULT_RATE_LIMIT_PAUSE}s pause between (default: {DEFAULT_RATE_LIMIT_RETRIES})",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Number of parallel workers (default: 1 = sequential). For the pages, each worker runs one analysis or one language's translation; for the CHANGELOG, one piece (its analysis, then its languages). Use with caution on free-tier models that may have rate limits.",
+    )
 
 
 def _add_diff_arguments(parser: argparse.ArgumentParser) -> None:
     """Add translate-diff-specific arguments to a parser."""
     target_langs = _detect_target_languages()
 
-    parser.add_argument("--lang", action="extend", nargs="+", choices=target_langs, metavar="LANG", help=f"Target language(s). Detected from frontend: {target_langs}", )
-    parser.add_argument("--file", action="extend", nargs="+", metavar="PATH", help="File(s) or glob pattern(s) to check (e.g. faq.en.md, 'user/**/*.en.md')", )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed structural diff reports", )
-    parser.add_argument("--issues-only", "-w", action="store_true", help="Show only files with issues (hide clean files)", )
+    parser.add_argument(
+        "--lang",
+        action="extend",
+        nargs="+",
+        choices=target_langs,
+        metavar="LANG",
+        help=f"Target language(s). Detected from frontend: {target_langs}",
+    )
+    parser.add_argument(
+        "--file",
+        action="extend",
+        nargs="+",
+        metavar="PATH",
+        help="File(s) or glob pattern(s) to check (e.g. faq.en.md, 'user/**/*.en.md')",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed structural diff reports",
+    )
+    parser.add_argument(
+        "--issues-only",
+        "-w",
+        action="store_true",
+        help="Show only files with issues (hide clean files)",
+    )
 
 
 def _add_inspect_arguments(parser: argparse.ArgumentParser) -> None:
     """Add translate-inspect-specific arguments to a parser."""
     target_langs = _detect_target_languages()
 
-    parser.add_argument("--lang", action="extend", nargs="+", choices=target_langs, metavar="LANG", help=f"Filter by language(s)", )
-    parser.add_argument("--file", action="extend", nargs="+", metavar="PATH", help="Filter by file name (substring match)", )
-    parser.add_argument("--critique", action="store_true", help="Show only critique artifacts", )
-    parser.add_argument("--analysis", action="store_true", help="Show only analysis artifacts", )
-    parser.add_argument("--diff", action="store_true", help="Show only structural diff artifacts", )
-
+    parser.add_argument(
+        "--lang",
+        action="extend",
+        nargs="+",
+        choices=target_langs,
+        metavar="LANG",
+        help=f"Filter by language(s)",
+    )
+    parser.add_argument(
+        "--file",
+        action="extend",
+        nargs="+",
+        metavar="PATH",
+        help="Filter by file name (substring match)",
+    )
+    parser.add_argument(
+        "--critique",
+        action="store_true",
+        help="Show only critique artifacts",
+    )
+    parser.add_argument(
+        "--analysis",
+        action="store_true",
+        help="Show only analysis artifacts",
+    )
+    parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="Show only structural diff artifacts",
+    )
 
 
 def _add_stamp_arguments(parser: argparse.ArgumentParser) -> None:
@@ -3400,16 +3428,23 @@ def _add_stamp_arguments(parser: argparse.ArgumentParser) -> None:
     target_langs = _detect_target_languages()
 
     parser.add_argument(
-        "--lang", action="extend", nargs="+",
-        choices=target_langs, metavar="LANG",
+        "--lang",
+        action="extend",
+        nargs="+",
+        choices=target_langs,
+        metavar="LANG",
         help=f"Language(s) to stamp as translated. Default: all detected ({', '.join(target_langs)})",
     )
     parser.add_argument(
-        "--file", action="extend", nargs="+", metavar="PATH",
+        "--file",
+        action="extend",
+        nargs="+",
+        metavar="PATH",
         help="File(s) or glob pattern(s) to stamp (e.g. getting-started.en.md). Default: all nav files.",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Show what would be stamped without modifying the cache.",
     )
 
@@ -3458,14 +3493,12 @@ def _stamp_changelog(args) -> int:
             parts = cl.cut_parts(body) if unit.split else [body]
             if len(parts) != len(unit.pieces):
                 skipped += 1
-                print(f"  ⚠️  {cl.KEY}#{unit.name} → {lang}: {len(parts)} translated parts for {len(unit.pieces)} pieces,"
-                      " not stamped")
+                print(f"  ⚠️  {cl.KEY}#{unit.name} → {lang}: {len(parts)} translated parts for {len(unit.pieces)} pieces," " not stamped")
                 continue
             for index, piece in enumerate(unit.pieces):
                 entry = hashes.get(piece.key, {})
                 lang_entry = entry.get("langs", {}).get(lang, {})
-                if (entry.get("md5") == piece.md5 and lang in entry.get("langs_done", [])
-                        and lang_entry.get("index") == index):
+                if entry.get("md5") == piece.md5 and lang in entry.get("langs_done", []) and lang_entry.get("index") == index:
                     continue
                 print(f"  {'🔍' if dry_run else '📌'} {piece.key} → {lang}  (MD5 {(before.get(piece.key) or '<none>')[:8]}→{piece.md5[:8]})")
                 if not dry_run:
@@ -3479,13 +3512,11 @@ def _stamp_changelog(args) -> int:
                     if key not in current:
                         hashes[key].get("langs", {}).get(lang, {}).pop("index", None)
     if dry_run:
-        print(f"\n🔍 Dry run — {stamped} {cl.KEY} piece(s) would be stamped"
-              + (f", {skipped} chapter(s) skipped" if skipped else ""))
+        print(f"\n🔍 Dry run — {stamped} {cl.KEY} piece(s) would be stamped" + (f", {skipped} chapter(s) skipped" if skipped else ""))
         return 0
     if stamped:
         _save_hashes(hashes)
-    print(f"\n✅ {cl.KEY}: stamped {stamped} piece(s)" + (f", {skipped} chapter(s) skipped" if skipped else "")
-          + f" for lang(s): {', '.join(target_langs)}")
+    print(f"\n✅ {cl.KEY}: stamped {stamped} piece(s)" + (f", {skipped} chapter(s) skipped" if skipped else "") + f" for lang(s): {', '.join(target_langs)}")
     return 1 if skipped else 0
 
 
@@ -3508,6 +3539,7 @@ def _run_stamp_pages(args) -> int:
     # Build source list (same logic as run_translate)
     if file_filter:
         import glob as _glob
+
         sources: list[tuple[str, Path]] = []
         seen: set[Path] = set()
         for f in file_filter:
@@ -3619,12 +3651,7 @@ def register_subparser(mk_sub) -> None:
     stmp_p = mk_sub.add_parser(
         "translate-stamp",
         help="Mark file(s) as already translated in the cache (no LLM call)",
-        description=(
-            "Update the translation hash cache to mark one or more source files "
-            "as translated at their current MD5, without running the LLM pipeline. "
-            "Use this after manually editing or reviewing translated files to "
-            "prevent the pipeline from re-translating them."
-        ),
+        description=("Update the translation hash cache to mark one or more source files " "as translated at their current MD5, without running the LLM pipeline. " "Use this after manually editing or reviewing translated files to " "prevent the pipeline from re-translating them."),
     )
     _add_stamp_arguments(stmp_p)
     stmp_p.set_defaults(func=run_stamp)
@@ -3637,7 +3664,9 @@ def register_subparser(mk_sub) -> None:
 
 def main():
     """Standalone CLI entry point."""
-    parser = argparse.ArgumentParser(description="Translate MkDocs documentation using Aphra (LLM agent)", )
+    parser = argparse.ArgumentParser(
+        description="Translate MkDocs documentation using Aphra (LLM agent)",
+    )
     sub = parser.add_subparsers(dest="command")
 
     # translate (default)

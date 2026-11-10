@@ -5,6 +5,7 @@
   final tie-break is described, not coded.
 -->
 <script lang="ts">
+    import {MediaQuery} from 'svelte/reactivity';
     import {t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
@@ -61,7 +62,12 @@
     const objectiveName = (code: string) => $t(`${PLANNER_KEY}.objectives.${code}`, {default: OBJECTIVE_FALLBACKS[code] ?? code});
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
     const help = (key: keyof typeof HELP_FALLBACKS) => () => $t(`${KEY}.help.${key}`, {default: HELP_FALLBACKS[key]});
-    const numberColumn = (id: string, header: string, value: (stage: Stage) => ResultCellContent | string, tooltip?: () => string): ColumnDef<Stage> => ({
+    // On a phone (the table's own 768 px breakpoint) the stages table follows the Review step's scheme (Y-9): each column is fluid down to a
+    // floor of its own and the least useful ones (the scope, and the three floating-point figures: the exact objective values are in the cards above) start hidden, so the table fits a card some
+    // 300 px wide; «Columns» brings them back.
+    const phone = new MediaQuery('max-width: 768px');
+
+    const numberColumn = (id: string, header: string, value: (stage: Stage) => ResultCellContent | string, tooltip?: () => string, secondary = false): ColumnDef<Stage> => ({
         id,
         header: () => header,
         headerTooltip: tooltip,
@@ -69,6 +75,8 @@
         sortable: false,
         filterable: false,
         align: 'right',
+        minWidth: phone.current ? 72 : undefined,
+        hiddenByDefault: phone.current && secondary,
         cell: (stage) => {
             const content = value(stage);
             return typeof content === 'string' ? content : cell(content);
@@ -101,7 +109,7 @@
                 sortable: false,
                 filterable: false,
                 pinned: 'left',
-                minWidth: 200,
+                minWidth: phone.current ? 110 : 200,
                 cell: (stage) => cell({type: 'label', text: objectiveName(stage.objective_code), sequence: stage.ordinal, testid: 'pac-planner-solver-stage', attrs: {'data-objective': stage.objective_code, 'data-status': stage.status}}),
             },
             {
@@ -111,6 +119,7 @@
                 type: 'text',
                 sortable: false,
                 filterable: false,
+                minWidth: phone.current ? 80 : undefined,
                 cell: (stage) => ({type: 'badge', text: $t(`${KEY}.statuses.${stage.status}`, {default: STATUS_FALLBACKS[stage.status]}), variant: STATUS_VARIANTS[stage.status]}),
             },
             ...(scopes.length > 1
@@ -121,13 +130,14 @@
                           type: 'text',
                           sortable: false,
                           filterable: false,
+                          hiddenByDefault: phone.current,
                           cell: (stage: Stage) => scopeText(stage.scope),
                       } satisfies ColumnDef<Stage>,
                   ]
                 : []),
-            numberColumn('primal', $t(`${KEY}.primal`, {default: 'Primal'}), (stage) => ({type: 'solver', value: stage.primal, unit: stage.unit, digits}), help('primal')),
-            numberColumn('dual', $t(`${KEY}.dual`, {default: 'Dual'}), (stage) => ({type: 'solver', value: stage.dual, unit: stage.unit, digits}), help('dual')),
-            numberColumn('absoluteGap', $t(`${KEY}.absoluteGap`, {default: 'Abs. gap'}), (stage) => ({type: 'solver', value: stage.absolute_gap, unit: stage.unit, digits}), help('absoluteGap')),
+            numberColumn('primal', $t(`${KEY}.primal`, {default: 'Primal'}), (stage) => ({type: 'solver', value: stage.primal, unit: stage.unit, digits}), help('primal'), true),
+            numberColumn('dual', $t(`${KEY}.dual`, {default: 'Dual'}), (stage) => ({type: 'solver', value: stage.dual, unit: stage.unit, digits}), help('dual'), true),
+            numberColumn('absoluteGap', $t(`${KEY}.absoluteGap`, {default: 'Abs. gap'}), (stage) => ({type: 'solver', value: stage.absolute_gap, unit: stage.unit, digits}), help('absoluteGap'), true),
             numberColumn('relativeGap', $t(`${KEY}.relativeGap`, {default: 'Rel. gap'}), (stage) => formatPlannerPlainDecimal(stage.relative_gap), help('relativeGap')),
         ]),
     );
@@ -188,8 +198,8 @@
     </div>
 
     {#if objectives}
-        <div class="space-y-2 border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="pac-planner-objectives">
-            <p class="font-medium text-gray-900 dark:text-gray-100">{$t(`${KEY}.exactObjectives`, {default: 'Exact objective values (backend, Decimal)'})}</p>
+        <div class="space-y-2 border-t border-lf-subtle pt-3" data-testid="pac-planner-objectives">
+            <p class="font-medium text-lf-primary">{$t(`${KEY}.exactObjectives`, {default: 'Exact objective values (backend, Decimal)'})}</p>
             <!-- R11.10: one card per objective, in cascade order, with the «?» of Strategy. -->
             <ol class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {#each objectives.stages as stage (stage.objective_code)}
@@ -197,13 +207,13 @@
                     <li class="{TILE} flex items-start gap-3" data-testid="pac-planner-objective" data-objective={stage.objective_code}>
                         <span class="{ICON_BUBBLE} text-xs font-semibold" aria-hidden="true">{stage.ordinal}</span>
                         <div class="min-w-0 flex-1">
-                            <div class="flex flex-wrap items-center gap-0.5 font-medium text-gray-900 dark:text-gray-100">
+                            <div class="flex flex-wrap items-center gap-0.5 font-medium text-lf-primary">
                                 <span>{objectiveName(stage.objective_code)}</span>
                                 {#if tip.help}
                                     <HelpTip label={objectiveName(stage.objective_code)} help={tip.help} math={tip.math} spoken={tip.spoken} testid="pac-planner-objective-help" />
                                 {/if}
                             </div>
-                            <p class="mt-1 break-words text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100" data-testid="pac-planner-objective-value">
+                            <p class="mt-1 break-words text-lg font-semibold tabular-nums text-lf-primary" data-testid="pac-planner-objective-value">
                                 {formatObjectiveValue(stage.value, stage.unit, digits)}
                             </p>
                         </div>
@@ -219,9 +229,9 @@
         </div>
     {/if}
 
-    <div class="space-y-2 border-t border-gray-200 pt-3 dark:border-gray-700" data-testid="pac-planner-solver">
+    <div class="space-y-2 border-t border-lf-subtle pt-3" data-testid="pac-planner-solver">
         <div class="flex flex-wrap items-center gap-2">
-            <p class="font-medium text-gray-900 dark:text-gray-100">
+            <p class="font-medium text-lf-primary">
                 {[$t(`${KEY}.solverStages`, {default: 'Solver stages'}), $t(`${KEY}.reportedFloating`, {default: 'reported in floating point'}), ...engines, ...(scopes.length === 1 ? [scopeText(scopes[0])] : [])].join(' · ')}
             </p>
             <TableColumns table={stagesTable} testid="pac-planner-solver-stages-columns" />
@@ -231,7 +241,7 @@
         </div>
     </div>
 
-    <div class="space-y-3 border-t border-gray-200 pt-3 dark:border-gray-700">
+    <div class="space-y-3 border-t border-lf-subtle pt-3">
         <ToolExecutionMetrics item={metrics} {batch} />
         <!-- R10.9: local to the PAC; the shared box belongs to the platform. -->
         <BackendTimingBar {metrics} />

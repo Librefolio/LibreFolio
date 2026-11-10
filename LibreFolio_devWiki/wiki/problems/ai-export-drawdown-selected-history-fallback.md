@@ -65,7 +65,7 @@ The targeted Asset assembler regression remained green in the final canonical ga
 > `ai_export/assemblers/` and `ai_export/profiles/` still exist as directories, but they
 > contain nothing except `__pycache__` — stale bytecode of files that are gone. That litter
 > is the only reason `ls` still shows them, and it is what makes them look like a move.
-> They were **deleted** in commit **`c9f840680` (2026-08-05)**, *"refactor(ai-export): remove
+> They were **deleted** in commit **`7f4f59bc7` (2026-08-05)**, *"refactor(ai-export): remove
 > legacy runtime"*, which removed **22 233 lines against 1 577 added**: the whole
 > `assemblers/` + `profiles/` + `resolver.py` + `sampling.py` + `technical.py` +
 > `normalization.py` + `service.py` stack, and the tests that covered it.
@@ -79,6 +79,8 @@ The targeted Asset assembler regression remained green in the final canonical ga
 > [[concepts/silent-no-op-option]]: same family — code that is present, plausible, and
 > not the one that runs.
 >
+> *2026-11-07 lint: the two empty directories are gone as well; `ai_export/` now holds only the V3 path.*
+>
 > The surviving path is **V3 composition**: `components/` (one module per payload),
 > `datasets/` and `analyses/` (catalog + spec), `temporal/`, `composer.py` and
 > `runtime_service.py`. The table above points there.
@@ -88,9 +90,9 @@ The targeted Asset assembler regression remained green in the final canonical ga
 > the tree — the same failure that produced the invented `scripts/test_runner/` paths.
 
 > **How the defect was actually settled.** The successor module does not contain a better
-> fallback — it contains **no fallback**. `components/drawdown_context.py:31` says so in
+> fallback — it contains **no fallback**. `components/drawdown_context.py` says so in
 > as many words: *"never fails — there is deliberately no success-shaped fallback."*
 > A failed or unavailable drawdown now returns an explicit `FAILED` / `UNAVAILABLE` status
-> with a message naming the scope and period (`:288`, `:320`), instead of quietly
+> with a message naming the scope and period, instead of quietly
 > substituting a different history and returning something success-shaped. That is the
 > same lesson as [[concepts/silent-no-op-option]], reached from the other direction.

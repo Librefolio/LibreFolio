@@ -21,13 +21,13 @@ The response time leaked too: an unknown username skipped bcrypt and answered fa
 The login checked `is_active` before verifying the password, and verified a password only when an account was
 found.
 
-## Solution (train 24, merge `01da03047`)
+## Solution (train 24, merge `b83945c79`)
 
 - **The password comes first, whatever the account** (`backend/app/api/v1/auth.py`, login handler): a wrong
   password gets the same `401 "Invalid credentials"` for an unknown, an active or a disabled account.
 - **An unknown account still costs a bcrypt check**: `verify_password_or_dummy()` checks the password against a
   dummy hash of the same cost, computed once (`_dummy_password_hash()`, `functools.cache`) and never matched
-  (`backend/app/services/auth_service.py`). The test checks that the bcrypt check runs; it does not measure time.
+  (`backend/app/services/accounts/auth_service.py`). The test checks that the bcrypt check runs; it does not measure time.
 - **Only the right password learns that the account is disabled**: `403` with
   `{"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"}`. The frontend's axios interceptor reacts
   only to 401, so the 403 reaches the login form's `catch` untouched.
@@ -50,5 +50,5 @@ Found together with the connection-security indicator: [[decisions/connection-se
 | Role | Path |
 |------|------|
 | Login handler (password first, 401/403) | `backend/app/api/v1/auth.py` |
-| `verify_password_or_dummy`, dummy hash | `backend/app/services/auth_service.py` |
+| `verify_password_or_dummy`, dummy hash | `backend/app/services/accounts/auth_service.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/36_connectionSecurity/plan-phase00ConnectionSecurity.prompt.md` |

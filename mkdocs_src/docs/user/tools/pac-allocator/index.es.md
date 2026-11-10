@@ -132,7 +132,7 @@ Dos acciones te ayudan a conseguirlo:
 
     Si todos son $0$, cada Activo recibe una parte igual. El redondeo mantiene el total exactamente en $100\%$. Para cambiar solo algunas filas, **Equilibrar al 100 %** en una fila da a ese Activo lo que falta, o quita el exceso, y **Equilibrar las filas seleccionadas al 100 %** reescala solo las filas que marques.
 
-- **Copiar la distribución actual** lee cuánto pesa hoy cada uno de estos Activos en los brókeres que marques, contando solo estos Activos y no el efectivo. Con $H_i$ el valor de mercado del Activo $i$ mantenido allí hoy:
+- **Copiar la distribución actual** lee cuánto pesa hoy cada uno de estos Activos en los brókeres que marques, contando solo estos Activos y no el efectivo. Con $H_i$ el valor de mercado del Activo $i$ mantenido allí hoy — lo que te costó, para un Activo sin ningún precio, cuya **Valoración** indica *valorado al coste · sin precio*:
 
     $$
     w_i = \frac{H_i}{\sum_j H_j} \cdot 100\%
@@ -148,7 +148,7 @@ Dos acciones te ayudan a conseguirlo:
 
 Este paso aparece solo cuando el escenario necesita tipos de cambio. Contiene un tipo $x$ por cada par de divisas en juego, cada uno **Auto** o **Manual**:
 
-- **Auto**: el último tipo almacenado en LibreFolio, leído cuando se abre el paso y de nuevo justo antes del cálculo. No se llama a ningún proveedor de datos.
+- **Auto**: el último tipo válido almacenado en LibreFolio, leído cuando se abre el paso y de nuevo justo antes del cálculo. No se llama a ningún proveedor de datos. Un tipo almacenado que el planificador no puede usar (0 o infinito, que una versión anterior podía guardar) se omite en favor del anterior válido, con un aviso que nombra el par, el día omitido y el día usado: corrige ese día en **Editar tipos de cambio** del par; hasta entonces, los resultados pueden ser ligeramente aproximados.
 - **Manual**: tu propio tipo.
 
 También contiene un **Spread de conversión** $s$: un porcentaje de cada importe convertido, mantenido como margen por un cambio en el tipo oficial o por comisiones del bróker. Convertir un importe $D$ al tipo $x$ (unidades recibidas por cada unidad convertida) da

@@ -8,6 +8,7 @@ related:
   - decisions/data-quality-proved-on-real-data
   - features/F-054
   - sources/phase00-data-quality-e2e-2026-10
+  - decisions/broker-page-is-a-portfolio-view
 ---
 
 # Problem: open panels stayed stale after «Sync rates»
@@ -29,7 +30,7 @@ test E1 of workstream V's real-data E2E (plan 46), red for exactly this reason b
 
 ## Solution
 
-Commit `15bfcf1e8` ("fix(dashboard): refresh open panels after FX sync", train 56): in `syncMissingFxRates()`, after
+Commit `5b4b9f188` ("fix(dashboard): refresh open panels after FX sync", train 56): in `syncMissingFxRates()`, after
 `invalidate()` and only without a transport error, `refreshVersion += 1`. With the fix the lots request leaves about
 1 ms after the sync's response, together with the report reload, and E1 is green with 1 and with 4 workers. The
 decision to write the red test and the fix in the same lot was the developer's (D2,
@@ -40,16 +41,23 @@ decision to write the red test and the fix in the same lot was the developer's (
 Any action that changes the data under the Dashboard must send the same refresh signal as «Aggiorna», not only reload
 the report. **The same gap after «Sync prices» (V-1)** — the stale-price button (`sync_asset_prices` in
 `handleBannerAction`) reloaded the report without incrementing `refreshVersion`, so open panels stayed old until a
-reload — was closed the same way in V's batch 2 (`a0722f755`, train 58): red first in `stale-price-banner.spec.ts`
+reload — was closed the same way in V's batch 2 (`86217eaf4`, train 58): red first in `stale-price-banner.spec.ts`
 (the lots panel already open must ask `POST /portfolio/lots/analysis` again, in the same page load), then
 `refreshVersion += 1` after `invalidate()`.
+
+2026-11-07 lint: the code has moved, the rule stays. The Dashboard body went into `PortfolioView.svelte`
+(`61ec8c3ab`, 03/11, Y6-7; [[decisions/broker-page-is-a-portfolio-view]]), and the banner actions into
+`portfolioBannerActions.svelte.ts` (`5f8dac5df`, 04/11). Both «Sync rates» (`syncMissingFxRates`) and «Sync prices»
+(`sync_asset_prices`) call `onDataChanged()`, which `PortfolioView` wires to `refreshVersion += 1`.
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| `syncMissingFxRates`, `refreshVersion`, `handleBannerAction` | `frontend/src/routes/(app)/dashboard/+page.svelte` |
-| The listener in the lots panel | `frontend/src/lib/components/brokers/lots/LotsAnalysisPanel.svelte` |
+| `syncMissingFxRates`, `refreshVersion`, `handleBannerAction` (at the time; now the route's shell only) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| `refreshVersion`, `onDataChanged: () => (refreshVersion += 1)` | `frontend/src/lib/features/portfolio-view/PortfolioView.svelte` |
+| `syncMissingFxRates`, `sync_asset_prices`, `onDataChanged()` | `frontend/src/lib/features/portfolio-view/portfolioBannerActions.svelte.ts` |
+| The listener in the lots panel | `frontend/src/lib/features/brokers/lots/LotsAnalysisPanel.svelte` |
 | E1, the red then the green | `frontend/e2e/portfolio/data-quality-real.spec.ts` |
 | Developer doc (the `sync_fx_pair` CTA) | `mkdocs_src/docs/developer/frontend/data-quality-banner.md` |
 | Backlog V-1 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

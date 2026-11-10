@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-07-22
 tags: [backend, validation, data-quality, scope, portfolio-engine]
-related: [fifo-v4-engine-architecture, entities/portfolio-engine, problems/transaction-update-bypassed-sign-validation]
+related: [decisions/fifo-v4-engine-architecture, entities/portfolio-engine, problems/transaction-update-bypassed-sign-validation]
 ---
 
 # Decision: FIFO v4 validation approach and release scope
@@ -63,6 +63,6 @@ same release.
 | Final validation approach | `.../v4-fee_tax_integration/implementation-plan-v5.md` Fase 0.1-0.3 |
 | Audit script + recap | `.../v4-fee_tax_integration/implementation-recap-v5.md` §1 |
 | PE deferral rationale | `.../v4-fee_tax_integration/implementation-recap-v5.md` §1, §5; `post-implementation-review-v5.md` §4, §9; `review-checklist-v5.md` R1 |
-| Validator | `backend/app/schemas/transactions.py`, `backend/app/services/transaction_service.py` |
+| Validator | `backend/app/schemas/transactions/transactions.py`, `backend/app/services/transactions/batch_edits.py` |
 | Audit script | `backend/test_scripts/test_db/audit_transaction_signs.py` |
 | Portfolio Engine | `backend/app/services/financial_math/portfolio/engine.py` |

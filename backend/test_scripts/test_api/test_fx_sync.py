@@ -495,7 +495,7 @@ async def test_convert_bulk_multi_day(test_server):
 async def test_sync_multi_step_chain(test_server):
     """G7§3: 2-leg CHAIN route (CHF→EUR via SNB, then EUR→USD via ECB).
 
-    Covers ``services/fx.py::sync_pairs_bulk._process_route`` lines 1033-1130
+    Covers ``services/fx/sync.py::sync_pairs_bulk._process_route``
     (multi-step chain branch). Previous coverage only hit single-leg routes.
 
     The route is configured as one logical pair CHF/USD whose ``chain_steps``

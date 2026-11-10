@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-04-10
 tags: [frontend, liveticker, navigation, crash]
-related_features: [F-004]
+related: [features/F-004, problems/tab-writes-after-the-look]
 ---
 
 # Problem: LiveTicker in Global Header Caused Navigation Crashes
@@ -22,6 +22,10 @@ LiveTicker is placed **only in page-level components** where it mounts/unmounts 
 - `assets/+page.svelte` — inline price in `AssetCard` (via prop, no separate component)
 
 `Header.svelte` was restored to its pre-LiveTicker state.
+
+2026-11-07 lint: `LiveTicker` was removed on 2026-08-05; pages poll prices themselves. Since 15/10 they poll through
+`startActivePolling` (`frontend/src/lib/features/live-updates/activePolling.ts`), which also pauses on a hidden tab or
+after two idle minutes ([[problems/tab-writes-after-the-look]]).
 
 ## Prevention
 **Rule**: components with active polling (`setInterval`, `$effect` loops, WebSocket subscriptions) must **not** be placed in layout components (`+layout.svelte`). They should only live in page-level components where SvelteKit controls mount/unmount cleanly.

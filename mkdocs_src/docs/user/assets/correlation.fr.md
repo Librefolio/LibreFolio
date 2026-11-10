@@ -49,7 +49,7 @@ Cette section répond à *lesquels évoluent ensemble ?* — pour repérer les a
 
 **Comment le lire**
 
-- **Un carré par paire** : bleu lorsque les deux actifs évoluent ensemble, rouge lorsqu'ils évoluent en sens opposés, pâle lorsqu'ils évoluent indépendamment. Survolez-le ou touchez-le pour obtenir la valeur en mots.
+- **Un carré par paire** : bleu lorsque les deux actifs évoluent ensemble, rouge lorsqu'ils évoluent en sens opposés, gris lorsqu'ils évoluent indépendamment. Survolez-le ou touchez-le pour obtenir la valeur en mots.
 - **Partez des deux listes** : **Les plus semblables** nomme les paires qui constituent presque la même exposition, **Ceux qui se compensent** les paires qui s'amortissent mutuellement. Une liste vide est un résultat. Cliquez sur une paire pour la retrouver dans la matrice.
 - **Un tiret n'est pas un zéro** : la paire n'a pas pu être mesurée — historique trop court, ou prix qui n'a jamais bougé.
 - **Les boutons d'ordre** réorganisent la matrice ; ils ne modifient jamais une valeur.
@@ -155,6 +155,7 @@ Lorsque quelque chose ne va pas avec les données, l'onglet le signale une fois,
 **Comment le lire**
 
 - **La bannière de qualité des données** liste ce qu'il faut corriger, chaque problème avec son action, comme **Synchroniser les prix** ou **Synchroniser les taux**. Cliquez dessus pour ouvrir la liste.
+- **Une paire de devises sans route de change** a son propre bouton dans cette bannière, un par paire (info-bulle **Ajouter paire FX**) : il ouvre aussitôt la fenêtre **Ajouter une Paire de Devises**, déjà remplie avec cette paire, et l'analyse se recalcule toute seule une fois la paire enregistrée et ses taux téléchargés → [Ajouter une paire de devises](../fx/add-pair.md)
 - **L'avertissement** en dessous nomme les résultats **partiels** et leur cause. Un résultat partiel affiche tout de même ses chiffres : lisez-les en gardant cette cause à l'esprit.
 - **La bannière ambre d'une section** signifie qu'un résultat n'a pas pu être obtenu du tout, souvent parce que la période est trop courte : choisissez-en une plus longue, ou synchronisez les prix.
 - **Que se passe-t-il si… ?** signale ses propres problèmes à l'intérieur de sa section.

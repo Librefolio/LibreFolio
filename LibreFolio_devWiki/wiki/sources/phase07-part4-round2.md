@@ -51,11 +51,11 @@ Final round of Phase 7 Part 4. Introduces `createEntityStore<T>()` factory patte
 | Entity store factory | `frontend/src/lib/stores/core/entityStore.ts` |
 | Asset store (refactored) | `frontend/src/lib/stores/reference/assetStore.ts` |
 | Broker store (new) | `frontend/src/lib/stores/reference/brokerStore.ts` |
-| TX type icon cell | `frontend/src/lib/components/transactions/cells/TxTypeIconCell.svelte` |
+| TX type icon cell | `frontend/src/lib/features/transactions/cells/TxTypeIconCell.svelte` |
 | DataTable | `frontend/src/lib/components/table/DataTable.svelte` |
 | DataTable filter | `frontend/src/lib/components/table/DataTableColumnFilter.svelte` |
 | Asset modal | `frontend/src/lib/components/assets/AssetModal.svelte` |
-| Broker modal | `frontend/src/lib/components/brokers/BrokerModal.svelte` |
+| Broker modal | `frontend/src/lib/features/brokers/BrokerModal.svelte` |
 | Assets page | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Brokers page | `frontend/src/routes/(app)/brokers/+page.svelte` |
 | Files page | `frontend/src/routes/(app)/files/+page.svelte` |

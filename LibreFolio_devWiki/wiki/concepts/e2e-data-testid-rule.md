@@ -144,6 +144,11 @@ async function clickRowAction(row: Locator, actionId: string) {
 
 **Known action IDs**: `mark-delete`, `remove-from-batch`, `clone`, `reset`, `edit`.
 
+> *2026-11-07 lint:* `data-action-id` no longer exists. Since `9a3b47388` (2026-07-18) a DataTable row has one
+> `row-actions-{rowId}` button that opens a `ContextMenu`; each action item carries
+> `data-testid={item.testid ?? "context-menu-action-{id}"}` (`frontend/src/lib/components/ui/ContextMenu.svelte`). The
+> action ids are still the stable part of the selector — now through `data-testid`, as the rule above asks.
+
 Example:
 
 ```typescript

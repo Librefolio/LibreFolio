@@ -53,6 +53,7 @@ ToolDiscoveryReason = Literal[
     "invalid_output_model",
     "invalid_schema",
     "invalid_operation_policy",
+    "invalid_settings",
 ]
 
 
@@ -260,6 +261,12 @@ class ToolItemMetrics(ToolTransportModel):
     cleanup_ms: ToolMilliseconds | None = None
     total_ms: ToolMilliseconds | None = None
     resources: ToolResourceMetrics | None = None
+    # J-19: a crashed worker's own exit status, read before the cleanup that may signal it: an exit code, or the negative
+    # number of the signal that ended it. Null for any other outcome, and for a crash seen while the worker still ran (the
+    # pipe broke, or the protocol failed, with the child alive). A comment, not the class docstring: a multi-line docstring
+    # becomes the OpenAPI description, which the client generator writes as a JS template literal without escaping its
+    # backticks.
+    worker_exit_code: int | None = None
 
 
 class ToolBatchMetrics(ToolTransportModel):

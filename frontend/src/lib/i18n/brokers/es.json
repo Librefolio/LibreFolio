@@ -33,7 +33,7 @@
     "cashBalances": "Saldos de Efectivo",
     "noCashBalances": "Sin posiciones de efectivo",
     "confirmDelete": "¿Estás seguro de que quieres eliminar este bróker?",
-    "confirmDeleteWithTransactions": "Este bróker tiene {n} transacciones. La eliminación forzada eliminará todas las transacciones. ¿Continuar?",
+    "confirmDeleteWithTransactions": "Este bróker tiene {n} transacciones. La eliminación forzada las eliminará todas. Los activos que este bróker transfirió a otros brókers, incluidos los compartidos, quedan allí como posición de apertura a su coste de transferencia: la ganancia de esos brókers contará también lo que los activos ganaron antes de la transferencia. Los activos que otros brókers transfirieron a este salen de ellos a su coste medio. Las transferencias de fondos con otros brókers se convierten allí en depósitos o retiros. ¿Continuar?",
     "createFailed": "Error al crear el bróker",
     "updateFailed": "Error al actualizar el bróker",
     "assets": "{n} activo(s)",
@@ -45,8 +45,8 @@
     "positions": "Posiciones",
     "info": "Info",
     "unsavedChanges": "Tienes cambios sin guardar. ¿Descartarlos?",
-    "discardChangesWarning": "Tienes cambios sin guardar en este broker. ¿Quieres descartarlos?",
-    "loadFailed": "Error al cargar el broker",
+    "discardChangesWarning": "Tienes cambios sin guardar en este bróker. ¿Quieres descartarlos?",
+    "loadFailed": "Error al cargar el bróker",
     "importFiles": "Archivos de Importación",
     "showImportHistory": "Informes Cargados",
     "viewInTransactions": "Ver en Transacciones",
@@ -82,7 +82,7 @@
       "viewerDesc": "Solo lectura",
       "loadFailedBlocking": "No se pudieron cargar los ajustes de uso compartido actuales. El guardado está desactivado hasta que un nuevo intento se complete correctamente.",
       "saveRequiresLoadedAccess": "Carga los ajustes de uso compartido actuales antes de guardar. Usa Reintentar.",
-      "lastOwnerRemovalWarning": "No puedes eliminar el último owner. Promociona primero a otro owner, o elimina el broker desde la lista de brokers; si tiene transacciones, usa la eliminación forzada para eliminarlas también.",
+      "lastOwnerRemovalWarning": "No puedes eliminar el último owner. Promociona primero a otro owner, o elimina el bróker desde la lista de brókers; si tiene transacciones, usa la eliminación forzada para eliminarlas también.",
       "lastOwnerDemotionWarning": "No puedes degradar al último owner. Promociona primero a otro owner.",
       "yourAccess": "Tu acceso",
       "leaveBroker": "Abandonar el bróker",
@@ -94,7 +94,8 @@
       "leaveDone": "Has abandonado el bróker",
       "leaveDeletedBroker": "Bróker eliminado: eras el último propietario",
       "selfDemoteDone": "Ahora eres lector",
-      "leaveLastOwnerHint": "Si no es lo que quieres, asigna primero a otro usuario como propietario y luego abandona."
+      "leaveLastOwnerHint": "Si no es lo que quieres, asigna primero a otro usuario como propietario y luego abandona.",
+      "maxShare": "% (máx. {max})"
     },
     "lots": {
       "unifiedLots": "Lotes",
@@ -128,7 +129,7 @@
       "shortLotLabel": "Short {date}",
       "detailTitle": "Detalle de Lotes FIFO",
       "loadFailed": "Error al cargar los datos de los lotes",
-      "analysisFailed": "El análisis de lotes no se pudo reconstruir de forma fiable (cantidades o transferencias incoherentes) — los valores pueden estar incompletos.",
+      "analysisFailed": "Los lotes de este activo no se pueden reconstruir: algunas de sus transacciones no cuadran. Los lotes, su cronología y la comparación están ocultos; las líneas del coste medio de abajo no se ven afectadas.",
       "combined": "Combinado",
       "chartMarkers": {
         "legend": {
@@ -146,7 +147,9 @@
           "ADJUSTMENT_OUT": "Ajuste de salida",
           "TRANSFER_DEPART": "Transferencia",
           "TRANSFER_ARRIVE": "Transferencia",
-          "SPLIT": "Desdoblamiento"
+          "SPLIT": "Desdoblamiento",
+          "TRANSFER_IN": "Transferencia de entrada",
+          "TRANSFER_OUT": "Transferencia de salida"
         },
         "unitPrice": "Precio unitario",
         "transitInterval": "Intervalo de tránsito",
@@ -224,7 +227,9 @@
           "ADJUSTMENT_OUT": "AJUSTE-",
           "TRANSFER_DEPART": "TRANSFERENCIA",
           "TRANSFER_ARRIVE": "TRANSFERENCIA",
-          "SPLIT": "SPLIT"
+          "SPLIT": "SPLIT",
+          "TRANSFER_IN": "TRANSFERENCIA+",
+          "TRANSFER_OUT": "TRANSFERENCIA-"
         },
         "historyDetail": {
           "openPrice": "Precio de apertura",
@@ -233,7 +238,8 @@
           "realizedPnl": "P&L realizado",
           "splitRatio": "Ratio de desdoblamiento",
           "sourceBroker": "Desde",
-          "destinationBroker": "Hacia"
+          "destinationBroker": "Hacia",
+          "handedOver": "Valor cedido"
         },
         "openingValue": "Valor de apertura",
         "cumulativeProceeds": "Ingresos acumulados"
@@ -266,9 +272,9 @@
       "totalPnl": "P&L total",
       "tooltip": {
         "initialValue": "Valor inicial",
-        "shares": "participaciones",
-        "sharesOpenOutOf": "participaciones abiertas de",
-        "since": "Desde el"
+        "since": "Desde el",
+        "quantityClosed": "{original} → 0 {count, plural, one {participación} other {participaciones}}",
+        "quantityOpen": "{count, plural, one {{open} participación abierta de {original}} other {{open} participaciones abiertas de {original}}}"
       },
       "footerTotals": "Totales",
       "closedOnly": "Cerrados",
@@ -283,7 +289,8 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "Desde 0",
       "annualizedReturn": "Anualizado",
-      "annualizedReturnTooltip": "Rendimiento neto anualizado (CAGR) de este lote individual durante su periodo de tenencia, neto de ingresos y gastos, para comparar lotes mantenidos durante distintas duraciones."
+      "annualizedReturnTooltip": "Rendimiento neto anualizado (CAGR) de este lote individual durante su periodo de tenencia, neto de ingresos y gastos, para comparar lotes mantenidos durante distintas duraciones.",
+      "analysisFailedFix": "Corrige estas transacciones y los lotes volverán:"
     },
     "createdInSystem": "Creado en el Sistema",
     "deleteBlockedTitle": "No se puede eliminar el bróker",

@@ -67,7 +67,7 @@ Tailwind 4 `space-y-*` is a margin on siblings, not a gap.
 | Simple select | `frontend/src/lib/components/ui/select/SimpleSelect.svelte` |
 | Layer guard | `frontend/src/lib/components/ui/modals/ModalBase.escapeLayers.test.ts` |
 | Test harness | `frontend/src/__tests__/harness/ModalEscapeLayersHarness.svelte` |
-| Wizard case | `frontend/src/lib/components/transactions/import/ReportSetCard.escape.test.ts` |
+| Wizard case | `frontend/src/lib/features/transactions/import/ReportSetCard.escape.test.ts` |
 | Backdrop E2E | `frontend/e2e/support-copy-and-go.spec.ts` |
 | Plans (steps 18–20) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep18CoverageTriage.prompt.md` |
 | | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep19AppStartAuth.prompt.md` |

@@ -131,6 +131,8 @@ Passa tra Portafoglio e Periodo, poi confronta i dati in viste tabella o mappa �
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portafoglio / Mappa" alt="Posizioni — Mappa portafoglio">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Periodo / Tabella" alt="Posizioni — Tabella periodo">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Periodo / Mappa" alt="Posizioni — Mappa periodo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-yoc" data-title="💰 Rendimento sul costo" alt="Posizioni — Rendimento sul costo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-fx-on-cash" data-title="💱 Effetto cambio sulla liquidità" alt="Posizioni — Effetto cambio sulla liquidità">
 </div>
 
 ### 💸 Scheda Transazioni
@@ -185,6 +187,14 @@ La dashboard con modalità privacy attiva — il pulsante a forma di occhio nell
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Modalità privacy">
+</div>
+
+### 🤖 AI Export
+
+Scegli cosa esportare per il tuo assistente AI: la categoria, il dataset, il livello di dettaglio, il periodo e le note.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="ai-export" data-name="dialog-dataset" alt="AI Export">
 </div>
 
 ---
@@ -301,12 +311,52 @@ La categoria Primo utilizzo delle Preferenze con lo stato di ciascuna guida e il
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Ripeti guide">
 </div>
 
+### 🧩 Impostazioni dei plugin
+
+La scheda Plugin: le impostazioni che chiedono le fonti dei prezzi e dei tassi di cambio, ogni plugin in un modulo a sé con il suo badge.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Impostazioni dei plugin">
+</div>
+
 ### 🛡️ Impostazioni globali (Admin)
 
 Gli amministratori possono configurare le impostazioni a livello di sistema.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Impostazioni globali">
+</div>
+
+### 📧 Email (Admin)
+
+Gli amministratori controllano l'email dell'istanza: se può spedire, quante email restano in quest'ora, i controlli della configurazione e un'email di prova al proprio indirizzo.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
+</div>
+
+### 🚨 Controlli di sicurezza (Admin)
+
+Gli amministratori vedono cosa richiede attenzione e come intervenire; i controlli superati restano chiusi in fondo, e un badge su Amministrazione conta errori e avvisi.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="security" alt="Controlli di sicurezza (Admin)">
+</div>
+
+### ↩️ Ripristino annullato (Admin)
+
+Se un ripristino non va a buon fine, LibreFolio rimette i dati com'erano e spiega il motivo.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-rolled-back" alt="Ripristino annullato (Admin)">
+</div>
+
+### 🧾 Esito dell'ultimo ripristino (Admin)
+
+La scheda del ripristino conserva l'esito dell'ultimo tentativo.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-last-result" alt="Esito dell'ultimo ripristino (Admin)">
 </div>
 
 ### 🕐 Scheduler dati di mercato — Configurazione
@@ -373,6 +423,14 @@ La ricerca scende nelle pieghe e i chip dei risultati saltano al punto esatto.
     <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Ricerca nel changelog">
 </div>
 
+### 🆕 Novità
+
+Dopo un aggiornamento, una finestra mostra cosa è cambiato dalla tua ultima versione.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="whats-new-modal" alt="Novità">
+</div>
+
 ### 🧩 Diagnostica plugin
 
 Stato di caricamento dei plugin per registro: cosa non è stato caricato e perché.
@@ -423,6 +481,22 @@ Sfoglia i file visivamente con anteprime delle immagini in layout a griglia.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vista griglia file statici">
+</div>
+
+### 💾 Backup (Admin)
+
+Gli amministratori vedono i backup conservati e impostano la pulizia automatica.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="backups" alt="Backup (Admin)">
+</div>
+
+### 📊 Spazio occupato (Admin)
+
+Una barra mostra come si divide lo spazio fra database, file caricati, report e backup, rispetto al limite impostato.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="storage-bar" alt="Spazio occupato (Admin)">
 </div>
 
 ### 📋 Report broker (BRIM)
@@ -526,6 +600,7 @@ Passa tra Portafoglio e Periodo, poi confronta i dati in viste tabella o mappa.
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portafoglio / Mappa" alt="Posizioni broker — Mappa portafoglio">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo / Tabella" alt="Posizioni broker — Tabella periodo">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo / Mappa" alt="Posizioni broker — Mappa periodo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-yoc" data-title="💰 Rendimento sul costo" alt="Posizioni broker — Rendimento sul costo">
 </div>
 
 ### ℹ️ Informazioni broker
@@ -712,6 +787,14 @@ Crea un nuovo asset con nome, tipo, valuta, identificatori, provider e classific
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-8" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Creazione manuale" alt="Modale crea asset">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Da Procedura guidata di importazione (precompilato)" alt="Crea asset da Procedura guidata di importazione">
+</div>
+
+### ⭐ Cerca Online — Fonti premium
+
+I risultati delle fonti premium compaiono per primi, in una sezione tutta loro.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="search-premium" alt="Cerca Online — Fonti premium">
 </div>
 
 ### 🧬 Selettore tipo asset

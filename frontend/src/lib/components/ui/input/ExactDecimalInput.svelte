@@ -1,6 +1,7 @@
 <script lang="ts">
+    import {_} from '$lib/i18n';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {filterDecimalInput, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalDigitCounts, expandScientificNotation, exponentNotReadable, filterDecimalInput, MAX_DECIMAL_EXPONENT, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {ArrowHold} from '$lib/utils/core/arrowHold';
 
     interface ExactDecimalValidity {
@@ -123,7 +124,9 @@
                 valid: !required,
             };
         }
-        if (!/^-?[\d\s.,]*$/.test(trimmed)) {
+        // A number in scientific notation within ±MAX_DECIMAL_EXPONENT reads exactly (W-B66), from a paste or from a value
+        // a parent formatted through Number (`1e-8`).
+        if (!/^-?[\d\s.,]*$/.test(trimmed) && expandScientificNotation(trimmed) === null) {
             return {
                 normalized: candidate,
                 empty: false,
@@ -147,11 +150,14 @@
                 valid: false,
             };
         }
-        const unsigned = normalized.startsWith('-') ? normalized.slice(1) : normalized;
-        const [integer = '', fraction = ''] = unsigned.split('.');
-        const digitsValid = (integer || '0').length <= maxIntegerDigits && fraction.length <= maxFractionDigits;
-        const belowMin = min !== undefined && compareExact(normalized, min) === -1;
-        const aboveMax = max !== undefined && compareExact(normalized, max) === 1;
+        // Counted as the backend counts them (W-B64): `0.10000000000` holds one decimal, `5.0` none, `007` one integer digit.
+        const counts = decimalDigitCounts(normalized);
+        const digitsValid = counts !== null && counts.integerDigits <= maxIntegerDigits && counts.fractionDigits <= maxFractionDigits;
+        // Within the budget only, and on the value without the zeros it does not count: past the budget the value is
+        // refused anyway, and the comparison builds a BigInt of every digit it is given (W-B66).
+        const stripped = counts?.stripped ?? normalized;
+        const belowMin = digitsValid && min !== undefined && compareExact(stripped, min) === -1;
+        const aboveMax = digitsValid && max !== undefined && compareExact(stripped, max) === 1;
         const rangeValid = !belowMin && !aboveMax;
         return {
             normalized,
@@ -166,7 +172,15 @@
 
     let parsedValue = $derived(normalizedParts(value));
     let locallyInvalid = $derived(!parsedValue.valid || externalInvalid);
-    let maxLength = $derived(maxIntegerDigits + maxFractionDigits + Math.max(0, Math.floor((maxIntegerDigits - 1) / 3)) + (maxFractionDigits > 0 ? 1 : 0) + (allowNegative ? 1 : 0));
+    // C-97b: a fraction past the budget is flagged (``digitsValid``) and said under the field, the value kept as typed. No
+    // maxlength: a browser cut a longer paste down to it in silence, into a number that looked valid. Its trailing zeros
+    // are not counted (W-B64).
+    let fractionOverflow = $derived.by(() => {
+        if (parsedValue.empty || !parsedValue.syntaxValid) return false;
+        return (decimalDigitCounts(parsedValue.normalized)?.fractionDigits ?? 0) > maxFractionDigits;
+    });
+    // W-B66: a text with an exponent the field cannot read exactly stays as typed, refused, and says why.
+    let exponentRefused = $derived(exponentNotReadable(value));
     let lastValidityKey = '';
 
     $effect(() => {
@@ -293,12 +307,30 @@
         return candidate;
     }
 
+    /** What an arrow steps from (W-B64): a value whose text is longer than the budget, valid only because the zeros it
+     *  ends or starts with are not counted (`5.` and 40 000 zeros), steps from the value without them, so no BigInt is
+     *  as long as its text; any other value steps from its text, its typed places kept (`1.50` → `2.50`). */
+    function stepBase(candidate: string): string {
+        const normalized = normalizeDecimalInput(candidate);
+        const counts = decimalDigitCounts(normalized);
+        if (!counts) return candidate;
+        const unsigned = normalized.startsWith('-') ? normalized.slice(1) : normalized;
+        const dot = unsigned.indexOf('.');
+        const integerText = dot < 0 ? unsigned.length : dot;
+        const fractionText = dot < 0 ? 0 : unsigned.length - dot - 1;
+        return integerText > maxIntegerDigits || fractionText > maxFractionDigits ? counts.stripped : candidate;
+    }
+
     function stepValue(event: KeyboardEvent): void {
         if (readOnly || disabled) {
             restoreDomValue();
             return;
         }
-        const next = acceleratedArrowStep(event, value);
+        // W-B66: neither a value past the digit budget (its BigInt would be as long as the paste) nor a text kept for its
+        // exponent, which an arrow would replace with a number, is stepped.
+        const arrow = event.key === 'ArrowUp' || event.key === 'ArrowDown';
+        if (arrow && (!parsedValue.digitsValid || exponentRefused)) return;
+        const next = acceleratedArrowStep(event, arrow ? stepBase(value) : value);
         if (next === null) {
             if (event.key === 'Enter') commit();
             return;
@@ -341,7 +373,6 @@
     inputmode="decimal"
     autocomplete="off"
     spellcheck="false"
-    maxlength={maxLength}
     {value}
     {disabled}
     readonly={readOnly}
@@ -358,7 +389,15 @@
     onkeydown={stepValue}
     onkeyup={handleKeyup}
     style={inlineStyle || undefined}
-    class={`w-full rounded-lg border bg-white px-3 py-2 font-mono text-gray-900 outline-none transition-colors focus:border-libre-green focus:ring-1 focus:ring-libre-green read-only:cursor-default disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-900 dark:text-gray-100 ${
-        locallyInvalid ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-    } ${className}`}
+    class={`w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 font-mono text-lf-primary placeholder:text-lf-placeholder outline-none transition-colors hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus aria-invalid:border-lf-danger read-only:cursor-default disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
 />
+{#if fractionOverflow}
+    <p class="mt-1 text-xs text-lf-danger" data-testid={testid ? `${testid}-digits-error` : undefined} data-max={maxFractionDigits}>
+        {$_('common.decimalPlacesExceeded', {values: {max: maxFractionDigits}})}
+    </p>
+{/if}
+{#if exponentRefused}
+    <p class="mt-1 text-xs text-lf-danger" data-testid={testid ? `${testid}-exponent-error` : undefined} data-max={MAX_DECIMAL_EXPONENT}>
+        {$_('common.decimalExponentOutOfRange', {values: {max: MAX_DECIMAL_EXPONENT}})}
+    </p>
+{/if}

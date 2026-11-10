@@ -5,6 +5,8 @@
 -->
 <script lang="ts">
     import {LayoutGrid, List} from 'lucide-svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import {_ as t} from '$lib/i18n';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
 
     interface Props {
@@ -33,25 +35,36 @@
     }
 </script>
 
-<div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-    <button
-        aria-label="Grid view"
-        data-testid="view-mode-grid"
-        class="flex items-center justify-center px-2.5 py-1.5 transition-colors
-               {mode === 'grid' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-        onclick={() => setMode('grid')}
-        title="Grid view"
-    >
-        <LayoutGrid size={16} />
-    </button>
-    <button
-        aria-label="Table view"
-        data-testid="view-mode-list"
-        class="flex items-center justify-center px-2.5 py-1.5 transition-colors
-               {mode === 'list' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-        onclick={() => setMode('list')}
-        title="Table view"
-    >
-        <List size={16} />
-    </button>
+<!-- Each button says what it does in the design system's tooltip; a click is the button's own, so it stops before the tooltip's click, which would pin the hint over the list that is redrawn. -->
+<div class="flex rounded-lg border border-lf-subtle text-lf-primary overflow-hidden">
+    <Tooltip text={$t('sharedResource.viewGrid')} position="bottom" interactiveChild testId="view-mode-grid-tooltip">
+        <button
+            aria-label={$t('sharedResource.viewGrid')}
+            aria-pressed={mode === 'grid'}
+            data-testid="view-mode-grid"
+            class="flex items-center justify-center px-2.5 py-1.5 transition-colors
+                   {mode === 'grid' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+            onclick={(event) => {
+                event.stopPropagation();
+                setMode('grid');
+            }}
+        >
+            <LayoutGrid size={16} />
+        </button>
+    </Tooltip>
+    <Tooltip text={$t('sharedResource.viewTable')} position="bottom" interactiveChild testId="view-mode-list-tooltip">
+        <button
+            aria-label={$t('sharedResource.viewTable')}
+            aria-pressed={mode === 'list'}
+            data-testid="view-mode-list"
+            class="flex items-center justify-center px-2.5 py-1.5 transition-colors
+                   {mode === 'list' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+            onclick={(event) => {
+                event.stopPropagation();
+                setMode('list');
+            }}
+        >
+            <List size={16} />
+        </button>
+    </Tooltip>
 </div>

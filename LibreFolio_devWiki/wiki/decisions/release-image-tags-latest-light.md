@@ -18,7 +18,7 @@ related:
 
 The 1.1.0 pipeline built two variants of the image, a **full** one that carries the documentation screenshots and
 a **light** one without them, and both pushed `latest`: the light one won only because it was pushed second
-([[concepts/ci-release-pipeline]]). On 2026-10-06 the cloud sizing study of workstream M found worse: the two
+([[concepts/ci-release-pipeline]]). On 2026-10-06 a sizing study of workstream M found worse: the two
 variants were identical, both with a debug frontend ([[problems/release-images-shipped-debug-frontend]]). Before
 fixing the images, M asked the developer which variant `latest` should be.
 
@@ -32,14 +32,14 @@ The developer (plan of the release images, §0, 2026-10-06):
   correggere, come è ora va bene, correggiamo la guida e allineamola a questa logica».
 
 On 2026-10-07 he confirmed it for the workflow too, through the coordinator: «Correggere il workflow: latest =
-light» (plan 32, D1). M wrote it in `release.yml` the same day (`ea63cd029`), together with three rules on
+light» (plan 32, D1). M wrote it in `release.yml` the same day (`2386dc8d7`), together with three rules on
 prereleases:
 
 | Rule | Developer, verbatim | Where |
 |------|---------------------|-------|
 | A prerelease never moves `latest` and never deploys the docs | «Sì, escluderle da latest e dal deploy della doc» | the light metadata step's `flavor: latest=…` is `auto` only for a non-prerelease release; the deploy runs only on `main` or a stable release |
 | A prerelease tag is `vX.Y.Z-rc.N` | «sì al suffisso rc per le pre release, però non succede che faccio una pre release e poi promuovo, al più ne creo un'altra da 0 su un tag nuovo» | first job step |
-| The check works both ways | «Sì, controllo simmetrico» | the step «Release tag must match the release kind» (`073ac30b2`): a prerelease must carry `-rc.N`, a stable release a plain `vX.Y.Z` |
+| The check works both ways | «Sì, controllo simmetrico» | the step «Release tag must match the release kind» (`024181cc2`): a prerelease must carry `-rc.N`, a stable release a plain `vX.Y.Z` |
 
 The resulting tags, which the user guide's «Image Variants» table states:
 

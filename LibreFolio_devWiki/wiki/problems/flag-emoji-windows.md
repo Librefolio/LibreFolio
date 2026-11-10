@@ -5,7 +5,7 @@ status: resolved
 date: 2026 (Phase 5)
 updated: 2026-09-29
 tags: [frontend, emoji, windows, fonts, css, unicode-range, i18n]
-related_features: [F-008]
+related: [features/F-008, problems/echarts-canvas-mismeasures-emoji-labels]
 ---
 
 # Problem: Flag Emoji Not Rendering on Windows
@@ -44,7 +44,7 @@ system falls back to Segoe UI Emoji, which prints the two letters.
   CSS. With a unicode-range face only the flags subset can load, and only where a flag is displayed.
 - The old `.emoji-flag` stack put emoji families **before** the text font. Apple Color Emoji (and Noto's subset 2)
   draw digits, `#` and `*` — measured with CDP: inside `.emoji-flag` the digits came from Apple Color Emoji.
-- `9ab32912c` (2026-05-27) put Apple first for iOS; a later local rule in `TransactionsTable.svelte` put Noto first
+- `963b83d9a` (2026-05-27) put Apple first for iOS; a later local rule in `TransactionsTable.svelte` put Noto first
   again (downloading Noto on Apple devices too). Removed.
 
 ## Prevention
@@ -56,16 +56,20 @@ system falls back to Segoe UI Emoji, which prints the two letters.
   `sans-serif`), and its HTML tooltips carry an inline `font: … sans-serif`. Flags there (signal legends, the
   geography map, allocation history) are not covered yet — backlog **K-13** (a global `textStyle.fontFamily` plus
   `document.fonts.load` before drawing); a tooltip flag wrapped in `.emoji-flag` is.
+  *2026-11-07 lint: K-13 is fixed — `052e16485` (2026-10-16) gives every chart `CHART_FONT_FAMILY` (`'LF Flags'`
+  first, then ECharts' own default) from `frontend/src/lib/components/charts/chartFont.ts`, loads the face before the
+  first paint, and `chartFlagFont.test.ts` gates it.*
 - **Known gaps (K-14)**: a few hand-written monospace stacks still lack `'LF Flags'` (e.g. `CompactCashCell`,
   `DataTable`, `FilePreviewModal`), and `lf-flags.css` points at a generated file name
-  (`noto-color-emoji.0.woff2`).
+  (`noto-color-emoji.0.woff2`). *2026-11-07 lint: `DataTable` no longer has its own stack; `CompactCashCell` and
+  `FilePreviewModal` still carry monospace stacks without `'LF Flags'`.*
 - **Verifying without Windows:** `frontend/e2e/fx/fx-flag-font.spec.ts` reads the font that actually draws each
   node through CDP `CSS.getPlatformFontsForNode`; a probe face whose `local()` source cannot resolve exercises the
   Noto (Windows) path on any OS. Real-device checks (iPhone, Mac, Windows) remain manual.
 
 ## History
 Phase 5 loaded `Noto Color Emoji` from Google Fonts and applied it through `.emoji-flag` to flag containers only,
-with Noto first; `9ab32912c` reordered it Apple-first for iOS. Both are superseded by the solution above.
+with Noto first; `963b83d9a` reordered it Apple-first for iOS. Both are superseded by the solution above.
 
 ## Source
 `LibreFolio_developer_journal/knowledge_base/05_project_conventions.md` — "Emoji Bandiera (Windows Fix)" section;
@@ -82,4 +86,5 @@ with Noto first; `9ab32912c` reordered it Apple-first for iOS. Both are supersed
 | Noto cache (flags subset only) | `scripts/update_js_cache.py` |
 | Static gate | `frontend/src/flagFont.gate.test.ts` |
 | CDP end-to-end check | `frontend/e2e/fx/fx-flag-font.spec.ts` |
+| ECharts font family (K-13) | `frontend/src/lib/components/charts/chartFont.ts` |
 | Language selector (flag emoji) | `frontend/src/lib/components/layout/LanguageSelector.svelte` |

@@ -39,23 +39,29 @@
         {
             container: string;
             icon: string;
+            /** The dismiss button's hover, a step down the family (designer, round 3: no opacity on it). */
+            dismiss: string;
         }
     > = {
         warning: {
-            container: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-200/60',
-            icon: 'text-amber-500 dark:text-amber-500/50',
+            container: 'bg-lf-warning-soft border-lf-warning-line text-lf-warning-on-soft',
+            icon: 'text-lf-warning',
+            dismiss: 'hover:bg-lf-warning-line',
         },
         info: {
-            container: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/40 text-blue-700 dark:text-blue-200/60',
-            icon: 'text-blue-500 dark:text-blue-400/50',
+            container: 'bg-lf-info-soft border-lf-info-line text-lf-info-on-soft',
+            icon: 'text-lf-info',
+            dismiss: 'hover:bg-lf-info-line',
         },
         error: {
-            container: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-200/60',
-            icon: 'text-red-500 dark:text-red-400/50',
+            container: 'bg-lf-danger-soft border-lf-danger-line text-lf-danger-on-soft',
+            icon: 'text-lf-danger',
+            dismiss: 'hover:bg-lf-danger-line',
         },
         success: {
-            container: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-200/60',
-            icon: 'text-emerald-500 dark:text-emerald-400/50',
+            container: 'bg-lf-success-soft border-lf-success-line text-lf-success-on-soft',
+            icon: 'text-lf-success',
+            dismiss: 'hover:bg-lf-success-line',
         },
     };
 
@@ -85,7 +91,7 @@
             {/if}
         </div>
         {#if dismissible && ondismiss}
-            <button type="button" class="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity" onclick={ondismiss} aria-label="Dismiss">
+            <button type="button" class="shrink-0 p-0.5 rounded transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-lf-focus {styles.dismiss}" onclick={ondismiss} aria-label="Dismiss">
                 <X size={14} />
             </button>
         {/if}

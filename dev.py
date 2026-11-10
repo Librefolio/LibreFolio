@@ -66,9 +66,12 @@ from scripts.cli_base import (
     print_header,
     print_success,
     print_warning,
+    record_tool_contract_inputs,
     run_command,
     run_command_live,
     run_pipenv,
+    run_server_live,
+    tool_contract_fingerprint,
 )
 from scripts.cli_tree_parser import TreeParser, format_help
 
@@ -76,48 +79,34 @@ from scripts.cli_tree_parser import TreeParser, format_help
 # Backend Commands: Server
 # =============================================================================
 
-def check_port_in_use(port: int) -> list:
-    """Check if port is in use and return list of (PID, process_name) tuples."""
 
-    processes = []
+def check_port_in_use(port: int) -> list:
+    """The processes listening on ``port``, as (PID, process_name) tuples; empty when nothing listens.
+
+    Only a listener counts, as in the test runner's ``port_holders`` (``scripts/test_runner/_server.py``): a client
+    connected to the port, or the accepted connection of a server that closed its listener, keeps nobody from binding
+    it (H-12). ``lsof`` answers that wherever it exists. On Linux without ``lsof``, ``fuser`` is the fallback, and it
+    also names a process that only holds an accepted connection on the port.
+    """
+    pids = []
     try:
-        if platform.system() == "Darwin":  # macOS
-            # Get PIDs first
-            result = subprocess.run(
-                ["lsof", "-i", f":{port}", "-t"],
-                capture_output=True, text=True
-                )
-            if result.stdout.strip():
-                pids = [int(p) for p in result.stdout.strip().split('\n') if p]
-                # Get process name for each PID
-                for pid in pids:
-                    try:
-                        ps_result = subprocess.run(
-                            ["ps", "-p", str(pid), "-o", "comm="],
-                            capture_output=True, text=True
-                            )
-                        proc_name = ps_result.stdout.strip() or "unknown"
-                        processes.append((pid, proc_name))
-                    except Exception:
-                        processes.append((pid, "unknown"))
+        if shutil.which("lsof"):
+            result = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"], capture_output=True, text=True)
+            pids = [int(p) for p in result.stdout.split() if p.isdigit()]
         elif platform.system() == "Linux":
             # fuser prints the PIDs on stdout and the "port/tcp:" label on stderr. `capture_output`
             # cannot be combined with `stderr=`: Python raises ValueError before running anything.
             result = subprocess.run(["fuser", f"{port}/tcp"], stdout=subprocess.PIPE, text=True, stderr=subprocess.DEVNULL)
-            if result.stdout.strip():
-                pids = [int(p) for p in result.stdout.strip().split() if p]
-                for pid in pids:
-                    try:
-                        ps_result = subprocess.run(
-                            ["ps", "-p", str(pid), "-o", "comm="],
-                            capture_output=True, text=True
-                            )
-                        proc_name = ps_result.stdout.strip() or "unknown"
-                        processes.append((pid, proc_name))
-                    except Exception:
-                        processes.append((pid, "unknown"))
+            pids = [int(p) for p in result.stdout.split() if p.isdigit()]
     except Exception:
         pass
+    processes = []
+    for pid in dict.fromkeys(pids):
+        try:
+            ps_result = subprocess.run(["ps", "-p", str(pid), "-o", "comm="], capture_output=True, text=True)
+            processes.append((pid, ps_result.stdout.strip() or "unknown"))
+        except Exception:
+            processes.append((pid, "unknown"))
     return processes
 
 
@@ -131,7 +120,7 @@ def _print_port_help(port: int, processes: list):
         print(f"  • PID {pid} ({proc_name})")
     print()
     print(f"{Colors.BLUE}To view details:{Colors.NC}")
-    print(f"  lsof -i :{port}")
+    print(f"  lsof -nP -iTCP:{port} -sTCP:LISTEN")
     print()
     print(f"{Colors.BLUE}To kill these processes:{Colors.NC}")
     print(f"  kill -9 {' '.join(pids)}")
@@ -163,39 +152,72 @@ def _ensure_shared_jwt_secret(env: dict) -> None:
     An empty or blank value counts as none: ``JWT_SECRET=`` in .env reaches the environment as ''
     through pipenv, and each worker would then make its own secret (auth_service), logging users
     out whenever a request lands on another worker.
+
+    With ``JWT_SECRET_FILE`` set, every worker reads the secret from that file: nothing is generated.
+    A blank ``JWT_SECRET`` beside it is left alone, because the server ignores a blank secret
+    (``env_secret``) and the file wins.
     """
-    if not env.get("JWT_SECRET", "").strip():
-        env["JWT_SECRET"] = secrets.token_urlsafe(64)
+    if env.get("JWT_SECRET", "").strip() or env.get("JWT_SECRET_FILE", "").strip():
+        return
+    env["JWT_SECRET"] = secrets.token_urlsafe(64)
+
+
+#: What ``dev.py server`` waits beyond the server's shutdown budget, for the process to exit (Z-10).
+SERVER_STOP_MARGIN_SECONDS = 2
+
+
+def _server_stop_grace(env: dict) -> Optional[float]:
+    """How long ``dev.py server`` waits for the server once Ctrl+C or a SIGTERM asked it to stop (Z-10).
+
+    The server's shutdown budget, ``LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`` in the environment it starts with (the
+    default when the value cannot be used: the server logs that itself), plus ``SERVER_STOP_MARGIN_SECONDS``. None
+    with no limit (budget 0): then only a second Ctrl+C or SIGTERM stops the wait.
+    """
+    from backend.app.config.sleep_wake import DEFAULT_SHUTDOWN_TIMEOUT_SECONDS, SleepWakeConfigError, shutdown_timeout_seconds  # noqa: PLC0415 — CLI-only import
+
+    try:
+        budget = shutdown_timeout_seconds(env)
+    except SleepWakeConfigError:
+        budget = DEFAULT_SHUTDOWN_TIMEOUT_SECONDS
+    return None if budget == 0 else float(budget + SERVER_STOP_MARGIN_SECONDS)
 
 
 def cmd_server(args):
-    """Start the development server."""
-    test_mode = getattr(args, 'test', False)
-    rebuild = getattr(args, 'rebuild', False)
-    debug_mode = getattr(args, 'debug', False)
-    force = getattr(args, 'force', False)
+    """Start the development server; with --build-only, only build what it serves and exit."""
+    test_mode = getattr(args, "test", False)
+    rebuild = getattr(args, "rebuild", False)
+    build_only = getattr(args, "build_only", False)
+    debug_mode = getattr(args, "debug", False)
+    force = getattr(args, "force", False)
     try:
-        workers = _resolve_server_workers(getattr(args, 'workers', 1))
+        workers = _resolve_server_workers(getattr(args, "workers", 1))
     except ValueError as exc:
         print_error(str(exc))
         return 1
-    host_override = getattr(args, 'host', None)
-    port_override = getattr(args, 'port', None)
-    data_dir_override = getattr(args, 'data_dir', None)
-    coverage_mode = getattr(args, 'coverage', False)
-    no_scheduler = getattr(args, 'no_scheduler', False)
-    no_reload = getattr(args, 'no_reload', False)
+    host_override = getattr(args, "host", None)
+    port_override = getattr(args, "port", None)
+    data_dir_override = getattr(args, "data_dir", None)
+    coverage_mode = getattr(args, "coverage", False)
+    no_scheduler = getattr(args, "no_scheduler", False)
+    no_reload = getattr(args, "no_reload", False)
+
+    lane_settings = getattr(args, "lane_settings", None)
+    if lane_settings and not test_mode:
+        print_error("--lane-setting works only with --test: it sets the instance of a test lane")
+        return 1
 
     if test_mode:
         try:
             port, _ = configure_test_runtime(
                 port=port_override,
                 data_dir=data_dir_override,
+                lane_settings=lane_settings,
             )
         except ValueError as exc:
             print_error(str(exc))
             return 1
         db = get_database_path(test_mode=True)
+        # The runner builds in this mode too (TEST_SERVER_BUILDS_DEBUG, scripts/test_runner/_frontend_common.py): keep them equal.
         debug_mode = True
     else:
         try:
@@ -234,6 +256,12 @@ def cmd_server(args):
 
     auto_build_mkdocs()
     update_js_cache()
+
+    # The test runner and the gallery run this first, in the foreground, so that these builds
+    # (minutes after a merge) never count against the startup timeout of the server they start next.
+    if build_only:
+        print_success("Server prerequisites ready (--build-only): frontend, documentation and JS cache; server not started")
+        return 0
 
     # Check immediately before binding. Builds can take minutes, so checking
     # before them left a large race in which another worktree could claim the
@@ -286,8 +314,12 @@ def cmd_server(args):
     print()
     print(f"{Colors.BLUE}{Colors.BOLD}Available endpoints:{Colors.NC}")
     print(f" ├── 🏠 {Colors.YELLOW}Frontend:  http://localhost:{port}/{Colors.NC}")
-    print(f" ├── 💻 {Colors.YELLOW}API Redoc: http://localhost:{port}/api/v1/redoc{Colors.NC}")
-    print(f" ├── 🚀 {Colors.YELLOW}API Docs:  http://localhost:{port}/api/v1/docs{Colors.NC}")
+    if _frontend_build_has_designer_lab():
+        print(f" ├── 🎨 {Colors.YELLOW}Designer Lab: http://localhost:{port}/designer-lab{Colors.NC}")
+    # The API's documentation exists only with --debug or in test mode (H-55 R5): no link to a page that answers 404
+    if debug_mode or test_mode:
+        print(f" ├── 💻 {Colors.YELLOW}API Redoc: http://localhost:{port}/api/v1/redoc{Colors.NC}")
+        print(f" ├── 🚀 {Colors.YELLOW}API Docs:  http://localhost:{port}/api/v1/docs{Colors.NC}")
     print(f" └── 📚 {Colors.YELLOW}User Doc:  http://localhost:{port}/mkdocs/{Colors.NC}")
     print()
 
@@ -305,10 +337,21 @@ def cmd_server(args):
         # Frontend E2E tests (Playwright) log in repeatedly against shared test users —
         # never let the donation popup signal fire and interfere with test assertions.
         env["LIBREFOLIO_DISABLE_DONATION_POPUP"] = "1"
+        # Nor the «What's new» modal (C-54): the lanes' accounts predate it, and a modal on every first load would stop the suites.
+        env["LIBREFOLIO_DISABLE_WHATS_NEW"] = "1"
+        # The suites sign in wrongly on purpose, from one address: the limit on failed sign-ins (F15) would refuse their
+        # later attempts. Off on every lane (configure_test_runtime has dropped any LIBREFOLIO_* of .env and the shell);
+        # its own tests turn it on in-process.
+        env["LIBREFOLIO_LOGIN_LIMIT"] = "off"
+        # MF-SI2: the E2E suites pick search results as one user, two provider probes a pick: the per-user probe limit
+        # would refuse them in a parallel run. Off on every lane; its own tests build limiters in-process.
+        env["LIBREFOLIO_PROBE_RATE_LIMIT"] = "0"
     else:
         env["LIBREFOLIO_TEST_MODE"] = "0"
     if debug_mode:
         env["LIBREFOLIO_LOG_LEVEL"] = "DEBUG"
+        # The API's documentation, off on every other instance (H-55 R5)
+        env["LIBREFOLIO_API_DOCS"] = "1"
     if no_scheduler:
         env["LIBREFOLIO_NO_SCHEDULER"] = "1"
     # Generate a shared JWT secret for all workers.
@@ -316,6 +359,11 @@ def cmd_server(args):
     # uvicorn worker is a fresh process. Without a shared env var, each worker
     # would generate its own random secret → tokens invalid across workers.
     _ensure_shared_jwt_secret(env)
+    # Shutdown budget (decision 35): uvicorn drains the requests in flight for 3/8 of
+    # LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, unless UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN is set by hand.
+    from backend.app.config.sleep_wake import uvicorn_drain_env  # noqa: PLC0415 — CLI-only import
+
+    env.update(uvicorn_drain_env(env))
 
     # uvicorn closes idle keep-alive connections after 5 s by default. A test
     # client that reuses a socket the server has just closed gets ECONNRESET on
@@ -363,18 +411,25 @@ def cmd_server(args):
         #   lines, each worker 224 — i.e. the children are fully tracked.
         coveragerc = str(PROJECT_ROOT / ".coveragerc")
         uvicorn_cmd = [
-            *pipenv_prefix(), "coverage", "run",
+            *pipenv_prefix(),
+            "coverage",
+            "run",
             "--parallel-mode",
             f"--rcfile={coveragerc}",
-            ]
+        ]
         if workers > 1:
             uvicorn_cmd.extend(["--concurrency", "multiprocessing,thread,gevent"])
-        uvicorn_cmd.extend([
-            "-m", "uvicorn",
-            "backend.app.main:app",
-            "--host", host,
-            "--port", str(port),
-            ])
+        uvicorn_cmd.extend(
+            [
+                "-m",
+                "uvicorn",
+                "backend.app.main:app",
+                "--host",
+                host,
+                "--port",
+                str(port),
+            ]
+        )
         if workers > 1:
             uvicorn_cmd.extend(["--workers", str(workers)])
         uvicorn_cmd.extend(keepalive_args)
@@ -391,13 +446,16 @@ def cmd_server(args):
         os.execvpe(uvicorn_cmd[0], uvicorn_cmd, full_env)
     else:
         uvicorn_cmd = [
-            *pipenv_prefix(), "python", "-c",
-            "import logging; logging.getLogger('watchfiles').setLevel(logging.WARNING); "
-            "import uvicorn.main; uvicorn.main.main()",
+            *pipenv_prefix(),
+            "python",
+            "-c",
+            "import logging; logging.getLogger('watchfiles').setLevel(logging.WARNING); " "import uvicorn.main; uvicorn.main.main()",
             "backend.app.main:app",
-            "--host", host,
-            "--port", str(port),
-            ]
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ]
         if workers > 1:
             uvicorn_cmd.extend(["--workers", str(workers)])
         else:
@@ -411,40 +469,51 @@ def cmd_server(args):
             # An ephemeral test server needs no reload anyway, so only enable it
             # when watchfiles is present; otherwise run a plain, stable server.
             import importlib.util
+
             if no_reload:
                 pass  # caller wants a single, plainly-killable process
             elif importlib.util.find_spec("watchfiles") is not None:
                 uvicorn_cmd.append("--reload")
                 # Exclude the git directory and the configured data directory
-                uvicorn_cmd.extend([
-                    "--reload-exclude", "**/.git/**",
-                ])
+                uvicorn_cmd.extend(
+                    [
+                        "--reload-exclude",
+                        "**/.git/**",
+                    ]
+                )
                 try:
                     data_dir_path = get_data_dir(test_mode=test_mode).resolve()
                     try:
                         rel_data_dir = data_dir_path.relative_to(PROJECT_ROOT)
                     except ValueError:
                         rel_data_dir = data_dir_path
-                    uvicorn_cmd.extend([
-                        "--reload-exclude", f"**/{rel_data_dir}/**",
-                    ])
+                    uvicorn_cmd.extend(
+                        [
+                            "--reload-exclude",
+                            f"**/{rel_data_dir}/**",
+                        ]
+                    )
                 except Exception:
                     pass
                 # Always exclude the default backend/data folder recursively as well
-                uvicorn_cmd.extend([
-                    "--reload-exclude", "**/backend/data/**",
-                ])
+                uvicorn_cmd.extend(
+                    [
+                        "--reload-exclude",
+                        "**/backend/data/**",
+                    ]
+                )
             else:
-                print(f"{Colors.YELLOW}⚠️  watchfiles not installed → running WITHOUT --reload "
-                      f"(StatReload ignores --reload-exclude and can reload-loop).{Colors.NC}")
+                print(f"{Colors.YELLOW}⚠️  watchfiles not installed → running WITHOUT --reload " f"(StatReload ignores --reload-exclude and can reload-loop).{Colors.NC}")
 
         uvicorn_cmd.extend(keepalive_args)
-        return run_command_live(uvicorn_cmd, env=env)
+        # Ctrl+C and SIGTERM let the server finish its shutdown within its budget (Z-10).
+        return run_server_live(uvicorn_cmd, env=env, grace_seconds=_server_stop_grace(env))
 
 
 # =============================================================================
 # Backend Commands: Database
 # =============================================================================
+
 
 def _named_db_file(args) -> tuple[Optional[Path], bool]:
     """The database file named on the command line, absolute: ``(None, True)`` when none was named.
@@ -495,9 +564,27 @@ def cmd_db_check(args):
     db_file, ok = _existing_db_file(args)
     if not ok:
         return 1
+    if getattr(args, "integrity", False):
+        print(Colors.success(f"Checking database integrity (read-only): {db_file or get_database_path()}"))
+        command = ["python", "-m", "backend.app.services.platform.db_integrity_check"]
+        if db_file is not None:
+            command += ["--db-file", str(db_file)]
+        return run_pipenv(command)
     print(Colors.success(f"Checking database constraints: {db_file or get_database_path()}"))
     env = {"ALEMBIC_DATABASE_URL": f"sqlite:///{db_file}"} if db_file else None
     return run_pipenv(["python", "-m", "backend.alembic.check_constraints_hook"], env=env)
+
+
+def cmd_db_currencies(args):
+    """List the stored currency codes that are not ISO 4217 codes (E-19a): read-only, exit 1 when it lists some."""
+    db_file, ok = _existing_db_file(args)
+    if not ok:
+        return 1
+    print(Colors.success(f"Checking stored currency codes: {db_file or get_database_path()}"))
+    command = ["python", "-m", "backend.app.services.platform.stored_currencies"]
+    if db_file is not None:
+        command += ["--db-file", str(db_file)]
+    return run_pipenv(command)
 
 
 def cmd_db_current(args):
@@ -554,7 +641,7 @@ def cmd_db_downgrade(args):
 
 def cmd_db_create_clean(args):
     """Delete database and recreate with latest migration."""
-    test_mode = getattr(args, 'test', False)
+    test_mode = getattr(args, "test", False)
     if test_mode:
         db_path = Path(get_test_database_path())
     else:
@@ -581,10 +668,7 @@ def cmd_db_create_clean(args):
     if test_mode:
         env["LIBREFOLIO_TEST_MODE"] = "1"
 
-    result = run_command_live(
-        [*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "upgrade", "head"],
-        env=env
-        )
+    result = run_command_live([*pipenv_prefix(), "alembic", "-c", "backend/alembic.ini", "upgrade", "head"], env=env)
 
     if result == 0:
         print_success(f"Database created successfully: {db_path}")
@@ -598,16 +682,53 @@ def cmd_db_create_clean(args):
 # Frontend Commands
 # =============================================================================
 
+
 def cmd_fe_dev(args):
     """Start frontend development server."""
     print(Colors.success("Starting frontend development server..."))
     print(Colors.warning("URL: http://localhost:5173"))
+    # `vite dev` carries the Designer Lab unless LF_DESIGNER_LAB=0 (designerLabEnabled in vite-plugin.mjs).
+    if os.environ.get("LF_DESIGNER_LAB") != "0":
+        print(Colors.warning("🎨 Designer Lab: http://localhost:5173/designer-lab"))
     print()
     return run_command_live(["npm", "run", "dev"], cwd=PROJECT_ROOT / "frontend")
 
 
+#: Where `npm ci` (in frontend/, from the lock) installs the frontend's command-line tools.
+FRONTEND_NODE_BIN = PROJECT_ROOT / "frontend" / "node_modules" / ".bin"
+#: What a frontend build calls: the API client generator (`generate-api`), `svelte-check`, and `vite` (`npm run build`).
+FRONTEND_BUILD_BINARIES = ("openapi-zod-client", "svelte-check", "vite")
+#: The API client and the Tool codecs need only their generator: `generate-api` runs it, `generate-tools` imports it.
+API_CLIENT_BINARIES = ("openapi-zod-client",)
+
+
+def missing_frontend_binaries(names) -> list[str]:
+    """The tools of ``names`` that ``frontend/node_modules/.bin`` does not hold, in the order asked."""
+    return [name for name in names if not (FRONTEND_NODE_BIN / name).exists()]
+
+
+def require_frontend_dependencies(names, *, purpose: str) -> int:
+    """0 when the frontend tools ``names`` are installed; otherwise say what is missing and return 1.
+
+    Checked before any npm or npx call. Without ``frontend/node_modules``, ``npx`` does not fail: it fetches
+    whatever version the registry serves (or one cached earlier) instead of the one the lock pins.
+    """
+    missing = missing_frontend_binaries(names)
+    if not missing:
+        return 0
+    print_error(f"Cannot run {purpose}: the frontend dependencies are not installed (missing from frontend/node_modules/.bin: {', '.join(missing)})")
+    print("   Install them from the lock file, then retry:  cd frontend && npm ci")
+    print("   dev.py never falls back to npx: without node_modules it would run unpinned versions from the registry.")
+    return 1
+
+
 def cmd_fe_build(args):
     """Build frontend for production."""
+    # Before anything that runs npm or npx: the API client generation and svelte-check below go through npx.
+    deps_result = require_frontend_dependencies(FRONTEND_BUILD_BINARIES, purpose="the frontend build")
+    if deps_result != 0:
+        return deps_result
+
     # Ensure fonts/JS libs exist before SvelteKit prerender (validates app.html refs)
     # Only resources the frontend ships can stop this build: MathJax lives in
     # mkdocs_src/ and is never referenced from frontend/, so letting it abort
@@ -616,6 +737,9 @@ def cmd_fe_build(args):
     if cache_result != 0:
         print_error("Resource cache incomplete - aborting frontend build")
         return cache_result
+
+    # The Tool codegen inputs as `api sync` reads them: recorded below only when the build succeeds (H-24)
+    tool_inputs = tool_contract_fingerprint(PROJECT_ROOT)
 
     # Sync API types to ensure frontend types are aligned with backend
     print(Colors.success("Syncing API types before build..."))
@@ -632,6 +756,8 @@ def cmd_fe_build(args):
 
     # Generate favicon from logo before build
     generate_favicon()
+    # sw.js names the offline page it caches by its hash: a build ships the stamp of the offline.html it copies (H-52)
+    stamp_service_worker()
 
     # DIAGNOSTICS FOR GITHUB ACTIONS
     print(Colors.info("[DEBUG] Running svelte-check..."))
@@ -651,6 +777,7 @@ def cmd_fe_build(args):
         # build) even when the build isn't otherwise stale. Not tracked by git (frontend/build
         # is gitignored).
         _write_frontend_build_mode_marker(debug=args.debug)
+        record_tool_contract_inputs(PROJECT_ROOT, tool_inputs)
         print_success("Frontend build complete!")
         print(Colors.warning("Output in: frontend/build/"))
     else:
@@ -661,7 +788,11 @@ def cmd_fe_build(args):
 def cmd_fe_check(args):
     """Run svelte-check for type errors."""
     print(Colors.success("Running svelte-check for type errors..."))
-    return run_command_live(["npm", "run", "check"], cwd=PROJECT_ROOT / "frontend")
+    result = run_command_live(["npm", "run", "check"], cwd=PROJECT_ROOT / "frontend")
+    # The E2E specs have their own tsconfig (I-07): svelte-check never sees them.
+    print(Colors.success("Running tsc on the E2E specs..."))
+    e2e_result = run_command_live(["npm", "run", "check:e2e"], cwd=PROJECT_ROOT / "frontend")
+    return result or e2e_result
 
 
 def cmd_fe_format(args):
@@ -686,6 +817,7 @@ def cmd_fe_preview(args):
 # API Schema Commands
 # =============================================================================
 
+
 def cmd_api_schema(args):
     """Export API and build-only Tool schemas."""
     print(Colors.success("Exporting OpenAPI contracts..."))
@@ -698,12 +830,12 @@ def cmd_api_schema(args):
 
 def cmd_api_client(args):
     """Generate the API client and exact Tool codecs from exported schemas."""
+    deps_result = require_frontend_dependencies(API_CLIENT_BINARIES, purpose="the TypeScript contracts generation")
+    if deps_result != 0:
+        return deps_result
     print(Colors.success("Generating TypeScript contracts..."))
     script = "generate-tools" if getattr(args, "tools_only", False) else "generate-api"
-    return run_command_live(
-        ["npm", "run", script],
-        cwd=PROJECT_ROOT / "frontend"
-        )
+    return run_command_live(["npm", "run", script], cwd=PROJECT_ROOT / "frontend")
 
 
 def cmd_api_sync(args):
@@ -718,6 +850,7 @@ def cmd_api_sync(args):
 # Info Commands
 # =============================================================================
 
+
 def cmd_info_api(args):
     """List all API endpoints."""
     print(Colors.success("Listing all API endpoints..."))
@@ -727,11 +860,12 @@ def cmd_info_api(args):
 def cmd_info_version(args):
     """Show application version from git tags."""
     from backend.app.utils.runtime.version import get_version_info
+
     version_info = get_version_info()
     print(f"{Colors.CYAN}LibreFolio {version_info['version']}{Colors.NC}")
-    if version_info['is_dirty']:
+    if version_info["is_dirty"]:
         print(f"  {Colors.YELLOW}(uncommitted changes){Colors.NC}")
-    if version_info['is_release']:
+    if version_info["is_release"]:
         print(f"  {Colors.GREEN}Release version{Colors.NC}")
     else:
         print(f"  Development version")
@@ -742,6 +876,7 @@ def cmd_info_version(args):
 # MkDocs Commands
 # =============================================================================
 
+
 def _check_admonition_empty_lines():
     """Warn if any admonition is missing the empty line after !!!/???.
 
@@ -750,8 +885,8 @@ def _check_admonition_empty_lines():
     Skips content inside fenced code blocks (``` or ~~~).
     """
     docs_dir = PROJECT_ROOT / "mkdocs_src" / "docs"
-    adm_re = re.compile(r'^(?:!!!|[?]{3})\s+\w+')
-    fence_re = re.compile(r'^(`{3,}|~{3,})')
+    adm_re = re.compile(r"^(?:!!!|[?]{3})\s+\w+")
+    fence_re = re.compile(r"^(`{3,}|~{3,})")
     bad_files = []
 
     for md_file in sorted(docs_dir.rglob("*.md")):
@@ -765,24 +900,19 @@ def _check_admonition_empty_lines():
             if in_fence:
                 continue
             if adm_re.match(line):
-                if i + 1 < len(lines) and lines[i + 1].strip() != '':
-                    if lines[i + 1].startswith('    '):
+                if i + 1 < len(lines) and lines[i + 1].strip() != "":
+                    if lines[i + 1].startswith("    "):
                         rel = md_file.relative_to(docs_dir)
                         bad_files.append(f"  {rel}:{i + 1}")
                         break  # one warning per file is enough
 
     if bad_files:
-        print(Colors.warning(
-            f"⚠️  {len(bad_files)} file(s) have admonitions without empty line after !!!/??? "
-            f"(Prettier will break them):"
-            ))
+        print(Colors.warning(f"⚠️  {len(bad_files)} file(s) have admonitions without empty line after !!!/??? " f"(Prettier will break them):"))
         for f in bad_files[:10]:
             print(f)
         if len(bad_files) > 10:
             print(f"  ... and {len(bad_files) - 10} more")
-        print(Colors.info(
-            "  Fix: add an empty line between the !!! directive and the indented body."
-            ))
+        print(Colors.info("  Fix: add an empty line between the !!! directive and the indented body."))
         print()
 
 
@@ -853,33 +983,6 @@ def _check_asset_paths_in_built_site(site_dir: Path | None = None) -> list[tuple
         print(Colors.success(f"✅ All {checked} relative asset URL(s) in the built site resolve"))
     return broken
 
-
-def cmd_mkdocs_video(args):
-    """Manage promotional video generation."""
-    action = args.action
-    video_dir = PROJECT_ROOT / "mkdocs_src" / "videoClipPrject" / "video_promo"
-    
-    if not video_dir.exists():
-        print_error("Video project not found")
-        return 1
-
-    if action == "sync":
-        print(Colors.success("Syncing AI assets for video promo..."))
-        return run_command_live(["npm", "run", "sync"], cwd=video_dir)
-    elif action == "start":
-        print(Colors.success("Starting Remotion studio..."))
-        return run_command_live(["npm", "run", "start"], cwd=video_dir)
-    elif action == "build":
-        locale = getattr(args, "locale", "all")
-        print(Colors.success(f"Building promo videos ({locale})..."))
-        cmd = ["npm", "run", f"build:{locale}"]
-        return run_command_live(cmd, cwd=video_dir)
-    elif action == "review":
-        print(Colors.success("Generating review assets..."))
-        return run_command_live(["npm", "run", "review:assets", "--", "--clean"], cwd=video_dir)
-    else:
-        print_error(f"Unknown action: {action}")
-        return 1
 
 def cmd_mkdocs_build(args):
     """Build MkDocs documentation."""
@@ -952,16 +1055,43 @@ def _reuse_gallery_test_db() -> bool:
     return True
 
 
+#: Share of the CPUs the gallery gives to browser workers when --workers is not given. One per CPU saturated a
+#: 10-CPU Mac (load 65, 8 reds in 10 minutes, requests stuck 10-20 s); 6 ran two 30-minute galleries green at load 11-16.
+GALLERY_BROWSER_WORKERS_PER_CPU = 0.6
+
+
+def default_gallery_workers(cpu_count: Optional[int] = None) -> int:
+    """Browser workers of `mkdocs gallery` without --workers: 60% of the CPUs, at least one.
+
+    ``None`` reads the CPU count when called, so a test (or a container) that changes it is seen.
+    """
+    cpus = cpu_count if cpu_count is not None else (os.cpu_count() or 2)
+    return max(1, round(GALLERY_BROWSER_WORKERS_PER_CPU * cpus))
+
+
+def _convert_gallery_webp() -> int:
+    """Write the WebP copies of the gallery PNGs that have none or an older one. Returns the number of PNGs that failed."""
+    from scripts.gallery_webp import WEBP_QUALITY, convert_gallery_webp  # noqa: PLC0415 — only the gallery needs Pillow here
+
+    root = PROJECT_ROOT / "mkdocs_src" / "docs" / "gallery"
+    print(f"\n{Colors.CYAN}🖼️  Converting the gallery PNGs to WebP (quality {WEBP_QUALITY})...{Colors.NC}")
+    report = convert_gallery_webp(root)
+    print(f"   {report.converted} converted, {report.up_to_date} already up to date, {len(report.failed)} failed")
+    for png, reason in report.failed:
+        print_error(f"WebP not written for {png.relative_to(root)}: {reason}")
+    return len(report.failed)
+
+
 def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
 
-    list_tests = getattr(args, 'list_tests', False)
-    filter_text = getattr(args, 'filter', None)
-    desktop_only = getattr(args, 'desktop_only', False)
-    mobile_only = getattr(args, 'mobile_only', False)
-    no_populate = getattr(args, 'no_populate', False)
-    test_port = getattr(args, 'test_port', None)
-    force = getattr(args, 'force', False)
+    list_tests = getattr(args, "list_tests", False)
+    filter_text = getattr(args, "filter", None)
+    desktop_only = getattr(args, "desktop_only", False)
+    mobile_only = getattr(args, "mobile_only", False)
+    no_populate = getattr(args, "no_populate", False)
+    test_port = getattr(args, "test_port", None)
+    force = getattr(args, "force", False)
 
     # --list: show available test names and exit
     if list_tests:
@@ -972,7 +1102,7 @@ def cmd_mkdocs_gallery(args):
         content = gallery_spec.read_text()
         current_describe = ""
         print(f"\n{Colors.CYAN}📸 Available Gallery Tests:{Colors.NC}")
-        print(f"  Use {Colors.YELLOW}./dev.py mkdocs gallery -f \"<text>\"{Colors.NC} to filter\n")
+        print(f'  Use {Colors.YELLOW}./dev.py mkdocs gallery -f "<text>"{Colors.NC} to filter\n')
         for line in content.splitlines():
             dm = re.search(r"test\.describe\('(.+?)'", line)
             if dm:
@@ -989,19 +1119,16 @@ def cmd_mkdocs_gallery(args):
         print(f"{Colors.YELLOW}Filter: only tests matching '{filter_text}'{Colors.NC}")
     viewports = []
     if not mobile_only:
-        viewports.append(('desktop', '📸 Running Desktop Screenshots...'))
+        viewports.append(("desktop", "📸 Running Desktop Screenshots..."))
     if not desktop_only:
-        viewports.append(('mobile', '📱 Running Mobile Screenshots...'))
+        viewports.append(("mobile", "📱 Running Mobile Screenshots..."))
     print(f"{Colors.BLUE}Viewports: {', '.join(v[0] for v in viewports)}{Colors.NC}")
     print(f"{Colors.BLUE}Screenshots will be saved to mkdocs_src/docs/gallery/{Colors.NC}\n")
 
     if not no_populate:
         # Populate test database with realistic data (creates fresh DB with --force)
         print(f"\n{Colors.CYAN}🗄️  Populating test database with sample data...{Colors.NC}")
-        result = subprocess.run(
-            ["python", "dev.py", "test", "-q", "db", "populate", "--force", "--clean", "--with-static", "--with-reports"],
-            cwd=PROJECT_ROOT
-            )
+        result = subprocess.run(["python", "dev.py", "test", "-q", "db", "populate", "--force", "--clean", "--with-static", "--with-reports"], cwd=PROJECT_ROOT)
         if result.returncode != 0:
             print_error("Failed to populate test database")
             return 1
@@ -1010,6 +1137,7 @@ def cmd_mkdocs_gallery(args):
         # Ensure ALL test users exist
         print(f"\n{Colors.YELLOW}Ensuring E2E test users exist...{Colors.NC}")
         from scripts.test_runner import _ensure_test_users
+
         if not _ensure_test_users():
             print_error("Failed to create test users")
             return 1
@@ -1018,19 +1146,19 @@ def cmd_mkdocs_gallery(args):
         return 1
 
     failures = []
-    # Determine worker count: --workers flag or CPU count
-    explicit_workers = getattr(args, 'workers', None)
-    cpu_count = os.cpu_count() or 2
-    worker_count = explicit_workers if explicit_workers else max(2, cpu_count)
+    # Determine worker count: --workers flag, or 60% of the CPUs (default_gallery_workers)
+    explicit_workers = getattr(args, "workers", None)
+    worker_count = explicit_workers if explicit_workers else default_gallery_workers()
     # Server workers: browser workers here spend most of their time rendering,
     # so one server per four of them (vs one per two for API/E2E).
-    from scripts.test_runner._server import CLIENTS_PER_SERVER_WORKER_GALLERY, server_workers_for
+    from scripts.test_runner._server import CLIENTS_PER_SERVER_WORKER_GALLERY, build_server_prerequisites, server_workers_for
+
     server_workers = server_workers_for(worker_count, CLIENTS_PER_SERVER_WORKER_GALLERY)
     print(f"{Colors.BLUE}Browser workers: {worker_count}  |  Server workers: {server_workers}{Colors.NC}")
 
     # --- Port conflict check ---
     # Determine which port the test server will use
-    effective_port = test_port or os.environ.get('TEST_PORT') or get_test_server_port()
+    effective_port = test_port or os.environ.get("TEST_PORT") or get_test_server_port()
     processes_using_port = check_port_in_use(int(effective_port))
     if processes_using_port:
         if force:
@@ -1063,8 +1191,8 @@ def cmd_mkdocs_gallery(args):
             return 1
 
     # --- Headless by default (screenshots are pixel-perfect in headless mode) ---
-    use_headed = getattr(args, 'headed', False)
-    use_ui = getattr(args, 'ui', False)
+    use_headed = getattr(args, "headed", False)
+    use_ui = getattr(args, "ui", False)
     if use_ui:
         print(f"{Colors.YELLOW}🖥️  Running in Playwright UI mode (--ui){Colors.NC}")
     elif use_headed:
@@ -1075,10 +1203,14 @@ def cmd_mkdocs_gallery(args):
     # Build a single Playwright command with all requested projects.
     # This shares one webServer process across desktop+mobile, avoiding port conflicts.
     cmd = [
-        "npm", "run", "test:e2e", "--",
+        "npm",
+        "run",
+        "test:e2e",
+        "--",
         "gallery.spec.ts",
-        "--workers", str(worker_count),
-        ]
+        "--workers",
+        str(worker_count),
+    ]
     if use_ui:
         cmd.append("--ui")
     elif use_headed:
@@ -1088,8 +1220,7 @@ def cmd_mkdocs_gallery(args):
     if filter_text:
         cmd.extend(["-g", filter_text])
 
-    viewport_labels = ', '.join(v[0] for v in viewports)
-    print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
+    viewport_labels = ", ".join(v[0] for v in viewports)
     # Pass server worker count + optional port via env so playwright.config.ts can use it
     # Stream output live to terminal (no capture_output) so user sees progress
     gallery_env = os.environ.copy()
@@ -1108,17 +1239,30 @@ def cmd_mkdocs_gallery(args):
     if test_port:
         gallery_env["TEST_PORT"] = str(test_port)
 
+    # Playwright's webServer starts `dev.py server --test` and waits STARTUP_TIMEOUT_S for it, and that
+    # server builds a stale frontend (debug) and MkDocs before it binds. Built here first, in the
+    # foreground, they no longer count against that wait. Same environment as the webServer's:
+    # LF_APP_VERSION included, which the build bakes into the sidebar of every screenshot.
+    if not build_server_prerequisites(env=gallery_env):
+        print_error("The test server's builds failed: gallery not started")
+        return 1
+
+    print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
     run_cmd = cmd
 
     try:
         # Use Popen to stream output live AND capture it for failure parsing
         proc = subprocess.Popen(
-            run_cmd, cwd=PROJECT_ROOT / "frontend", env=gallery_env,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-            )
+            run_cmd,
+            cwd=PROJECT_ROOT / "frontend",
+            env=gallery_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
         output_lines = []
         for line in proc.stdout:
-            print(line, end='')
+            print(line, end="", flush=True)
             output_lines.append(line)
         proc.wait()
         returncode = proc.returncode
@@ -1126,6 +1270,10 @@ def cmd_mkdocs_gallery(args):
         print(f"\n{Colors.YELLOW}⚠️  Gallery interrupted by user (Ctrl+C){Colors.NC}")
         print(f"{Colors.YELLOW}Partial screenshots may have been saved to mkdocs_src/docs/gallery/{Colors.NC}")
         return 1
+
+    # The PNGs are what Playwright writes; the documentation pages ask for their WebP copies. Converted whether or not the
+    # run failed, so the shots that did succeed are served as WebP (the nightly goes on with them).
+    webp_failures = _convert_gallery_webp()
 
     # Parse failed test names from Playwright output
     # Playwright prints lines like:
@@ -1137,17 +1285,17 @@ def cmd_mkdocs_gallery(args):
         for line in output_lines:
             stripped = line.strip()
             # Detect the failures summary block (e.g. "  1 failed")
-            if re.match(r'^\d+ failed$', stripped):
+            if re.match(r"^\d+ failed$", stripped):
                 in_failures_block = True
                 continue
             if in_failures_block:
                 # Lines like: [desktop] › e2e/gallery.spec.ts:330:9 › Gallery Screenshots › Files › test name ───
-                m = re.match(r'\[([\w]+)\]\s+›\s+\S+\s+›\s+Gallery Screenshots\s+›\s+(.+)', stripped)
+                m = re.match(r"\[([\w]+)\]\s+›\s+\S+\s+›\s+Gallery Screenshots\s+›\s+(.+)", stripped)
                 if m:
-                    viewport = m.group(1).strip()   # 'desktop' or 'mobile'
-                    test_name = m.group(2).strip()   # 'FX › Chart settings modal ───────'
+                    viewport = m.group(1).strip()  # 'desktop' or 'mobile'
+                    test_name = m.group(2).strip()  # 'FX › Chart settings modal ───────'
                     failed_tests.append((viewport, test_name))
-                elif stripped and not stripped.startswith('['):
+                elif stripped and not stripped.startswith("["):
                     # End of failures block (e.g. "X passed", empty line, etc.)
                     in_failures_block = False
         print_error(f"Gallery generation had failures (see above)")
@@ -1162,28 +1310,31 @@ def cmd_mkdocs_gallery(args):
 
             # Group by test name to detect which viewports failed
             from collections import defaultdict
+
             by_test: dict[str, list[str]] = defaultdict(list)
             for vp, t in failed_tests:
                 # Strip trailing ─── decoration for the filter text
-                clean_name = re.sub(r'\s*─+\s*$', '', t).strip()
+                clean_name = re.sub(r"\s*─+\s*$", "", t).strip()
                 by_test[clean_name].append(vp)
 
             for test_name, vps in by_test.items():
-                has_desktop = 'desktop' in vps
-                has_mobile = 'mobile' in vps
+                has_desktop = "desktop" in vps
+                has_mobile = "mobile" in vps
                 if has_desktop:
-                    print(f"   ./dev.py mkdocs gallery --no-populate --desktop-only -f \"{test_name}\"")
+                    print(f'   ./dev.py mkdocs gallery --no-populate --desktop-only -f "{test_name}"')
                 if has_mobile:
-                    print(f"   ./dev.py mkdocs gallery --no-populate --mobile-only -f \"{test_name}\"")
+                    print(f'   ./dev.py mkdocs gallery --no-populate --mobile-only -f "{test_name}"')
                 if has_desktop and has_mobile:
-                    print(f"   ./dev.py mkdocs gallery --no-populate -f \"{test_name}\"  # both viewports")
+                    print(f'   ./dev.py mkdocs gallery --no-populate -f "{test_name}"  # both viewports')
             print()
         else:
             print(f"{Colors.YELLOW}Some screenshots may be missing or outdated. Run with --filter to retry specific tests.{Colors.NC}")
+    elif webp_failures:
+        print(f"\n{Colors.YELLOW}⚠️  The screenshots were taken, but {webp_failures} PNG(s) could not be converted to WebP (see above): those pages fall back to the PNG.{Colors.NC}")
     else:
         print_success("\n✅ Gallery screenshots generated successfully!")
     print(f"{Colors.GREEN}Output: mkdocs_src/docs/gallery/{Colors.NC}")
-    return 1 if failures else 0
+    return 1 if (failures or webp_failures) else 0
 
 
 # Declared perimeter of the explicit-anchor convention, measured 18 Sep 2026.
@@ -1259,11 +1410,7 @@ def _mkdocs_check_anchor(en_file, anchor: str, path: str, origin: str, docs_root
         print(f"  🟡 {path}  (known: dead in {', '.join(broken)} — awaiting translation)")
         return "KNOWN"
 
-    return (
-        f"  ❌ {path}\n"
-        f"     → Anchor #{anchor} resolves in English but is missing in: {', '.join(broken)}\n"
-        f"       (from {origin}) — the translated heading produces a different slug"
-    )
+    return f"  ❌ {path}\n" f"     → Anchor #{anchor} resolves in English but is missing in: {', '.join(broken)}\n" f"       (from {origin}) — the translated heading produces a different slug"
 
 
 def cmd_mkdocs_check_links(args):
@@ -1364,9 +1511,7 @@ def cmd_mkdocs_check_links(args):
     # A value that genuinely depends on runtime state is not an error, but it is
     # not a pass either. It used to disappear from the output entirely, and an
     # empty error list read as "everything is fine".
-    unverified = docs_links.deduplicate(
-        discovery.unverified + backend_found.unverified + speculative_misses
-    )
+    unverified = docs_links.deduplicate(discovery.unverified + backend_found.unverified + speculative_misses)
     if unverified:
         print(f"\n{Colors.CYAN}── Not verifiable ({len(unverified)}) ──{Colors.NC}")
         for link in unverified:
@@ -1376,8 +1521,7 @@ def cmd_mkdocs_check_links(args):
     print(f"\n{Colors.CYAN}── Summary ──{Colors.NC}")
     print(f"  ✅ {ok_count} valid link(s)")
     if known_count:
-        print(f"  🟡 {known_count} known-broken anchor(s) awaiting translation "
-              f"(see MKDOCS_ANCHOR_EXCEPTIONS — this list must only shrink)")
+        print(f"  🟡 {known_count} known-broken anchor(s) awaiting translation " f"(see MKDOCS_ANCHOR_EXCEPTIONS — this list must only shrink)")
     if errors:
         print(f"  ❌ {len(errors)} broken link(s):\n")
         for e in errors:
@@ -1392,49 +1536,65 @@ def cmd_mkdocs_check_links(args):
 # =============================================================================
 # Graph / DevWiki Commands (graphify knowledge graph)
 # =============================================================================
+#
+# graphify scans the repository root ("."), filtered by the allow-list in
+# /.graphifyignore (devWiki pages, English MkDocs pages, backend/app,
+# backend/alembic/versions, frontend/src/lib, frontend/src/routes). The output
+# lives in LibreFolio_devWiki/graphify-out/, selected through GRAPHIFY_OUT.
+# graphify refuses every file whose real path is outside the scan root, which is
+# why the corpus is no longer a folder of symlinks.
 
-WIKI_DIR = PROJECT_ROOT / "LibreFolio_devWiki"
-CORPUS_DIR = WIKI_DIR / "corpus"
-GRAPH_JSON = WIKI_DIR / "graphify-out" / "graph.json"
-GRAPH_REPORT = WIKI_DIR / "graphify-out" / "GRAPH_REPORT.md"
+GRAPH_IGNORE = PROJECT_ROOT / ".graphifyignore"
+GRAPH_OUT_REL = "LibreFolio_devWiki/graphify-out"  # relative to PROJECT_ROOT
+GRAPH_OUT = PROJECT_ROOT / GRAPH_OUT_REL
+GRAPH_JSON = GRAPH_OUT / "graph.json"
+GRAPH_REPORT = GRAPH_OUT / "GRAPH_REPORT.md"
+# graph.html node cap. graphify stores it in its build state, so every command
+# must pass the same value, or `graph update` rebuilds instead of skipping.
+GRAPHIFY_VIZ_NODE_LIMIT = "15000"
 
 
-def _graphify_cmd(args_list: list, cwd: Path = WIKI_DIR, env: dict | None = None) -> int:
-    """Run graphify via pipenv with live output from LibreFolio_devWiki/."""
-    return run_pipenv(["python", "-m", "graphify"] + args_list, cwd=cwd, env=env)
+def _graphify_cmd(args_list: list, env: dict | None = None) -> int:
+    """Run graphify via pipenv from the repository root, output in LibreFolio_devWiki/graphify-out/."""
+    full_env = {"GRAPHIFY_OUT": GRAPH_OUT_REL, "GRAPHIFY_VIZ_NODE_LIMIT": GRAPHIFY_VIZ_NODE_LIMIT}
+    if env:
+        full_env.update(env)
+    return run_pipenv(["python", "-m", "graphify"] + args_list, cwd=PROJECT_ROOT, env=full_env)
 
 
 def cmd_graph_build(args):
     """Full knowledge-graph build: extract + cluster + report.
 
     When graph.json already exists (default): code-only incremental update, no LLM needed.
-    With --full: full semantic re-extraction (requires an LLM API key in env, or use the
-    graphify skill through your AI assistant for semantic extraction of new doc files).
+    With --full: headless full extraction (needs an LLM API key in env for the docs; otherwise
+    run the graphify skill through your AI assistant, scanning the repository root).
     """
     full = getattr(args, "full", False)
 
-    if not CORPUS_DIR.exists():
-        print_error(f"Corpus directory not found: {CORPUS_DIR}")
-        print_error("Run from project root and ensure LibreFolio_devWiki/corpus/ exists.")
+    if not GRAPH_IGNORE.exists():
+        print_error(f"Corpus allow-list not found: {GRAPH_IGNORE}")
+        print_error("graphify would scan the whole repository: restore /.graphifyignore first.")
         return 1
 
     if GRAPH_JSON.exists() and not full:
         print_warning("graph.json exists — running incremental update (use --full for complete rebuild).")
-        return _graphify_cmd(["update", "corpus/"])
+        return _graphify_cmd(["update", "."])
 
     print(Colors.success("🔬 Building knowledge graph (full extract, no-viz)..."))
     print_warning("Semantic extraction uses cache for known files. New .md files need an LLM API key")
-    print_warning("or run '/graphify corpus/' through your AI assistant for semantic extraction.")
+    print_warning("or run the graphify skill on the repository root through your AI assistant.")
     backend_args = []
     if getattr(args, "backend", None):
         backend_args = ["--backend", args.backend]
-    return _graphify_cmd([
-        "extract", "corpus/",
-        *backend_args,
-        "--no-viz",
-        "--no-cluster",  # cluster separately; cluster-only is faster on 8k+ nodes
-        "--out", ".",     # write to LibreFolio_devWiki/graphify-out/ (corpus/graphify-out symlinks here)
-    ])
+    return _graphify_cmd(
+        [
+            "extract",
+            ".",  # scan root = repository root; GRAPHIFY_OUT sends the output to the devWiki
+            *backend_args,
+            "--no-viz",
+            "--no-cluster",  # cluster separately: ./dev.py graph cluster
+        ]
+    )
 
 
 def cmd_graph_cluster(args):
@@ -1443,21 +1603,18 @@ def cmd_graph_cluster(args):
         print_error("No graph.json found. Run: ./dev.py graph build")
         return 1
     print(Colors.success("🔬 Reclustering graph..."))
-    return _graphify_cmd(["cluster-only", "corpus/", "--no-viz"])
+    return _graphify_cmd(["cluster-only", ".", "--no-viz"])
 
 
 def cmd_graph_viz(args):
-    """Generate graph.html from existing graph.json (raises node limit to 15000)."""
+    """Generate graph.html from existing graph.json and its community labels (no reclustering)."""
     if not GRAPH_JSON.exists():
         print_error("No graph.json found. Run: ./dev.py graph build first.")
         return 1
-    print(Colors.success("🌐 Generating graph.html (node limit raised to 15000)..."))
-    rc = _graphify_cmd(
-        ["cluster-only", "corpus/"],
-        env={"GRAPHIFY_VIZ_NODE_LIMIT": "15000"},
-    )
+    print(Colors.success(f"🌐 Generating graph.html (node limit {GRAPHIFY_VIZ_NODE_LIMIT})..."))
+    rc = _graphify_cmd(["export", "html", "--node-limit", GRAPHIFY_VIZ_NODE_LIMIT])
     if rc == 0:
-        print(Colors.success(f"✅ graph.html → {WIKI_DIR / 'graphify-out' / 'graph.html'}"))
+        print(Colors.success(f"✅ graph.html → {GRAPH_OUT / 'graph.html'}"))
     return rc
 
 
@@ -1467,7 +1624,7 @@ def cmd_graph_update(args):
         print_error("No graph.json found. Run: ./dev.py graph build first.")
         return 1
     print(Colors.success("🔄 Updating graph (code-only, no LLM)..."))
-    return _graphify_cmd(["update", "corpus/"])
+    return _graphify_cmd(["update", "."])
 
 
 def cmd_graph_query(args):
@@ -1503,34 +1660,42 @@ def cmd_graph_report(args):
 # Docker Commands
 # =============================================================================
 
-def _get_docker_tag(override: str | None = None) -> str:
-    """Get Docker image tag from git version or override.
 
-    Uses the same git-based versioning as `./dev.py info version`:
+def _get_docker_tag(override: str | None = None) -> str:
+    """Get Docker image tag: the version the image reports, or the override.
+
+    The same git-based versioning as `./dev.py info version`:
       - On a tag:       librefolio:v1.2.3
       - After commits:  librefolio:v1.2.3-5-gabcdef
       - Dirty tree:     librefolio:v1.2.3-dirty
       - No tags:        librefolio:v0.0.0-gabcdef
 
-    Note: We call get_git_version() fresh (bypassing lru_cache) because
-    _docker_ensure_assets_built() may have dirtied the tree after a prior
-    cached call.
+    Called after _docker_ensure_assets_built(), which froze the version before any build step and wrote it to
+    VERSION: the tag reads that file, so the tag, VERSION and the frontend bundle name one version even when a build
+    step wrote a tracked file meanwhile. Without the file, the version is computed afresh.
     """
     if override:
         return override
 
+    version_file = PROJECT_ROOT / "VERSION"
+    try:
+        frozen = version_file.read_text().strip()
+    except OSError:
+        frozen = ""
+    if frozen:
+        return f"librefolio:{frozen}"
+
     from backend.app.utils.runtime.version import get_git_version
-    # Clear lru_cache so that asset-build artefacts don't produce a stale result
+
     get_git_version.cache_clear()
-    version = get_git_version()  # e.g. "v0.5.0" or "v0.5.0-3-gabcdef-dirty"
-    return f"librefolio:{version}"
+    return f"librefolio:{get_git_version()}"
 
 
 def _check_env_file():
     """Check that .env exists; if not, abort with helpful instructions.
 
     Also warns when terminal environment variables override .env values
-    for Docker-relevant variables (PORT, TEST_PORT).
+    for the Docker-relevant variable PORT (the host side of the port mapping).
     """
     env_file = PROJECT_ROOT / ".env"
     if not env_file.exists():
@@ -1545,7 +1710,7 @@ def _check_env_file():
         return False
 
     # Check for shell env vars that override .env values
-    DOCKER_VARS = ("PORT", "TEST_PORT")
+    DOCKER_VARS = ("PORT",)
     try:
         for line in env_file.read_text().splitlines():
             line = line.strip()
@@ -1557,10 +1722,7 @@ def _check_env_file():
             if key in DOCKER_VARS:
                 shell_value = os.environ.get(key)
                 if shell_value is not None and shell_value != value:
-                    print_warning(
-                        f"⚠ env variable {key} is set in terminal ({shell_value}) "
-                        f"but differs from .env ({value})"
-                        )
+                    print_warning(f"⚠ env variable {key} is set in terminal ({shell_value}) " f"but differs from .env ({value})")
                     print(Colors.info(f"  Terminal value takes priority. To use .env value: unset {key}"))
     except Exception:
         pass  # Non-blocking: if .env parsing fails, just skip the check
@@ -1568,13 +1730,72 @@ def _check_env_file():
     return True
 
 
+def _docker_frontend_stale_reason(version: str, check_frontend_needs_build) -> Optional[str]:
+    """Why the frontend bundle cannot go into an image of ``version`` as it is, or None when it can.
+
+    The image needs a production bundle of this version: the sources changed, the last build was a debug one (or
+    of unknown mode), or it carries another version, e.g. after a commit that touched no frontend file.
+    """
+    if check_frontend_needs_build():
+        return "missing or outdated"
+    if _read_frontend_build_mode_marker() is not False:
+        return "not a production build"
+    recorded = _read_frontend_build_version()
+    if recorded is None:
+        return "made without a recorded version (not by docker build)"
+    if recorded != version:
+        return f"built for {recorded}, not {version}"
+    return None
+
+
+def _docker_ensure_frontend_built(version: str, check_frontend_needs_build) -> int:
+    """Rebuild the frontend in production mode with ``LF_APP_VERSION=version`` unless the bundle already fits."""
+    stale_reason = _docker_frontend_stale_reason(version, check_frontend_needs_build)
+    if stale_reason is None:
+        print(Colors.info(f"ℹ️  Frontend build is up to date ({version})"))
+        return 0
+    print_warning(f"Frontend build {stale_reason} — building now...")
+
+    class BuildArgs:
+        debug = False
+
+    previous = os.environ.get("LF_APP_VERSION")
+    os.environ["LF_APP_VERSION"] = version
+    try:
+        result = cmd_fe_build(BuildArgs())
+    finally:
+        if previous is None:
+            os.environ.pop("LF_APP_VERSION", None)
+        else:
+            os.environ["LF_APP_VERSION"] = previous
+    if result != 0:
+        print_error("Frontend build failed. Cannot build Docker image.")
+        return result
+    _write_frontend_build_version(version)
+    print_success(f"Frontend build ready ({version})")
+    return 0
+
+
 def _docker_ensure_assets_built():
     """Ensure frontend, docs, JS cache, requirements.txt and VERSION are ready before Docker build.
 
     Uses the same staleness checks as the 'server' command so that
-    ``dev.py docker build`` always produces an image with fresh assets.
+    ``dev.py docker build`` always produces an image with fresh assets. The
+    version is frozen once, first: the frontend bundle (as ``LF_APP_VERSION``)
+    and the VERSION file carry the same one.
     """
+    from backend.app.utils.runtime.version import get_git_version
     from scripts.cli_base import check_frontend_needs_build
+
+    # --- 0. The image's version, frozen once ----------------------------------
+    # Before any step can write a tracked file and make `git describe` say
+    # "-dirty". get_git_version() reads VERSION only where there is no .git/ or
+    # `git describe` fails: remove the file of a previous build first, so such a
+    # checkout gets "unknown" instead of the old value.
+    version_file = PROJECT_ROOT / "VERSION"
+    version_file.unlink(missing_ok=True)
+    get_git_version.cache_clear()
+    version = get_git_version()
 
     # --- 1. JS library cache (fonts must exist before SvelteKit prerender) ----
     # No narrowing here on purpose: the image copies mkdocs_src/site/ next to
@@ -1586,19 +1807,9 @@ def _docker_ensure_assets_built():
         return cache_result
 
     # --- 2. Frontend ----------------------------------------------------------
-    if check_frontend_needs_build():
-        print_warning("Frontend build missing or outdated — building now...")
-
-        class BuildArgs:
-            debug = False
-
-        result = cmd_fe_build(BuildArgs())
-        if result != 0:
-            print_error("Frontend build failed. Cannot build Docker image.")
-            return result
-        print_success("Frontend build ready")
-    else:
-        print(Colors.info("ℹ️  Frontend build is up to date"))
+    result = _docker_ensure_frontend_built(version, check_frontend_needs_build)
+    if result != 0:
+        return result
 
     # --- 3. MkDocs ------------------------------------------------------------
     docs_index = PROJECT_ROOT / "mkdocs_src" / "site" / "index.html"
@@ -1652,18 +1863,8 @@ def _docker_ensure_assets_built():
 
     # --- 5. VERSION file for Docker (no .git/ in the runtime image) -----------
     # The image has no .git/, so get_git_version()'s `git describe` can't run at
-    # container runtime. Freeze the version now (on the host, where .git/ exists)
-    # into a plain file that gets COPYed into the image.
-    from backend.app.utils.runtime.version import get_git_version
-
-    # get_git_version() prefers an existing VERSION file over `git describe` (so
-    # it works with no .git/ inside the container). Remove any stale VERSION file
-    # from a previous build first, so this recomputes a true fresh value instead
-    # of just re-reading what's already there.
-    version_file = PROJECT_ROOT / "VERSION"
-    version_file.unlink(missing_ok=True)
-    get_git_version.cache_clear()
-    version = get_git_version()
+    # container runtime: the version frozen at step 0 goes into a plain file
+    # that gets COPYed into the image.
     version_file.write_text(version)
     print_success(f"VERSION file generated ({version})")
 
@@ -1692,9 +1893,9 @@ def cmd_docker_build(args):
     """Build the Docker image with git-based versioning."""
     if not _check_env_file():
         return 1
-    tag_override = getattr(args, 'tag', None)
-    no_cache = getattr(args, 'no_cache', False)
-    light = getattr(args, 'light', False)
+    tag_override = getattr(args, "tag", None)
+    no_cache = getattr(args, "no_cache", False)
+    light = getattr(args, "light", False)
 
     result = _docker_ensure_assets_built()
     if result != 0:
@@ -1720,9 +1921,9 @@ def cmd_docker_rebuild(args):
     """Rebuild image, stop running containers, restart with new version."""
     if not _check_env_file():
         return 1
-    tag_override = getattr(args, 'tag', None)
-    no_cache = getattr(args, 'no_cache', False)
-    light = getattr(args, 'light', False)
+    tag_override = getattr(args, "tag", None)
+    no_cache = getattr(args, "no_cache", False)
+    light = getattr(args, "light", False)
 
     print(Colors.success("🐳 Rebuild: build new image → stop → start..."))
     print()
@@ -1762,7 +1963,7 @@ def cmd_docker_rebuild(args):
 
 def cmd_docker_up(args):
     """Start containers with docker compose."""
-    detach = not getattr(args, 'no_detach', False)
+    detach = not getattr(args, "no_detach", False)
     print(Colors.success("🐳 Starting LibreFolio containers..."))
     cmd = ["docker", "compose", "up"]
     if detach:
@@ -1793,7 +1994,7 @@ def cmd_docker_restart(args):
 
 def cmd_docker_logs(args):
     """Show container logs."""
-    follow = getattr(args, 'follow', False)
+    follow = getattr(args, "follow", False)
     cmd = ["docker", "compose", "logs"]
     if follow:
         cmd.append("-f")
@@ -1818,7 +2019,7 @@ def cmd_docker_exec(args):
         ./dev.py docker exec user create admin admin@test.com Pass123!
         ./dev.py docker exec db current
     """
-    extra = getattr(args, 'cmd_args', [])
+    extra = getattr(args, "cmd_args", [])
     if not extra:
         print_error("No command specified. Usage: ./dev.py docker exec <command> [args...]")
         print(Colors.info("Examples:"))
@@ -1827,7 +2028,10 @@ def cmd_docker_exec(args):
         print(f"  ./dev.py docker exec db current")
         return 1
 
-    cmd = ["docker", "compose", "exec", "librefolio", "python", "dev.py"] + extra
+    # As the server: gosu drops to the numeric ids the entrypoint uses (LIBREFOLIO_UID/GID, set in the image, with the
+    # entrypoint's defaults), so a file a command creates in the data volume belongs to them, not to root. sh hands the
+    # arguments on as "$@".
+    cmd = ["docker", "compose", "exec", "librefolio", "sh", "-c", 'exec gosu "${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}" python dev.py "$@"', "sh", *extra]
     print(Colors.info(f"🐳 Running in container: dev.py {' '.join(extra)}"))
     return run_command_live(cmd)
 
@@ -1835,6 +2039,7 @@ def cmd_docker_exec(args):
 # =============================================================================
 # Format/Lint Commands
 # =============================================================================
+
 
 def cmd_format(args):
     """Format code with black."""
@@ -1990,6 +2195,9 @@ def _extract_json(text):
 
 def _run_knip_on_generated_catalogue(frontend_dir, exclude):
     """knip resolves the imports of the generated src/lib/i18n/<lang>.json: write them first, or it reports false findings."""
+    # The check calls `npx knip`: without it installed npx would fetch an unpinned one (J-8). A stop counts as a finding.
+    if require_frontend_dependencies(("knip",), purpose="the frontend dead-code check") != 0:
+        return True
     if i18n_catalog.build(quiet=True) != 0:
         print_error("  translation catalogue could not be generated - knip skipped")
         return True
@@ -2047,6 +2255,7 @@ def _run_knip(frontend_dir, exclude):
 # Shell/Install Commands
 # =============================================================================
 
+
 def cmd_shell(args):
     """Open shell in virtualenv."""
     print(Colors.success("Opening shell in virtualenv..."))
@@ -2095,14 +2304,14 @@ def cmd_install(args):
     print()
 
     print_header("✅ All dependencies installed!")
-    
+
     # DIAGNOSTICS FOR GITHUB ACTIONS
     print()
     print(Colors.info("[DEBUG] Backend Package versions:"))
     run_command_live(["pipenv", "run", "pip", "list"])
     print(Colors.info("[DEBUG] Frontend Package versions:"))
     run_command_live(["npm", "ls", "svelte", "@sveltejs/kit", "@sveltejs/vite-plugin-svelte", "vite", "typescript", "esbuild"], cwd=PROJECT_ROOT / "frontend")
-    
+
     return 0
 
 
@@ -2127,6 +2336,51 @@ def _read_frontend_build_mode_marker() -> Optional[bool]:
         return FRONTEND_BUILD_MODE_MARKER.read_text().strip() == "1"
     except OSError:
         return None
+
+
+#: The version the last frontend build for a Docker image carries (_docker_ensure_assets_built). Every build empties
+#: frontend/build/, so the file exists only when the last build was made for an image.
+FRONTEND_BUILD_VERSION_MARKER = PROJECT_ROOT / "frontend" / "build" / ".build-version"
+
+
+def _write_frontend_build_version(version: str) -> None:
+    """Record the version the frontend bundle was built with (LF_APP_VERSION), for the next image build."""
+    try:
+        FRONTEND_BUILD_VERSION_MARKER.write_text(version)
+    except OSError:
+        pass  # non-critical bookkeeping — worst case, the next image build rebuilds the frontend
+
+
+def _read_frontend_build_version() -> Optional[str]:
+    """Return the version the last image-bound frontend build carries, or None if unknown."""
+    try:
+        return FRONTEND_BUILD_VERSION_MARKER.read_text().strip() or None
+    except OSError:
+        return None
+
+
+#: A string every Designer Lab runtime module contains: LAB_MARKER of frontend/scripts/designer-lab/vite-plugin.mjs.
+DESIGNER_LAB_MARKER = b"lf-designer-lab"
+
+
+def _frontend_build_has_designer_lab(build_dir: Path = PROJECT_ROOT / "frontend" / "build") -> bool:
+    """Whether the frontend build carries the Designer Lab (/designer-lab): one of its scripts holds the Lab's marker.
+
+    The debug-mode marker cannot tell, since a debug build made with LF_DESIGNER_LAB=0 has no Lab. The marker can: when
+    the Lab is off, the Vite plugin fails the build if any emitted file contains it. Reads the scripts of
+    _app/immutable/ up to the first hit: a few milliseconds on a debug build, a few tens when it reads them all.
+    """
+    try:
+        scripts = sorted((build_dir / "_app" / "immutable").rglob("*.js"))
+    except OSError:
+        return False
+    for script in scripts:
+        try:
+            if DESIGNER_LAB_MARKER in script.read_bytes():
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def auto_build_frontend(debug=False):
@@ -2315,10 +2569,14 @@ def stamp_service_worker():
     offline_hash = hashlib.md5(offline_path.read_bytes()).hexdigest()[:8]
     sw_content = sw_path.read_text()
     # Remove any existing hash comment
-    lines = [l for l in sw_content.splitlines() if not l.startswith('// build:')]
+    lines = [l for l in sw_content.splitlines() if not l.startswith("// build:")]
     # Prepend hash comment (any byte change in sw.js triggers browser SW update)
-    lines.insert(1, f'// build: {offline_hash}')
-    sw_path.write_text('\n'.join(lines) + '\n')
+    lines.insert(1, f"// build: {offline_hash}")
+    stamped = "\n".join(lines) + "\n"
+    # Written only when it changes: the frontend build watches static/ (H-52), and a rewrite at every docs build
+    # would leave sw.js newer than the build, for a needless rebuild at the next start
+    if stamped != sw_content:
+        sw_path.write_text(stamped)
 
 
 def copy_docs_assets():
@@ -2344,15 +2602,6 @@ def copy_docs_assets():
         if dest_icons.exists():
             shutil.rmtree(dest_icons)
         shutil.copytree(src_icons, dest_icons)
-
-    # Copy promo videos (disabled/commented out)
-    # promo_dir = PROJECT_ROOT / "mkdocs_src" / "videoClipPrject" / "video_promo" / "out"
-    # video_dest = static_dir / "video"
-    # if promo_dir.exists():
-    #     video_dest.mkdir(parents=True, exist_ok=True)
-    #     for video_file in promo_dir.glob("*.mp4"):
-    #         shutil.copy(video_file, video_dest / video_file.name)
-    #         print_success(f"Copied promo video to mkdocs assets: {video_file.name}")
 
 
 def update_js_cache(strict: bool = False, required_for: str | None = None):
@@ -2416,6 +2665,7 @@ def _add_unavailable(subparsers, name: str, help_text: str, missing: str) -> Non
 # Main Entry Point
 # =============================================================================
 
+
 def main():
     parser = TreeParser(
         description="LibreFolio Development CLI",
@@ -2435,6 +2685,9 @@ Commands by Category:
 
   👤  Users
       user                User management (create, list, reset, promote...)
+
+  💾  Backup
+      backup              Instance backup (create, inspect, restore, pending)
 
   📚  Documentation
       mkdocs              MkDocs commands (build, serve, clean, deploy)
@@ -2463,8 +2716,8 @@ Examples:
   ./dev.py front build         Build frontend
   ./dev.py mkdocs serve        Serve documentation locally
   ./dev.py user list           List all users
-"""
-        )
+""",
+    )
 
     subparsers = parser.add_subparsers(dest="command", metavar="command")
 
@@ -2476,27 +2729,31 @@ Examples:
     p = subparsers.add_parser("server", help="🖥️  Start development server")
     p.add_argument("--test", "-t", action="store_true", help="Use test database (port 6041)")
     p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
+    p.add_argument("--build-only", action="store_true", dest="build_only", help="Only build what the server serves (frontend, docs, JS cache), then exit without starting it")
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
     p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
     p.add_argument("--workers", "-w", metavar="N|auto", default=1, help="Number of uvicorn workers, or 'auto' for 2 × (CPU-1) (default: 1)")
     p.add_argument("--host", type=str, default=None, help="Bind host (default: HOST env or 0.0.0.0)")
     p.add_argument("--port", "-p", type=int, default=None, help="Bind port (default: PORT env or 6040)")
-    p.add_argument("--data-dir", metavar="PATH", default=None,
-                   help="Data root for this server (test mode uses LIBREFOLIO_TEST_DATA_DIR)")
+    p.add_argument("--data-dir", metavar="PATH", default=None, help="Data root for this server (test mode uses LIBREFOLIO_TEST_DATA_DIR)")
     p.add_argument("--coverage", action="store_true", help="Enable backend code coverage tracking (writes .coverage.<pid>)")
-    p.add_argument("--no-scheduler", action="store_true", dest="no_scheduler",
-                   help="Disable the market data scheduler (no background sync jobs)")
-    p.add_argument("--no-reload", action="store_true", dest="no_reload",
-                   help="Never enable uvicorn --reload (the reloader adds a supervisor process that outlives SIGTERM)")
+    p.add_argument("--no-scheduler", action="store_true", dest="no_scheduler", help="Disable the market data scheduler (no background sync jobs)")
+    p.add_argument("--no-reload", action="store_true", dest="no_reload", help="Never enable uvicorn --reload (the reloader adds a supervisor process that outlives SIGTERM)")
+    p.add_argument("--lane-setting", dest="lane_settings", action="append", metavar="NAME=VALUE", default=None, help="With --test: a setting of the lane's instance, repeatable (H-43): LIBREFOLIO_PROFILE, LIBREFOLIO_FRAME_PROTECTION or LIBREFOLIO_CSP_REPORT_ONLY")
     p.set_defaults(func=cmd_server)
 
     # Database
     p = subparsers.add_parser("db", help="🖥️  Database commands")
     db_sub = p.add_subparsers(dest="db_cmd", metavar="action")
 
-    db_p = db_sub.add_parser("check", help="Verify CHECK constraints")
+    db_p = db_sub.add_parser("check", help="Verify CHECK constraints (--integrity: the restore's checks on the file, read-only)")
     db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
+    db_p.add_argument("--integrity", action="store_true", help="Instead: integrity_check, foreign_key_check, text that is not UTF-8 (table and rowid) and the Alembic revision")
     db_p.set_defaults(func=cmd_db_check)
+
+    db_p = db_sub.add_parser("currencies", help="List stored currency codes that are not ISO 4217 codes")
+    db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
+    db_p.set_defaults(func=cmd_db_currencies)
 
     db_p = db_sub.add_parser("current", help="Show current migration")
     db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
@@ -2550,6 +2807,7 @@ Examples:
     has_test_runner = _has("backend/test_scripts")
     if has_test_runner:
         from scripts.test_runner import register_subparser as register_test_parser
+
         register_test_parser(subparsers)
     else:
         _add_unavailable(subparsers, "test", "🧪 Run tests", "backend/test_scripts")
@@ -2559,7 +2817,16 @@ Examples:
     # =========================================================================
 
     from scripts.user_cli import register_subparser as register_user_parser
+
     register_user_parser(subparsers)
+
+    # =========================================================================
+    # 💾 Backup Commands - Import from backup_cli
+    # =========================================================================
+
+    from scripts.backup_cli import register_subparser as register_backup_parser
+
+    register_backup_parser(subparsers)
 
     # =========================================================================
     # 📚 Documentation Commands
@@ -2581,39 +2848,22 @@ Examples:
     mk_p.set_defaults(func=cmd_mkdocs_deploy)
 
     mk_p = mk_sub.add_parser("gallery", help="Generate gallery screenshots with Playwright")
-    mk_p.add_argument("--list", "-l", action="store_true", dest="list_tests",
-                      help="List available gallery test names (for use with --filter)")
-    mk_p.add_argument("--filter", "-f", type=str, default=None,
-                      help="Filter: only run tests matching this text (passed as -g to Playwright)")
-    mk_p.add_argument("--desktop-only", action="store_true",
-                      help="Only generate desktop screenshots")
-    mk_p.add_argument("--mobile-only", action="store_true",
-                      help="Only generate mobile screenshots")
-    mk_p.add_argument("--no-populate", action="store_true",
-                      help="Reuse the existing test database as it is (faster re-runs; needs one earlier full run)")
-    mk_p.add_argument("--workers", "-w", type=int, default=None,
-                      help="Number of Playwright workers (default: CPU count)")
-    mk_p.add_argument("--test-port", type=int, default=None,
-                      help="Port for the test server (default: TEST_PORT env or 6041)")
-    mk_p.add_argument("--headed", action="store_true",
-                      help="Run browser in headed mode (visible window) instead of headless")
-    mk_p.add_argument("--ui", action="store_true",
-                      help="Open Playwright UI mode (interactive test runner with time-travel debugger)")
-    mk_p.add_argument("--force", action="store_true",
-                      help="Kill zombie processes blocking the test port instead of failing")
+    mk_p.add_argument("--list", "-l", action="store_true", dest="list_tests", help="List available gallery test names (for use with --filter)")
+    mk_p.add_argument("--filter", "-f", type=str, default=None, help="Filter: only run tests matching this text (passed as -g to Playwright)")
+    mk_p.add_argument("--desktop-only", action="store_true", help="Only generate desktop screenshots")
+    mk_p.add_argument("--mobile-only", action="store_true", help="Only generate mobile screenshots")
+    mk_p.add_argument("--no-populate", action="store_true", help="Reuse the existing test database as it is (faster re-runs; needs one earlier full run)")
+    mk_p.add_argument("--workers", "-w", type=int, default=None, help="Number of Playwright workers (default: 60%% of the CPU count, at least 1)")
+    mk_p.add_argument("--test-port", type=int, default=None, help="Port for the test server (default: TEST_PORT env or 6041)")
+    mk_p.add_argument("--headed", action="store_true", help="Run browser in headed mode (visible window) instead of headless")
+    mk_p.add_argument("--ui", action="store_true", help="Open Playwright UI mode (interactive test runner with time-travel debugger)")
+    mk_p.add_argument("--force", action="store_true", help="Kill zombie processes blocking the test port instead of failing")
     mk_p.set_defaults(func=cmd_mkdocs_gallery)
 
     mk_p = mk_sub.add_parser("normalize-dashboard-fixture", help="Rescale the gallery dashboard snapshot to a 50K net worth (anonymization)")
-    mk_p.add_argument("path", nargs="?", default="frontend/e2e/dashboard-report.json",
-                      help="Fixture path (default: the gallery dashboard snapshot)")
-    mk_p.add_argument("--dry-run", action="store_true",
-                      help="Report what would change without writing")
+    mk_p.add_argument("path", nargs="?", default="frontend/e2e/dashboard-report.json", help="Fixture path (default: the gallery dashboard snapshot)")
+    mk_p.add_argument("--dry-run", action="store_true", help="Report what would change without writing")
     mk_p.set_defaults(func=cmd_mkdocs_normalize_dashboard_fixture)
-
-    mk_p = mk_sub.add_parser("video", help="Manage promotional video assets (sync, start, build, review)")
-    mk_p.add_argument("action", choices=["sync", "start", "build", "review"], help="Action to perform")
-    mk_p.add_argument("--locale", "-l", default="all", choices=["en", "it", "es", "fr", "all"], help="Locale to build (for build action)")
-    mk_p.set_defaults(func=cmd_mkdocs_video)
 
     mk_p = mk_sub.add_parser("check-links", help="Validate cross-boundary links (frontend/backend → docs)")
     mk_p.set_defaults(func=cmd_mkdocs_check_links)
@@ -2623,10 +2873,12 @@ Examples:
     if _has("mkdocs_src/aphra-pipeline"):
         sys.path.insert(0, str(PROJECT_ROOT / "mkdocs_src" / "aphra-pipeline"))
         from translate_docs import register_subparser as register_translate_parser
+
         register_translate_parser(mk_sub)
 
         # Translate-validate - structural validation of translated files
         from validate_translations import register_subparser as register_validate_parser
+
         register_validate_parser(mk_sub)
     else:
         _add_unavailable(mk_sub, "translate", "Translate the documentation (Aphra pipeline)", "mkdocs_src/aphra-pipeline")
@@ -2657,6 +2909,7 @@ Examples:
     if _has("frontend/scripts/i18n-audit.py"):
         sys.path.insert(0, str(PROJECT_ROOT / "frontend" / "scripts"))
         from importlib import import_module
+
         i18n_module = import_module("i18n-audit")
         i18n_module.register_subparser(subparsers)
     else:
@@ -2664,6 +2917,7 @@ Examples:
 
     # Cache - Import from scripts/update_js_cache.py
     from scripts.update_js_cache import register_subparser as register_cache_parser
+
     register_cache_parser(subparsers)
 
     # Info
@@ -2741,21 +2995,18 @@ Examples:
     # 🔬 Graph / DevWiki Commands (graphify knowledge graph)
     # =========================================================================
 
-    p = subparsers.add_parser("graph", help="🔬 DevWiki knowledge graph (graphify)")
+    p = subparsers.add_parser("graph", help="🔬 DevWiki knowledge graph (graphify): docs + code, scanned from the repo root")
     graph_sub = p.add_subparsers(dest="graph_cmd", metavar="action")
 
-    gp = graph_sub.add_parser("build", help="Full extraction (--full) or incremental code update")
-    gp.add_argument("--backend", default=None,
-                    choices=["claude", "openai", "kimi", "deepseek", "ollama", "gemini"],
-                    help="LLM backend for semantic extraction of new docs (optional; uses env var auto-detect if not set)")
-    gp.add_argument("--full", action="store_true",
-                    help="Force full rebuild even if graph.json already exists")
+    gp = graph_sub.add_parser("build", help="Incremental code update, or headless full extraction (--full, needs an LLM key)")
+    gp.add_argument("--backend", default=None, choices=["claude", "openai", "kimi", "deepseek", "ollama", "gemini"], help="LLM backend for semantic extraction of new docs (optional; uses env var auto-detect if not set)")
+    gp.add_argument("--full", action="store_true", help="Force full rebuild even if graph.json already exists")
     gp.set_defaults(func=cmd_graph_build)
 
     gp = graph_sub.add_parser("cluster", help="Rerun clustering on existing graph.json")
     gp.set_defaults(func=cmd_graph_cluster)
 
-    gp = graph_sub.add_parser("viz", help="Generate graph.html (raises node limit to 15000)")
+    gp = graph_sub.add_parser("viz", help=f"Generate graph.html from graph.json, no reclustering (node limit {GRAPHIFY_VIZ_NODE_LIMIT})")
     gp.set_defaults(func=cmd_graph_viz)
 
     gp = graph_sub.add_parser("update", help="Code-only incremental update (no LLM, fast)")
@@ -2778,6 +3029,7 @@ Examples:
     def _graph_help(a):
         p.print_help()
         return 0
+
     p.set_defaults(func=_graph_help)
 
     # =========================================================================
@@ -2790,6 +3042,7 @@ Examples:
     argv = sys.argv[1:]
     if has_test_runner:
         from scripts.test_runner._cli import normalize_coverage_argv
+
         argv = normalize_coverage_argv(argv, only_command="test")
 
     args = parser.parse_args(argv)
@@ -2798,7 +3051,7 @@ Examples:
         parser.print_help()
         return 0
 
-    if hasattr(args, 'func'):
+    if hasattr(args, "func"):
         return args.func(args) or 0
     else:
         parser.print_help()

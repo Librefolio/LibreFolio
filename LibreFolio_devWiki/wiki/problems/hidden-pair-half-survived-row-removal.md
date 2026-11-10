@@ -26,8 +26,8 @@ key with the one taken at opening and asked to discard changes.
 
 ## Solution
 
-`e6019f349` («fix(transactions): remove both halves of a pair», train 82): `removeRow` also drops the operation whose
-`pairedWith` is the removed row. The 1.2 CHANGELOG lists it as a fix (`ed8fc5cd7`).
+`3ccb147e0` («fix(transactions): remove both halves of a pair», train 82): `removeRow` also drops the operation whose
+`pairedWith` is the removed row. The 1.2 CHANGELOG lists it as a fix (`87e841108`).
 
 ## Prevention
 
@@ -38,5 +38,5 @@ key with the one taken at opening and asked to discard changes.
 
 | Role | Path |
 |------|------|
-| The bulk editor (`removeRow`, `addDualRowFromForm`) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| The bulk editor (`removeRow`, `addDualRowFromForm`) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | Plan 46 (§12.10) | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |

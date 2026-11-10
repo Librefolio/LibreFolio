@@ -37,8 +37,8 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioDimension,
     RiskScenarioMissingHistoryPolicy,
 )
-from backend.app.services.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE, STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.platform.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE, STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,
@@ -50,6 +50,7 @@ from backend.app.services.risk.metrics import (
     current_buy_and_hold_returns,
     hypothetical_stress_return,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.utils.asset.geo import normalize_country_to_iso3
 from backend.app.utils.asset.sector import FinancialSector
 
@@ -316,7 +317,9 @@ def _resolve_bucket(
 @register_plugin(RiskAnalyticRegistry)
 class StressAnalytic(RiskAnalytic):
     analytic_code = "stress"
-    algorithm_version = "3.0.0"
+    # 3.0.1 — a historical replay outside the bounds replays the bounded window (R13-SEC8-1b) and its output states
+    # that window, while metadata.params keeps the request as asked (J-52).
+    algorithm_version = "3.0.1"
     name_i18n_key = "risk.analytics.stress.name"
     description_i18n_key = "risk.analytics.stress.description"
     output_kind = RiskOutputKind.STRESS
@@ -626,13 +629,15 @@ class StressAnalytic(RiskAnalytic):
         ]
 
         prepared = replay.prepared_series
-        analyzed_range = prepared.effective_range or params.replay_range
+        # The window the replay prepared (bounded, R13-SEC8-1b), never the request's own.
+        analyzed_range = prepared.effective_range or prepared.requested_range
         return RiskComputation(
             output=RiskStressOutput(
                 method=RiskStressMethod.HISTORICAL_REPLAY,
                 portfolio_return=portfolio_return,
                 impact_amount=_amount(context.scope_value, portfolio_return) if portfolio_return is not None else None,
-                replay_range=params.replay_range,
+                # The window replayed: the request bounded by R13-SEC8-1b; metadata.params keeps the request as asked (J-52).
+                replay_range=prepared.requested_range,
                 impacts=impacts,
             ),
             method="historical_replay_current_buy_and_hold",

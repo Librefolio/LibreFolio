@@ -16,7 +16,7 @@ related:
 
 ## Symptom
 
-In the Growth chart's P&L in lines, with one line per broker (new in 1.2, `8ed7a0f0d`, 2026-09-18), changing the set
+In the Growth chart's P&L in lines, with one line per broker (new in 1.2, `73fbf9c1e`, 2026-09-18), changing the set
 of brokers left the chart wrong: brokers removed from the filter stayed drawn and in the legend, a broker added was not
 drawn, a swapped one took the place of the old one under the old one's legend entry. The coordinator's item 1, joined
 to plan 47.
@@ -39,7 +39,7 @@ the legend's `data` exists only in the full build. Replayed on the same ECharts:
 
 ## Solution
 
-`e72b0b56e` («fix(charts): rebuild P&L lines on broker change»): the chart computes `seriesKey`, the names of its
+`883d65448` («fix(charts): rebuild P&L lines on broker change»): the chart computes `seriesKey`, the names of its
 series in order, and takes the full path whenever the key changes since the last draw; the key is reset with the other
 `lastRendered*` values when the instance is destroyed. `CHART_SERIES_UPDATE_OPTS` is unchanged. The test replays the
 calls recorded by the fake ECharts on a real instance (`vi.importActual('echarts')`) and checks that series and legend
@@ -54,6 +54,6 @@ rebuild — [[concepts/echarts-chart-gotchas]].
 
 | Role | Path |
 |------|------|
-| `seriesKey`, `needsFullInit`, the partial update | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
-| Replay test | `frontend/src/lib/components/dashboard/GrowthChart.test.ts` |
+| `seriesKey`, `needsFullInit`, the partial update | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
+| Replay test | `frontend/src/lib/features/dashboard/GrowthChart.test.ts` |
 | Journal (§1.3) | `LibreFolio_developer_journal/Release_2/Phase_0/47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md` |

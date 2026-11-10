@@ -25,11 +25,11 @@ code but not reproduced. P wrote the red tests first, the coordinator decided D1
 - the bulk editor comparing costs by reference;
 - the 💡 proposing event-linked rows.
 
-The lot entered with train 34 (`7f8233c47`, merge `8ca0d5535`). Three more pieces followed:
+The lot entered with train 34 (`ff449bffe`, merge `82afc0e42`). Three more pieces followed:
 
-- a side task on the distribution editor (`01b967c56`, train 32);
-- C-46…C-48 (`bdec709d2`, train 37);
-- a mini-lot of localisation fixes from M's audit (`0de730f3b`, train 38), on the coordinator's word: the developer was
+- a side task on the distribution editor (`7e315bc36`, train 32);
+- C-46…C-48 (`25210ff16`, train 37);
+- a mini-lot of localisation fixes from M's audit (`3d2378626`, train 38), on the coordinator's word: the developer was
   away and had delegated the reasonable choices.
 
 P then finished, and its chat was archived on 2026-10-11.
@@ -72,6 +72,6 @@ P then finished, and its chat was archived on 2026-10-11.
 |------|------|
 | Plan 42 | `LibreFolio_developer_journal/Release_2/Phase_0/42_promotePairChecks/plan-phase00PromotePairChecks.prompt.md` |
 | Post-1.2 backlog, section P (P-12…P-15) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
-| The pair and promote rules | `backend/app/services/transaction_service.py`, `backend/app/services/transaction_batch_stages.py` |
-| The editor's rule | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
+| The pair and promote rules | `backend/app/services/transactions/transaction_service.py`, `backend/app/services/transactions/transaction_batch_stages.py` |
+| The editor's rule | `frontend/src/lib/features/transactions/transactionTypeStore.ts` |
 | The suggest endpoint (`tolerance_days`) | `backend/app/api/v1/transactions.py` |

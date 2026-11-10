@@ -14,13 +14,14 @@
     import {marked} from 'marked';
     import {onDestroy, tick} from 'svelte';
     import {ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, RefreshCw, Search} from 'lucide-svelte';
-    import AskAdminModal from '$lib/components/auth/AskAdminModal.svelte';
+    import AskAdminModal from '$lib/features/update-check/AskAdminModal.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {CHANGELOG_REMOTE_URL, baseLanguage, localizedChangelog, type ChangelogChapter, type ChangelogSection, type DisplayedChapter} from '$lib/features/changelog/changelog';
     import {auth} from '$lib/stores/app/auth';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {zodiosApi} from '$lib/api';
     import {checkForUpdates, type UpdateCheckResult} from '$lib/features/update-check/updateCheck';
+    import {selfHostedConfirmed} from '$lib/features/instance/profile';
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
@@ -161,9 +162,13 @@
             .join('');
     }
 
-    /** Highlight helper: matched titles get a marker class while searching. */
-    function hitClass(text: string): string {
-        return needle && text.toLowerCase().includes(needle) ? 'bg-amber-100 dark:bg-amber-900/40 rounded px-0.5' : '';
+    /**
+     * Highlight helper: while searching, a matched title takes the mark roles (Q7), any other title its resting text
+     * colour `idle`. Both sit in one ternary: Tailwind orders two text utilities of one element by name, not by their
+     * place in the class string (skill `theme-roles`, rule 8).
+     */
+    function hitClass(text: string, idle: string): string {
+        return needle && text.toLowerCase().includes(needle) ? 'bg-lf-mark text-lf-on-mark inset-ring inset-ring-lf-mark-line rounded px-0.5' : idle;
     }
 
     // =========================================================================
@@ -298,59 +303,63 @@
 </script>
 
 <ModalBase {open} onRequestClose={onClose} maxWidth="4xl" testId="changelog-modal">
-    <div class="bg-white dark:bg-slate-800 rounded-xl flex flex-col max-h-[85vh]">
+    <div class="bg-lf-card text-lf-primary rounded-xl flex flex-col max-h-[85vh]">
         <!-- Header rows:
              - Row 1 (always): title + expand/collapse + GitHub link.
              - Row 2: search (left) + update-check (right). On ≥sm everything merges
                into one line; on mobile the two rows stay distinct. -->
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-4 border-b border-lf-subtle shrink-0">
             <!-- Row 1 -->
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 shrink-0 order-1">{$_('changelog.title')}</h2>
+            <h2 class="text-lg font-semibold text-lf-primary shrink-0 order-1">{$_('changelog.title')}</h2>
             <div class="flex items-center gap-1 shrink-0 order-2 sm:order-2 ml-auto">
-                <button type="button" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title={$_('changelog.expandAll')} onclick={() => setAll(true)} data-testid="changelog-expand-all">
+                <button type="button" class="p-1.5 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" title={$_('changelog.expandAll')} onclick={() => setAll(true)} data-testid="changelog-expand-all">
                     <ChevronsUpDown size={15} />
                 </button>
-                <button type="button" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title={$_('changelog.collapseAll')} onclick={() => setAll(false)} data-testid="changelog-collapse-all">
+                <button type="button" class="p-1.5 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" title={$_('changelog.collapseAll')} onclick={() => setAll(false)} data-testid="changelog-collapse-all">
                     <ChevronsDownUp size={15} />
                 </button>
-                <a href={CHANGELOG_REMOTE_URL} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-medium text-libre-green dark:text-green-400 hover:underline ml-1" data-testid="changelog-remote-link">
+                <a href={CHANGELOG_REMOTE_URL} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-medium text-lf-link hover:underline ml-1" data-testid="changelog-remote-link">
                     <ExternalLink size={13} />
                     <span class="hidden sm:inline">{$_('changelog.viewRemote')}</span>
                 </a>
             </div>
             <!-- Row 2: search (left) + update check (right). Full-width row on mobile. -->
             <div class="relative flex-1 min-w-32 max-w-xs order-3 sm:order-3">
-                <Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-lf-muted pointer-events-none" />
                 <input
                     type="text"
                     bind:value={query}
                     placeholder={$_('changelog.searchPlaceholder')}
-                    class="w-full pl-8 pr-2 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-libre-green"
+                    class="w-full pl-8 pr-2 py-1.5 text-xs rounded-lg border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
                     data-testid="changelog-search"
                 />
             </div>
             <div class="flex items-center gap-1 shrink-0 order-4 sm:order-4 ml-auto sm:ml-0">
-                <!-- Update check (F14): force a fresh result, retaining the login flow's gates. -->
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                    onclick={handleCheckNow}
-                    disabled={checkState === 'checking'}
-                    title={$_('changelog.checkNow')}
-                    data-testid="changelog-check-update"
-                >
-                    <RefreshCw size={13} class={checkState === 'checking' ? 'animate-spin' : ''} />
-                    <span class="hidden sm:inline">{$_('changelog.checkNow')}</span>
-                </button>
+                <!-- Update check (F14): force a fresh result, retaining the login flow's gates. Only once the server said
+                     self-hosted: a managed instance is updated by its operator (F05, workstream A), and nothing shows
+                     before the answer or after a failed request. -->
+                {#if selfHostedConfirmed()}
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-lf-subtle text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
+                        onclick={handleCheckNow}
+                        disabled={checkState === 'checking'}
+                        title={$_('changelog.checkNow')}
+                        data-testid="changelog-check-update"
+                    >
+                        <RefreshCw size={13} class={checkState === 'checking' ? 'animate-spin' : ''} />
+                        <span class="hidden sm:inline">{$_('changelog.checkNow')}</span>
+                    </button>
+                {/if}
             </div>
         </div>
 
         <!-- Search results (clickable) + update-check outcome -->
         {#if searchHits.length > 0}
-            <div class="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-gray-100 dark:border-slate-700 shrink-0" data-testid="changelog-search-results">
-                <span class="text-[11px] text-gray-400 dark:text-gray-500">{$_('changelog.searchResults')}</span>
+            <div class="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-lf-subtle shrink-0" data-testid="changelog-search-results">
+                <span class="text-[11px] text-lf-muted">{$_('changelog.searchResults')}</span>
                 {#each searchHits as hit (hit.key)}
-                    <button type="button" class="px-2 py-0.5 text-[11px] font-medium rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors" onclick={() => jumpToHit(hit)} data-testid="changelog-hit-{hit.key}">
+                    <button type="button" class="px-2 py-0.5 text-[11px] font-medium rounded-full bg-lf-info-soft text-lf-info-on-soft hover:bg-lf-info-line transition-colors" onclick={() => jumpToHit(hit)} data-testid="changelog-hit-{hit.key}">
                         {hit.label}
                     </button>
                 {/each}
@@ -362,16 +371,16 @@
         {/if}
 
         {#if loading}
-            <p class="p-6 text-sm text-gray-500 dark:text-gray-400" data-testid="changelog-loading" aria-busy="true">{$_('common.loading')}</p>
+            <p class="p-6 text-sm text-lf-muted" data-testid="changelog-loading" aria-busy="true">{$_('common.loading')}</p>
         {:else if chapters.length === 0}
-            <p class="p-6 text-sm text-gray-500 dark:text-gray-400" data-testid="changelog-empty">{$_('changelog.empty')}</p>
+            <p class="p-6 text-sm text-lf-muted" data-testid="changelog-empty">{$_('changelog.empty')}</p>
         {:else}
             <!-- Version index -->
-            <div class="flex gap-1.5 overflow-x-auto px-4 py-2 border-b border-gray-100 dark:border-slate-700 shrink-0" data-testid="changelog-index">
+            <div class="flex gap-1.5 overflow-x-auto px-4 py-2 border-b border-lf-subtle shrink-0" data-testid="changelog-index">
                 {#each chapters as chapter, i (chapter.version + chapter.date)}
                     <button
                         type="button"
-                        class="px-2.5 py-1 text-xs font-mono font-medium rounded-full whitespace-nowrap transition-colors {isChapterOpen(i, chapter) ? 'bg-libre-green text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
+                        class="px-2.5 py-1 text-xs font-mono font-medium rounded-full whitespace-nowrap transition-colors {isChapterOpen(i, chapter) ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
                         onclick={() => jumpTo(i)}
                         data-testid="changelog-index-{i}"
                     >
@@ -383,22 +392,22 @@
             <!-- Chapters -->
             <div class="flex-1 overflow-y-auto p-4 space-y-3" data-testid="changelog-chapters">
                 {#each chapters as chapter, ci (chapter.version + chapter.date)}
-                    <section class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="changelog-chapter-{ci}" data-version={chapter.version} lang={chapter.lang}>
+                    <section class="rounded-lg border border-lf-subtle overflow-hidden" data-testid="changelog-chapter-{ci}" data-version={chapter.version} lang={chapter.lang}>
                         <button
                             type="button"
-                            class="flex w-full items-center gap-2 px-3 py-2 text-left bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                            class="flex w-full items-center gap-2 px-3 py-2 text-left bg-lf-panel hover:bg-lf-neutral transition-colors"
                             onclick={() => (openChapters = {...openChapters, [ci]: !openChapters[ci]})}
                             aria-expanded={isChapterOpen(ci, chapter)}
                             data-testid="changelog-chapter-toggle-{ci}"
                         >
-                            <ChevronDown size={14} class="shrink-0 text-gray-400 transition-transform {isChapterOpen(ci, chapter) ? 'rotate-180' : ''}" />
-                            <span class="text-sm font-semibold text-libre-green dark:text-green-400 {hitClass(chapter.version)}">v{chapter.version}</span>
+                            <ChevronDown size={14} class="shrink-0 text-lf-muted transition-transform {isChapterOpen(ci, chapter) ? 'rotate-180' : ''}" />
+                            <span class="text-sm font-semibold {hitClass(chapter.version, 'text-lf-link')}">v{chapter.version}</span>
                             {#if chapter.date}
-                                <span class="text-xs text-gray-400 dark:text-gray-500">{chapter.date}</span>
+                                <span class="text-xs text-lf-muted">{chapter.date}</span>
                             {/if}
                             {#if chapter.lang !== uiLanguage}
                                 <!-- An English chapter in a translated interface: its translation is not out yet. -->
-                                <span class="rounded-full border border-gray-200 dark:border-slate-600 px-1.5 text-[10px] font-medium leading-4 text-gray-400 dark:text-gray-500" lang={uiLanguage} data-testid="changelog-not-translated-{ci}">{$_('changelog.notTranslated')}</span>
+                                <span class="rounded-full border border-lf-subtle px-1.5 text-[10px] font-medium leading-4 text-lf-muted" lang={uiLanguage} data-testid="changelog-not-translated-{ci}">{$_('changelog.notTranslated')}</span>
                             {/if}
                         </button>
                         {#if isChapterOpen(ci, chapter)}
@@ -406,7 +415,7 @@
                                 {#each chapter.sections as section, si}
                                     {#if section.title === null}
                                         <!-- intro block before the first ### — always visible -->
-                                        <div class="changelog-body text-sm text-gray-700 dark:text-gray-300 leading-relaxed py-1" data-testid="changelog-intro-{ci}">
+                                        <div class="changelog-body text-sm text-lf-secondary leading-relaxed py-1" data-testid="changelog-intro-{ci}">
                                             {@html sanitizeHtml(renderHighlighted(section.body))}
                                         </div>
                                         {#each section.subsections as sub, ssi}
@@ -417,18 +426,18 @@
                                         <div class="rounded-md" data-testid="changelog-section-{ci}-{si}">
                                             <button
                                                 type="button"
-                                                class="flex w-full items-center gap-1.5 px-1.5 py-1 text-left rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                                                class="flex w-full items-center gap-1.5 px-1.5 py-1 text-left rounded hover:bg-lf-hover transition-colors"
                                                 onclick={() => (openSections = {...openSections, [`${ci}:${si}`]: !openSections[`${ci}:${si}`]})}
                                                 aria-expanded={isSectionOpen(ci, si, section)}
                                                 data-testid="changelog-section-toggle-{ci}-{si}"
                                             >
-                                                <ChevronDown size={12} class="shrink-0 text-gray-400 transition-transform {isSectionOpen(ci, si, section) ? 'rotate-180' : ''}" />
-                                                <span class="text-[13px] font-medium text-gray-700 dark:text-gray-200 {hitClass(section.title ?? '')}">{section.title}</span>
+                                                <ChevronDown size={12} class="shrink-0 text-lf-muted transition-transform {isSectionOpen(ci, si, section) ? 'rotate-180' : ''}" />
+                                                <span class="text-[13px] font-medium {hitClass(section.title ?? '', 'text-lf-secondary')}">{section.title}</span>
                                             </button>
                                             {#if isSectionOpen(ci, si, section)}
                                                 <div class="pl-6 pr-1 py-1 space-y-1">
                                                     {#if section.body.trim().length > 0}
-                                                        <div class="changelog-body text-sm text-gray-700 dark:text-gray-300 leading-relaxed" data-testid="changelog-section-body-{ci}-{si}">
+                                                        <div class="changelog-body text-sm text-lf-secondary leading-relaxed" data-testid="changelog-section-body-{ci}-{si}">
                                                             {@html sanitizeHtml(renderHighlighted(section.body))}
                                                         </div>
                                                     {/if}
@@ -454,16 +463,16 @@
     <div class="rounded-md" data-testid="changelog-subsection-{ci}-{si}-{ssi}">
         <button
             type="button"
-            class="flex w-full items-center gap-1.5 px-1.5 py-1 text-left rounded hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+            class="flex w-full items-center gap-1.5 px-1.5 py-1 text-left rounded hover:bg-lf-hover transition-colors"
             onclick={() => (openSections = {...openSections, [`${ci}:${si}:${ssi}`]: !openSections[`${ci}:${si}:${ssi}`]})}
             aria-expanded={isSubsectionOpen(ci, si, ssi, title, body)}
             data-testid="changelog-subsection-toggle-{ci}-{si}-{ssi}"
         >
-            <ChevronDown size={11} class="shrink-0 text-gray-400 transition-transform {isSubsectionOpen(ci, si, ssi, title, body) ? 'rotate-180' : ''}" />
-            <span class="text-xs font-medium text-gray-600 dark:text-gray-300 {hitClass(title)}">{title}</span>
+            <ChevronDown size={11} class="shrink-0 text-lf-muted transition-transform {isSubsectionOpen(ci, si, ssi, title, body) ? 'rotate-180' : ''}" />
+            <span class="text-xs font-medium {hitClass(title, 'text-lf-secondary')}">{title}</span>
         </button>
         {#if isSubsectionOpen(ci, si, ssi, title, body)}
-            <div class="changelog-body pl-7 pr-1 py-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed" data-testid="changelog-subsection-body-{ci}-{si}-{ssi}">
+            <div class="changelog-body pl-7 pr-1 py-1 text-sm text-lf-secondary leading-relaxed" data-testid="changelog-subsection-body-{ci}-{si}-{ssi}">
                 {@html sanitizeHtml(renderHighlighted(body))}
             </div>
         {/if}
@@ -496,41 +505,33 @@
     }
 
     .changelog-body :global(a) {
-        color: #1a4031;
+        color: var(--lf-link);
         text-decoration: underline;
-    }
-
-    :global(html.dark) .changelog-body :global(a) {
-        color: #4ade80;
     }
 
     .changelog-body :global(code) {
         font-size: 0.8em;
-        background: rgba(0, 0, 0, 0.05);
+        background: var(--lf-surface-panel);
+        border: 1px solid var(--lf-border-subtle);
+        color: var(--lf-text-primary);
         padding: 0.1em 0.3em;
         border-radius: 0.25rem;
     }
 
-    :global(html.dark) .changelog-body :global(code) {
-        background: rgba(255, 255, 255, 0.08);
-    }
-
     .changelog-body :global(blockquote) {
-        border-left: 3px solid #d1d5db;
+        border-left: 3px solid var(--lf-border-subtle);
         padding-left: 0.75rem;
         margin: 0.5rem 0;
-        color: #6b7280;
+        color: var(--lf-text-muted);
     }
 
-    /* Search hits inside the rendered markdown (round 5) */
+    /* Search hits inside the rendered markdown (round 5), on the mark roles (Q7). The edge is an inset shadow, so a
+       hit never moves the text around it. */
     .changelog-body :global(.changelog-hit-mark) {
-        background: #fef08a;
-        color: inherit;
+        background: var(--lf-mark-bg);
+        color: var(--lf-mark-text);
+        box-shadow: inset 0 0 0 1px var(--lf-mark-line);
         border-radius: 0.2em;
         padding: 0 0.1em;
-    }
-
-    :global(html.dark) .changelog-body :global(.changelog-hit-mark) {
-        background: rgba(234, 179, 8, 0.35);
     }
 </style>

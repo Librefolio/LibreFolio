@@ -20,6 +20,8 @@ Responsibilities:
   data starting at column A in CSV but column C in the XLSX variant).
 - Parse Italian-formatted numbers (``1.234,56`` -> ``1234.56``) and plain/Anglo
   numbers (``1867.178`` -> ``1867.178``) and multi-format dates.
+- Collect the rows a plugin leaves out and turn them into the two shared notices (``RowSkips``): *known rows quietly,
+  unknown rows loudly* (the plugin guide's rule 10, W-B86).
 
 None of these helpers touch the FX subsystem or recompute any figure; they only
 transcribe and normalise what the broker reported (BRIM verbatim rule).
@@ -33,10 +35,12 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
-from backend.app.services.brim_provider import BRIMProvider
+from backend.app.schemas.brim import BRIMEvidence, BRIMFieldTodo, BRIMNotice
+from backend.app.services.brim.brim_provider import BRIMProvider
 
 try:
     import openpyxl
@@ -398,3 +402,169 @@ def detect_maturity_hits(transactions: Sequence[Any]) -> Dict[int, List[int]]:
         if looks_like_maturity(getattr(tx, "description", None)):
             hits.setdefault(asset_id, []).append(idx)
     return hits
+
+
+# =============================================================================
+# ROWS LEFT OUT — "known rows quietly, unknown rows loudly" (W-B86)
+# =============================================================================
+
+#: A row whose type, status or description the plugin does not recognise, or recognises but does not import yet.
+ROWS_NOT_RECOGNIZED = "rows_not_recognized"
+#: A row the plugin cannot read: a date, an amount, a currency or a required field is missing or unusable.
+ROWS_UNREADABLE = "rows_unreadable"
+
+_SKIP_DETAIL_HEADER = "Reason"
+_SKIP_COMMENTS = {
+    ROWS_NOT_RECOGNIZED: "The last column says what each row is, or what of it was not imported: the importer does not know it, or does not import it yet.",
+    ROWS_UNREADABLE: "The last column says what could not be read on each row.",
+}
+_SKIP_MESSAGES = {
+    ROWS_NOT_RECOGNIZED: "{n} rows were left out, or only partly imported, because the importer does not recognise them or does not import them yet. If they change your shares or cash, report them so the case can be handled.",
+    ROWS_UNREADABLE: "{n} rows were left out because a value they need cannot be read. Check them and, if the file is right, report them so the case can be handled.",
+}
+
+
+# The managed todo of a share change that may be a stock split (W-B87): the Bulk editor answers it with a SPLIT event.
+POSSIBLE_SPLIT = "possible_split"
+
+
+# A ratio is «round» when a fraction with a denominator of at most 5 lies within half a percent of it: 3, 2, 3/2, 5/4…
+_ROUND_RATIO_MAX_DENOMINATOR = 5
+_ROUND_RATIO_TOLERANCE = Decimal("0.005")
+_RATIO_EXACT_PLACES = Decimal("0.00000001")  # the ratio shown as implied by the file
+_RATIO_EVENT_PLACES = Decimal("0.000001")  # what an asset event keeps (AssetEvent.value, 6 decimals)
+
+
+def _plain(value: Decimal) -> str:
+    """A decimal as plain text, trailing zeros dropped, never in scientific notation (``0`` for zero)."""
+    return format(value.normalize(), "f") if value != 0 else "0"
+
+
+def split_ratio_hint(held_before: Decimal, added: Decimal) -> Dict[str, str]:
+    """What a split row says about its ratio, given the shares held just before it; {} when that cannot be read.
+
+    ``ratio`` is the ratio the file implies, ``(held + added) / held``, to 8 decimals. ``suggested_ratio`` is the ratio the
+    user should give the SPLIT event: the round fraction closest to it when one lies within half a percent, else the implied
+    ratio cut to the 6 decimals an event keeps. ``rounding_delta`` is the shares the row differs by from the position times
+    the suggested ratio, ``held * (suggested - 1) - added`` (0 when they agree): a broker that rounds its quantity leaves a
+    gap there, and the average cost follows the row while the FIFO lots follow the event's ratio (MF review of W-B87).
+
+    This is a hint that labels a todo, not a ledger figure: the ledger always reads the event's ratio and the row's quantity.
+    """
+    if held_before <= 0 or added <= 0:
+        return {}
+    ratio = (held_before + added) / held_before
+    near = Fraction(ratio).limit_denominator(_ROUND_RATIO_MAX_DENOMINATOR)
+    candidate = Decimal(near.numerator) / Decimal(near.denominator)
+    if abs(candidate - ratio) / ratio <= _ROUND_RATIO_TOLERANCE:
+        suggested = candidate.quantize(_RATIO_EVENT_PLACES)
+    else:
+        suggested = ratio.quantize(_RATIO_EVENT_PLACES)
+    delta = (held_before * (suggested - 1) - added).quantize(_RATIO_EXACT_PLACES)
+    return {
+        "held_before": _plain(held_before),
+        "ratio": _plain(ratio.quantize(_RATIO_EXACT_PLACES)),
+        "suggested_ratio": _plain(suggested),
+        "rounding_delta": _plain(delta),
+    }
+
+
+def possible_split_todo(
+    tx_index: int,
+    row_number: int,
+    headers: Sequence[Any],
+    row: Union[Sequence[Any], Mapping[str, Any]],
+    *,
+    ticker: str,
+    added_quantity: Decimal,
+    isin: Optional[str] = None,
+    held_before: Optional[Decimal] = None,
+) -> BRIMFieldTodo:
+    """The todo of an incoming ADJUSTMENT that a broker's multiplicative split row became.
+
+    The shares enter without cost, which is right for a split, and wrong for a gift or a spin-off: the broker's file does not say
+    which. The row stays flagged until the user links a SPLIT event (the todo is on ``asset_event_id``), which makes the cost
+    follow the old shares. ``context`` gives the ticker, the shares added (a string, as the file wrote it) and the ISIN when
+    the file has one; with the shares held just before the split (``held_before``, when the plugin can read them) it also gives
+    the implied ratio and the rounding gap (``split_ratio_hint``). The evidence is the source row.
+    """
+    names = [cell_str(header) for header in headers]
+    cells = [cell_str(row.get(name)) for name in names] if isinstance(row, Mapping) else [cell_str(cell) for cell in row]
+    context: Dict[str, Any] = {"ticker": ticker, "added_quantity": format(added_quantity.normalize(), "f")}
+    if isin:
+        context["isin"] = isin
+    if held_before is not None:
+        context.update(split_ratio_hint(held_before, added_quantity))
+    evidence = BRIMEvidence(title="Source row", headers=names, rows=[cells], row_numbers=[row_number], comment="The broker reports a stock split. The new shares enter at no cost; link a SPLIT event so the cost follows the old shares.")
+    return BRIMFieldTodo(
+        tx_index=tx_index,
+        field="asset_event_id",
+        severity="warning",
+        reason_code=POSSIBLE_SPLIT,
+        message=f"Line {row_number}: {ticker} may be a stock split of {format(added_quantity.normalize(), 'f')} new shares — link a SPLIT event.",
+        context=context,
+        evidence=[evidence],
+    )
+
+
+class RowSkips:
+    """The rows a plugin leaves out for a reason it cannot call safe, grouped into the two shared notices (W-B86).
+
+    A plugin calls ``unknown`` for a row it does not recognise (a type, a status, a description) and ``unreadable`` for a row it
+    cannot read (a date, an amount, a required field), then returns ``notices()`` with its warnings. Each notice is a
+    ``warning`` with the rows as evidence (the file's header, one last column naming the reason, the 1-based line numbers) and
+    ``context`` ``{"count": n, "report_issue": True}``: the wizard shows «open an issue on GitHub» under it, so the users
+    become the canaries of a broker whose export changes. A row the plugin knows it may drop (a blank, a header or a total
+    row, a reservation, a cancelled order) is not collected here: it is dropped silently, with at most a log line.
+
+    The two codes are shared, and so are their i18n keys (``importWizard.brimNotice.<code>`` and
+    ``importWizard.brimEvidence.<code>``); the message here is the English fallback.
+    """
+
+    def __init__(self, headers: Optional[Sequence[Any]] = None) -> None:
+        self._headers = [cell_str(cell) for cell in (headers or [])]
+        self._rows: Dict[str, List[tuple[int, List[str], str]]] = {ROWS_NOT_RECOGNIZED: [], ROWS_UNREADABLE: []}
+
+    def set_headers(self, headers: Optional[Sequence[Any]]) -> None:
+        """Give the header row once the reader has it (a ``csv.DictReader`` knows its field names only when it starts)."""
+        self._headers = [cell_str(cell) for cell in (headers or [])]
+
+    def _cells(self, row: Union[Sequence[Any], Mapping[str, Any]]) -> List[str]:
+        """The row's cells as strings; a ``csv.DictReader`` row is read in the order of the headers the helper was given."""
+        if isinstance(row, Mapping):
+            return [cell_str(row.get(header)) for header in self._headers]
+        return [cell_str(cell) for cell in row]
+
+    def unknown(self, row_number: int, row: Union[Sequence[Any], Mapping[str, Any]], reason: str) -> None:
+        """A row the plugin does not recognise or does not import yet; ``reason`` names it (the unknown type, the status)."""
+        self._rows[ROWS_NOT_RECOGNIZED].append((row_number, self._cells(row), reason))
+
+    def unreadable(self, row_number: int, row: Union[Sequence[Any], Mapping[str, Any]], reason: str) -> None:
+        """A row whose date, amount or required field cannot be read; ``reason`` names the field."""
+        self._rows[ROWS_UNREADABLE].append((row_number, self._cells(row), reason))
+
+    def __bool__(self) -> bool:
+        return any(self._rows.values())
+
+    def count(self, code: Optional[str] = None) -> int:
+        """The rows collected, for one code or for both."""
+        return len(self._rows[code]) if code else sum(len(rows) for rows in self._rows.values())
+
+    def notices(self) -> List[BRIMNotice]:
+        """At most two notices, one for each code that collected rows (unknown first)."""
+        notices: List[BRIMNotice] = []
+        for code in (ROWS_NOT_RECOGNIZED, ROWS_UNREADABLE):
+            rows = self._rows[code]
+            if not rows:
+                continue
+            width = max([len(self._headers), *(len(cells) for _, cells, _ in rows)])
+            headers = [*self._headers, *[f"#{index + 1}" for index in range(len(self._headers), width)]]
+            evidence = BRIMEvidence(
+                title="",
+                headers=[*headers, _SKIP_DETAIL_HEADER],
+                rows=[[*(cells + [""] * width)[:width], reason] for _, cells, reason in rows],
+                row_numbers=[number for number, _, _ in rows],
+                comment=_SKIP_COMMENTS[code],
+            )
+            notices.append(BRIMNotice(severity="warning", code=code, message=_SKIP_MESSAGES[code].format(n=len(rows)), evidence=[evidence], context={"count": len(rows), "report_issue": True}))
+        return notices

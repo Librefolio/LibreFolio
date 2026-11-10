@@ -22,6 +22,7 @@ pattern of exercising the builder/runtime layer without a live DB.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -33,12 +34,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
+    AllocationItem,
     AssetPeriodContribution,
     LotAnalysisType,
     LotCustodySummarySchema,
     LotsAnalysisMetadata,
     LotsAnalysisResponse,
     LotSummarySchema,
+    OtherPeriodEffect,
+    OtherPeriodEffectCode,
     PortfolioHistoryPoint,
     PortfolioHolding,
     PortfolioReportMetadata,
@@ -49,11 +53,12 @@ from backend.app.schemas.portfolio import (
     YieldOnCostResult,
     YieldOnCostStatus,
 )
-from backend.app.services.ai_export.components import broker_financial, portfolio_financial
+from backend.app.services.ai_export.components import asset_resources, broker_financial, fx_core, portfolio_financial
 from backend.app.services.ai_export.components.envelope import ComponentPayloadValidationError, SectionEnvelope
 from backend.app.services.ai_export.components.payloads import portfolio_broker as shared_payloads
 from backend.app.services.ai_export.components.payloads.portfolio_broker import FifoLotRow
 from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.resources import BROKER_REPORT_RESOURCE, PORTFOLIO_REPORT_RESOURCE
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import (
@@ -62,6 +67,7 @@ from backend.app.services.ai_export.dependencies import (
     build_bucket_plan_for_scope,
 )
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
+from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 
@@ -120,9 +126,12 @@ def _history_point(
     capital_baseline: object,
     total_pnl: object,
     twrr: object | None = None,
+    through: date | None = None,
 ) -> PortfolioHistoryPoint:
+    """A history point that holds from ``day`` to ``through`` (D-P4: a step); one day when ``through`` is not given."""
     return PortfolioHistoryPoint(
         date=day,
+        through=through or day,
         cash_value=_money(0),
         market_value=_money(nav),
         nav_value=_money(nav),
@@ -150,7 +159,7 @@ def _required_yoc() -> YieldOnCostResult:
     )
 
 
-def _holding(asset_id: int, broker_id: int, *, quantity: object = 10, current_value: object = 1000) -> PortfolioHolding:
+def _holding(asset_id: int, broker_id: int, *, quantity: object = 10, current_value: object = 1000, valuation_source: str | None = None) -> PortfolioHolding:
     return PortfolioHolding(
         asset_id=asset_id,
         asset_name=f"Asset {asset_id}",
@@ -159,6 +168,7 @@ def _holding(asset_id: int, broker_id: int, *, quantity: object = 10, current_va
         broker_name=f"Broker {broker_id}",
         quantity=Decimal(str(quantity)),
         current_value=Decimal(str(current_value)),
+        valuation_source=valuation_source,
         nav_weight_percent=Decimal("10"),
         yield_on_cost=_required_yoc(),
     )
@@ -659,6 +669,56 @@ class TestAutonomousGeneralEvidence:
         assert envelope.payload["currency_coverage"]["unknown_position_count"] == 0
 
     @pytest.mark.asyncio
+    async def test_portfolio_allocations_copy_null_slice_percents_and_keep_the_amounts(self, monkeypatch):
+        """MF-C2 (developer's decision, ondata 6): an emptied portfolio's slices add up to zero (``{Liquidity: 0}``) and an
+        overdraft's cancel out (stocks 500, cash -500): the engine gives ``AllocationItem.value`` None, and
+        ``portfolio.allocations_cash`` copies it as ``percent`` null, amounts and order (the summary's) kept.
+
+        RED on the tree of 2026-10-28 (HEAD ed2f59268): ``AllocationItem(value=None)`` is refused (``ValidationError``),
+        and ``AllocationSlice.percent`` is required, so the component would fail its payload validation too.
+        """
+        scope = _scope()
+        summary = _summary(
+            holdings=[_holding(1, 1, current_value=500).model_copy(update={"nav_weight_percent": None, "valuation_effective_currency": "USD"})],
+            net_worth=_money(0),
+            cash_total=_money(-500),
+            market_value=_money(500),
+            allocation_by_type=[AllocationItem(name="Stock", value=None, amount=Decimal("500")), AllocationItem(name="Liquidity", value=None, amount=Decimal("-500"))],
+            allocation_by_sector=[AllocationItem(name="Technology", value=None, amount=Decimal("500")), AllocationItem(name="Liquidity", value=None, amount=Decimal("-500"))],
+            allocation_by_geography=[AllocationItem(name="US", value=Decimal("100.00"), amount=Decimal("500"))],
+        )
+        report = _report(scope, summary=summary)
+        _patch_report(monkeypatch, report)
+        _patch_metadata(monkeypatch)
+        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
+        context = _make_context(scope, registry, _make_async_session())
+
+        payload = (await context.resolve("portfolio.allocations_cash", required=True)).payload
+
+        assert [(row["name"], row["percent"], Decimal(row["amount"]["amount"])) for row in payload["by_type"]] == [("Stock", None, Decimal("500")), ("Liquidity", None, Decimal("-500"))]
+        assert [(row["name"], row["percent"]) for row in payload["by_sector"]] == [("Technology", None), ("Liquidity", None)]
+        assert [(row["name"], Decimal(row["percent"])) for row in payload["by_geography"]] == [("US", Decimal("100.00"))]
+
+    @pytest.mark.asyncio
+    async def test_emptied_portfolio_allocations_build_with_a_null_liquidity_percent(self, monkeypatch):
+        scope = _scope()
+        summary = _summary(
+            holdings=[],
+            net_worth=_money(0),
+            total_invested=_money(0),
+            allocation_by_type=[AllocationItem(name="Liquidity", value=None, amount=Decimal("0"))],
+            allocation_by_sector=[AllocationItem(name="Liquidity", value=None, amount=Decimal("0"))],
+        )
+        _patch_report(monkeypatch, _report(scope, summary=summary))
+        _patch_metadata(monkeypatch)
+        context = _make_context(scope, _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS), _make_async_session())
+
+        payload = (await context.resolve("portfolio.allocations_cash", required=True)).payload
+
+        assert [(row["name"], row["percent"], Decimal(row["amount"]["amount"])) for row in payload["by_type"]] == [("Liquidity", None, Decimal("0"))]
+        assert [(row["name"], row["percent"]) for row in payload["by_sector"]] == [("Liquidity", None)]
+
+    @pytest.mark.asyncio
     async def test_fifo_summary_exports_per_asset_economics_and_coverage(self, monkeypatch):
         scope = _scope(broker_scope=(1, 2))
         open_lot = _lot(
@@ -743,6 +803,59 @@ class TestAllContributorsRetained:
         assert len(envelope.payload["contributors"]) == 25
         assert Decimal(envelope.payload["gross_gains"]["amount"]) == Decimal("500")
         assert Decimal(envelope.payload["gross_losses"]["amount"]) == Decimal("50")
+
+
+class TestFxOnCashRows:
+    """F-AI (b): the «FX on cash» rows are told by their `code`, never by the English description."""
+
+    @staticmethod
+    def _effects() -> PositionsContribution:
+        return PositionsContribution(
+            other_effects=[
+                OtherPeriodEffect(description="Unallocated income", category="Income", period_pnl=Decimal("80"), broker_id=2, broker_name="Beta"),
+                # Two brokers' exchange results, handed over out of broker order, with a description that is NOT the English one.
+                OtherPeriodEffect(description="renamed row", code=OtherPeriodEffectCode.FX_ON_CASH, category="Other", period_pnl=Decimal("-30"), broker_id=2, broker_name="Beta"),
+                OtherPeriodEffect(description="renamed row", code=OtherPeriodEffectCode.FX_ON_CASH, category="Other", period_pnl=Decimal("12.5"), broker_id=1, broker_name="Alpha"),
+                # The English text without the code is not the exchange result: a row is recognized by its code only.
+                OtherPeriodEffect(description="FX on cash", category="Other", period_pnl=Decimal("99"), broker_id=3, broker_name="Gamma"),
+                OtherPeriodEffect(description="Other / reconciliation residual", category="Other", period_pnl=Decimal("1")),
+            ]
+        )
+
+    async def _resolve(self, monkeypatch: pytest.MonkeyPatch, component_id: str, **scope_overrides) -> SectionEnvelope:
+        scope = _scope(**scope_overrides)
+        _patch_report(monkeypatch, _report(scope, summary=_summary(), contribution=self._effects()))
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        components = broker_financial.BROKER_FINANCIAL_COMPONENTS if component_id.startswith("broker.") else portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS
+        context = _make_context(scope, _registry(components), _make_async_session())
+        return await context.resolve(component_id, required=True)
+
+    @pytest.mark.asyncio
+    async def test_portfolio_flows_income_lists_the_exchange_rows_apart_broker_by_broker(self, monkeypatch):
+        envelope = await self._resolve(monkeypatch, "portfolio.flows_income")
+
+        rows = envelope.payload["fx_on_cash_effects"]
+        assert [(row["broker_id"], row["code"], Decimal(row["period_pnl"]["amount"])) for row in rows] == [(1, "fx_on_cash", Decimal("12.5")), (2, "fx_on_cash", Decimal("-30"))]
+        # Not income: the exchange result stays out of the income rows, which keep no code.
+        assert [(row["description"], row["code"]) for row in envelope.payload["income_effects"]] == [("Unallocated income", None)]
+
+    @pytest.mark.asyncio
+    async def test_portfolio_fees_taxes_keeps_its_cost_rows_without_the_exchange_rows(self, monkeypatch):
+        envelope = await self._resolve(monkeypatch, "portfolio.fees_taxes")
+
+        assert envelope.payload["cost_effects"] == []
+        assert "fx_on_cash_effects" not in envelope.payload
+
+    @pytest.mark.asyncio
+    async def test_broker_effects_carry_the_code(self, monkeypatch):
+        envelope = await self._resolve(monkeypatch, "broker.flows_income_costs", domain=Domain.BROKER, broker_id=7, broker_scope=(7,))
+
+        by_description = {(row["description"], row["broker_id"]): row["code"] for row in envelope.payload["effects"]}
+        assert by_description[("renamed row", 1)] == "fx_on_cash"
+        assert by_description[("renamed row", 2)] == "fx_on_cash"
+        assert by_description[("FX on cash", 3)] is None
+        assert by_description[("Unallocated income", 2)] is None
 
 
 # =============================================================================
@@ -882,6 +995,150 @@ class TestEngineReconciliation:
         envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
 
         assert (envelope.payload["reconciled"], Decimal(envelope.payload["residual"]["amount"])) == (True, Decimal("1E-24"))
+
+
+# J-14: the residual and the tolerance the two reconciliation components wrote in line at `74ae873f7`
+# (portfolio_financial.py:491-495, broker_financial.py:432-436), as written, and the module each domain's builder lives in.
+_RECONCILIATION_MODULES = {"portfolio": portfolio_financial, "broker": broker_financial}
+
+
+def _head_inline_residual(summary: PortfolioSummary) -> Decimal:
+    return summary.period_pnl.amount - (summary.period_unrealized_gain_loss_delta.amount + summary.period_realized_gain_loss.amount + summary.period_income.amount - summary.period_fees_taxes.amount + summary.period_other_result.amount)
+
+
+def _head_inline_reconciled(residual_amount: Decimal) -> bool:
+    return abs(residual_amount) < CONVERSION_DUST
+
+
+_IDENTITY_ARGUMENTS = ("pnl", "ugl_delta", "realized", "income", "fees_taxes", "other_result")
+
+
+def _identity_summary(figures: tuple[Decimal, ...]) -> PortfolioSummary:
+    """A summary whose six period figures are `figures`, in `period_identity_residual`'s order."""
+    pnl, ugl_delta, realized, income, fees_taxes, other_result = figures
+    return _summary(
+        period_pnl=_money(pnl),
+        period_unrealized_gain_loss_delta=_money(ugl_delta),
+        period_realized_gain_loss=_money(realized),
+        period_income=_money(income),
+        period_fees_taxes=_money(fees_taxes),
+        period_other_result=_money(other_result),
+    )
+
+
+def _identity_figures(summary: PortfolioSummary) -> tuple[Decimal, ...]:
+    """The six period figures of `summary`, in `period_identity_residual`'s order."""
+    return (
+        summary.period_pnl.amount,
+        summary.period_unrealized_gain_loss_delta.amount,
+        summary.period_realized_gain_loss.amount,
+        summary.period_income.amount,
+        summary.period_fees_taxes.amount,
+        summary.period_other_result.amount,
+    )
+
+
+def _closed_by_the_engine() -> tuple[Decimal, ...]:
+    """Five figures in one currency converted at 1.19533 (28 significant digits each), closed by PortfolioService's own
+    term (pnl - unrealized delta - realized - income + fees/taxes): the identity leaves 6E-23 of rounding, a figure
+    every other association of the sum misses (test_period_and_unit_costs, the-last-digit)."""
+    pnl, ugl_delta, realized, income, fees_taxes = (Decimal(amount) / Decimal("1.19533") for amount in ("92967.16", "42957.89", "31465", "58674.48", "8109.5"))
+    return pnl, ugl_delta, realized, income, fees_taxes, pnl - ugl_delta - realized - income + fees_taxes
+
+
+def _missing_a_converted_amount() -> tuple[Decimal, ...]:
+    """Amounts times 10-digit rates (23 and 22 significant digits) and amounts converted by division and across two
+    rates (28): a closing term that misses 12.5 / 1.0876543219, a real gap stated to its last digit."""
+    ugl_delta = Decimal("1234567.891234") * Decimal("1.0876543219")
+    realized = Decimal("-987654.321987") * Decimal("0.9123456789")
+    income = Decimal("8109.5") / Decimal("1.19533") * Decimal("1.0876543219")
+    fees_taxes = Decimal("2500") / Decimal("1.09")
+    pnl = Decimal("-31465") / Decimal("1.19533")
+    return pnl, ugl_delta, realized, income, fees_taxes, pnl - ugl_delta - realized - income + fees_taxes - Decimal("12.5") / Decimal("1.0876543219")
+
+
+def _off_by(offset: Decimal) -> tuple[Decimal, ...]:
+    """Amounts times 10-digit rates (20 to 23 significant digits, exact), under a P&L that exceeds their sum by
+    `offset`: the identity leaves `offset` exactly."""
+    ugl_delta = Decimal("1234567.891234") * Decimal("1.0876543219")
+    realized = Decimal("-987654.321987") * Decimal("0.9123456789")
+    income = Decimal("4321.123456") * Decimal("1.0876543219")
+    fees_taxes = Decimal("9876.543219") * Decimal("0.9123456789")
+    other_result = Decimal("-1234.567891") * Decimal("1.0876543219")
+    return ugl_delta + realized + income - fees_taxes + other_result + offset, ugl_delta, realized, income, fees_taxes, other_result
+
+
+class TestReconciliationFromTheHouse:
+    """J-14: each reconciliation component takes its residual from `financial_math.portfolio.period.
+    period_identity_residual` and its flag from `is_reconciled`, which replace the expression and the tolerance both
+    wrote in line, with no value change. On long-digit figures, where the association of the sum shows, the stated
+    residual is the house's and the old inline's to the last digit and exponent, and so is the flag, on either side
+    of CONVERSION_DUST."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    @pytest.mark.parametrize(
+        ("figures", "residual_text", "reconciled"),
+        [
+            pytest.param(_closed_by_the_engine(), "6E-23", True, id="closed-by-the-engine"),
+            pytest.param(_missing_a_converted_amount(), "11.49262201079109232011977", False, id="a-converted-gap"),
+            pytest.param(_off_by(CONVERSION_DUST - Decimal("1E-18")), "9.99999999E-10", True, id="just-under-conversion-dust"),
+            pytest.param(_off_by(CONVERSION_DUST), "1.0000000E-9", False, id="at-conversion-dust"),
+        ],
+    )
+    async def test_long_digit_residual_and_flag_are_the_house_s_and_today_s(self, monkeypatch, domain, figures, residual_text, reconciled):
+        """The payload states the residual in fixed point (SafeDecimal): the very text of the house's figure, which
+        reads back to it with its exponent."""
+        summary = _identity_summary(figures)
+        assert all(len(figure.as_tuple().digits) >= 20 for figure in figures)
+        today = _head_inline_residual(summary)
+        assert (str(today), _head_inline_reconciled(today)) == (residual_text, reconciled)
+
+        house = period_math.period_identity_residual(*_identity_figures(summary))
+        envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
+
+        stated = envelope.payload["residual"]["amount"]
+        assert str(house) == str(today)
+        assert stated == format(house, "f")
+        assert str(Decimal(stated)) == str(today)
+        assert period_math.is_reconciled(house) is reconciled
+        assert envelope.payload["reconciled"] is reconciled
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    async def test_the_component_asks_the_house_once_per_build(self, monkeypatch, domain):
+        """A structural guard, not a value test: it keeps the identity from being written in line again. Recorders
+        that delegate to the real functions replace them in the component's own module; one build calls each exactly
+        once, the residual with the summary's six figures in order, the flag with that residual, and the payload states
+        what they returned. An inline copy, whatever it computed, would never call them."""
+        module = _RECONCILIATION_MODULES[domain]
+        real_residual, real_reconciled = period_math.period_identity_residual, period_math.is_reconciled
+        residual_calls: list[tuple[dict[str, object], Decimal]] = []
+        reconciled_calls: list[tuple[dict[str, object], bool]] = []
+
+        def residual_recorder(*args, **kwargs):
+            result = real_residual(*args, **kwargs)
+            residual_calls.append((dict(inspect.signature(real_residual).bind(*args, **kwargs).arguments), result))
+            return result
+
+        def reconciled_recorder(*args, **kwargs):
+            result = real_reconciled(*args, **kwargs)
+            reconciled_calls.append((dict(inspect.signature(real_reconciled).bind(*args, **kwargs).arguments), result))
+            return result
+
+        monkeypatch.setattr(module, "period_identity_residual", residual_recorder)
+        monkeypatch.setattr(module, "is_reconciled", reconciled_recorder)
+        summary = _identity_summary(_closed_by_the_engine())
+
+        envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
+
+        assert (len(residual_calls), len(reconciled_calls)) == (1, 1)
+        ((residual_arguments, residual),) = residual_calls
+        ((reconciled_arguments, reconciled),) = reconciled_calls
+        assert {name: str(value) for name, value in residual_arguments.items()} == {name: str(figure) for name, figure in zip(_IDENTITY_ARGUMENTS, _identity_figures(summary), strict=True)}
+        assert reconciled_arguments == {"residual": residual} and reconciled_arguments["residual"] is residual
+        assert (envelope.payload["residual"]["amount"], envelope.payload["reconciled"]) == (format(residual, "f"), reconciled)
+        assert (str(residual), reconciled) == ("6E-23", True)
 
 
 class TestReconciliationComponentVersion:
@@ -1429,7 +1686,11 @@ class TestUnvaluedFifoFigures:
     def test_summary_takes_its_currency_from_a_market_value_when_every_nullable_amount_is_unknown(self, unrealized_pnl):
         """A lot can have all eight nullable amounts unknown (no rate at its opening nor at its closures) and still a
         market value, priced at today's rate. The summary's currency is read from every known amount: its market totals
-        keep that currency -- EUR here, appearing nowhere else -- and nothing raises. The summed totals stay unknown."""
+        keep that currency -- EUR here, appearing nowhere else -- and nothing raises. The summed totals stay unknown.
+
+        MF-E1 (T-B8): the market totals sum the lots valued in full, open value and unrealized P&L both known. A lot with
+        its market value alone is not one of them, so its 700 is no longer summed: the open value is unknown with its
+        P&L. Before MF-E1: ``open_value`` was EUR 700 in the market-value-only case too."""
         unknown = dict.fromkeys(_NULLABLE_ROW_FIELDS)
 
         def eur(amount: object) -> Currency:
@@ -1440,9 +1701,8 @@ class TestUnvaluedFifoFigures:
 
         summary = shared_payloads.summarize_fifo_asset_rows([priced, unpriced])
 
-        assert summary.open_value == eur(700)
-        expected_unrealized = (eur(200), eur(200), eur(0)) if unrealized_pnl is not None else (None, None, None)
-        assert (summary.unrealized_pnl, summary.potential_gain, summary.potential_loss) == expected_unrealized
+        expected_market = (eur(700), eur(200), eur(200), eur(0)) if unrealized_pnl is not None else (None, None, None, None)
+        assert (summary.open_value, summary.unrealized_pnl, summary.potential_gain, summary.potential_loss) == expected_market
         assert {name: getattr(summary, name) for name in _SUMMED_MONEY_FIELDS} == dict.fromkeys(_SUMMED_MONEY_FIELDS)
 
     def test_summary_still_rejects_known_figures_in_two_currencies(self):
@@ -1463,6 +1723,33 @@ class TestUnvaluedFifoFigures:
         market = ("open_value", "unrealized_pnl", "potential_gain", "potential_loss")
         assert {name: getattr(summary, name) for name in market} == {"open_value": _money(700), "unrealized_pnl": _money(200), "potential_gain": _money(200), "potential_loss": _money(0)}
         assert (summary.valued_open_lot_count, summary.unavailable_open_lot_count, summary.value_coverage_status) == (1, 1, "partial")
+
+    @pytest.mark.parametrize(
+        "half_valued",
+        [
+            # The case the lots analysis produces: a market price, but a P&L it could not form (a proceeds rate missing).
+            pytest.param({"open_value": _money(300), "unrealized_pnl": None}, id="value-known-pnl-unknown"),
+            # Its mirror, which the row model admits: the same rule holds the other way round.
+            pytest.param({"open_value": None, "unrealized_pnl": _money(50)}, id="pnl-known-value-unknown"),
+        ],
+    )
+    def test_summary_market_totals_sum_the_same_lots_the_coverage_counts(self, half_valued):
+        """MF-E1 (T-B8): open value and unrealized P&L sum the same open lots -- those with both known, the
+        `valued_open_rows` that `valued_open_lot_count` counts. Three open lots: both known, one of the two known,
+        neither: each total is the first lot's alone, and the coverage it states is one valued lot of three.
+
+        Before MF-E1 each total summed the lots where it alone was known: open value 1000 (700 + 300) beside an
+        unrealized P&L of 200 -- two figures over two different sets of lots, and a coverage that matched neither
+        (mirror: unrealized P&L 250 beside an open value of 700)."""
+        rows = [_fifo_row("L1", **_MARKET_FIGURES), _fifo_row("L2", **half_valued), _fifo_row("L3")]
+        assert all(row.open_quantity != 0 for row in rows), "precondition: the three lots are open"
+
+        summary = shared_payloads.summarize_fifo_asset_rows(rows)
+
+        market = ("open_value", "unrealized_pnl", "potential_gain", "potential_loss")
+        assert {name: getattr(summary, name) for name in market} == {"open_value": _money(700), "unrealized_pnl": _money(200), "potential_gain": _money(200), "potential_loss": _money(0)}
+        # Unchanged: the coverage counts already read the lots with both figures known.
+        assert (summary.valued_open_lot_count, summary.unavailable_open_lot_count, summary.value_coverage_status) == (1, 2, "partial")
 
     @pytest.mark.parametrize(
         ("second_lot", "expected"),
@@ -1643,24 +1930,32 @@ class TestUnavailableAmountLotCount:
 
 class TestFifoComponentVersion:
     """B3b made the FIFO lot and summary money figures nullable (null = unavailable): each FIFO component moved from
-    version 1 to 2, on the real spec and on the frozen catalog placeholder together. The catalog is imported in the
-    test rather than at module level, so a parity failure on import reds these tests only."""
+    version 1 to 2, on the real spec and on the frozen catalog placeholder together. MF-E1 (T-B8) moves the two FIFO
+    summaries on to 3 -- an asset's open value and unrealized P&L sum the same lots, those valued in full -- with the
+    same payload shape. J-12 (N81) declares an asset whose lot reconstruction FAILED (`failed_reconstruction_asset_count`,
+    `failed_lot_reconstructions`) instead of exporting its wrong lots: the FIFO lots move 2 -> 3, the summaries stay at 3
+    (already moved in this cycle; at most +1 over the released v1.2.1). The catalog is imported in the test rather than
+    at module level, so a parity failure on import reds these tests only."""
 
     @pytest.mark.parametrize(
-        ("component_id", "components"),
+        ("component_id", "components", "version"),
         [
-            pytest.param("portfolio.fifo_summary", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio-fifo-summary"),
-            pytest.param("portfolio.fifo_lots", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio-fifo-lots"),
-            pytest.param("broker.fifo_summary", broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker-fifo-summary"),
-            pytest.param("broker.fifo_lots", broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker-fifo-lots"),
+            # Before MF-E1: 2.
+            pytest.param("portfolio.fifo_summary", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, 3, id="portfolio-fifo-summary"),
+            # Before J-12: 2.
+            pytest.param("portfolio.fifo_lots", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, 3, id="portfolio-fifo-lots"),
+            # Before MF-E1: 2.
+            pytest.param("broker.fifo_summary", broker_financial.BROKER_FINANCIAL_COMPONENTS, 3, id="broker-fifo-summary"),
+            # Before J-12: 2.
+            pytest.param("broker.fifo_lots", broker_financial.BROKER_FINANCIAL_COMPONENTS, 3, id="broker-fifo-lots"),
         ],
     )
-    def test_fifo_component_is_versioned_v2_in_registry_and_placeholder(self, component_id, components):
+    def test_fifo_component_version_in_registry_and_placeholder(self, component_id, components, version):
         from backend.app.services.ai_export.components import catalog  # noqa: PLC0415 — test-local: a real/placeholder parity failure on import must red these tests only
 
         real = next(spec for spec in components if spec.component_id == component_id)
         placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
-        assert (real.version, placeholder.version) == (2, 2)
+        assert (real.version, placeholder.version, real.schema_version) == (version, version, 1)
 
 
 # =============================================================================
@@ -1738,8 +2033,9 @@ class TestBrokerScope:
 
 class TestProvenanceComponentVersion:
     """What the Snapshot Data renderer reads off each section: the provenance envelopes say
-    component_version 2 (the WAC semantics moved to the single average cost), schema_version 1
-    (the payload shape is unchanged). No prompt wording is asserted."""
+    component_version 3, schema_version 1 (the payload shape is unchanged). Version 2 (D12(a)): the
+    WAC semantics moved to the single average cost; version 3 (J-17): the valuation hierarchy names
+    ESTIMATED_AT_COST and an ADJUSTMENT is never a price. No prompt wording is asserted."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -1749,7 +2045,72 @@ class TestProvenanceComponentVersion:
             pytest.param("broker.provenance", {"domain": Domain.BROKER, "broker_id": 5, "broker_scope": (5,)}, broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker"),
         ],
     )
-    async def test_provenance_envelope_is_component_version_2_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
+    async def test_provenance_envelope_is_component_version_3_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
+        """Before J-17: component_version 2."""
+        scope = _scope(**scope_overrides)
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        if component_id == "broker.provenance":
+            _patch_broker_access(monkeypatch, role="OWNER", share="1")
+        context = _make_context(scope, _registry(components), _make_async_session())
+
+        envelope = await context.resolve(component_id, required=True)
+
+        assert (envelope.component_id, envelope.component_version, envelope.schema_version) == (component_id, 3, 1)
+        assert envelope.payload["domain"] == component_id.split(".")[0]
+
+
+# =============================================================================
+# J-17 — a holding valued at cost has no unit_price (portfolio.positions / broker.positions v2)
+# =============================================================================
+
+
+_POSITIONS_COMPONENTS = [
+    pytest.param("portfolio.positions", {}, portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio"),
+    pytest.param("broker.positions", {"domain": Domain.BROKER, "broker_id": 5, "broker_scope": (5,)}, broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker"),
+]
+
+
+class TestValuedAtCostPositions:
+    """J-17 (developer's option A, 16/10): a holding with no price at all is valued at its book cost,
+    ``valuation_source == "ESTIMATED_AT_COST"``, with no price. Its value per unit would be its unit cost,
+    not a price, so its position row exports no ``unit_price``; the rows priced at the market or at a trade
+    keep theirs (value / quantity). Both positions components move to version 2 with the same payload
+    shape (schema_version 1): what the Snapshot Data renderer reads off each section. No prompt wording is
+    asserted; rows are read by asset."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("component_id", "scope_overrides", "components"), _POSITIONS_COMPONENTS)
+    async def test_an_at_cost_row_has_no_unit_price(self, monkeypatch, component_id, scope_overrides, components):
+        """Before J-17: ValidationError — PortfolioHolding.valuation_source accepted MARKET_PRICE,
+        LAST_TRADE_PRICE and MISSING only. (J-17's first version exported the at-cost row's unit cost,
+        300 / 4 = 75, as its unit_price.)"""
+        scope = _scope(**scope_overrides)
+        holdings = [
+            _holding(1, 5, quantity=10, current_value=1000, valuation_source="MARKET_PRICE"),
+            _holding(2, 5, quantity=4, current_value=300, valuation_source="ESTIMATED_AT_COST"),
+            _holding(3, 5, quantity=5, current_value=450, valuation_source="LAST_TRADE_PRICE"),
+        ]
+        _patch_report(monkeypatch, _report(scope, summary=_summary(holdings=holdings)))
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        context = _make_context(scope, _registry(components), _make_async_session())
+
+        envelope = await context.resolve(component_id, required=True)
+
+        rows = {row["asset_id"]: row for row in envelope.payload["positions"]}
+        assert {asset_id: (row["valuation_source"], row["unit_price"]) for asset_id, row in rows.items()} == {
+            1: ("MARKET_PRICE", {"code": CURRENCY, "amount": "100"}),
+            2: ("ESTIMATED_AT_COST", None),
+            3: ("LAST_TRADE_PRICE", {"code": CURRENCY, "amount": "90"}),
+        }
+        assert rows[2]["current_value"] == {"code": CURRENCY, "amount": "300"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("component_id", "scope_overrides", "components"), _POSITIONS_COMPONENTS)
+    async def test_positions_envelope_is_component_version_2_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
+        """Before J-17: component_version 1."""
         scope = _scope(**scope_overrides)
         _patch_report(monkeypatch, _report(scope))
         _patch_lots(monkeypatch, {})
@@ -1759,7 +2120,6 @@ class TestProvenanceComponentVersion:
         envelope = await context.resolve(component_id, required=True)
 
         assert (envelope.component_id, envelope.component_version, envelope.schema_version) == (component_id, 2, 1)
-        assert envelope.payload["domain"] == component_id.split(".")[0]
 
 
 # =============================================================================
@@ -1904,3 +2264,144 @@ class TestPayloadValidation:
         with pytest.raises(RequiredComponentBuildError) as exc_info:
             await context.resolve("portfolio.summary", required=True)
         assert isinstance(exc_info.value.cause, ComponentPayloadValidationError)
+
+
+# =============================================================================
+# R11 — the export opened from the broker page gives the broker's whole amounts
+# =============================================================================
+
+
+def _patch_report_queries(monkeypatch: pytest.MonkeyPatch, report: PortfolioReportResponse) -> list[object]:
+    """Like `_patch_report`, but keeps every `PortfolioReportQuery` the service received."""
+    queries: list[object] = []
+
+    async def _fake_get_report(self, user_id, query):  # noqa: ARG001
+        queries.append(query)
+        return report
+
+    monkeypatch.setattr(PortfolioService, "get_report", _fake_get_report)
+    return queries
+
+
+def _patch_broker_access(monkeypatch: pytest.MonkeyPatch, *, role: str, share: object | None) -> None:
+    """The access row `broker.provenance` reads for the note: `(role, share_percentage)`, or none."""
+
+    async def _fake_query(session, *, user_id, broker_id):  # noqa: ARG001
+        return (role, None if share is None else Decimal(str(share)))
+
+    monkeypatch.setattr(broker_financial, "_query_broker_access", _fake_query)
+
+
+class TestWholeBrokerAmounts:
+    """R11 (developer, 30/10): the export opened from the broker page counts the broker whole, as the page does.
+
+    The shared report query of the `portfolio.*`/`broker.*` components carries `apply_ownership_share`: False for a
+    Broker scope, True for every other domain (the Dashboard counts an owner's share). The rule is in one place,
+    `counts_ownership_share`; the share itself stays in `native_cash.broker_shares`.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("domain", "overrides", "expected"),
+        [
+            pytest.param(Domain.BROKER, {"broker_id": 5, "broker_scope": (5,)}, False, id="broker-whole"),
+            pytest.param(Domain.PORTFOLIO, {}, True, id="portfolio-keeps-the-share"),
+            pytest.param(Domain.PORTFOLIO, {"broker_scope": (5,)}, True, id="portfolio-subset-keeps-the-share"),
+        ],
+    )
+    async def test_the_shared_report_query_carries_the_flag_of_its_domain(self, monkeypatch, domain, overrides, expected):
+        """Before R11: the query never set the flag (default True) for a Broker scope too."""
+        scope = _scope(domain=domain, **overrides)
+        queries = _patch_report_queries(monkeypatch, _report(scope))
+        context = _make_context(scope, _registry(()), _make_async_session())
+
+        await shared_payloads.load_portfolio_report(context, scope, BROKER_REPORT_RESOURCE if domain is Domain.BROKER else PORTFOLIO_REPORT_RESOURCE)
+
+        assert len(queries) == 1
+        assert queries[0].apply_ownership_share is expected
+
+    @pytest.mark.asyncio
+    async def test_a_caller_can_override_the_flag_of_the_domain(self, monkeypatch):
+        """The broker-vs-portfolio comparison loads the whole portfolio on the broker's basis."""
+        scope = _scope()
+        queries = _patch_report_queries(monkeypatch, _report(scope))
+        context = _make_context(scope, _registry(()), _make_async_session())
+
+        await shared_payloads.load_portfolio_report(context, scope, PORTFOLIO_REPORT_RESOURCE, apply_ownership_share=False)
+
+        assert queries[0].apply_ownership_share is False
+
+    @pytest.mark.asyncio
+    async def test_the_asset_and_fx_pages_keep_the_owners_share(self, monkeypatch):
+        """Only the broker page is whole (R11): the asset page and the FX page count the user's own part, as the Dashboard does."""
+        asset_scope = _scope(domain=Domain.ASSET, asset_id=3)
+        queries = _patch_report_queries(monkeypatch, _report(asset_scope))
+        await asset_resources.load_asset_report(asset_scope)(_make_async_session())
+
+        fx_scope = _scope(domain=Domain.FX, base_currency="EUR", quote_currency="USD")
+        fx_context = _make_context(fx_scope, _registry(()), _make_async_session())
+        await fx_core._load_exposure_report(fx_context)
+
+        assert [query.apply_ownership_share for query in queries] == [True, True]
+
+    def test_the_rule_is_one_function_of_the_scope(self):
+        assert shared_payloads.counts_ownership_share(_scope(domain=Domain.BROKER, broker_id=5, broker_scope=(5,))) is False
+        assert shared_payloads.counts_ownership_share(_scope()) is True
+
+
+class TestBrokerOwnershipNote:
+    """R11: `broker.provenance` says who the user is for the broker, and that the amounts are the broker's full ones."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("role", "stored_share", "expected_stake"),
+        [
+            pytest.param("OWNER", "0.3", Decimal("0.3"), id="owner-with-a-stake"),
+            pytest.param("OWNER", None, Decimal("1"), id="owner-without-a-recorded-stake-owns-it-all"),
+            pytest.param("OWNER", "0", Decimal("0"), id="owner-at-zero"),
+            pytest.param("EDITOR", "0.5", None, id="editor-has-no-stake"),
+            pytest.param("VIEWER", "0", None, id="viewer-has-no-stake"),
+        ],
+    )
+    async def test_the_note_carries_the_role_and_the_owner_stake(self, monkeypatch, role, stored_share, expected_stake):
+        scope = _scope(domain=Domain.BROKER, broker_id=5, broker_scope=(5,))
+        _patch_report(monkeypatch, _report(scope))
+        _patch_broker_access(monkeypatch, role=role, share=stored_share)
+        context = _make_context(scope, _registry(broker_financial.BROKER_FINANCIAL_COMPONENTS), _make_async_session())
+
+        payload = (await context.resolve("broker.provenance", required=True)).payload
+
+        ownership = payload["ownership"]
+        assert ownership["role"] == role
+        assert ownership["amounts_basis"] == "whole_broker"
+        if expected_stake is None:
+            assert ownership["owner_stake_ratio"] is None
+        else:
+            assert Decimal(ownership["owner_stake_ratio"]) == expected_stake
+        assert ownership["explanation"], "the role must be explained, whatever the wording"
+
+    @pytest.mark.asyncio
+    async def test_the_explanation_differs_by_role_and_says_the_numbers_are_full(self, monkeypatch):
+        scope = _scope(domain=Domain.BROKER, broker_id=5, broker_scope=(5,))
+        _patch_report(monkeypatch, _report(scope))
+        texts: dict[str, str] = {}
+        for role in ("OWNER", "EDITOR", "VIEWER"):
+            _patch_broker_access(monkeypatch, role=role, share="0.3" if role == "OWNER" else "0")
+            context = _make_context(scope, _registry(broker_financial.BROKER_FINANCIAL_COMPONENTS), _make_async_session())
+            texts[role] = (await context.resolve("broker.provenance", required=True)).payload["ownership"]["explanation"]
+
+        assert len(set(texts.values())) == 3, "each role has its own explanation"
+
+    @pytest.mark.asyncio
+    async def test_a_scoped_user_without_an_access_row_fails_explicitly(self, monkeypatch):
+        scope = _scope(domain=Domain.BROKER, broker_id=5, broker_scope=(5,))
+        _patch_report(monkeypatch, _report(scope))
+
+        async def _none(session, *, user_id, broker_id):  # noqa: ARG001
+            return None
+
+        monkeypatch.setattr(broker_financial, "_query_broker_access", _none)
+        context = _make_context(scope, _registry(broker_financial.BROKER_FINANCIAL_COMPONENTS), _make_async_session())
+
+        with pytest.raises(RequiredComponentBuildError):
+            await context.resolve("broker.provenance", required=True)

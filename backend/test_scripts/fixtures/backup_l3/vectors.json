@@ -1,0 +1,184 @@
+{
+  "comment": "TEST ONLY - LibreFolio L3 sealed backup vectors - never use for real backups. Contract L3 \u00a79: written once by generate_vectors.py; files beside this index.",
+  "generated_at": "2026-10-22T14:00:21Z",
+  "pyrage": "1.4.0",
+  "members": [
+    "manifest.json",
+    "password.age",
+    "backup.lfbk"
+  ],
+  "recipients": {
+    "test-identity-1.txt": "age1r7hr6nule5dwh69r76kn65y70dudk6xuyf2vel5g5kv8mvlszf8qrdp3av",
+    "test-identity-2.txt": "age1vf5mr7hereqyawsjnzugqd03xs20wwpt8nnu86nv7fkvzaw3gdkqz5xadk"
+  },
+  "cases": [
+    {
+      "file": "librefolio-backup-20261023-030012.tar",
+      "expect": "ok",
+      "note": "the good case: one recipient (identity 1)",
+      "tar_sha256": "0799d6b9046f739072648c26a493abf41abc01f964d07e7a1d3fcbd69ad11411",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ],
+      "password": "dxuCTq8RDj8JabdjMGTzKEaTSpvWo_jubTNrrGN0J1g",
+      "manifest": {
+        "created_at": "2026-10-23T03:00:12Z",
+        "db_revision": "test-only-revision",
+        "format": "lfbk-tar",
+        "lfbk_sha256": "310c6f09ef51f65983eec4e8e2e1b9fde6bd4242999c9679958b1f7b172f5c75",
+        "lfbk_size": 374,
+        "librefolio_version": "1.3.0-test",
+        "password_member": "password.age",
+        "recipients": [
+          "age1r7hr6nule5dwh69r76kn65y70dudk6xuyf2vel5g5kv8mvlszf8qrdp3av"
+        ],
+        "version": 1
+      },
+      "lfbk_sha256": "310c6f09ef51f65983eec4e8e2e1b9fde6bd4242999c9679958b1f7b172f5c75",
+      "lfbk_size": 374,
+      "lfbk_header_hex": "4c46424b01010f08014c46424b2d4c332d746573742d73616c65acfbb852cf86d40edb70221b82b9fa001000004c332d74657374",
+      "lfbk_check_hex": "65acfbb852cf86d40edb70221b82b9fa",
+      "zip_sha256": "df01edb67404ec0b702d701ebe62365b374eb64344727ff2c3bb4ac0a50ebc10",
+      "mtime": 1792724412
+    },
+    {
+      "file": "rotation-two-recipients.tar",
+      "expect": "ok",
+      "note": "a rotation: the password opens with either identity",
+      "tar_sha256": "a369a220449be01a553c7a9bf8b476fcdef1087571ccd2d9920334275b4fc16d",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt",
+        "test-identity-2.txt"
+      ],
+      "password": "dxuCTq8RDj8JabdjMGTzKEaTSpvWo_jubTNrrGN0J1g"
+    },
+    {
+      "file": "neg-other-recipient.tar",
+      "expect": "sealed_no_identity",
+      "note": "the password is for a key that is not kept: neither test identity opens it",
+      "tar_sha256": "49c5d5c618c8837fbe37058ddb96257fec1bfa2c49fb94e9bc80389cef174a6b",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt",
+        "test-identity-2.txt"
+      ]
+    },
+    {
+      "file": "neg-wrong-password.tar",
+      "expect": "wrong_password",
+      "note": "password.age opens, but its password does not open backup.lfbk (the check differs)",
+      "tar_sha256": "e51b655dde20274151a074b0a461f9c4a9b48377359b2bf480b64b269b67f120",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ],
+      "password": "6ctFXvDCbVtWDQD6AkNL8Xg4bMxiAJUfmzX5od24e-A"
+    },
+    {
+      "file": "neg-manifest-mismatch.tar",
+      "expect": "sealed_manifest_invalid",
+      "note": "lfbk_sha256 of the manifest is not the member's",
+      "tar_sha256": "346132472e9ccf4e15627f682778325c9f33fb31e6e0d8e2c7e75b522c9729d0",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ]
+    },
+    {
+      "file": "neg-extra-member.tar",
+      "expect": "sealed_tar_invalid",
+      "note": "four members",
+      "tar_sha256": "4a1cdc6a90e94ab3121a1d5dbd3c1453aa2122d4fd28a3363129b075bb2d7339",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ]
+    },
+    {
+      "file": "neg-bad-order.tar",
+      "expect": "sealed_tar_invalid",
+      "note": "backup.lfbk first",
+      "tar_sha256": "d079b710a3c5e4b066677edc7548126523e2c8caecdd9d183508b2fe1e6ddc28",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ]
+    },
+    {
+      "file": "neg-traversal.tar",
+      "expect": "sealed_tar_invalid",
+      "note": "a member named with a path",
+      "tar_sha256": "8958d95bafb5c5bce70119e1c508b7eaf7913d1f111c8f6d150fe41a5ad9ffad",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ]
+    },
+    {
+      "file": "neg-symlink.tar",
+      "expect": "sealed_tar_invalid",
+      "note": "password.age is a symbolic link",
+      "tar_sha256": "61a67c0194f8d4145816d59f4f38bb3052fa223eab557336f065a5af4af28872",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ]
+    },
+    {
+      "file": "neg-tampered-lfbk.tar",
+      "expect": "envelope_damaged",
+      "note": "one byte of the first chunk changed; the manifest matches it, so the tar reads and the password checks, and the decryption fails",
+      "tar_sha256": "eefd3fcf03cc0945e9c560281938d63673851bb5f56b6876992aff3fd6594d9f",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ],
+      "password": "dxuCTq8RDj8JabdjMGTzKEaTSpvWo_jubTNrrGN0J1g"
+    },
+    {
+      "file": "neg-hidden-member.tar",
+      "expect": "sealed_tar_invalid",
+      "note": "a fourth member after a single zero block: tar -i would extract it",
+      "tar_sha256": "f6d0ea272a9a2ec5254dea078a71631ce91360a67a1cb2dddc3b22281f76f1fa",
+      "tar_size": 10240,
+      "identities": [
+        "test-identity-1.txt"
+      ]
+    },
+    {
+      "file": "neg-trailing-garbage.tar",
+      "expect": "sealed_tar_invalid",
+      "note": "100 bytes that are not zeros after the end of the archive",
+      "tar_sha256": "cb6e32776f3dea1e883aa0862655791177f492d0607910aad46de0dd86ffdb02",
+      "tar_size": 10340,
+      "identities": [
+        "test-identity-1.txt"
+      ]
+    }
+  ],
+  "cloud_derivation": [
+    {
+      "instance": 42,
+      "version": 1,
+      "private_hex": "2b024accd96c2edc8f1990c9f7967326537529ffa4a6c5b622aeb0d2295dbc23",
+      "identity": "AGE-SECRET-KEY-19VPY4NXEDSHDERCEJRYL09NNYEFH220L5JNVTD3Z46CDY22AHS3SKVW4RR",
+      "recipient": "age158ex3dmayyml4rx9md6pzehzlc96zlh8w7zn4vd0t6ya8dmn4egqn87h8q"
+    },
+    {
+      "instance": 42,
+      "version": 2,
+      "private_hex": "da2bf4d45d78406574b751a0db1c5d62425c4fe7ab3bb5f1996bb1c86b1c94f2",
+      "identity": "AGE-SECRET-KEY-1MG4LF4ZA0PQX2A9H2XSDK8ZAVFP9CNL84VAMTUVEDWCUS6CUJNEQEDQDFZ",
+      "recipient": "age1sg09nv32ud36umafrg587hqx4mfnldqe8njnx0xty9luv9f6w36qyh9xcx"
+    },
+    {
+      "instance": 43,
+      "version": 1,
+      "private_hex": "180f86f37e409203f99249d7a7d45fab0d1473878c617bbd422f7720a31dad91",
+      "identity": "AGE-SECRET-KEY-1RQ8CDUM7GZFQ87VJF8T604ZL4VX3GUU833SHH02Z9AMJPGCA4KGSSHHW6A",
+      "recipient": "age1q8daau6vzt306qx6034e2wxxwxfn8qucjgqynuw9v6gkgn6pr5fscq0jf0"
+    }
+  ]
+}

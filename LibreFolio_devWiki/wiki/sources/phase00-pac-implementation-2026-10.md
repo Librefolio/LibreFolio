@@ -27,17 +27,17 @@ merge of the planner. Step 1, Round 1 — the platform's capacity round — is i
 
 | Rows | Plans | What happened |
 |------|-------|---------------|
-| 0–6 | Master, Steps 1–6 (2026-09-16 → 10-05) | Contracts, the exact core and the oracle, the SCIP compiler and policies, the domain copies, the planner UI, integration — PySCIPOpt pinned (`941834237`), exact primitives (`22cb18d1d`), FX redesign (`0088748a8`), the plan service (`c25c1e874`) |
+| 0–6 | Master, Steps 1–6 (2026-09-16 → 10-05) | Contracts, the exact core and the oracle, the SCIP compiler and policies, the domain copies, the planner UI, integration — PySCIPOpt pinned (`90ef16ce8`), exact primitives (`4ab1bc838`), FX redesign (`763bf1942`), the plan service (`b8999cad1`) |
 | 7 | Remediation (2026-09-21) | ~9,100 lines unreachable, 23 of 80 boxes ticked; phases and seven open questions — [[decisions/pac-p1-prototype-removed]] |
-| 8 | P1 residue removal (2026-09-21) | `b82e59ffa`: P1 out, `plan` wired; the orphan count from 83 to 0 |
-| 9 | Solver budget (2026-09-21/22) | `a7cd01b07` — [[problems/pac-solver-ran-on-default-budget]] |
-| 10 | Round 5 post-merge, with its C0 delta (2026-09-24 → 10-05) | Docs aligned, the UI in the build (`0210f9848`), Passo F (D-X1, fees, top-ups), review rounds 1–14 (`6f29ec1cf`), the developer's OK |
-| 11 | Contract compaction (2026-10-05) | `ac18ce097` — [[decisions/pac-contract-compacted-before-release]] |
-| 12 | Solver robustness (2026-10-05/06) | `8fa96ac28` — [[problems/pac-scip-tolerance-misreported-proof]] |
-| 13 | Final P1 removal (2026-10-06) | `6ebad820b`, then R7 (`dbedcc822`): plurals counted on the displayed digits, the distribution help reworded |
+| 8 | P1 residue removal (2026-09-21) | `a538ee94d`: P1 out, `plan` wired; the orphan count from 83 to 0 |
+| 9 | Solver budget (2026-09-21/22) | `bb6fcae06` — [[problems/pac-solver-ran-on-default-budget]] |
+| 10 | Round 5 post-merge, with its C0 delta (2026-09-24 → 10-05) | Docs aligned, the UI in the build (`474c610ec`), Passo F (D-X1, fees, top-ups), review rounds 1–14 (`1248c0380`), the developer's OK |
+| 11 | Contract compaction (2026-10-05) | `b679661e0` — [[decisions/pac-contract-compacted-before-release]] |
+| 12 | Solver robustness (2026-10-05/06) | `63700657d` — [[problems/pac-scip-tolerance-misreported-proof]] |
+| 13 | Final P1 removal (2026-10-06) | `ab0480f6e`, then R7 (`378d7d9e1`): plurals counted on the displayed digits, the distribution help reworded |
 | 14 | Rebalancer analysis | To be defined, after 1.2 — [[features/F-108]] |
-| 15 | FX conversions (2026-10-08/09) | `bffc634b0` — [[problems/pac-foreign-funding-calculation-failed]] |
-| 16 | Rounding against the plan (2026-10-09) | `96283eaa5` — [[decisions/pac-rounding-against-the-plan]] |
+| 15 | FX conversions (2026-10-08/09) | `f62a38cad` — [[problems/pac-foreign-funding-calculation-failed]] |
+| 16 | Rounding against the plan (2026-10-09) | `f57307140` — [[decisions/pac-rounding-against-the-plan]] |
 
 ## Key Takeaways
 
@@ -64,7 +64,7 @@ merge of the planner. Step 1, Round 1 — the platform's capacity round — is i
   raised `NameError`.
 - **Gates learned the hard way**: the shared test backend did not answer within the runner's 120 s, because test
   mode builds the frontend (88 s) and the MkDocs site (42 s) before binding the port — build first, then run the
-  gates; a merge with no textual conflict still failed K's HTML-sink gates on two planner files (`0900f11fa`,
+  gates; a merge with no textual conflict still failed K's HTML-sink gates on two planner files (`b9dff5254`,
   [[decisions/html-escape-at-the-source]]); no CI workflow checks the planner's formatting, so the README adds a
   Prettier gate, and after any Prettier pass the 35 test files that read sources as text (1,415 tests) must run again,
   because a moved line break can make a site appear or vanish.

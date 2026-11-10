@@ -46,14 +46,16 @@ from typing import Dict, List, Optional
 
 import structlog
 
-from backend.app.db.models import TransactionType
+from backend.app.db.models import Transaction, TransactionType
+from backend.app.db.precision import round_computed_value
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.brim_providers._brim_output import attach_maturity_notices
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -160,16 +162,16 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
         try:
             rows = io.read_rows(file_path)
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as exc:
-            raise BRIMParseError(f"Error reading file: {exc}") from exc
+            raise BRIMParseError(f"Error reading file: {exc}", details={"code": "file_unreadable", "context": {"error": str(exc)}}) from exc
 
         blob = " \n ".join(io.cell_str(c).lower() for row in rows[:40] for c in row)
         if _SNAPSHOT_MARKER in blob:
             return self._parse_patrimonio(rows, broker_id)
         if io.find_header_row(rows, ["Operazione", "Dettagli", "Importo"]) is not None:
             return self._parse_movements(rows, broker_id)
-        raise BRIMParseError("Unrecognised Intesa Sanpaolo layout (neither movements nor patrimonio)")
+        raise BRIMParseError("Unrecognised Intesa Sanpaolo layout (neither movements nor patrimonio)", details={"code": "intesa_layout_unknown"})
 
     # ------------------------------------------------------------------
     # Movements list
@@ -185,7 +187,7 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
 
         header_idx = io.find_header_row(rows, ["Operazione", "Dettagli", "Importo"])
         if header_idx is None:
-            raise BRIMParseError("Movements header row not found")
+            raise BRIMParseError("Movements header row not found", details={"code": "header_row_not_found", "context": {"layout": "movements"}})
         col = io.build_col_index(
             rows[header_idx],
             {
@@ -365,8 +367,9 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
             # ``cost_basis_override`` is a PER-UNIT weighted-average cost: the portfolio
             # engine and lot analysis multiply it by quantity to obtain the total cost
             # basis. The snapshot instead reports a TOTAL ``Controvalore di carico
-            # fiscale €`` → divide by quantity to store the per-unit value.
-            unit_cost = (cost / qty) if (cost is not None and qty and qty > 0) else None
+            # fiscale €`` → divide by quantity to store the per-unit value, rounded explicitly to what the column
+            # keeps (C-97, decision D6): a quotient such as 1000 / 3 has no end, and the batch refuses more digits.
+            unit_cost = round_computed_value(cost / qty, Transaction, "cost_basis_override") if (cost is not None and qty and qty > 0) else None
             cost_override = Currency(code="EUR", amount=unit_cost) if unit_cost is not None else None
             if cost_override is None:
                 warnings.append(f"Titolo '{asset['name']}': nessun costo fiscale nello snapshot; rettifica creata senza override del costo")

@@ -78,6 +78,32 @@ export function formatDay(value: string, locale: string = uiLocale()): string {
     return DATE_ONLY.test(value) ? formatAxisDate(locale, value, true) : value;
 }
 
+/**
+ * Two calendar days, `YYYY-MM-DD`, as one stretch the way the language writes it (F8, 06/11/2026): `7 ott – 5 nov 2026` when both
+ * fall in one year, `5 dic 2025 – 9 gen 2026` when they do not, and a single `5 nov 2026` when they are one day. The days are read
+ * on the local calendar like `formatDay`, never through UTC. Anything that is not a calendar day comes back as the two texts joined
+ * by an en dash, unread.
+ */
+export function formatDayRange(from: string, to: string, locale: string = uiLocale()): string {
+    if (!DATE_ONLY.test(from) || !DATE_ONLY.test(to)) return `${from} \u2013 ${to}`;
+    const start = parseDisplayDate(from);
+    const end = parseDisplayDate(to);
+    if (!start || !end) return `${from} \u2013 ${to}`;
+    return new Intl.DateTimeFormat(locale || uiLocale(), {year: 'numeric', month: 'short', day: 'numeric'}).formatRange(start, end);
+}
+
+/**
+ * The day of a chart tooltip's header: `formatDay` plus the weekday of that calendar day in brackets, `12 Oct 2026 (Mon)`, in the
+ * language of the interface (`12 ott 2026 (lun)`). The weekday is read on the local calendar like the day, never through UTC.
+ * A millisecond value is read as the instant it is. Any other text (a count, a year, `Q3`) comes back unchanged.
+ */
+export function formatDayWithWeekday(value: string | number, locale: string = uiLocale()): string {
+    const date = typeof value === 'number' || DATE_ONLY.test(value) ? parseDisplayDate(value) : null;
+    if (!date) return String(value);
+    const weekday = date.toLocaleDateString(locale || uiLocale(), {weekday: 'short'});
+    return `${formatAxisDate(locale, value, true)} (${weekday})`;
+}
+
 export function formatAxisDate(locale: string | undefined, value: number | string, withYear = false): string {
     const date = parseDisplayDate(value);
     if (!date) return String(value);

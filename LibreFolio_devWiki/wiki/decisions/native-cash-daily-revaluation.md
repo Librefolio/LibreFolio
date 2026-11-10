@@ -69,8 +69,8 @@ centralized WAC").
    - *(b)* a field in `portfolio.flows_income` listing the rows per broker, with a version bump.
    - **The developer's decision (2026-10-12, via the coordinator): (a) now, (b) after release 1.2 with a typed code.**
      Today an `OtherPeriodEffect` has no code, so the frontend and any filter can only match the English description.
-     At `5d0585595` this is a decision, not yet a row of the post-1.2 backlog: section I still lists F-AI (b) as open,
-     and the row enters with I's next checkpoint. *It entered with `8339b0a06` (plan 44, train 48): «F-AI (b) · «FX on
+     At `4bc7be91b` this is a decision, not yet a row of the post-1.2 backlog: section I still lists F-AI (b) as open,
+     and the row enters with I's next checkpoint. *It entered with `aa12286e1` (plan 44, train 48): «F-AI (b) · «FX on
      cash» per nome nell'export del portafoglio», a typed code on `OtherPeriodEffect`, about ¾ day plus the probe.*
 
 ## Decision
@@ -114,7 +114,8 @@ dates. `get_positions_contribution()` adds one `OtherPeriodEffect("FX on cash", 
 in access order, and lowers the residual by the same figure. Below `CONVERSION_DUST` (1e-9) the row is skipped, and
 with foreign cash in scope the residual is shown only at or above that size. The schema, the API and KpiSection did
 not change; the frontend maps the description to `dashboard.fxOnCash` in `OtherPeriodEffectsTable.svelte` and
-`PerformanceChart.svelte`.
+`PerformanceChart.svelte`. *2026-11-07 lint:* since F-AI (b) (`aa12286e1`) the row carries the typed code `fx_on_cash`, and both
+components map that code to `dashboard.fxOnCash`, no longer the English description.
 
 ### AI Export, F-AI (a)
 
@@ -137,7 +138,8 @@ the engine (coordinator, 2026-10-12; [[decisions/ai-export-version-bump-once-per
   ([[problems/ai-export-reconciled-false-on-rounding-dust]]).
 - **Left in the residual, by design** (backlog section I): the exchange result on cash *in transit* (B17), the spread
   of an FX_CONVERSION on the same broker (B18), and the order of the unallocated rows (B19, order only). The
-  securities half of B11 stays open: [[problems/dirty-days-ignore-fx-only-moves]].
+  securities half of B11 stayed open here; J closed it in CP-6 (2026-10-16), with one `change_days` shared by the
+  native cash and the engine: [[problems/dirty-days-ignore-fx-only-moves]].
 - **Confirmed on real data** (developer, 2026-10-12, via the coordinator): after importing his Scalable Capital
   reports on his own server, the per-broker P&L chart looked «come me lo aspettavo» ("as I expected").
 
@@ -159,7 +161,7 @@ the engine (coordinator, 2026-10-12; [[decisions/ai-export-version-bump-once-per
 | Step 10c: the ledger built for the run | `backend/app/services/financial_math/portfolio/engine.py` |
 | `_revalue_foreign_cash`, rate-change days in pre-frame and frame | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Cards, histories, contributions, the «FX on cash» row | `backend/app/services/portfolio_service.py` |
-| Row mapping (table, waterfall) | `frontend/src/lib/components/dashboard/OtherPeriodEffectsTable.svelte`, `frontend/src/lib/components/dashboard/PerformanceChart.svelte` |
+| Row mapping (table, waterfall) | `frontend/src/lib/features/dashboard/OtherPeriodEffectsTable.svelte`, `frontend/src/lib/features/dashboard/PerformanceChart.svelte` |
 | Module tests | `backend/test_scripts/test_services/test_financial_math/test_native_cash.py` |
 | Engine scenarios (B1–B12, B3w, B4v) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_foreign_cash_revaluation.py` |
 | Report-currency guard and its golden | `backend/test_scripts/test_services/test_financial/test_native_cash_guard.py`, `backend/test_scripts/fixtures/native_cash_guard/eur_only_golden.json` |

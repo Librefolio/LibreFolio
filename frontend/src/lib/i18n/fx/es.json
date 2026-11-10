@@ -22,7 +22,6 @@
       "quoteCurrency": "Divisa Cotizada",
       "providerDisabledHint": "Seleccione primero ambas divisas",
       "providerInfoBanner": "Los proveedores obtienen automáticamente los tipos de cambio de los bancos centrales. Sin un proveedor, deberá insertar los tipos manualmente.",
-      "noProviderWarning": "Ningún proveedor configurado. Deberá insertar manualmente los tipos de cambio para cada fecha.",
       "createIntermediatePairs": "Crear también los pares intermedios",
       "createIntermediatePairsHint": "Cada paso de las cadenas seleccionadas se guardará como par autónomo con su proveedor, para poder sincronizarlos de forma independiente.",
       "titleEdit": "Editar Proveedores del Par",
@@ -46,7 +45,8 @@
       "timeoutAfter": "Tiempo agotado tras {seconds} s",
       "requestTimedOut": "La solicitud agotó el tiempo tras {seconds} s. Aumenta el tiempo de espera y vuelve a intentarlo.",
       "failed": "Error de sincronización",
-      "retryFailed": "{n, plural, one {Reintentar el fallido} other {Reintentar los # fallidos}}"
+      "retryFailed": "{n, plural, one {Reintentar el fallido} other {Reintentar los # fallidos}}",
+      "overwriteWarning": "{existing, plural, one {# de {total} ya tiene} other {# de {total} ya tienen}} datos guardados en este intervalo: la sincronización los reemplaza con los valores del proveedor, incluidas las ediciones manuales."
     },
     "route": {
       "title": "Rutas de Conversión",
@@ -57,6 +57,7 @@
       "unusableHint": "Estos proveedores no tienen una ruta de conversión automática para este par de divisas.",
       "steps": "pasos",
       "noRoutesAvailable": "No se encontraron rutas de conversión automáticas para este par. Puede guardar sin proveedor e insertar los tipos de cambio manualmente.",
+      "providersUnavailable": "Las rutas de conversión no están disponibles en este momento. Cierre esta ventana y vuelva a abrirla en unos instantes.",
       "chainWarning": "Las cadenas requieren que TODOS los pasos intermedios tengan éxito durante la sincronización. Si un proveedor falla, toda la cadena falla para esa fecha.",
       "searchPlaceholder": "Buscar proveedores, divisas, países…",
       "noSearchResults": "Ninguna ruta coincide con la búsqueda",
@@ -99,6 +100,7 @@
     "savedCount": "{n, plural, one {# guardado} other {# guardados}}",
     "deletedCount": "{n, plural, one {# eliminado} other {# eliminados}}",
     "skippedCount": "{n, plural, one {# omitido (no válido)} other {# omitidos (no válidos)}}",
-    "saveFailed": "Error al guardar los tipos de cambio: {error}"
+    "saveFailed": "Error al guardar los tipos de cambio: {error}",
+    "refusedCount": "{n, plural, one {# rechazado} other {# rechazados}}"
   }
 }

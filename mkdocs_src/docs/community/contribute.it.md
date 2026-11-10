@@ -88,14 +88,6 @@ Un modo semplice ma potente per aiutare: **metti una stella al repository** su G
 
 ---
 
-## :globe_with_meridians: Prossimi Passi — LibreFolio Cloud
-
-Per coloro che vogliono utilizzare LibreFolio ma non hanno il tempo, le competenze o l'infrastruttura per l'auto-hosting, stiamo pianificando una **piattaforma hosted** — **LibreFolio Cloud**. Offrirà tutte le stesse potenti funzionalità senza alcuna configurazione tecnica, oltre a future **analisi potenziate dall'IA** per aiutarti a prendere decisioni di investimento più intelligenti.
-
-Per sostenere l'infrastruttura, la manutenzione e lo sviluppo continuo, la piattaforma cloud sarà offerta come **servizio in abbonamento** — i prezzi saranno determinati in seguito.
-
----
-
 !!! tip "Grazie!"
 
     Ogni forma di supporto — codice, idee, segnalazioni di bug o donazioni — è profondamente apprezzata. Insieme possiamo costruire il miglior tracker di portafoglio self-hosted! :rocket:

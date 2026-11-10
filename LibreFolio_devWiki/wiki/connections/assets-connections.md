@@ -2,7 +2,7 @@
 
 > Dependencies and relationships between Asset domain features.
 > See [[connections/dependency-graph]] for the full project view.
-> The domain narrative is [[domains/assets]].
+> The domain narrative is [[domains/assets]]; the end-to-end steps are [[workflows/asset-onboarding-flow]].
 
 ---
 
@@ -44,14 +44,18 @@ graph TD
 
 | Backend | Interface | Frontend |
 |---------|-----------|----------|
-| [[F-025]] Provider list | `GET /api/v1/assets/provider/list` | [[F-026]] Provider Assignment Section |
+| [[F-025]] Provider list | `GET /api/v1/assets/provider` | [[F-026]] Provider Assignment Section |
 | [[F-025]] Provider search | `GET /api/v1/assets/provider/search` | [[F-028]] Search Autocomplete |
-| [[F-024]] Asset CRUD | `GET/POST/PATCH/DELETE /api/v1/assets` | [[F-032]] List, [[F-033]] Detail |
-| [[F-027]] Sync | `POST /api/v1/assets/{id}/sync` | [[F-033]] Detail page sync button |
-| [[F-029]] Metadata refresh | `POST /api/v1/assets/{id}/metadata/refresh` | [[F-033]] Detail page |
-| [[F-030]] Price history | `GET /api/v1/assets/{id}/prices` | [[F-033]] Chart data |
-| [[F-031]] Events | `GET /api/v1/assets/{id}/events` | [[F-033]] Event markers |
-| [[F-036]] Provider comparison | `GET /api/v1/assets/{id}/provider/compare` | [[F-036]] Comparison modal |
+| [[F-024]] Asset CRUD | `GET/POST/PATCH/DELETE /api/v1/assets` (+ `GET /api/v1/assets/query`) | [[F-032]] List, [[F-033]] Detail |
+| [[F-027]] Sync | `POST /api/v1/assets/prices/sync` (bulk) | [[F-033]] Detail page sync button |
+| [[F-029]] Metadata refresh | `POST /api/v1/assets/provider/probe` (operation `metadata`) | [[F-033]] Detail page |
+| [[F-030]] Price history | `POST /api/v1/assets/prices/query` | [[F-033]] Chart data |
+| [[F-031]] Events | `GET /api/v1/assets/events`, `POST /api/v1/assets/events/query` | [[F-033]] Event markers |
+| [[F-036]] Provider comparison | `POST /api/v1/assets/provider/probe` (operation `metadata`) | [[F-036]] Comparison modal |
+
+> 2026-11-07 lint: endpoints realigned with `backend/app/api/v1/assets/` — the per-asset `/{id}/...` routes became bulk
+> routes under `/assets/prices`, `/assets/events` and `/assets/provider`; the single metadata refresh was removed in
+> `94120b65e`, and metadata is now fetched through the provider probe.
 
 ---
 
@@ -61,9 +65,10 @@ All asset providers use the **Provider Registry Pattern** ([[F-059]]): decorated
 
 | Provider | Code | Has search | Has params_schema |
 |----------|------|-----------|------------------|
-| yfinance | `yahoo_finance` | ✅ | ❌ |
-| JustETF | `justetf` | ✅ | ❌ |
-| CSS Scraper | `css_scraper` | ❌ | ✅ (url, css_selector, currency) |
+| yfinance | `yfinance` | ✅ | ❌ |
+| JustETF | `justetf` | ✅ | ✅ (currency) |
+| CSS Scraper | `css_scraper` | ❌ | ✅ (current_css_selector, currency, decimal_format, …) |
+| Borsa Italiana | `borsa_italiana` | ✅ | ✅ (language, codice_fondo, mic, platform) |
 | Scheduled Investment | `scheduled_investment` | ❌ | ✅ (complex schedule schema) |
 | mockprov | `mockprov` | ✅ | ❌ (test only, hidden from UI) |
 
@@ -83,8 +88,8 @@ All asset providers use the **Provider Registry Pattern** ([[F-059]]): decorated
 
 | Role | Path |
 |------|------|
-| Asset API | `backend/app/api/v1/assets.py` |
-| Asset service / abstract base | `backend/app/services/asset_source.py` |
+| Asset API | `backend/app/api/v1/assets/` |
+| Asset service / abstract base | `backend/app/services/assets/` |
 | DB model (Asset, PriceHistory, AssetEvent) | `backend/app/db/models.py` |
 | Asset pages | `frontend/src/routes/(app)/assets/` |
 | Asset components | `frontend/src/lib/components/assets/` |

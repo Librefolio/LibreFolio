@@ -14,7 +14,7 @@ decisions, patterns, problems solved, architectural rationale.
 
 ```
 Source code          → immutable truth
-developer_journal/   → working plans during active sessions (short-lived, operational)
+developer_journal/   → working plans during active sessions (short-lived, operational); a separate local repository beside this one, with no remote, NOT part of the public repository
 devWiki/             → persistent accumulated knowledge (this layer, long-lived)
 mkdocs_src/          → formal human documentation (final, polished)
 ```
@@ -47,7 +47,7 @@ LibreFolio_devWiki/
 The `raw/` directory serves a specific purpose: **tracking which version of each source was ingested**.
 
 The actual sources (plans, code, knowledge base files) live in their natural locations:
-- `LibreFolio_developer_journal/` — development plans
+- `LibreFolio_developer_journal/` — development plans (a separate local repository next to the checkout, outside this public repo: paths into it are read from the main checkout, never committed here)
 - `backend/`, `frontend/` — the codebase itself
 - `LibreFolio_developer_journal/knowledge_base/` — accumulated notes
 
@@ -257,30 +257,32 @@ Parseable: `grep "^## \[" log.md | tail -10` gives last 10 entries.
 
 ## Graphify Layer
 
-The `graphify-out/` directory contains a persistent knowledge graph built from the entire corpus:
+The `graphify-out/` directory contains a persistent knowledge graph built from **docs and code**. graphify scans
+the **repository root**, filtered by the allow-list in `/.graphifyignore` (devWiki pages, English MkDocs pages,
+`backend/app`, `backend/alembic/versions`, `frontend/src/lib`, `frontend/src/routes`), and writes its output here
+through `GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out` (set by `./dev.py graph ...`). graphify refuses files whose
+real path is outside the scan root, so the journal plans are not in the graph.
 
 ```
-LibreFolio_devWiki/
-├── corpus/                # Input corpus (symlinks)
-│   ├── wiki/              # → LibreFolio_devWiki/wiki/
-│   ├── roadmap/           # → LibreFolio_developer_journal/RoadmapV4_UI/
-│   └── mkdocs-en/         # EN-only symlinks from mkdocs_src/
-└── graphify-out/
-    ├── graph.json         # Persistent graph (948 nodes, 1292 edges, 71 communities)
-    ├── graph.html         # Interactive visualization (open in browser)
-    ├── GRAPH_REPORT.md    # Audit report: god nodes, surprises, suggested questions
-    ├── cost.json          # Cumulative token cost tracker
-    ├── manifest.json      # File manifest for --update incremental runs
-    └── cache/             # Semantic extraction cache (per-file, reused on --update)
+LibreFolio/                # Scan root (repository root)
+├── .graphifyignore        # Allow-list: what graphify reads
+└── LibreFolio_devWiki/
+    └── graphify-out/      # GRAPHIFY_OUT
+        ├── graph.json     # Persistent graph (its size: see GRAPH_REPORT.md)
+        ├── graph.html     # Interactive visualization (open in browser)
+        ├── GRAPH_REPORT.md  # Audit report: god nodes, surprises, suggested questions
+        ├── cost.json      # Cumulative token cost tracker
+        ├── manifest.json  # File manifest for --update incremental runs
+        └── cache/         # Semantic extraction cache (per-file, reused on --update)
 ```
 
 ### What the graph adds
 
 The graph layer complements the wiki pages by discovering:
-- **Cross-document connections** between wiki pages, plans, and docs that were never explicitly linked
+- **Cross-document connections** between wiki pages, docs and code that were never explicitly linked
 - **God nodes** — the concepts with highest betweenness centrality (system-wide hubs)
 - **Community clusters** — natural groupings: FX Provider Registry, Transaction Types & FIFO, Auth & User Management, etc.
-- **330x token compression** — a BFS query costs ~2,800 tokens vs 935K for raw corpus
+- **330x token compression** — a BFS query costs ~2,800 tokens vs 935K for the raw sources (first-build figure)
 
 ### Key commands (run from `LibreFolio_devWiki/`)
 
@@ -297,29 +299,39 @@ $(cat graphify-out/.graphify_python) -m graphify path "FX Provider Registry" "FI
 # Explain a specific node
 $(cat graphify-out/.graphify_python) -m graphify explain "EditBuffer" graphify-out/graph.json
 
-# Incremental update after adding new wiki pages or ingesting new plans
-$(cat graphify-out/.graphify_python) -c "
+# Incremental update after adding new wiki pages or ingesting new plans:
+# from the repository root, scan path ".", output through GRAPHIFY_OUT
+cd "$(git rev-parse --show-toplevel)"
+GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out "$(cat LibreFolio_devWiki/graphify-out/.graphify_python)" -c "
 from graphify.detect import detect_incremental
 from pathlib import Path
-import json
-result = detect_incremental(Path('corpus/'))
+result = detect_incremental(Path('.'))
 print(f'{result.get(\"new_total\", 0)} files changed')
-" && graphify corpus/ --update
+"
+# then, if files changed, the graphify --update pipeline (see the wiki-file skill, Step 6)
 ```
 
 ### When to run `--update`
 
-Run `graphify corpus/ --update` (from `LibreFolio_devWiki/`) after:
+Run the graphify `--update` pipeline (from the repository root, `GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out`,
+see the `wiki-file` skill, Step 6) after:
 - The historian agent ingests a new plan or creates new wiki pages
 - A batch of wiki pages has been updated
-- New mkdocs-en pages are added to the corpus
+- New English MkDocs pages are added under `mkdocs_src/docs/`
+
+Code changes alone need only `./dev.py graph update` (AST, no LLM).
 
 The `--update` only re-extracts changed files and merges into the existing graph, costing a fraction of the initial build.
 
 ### Graph structure
 
-The graph was built from **526 files** (246 wiki pages, 185 roadmap plans, 95 mkdocs-en docs).
-71 communities were detected, including:
+> The counts below are those of the first build (2026-04/05: 526 files, 71 communities). Read the current size —
+> nodes, edges, communities, files — from `graphify-out/GRAPH_REPORT.md`: a number written in prose ages, the report
+> does not (2026-11-07 lint).
+
+The first build came from **526 files** (246 wiki pages, 185 roadmap plans, 95 English MkDocs docs); the roadmap
+plans have since left the graph (they live outside the repository root), and the code has joined it.
+71 communities were detected then, including:
 - `FX & Asset Overview` (C0, n=52) — FX pair management, asset overview
 - `Financial Instruments` (C1, n=49) — ETF, bonds, commodities, stocks
 - `Phase 6 Provider Forms` (C2, n=48) — dynamic params_schema, provider registry UI

@@ -51,6 +51,7 @@ def _check_deps() -> None:
         print("   Install with: pipenv install tabulate --dev")
         sys.exit(1)
 
+
 # Configuration
 I18N_DIR = Path(__file__).parent.parent / "src" / "lib" / "i18n"
 LANGUAGES = ["en", "it", "fr", "es"]  # Order matters for display
@@ -106,7 +107,7 @@ def find_used_keys_in_sources(skip: frozenset[Path] = frozenset()) -> tuple[set[
     patterns_exact = [
         # $t('key') or $_('key') or t('key') with single/double quotes
         re.compile(r"(?:\$t|\$_|(?<![a-zA-Z])t|(?<![a-zA-Z])_)\s*\(\s*['\"]([a-zA-Z0-9_.]+)['\"]"),
-        ]
+    ]
 
     # Patterns for INDIRECT keys (passed as props/variables)
     # These are keys stored in objects/arrays and later passed to $t/$_
@@ -120,7 +121,7 @@ def find_used_keys_in_sources(skip: frozenset[Path] = frozenset()) -> tuple[set[
         # Individual i18n-like strings in const arrays (e.g., WEEKDAY_KEYS, MONTH_KEYS)
         # Matches strings like 'datePicker.weekdays.mo' in array/object contexts
         re.compile(r"['\"]([a-zA-Z]+\.[a-zA-Z]+\.[a-zA-Z]+)['\"]"),
-        ]
+    ]
 
     # Patterns for DYNAMIC keys (template literals / concatenation)
     patterns_dynamic = [
@@ -134,7 +135,7 @@ def find_used_keys_in_sources(skip: frozenset[Path] = frozenset()) -> tuple[set[
         re.compile(r"`([a-zA-Z0-9_.]+\.[a-zA-Z0-9_]*)\$\{"),
         # 'prefix.' + var or "prefix." + var
         re.compile(r"['\"]([a-zA-Z0-9_.]+)\.['\"]?\s*\+"),
-        ]
+    ]
 
     # Scan the product sources only: a test, a dependency or a build artefact proves nothing
     for file_path in _usage.iter_source_files(src_dir):
@@ -282,7 +283,7 @@ def build_dataframe(translations: dict[str, dict[str, str]]) -> pd.DataFrame:
         row: dict[str, Any] = {
             "Section": extract_section(key),
             "Key": key,
-            }
+        }
 
         # Add each language value
         missing_count = 0
@@ -298,8 +299,7 @@ def build_dataframe(translations: dict[str, dict[str, str]]) -> pd.DataFrame:
         elif missing_count == len(LANGUAGES):
             row["Status"] = "❌ MISSING ALL"
         else:
-            missing_langs = [lang.upper() for lang in LANGUAGES
-                             if not translations.get(lang, {}).get(key)]
+            missing_langs = [lang.upper() for lang in LANGUAGES if not translations.get(lang, {}).get(key)]
             row["Status"] = f"⚠️ Missing: {', '.join(missing_langs)}"
 
         rows.append(row)
@@ -314,7 +314,7 @@ def generate_summary(df: pd.DataFrame) -> str:
     lines = [
         "## 📊 Translation Coverage Summary\n",
         f"**Total keys**: {len(df)}\n",
-        ]
+    ]
 
     # Per-language stats
     for lang in LANGUAGES:
@@ -345,7 +345,7 @@ def generate_missing_report(df: pd.DataFrame) -> str:
     lines = [
         "\n## ⚠️ Missing Translations\n",
         "The following keys need attention:\n",
-        ]
+    ]
 
     # Group by section
     for section in incomplete["Section"].unique():
@@ -355,14 +355,10 @@ def generate_missing_report(df: pd.DataFrame) -> str:
         # Build table data for tabulate
         table_data = []
         for _, row in section_rows.iterrows():
-            table_data.append([f"`{row['Key']}`", row['Status']])
+            table_data.append([f"`{row['Key']}`", row["Status"]])
 
         # Use tabulate for nice formatting
-        table_str = tabulate(
-            table_data,
-            headers=["Key", "Status"],
-            tablefmt="github"
-            )
+        table_str = tabulate(table_data, headers=["Key", "Status"], tablefmt="github")
         lines.append(table_str)
         lines.append("")
 
@@ -385,9 +381,7 @@ class _BackendEvidence(NamedTuple):
         return cls(_usage.harvest_backend_keys(BACKEND_DIR), _usage.harvest_backend_families(BACKEND_DIR), _usage.harvest_vocabulary(BACKEND_DIR))
 
 
-def _classify_keys(
-    all_keys: list[str], exact_keys: set[str], prefix_patterns: set[str], backend: _BackendEvidence, skip: frozenset[Path] = frozenset()
-) -> tuple[_usage.Usage, dict[str, str]]:
+def _classify_keys(all_keys: list[str], exact_keys: set[str], prefix_patterns: set[str], backend: _BackendEvidence, skip: frozenset[Path] = frozenset()) -> tuple[_usage.Usage, dict[str, str]]:
     """Every key's verdict, from the product sources not in ``skip`` and from the backend."""
     usage = _usage.collect_from_source(I18N_DIR.parent.parent, skip=skip)
     usage.exact |= exact_keys | backend.keys
@@ -431,9 +425,7 @@ def _kept_alive_section(orphans: list[Path], kept_alive: dict[str, str]) -> list
     src_dir = I18N_DIR.parent.parent
     lines = [
         f"\n### 📦 Kept Alive Only by Unreferenced Sources ({len(kept_alive)} keys)\n",
-        "No route, hook or service worker reaches the sources listed below, through any chain of "
-        "imports, so nothing renders them. Without them these keys would get the verdict shown. The "
-        "lists above do not change: decide whether the source is dead, then remove it with its keys.\n",
+        "No route, hook or service worker reaches the sources listed below, through any chain of " "imports, so nothing renders them. Without them these keys would get the verdict shown. The " "lists above do not change: decide whether the source is dead, then remove it with its keys.\n",
     ]
     lines.extend(_keys_by_section(list(kept_alive), kept_alive))
     lines.append(f"Unreferenced sources ({len(orphans)}):\n")
@@ -442,11 +434,7 @@ def _kept_alive_section(orphans: list[Path], kept_alive: dict[str, str]) -> list
     return lines
 
 
-def generate_unused_keys_report(
-    all_keys: list[str],
-    exact_keys: set[str],
-    prefix_patterns: set[str]
-    ) -> tuple[str, list[str]]:
+def generate_unused_keys_report(all_keys: list[str], exact_keys: set[str], prefix_patterns: set[str]) -> tuple[str, list[str]]:
     """
     Generate a report of translation keys that exist but are not used in the codebase.
     Splits keys into "Not Verified" (the family exists, the final segment is
@@ -483,13 +471,12 @@ def generate_unused_keys_report(
         "- **used** — a literal reference, or a dynamic code found in the producer's vocabulary\n",
         "- **not verified** — the family is real but its final segment is built at runtime\n",
         "- **dead** — no evidence anywhere\n\n",
-        "Collapsing *not verified* into *used* absolves a whole namespace; collapsing it into "
-        "*dead* condemns live keys. Only the **dead** list below is actionable.\n\n",
+        "Collapsing *not verified* into *used* absolves a whole namespace; collapsing it into " "*dead* condemns live keys. Only the **dead** list below is actionable.\n\n",
         "Evidence comes from product sources only: `*.test.ts`, `*.spec.ts`, `__tests__/`, `__mocks__/` "
         "and generated API clients (`generated.ts`, `*.generated.ts`) prove nothing. A key written as a "
         "literal anywhere counts, whatever receives it "
         "(`translateOr($_, 'k')`, `label('k')`, `afterCopyKey: 'k'`, a ternary across lines, a backend "
-        "dictionary). Also detected: backend `..._i18n_key=` fields and `f\"ns.family.{code}\"` families, "
+        'dictionary). Also detected: backend `..._i18n_key=` fields and `f"ns.family.{code}"` families, '
         "constant namespaces (`` $t(`${NS}.leaf`) ``), camelCase continuations, ternary arguments, "
         "typed unions and single-literal parameter types (`` `risk.${prefix}.${code}` `` with "
         "`prefix: 'errors'`), nested templates, `` `${key}Full` `` suffixes, the members a file "
@@ -497,28 +484,18 @@ def generate_unused_keys_report(
         "that a module it imports directly names, backend codes in another case or starting with a digit "
         "(`IN_TRANSIT` for `in_transit`, `3m`), and templates with several runtime segments "
         "(`` `ns.params.${code}.${kind}.${field.key}` ``) whose every segment is named.\n\n",
-        ]
+    ]
 
     if prefix_patterns:
         lines.append(f"**Dynamic prefixes detected:** `{', '.join(sorted(prefix_patterns))}`\n")
-        lines.append(
-            "A key under these legacy prefixes, and nothing more, is **not verified**: the prefix keeps "
-            "it out of the dead list but no longer proves it used.\n\n"
-        )
+        lines.append("A key under these legacy prefixes, and nothing more, is **not verified**: the prefix keeps " "it out of the dead list but no longer proves it used.\n\n")
     if usage.suppressed_roots:
-        lines.append(
-            f"**Bare roots superseded by expansion:** `{', '.join(sorted(usage.suppressed_roots))}` — "
-            "these no longer absolve their whole namespace.\n\n"
-        )
+        lines.append(f"**Bare roots superseded by expansion:** `{', '.join(sorted(usage.suppressed_roots))}` — " "these no longer absolve their whole namespace.\n\n")
 
     # Section 1: not verified — real family, runtime-built leaf. NOT actionable.
     if likely_dynamic:
         lines.append(f"\n### 🔵 Not Verified ({len(likely_dynamic)} keys)\n")
-        lines.append(
-            "These sit under a resolved dynamic family, or only under a legacy prefix, but their final "
-            "segment is produced at runtime and neither the building file nor the producer's vocabulary "
-            "names it. **Not evidence of death.**\n"
-        )
+        lines.append("These sit under a resolved dynamic family, or only under a legacy prefix, but their final " "segment is produced at runtime and neither the building file nor the producer's vocabulary " "names it. **Not evidence of death.**\n")
         lines.extend(_keys_by_section(likely_dynamic))
 
     # Section 2: dead — no evidence anywhere. The only actionable list.
@@ -530,10 +507,7 @@ def generate_unused_keys_report(
     # Section 3: backend families with no catalogue key. Informational, not blocking.
     if phantoms:
         lines.append(f"\n### 👻 Backend Families Without Catalogue Keys ({len(phantoms)})\n")
-        lines.append(
-            "The backend builds these key prefixes at runtime, but no catalogue key lives under them: "
-            "either nothing renders them or every rendering falls back to the raw key.\n"
-        )
+        lines.append("The backend builds these key prefixes at runtime, but no catalogue key lives under them: " "either nothing renders them or every rendering falls back to the raw key.\n")
         for prefix in phantoms:
             lines.append(f"- `{prefix}` ← {backend.families[prefix]}")
         lines.append("")
@@ -564,9 +538,7 @@ def _get_tier_info(n_langs: int) -> tuple[str, str, str]:
         return "🟢", "1 language only", "1 lang only"
 
 
-def _find_duplicate_groups(
-    translations: dict[str, dict[str, str]]
-    ) -> tuple[list[DuplicateGroup], dict[int, int]]:
+def _find_duplicate_groups(translations: dict[str, dict[str, str]]) -> tuple[list[DuplicateGroup], dict[int, int]]:
     """
     Analyze all languages for keys sharing the same value (case-insensitive).
 
@@ -620,7 +592,7 @@ def _find_duplicate_groups(
     sorted_groups: list[DuplicateGroup] = sorted(
         all_key_groups.items(),
         key=lambda x: (-len(x[1]), -len(x[0]), sorted(x[0])[0]),
-        )
+    )
 
     tier_counts: dict[int, int] = {}
     for _ks, lang_matches in sorted_groups:
@@ -658,8 +630,7 @@ def generate_duplicate_values_report(translations: dict[str, dict[str, str]]) ->
         Tuple of (markdown report string, total number of unique groups, sorted groups data)
     """
     lines: list[str] = ["\n## 🔄 Duplicate Value Analysis\n"]
-    lines.append("Keys with identical values (case-insensitive). "
-                 "Not necessarily a problem — helps spot repeated or unoptimised keys.\n")
+    lines.append("Keys with identical values (case-insensitive). " "Not necessarily a problem — helps spot repeated or unoptimised keys.\n")
 
     sorted_groups, tier_counts = _find_duplicate_groups(translations)
     total_groups = len(sorted_groups)
@@ -715,13 +686,7 @@ def generate_duplicate_values_report(translations: dict[str, dict[str, str]]) ->
     return "\n".join(lines), total_groups, sorted_groups
 
 
-def export_markdown(
-    df: pd.DataFrame,
-    output_path: Path | None,
-    include_full_table: bool = True,
-    unused_keys_report: str = "",
-    duplicates_report: str = ""
-    ) -> None:
+def export_markdown(df: pd.DataFrame, output_path: Path | None, include_full_table: bool = True, unused_keys_report: str = "", duplicates_report: str = "") -> None:
     """
     Export the translation table to Markdown format using tabulate.
 
@@ -740,12 +705,7 @@ def export_markdown(
         display_df[col] = display_df[col].apply(lambda x: (str(x)[:10] + "...") if len(str(x)) > 13 else str(x))
 
     # Generate markdown table using tabulate
-    table_md = tabulate(
-        display_df,
-        headers="keys",
-        tablefmt="github",  # GitHub-flavored markdown
-        showindex=False
-        )
+    table_md = tabulate(display_df, headers="keys", tablefmt="github", showindex=False)  # GitHub-flavored markdown
 
     # Build report parts
     parts = [
@@ -753,7 +713,7 @@ def export_markdown(
         f"*Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}*\n",
         summary,
         missing_report,
-        ]
+    ]
 
     if unused_keys_report:
         parts.append(unused_keys_report)
@@ -762,10 +722,12 @@ def export_markdown(
         parts.append(duplicates_report)
 
     if include_full_table:
-        parts.extend([
-            "\n## 📋 Complete Translation Table\n",
-            table_md,
-            ])
+        parts.extend(
+            [
+                "\n## 📋 Complete Translation Table\n",
+                table_md,
+            ]
+        )
 
     parts.append("")
     content = "\n".join(parts)
@@ -785,7 +747,7 @@ def export_excel(
     output_path: Path,
     dup_groups: list[DuplicateGroup] | None = None,
     translations: dict[str, dict[str, str]] | None = None,
-    ) -> None:
+) -> None:
     """
     Export the translation table to Excel format with formatting.
 
@@ -816,11 +778,8 @@ def export_excel(
             "Language": [lang.upper() for lang in LANGUAGES],
             "Filled": [df[lang.upper()].apply(lambda x: bool(x)).sum() for lang in LANGUAGES],
             "Missing": [df[lang.upper()].apply(lambda x: not bool(x)).sum() for lang in LANGUAGES],
-            "Coverage %": [
-                f"{(df[lang.upper()].apply(lambda x: bool(x)).sum() / len(df)) * 100:.1f}%"
-                for lang in LANGUAGES
-                ],
-            }
+            "Coverage %": [f"{(df[lang.upper()].apply(lambda x: bool(x)).sum() / len(df)) * 100:.1f}%" for lang in LANGUAGES],
+        }
         summary_df = pd.DataFrame(summary_data)
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
 
@@ -871,7 +830,7 @@ def _write_duplicate_sheets(
     workbook,
     dup_groups: list[DuplicateGroup],
     translations: dict[str, dict[str, str]],
-    ) -> None:
+) -> None:
     """
     Create one Excel sheet per severity tier with duplicate-value tables
     stacked vertically.  Each table has a title row, a header row, then
@@ -888,7 +847,7 @@ def _write_duplicate_sheets(
     dup_highlight = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")  # light green
     thin_border = Border(
         bottom=Side(style="thin", color="CCCCCC"),
-        )
+    )
 
     headers = ["Key"] + [l.upper() for l in LANGUAGES]
     n_cols = len(headers)
@@ -924,9 +883,11 @@ def _write_duplicate_sheets(
             # Merge title across all columns
             if n_cols > 1:
                 ws.merge_cells(
-                    start_row=row_cursor, start_column=1,
-                    end_row=row_cursor, end_column=n_cols,
-                    )
+                    start_row=row_cursor,
+                    start_column=1,
+                    end_row=row_cursor,
+                    end_column=n_cols,
+                )
             row_cursor += 1
 
             # --- Header row ---
@@ -957,6 +918,7 @@ def _write_duplicate_sheets(
 
         # Auto-adjust column widths (skip merged cells)
         from openpyxl.utils import get_column_letter as gcl
+
         for col_idx in range(1, n_cols + 1):
             max_length = 0
             for row_cells in ws.iter_rows(min_col=col_idx, max_col=col_idx):
@@ -1091,34 +1053,15 @@ def run_audit(format_type: str = "none", output: str | None = None, duplicates: 
 
 def add_arguments(parser) -> None:
     """Add arguments to a parser (reusable for both standalone and subparser)."""
-    parser.add_argument(
-        "--format", "-f",
-        choices=["none", "md", "xlsx", "both"],
-        default="none",
-        help="Output format: none=only warnings (default), md=full markdown, xlsx=excel, both=md+xlsx"
-        )
-    parser.add_argument(
-        "--output", "-o",
-        type=str,
-        default=None,
-        help="Output directory or file path (default: current directory for file output)"
-        )
-    parser.add_argument(
-        "--duplicates", "-d",
-        action="store_true",
-        default=False,
-        help="Analyze duplicate values: find keys sharing the same translation (case-insensitive)"
-        )
+    parser.add_argument("--format", "-f", choices=["none", "md", "xlsx", "both"], default="none", help="Output format: none=only warnings (default), md=full markdown, xlsx=excel, both=md+xlsx")
+    parser.add_argument("--output", "-o", type=str, default=None, help="Output directory or file path (default: current directory for file output)")
+    parser.add_argument("--duplicates", "-d", action="store_true", default=False, help="Analyze duplicate values: find keys sharing the same translation (case-insensitive)")
 
 
 def run_from_args(args) -> int:
     """Execute the command from parsed args."""
     _check_deps()
-    return _catalog_command(lambda: run_audit(
-        format_type=getattr(args, 'format', 'none'),
-        output=getattr(args, 'output', None),
-        duplicates=getattr(args, 'duplicates', False)
-        ))
+    return _catalog_command(lambda: run_audit(format_type=getattr(args, "format", "none"), output=getattr(args, "output", None), duplicates=getattr(args, "duplicates", False)))
 
 
 def main():
@@ -1137,8 +1080,8 @@ Examples:
   python i18n-audit.py --format both      Generate both formats in current dir
   python i18n-audit.py -o ./reports/      Save to specific directory
   python i18n-audit.py --duplicates       Include duplicate value analysis
-        """
-        )
+        """,
+    )
     add_arguments(parser)
     args = parser.parse_args()
     return run_from_args(args)
@@ -1147,6 +1090,7 @@ Examples:
 # =============================================================================
 # i18n CLI Management Functions (add, remove, update, search)
 # =============================================================================
+
 
 def get_nested_key(data: dict, key: str) -> str | None:
     """Get value from nested dict using dot notation key."""
@@ -1195,7 +1139,7 @@ def cmd_add(args) -> int:
         "it": args.it,
         "fr": args.fr,
         "es": args.es,
-        }
+    }
 
     # Check if key already exists in any language
     existing_values = {}
@@ -1249,7 +1193,7 @@ def cmd_remove(args) -> int:
     """Remove a translation key from all languages."""
     _check_deps()
     key = args.key
-    dry_run = getattr(args, 'dry_run', False)
+    dry_run = getattr(args, "dry_run", False)
 
     # Check current values
     current_values = {}
@@ -1292,7 +1236,7 @@ def cmd_remove(args) -> int:
         except EOFError:
             print("\nAborted.")
             return 0
-        if confirm.lower() != 'y':
+        if confirm.lower() != "y":
             print("Aborted.")
             return 0
 
@@ -1317,10 +1261,14 @@ def cmd_update(args) -> int:
     key = args.key
     updates = {}
 
-    if args.en: updates["en"] = args.en
-    if args.it: updates["it"] = args.it
-    if args.fr: updates["fr"] = args.fr
-    if args.es: updates["es"] = args.es
+    if args.en:
+        updates["en"] = args.en
+    if args.it:
+        updates["it"] = args.it
+    if args.fr:
+        updates["fr"] = args.fr
+    if args.es:
+        updates["es"] = args.es
 
     if not updates:
         print("❌ At least one language must be specified (--en, --it, --fr, --es)")
@@ -1376,9 +1324,9 @@ def cmd_search(args) -> int:
     """
     _check_deps()
     query = args.query.lower()
-    search_keys = getattr(args, 'keys', False)
-    search_values = getattr(args, 'values', False)
-    lang_filter = getattr(args, 'lang', None)  # e.g. "en,it"
+    search_keys = getattr(args, "keys", False)
+    search_values = getattr(args, "values", False)
+    lang_filter = getattr(args, "lang", None)  # e.g. "en,it"
 
     # Default: search both keys and values if neither flag specified
     if not search_keys and not search_values:
@@ -1479,9 +1427,9 @@ def cmd_tree(args) -> int:
         ./dev.py i18n tree --counts            # Show leaf count per branch
     """
     _check_deps()
-    prefix = getattr(args, 'prefix', '') or ''
-    max_depth = getattr(args, 'depth', 0) or 0
-    show_counts = getattr(args, 'counts', False)
+    prefix = getattr(args, "prefix", "") or ""
+    max_depth = getattr(args, "depth", 0) or 0
+    show_counts = getattr(args, "counts", False)
 
     # Load English as the reference structure
     data = load_lang_file("en")
@@ -1509,7 +1457,7 @@ def cmd_tree(args) -> int:
         """Print dict as an ASCII tree with ├── and └── connectors."""
         keys = list(d.keys())
         for i, key in enumerate(keys):
-            is_last = (i == len(keys) - 1)
+            is_last = i == len(keys) - 1
             connector = "└── " if is_last else "├── "
             child = d[key]
 
@@ -1527,7 +1475,7 @@ def cmd_tree(args) -> int:
                 val_str = str(child)
                 if len(val_str) > 50:
                     val_str = val_str[:47] + "..."
-                print(f"{indent}{connector}🔑 {key}: \"{val_str}\"")
+                print(f'{indent}{connector}🔑 {key}: "{val_str}"')
 
     # Header
     total_leaves = count_leaves(data)
@@ -1562,6 +1510,7 @@ def _owner_names() -> dict[str, str]:
 
 def _guarded(command):
     """``command`` with the catalogue's problems (e.g. a source that is not valid JSON) reported, not raised."""
+
     def run(args) -> int:
         return _catalog_command(lambda: command(args))
 
@@ -1580,6 +1529,7 @@ def cmd_check(args) -> int:
 
 def cmd_where(args) -> int:
     """Print the file that holds a key, or the one 'add' would write it to."""
+
     def show() -> int:
         print(_catalog.where(args.key))
         return 0
@@ -1589,6 +1539,7 @@ def cmd_where(args) -> int:
 
 def cmd_move(args) -> int:
     """Move every key under a prefix, in every language, to another source."""
+
     def move() -> int:
         moved = _catalog.move(args.prefix, args.into)
         print(f"✅ Moved {moved} key(s) under '{args.prefix}' to {args.into}")
@@ -1599,6 +1550,7 @@ def cmd_move(args) -> int:
 
 def cmd_split(args) -> int:
     """Put every key of base and of the subsystems in the folder its declared prefix names."""
+
     def split() -> int:
         counts = _catalog.split()
         for target, count in counts.items():
@@ -1611,6 +1563,7 @@ def cmd_split(args) -> int:
 
 def cmd_absorb(args) -> int:
     """Replay on the sources the key changes a revision made since another (for branches on the old layout)."""
+
     def absorb() -> int:
         counts = _catalog.absorb(args.base, args.theirs, prefer=args.prefer)
         print(f"✅ Absorbed {args.base}..{args.theirs}: " + ", ".join(f"{count} {kind}" for kind, count in counts.items()))
@@ -1660,22 +1613,16 @@ def register_subparser(subparsers) -> None:
     # Search command
     search_p = i18n_sub.add_parser("search", help="Search for keys/values in translations")
     search_p.add_argument("query", help="Search query (substring match, case-insensitive)")
-    search_p.add_argument("-k", "--keys", action="store_true",
-                          help="Search only in key names (e.g., 'common.cancel')")
-    search_p.add_argument("-v", "--values", action="store_true",
-                          help="Search only in translation values")
-    search_p.add_argument("-l", "--lang",
-                          help="Restrict value search to specific language(s), comma-separated (e.g., 'it' or 'en,es')")
+    search_p.add_argument("-k", "--keys", action="store_true", help="Search only in key names (e.g., 'common.cancel')")
+    search_p.add_argument("-v", "--values", action="store_true", help="Search only in translation values")
+    search_p.add_argument("-l", "--lang", help="Restrict value search to specific language(s), comma-separated (e.g., 'it' or 'en,es')")
     search_p.set_defaults(func=_guarded(cmd_search))
 
     # Tree command
     tree_p = i18n_sub.add_parser("tree", help="Show translation key structure as a tree")
-    tree_p.add_argument("prefix", nargs="?", default="",
-                        help="Filter tree to keys starting with this prefix (e.g., 'chartSettings')")
-    tree_p.add_argument("-d", "--depth", type=int, default=0,
-                        help="Max depth to display (0 = unlimited)")
-    tree_p.add_argument("--counts", action="store_true",
-                        help="Show leaf count per branch")
+    tree_p.add_argument("prefix", nargs="?", default="", help="Filter tree to keys starting with this prefix (e.g., 'chartSettings')")
+    tree_p.add_argument("-d", "--depth", type=int, default=0, help="Max depth to display (0 = unlimited)")
+    tree_p.add_argument("--counts", action="store_true", help="Show leaf count per branch")
     tree_p.set_defaults(func=_guarded(cmd_tree))
 
     # The catalogue's sources (scripts/i18n_catalog.py)

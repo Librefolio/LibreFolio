@@ -5,12 +5,15 @@ Tests for user settings and global settings endpoints.
 
 Test IDs:
 - SET-001 to SET-004: User Settings
-- GSET-001 to GSET-010: Global Settings
+- SET-A11-01 to SET-A11-07: a stored interface preference the app does not know (lots A-11 and UIP, per key), in-process on a private database
+- SET-UIP-01 to SET-UIP-12: ui_preferences merge, size cap, defaults, default_chart_line_shape (lot UIP)
+- GSET-001 to GSET-007: Global Settings (GSET-001, 002, 002c: who reads them, A6d — any signed-in user,
+  nobody without a valid session)
 """
 
 import uuid
 import zoneinfo
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Optional
 
 import httpx
@@ -18,9 +21,11 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.v1.auth import SESSION_COOKIE_NAME
 from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
-from backend.app.services import user_service
+from backend.app.schemas.settings import GlobalSettingRead
+from backend.app.services.accounts import user_service
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success
 
@@ -225,7 +230,8 @@ class TestUserSettings:
             data = resp.json()
 
             # Verify structure
-            assert "language" in data or "theme" in data or "settings" in data, "Response should contain user settings"
+            assert {"language", "base_currency", "ui_preferences", "ui_preference_defaults"} <= set(data), "Response should contain user settings"
+            assert "theme" not in data, "theme is no top-level field any more: it lives in ui_preferences"
 
             print_success("✓ User settings retrieved successfully")
 
@@ -250,7 +256,7 @@ class TestUserSettings:
             assert session is not None, "Failed to create test user"
 
             # Update settings
-            new_settings = {"language": "it", "theme": "dark", "default_currency": "USD"}
+            new_settings = {"language": "it", "ui_preferences": {"theme": "dark"}, "base_currency": "USD"}
 
             resp = await client.put(f"{API_BASE}/settings/user", json=new_settings, timeout=TIMEOUT)
 
@@ -275,18 +281,20 @@ class TestUserSettings:
             payload = {
                 "language": "fr",
                 "base_currency": "USD",
-                "theme": "dark",
+                "ui_preferences": {"theme": "dark"},
                 "avatar_url": "https://example.com/settings-avatar.png",
             }
 
             resp = await client.put(f"{API_BASE}/settings/user", json=payload, timeout=TIMEOUT)
 
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
-            assert resp.json() == payload
+            body = resp.json()
+            assert {key: body[key] for key in payload} == payload
+            assert set(body["ui_preference_defaults"]) == {"theme", "chart_line_shape"}
 
             get_resp = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
             assert get_resp.status_code == 200
-            assert get_resp.json() == payload
+            assert {key: get_resp.json()[key] for key in payload} == payload
 
             print_success("✓ User settings created with expected values")
 
@@ -306,17 +314,18 @@ class TestUserSettings:
 
             resp = await client.put(
                 f"{API_BASE}/settings/user",
-                json={"theme": "auto", "avatar_url": "https://example.com/updated-avatar.png"},
+                json={"ui_preferences": {"theme": "auto"}, "avatar_url": "https://example.com/updated-avatar.png"},
                 timeout=TIMEOUT,
             )
 
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
-            assert resp.json() == {
-                "language": "en",
-                "base_currency": "EUR",
-                "theme": "auto",
+            body = resp.json()
+            assert {key: body[key] for key in ("language", "base_currency", "ui_preferences", "avatar_url")} == {
+                "language": initial_resp.json()["language"],
+                "base_currency": initial_resp.json()["base_currency"],
+                "ui_preferences": {"theme": "auto"},
                 "avatar_url": "https://example.com/updated-avatar.png",
-            }
+            }, "omitted fields are preserved, the sent ones saved"
 
             print_success("✓ Existing user settings updated and partial fields preserved")
 
@@ -335,12 +344,12 @@ class TestUserSettings:
             set_payload = {
                 "language": "fr",
                 "base_currency": "USD",
-                "theme": "dark",
+                "ui_preferences": {"theme": "dark"},
                 "avatar_url": "https://example.com/settings-avatar-to-clear.png",
             }
             set_resp = await client.put(f"{API_BASE}/settings/user", json=set_payload, timeout=TIMEOUT)
             assert set_resp.status_code == 200, f"Expected 200, got {set_resp.status_code}: {set_resp.text}"
-            assert set_resp.json() == set_payload
+            assert {key: set_resp.json()[key] for key in set_payload} == set_payload
 
             # Now clear only avatar_url via explicit null.
             clear_resp = await client.put(
@@ -353,15 +362,16 @@ class TestUserSettings:
             expected = {
                 "language": "fr",
                 "base_currency": "USD",
-                "theme": "dark",
+                "ui_preferences": {"theme": "dark"},
                 "avatar_url": None,
             }
-            assert clear_resp.json() == expected, f"Expected {expected}, got {clear_resp.json()}"
+            body = clear_resp.json()
+            assert {key: body[key] for key in expected} == expected, f"Expected {expected}, got {body}"
 
             # A subsequent GET must reflect the same cleared state.
             get_resp = await client.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
             assert get_resp.status_code == 200, f"Expected 200, got {get_resp.status_code}"
-            assert get_resp.json() == expected, f"Expected {expected}, got {get_resp.json()}"
+            assert {key: get_resp.json()[key] for key in expected} == expected, f"Expected {expected}, got {get_resp.json()}"
 
             print_success("✓ avatar_url cleared to null while other settings were preserved")
 
@@ -410,6 +420,7 @@ ONBOARDING_FLOWS = (
     "asset_page_guide",
     "asset_guide",
     "asset_detail_guide",
+    "tools_page_guide",
 )
 REMOVED_ONBOARDING_DRAFT_FLOWS = {
     "transaction_bulk_validation_guide",
@@ -528,7 +539,7 @@ class TestOnboardingProgressApi:
                 flows = {item["flow"]: item for item in data["flows"]}
 
                 assert set(data) == {"flows"}
-                assert len(data["flows"]) == 15, f"Final contract must expose exactly 15 flows, got {[item['flow'] for item in data['flows']]}"
+                assert len(data["flows"]) == 16, f"Final contract must expose exactly 16 flows, got {[item['flow'] for item in data['flows']]}"
                 assert tuple(item["flow"] for item in data["flows"]) == ONBOARDING_FLOWS
                 assert len(flows) == len(data["flows"]), "Final contract must not contain duplicate flow rows"
                 assert set(flows).isdisjoint(REMOVED_ONBOARDING_DRAFT_FLOWS)
@@ -543,7 +554,7 @@ class TestOnboardingProgressApi:
             finally:
                 await _delete_onboarding_user(username)
 
-        print_success("✓ GET exposes the final 15 flows and both ordered step arrays")
+        print_success("✓ GET exposes the final 16 flows and both ordered step arrays")
 
     @pytest.mark.asyncio
     async def test_complete_onboarding_flow(self, test_server):
@@ -989,103 +1000,134 @@ class TestOnboardingWelcomeAtomicApi:
 
 
 # ============================================================================
-# Global Settings Tests - List
+# Global Settings Tests - List, and who reads them
 # ============================================================================
+#
+# Read by signed-in users only (A6d, decision 36): any session, an administrator's or a regular user's, reads them
+# whole, and nobody without a valid one, whatever the key. Writes stay the administrator's (require_admin, GSET-005 to
+# GSET-007). What the app needs before anyone signs in, the registration mode included, comes from the public
+# GET /system/instance (test_system_api.py), no longer from here.
+
+#: The answer of every protected route (get_current_user) to a request without a session cookie.
+NO_SESSION_ANSWER = {"detail": "Not authenticated"}
+#: The answer of every protected route (get_current_user) to a session cookie the server never issued.
+FORGED_SESSION_ANSWER = {"detail": "Session expired or invalid"}
+#: A protected route of this file's own: the reference for the answer every protected route gives.
+PROTECTED_REFERENCE = f"{API_BASE}/settings/user"
+#: Every field of a global setting, as GET /settings/global lists it.
+GLOBAL_SETTING_FIELDS = set(GlobalSettingRead.model_fields)
+
+
+async def _get(url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+    """GET ``url`` with exactly these headers, from a client with an empty cookie jar: a session travels only in ``headers``."""
+    async with httpx.AsyncClient() as client:
+        return await client.get(url, headers=headers or {}, timeout=TIMEOUT)
+
+
+async def _delete_user_of_this_test(username: str) -> None:
+    """Cleanup of an account a test of this section registered, through the service layer, with what goes with it."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        user = await user_service.get_user_by_username(session, username)
+        if user is not None:
+            await user_service.delete_user(session, user.id)
+
+
+@pytest_asyncio.fixture
+async def regular_session(test_server) -> AsyncIterator[dict[str, str]]:
+    """A Cookie header with the session of a user registered for this test only, proven a regular user, not an administrator.
+
+    The api category populates the lane before it runs, so a new registration is never the instance's first account,
+    the one that becomes its administrator: the register answer and GET /auth/me check it rather than assume it. The
+    session travels explicitly on each request, never through a cookie jar; the account is deleted at teardown.
+    """
+    username = f"gset_reader_{uuid.uuid4().hex[:12]}"
+    credentials = {"username": username, "password": "TestPass123!"}
+    try:
+        async with httpx.AsyncClient() as client:
+            registered = await client.post(f"{API_BASE}/auth/register", json={**credentials, "email": f"{username}@test.com"}, timeout=TIMEOUT)
+            assert registered.status_code == 201, f"Setup: registering {username} failed: {registered.status_code} {registered.text}"
+            assert registered.json()["user"]["is_superuser"] is False, f"Barrier: {username} must be a regular user, not an administrator (the lane already has its accounts): {registered.text}"
+            login = await client.post(f"{API_BASE}/auth/login", json=credentials, timeout=TIMEOUT)
+        token = login.cookies.get(SESSION_COOKIE_NAME)
+        assert login.status_code == 200 and token, f"Setup: signing in as {username} failed: {login.status_code} {login.text}"
+        cookie = {"Cookie": f"{SESSION_COOKIE_NAME}={token}"}
+        me = await _get(f"{API_BASE}/auth/me", cookie)
+        assert me.status_code == 200 and me.json()["user"]["username"] == username and me.json()["user"]["is_superuser"] is False, f"Barrier: the session must be {username}'s, a regular user's: {me.status_code} {me.text}"
+        yield cookie
+    finally:
+        await _delete_user_of_this_test(username)
 
 
 class TestGlobalSettingsList:
-    """Tests for listing global settings."""
+    """Listing the global settings, and who may read them: any signed-in user, nobody without a valid session."""
 
     @pytest.mark.asyncio
-    async def test_list_global_settings_authenticated(self, test_server):
-        """GSET-001: List global settings when authenticated."""
-        print_section("GSET-001: GET /settings/global - Authenticated")
+    async def test_list_global_settings_authenticated(self, test_server, regular_session):
+        """GSET-001: Any signed-in user lists the global settings, not only an administrator: a regular user gets 200 and
+        the same settings an administrator gets, each with every field of a global setting."""
+        print_section("GSET-001: GET /settings/global - Regular user")
 
-        async with httpx.AsyncClient() as client:
-            username, email, session = await create_user_simple(client)
-            assert session is not None, "Failed to create test user"
+        resp = await _get(f"{API_BASE}/settings/global", regular_session)
 
-            resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+        assert resp.status_code == 200, f"GET /settings/global must answer any signed-in user, a regular one too: {resp.status_code} {resp.text}"
+        data = resp.json()
+        assert set(data) == {"items"} and isinstance(data["items"], list), f"The answer must be the list of the global settings, under items: {resp.text}"
+        malformed = [item for item in data["items"] if set(item) != GLOBAL_SETTING_FIELDS]
+        assert not malformed, f"Every global setting must carry exactly {sorted(GLOBAL_SETTING_FIELDS)}: {malformed}"
+        keys = {item["key"] for item in data["items"]}
+        assert "session_ttl_hours" in keys, f"Barrier: the list holds the settings the instance seeds, session_ttl_hours among them: {sorted(keys)}"
 
-            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
-            data = resp.json()
+        async with httpx.AsyncClient() as admin_client:
+            await get_admin_session(admin_client)
+            admin_resp = await admin_client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+        assert admin_resp.status_code == 200, f"Barrier: an administrator lists the global settings: {admin_resp.status_code} {admin_resp.text}"
+        admin_keys = {item["key"] for item in admin_resp.json()["items"]}
+        assert keys == admin_keys, f"A regular user must read the same global settings as an administrator: missing {sorted(admin_keys - keys)}, extra {sorted(keys - admin_keys)}"
 
-            # Verify structure
-            assert "items" in data, "Response should contain 'items' key"
-            assert isinstance(data["items"], list), "Settings should be a list"
-
-            if len(data["items"]) > 0:
-                setting = data["items"][0]
-                assert "key" in setting, "Setting should have 'key'"
-                assert "value" in setting, "Setting should have 'value'"
-                assert "value_type" in setting, "Setting should have 'value_type'"
-                print_info(f"  Found {len(data['items'])} global settings")
-
-            print_success("✓ Global settings listed successfully")
+        print_info(f"  {len(keys)} global settings, the same as an administrator's")
+        print_success("✓ A regular user lists the global settings")
 
     @pytest.mark.asyncio
     async def test_list_global_settings_unauthenticated(self, test_server):
-        """GSET-002: List global settings without authentication → 200 (public read access)."""
-        print_section("GSET-002: GET /settings/global - Unauthenticated (Public)")
+        """GSET-002: List global settings without a session → 401, the answer of every protected route.
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+        No longer public (A6d, decision 36): the scheduler, the session lifetime and the registration mode are for
+        signed-in users only. The login page does not need them: it reads the registration mode, and whether the instance
+        has no account yet, from the public GET /system/instance.
+        """
+        print_section("GSET-002: GET /settings/global - No session → 401")
 
-            # Global settings have PUBLIC read access by design
-            # (needed for frontend to check enable_registration, etc.)
-            assert resp.status_code == 200, f"Expected 200 (public access), got {resp.status_code}"
-            data = resp.json()
-            assert "items" in data, "Response should contain 'items' key"
-            print_success("✓ Global settings publicly accessible (as designed)")
+        reference = await _get(PROTECTED_REFERENCE)
+        resp = await _get(f"{API_BASE}/settings/global")
+
+        assert (reference.status_code, reference.json()) == (401, NO_SESSION_ANSWER), f"Barrier: a protected route without a session answers 401 {NO_SESSION_ANSWER}: GET /settings/user → {reference.status_code} {reference.text}"
+        assert (resp.status_code, resp.json()) == (reference.status_code, reference.json()), f"GET /settings/global without a session must answer as every protected route, 401 {NO_SESSION_ANSWER}: {resp.status_code} {resp.text}"
+        print_success("✓ No session: 401, as every protected route")
+
+    @pytest.mark.asyncio
+    async def test_global_settings_with_a_forged_session_cookie(self, test_server):
+        """GSET-002c: The read with a session cookie the server never issued → 401, the answer every protected route
+        gives that cookie: GET /settings/global accepts only a session the server issued."""
+        print_section("GSET-002c: GET /settings/global - Forged session cookie → 401")
+        forged = {"Cookie": f"{SESSION_COOKIE_NAME}=forged-{uuid.uuid4().hex}"}
+        paths = ["/settings/global"]
+
+        reference = await _get(PROTECTED_REFERENCE, forged)
+        answers = {path: await _get(f"{API_BASE}{path}", forged) for path in paths}
+
+        assert (reference.status_code, reference.json()) == (401, FORGED_SESSION_ANSWER), f"Barrier: a protected route reads the forged cookie as a session it never issued, 401 {FORGED_SESSION_ANSWER}: GET /settings/user → {reference.status_code} {reference.text}"
+        for path, resp in answers.items():
+            assert (resp.status_code, resp.json()) == (reference.status_code, reference.json()), f"GET {path} with a forged session cookie must answer as every protected route, 401 {FORGED_SESSION_ANSWER}: {resp.status_code} {resp.text}"
+        print_success("✓ Forged session cookie: 401, as every protected route")
 
 
 # ============================================================================
-# Global Settings Tests - Single Setting
+# Global Settings Tests - Update
 # ============================================================================
 
 
-class TestGlobalSettingsSingle:
-    """Tests for single global setting operations."""
-
-    @pytest.mark.asyncio
-    async def test_get_single_setting(self, test_server):
-        """GSET-003: Get a single global setting."""
-        print_section("GSET-003: GET /settings/global/{key} - Single Setting")
-
-        async with httpx.AsyncClient() as client:
-            username, email, session = await create_user_simple(client)
-            assert session is not None, "Failed to create test user"
-
-            # Try to get session_ttl_hours (should exist)
-            resp = await client.get(f"{API_BASE}/settings/global/session_ttl_hours", timeout=TIMEOUT)
-
-            # Accept 200 or 404 (if single-get not implemented)
-            if resp.status_code == 404:
-                # Check if it's "not found" for the endpoint or the setting
-                data = resp.json()
-                if "detail" in data and "not found" in str(data["detail"]).lower():
-                    pytest.skip("Single setting GET endpoint not implemented")
-
-            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
-            data = resp.json()
-            assert "key" in data, "Response should have 'key'"
-            assert data["key"] == "session_ttl_hours", "Key should match"
-
-            print_success("✓ Single setting retrieved successfully")
-
-    @pytest.mark.asyncio
-    async def test_get_nonexistent_setting(self, test_server):
-        """GSET-004: Get non-existent setting → 404."""
-        print_section("GSET-004: GET /settings/global/{key} - Non-existent")
-
-        async with httpx.AsyncClient() as client:
-            username, email, session = await create_user_simple(client)
-            assert session is not None, "Failed to create test user"
-
-            resp = await client.get(f"{API_BASE}/settings/global/nonexistent_setting_key", timeout=TIMEOUT)
-
-            assert resp.status_code == 404, f"Expected 404, got {resp.status_code}"
-            print_success("✓ Correctly returned 404 for non-existent setting")
+class TestGlobalSettingsUpdate:
+    """Tests for global setting update operations."""
 
     @pytest.mark.asyncio
     async def test_update_setting_as_admin(self, test_server):
@@ -1163,88 +1205,6 @@ class TestGlobalSettingsSingle:
 
             assert resp.status_code == 404, f"Expected 404, got {resp.status_code}"
             print_success("✓ Admin correctly received 404 for non-existent setting")
-
-
-# ============================================================================
-# Global Settings Tests - Initialize
-# ============================================================================
-
-
-class TestGlobalSettingsInitialize:
-    """Tests for global settings initialization."""
-
-    @pytest.mark.asyncio
-    async def test_initialize_as_admin(self, test_server):
-        """GSET-008: Initialize global settings as admin → success."""
-        print_section("GSET-008: POST /settings/global/initialize - As Admin")
-
-        async with httpx.AsyncClient() as client:
-            # Get admin user (creates and promotes if needed)
-            username, email, session = await get_admin_session(client)
-
-            resp = await client.post(f"{API_BASE}/settings/global/initialize", timeout=TIMEOUT)
-
-            # Accept 200 (success) or 404 (endpoint not implemented)
-            if resp.status_code == 404:
-                pytest.skip("Initialize endpoint not implemented")
-
-            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
-            data = resp.json()
-
-            # Should return count of created settings (could be 0 if already exist)
-            assert "message" in data, "Response should indicate result"
-
-            print_success("✓ Admin initialized settings successfully")
-
-    @pytest.mark.asyncio
-    async def test_initialize_as_non_admin(self, test_server):
-        """GSET-009: Initialize global settings as non-admin → 403."""
-        print_section("GSET-009: POST /settings/global/initialize - Non-Admin")
-
-        async with httpx.AsyncClient() as client:
-            # Create first user (might be admin)
-            _, _, _, first_is_admin = await create_test_user(client)
-
-            # Create second user (not admin)
-            username2, email2, session2, is_admin2 = await create_test_user(client)
-
-            # If second user is somehow admin, skip
-            if is_admin2:
-                pytest.skip("Second user is admin, cannot test non-admin rejection")
-
-            assert session2 is not None, "Failed to create second test user"
-
-            resp = await client.post(f"{API_BASE}/settings/global/initialize", timeout=TIMEOUT)
-
-            # Accept 403 (forbidden) or 404 (endpoint not implemented)
-            if resp.status_code == 404:
-                pytest.skip("Initialize endpoint not implemented")
-
-            assert resp.status_code == 403, f"Expected 403, got {resp.status_code}"
-            print_success("✓ Non-admin correctly rejected with 403")
-
-    @pytest.mark.asyncio
-    async def test_initialize_idempotent(self, test_server):
-        """GSET-010: Initialize when already exists → idempotent."""
-        print_section("GSET-010: POST /settings/global/initialize - Idempotent")
-
-        async with httpx.AsyncClient() as client:
-            # Get admin user (creates and promotes if needed)
-            username, email, session = await get_admin_session(client)
-
-            # First initialization
-            resp1 = await client.post(f"{API_BASE}/settings/global/initialize", timeout=TIMEOUT)
-
-            if resp1.status_code == 404:
-                pytest.skip("Initialize endpoint not implemented")
-
-            assert resp1.status_code == 200, f"First init expected 200, got {resp1.status_code}"
-
-            # Second initialization (should be idempotent)
-            resp2 = await client.post(f"{API_BASE}/settings/global/initialize", timeout=TIMEOUT)
-
-            assert resp2.status_code == 200, f"Expected 200, got {resp2.status_code}"
-            print_success("✓ Initialize is idempotent")
 
 
 # ============================================================================
@@ -1560,9 +1520,10 @@ async def _assert_saved(client: httpx.AsyncClient, items: list[tuple[str, str]],
 
 
 async def _assert_key_absent(client: httpx.AsyncClient, key: str) -> None:
-    """An unknown key in a refused request must not have been created."""
-    resp = await client.get(f"{API_BASE}/settings/global/{key}", timeout=TIMEOUT)
-    assert resp.status_code == 404, f"Unknown key {key!r} must not be created: GET returned {resp.status_code} {resp.text}"
+    """An unknown key in a refused request must not have been created: the list must not carry it."""
+    resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"GET /settings/global failed: {resp.status_code} {resp.text}"
+    assert key not in {item["key"] for item in resp.json()["items"]}, f"Unknown key {key!r} must not be created: GET /settings/global lists it"
 
 
 def _unknown_key() -> str:
@@ -1585,11 +1546,12 @@ _INVALID_GLOBAL_VALUES = [
     # int 1..365
     pytest.param("scheduler_history_sync_horizon_days", "0", id="sync_horizon_days-below_min"),
     pytest.param("scheduler_history_sync_horizon_days", "366", id="sync_horizon_days-above_max"),
+    # One of open, invite, disabled. Every user registration of the lane depends on
+    # registration_mode, so it gets a single refused value, never an accepted one.
+    pytest.param("registration_mode", "closed", id="registration_mode-unknown_choice"),
     # bool: true/false/1/0/yes/no/on/off in any case, nothing else. Every invalid
-    # spelling reads back as False, so enable_registration (which every user
-    # registration depends on) gets a single typo; the variants go on
-    # require_email_verification, which nothing reads yet.
-    pytest.param("enable_registration", "ture", id="enable_registration-typo"),
+    # spelling reads back as False; the variants go on require_email_verification:
+    # a refusal stores nothing, so the lane's registrations never see it on.
     pytest.param("require_email_verification", "", id="require_email_verification-empty"),
     pytest.param("require_email_verification", "2", id="require_email_verification-not_0_or_1"),
     pytest.param("require_email_verification", "y", id="require_email_verification-y_is_not_yes"),
@@ -1613,6 +1575,7 @@ _INVALID_GLOBAL_VALUES = [
     pytest.param("default_currency", "ABC", id="default_currency-not_iso4217"),
     pytest.param("default_language", "de", id="default_language-unsupported"),
     pytest.param("default_theme", "blue", id="default_theme-unknown"),
+    pytest.param("default_chart_line_shape", "curvy", id="default_chart_line_shape-unknown"),
 ]
 
 # Every accepted bool spelling, in mixed case, and the canonical value it must be stored as.
@@ -1656,7 +1619,7 @@ class TestGlobalSettingsBulkValidation:
     422, `detail` a string naming each rejected key). A refused request saves
     nothing, valid items included; an accepted one is saved whole and listed.
 
-    Test IDs: GSET-VAL-001..GSET-VAL-010
+    Test IDs: GSET-VAL-001..GSET-VAL-011
     """
 
     @pytest.mark.parametrize(("key", "value"), _INVALID_GLOBAL_VALUES)
@@ -1767,7 +1730,9 @@ class TestGlobalSettingsBulkValidation:
     async def test_bool_spelling_is_stored_canonical(self, test_server, sent: str, canonical: str):
         """GSET-VAL-007: Every accepted bool spelling → 200, stored and returned as canonical "true"/"false"."""
         print_section(f"GSET-VAL-007: {sent!r} → stored {canonical!r}")
-        key = "require_email_verification"  # read nowhere yet: flipping it is harmless to the lane
+        # The lane's server runs with --no-scheduler: flipping it is harmless (GSET-SCH-001 does too). Never
+        # require_email_verification: it changes every registration of the lane, and turns on only with email.
+        key = "scheduler_enabled"
         start = "false" if canonical == "true" else "true"
 
         async with httpx.AsyncClient() as client:
@@ -1834,3 +1799,707 @@ class TestGlobalSettingsBulkValidation:
                 await _restore_global_values(client, originals)
 
         print_success(f"✓ {key}={sent!r} saved")
+
+    @pytest.mark.asyncio
+    async def test_email_verification_turned_on_without_email_is_refused(self, test_server):
+        """GSET-VAL-011: require_email_verification off → on while no email with a link can go out (a test lane has no
+        SMTP configuration) → 409 EMAIL_VERIFICATION_UNAVAILABLE naming the key; nothing saved, the other item included."""
+        print_section("GSET-VAL-011: require_email_verification on without email → 409, nothing saved")
+        key = "require_email_verification"
+        other = "session_ttl_hours"
+
+        async with httpx.AsyncClient() as client:
+            await get_admin_session(client)
+            originals = await _read_global_values(client, [key, other])
+            assert originals[key] == "false", f"A lane without email can never have {key} on: stored {originals[key]!r}"
+            changed = "25" if originals[other] != "25" else "26"
+            try:
+                resp = await _bulk_patch(client, [(other, changed), (key, "true")])
+                stored = await _read_global_values(client, [key, other])
+                assert resp.status_code == 409, f"Expected 409, got {resp.status_code}: {resp.text} — stored now {stored}"
+                detail = resp.json().get("detail")
+                assert isinstance(detail, dict), f"'detail' must be an object, got {detail!r}"
+                assert detail.get("error_code") == "EMAIL_VERIFICATION_UNAVAILABLE" and detail.get("key") == key, f"Unexpected detail: {detail!r}"
+                assert stored == originals, f"A refused request must save nothing: stored now {stored}, originals {originals}"
+            finally:
+                await _restore_global_values(client, originals)
+
+        print_success(f"✓ {key} stays off, {other} still {originals[other]!r}")
+
+
+# ============================================================================
+# STORED INTERFACE PREFERENCES — lot A-11 (per key) and lot UIP (SET-A11-01 to SET-A11-07, SET-UIP-01 to SET-UIP-10),
+# in-process on a private database
+# ============================================================================
+# user_settings.ui_preferences is a TEXT column holding a JSON object: SQLite enforces nothing, so a hand-edited row,
+# a downgrade-and-upgrade, or a later release can leave text that is not JSON, a JSON array, or a known key holding a
+# value this version does not know. Such a row exists on no lane, whose rows the app itself wrote, and its warning is
+# logged in a process no test can capture: so these cases run in-process, as TestSignInLogsNoTypedIdentifier
+# (test_auth_api.py, lot A-22) runs its own, on a private instance — the real auth and settings routers, mounted under
+# the API prefix as api/v1/router.py mounts them, in an app of this test whose get_session_generator opens sessions on a
+# private SQLite file under tmp_path, seeded as a new install; get_async_engine, the lane's database, is a tripwire.
+# What a hand edit leaves is written by SQL on that file. bcrypt runs at cost 4, the dummy hash in a cache of the test's
+# own; the login limiters are fresh ones of the shipped size. The same private file serves the merge rules of
+# PUT /settings/user: the stored text is read back by SQL, and the global defaults are rows of the file. Nothing waits.
+
+import contextlib
+import functools
+import json as jsonlib
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, get_args
+
+import structlog
+from fastapi import FastAPI
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
+from structlog.testing import capture_logs
+
+from backend.app.api.v1 import auth as auth_api
+from backend.app.api.v1 import settings as settings_routes
+from backend.app.config import API_V1_PREFIX
+from backend.app.db import session as db_session
+from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
+from backend.app.db.models import User, UserSettings
+from backend.app.db.session import get_session_generator
+from backend.app.schemas.settings import SETTINGS_REGISTRY, UI_PREFERENCES_MAX_BYTES, UIPreferences
+from backend.app.services.accounts import auth_service, login_throttle
+from backend.app.services.accounts.settings_service import initialize_global_settings
+from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
+
+#: The logger that warns of an unknown stored preference: the settings service's structlog.get_logger(__name__).
+_SETTINGS_SERVICE_LOGGER = "backend.app.services.accounts.settings_service"
+#: The canary logged through _SETTINGS_SERVICE_LOGGER inside every capture.
+_THEME_LOG_CANARY = f"canary: the capture sees the events of {_SETTINGS_SERVICE_LOGGER}"
+
+
+def _literal_values(key: str) -> tuple[str, ...]:
+    """The values ``UIPreferences.<key>`` accepts, read from the schema (an ``Optional[Literal[...]]``)."""
+    return tuple(value for arg in get_args(UIPreferences.model_fields[key].annotation) for value in get_args(arg))
+
+
+#: The themes and line shapes the app knows: the values of the schema's Literals (contract).
+_KNOWN_THEMES: tuple[str, ...] = _literal_values("theme")
+_KNOWN_SHAPES: tuple[str, ...] = _literal_values("chart_line_shape")
+#: A stored theme no release knows, as a hand edit leaves it.
+_UNKNOWN_THEME = "sepia"
+#: An unknown stored theme longer than 20 characters: the warning carries its first 20.
+_LONG_UNKNOWN_THEME = "solarized-high-contrast-v2"
+#: A global default_theme no release knows either, written as the setting's row.
+_UNKNOWN_DEFAULT_THEME = "neon"
+_DEFAULT_THEME_KEY = SETTINGS_REGISTRY.global_.DEFAULT_THEME.key
+_DEFAULT_SHAPE_KEY = SETTINGS_REGISTRY.global_.DEFAULT_CHART_LINE_SHAPE.key
+#: The settings every account of the private instance is written with, its preferences aside; and its password.
+_THEME_ACCOUNT_LANGUAGE = "en"
+_THEME_ACCOUNT_CURRENCY = "EUR"
+_THEME_PASSWORD = "Stored-Theme-Pass-2026"
+#: (global default_theme, ui_preference_defaults.theme): the default when the app knows it, else auto.
+_SHOWN_FOR_AN_UNKNOWN_THEME = [
+    pytest.param("dark", "dark", id="default-dark-shown-dark"),
+    pytest.param(_UNKNOWN_DEFAULT_THEME, "auto", id="default-unknown-shown-auto"),
+]
+#: Rows a hand edit can leave, each of which yields NO own preference: (stored text, id).
+_UNREADABLE_ROWS = [
+    pytest.param(f'{{"theme":"{_UNKNOWN_THEME}"}}', id="theme-unknown-value"),
+    pytest.param("this is not json", id="not-json"),
+    pytest.param('["dark"]', id="json-array"),
+    pytest.param('{"theme":1}', id="theme-not-a-string"),
+]
+#: (stored theme, global default_theme): every known theme, with another known theme as the default, so «shown as stored» is never the default's.
+_KNOWN_STORED_THEMES = [pytest.param(theme, _KNOWN_THEMES[(index + 1) % len(_KNOWN_THEMES)], id=f"stored-{theme}") for index, theme in enumerate(_KNOWN_THEMES)]
+
+
+@dataclass(frozen=True)
+class _ThemeInstance:
+    """An instance of one test: the auth and settings routers, every session on ``engine``."""
+
+    engine: AsyncEngine
+    app: FastAPI
+
+
+@dataclass(frozen=True)
+class _ThemeAccount:
+    """An active account of the private instance."""
+
+    user_id: int
+    username: str
+
+
+def _theme_app(engine: AsyncEngine) -> FastAPI:
+    """The real auth and settings routers, mounted under the API prefix as ``api/v1/router.py`` mounts them; ``get_session_generator`` opens sessions on ``engine``."""
+    app = FastAPI()
+    app.include_router(auth_api.router, prefix=API_V1_PREFIX)
+    app.include_router(settings_routes.router, prefix=API_V1_PREFIX)
+
+    async def private_session() -> AsyncIterator[AsyncSession]:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            yield session
+
+    app.dependency_overrides[get_session_generator] = private_session
+    return app
+
+
+def _lane_database_tripwire(*_arguments: object, **_keywords: object) -> AsyncEngine:
+    raise AssertionError("get_async_engine() was called: that is the lane's database, not this test's private one")
+
+
+@pytest_asyncio.fixture
+async def theme_instance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_ThemeInstance]:
+    """A private SQLite file under tmp_path, schema and default settings as a new install starts with, no account. Disposed at teardown.
+
+    bcrypt at cost 4, with a dummy-hash cache of the test's own (as private_sign_in in test_auth_api.py); login limiters
+    of the shipped size holding no count, so no sign-in of another in-process test counts against these; get_async_engine
+    a tripwire where these routes could reach it.
+    """
+    monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
+    monkeypatch.setattr(auth_service, "_dummy_password_hash", functools.cache(auth_service._dummy_password_hash.__wrapped__))
+    for name in ("LOGIN_BY_IDENTIFIER", "LOGIN_BY_ADDRESS"):
+        shipped = getattr(login_throttle, name)
+        monkeypatch.setattr(login_throttle, name, SlidingWindowLimiter(shipped.limit, shipped.window_seconds))
+    for module in (db_session, settings_routes):
+        monkeypatch.setattr(module, "get_async_engine", _lane_database_tripwire)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stored-theme.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine) as session:
+            await initialize_global_settings(session)
+        yield _ThemeInstance(engine=engine, app=_theme_app(engine))
+    finally:
+        await engine.dispose()
+
+
+async def _theme_account(instance: _ThemeInstance, ui_preferences: Optional[str] = None) -> _ThemeAccount:
+    """An active account written as rows: a real bcrypt hash of _THEME_PASSWORD (cost 4), and its user_settings row — language, currency, ``ui_preferences`` as given (raw text or NULL), no avatar."""
+    username = f"theme_{uuid.uuid4().hex[:12]}"
+    async with AsyncSession(instance.engine, expire_on_commit=False) as session:
+        user = User(username=username, email=f"{username}@example.com", hashed_password=auth_service.hash_password(_THEME_PASSWORD), is_active=True)
+        session.add(user)
+        await session.flush()
+        session.add(UserSettings(user_id=user.id, language=_THEME_ACCOUNT_LANGUAGE, base_currency=_THEME_ACCOUNT_CURRENCY, ui_preferences=ui_preferences))
+        await session.commit()
+    assert user.id is not None, f"Setup: {username} must be written"
+    return _ThemeAccount(user_id=user.id, username=username)
+
+
+async def _theme_write(instance: _ThemeInstance, statement: str, **parameters: Any) -> None:
+    """One UPDATE by SQL on the private file, as a hand edit makes it, committed; it must change exactly one row."""
+    async with instance.engine.begin() as connection:
+        changed = (await connection.execute(text(statement), parameters)).rowcount
+    assert changed == 1, f"Setup: {statement} with {parameters} must change one row, it changed {changed}"
+
+
+async def _hand_edit_ui_preferences(instance: _ThemeInstance, user_id: int, raw: Optional[str]) -> None:
+    """The account's stored ``ui_preferences`` is ``raw`` (text or NULL): written by SQL."""
+    await _theme_write(instance, "UPDATE user_settings SET ui_preferences = :raw WHERE user_id = :user_id", raw=raw, user_id=user_id)
+
+
+async def _hand_edit_global(instance: _ThemeInstance, key: str, value: str) -> None:
+    """The global setting ``key`` is ``value``: the setting's row written by SQL."""
+    await _theme_write(instance, "UPDATE global_settings SET value = :value WHERE key = :key", value=value, key=key)
+
+
+async def _hand_edit_default_theme(instance: _ThemeInstance, value: str) -> None:
+    """The global default_theme is ``value``: the setting's row written by SQL."""
+    await _hand_edit_global(instance, _DEFAULT_THEME_KEY, value)
+
+
+async def _theme_stored(instance: _ThemeInstance, user_id: int) -> dict[str, Any]:
+    """What is committed: the account's user_settings row, every column but its ids, and the two global defaults."""
+    async with instance.engine.connect() as connection:
+        row = (await connection.execute(text("SELECT language, base_currency, ui_preferences, avatar_url, created_at, updated_at FROM user_settings WHERE user_id = :user_id"), {"user_id": user_id})).mappings().one()
+        defaults = {}
+        for key in (_DEFAULT_THEME_KEY, _DEFAULT_SHAPE_KEY):
+            defaults[key] = (await connection.execute(text("SELECT value FROM global_settings WHERE key = :key"), {"key": key})).scalar_one()
+    return {**dict(row), **defaults}
+
+
+async def _stored_ui_preferences_text(instance: _ThemeInstance, user_id: int) -> Optional[str]:
+    """The raw ``user_settings.ui_preferences`` of the account, read by SQL."""
+    async with instance.engine.connect() as connection:
+        return (await connection.execute(text("SELECT ui_preferences FROM user_settings WHERE user_id = :user_id"), {"user_id": user_id})).scalar_one()
+
+
+async def _theme_request(instance: _ThemeInstance, method: str, path: str, *, cookie: Optional[str] = None, json: Optional[dict[str, Any]] = None) -> httpx.Response:
+    """One request to the private instance from a client of its own: no cookie jar, the session cookie, if any, sent explicitly."""
+    headers = {"Cookie": f"{SESSION_COOKIE_NAME}={cookie}"} if cookie else {}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=instance.app), base_url="http://test", timeout=TIMEOUT) as client:
+        return await client.request(method, f"{API_V1_PREFIX}{path}", json=json, headers=headers)
+
+
+async def _theme_login(instance: _ThemeInstance, account: _ThemeAccount) -> httpx.Response:
+    return await _theme_request(instance, "POST", "/auth/login", json={"username": account.username, "password": _THEME_PASSWORD})
+
+
+def _session_cookie_values(response: httpx.Response) -> list[str]:
+    """The values the answer's ``Set-Cookie`` headers give the session cookie, found by name."""
+    values = []
+    for header in response.headers.get_list("set-cookie"):
+        name, _, value = header.split(";", 1)[0].partition("=")
+        if name.strip() == SESSION_COOKIE_NAME:
+            values.append(value.strip())
+    return values
+
+
+async def _theme_signed_in(instance: _ThemeInstance, account: _ThemeAccount) -> str:
+    """The session cookie of ``account``, signed in through POST /auth/login. It ends on its promise: a 200, one cookie."""
+    login = await _theme_login(instance, account)
+    cookies = _session_cookie_values(login)
+    assert login.status_code == 200 and len(cookies) == 1 and cookies[0], f"Setup: {account.username} signs in: {login.status_code} {login.text}"
+    return cookies[0]
+
+
+@contextlib.contextmanager
+def _settings_service_log() -> Iterator[list[dict[str, Any]]]:
+    """Every structlog event logged inside the block, each with its logger's name, after a canary of the settings service's logger."""
+    with capture_logs(processors=[structlog.stdlib.add_logger_name]) as events:
+        structlog.get_logger(_SETTINGS_SERVICE_LOGGER).debug(_THEME_LOG_CANARY)
+        yield events
+
+
+def _theme_warnings(events: list[dict[str, Any]], request: str) -> list[dict[str, Any]]:
+    """The WARNING events of the settings service's logger among ``events``.
+
+    Barrier first: the canary reached the capture with that logger's name, or a capture that sees nothing would pass for
+    a request that warns of nothing.
+    """
+    assert any(event.get("event") == _THEME_LOG_CANARY and event.get("logger") == _SETTINGS_SERVICE_LOGGER for event in events), f"barrier ({request}): the events of {_SETTINGS_SERVICE_LOGGER} do not reach capture_logs with their logger's name: {events}"
+    return [event for event in events if event.get("logger") == _SETTINGS_SERVICE_LOGGER and event.get("log_level") == "warning"]
+
+
+def _assert_one_theme_warning(events: list[dict[str, Any]], expected: dict[str, Any], request: str) -> None:
+    """Exactly one WARNING of the settings service's logger among ``events``, carrying ``expected`` (its text is the implementer's)."""
+    warnings = _theme_warnings(events, request)
+    assert len(warnings) == 1, f"{request}: a read of an unknown stored preference must log exactly one WARNING through {_SETTINGS_SERVICE_LOGGER}: {warnings}"
+    carried = {field: warnings[0].get(field) for field in expected}
+    assert carried == expected, f"{request}: the warning must carry {expected}: {warnings[0]}"
+
+
+def _own_and_defaults(answer: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(ui_preferences, ui_preference_defaults) of a settings answer — a login's ``user_settings`` or a GET/PUT body."""
+    return answer.get("ui_preferences"), answer.get("ui_preference_defaults")
+
+
+class TestStoredPreferencesUnknownToTheApp:
+    """Lot A-11 (per key, lot UIP): a stored preference the app does not know is left out, never fatal.
+
+    The contract:
+
+    1. The known themes are exactly the values of ``UIPreferences.theme``'s Literal: light, dark, auto (SET-A11-01).
+    2. A stored row that is not JSON, a JSON array, or holds a known key with a value the app does not know (or not
+       a string) yields no own key for it: ``ui_preferences`` answers without it, ``ui_preference_defaults.theme`` is
+       the instance's global ``default_theme`` when that is a known theme, otherwise ``auto``.
+    3. Reading never writes: the row and the global defaults stay as left after the login, ``GET /settings/user`` and a
+       ``PUT /settings/user`` without ``ui_preferences`` — a later version that knows the value shows it again.
+    4. ``PUT /settings/user`` without ``ui_preferences`` answers 200, saves the rest and keeps the stored text
+       (SET-A11-04); with ``ui_preferences.theme`` it merges the new value into the readable part (SET-A11-05).
+    5. ``POST /auth/login`` answers 200 with ``ui_preferences`` as above, and the session works (SET-A11-02/03).
+    6. A known stored theme is shown as stored (SET-A11-06).
+    7. Each read of an unknown stored value logs one structlog WARNING through
+       ``backend.app.services.accounts.settings_service`` carrying ``user_id``, ``key`` and ``stored`` — the stored value
+       cut to its first 20 characters (SET-A11-07); the read of a known one logs none.
+
+    Write-safe: every account and setting lives in the test's own tmp_path (theme_instance); no request reaches the lane.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_known_values_are_those_of_the_schema(self):
+        """SET-A11-01 — GUARD: the themes the app knows are exactly the values of ``UIPreferences.theme``'s Literal — light,
+        dark, auto — and the line shapes segments, steps, spline; the values these cases hand-edit are none of them."""
+        print_section("SET-A11-01: the known values are the schema's Literals")
+        assert set(_KNOWN_THEMES) == {"light", "dark", "auto"}, f"UIPreferences.theme must be Literal['light', 'dark', 'auto']: its values are {_KNOWN_THEMES}"
+        assert set(_KNOWN_SHAPES) == {"segments", "steps", "spline"}, f"UIPreferences.chart_line_shape must be Literal['segments', 'steps', 'spline']: {_KNOWN_SHAPES}"
+        hand_edited = {_UNKNOWN_THEME, _LONG_UNKNOWN_THEME, _UNKNOWN_DEFAULT_THEME}
+        assert not hand_edited & set(_KNOWN_THEMES), f"Premise: {sorted(hand_edited)} must be themes the app does not know: {_KNOWN_THEMES}"
+        assert len(_LONG_UNKNOWN_THEME) > 20, f"Premise: {_LONG_UNKNOWN_THEME!r} must be longer than 20 characters"
+        print_success(f"✓ Known themes {_KNOWN_THEMES}, shapes {_KNOWN_SHAPES}; {sorted(hand_edited)} unknown")
+
+    @pytest.mark.parametrize(("default_theme", "shown"), _SHOWN_FOR_AN_UNKNOWN_THEME)
+    @pytest.mark.parametrize("raw", _UNREADABLE_ROWS)
+    @pytest.mark.asyncio
+    async def test_sign_in_leaves_out_an_unreadable_preference_and_writes_nothing(self, theme_instance: _ThemeInstance, raw: str, default_theme: str, shown: str):
+        """SET-A11-02: an account whose stored ``ui_preferences`` is unreadable (unknown theme value, not JSON, a JSON array,
+        a non-string theme) signs in: ``POST /auth/login`` answers 200, ``user_settings.ui_preferences`` is ``{}`` and
+        ``ui_preference_defaults.theme`` = ``shown`` — the global default_theme when the app knows it, otherwise auto —,
+        with one session cookie, and ``GET /settings/user`` with it answers the same. Neither wrote anything."""
+        print_section(f"SET-A11-02: sign-in with the stored {raw!r}, default_theme {default_theme!r}: defaults.theme {shown!r}")
+        account = await _theme_account(theme_instance)
+        await _hand_edit_default_theme(theme_instance, default_theme)
+        await _hand_edit_ui_preferences(theme_instance, account.user_id, raw)
+        before = await _theme_stored(theme_instance, account.user_id)
+
+        login = await _theme_login(theme_instance, account)
+
+        assert login.status_code == 200, f"An unreadable stored preference must not stop the sign-in: POST /auth/login answered {login.status_code} {login.text}"
+        own, defaults = _own_and_defaults(login.json().get("user_settings") or {})
+        assert own == {}, f"The login must leave the unreadable preference out: ui_preferences {own}"
+        assert (defaults or {}).get("theme") == shown, f"ui_preference_defaults.theme must be {shown!r} (default_theme {default_theme!r}): {defaults}"
+        cookies = _session_cookie_values(login)
+        assert len(cookies) == 1 and cookies[0], f"The login must set one session cookie: {login.headers.get_list('set-cookie')}"
+        reread = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookies[0])
+        assert reread.status_code == 200 and _own_and_defaults(reread.json()) == (own, defaults), f"The session must work: GET /settings/user with its cookie must answer 200 with the same preferences: {reread.status_code} {reread.text}"
+        after = await _theme_stored(theme_instance, account.user_id)
+        assert after == before, f"Reading never writes: the row and the defaults must stay as the hand edit left them: before {before}, after {after}"
+        assert "theme" not in login.json().get("user_settings", {}), "theme is no top-level field of the login's user_settings"
+        print_success(f"✓ Signed in, no own key, defaults.theme {shown!r}; {raw!r} still stored")
+
+    @pytest.mark.parametrize(("default_theme", "shown"), _SHOWN_FOR_AN_UNKNOWN_THEME)
+    @pytest.mark.parametrize("raw", _UNREADABLE_ROWS)
+    @pytest.mark.asyncio
+    async def test_get_settings_leaves_out_an_unreadable_preference_and_writes_nothing(self, theme_instance: _ThemeInstance, raw: str, default_theme: str, shown: str):
+        """SET-A11-03: a signed-in account whose stored preferences became unreadable — a hand edit after its sign-in —
+        reads its settings: 200, the stored language, currency and avatar, ``ui_preferences`` ``{}``, the defaults
+        carrying ``shown`` as theme and the shipped line shape; the row and the global defaults unchanged."""
+        print_section(f"SET-A11-03: GET /settings/user with the stored {raw!r}, default_theme {default_theme!r}: defaults.theme {shown!r}")
+        account = await _theme_account(theme_instance)
+        cookie = await _theme_signed_in(theme_instance, account)
+        await _hand_edit_default_theme(theme_instance, default_theme)
+        await _hand_edit_ui_preferences(theme_instance, account.user_id, raw)
+        before = await _theme_stored(theme_instance, account.user_id)
+
+        answer = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)
+
+        assert answer.status_code == 200, f"An unreadable stored preference must not break GET /settings/user: {answer.status_code} {answer.text}"
+        expected = {
+            "language": _THEME_ACCOUNT_LANGUAGE,
+            "base_currency": _THEME_ACCOUNT_CURRENCY,
+            "avatar_url": None,
+            "ui_preferences": {},
+            "ui_preference_defaults": {"theme": shown, "chart_line_shape": before[_DEFAULT_SHAPE_KEY]},
+        }
+        assert answer.json() == expected, f"Expected {expected}, got {answer.json()}"
+        after = await _theme_stored(theme_instance, account.user_id)
+        assert after == before, f"Reading never writes: before {before}, after {after}"
+        print_success(f"✓ 200, no own key, defaults.theme {shown!r}; {raw!r} still stored")
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_value_leaves_out_only_its_own_key(self, theme_instance: _ThemeInstance):
+        """SET-A11-03b: the rule is per key — a stored ``{"theme": "sepia", "chart_line_shape": "steps"}`` answers
+        ``ui_preferences`` ``{"chart_line_shape": "steps"}``: the readable key is kept, the unknown theme left out; the row is untouched."""
+        print_section("SET-A11-03b: an unknown theme does not hide a readable line shape")
+        raw = '{"chart_line_shape":"steps","theme":"sepia"}'
+        account = await _theme_account(theme_instance, raw)
+        cookie = await _theme_signed_in(theme_instance, account)
+        before = await _theme_stored(theme_instance, account.user_id)
+
+        answer = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)
+
+        assert answer.status_code == 200 and answer.json()["ui_preferences"] == {"chart_line_shape": "steps"}, f"Only the unknown key is left out: {answer.status_code} {answer.text}"
+        assert await _theme_stored(theme_instance, account.user_id) == before, "Reading never writes"
+        print_success("✓ steps kept, sepia left out, row untouched")
+
+    @pytest.mark.parametrize(("default_theme", "shown"), _SHOWN_FOR_AN_UNKNOWN_THEME)
+    @pytest.mark.asyncio
+    async def test_put_without_preferences_saves_the_rest_and_keeps_the_stored_text(self, theme_instance: _ThemeInstance, default_theme: str, shown: str):
+        """SET-A11-04: a signed-in account whose stored theme is unknown saves ``{"language": "it"}``: 200, the language saved
+        and answered, ``ui_preferences`` ``{}``, the defaults carrying ``shown``; the stored text stays as it was, and
+        nothing else of the row or of the global defaults changes (``updated_at`` aside: the row was written)."""
+        print_section(f"SET-A11-04: PUT /settings/user without ui_preferences, stored {_UNKNOWN_THEME!r}, default_theme {default_theme!r}")
+        account = await _theme_account(theme_instance)
+        cookie = await _theme_signed_in(theme_instance, account)
+        await _hand_edit_default_theme(theme_instance, default_theme)
+        raw = f'{{"theme":"{_UNKNOWN_THEME}"}}'
+        await _hand_edit_ui_preferences(theme_instance, account.user_id, raw)
+        before = await _theme_stored(theme_instance, account.user_id)
+
+        answer = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"language": "it"})
+
+        after = await _theme_stored(theme_instance, account.user_id)
+        assert answer.status_code == 200, f"An unknown stored theme must not break PUT /settings/user: {answer.status_code} {answer.text}; the row afterwards {after}"
+        body = answer.json()
+        assert (body["language"], body["ui_preferences"], body["ui_preference_defaults"]["theme"]) == ("it", {}, shown), f"The language saved, the theme left out, defaults.theme {shown!r}: {body}"
+        assert (after["language"], after["ui_preferences"]) == ("it", raw), f"The language must be saved and the stored text kept: {after}"
+        untouched = ("base_currency", "avatar_url", "created_at", _DEFAULT_THEME_KEY, _DEFAULT_SHAPE_KEY)
+        assert {key: after[key] for key in untouched} == {key: before[key] for key in untouched}, f"Nothing else may change: before {before}, after {after}"
+        print_success(f"✓ 200, language saved, no own theme; {raw!r} still stored")
+
+    @pytest.mark.parametrize("raw", [pytest.param(f'{{"theme":"{_UNKNOWN_THEME}"}}', id="unknown-value"), pytest.param("this is not json", id="not-json")])
+    @pytest.mark.asyncio
+    async def test_put_with_a_theme_replaces_an_unreadable_stored_one(self, theme_instance: _ThemeInstance, raw: str):
+        """SET-A11-05: a signed-in account whose stored preferences are unreadable saves ``{"ui_preferences": {"theme": "dark"}}``:
+        200, dark shown as own and stored as ``{"theme":"dark"}``, and the next ``GET /settings/user`` shows dark; neither
+        request logs a warning of the settings service, the theme read being a known one. The global default_theme is
+        auto, so the dark shown is the one stored, not the default."""
+        print_section(f"SET-A11-05: PUT ui_preferences.theme dark over the stored {raw!r}")
+        account = await _theme_account(theme_instance)
+        cookie = await _theme_signed_in(theme_instance, account)
+        await _hand_edit_default_theme(theme_instance, "auto")
+        await _hand_edit_ui_preferences(theme_instance, account.user_id, raw)
+
+        with _settings_service_log() as put_events:
+            answer = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {"theme": "dark"}})
+        with _settings_service_log() as read_events:
+            reread = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)
+
+        assert answer.status_code == 200 and answer.json()["ui_preferences"] == {"theme": "dark"}, f"PUT with theme dark must answer 200 with dark: {answer.status_code} {answer.text}"
+        assert await _stored_ui_preferences_text(theme_instance, account.user_id) == '{"theme":"dark"}', "The theme sent must replace the unreadable stored text"
+        assert reread.status_code == 200 and reread.json()["ui_preferences"] == {"theme": "dark"}, f"The next read must show dark: {reread.status_code} {reread.text}"
+        put_warnings = _theme_warnings(put_events, "PUT /settings/user with theme")
+        if raw.startswith("{"):
+            assert put_warnings == [], "The PUT reads the theme it stored, a known one: no warning"
+        else:
+            assert len(put_warnings) == 1 and "key" not in put_warnings[0], f"Only the merge's read of the text that is not JSON warns, naming no key: {put_warnings}"
+        assert _theme_warnings(read_events, "GET /settings/user") == [], "A known stored theme is read without a warning"
+        print_success("✓ dark stored and shown, no warning")
+
+    @pytest.mark.parametrize(("stored", "default_theme"), _KNOWN_STORED_THEMES)
+    @pytest.mark.asyncio
+    async def test_a_known_stored_theme_is_shown_as_stored(self, theme_instance: _ThemeInstance, stored: str, default_theme: str):
+        """SET-A11-06: an account whose stored theme is a known one, the global default another known one. The login,
+        ``GET /settings/user`` and ``PUT /settings/user`` without ``ui_preferences`` each answer 200 with ``ui_preferences``
+        ``{"theme": stored}`` — never the default —, none logs a warning of the settings service, and the row keeps its text."""
+        print_section(f"SET-A11-06: the stored theme {stored!r} is shown as own (default_theme {default_theme!r})")
+        raw = jsonlib.dumps({"theme": stored}, separators=(",", ":"))
+        account = await _theme_account(theme_instance, raw)
+        await _hand_edit_default_theme(theme_instance, default_theme)
+
+        with _settings_service_log() as login_events:
+            login = await _theme_login(theme_instance, account)
+        assert login.status_code == 200, f"Setup: {account.username} signs in: {login.status_code} {login.text}"
+        cookies = _session_cookie_values(login)
+        assert len(cookies) == 1 and cookies[0], f"The login must set one session cookie: {login.headers.get_list('set-cookie')}"
+        with _settings_service_log() as read_events:
+            reread = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookies[0])
+        with _settings_service_log() as put_events:
+            saved = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookies[0], json={"language": "it"})
+
+        shown = {
+            "POST /auth/login": (login.status_code, (login.json().get("user_settings") or {}).get("ui_preferences")),
+            "GET /settings/user": (reread.status_code, reread.json().get("ui_preferences")),
+            "PUT /settings/user without ui_preferences": (saved.status_code, saved.json().get("ui_preferences")),
+        }
+        assert shown == dict.fromkeys(shown, (200, {"theme": stored})), f"A known stored theme is shown as own, {stored!r}, never as the default {default_theme!r}: {shown}"
+        for request, events in (("POST /auth/login", login_events), ("GET /settings/user", read_events), ("PUT /settings/user without ui_preferences", put_events)):
+            assert _theme_warnings(events, request) == [], f"{request}: a known stored theme is read without a warning"
+        assert await _stored_ui_preferences_text(theme_instance, account.user_id) == raw, f"The stored text must stay {raw!r}"
+        print_success(f"✓ {stored!r} shown three times, no warning")
+
+    @pytest.mark.asyncio
+    async def test_each_read_of_an_unknown_stored_theme_logs_one_warning(self, theme_instance: _ThemeInstance):
+        """SET-A11-07: a stored theme longer than 20 characters. The login, ``GET /settings/user`` and ``PUT /settings/user``
+        without ``ui_preferences`` each log exactly one WARNING through ``backend.app.services.accounts.settings_service``,
+        carrying the account's ``user_id``, ``key`` = theme and ``stored`` = the stored value's first 20 characters."""
+        print_section(f"SET-A11-07: one warning per read of the stored theme {_LONG_UNKNOWN_THEME!r}")
+        account = await _theme_account(theme_instance)
+        await _hand_edit_default_theme(theme_instance, "dark")
+        await _hand_edit_ui_preferences(theme_instance, account.user_id, jsonlib.dumps({"theme": _LONG_UNKNOWN_THEME}))
+        expected = {"user_id": account.user_id, "key": "theme", "stored": _LONG_UNKNOWN_THEME[:20]}
+
+        with _settings_service_log() as login_events:
+            login = await _theme_login(theme_instance, account)
+        assert login.status_code == 200, f"An unknown stored theme must not stop the sign-in: {login.status_code} {login.text}"
+        _assert_one_theme_warning(login_events, expected, "POST /auth/login")
+        cookies = _session_cookie_values(login)
+        assert len(cookies) == 1 and cookies[0], f"The login must set one session cookie: {login.headers.get_list('set-cookie')}"
+
+        with _settings_service_log() as read_events:
+            reread = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookies[0])
+        assert reread.status_code == 200, f"GET /settings/user must answer 200: {reread.status_code} {reread.text}"
+        _assert_one_theme_warning(read_events, expected, "GET /settings/user")
+
+        with _settings_service_log() as put_events:
+            saved = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookies[0], json={"language": "it"})
+        assert saved.status_code == 200, f"PUT /settings/user without ui_preferences must answer 200: {saved.status_code} {saved.text}"
+        _assert_one_theme_warning(put_events, expected, "PUT /settings/user without ui_preferences")
+        print_success(f"✓ Three reads, three warnings carrying {expected}")
+
+
+class TestUserUiPreferencesMerge:
+    """Lot UIP: ``PUT /settings/user`` merges ``ui_preferences`` key by key (SET-UIP-01 to SET-UIP-10).
+
+    A key with a value sets it, a key sent as ``null`` removes it, a key left out is kept; the merged JSON is stored compact
+    with sorted keys, an empty result as NULL; a stored key this version does not know survives; a write that would leave
+    the text over ``UI_PREFERENCES_MAX_BYTES`` answers 422 and saves nothing; an unknown key, a top-level ``theme`` and a
+    value outside the enum answer 422. All on the private instance of ``theme_instance``: the stored text is read by SQL.
+    """
+
+    async def _signed_in_account(self, instance: _ThemeInstance, raw: Optional[str] = None) -> tuple[_ThemeAccount, str]:
+        account = await _theme_account(instance, raw)
+        return account, await _theme_signed_in(instance, account)
+
+    @pytest.mark.asyncio
+    async def test_two_puts_keep_both_keys(self, theme_instance: _ThemeInstance):
+        """SET-UIP-01: set the theme, then set chart_line_shape in a second PUT: both are kept, answered, and stored compact with sorted keys."""
+        print_section("SET-UIP-01: PUT theme, then PUT chart_line_shape: both kept")
+        account, cookie = await self._signed_in_account(theme_instance)
+
+        first = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {"theme": "dark"}})
+        second = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {"chart_line_shape": "spline"}})
+
+        assert first.status_code == 200 and first.json()["ui_preferences"] == {"theme": "dark"}, f"{first.status_code} {first.text}"
+        assert second.status_code == 200 and second.json()["ui_preferences"] == {"theme": "dark", "chart_line_shape": "spline"}, f"{second.status_code} {second.text}"
+        assert await _stored_ui_preferences_text(theme_instance, account.user_id) == '{"chart_line_shape":"spline","theme":"dark"}', "compact JSON, sorted keys"
+        reread = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)
+        assert reread.json()["ui_preferences"] == {"theme": "dark", "chart_line_shape": "spline"}
+        print_success("✓ both keys kept and stored sorted")
+
+    @pytest.mark.asyncio
+    async def test_null_removes_one_key_and_keeps_the_other(self, theme_instance: _ThemeInstance):
+        """SET-UIP-02: ``{"theme": null}`` removes the theme (it follows its global default again) and leaves chart_line_shape; a key left out is kept."""
+        print_section("SET-UIP-02: null removes one key, a key left out is kept")
+        account, cookie = await self._signed_in_account(theme_instance, '{"chart_line_shape":"steps","theme":"light"}')
+
+        answer = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {"theme": None}})
+        assert answer.status_code == 200 and answer.json()["ui_preferences"] == {"chart_line_shape": "steps"}, f"{answer.status_code} {answer.text}"
+        assert await _stored_ui_preferences_text(theme_instance, account.user_id) == '{"chart_line_shape":"steps"}'
+
+        untouched = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {}})
+        assert untouched.status_code == 200 and untouched.json()["ui_preferences"] == {"chart_line_shape": "steps"}, "an empty ui_preferences names no key: nothing changes"
+        assert await _stored_ui_preferences_text(theme_instance, account.user_id) == '{"chart_line_shape":"steps"}'
+        print_success("✓ theme removed, shape kept")
+
+    @pytest.mark.asyncio
+    async def test_an_empty_result_is_stored_null(self, theme_instance: _ThemeInstance):
+        """SET-UIP-03: removing the last key stores NULL (not ``{}``), and the read answers ``{}``."""
+        print_section("SET-UIP-03: an empty result is stored NULL")
+        account, cookie = await self._signed_in_account(theme_instance, '{"theme":"dark"}')
+
+        answer = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {"theme": None}})
+
+        assert answer.status_code == 200 and answer.json()["ui_preferences"] == {}, f"{answer.status_code} {answer.text}"
+        assert await _stored_ui_preferences_text(theme_instance, account.user_id) is None, "the empty result must be stored NULL"
+        print_success("✓ NULL stored")
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            pytest.param({"ui_preferences": {"colour": "red"}}, id="unknown-key-inside"),
+            pytest.param({"theme": "dark"}, id="top-level-theme"),
+            pytest.param({"ui_preferences": {"theme": "sepia"}}, id="theme-outside-enum"),
+            pytest.param({"ui_preferences": {"chart_line_shape": "curvy"}}, id="shape-outside-enum"),
+            pytest.param({"ui_preferences": {"theme": "dark", "colour": "red"}}, id="valid-key-with-unknown-key"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_an_invalid_request_is_422_and_saves_nothing(self, theme_instance: _ThemeInstance, payload: dict[str, Any]):
+        """SET-UIP-04/05/06: an unknown key inside ``ui_preferences``, a top-level ``theme`` and a value outside the enum answer 422; the row is untouched (a valid key sent beside an invalid one is not saved either)."""
+        print_section(f"SET-UIP-04: PUT {payload} → 422, nothing saved")
+        account, cookie = await self._signed_in_account(theme_instance, '{"chart_line_shape":"steps"}')
+        before = await _theme_stored(theme_instance, account.user_id)
+
+        answer = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json=payload)
+
+        assert answer.status_code == 422, f"Expected 422, got {answer.status_code}: {answer.text}"
+        assert await _theme_stored(theme_instance, account.user_id) == before, "A refused request must save nothing"
+        print_success("✓ 422, row untouched")
+
+    @pytest.mark.asyncio
+    async def test_get_returns_only_own_keys_and_the_defaults_follow_the_globals(self, theme_instance: _ThemeInstance):
+        """SET-UIP-07: a new account owns no key (``{}``); ``ui_preference_defaults`` mirrors the global ``default_theme`` and
+        ``default_chart_line_shape`` rows, and follows them when they change; an own key is returned and does not change the defaults."""
+        print_section("SET-UIP-07: own keys only, defaults follow the global rows")
+        account, cookie = await self._signed_in_account(theme_instance)
+        await _hand_edit_global(theme_instance, _DEFAULT_THEME_KEY, "dark")
+        await _hand_edit_global(theme_instance, _DEFAULT_SHAPE_KEY, "steps")
+
+        first = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)
+        assert first.status_code == 200
+        assert _own_and_defaults(first.json()) == ({}, {"theme": "dark", "chart_line_shape": "steps"}), f"{first.text}"
+
+        await _hand_edit_global(theme_instance, _DEFAULT_THEME_KEY, "light")
+        await _hand_edit_global(theme_instance, _DEFAULT_SHAPE_KEY, "spline")
+        put = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {"theme": "auto"}})
+        assert put.status_code == 200
+        assert _own_and_defaults(put.json()) == ({"theme": "auto"}, {"theme": "light", "chart_line_shape": "spline"}), f"{put.text}"
+
+        await _hand_edit_global(theme_instance, _DEFAULT_SHAPE_KEY, "curvy")
+        unknown_default = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)
+        assert unknown_default.json()["ui_preference_defaults"]["chart_line_shape"] == "segments", "a global shape the app does not know falls back to segments"
+        print_success("✓ defaults mirror the global rows, unknown falls back")
+
+    @pytest.mark.asyncio
+    async def test_a_stored_unknown_key_survives_a_merge(self, theme_instance: _ThemeInstance):
+        """SET-UIP-08: a key a later version wrote (here ``zoom``) is kept as it is by a merge of another key, and never answered."""
+        print_section("SET-UIP-08: a stored unknown key survives a merge")
+        account, cookie = await self._signed_in_account(theme_instance, '{"zoom":{"level":3}}')
+
+        answer = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {"theme": "dark"}})
+
+        assert answer.status_code == 200 and answer.json()["ui_preferences"] == {"theme": "dark"}, "the unknown key is never answered"
+        stored = jsonlib.loads(await _stored_ui_preferences_text(theme_instance, account.user_id))
+        assert stored == {"zoom": {"level": 3}, "theme": "dark"}, f"the unknown key must survive: {stored}"
+        removal = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {"theme": None}})
+        assert removal.status_code == 200
+        assert jsonlib.loads(await _stored_ui_preferences_text(theme_instance, account.user_id)) == {"zoom": {"level": 3}}, "removing the last known key leaves the unknown one, not NULL"
+        print_success("✓ zoom kept through both merges")
+
+    @pytest.mark.asyncio
+    async def test_a_merge_over_the_size_cap_is_422_and_leaves_the_row_untouched(self, theme_instance: _ThemeInstance):
+        """SET-UIP-09: a row holding a big unknown key (over ``UI_PREFERENCES_MAX_BYTES``, written by SQL) makes a PUT of the theme answer 422 and leaves the row untouched; GET still answers 200."""
+        print_section("SET-UIP-09: size cap")
+        raw = jsonlib.dumps({"blob": "x" * (UI_PREFERENCES_MAX_BYTES + 1)}, separators=(",", ":"), sort_keys=True)
+        assert len(raw.encode("utf-8")) > UI_PREFERENCES_MAX_BYTES, "Premise: the stored text is over the cap"
+        account, cookie = await self._signed_in_account(theme_instance, raw)
+        before = await _theme_stored(theme_instance, account.user_id)
+
+        answer = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"ui_preferences": {"theme": "dark"}})
+
+        assert answer.status_code == 422, f"Expected 422, got {answer.status_code}: {answer.text}"
+        assert await _theme_stored(theme_instance, account.user_id) == before, "A refused request must save nothing (updated_at included)"
+        assert (await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)).status_code == 200, "the row is still readable"
+        print_success("✓ 422, row untouched")
+
+    @pytest.mark.asyncio
+    async def test_a_new_row_made_by_get_holds_no_preference(self, theme_instance: _ThemeInstance):
+        """SET-UIP-10: an account without a ``user_settings`` row gets one from ``GET /settings/user`` with ``ui_preferences`` NULL — no theme written."""
+        print_section("SET-UIP-10: a new row writes no preference")
+        username = f"theme_{uuid.uuid4().hex[:12]}"
+        async with AsyncSession(theme_instance.engine, expire_on_commit=False) as session:
+            user = User(username=username, email=f"{username}@example.com", hashed_password=auth_service.hash_password(_THEME_PASSWORD), is_active=True)
+            session.add(user)
+            await session.commit()
+        account = _ThemeAccount(user_id=user.id, username=username)
+        cookie = await _theme_signed_in(theme_instance, account)
+
+        answer = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)
+
+        assert answer.status_code == 200 and answer.json()["ui_preferences"] == {}, f"{answer.status_code} {answer.text}"
+        assert await _stored_ui_preferences_text(theme_instance, account.user_id) is None, "the new row must hold NULL"
+        print_success("✓ NULL")
+
+
+class TestDefaultChartLineShapeSetting:
+    """Lot UIP: the global setting ``default_chart_line_shape`` accepts segments/steps/spline and refuses anything else (SET-UIP-11)."""
+
+    @pytest.mark.asyncio
+    async def test_accepted_and_refused_values(self, test_server):
+        """SET-UIP-11: PATCH /settings/global/bulk accepts each of segments, steps, spline and ``GET /settings/user``'s
+        ``ui_preference_defaults.chart_line_shape`` follows it; ``curvy`` answers 422 and the stored value stays; the original is restored in ``finally``."""
+        print_section("SET-UIP-11: default_chart_line_shape")
+        key = "default_chart_line_shape"
+        async with httpx.AsyncClient() as admin, httpx.AsyncClient() as user:
+            await get_admin_session(admin)
+            _, _, session = await create_user_simple(user)
+            assert session is not None, "Failed to create test user"
+            originals = await _read_global_values(admin, [key])
+            try:
+                for shape in ("segments", "steps", "spline"):
+                    await _assert_saved(admin, [(key, shape)], {key: shape})
+                    own = await user.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+                    assert own.status_code == 200 and own.json()["ui_preference_defaults"]["chart_line_shape"] == shape, f"{shape}: {own.status_code} {own.text}"
+                await _assert_refused_and_nothing_saved(admin, [(key, "curvy")], {key: "spline"}, status=422, named=[key])
+            finally:
+                await _restore_global_values(admin, originals)
+        print_success("✓ three shapes accepted, curvy refused, original restored")
+
+    @pytest.mark.asyncio
+    async def test_default_theme_is_reflected_in_the_defaults(self, test_server):
+        """SET-UIP-12: PATCH /settings/global/bulk ``default_theme`` shows in ``ui_preference_defaults.theme`` of a user who owns no theme, never in ``ui_preferences``; restored in ``finally``."""
+        print_section("SET-UIP-12: default_theme reaches ui_preference_defaults")
+        key = "default_theme"
+        async with httpx.AsyncClient() as admin, httpx.AsyncClient() as user:
+            await get_admin_session(admin)
+            _, _, session = await create_user_simple(user)
+            assert session is not None, "Failed to create test user"
+            originals = await _read_global_values(admin, [key])
+            try:
+                for theme in (_other_value(_THEMES, originals[key]), originals[key]):
+                    await _assert_saved(admin, [(key, theme)], {key: theme})
+                    own = await user.get(f"{API_BASE}/settings/user", timeout=TIMEOUT)
+                    body = own.json()
+                    assert own.status_code == 200 and body["ui_preference_defaults"]["theme"] == theme and "theme" not in body["ui_preferences"], f"{theme}: {own.text}"
+            finally:
+                await _restore_global_values(admin, originals)
+        print_success("✓ defaults follow default_theme")

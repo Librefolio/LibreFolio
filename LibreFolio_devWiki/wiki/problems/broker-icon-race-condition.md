@@ -1,9 +1,9 @@
 ---
 title: "Broker icon race condition (ensurePluginIconsLoaded)"
 category: problem
-status: open
+status: resolved
 date: 2026-06-25
-updated: 2026-10-12
+updated: 2026-11-07
 tags: [frontend, broker-icon, race-condition, async, plugin-icons, svelte5]
 related:
   - sources/phase-final-bugs-2026-06-25
@@ -42,11 +42,11 @@ The issue: the 3-step icon chain `icon_url → portal_url/favicon → plugin_ico
 
 Both forms are closed in the places where they were seen in June:
 
-- **Form A** — commit `7bae73b74` (2026-06-25, the QA session that found it): `files/+page.svelte` awaits
+- **Form A** — commit `521d88bf1` (2026-06-25, the QA session that found it): `files/+page.svelte` awaits
   `ensurePluginIconsLoaded()`, and `BrokerInfo` gained `default_import_plugin`, so a broker known only by its plugin
   reaches the plugin step.
 - **Form B** — the transactions page awaits the cache and then sets `pluginIconsReady` (option 2 above). The other
-  icons go through the shared reactive chain `brokerIconChain.svelte.ts` (`ddffb5273`, 2026-06-26), which updates its
+  icons go through the shared reactive chain `brokerIconChain.svelte.ts` (`18399d90c`, 2026-06-26), which updates its
   own state when the cache arrives, so the derived URL list is computed again. `ensureBrokersLoaded()` and
   `refreshAllBrokers()` in `brokerStore.ts` start the cache for every consumer — the app-level call that Prevention
   asks for.
@@ -66,7 +66,7 @@ the broker and merges it into the store; but its icon chain reads only the props
 `pluginCode`), so the store fills up and the props never change. Assigned to workstream I, in the UI polish lot.
 
 *Update (train 72)*: both symptoms had another cause. A late `error` event from a replaced `<img>` marked the plugin
-icon as failed, and the plugin state started from `null` even with a warm cache; fixed in `2412c3fe4` —
+icon as failed, and the plugin state started from `null` even with a warm cache; fixed in `db0277a99` —
 [[problems/late-img-error-marked-the-visible-icon-failed]]. The diagnosis above was not the cause; it survives as the
 latent C-56 below.
 
@@ -77,6 +77,11 @@ after a failed first request, so plugin icons stay missing until the page reload
 
 *2026-10-13*: another way to the fallback icon, from outside the app — a broker's site that answers the browser with a
 bot check: [[problems/schwab-favicon-blocked-by-orb]].
+
+*2026-11-07 lint — status `open` → `resolved`*: every symptom seen is fixed (Form A/B in June, the two of 2026-10-12
+in `db0277a99`). **C-57** is fixed too: since `eb88bdd3c` (2026-10-30, W6-8) a failed first request leaves the cache
+empty (`null`), so the next `ensurePluginIconsLoaded()` asks again. Only **C-56** stays, latent: `BrokerIcon.svelte`
+still reads only its props, which every surface fills today.
 
 ## Prevention
 
@@ -92,10 +97,10 @@ Visual only — colored dots instead of brand icons. Confusing UX when users hav
 | Role | Path |
 |------|------|
 | brokerHelpers | `frontend/src/lib/utils/broker/brokerHelpers.ts` |
-| FilesTable | `frontend/src/lib/components/files/FilesTable.svelte` |
+| FilesTable | `frontend/src/lib/features/files/FilesTable.svelte` |
 | files page (missing call) | `frontend/src/routes/(app)/files/+page.svelte` |
 | transactions page (race) | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | dashboard page (race) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | The shared reactive icon chain (Form B fix) | `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts` |
 | The store that starts the plugin-icon cache; `ensureBrokerIconFieldsLoaded` | `frontend/src/lib/stores/reference/brokerStore.ts` |
-| C-56, latent: the chain reads only the props | `frontend/src/lib/components/brokers/BrokerIcon.svelte` |
+| C-56, latent: the chain reads only the props | `frontend/src/lib/components/ui/display/BrokerIcon.svelte` |

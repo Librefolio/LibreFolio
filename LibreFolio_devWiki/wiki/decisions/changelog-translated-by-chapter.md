@@ -28,7 +28,7 @@ dividere prima i cataloghi» (developer, 2026-10-12).
 **M's contract**: `CHANGELOG.{it,fr,es}.md` at the repository root; their `## [x.y.z] - date` lines identical to the
 English ones; a chapter not yet translated is simply absent from the file.
 
-**T's frontend** (CL of plan 43, approved by the coordinator; `8f67f89de`, with the key `a8691bd27`):
+**T's frontend** (CL of plan 43, approved by the coordinator; `7d5a59980`, with the key `260153707`):
 
 - **Loading.** English stays inline in the bundle. The translations come from a lazy
   `import.meta.glob('…/CHANGELOG.[a-z][a-z].md', {query: '?raw'})`: one chunk per language, fetched only when the modal
@@ -54,17 +54,17 @@ English ones; a chapter not yet translated is simply absent from the file.
 
 ## Consequences
 
-- *Corrected in train 66*: this page said, at `35c4242f3`, that no `CHANGELOG.<xx>.md` existed yet. M's files landed
-  in `4325e03d4` (train 66): `CHANGELOG.{it,fr,es}.md`, every chapter, [1.2.0] included, produced by the pipeline of
+- *Corrected in train 66*: this page said, at `d73ac21a6`, that no `CHANGELOG.<xx>.md` existed yet. M's files landed
+  in `e85765e21` (train 66): `CHANGELOG.{it,fr,es}.md`, every chapter, [1.2.0] included, produced by the pipeline of
   [[decisions/changelog-translated-by-heading-pieces]]. The E2E reads whichever file is on disk, so it held before and
-  holds after. The CHANGELOG announces it under ✨: «The changelog speaks your language» (`b91d6d902`).
+  holds after. The CHANGELOG announces it under ✨: «The changelog speaks your language» (`334704cd5`).
 - The developer's «andremo in append»: a chapter added later in English simply shows in English until its
   translation is appended.
-- `dev.py` treats `CHANGELOG*.md` as inputs of the frontend build (`ee8a19384`); deleting a translation needs an
+- `dev.py` treats `CHANGELOG*.md` as inputs of the frontend build (`8e888469a`); deleting a translation needs an
   explicit `front build`, since modification times cannot see a deletion.
 - The gallery's `changelog-modal-search` shot searched «Added», which a translated chapter no longer contains; M made it
-  search a word the same in the four languages, `CHANGELOG_SEARCH_TERM = 'Docker'` (`416faf60d`).
-- The user guide says the modal follows the interface language and labels untranslated releases (`b02bf6c54`).
+  search a word the same in the four languages, `CHANGELOG_SEARCH_TERM = 'Docker'` (`dfc983b09`).
+- The user guide says the modal follows the interface language and labels untranslated releases (`b7641a58f`).
 
 ## Source files
 
@@ -75,6 +75,6 @@ English ones; a chapter not yet translated is simply absent from the file.
 | HTML sink gate | `frontend/src/htmlSink.gate.test.ts` |
 | E2E | `frontend/e2e/layout/changelog-locale.spec.ts` |
 | Rebuild on a changelog change | `scripts/cli_base.py` |
-| The label key (English catalogue) | `frontend/src/lib/i18n/base/en.json` |
+| The label key (English catalogue; in the base catalogue at filing, moved to the app catalogue by `e47f45c98`) | `frontend/src/lib/i18n/app/en.json` |
 | Journal (CL, plan 43) | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |
 | Journal (the developer's approval, §16) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` |

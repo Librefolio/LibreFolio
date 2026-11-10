@@ -2,7 +2,7 @@
 title: "Release 1.2.0 (2026-10-14): what it brings, the decisions of its cycle, what it leaves open, how it was verified"
 category: source
 source_type: release
-status: ready-for-tag
+status: released
 date_ingested: 2026-10-13
 original_path: CHANGELOG.md
 tags: [release, release-1.2, changelog, features, decisions, open-problems, verification, backlog]
@@ -15,18 +15,17 @@ related:
 
 # Source: release 1.2.0
 
-> **Released on 2026-10-14, ready for the tag.** Every count on this page is the state of `dev_release2` at
-> `a28beed92`. Two rows of the last table — the tagged commit and the release pipeline's run — exist only after
-> publication: **the next ingest fills them**.
+> **Released on 2026-10-14**: tag `v1.2.0` on `0a7c2c612` (`main`), the same tree as `556e68405` on `dev_release2`.
+> Every count on this page is the state of `dev_release2` at `bcf9ed49b`.
 
 ## Summary
 
 1.2.0 is the second feature release after 1.0, built on `dev_release2` after `v1.1.0` (2026-09-07) and dated
 2026-10-14. Its chapter in `CHANGELOG.md` was checked line by line against the code and against `v1.1.0`
-(`60f734e08`, under the rules of [[decisions/changelog-entry-rules]]), then completed up to the release. At
-`a28beed92` it holds **25 ✨ Added** entries (with 27 sub-items), **152 🐛 Fixed** in 13 groups (9 of them 🔒
+(`ed85502e2`, under the rules of [[decisions/changelog-entry-rules]]), then completed up to the release. At
+`bcf9ed49b` it holds **25 ✨ Added** entries (with 27 sub-items), **152 🐛 Fixed** in 13 groups (9 of them 🔒
 Security), **32 🔄 Changed** and **7 ⚠️ Breaking changes**, under the header `## [1.2.0] - 2026-10-14`. The line
-«Preparing v1.2.0» gave way to the approved introduction (`a28beed92`), quoted here as it stands in the chapter:
+«Preparing v1.2.0» gave way to the approved introduction (`bcf9ed49b`), quoted here as it stands in the chapter:
 
 > What 1.2 adds to 1.1:
 >
@@ -45,7 +44,7 @@ Security), **32 🔄 Changed** and **7 ⚠️ Breaking changes**, under the head
 | | |
 |---|---|
 | Version | 1.2.0 |
-| Tag | `v1.2.0`, 2026-10-14 — the tagged commit is recorded by the next ingest |
+| Tag | `v1.2.0`, 2026-10-14, on `0a7c2c612` — the merge of PR #46 (`dev` into `main`) |
 | Previous release | `v1.1.0`, 2026-09-07 |
 | Database | one Alembic revision, `004_release_1_2_0_schema` (benchmark flag, widened taxonomy, onboarding progress); at the first start an existing database rebuilds six tables so that ids are never reused — [[problems/reused-ids-after-delete]] |
 | AI Export | at most one version step per component over 1.1.0 — [[decisions/ai-export-version-bump-once-per-release]] |
@@ -76,11 +75,11 @@ with the commit or the train.
   the 1.1.0 image ([[problems/devpy-unusable-in-docker-image]]); the 1.1 images with a debug frontend
   ([[problems/release-images-shipped-debug-frontend]]); event markers lost in the last, open period at weekly or monthly
   resolution, since v1.0.0 (R-5, [[problems/event-markers-lost-in-the-last-partial-period]]; its 🐛 line, with the open
-  period's tooltip and every chart's running period, is in the chapter since `fcc4ac96f`, `ef666fdee` and `10e646f79`);
+  period's tooltip and every chart's running period, is in the chapter since `02a2080da`, `29de8c014` and `2a48d6529`);
   the transaction form that saved a refused date and said *valid* next to a red field, since v1.1.0
-  ([[problems/transaction-form-saved-a-refused-date]], V-37, two 🐛 lines in `f8dbdddaf`).
+  ([[problems/transaction-form-saved-a-refused-date]], V-37, two 🐛 lines in `ee16ebe5b`).
 - **🔄 Changed**: besides the three lines in the table, the risk API, `/api/v1/risk`, leaves beta with the panels: from
-  1.2 it changes only with a major version, except the simulation (`4de042cfe`); the figures of CVaR and Sharpe change
+  1.2 it changes only with a major version, except the simulation (`a3c1dab57`); the figures of CVaR and Sharpe change
   on purpose, so they stay in 🔄; ids are never reused after the database conversion; the server compresses its responses
   ([[decisions/http-gzip-in-the-app]]).
 - **⚠️ Breaking changes (7)**: the cost fields of `GET /brokers/{id}/summary` and the amounts of
@@ -88,6 +87,8 @@ with the commit or the train.
   risk API changed in two visible ways; two endpoints now require signing in; `PATCH /api/v1/settings/global/bulk`
   refuses invalid values; behind a proxy that reports HTTPS for a plain-HTTP address, signing in no longer sticks
   ([[decisions/connection-security-server-never-upgrades]]).
+  *2026-11-07 lint*: `GET /brokers/{id}/summary` itself was removed in 1.3 — the broker page reads `GET /brokers/{id}`
+  and the portfolio report: [[decisions/broker-page-is-a-portfolio-view]], [[decisions/api-routes-removed-without-deprecation]].
 
 ## Decisions of the cycle
 
@@ -139,7 +140,7 @@ future. From R's final run and the release day:
 
 - C-79 — deleting a broker leaves its lock file and an empty upload folder behind (no report file is orphaned);
 - C-80 — backend modules below 80 %: the scheduler, two importers, `api/v1/assets.py`, the FED provider, the tools'
-  resources;
+  resources (`api/v1/assets.py` is today the `backend/app/api/v1/assets/` package, `37d8273a9`);
 - C-81 — frontend files never executed and the largest uncovered ones, to measure again once the coverage fixture
   stops losing counters (C-69);
 - C-82 — the load cures (V-27, V-28, V-33, V-36) are proven at normal load only: a run under high load before the next
@@ -153,28 +154,28 @@ stay `planned` ([[features/F-077]], [[features/F-079]], [[features/F-081]], [[fe
 
 ## Verification
 
-- **R's final run with coverage** (evening of 2026-10-13, on `10e646f79`: train 97 plus the CHANGELOG): **0 reds**,
+- **R's final run with coverage** (evening of 2026-10-13, on `2a48d6529`: train 97 plus the CHANGELOG): **0 reds**,
   15 of 15 categories green, no retry, 2 h 44 min. pytest **12 936**, vitest **11 515** and Playwright **1 221**
   passed. Coverage: backend 91.54 % from its tests (91.55 % combined with the E2E), frontend 71.17 % of statements,
   a lower bound for its E2E part while the coverage fixture loses counters (C-69); 78.34 % without
   `features/tools`. The load was low — 8.9 on average, against 37.9 on 12/10 —, so the load cures are proven at
-  normal load only (C-82). Between `10e646f79` and `a28beed92` no application code changed: only the gallery's
+  normal load only (C-82). Between `2a48d6529` and `bcf9ed49b` no application code changed: only the gallery's
   fixture, its normalizer and their tests, the gallery spec, the documentation and the CHANGELOGs.
-- **R's run before it** (2026-10-12, train 68, `a5653f9ef`) — [[sources/r-full-run-coverage-2026-10-12]]:
+- **R's run before it** (2026-10-12, train 68, `3c8ea2c8b`) — [[sources/r-full-run-coverage-2026-10-12]]:
   pytest 12 627 and vitest 10 760 passed with no red; Playwright 1 163 passed and 29 failed, 27 of them load and 2
   already cured. Coverage: backend 91.51 % from its tests, frontend 71.24 % of statements (78.4 % without
   `features/tools`, where the PAC planner lives).
 - **The gallery** ([[decisions/gallery-is-a-release-gate-with-real-data]]): M's full run of 2026-10-13 on train 80
-  (`cea8a478d`), with the frontend built as `v1.2.0`: 242 passed, 9 failed, 1 skipped by design, in 1.4 hours. Four
+  (`db6ee71d3`), with the frontend built as `v1.2.0`: 242 passed, 9 failed, 1 skipped by design, in 1.4 hours. Four
   causes: Schwab's favicon (4, first read as the environment, then found to be our own favicon mark in the gallery,
-  cured in `6bb79fecd` — [[problems/schwab-favicon-blocked-by-orb]]), a test hook that read `data-dist-pct` in the
-  interface language (2, cured in `dfc4f9ccc` — [[problems/test-hooks-read-the-localized-text]]), and two fixed waits
-  (1 and 2, the clock, cured in `6bb79fecd`). The targeted rerun of the touched tests passed 42 of 42. M's report is
-  kept outside the repository. **The final gallery** (2026-10-13, on `baabbf7a2`, frontend built as `v1.2.0`): 251
+  cured in `ae7da021c` — [[problems/schwab-favicon-blocked-by-orb]]), a test hook that read `data-dist-pct` in the
+  interface language (2, cured in `d9aa8be8f` — [[problems/test-hooks-read-the-localized-text]]), and two fixed waits
+  (1 and 2, the clock, cured in `ae7da021c`). The targeted rerun of the touched tests passed 42 of 42. M's report is
+  kept outside the repository. **The final gallery** (2026-10-13, on `f5bb8ec7d`, frontend built as `v1.2.0`): 251
   passed, 0 failed, 1 skipped; after I's lot 52 the nine groups it changed were shot again: 20 passed, 0 failed
   ([[sources/phase00-translation-round12-2026-10]]). One defect lived in the shots only, never in the app: the
   allocation-history stacks — [[problems/gallery-fixture-normalizer-scaled-ratios]]; after its cure, M shot the
-  allocation and positions groups again (2026-10-14, on `bae15c3cf`): 10 passed, 0 failed, the stacks at 100 %.
+  allocation and positions groups again (2026-10-14, on `3f3502b42`): 10 passed, 0 failed, the stacks at 100 %.
   **The fixture**: the developer decided on 2026-10-14 — option (a) — that it is published as it is.
 - **The gates**: `./dev.py test utils` runs five — `gate-i18n-catalog`, `gate-i18n-usage`,
   `gate-plugin-i18n-ownership`, `gate-plugin-layout`, `gate-docs-links` — and vitest runs the `*.gate.test.ts` files
@@ -183,18 +184,18 @@ stay `planned` ([[features/F-077]], [[features/F-079]], [[features/F-081]], [[fe
 
 ### To fill at the tag
 
-Filled on 2026-10-14. The last two rows exist only once the release is published: **the next ingest fills them**.
+Filled on 2026-10-14; the last two rows after the publication.
 
 | Item | State |
 |---|---|
 | Tag date | 2026-10-14 |
-| R's final run (counts, coverage, reds and their triage) | done: `10e646f79`, 0 reds, pytest 12 936, vitest 11 515, Playwright 1 221 (above) |
+| R's final run (counts, coverage, reds and their triage) | done: `2a48d6529`, 0 reds, pytest 12 936, vitest 11 515, Playwright 1 221 (above) |
 | Gates | green in R's final run; no application code changed after it |
-| Gallery | green: 251 passed, 0 failed, 1 skipped (2026-10-13, `baabbf7a2`); the nine groups changed by I's lot 52, 20 of 20; the allocation and positions groups after I-M30, 10 of 10 (2026-10-14, `bae15c3cf`) |
+| Gallery | green: 251 passed, 0 failed, 1 skipped (2026-10-13, `f5bb8ec7d`); the nine groups changed by I's lot 52, 20 of 20; the allocation and positions groups after I-M30, 10 of 10 (2026-10-14, `3f3502b42`) |
 | First pipeline after the push (the dirty version) | done: run 77, on PR #42's merge into `main`, reports `v1.1.0-1648-g1ee978788`, no `-dirty` — question 11 closed ([[problems/release-shots-show-dirty-version]]) |
-| CHANGELOG counts and header date at the tag | done: `## [1.2.0] - 2026-10-14`; 25 ✨ (27 sub-items), 152 🐛 in 13 groups, 32 🔄, 7 ⚠️ at `a28beed92` |
-| The tagged commit (SHA) | *empty until publication — filled by the next ingest* |
-| The release pipeline's run | *empty until publication — filled by the next ingest* |
+| CHANGELOG counts and header date at the tag | done: `## [1.2.0] - 2026-10-14`; 25 ✨ (27 sub-items), 152 🐛 in 13 groups, 32 🔄, 7 ⚠️ at `bcf9ed49b` |
+| The tagged commit (SHA) | `0a7c2c612` on `main`, the merge of PR #46; its tree is the tree of `556e68405` on `dev_release2`. The GitHub release was published at 09:07 UTC |
+| The release pipeline's run | run 38540086298, «Release v1.2.0»: success, finished at 10:40 UTC. Images `1.2.0`, `1.2.0-light` and `latest` on GHCR, their `docker pull` lines appended to the GitHub release, the docs site deployed from `0a7c2c612` |
 
 ## Source files
 

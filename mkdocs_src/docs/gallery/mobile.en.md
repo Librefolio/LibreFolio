@@ -136,6 +136,8 @@ Switch between Portfolio and Period, then compare data in table or map views —
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portfolio / Map" alt="Positions — Portfolio Map">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Period / Table" alt="Positions — Period Table">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Period / Map" alt="Positions — Period Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-yoc" data-title="💰 Yield on Cost" alt="Positions — Yield on Cost">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-fx-on-cash" data-title="💱 FX on cash" alt="Positions — FX on cash">
 </div>
 
 ### 💸 Transactions Tab
@@ -199,6 +201,14 @@ The dashboard with privacy mode on — the eye button in the header and every am
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Privacy Mode">
+</div>
+
+### 🤖 AI Export
+
+Choose what to export for your AI assistant: the category, the dataset, the detail level, the period and your notes.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="ai-export" data-name="dialog-dataset" alt="AI Export">
 </div>
 
 ---
@@ -316,12 +326,52 @@ The Onboarding category of Preferences with each guide's status and its Replay b
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Guide Replay">
 </div>
 
+### 🧩 Plugin Settings
+
+The Plugins tab on mobile: each plugin's settings in a form of its own.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Plugin Settings">
+</div>
+
 ### 🛡️ Global Settings (Admin)
 
 System-wide configuration on mobile.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings">
+</div>
+
+### 📧 Email (Admin)
+
+The instance's email status and the test email on mobile.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Email">
+</div>
+
+### 🚨 Security Checks (Admin)
+
+Administrators see what needs attention and how to act on it; the passed checks stay folded below, and a badge on Administration counts the errors and warnings.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="security" alt="Security Checks (Admin)">
+</div>
+
+### ↩️ Restore Rolled Back (Admin)
+
+If a restore fails, LibreFolio puts the data back as it was and says why.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-rolled-back" alt="Restore Rolled Back (Admin)">
+</div>
+
+### 🧾 Last Restore Result (Admin)
+
+The restore card keeps the result of the last attempt.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-last-result" alt="Last Restore Result (Admin)">
 </div>
 
 ### 🕐 Market Data Scheduler — Config
@@ -390,6 +440,14 @@ Searching descends into the folds and the result chips jump to the exact spot.
     <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Changelog Search">
 </div>
 
+### 🆕 What's New
+
+After an update, a window shows what changed since your last version.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="whats-new-modal" alt="What's New">
+</div>
+
 ### 🧩 Plugin Diagnostics
 
 Per-registry plugin load health: what failed to load and why.
@@ -440,6 +498,22 @@ Visual file browsing with image previews on mobile.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Static Files Grid View">
+</div>
+
+### 💾 Backups (Admin)
+
+Administrators see the kept backups and set their automatic clean-up.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="backups" alt="Backups (Admin)">
+</div>
+
+### 📊 Space Used (Admin)
+
+A bar shows how the space is shared among the database, uploaded files, reports and backups, against the limit you set.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="storage-bar" alt="Space Used (Admin)">
 </div>
 
 ### 📋 Broker Reports (BRIM)
@@ -543,6 +617,7 @@ The Portfolio / Period switch changes the view; the Table / Map icons draw it as
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portfolio / Map" alt="Broker Positions — Portfolio Map">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Period / Table" alt="Broker Positions — Period Table">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Period / Map" alt="Broker Positions — Period Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-yoc" data-title="💰 Yield on Cost" alt="Broker Positions — Yield on Cost">
 </div>
 
 ### ℹ️ Broker Info
@@ -730,6 +805,14 @@ Create a new asset on mobile — or launch from the Import Wizard with pre-fille
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-7" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Manual create" alt="Create Asset Modal">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 From Import Wizard" alt="Create Asset from Import Wizard">
+</div>
+
+### ⭐ Search Online — Premium Sources
+
+Results from premium sources come first, in a section of their own.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="search-premium" alt="Search Online — Premium Sources">
 </div>
 
 ### 🧬 Asset Type Picker

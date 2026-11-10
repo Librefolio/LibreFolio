@@ -4,8 +4,7 @@ category: decision
 date: 2026-05-24
 status: resolved
 tags: [transactions, cost-basis, currency, schema, breaking-change, wac]
-related_features: [F-097, F-048]
-related_decisions: [decisions/unified-batch-pipeline]
+related: [features/F-097, features/F-048, decisions/unified-batch-pipeline]
 ---
 
 # Decision: cost_basis_override as Currency Object
@@ -52,14 +51,14 @@ New column `cost_basis_currency VARCHAR(3)` alongside existing `cost_basis_overr
 - `TXReadItem.from_db_model()` constructs Currency from two DB columns
 
 ## Implementation
-- Commit: `a79e68156` (SP-A)
-- Files: `backend/app/db/models.py`, `backend/app/schemas/transactions.py`, `backend/alembic/versions/001_initial.py`
+- Commit: `5441cf544` (SP-A)
+- Files: `backend/app/db/models.py`, `backend/app/schemas/transactions/transactions.py`, `backend/alembic/versions/001_initial.py`
 
 ## Source files
 
 | Role | Path |
 |------|------|
 | DB model (cost_basis fields) | `backend/app/db/models.py` |
-| TX schemas (Currency field) | `backend/app/schemas/transactions.py` |
+| TX schemas (Currency field) | `backend/app/schemas/transactions/transactions.py` |
 | Currency class definition | `backend/app/schemas/common.py` |
 | Alembic migration | `backend/alembic/versions/001_initial.py` |

@@ -22,7 +22,6 @@
       "quoteCurrency": "Quote Currency",
       "providerDisabledHint": "Select both currencies first",
       "providerInfoBanner": "Providers automatically fetch exchange rates from central banks. Without a provider, you will need to insert rates manually.",
-      "noProviderWarning": "No provider configured. You will need to manually insert exchange rates for each date.",
       "createIntermediatePairs": "Also create intermediate pairs",
       "createIntermediatePairsHint": "Each step of the selected chain routes will be saved as a standalone pair with its provider, so they can be synced independently.",
       "titleEdit": "Edit Pair Providers",
@@ -46,7 +45,8 @@
       "timeoutAfter": "Timeout after {seconds}s",
       "requestTimedOut": "Request timed out after {seconds}s. Increase the timeout and retry.",
       "failed": "Sync failed",
-      "retryFailed": "Retry {n} failed"
+      "retryFailed": "Retry {n} failed",
+      "overwriteWarning": "{existing, plural, one {# of {total} already has} other {# of {total} already have}} data stored in this range: syncing replaces it with the provider's values, manual edits included."
     },
     "route": {
       "title": "Conversion Routes",
@@ -57,6 +57,7 @@
       "unusableHint": "These providers have no automatic conversion path for this currency pair.",
       "steps": "steps",
       "noRoutesAvailable": "No automatic conversion routes found for this currency pair. You can still save without a provider and insert rates manually.",
+      "providersUnavailable": "Conversion routes are not available right now. Close this window and open it again in a moment.",
       "chainWarning": "Chain routes require ALL intermediate steps to succeed during sync. If any provider fails, the entire chain fails for that date.",
       "searchPlaceholder": "Search providers, currencies, countries…",
       "noSearchResults": "No routes match the search query",
@@ -99,6 +100,7 @@
     "savedCount": "{n} saved",
     "deletedCount": "{n} deleted",
     "skippedCount": "{n} skipped (invalid)",
-    "saveFailed": "FX save failed: {error}"
+    "saveFailed": "FX save failed: {error}",
+    "refusedCount": "{n} refused"
   }
 }

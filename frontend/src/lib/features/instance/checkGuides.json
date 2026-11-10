@@ -1,0 +1,95 @@
+{
+  "server": {
+    "platform.jwt_secret": {
+      "kind": "guide",
+      "path": "admin/configuration_secrets/#secrets"
+    },
+    "platform.secrets_set_twice": {
+      "kind": "guide",
+      "path": "admin/configuration_secrets/#secret-files"
+    },
+    "platform.instance_key": {
+      "kind": "guide",
+      "path": "admin/configuration_secrets/#instance-key"
+    },
+    "platform.session_cookie": {
+      "kind": "guide",
+      "path": "admin/connection_checks/#session-cookie"
+    },
+    "platform.client_address": {
+      "kind": "guide",
+      "path": "admin/connection_proxy/#untrusted-proxy"
+    },
+    "platform.frame_protection": {
+      "kind": "guide",
+      "path": "admin/configuration_security/#frame-protection"
+    },
+    "platform.csp_report_only": {
+      "kind": "guide",
+      "path": "admin/configuration_security/#csp-report-only"
+    },
+    "platform.log_level": {
+      "kind": "guide",
+      "path": "admin/configuration_security/#startup-checks"
+    },
+    "platform.hosting_panel": {
+      "kind": "support"
+    },
+    "platform.test_mode": {
+      "kind": "guide",
+      "path": "admin/configuration_security/#startup-checks"
+    },
+    "backup.panel_token": {
+      "kind": "support"
+    },
+    "backup.upload_limit": {
+      "kind": "guide",
+      "path": "admin/configuration/#main-options"
+    },
+    "backup.restore_limit": {
+      "kind": "guide",
+      "path": "admin/cli_backup/#backup-restore-dry-run"
+    },
+    "backup.recipients": {
+      "kind": "guide",
+      "path": "admin/backup_sealed/#sealed"
+    },
+    "accounts.login_limit": {
+      "kind": "guide",
+      "path": "admin/configuration_accounts/#login-limit"
+    },
+    "accounts.owner_email_change": {
+      "kind": "support"
+    },
+    "email.smtp": {
+      "kind": "guide",
+      "path": "admin/email/#variables"
+    },
+    "email.smtp_encryption": {
+      "kind": "guide",
+      "path": "admin/email/#encryption-modes"
+    },
+    "email.links": {
+      "kind": "guide",
+      "path": "admin/email/#links-check"
+    },
+    "platform.plugin_secrets": {
+      "kind": "guide",
+      "path": "admin/configuration_secrets/#plugin-secrets"
+    },
+    "platform.instance_key_check": {
+      "kind": "guide",
+      "path": "admin/configuration_secrets/#instance-key-check"
+    }
+  },
+  "browser": {
+    "accounts.openRegistration": {
+      "kind": "guide",
+      "path": "admin/settings/#open-registration-warning"
+    },
+    "platform.blockedScript": {
+      "kind": "guide",
+      "path": "admin/configuration_security/#csp"
+    }
+  }
+}

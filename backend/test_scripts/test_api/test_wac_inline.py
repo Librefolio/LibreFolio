@@ -494,14 +494,21 @@ class TestWACInlineValidateCommit:
             print_success("P26 ✓")
 
     # ------------------------------------------------------------------ P27
-    async def test_wacp27_empty_pool_wac_zero(self):
-        """TRANSFER auto from empty pool → WAC = 0."""
-        print_section("P27 — empty pool → WAC=0")
+    async def test_wacp27_empty_pool_is_refused(self):
+        """N88 (J-57): TRANSFER auto from an empty pool → refused, autoCostEmptyPool on the receiver and no WAC for it.
+
+        The receiving leg (create 1) averages its partner's broker A up to the partner's date, without the giving leg: A
+        never held the asset, so the pool holds no units on that date. Before N88 its average was 0 EUR, and /validate
+        answered it in ``wac_results`` — the Auto cost /commit writes. Now the response carries one ``autoCostEmptyPool`` on
+        create 1 — field ``cost_basis_override``, ``ref_id`` None, no params — and ``wac_results`` has no item for create 1.
+        The giving leg takes from A units it never had, so a balance issue on it may sit beside: not asserted either way.
+        """
+        print_section("P27 — empty pool → autoCostEmptyPool, no WAC")
         async with httpx.AsyncClient() as client:
             broker_a_id, asset_id = await create_user_broker_asset(client)
             broker_b_id = await create_broker(client, "P27B")
 
-            # No BUYs. WAC computed before balance walk.
+            # No BUYs: broker A never held the asset. The WAC stage runs before the balance walk.
             link = str(uuid.uuid4())
             data = await validate_batch(
                 client,
@@ -511,10 +518,14 @@ class TestWACInlineValidateCommit:
                 ],
             )
 
-            if data.get("wac_results") is not None:
-                wr = data["wac_results"][0]
-                assert wr["wac"] is not None
-                assert Decimal(wr["wac"]["amount"]) == Decimal("0")
+            assert data["committed"] is False, f"/validate never commits: {data}"
+            refused = [(issue["operation"], issue["index"], issue.get("ref_id"), issue.get("field"), issue.get("params") or None) for issue in data["issues"] if issue.get("code") == "autoCostEmptyPool"]
+            assert refused == [("create", 1, None, "cost_basis_override", None)], (
+                f"N88: the receiving leg's pool — broker A={broker_a_id}, which never held the asset — holds no units, so /validate must refuse it with one autoCostEmptyPool on create 1 "
+                f"(field cost_basis_override, ref_id None, no params); the response carries issues {data['issues']} and wac_results {data.get('wac_results')}"
+            )
+            receiver_wac = [item for item in data.get("wac_results") or [] if (item.get("operation"), item.get("index")) == ("create", 1)]
+            assert receiver_wac == [], f"N88: a refused Auto row gets no wac_results item; create 1 has {receiver_wac}"
             print_success("P27 ✓")
 
     # ------------------------------------------------------------------ P28

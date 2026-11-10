@@ -43,7 +43,7 @@ DEGIRO books a conversion as two rows: the money leaving one currency and the mo
 
 ## 🚫 What Is Not Imported
 
-Each kind below is listed in a warning during the import, with its original rows, so you can check them:
+Each kind below is listed in an amber warning during the import, with its original rows, so you can check them. Each warning has a link to open an issue on GitHub, in case the rows are real movements LibreFolio should read:
 
 - **Corporate actions** (product or ISIN changes, splits, mergers, stock dividends and their cash settlements), **money market fund** rows and **capital returns**: LibreFolio does not import them automatically — check the positions they affect.
 - **flatex withdrawal rows** (`flatex Withdrawal`): LibreFolio cannot tell whether money really left your account. If it did, add the withdrawal by hand.

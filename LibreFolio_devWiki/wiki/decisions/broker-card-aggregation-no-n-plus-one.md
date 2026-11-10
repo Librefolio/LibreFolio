@@ -41,7 +41,7 @@ that the existing `BrokerBreakdown` schema didn't carry natively.
   cost.
 - `BrokerBreakdown` (in `POST /portfolio/report` responses) gains `cash_balances: List[Currency]` — the same
   field/pattern already used on `PortfolioSummary.cash_balances`, populated by projecting `broker_cash` per
-  broker with no new aggregation logic (`backend/app/schemas/portfolio.py:344-366`,
+  broker with no new aggregation logic (`backend/app/schemas/portfolio.py`, `BrokerBreakdown`,
   `backend/app/services/portfolio_service.py`).
 - The per-broker breakdown call is kept **separate** from `GET /brokers` (which feeds lightweight selectors
   used throughout the app) and is cached client-side by `portfolioStore` like every other `/report` call —
@@ -54,10 +54,10 @@ that the existing `BrokerBreakdown` schema didn't carry natively.
   count.
 - `BrokerBreakdown.cash_balances` is now available to any other consumer that reads the breakdown, not just
   the broker list.
-- Since lot 41 (2026-10-11, step H, `801b4a168`), the card's Gain/Loss reads capital and value in transit from the
+- Since lot 41 (2026-10-11, step H, `1eb487ee1`), the card's Gain/Loss reads capital and value in transit from the
   engine's per-broker slice; the service's own capital mirror is gone (see [[decisions/portfolio-pnl-series-contracts]],
   G1a).
-- Since lot 41 F (2026-10-12, `c04e44ff5`), a card's cash is its native balances valued at the valuation date's
+- Since lot 41 F (2026-10-12, `b11c7720e`), a card's cash is its native balances valued at the valuation date's
   rates (`NativeCash.value_at()`), its `cash_balances` come from `NativeCash.balances()`, and the headline cash is the
   sum of the cards — on the mock database the two had differed by up to 866.5 before
   ([[decisions/native-cash-daily-revaluation]], [[problems/foreign-cash-never-revalued]]).

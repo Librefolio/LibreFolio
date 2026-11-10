@@ -17,6 +17,7 @@ def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/stores/__tests__/EditBuffer.test.ts",
         "src/lib/stores/__tests__/TimeSeriesStore.test.ts",
         "src/lib/stores/__tests__/fxStoreRegistry.test.ts",
+        "src/lib/stores/currencyGraphStore.test.ts",
         # K step 12b: one global font rule for flags ('LF Flags'), no emoji font ahead of text.
         "src/flagFont.gate.test.ts",
     ]
@@ -38,54 +39,84 @@ def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
 def front_fx_list(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX list page E2E tests."""
     print_section("Frontend FX List Page Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-list.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_fx_detail(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX detail page E2E tests."""
     print_section("Frontend FX Detail Page Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_fx_detail_rolling_return(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run FX detail page rolling-return E2E tests (X5-F1)."""
+    print_section("Frontend FX Detail Rolling Return Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("fx/fx-detail-rolling-return.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_fx_add_pair(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX add pair modal E2E tests."""
     print_section("Frontend FX Add Pair Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-add-pair.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_fx_editor(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX data editor E2E tests."""
     print_section("Frontend FX Data Editor Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-data-editor.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_fx_csv_import(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX CSV import modal E2E tests."""
     print_section("Frontend FX CSV Import Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-csv-import.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_fx_sync(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX sync modal E2E tests."""
     print_section("Frontend FX Sync Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-sync.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
@@ -100,45 +131,60 @@ def front_fx_sync_mock(verbose: bool = False, ui: bool = False, headed: bool = F
     at all — a real provider cannot be asked to fail on command.
     """
     print_section("Frontend FX Sync (mock providers)")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-sync-mock.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_fx_api(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX API route E2E tests."""
     print_section("Frontend FX API Route Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-api.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_fx_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX chart settings E2E tests."""
     print_section("Frontend FX Chart Settings Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-chart-settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_fx_bulk(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX list-view bulk actions & second-filter E2E tests."""
     print_section("Frontend FX Bulk Actions Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-bulk.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_fx_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX destructive-route E2E tests (pair delete single/bulk, bulk refresh, rate delete)."""
     print_section("Frontend FX Destructive Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-destructive.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
@@ -150,9 +196,12 @@ def front_fx_flag_font(verbose: bool = False, ui: bool = False, headed: bool = F
     self-hosted Noto flags subset.
     """
     print_section("Frontend FX Flag Font Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_db_populated(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("fx/fx-flag-font.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
@@ -175,21 +224,35 @@ def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debu
 def populate_registry(registry: dict) -> None:
     """Register all frontend FX test entries."""
     from ._common import add_test, make_category
-    cat = make_category(
-        help_text="Frontend FX E2E & unit tests",
-        description="""Frontend FX Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)", tests="vitest")
+
+    cat = make_category(help_text="Frontend FX E2E & unit tests", description="""Frontend FX Tests\n\nOptions: --ui, --headed, --debug""")
+    add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, currencyGraphStore (an incomplete graph is not cached, B-4), flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)", tests="vitest")
     add_test(cat, "fx-list", front_fx_list, name="FX List Page", desc="List page navigation, cards, filters", tests="fx/fx-list.spec.ts")
     add_test(cat, "fx-detail", front_fx_detail, name="FX Detail Page", desc="Detail page chart, panels, swap", tests="fx/fx-detail.spec.ts")
+    add_test(
+        cat,
+        "fx-detail-rolling-return",
+        front_fx_detail_rolling_return,
+        name="FX Detail Rolling Return",
+        desc="X5-F1: the rolling return in the FX pair detail chart: mode toggle (price / calendar-return), the window presets and the convert request each sends, back to prices sends nothing, the mode saved with the pair's chart settings and kept on reload, a saved fx-pair comparison asked in the same request, a pair saved in calendar-return opens in it",
+        tests="fx/fx-detail-rolling-return.spec.ts",
+    )
     add_test(cat, "fx-add-pair", front_fx_add_pair, name="FX Add Pair", desc="Add pair modal, validation", tests="fx/fx-add-pair.spec.ts")
     add_test(cat, "fx-editor", front_fx_editor, name="FX Data Editor", desc="Inline editing, save, cancel", tests="fx/fx-data-editor.spec.ts")
     add_test(cat, "fx-csv-import", front_fx_csv_import, name="FX CSV Import", desc="CSV upload, preview, import", tests="fx/fx-csv-import.spec.ts")
-    add_test(cat, "fx-sync", front_fx_sync, name="FX Sync Modal", desc="Sync modal, providers, results", tests="fx/fx-sync.spec.ts")
+    add_test(cat, "fx-sync", front_fx_sync, name="FX Sync Modal", desc="Sync modal, providers, results, sync-all overwrite warning (C-66: stored rates counted, rates filled backward not)", tests="fx/fx-sync.spec.ts")
     add_test(cat, "fx-sync-mock", front_fx_sync_mock, name="FX Sync (mock providers)", desc="Sync against MOCKFX/MOCKFX_FAIL: batch announcement, success/failure tallies, mixed batch + retry-failed, second sync reports nothing changed (disposable pairs, no network)", tests="fx/fx-sync-mock.spec.ts")
     add_test(cat, "fx-api", front_fx_api, name="FX API Routes", desc="API routes via Playwright", tests="fx/fx-api.spec.ts")
     add_test(cat, "fx-settings", front_fx_settings, name="FX Chart Settings", desc="Chart interval, granularity", tests="fx/fx-chart-settings.spec.ts")
     add_test(cat, "fx-bulk", front_fx_bulk, name="FX Bulk Actions", desc="List-view selection toolbar, bulk sync/invert/delete, second currency filter", tests="fx/fx-bulk.spec.ts")
     add_test(cat, "fx-destructive", front_fx_destructive, name="FX Destructive Routes", desc="Pair delete (single + bulk confirmed), bulk refresh, manual rate delete, swap-while-editing confirm (disposable pairs, self-restoring)", tests="fx/fx-destructive.spec.ts")
-    add_test(cat, "fx-flag-font", front_fx_flag_font, name="FX Flag Font (CDP)", desc="Which font draws a flag, read through CDP: Apple Color Emoji on an Apple host with no Noto download (transactions cash cell, dashboard, FX, offline page), the self-hosted Noto flags elsewhere; digits/#/* never drawn by an emoji font (own broker + deposits, self-cleaning; desktop Chromium)", tests="fx/fx-flag-font.spec.ts")
+    add_test(
+        cat,
+        "fx-flag-font",
+        front_fx_flag_font,
+        name="FX Flag Font (CDP)",
+        desc="Which font draws a flag, read through CDP: Apple Color Emoji on an Apple host with no Noto download (transactions cash cell, dashboard, FX, offline page), the self-hosted Noto flags elsewhere; digits/#/* never drawn by an emoji font (own broker + deposits, self-cleaning; desktop Chromium)",
+        tests="fx/fx-flag-font.spec.ts",
+    )
     add_test(cat, "all", front_fx, test_names=False, name="All FX Tests", desc="Run all FX tests (unit + E2E)")
     registry["front-fx"] = cat

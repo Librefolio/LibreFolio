@@ -120,19 +120,30 @@ describe('RiskMetricCard', () => {
             await setupI18n();
             render(RiskMetricCard, {props: BASE});
 
+            // The value is there, in the neutral text role: it is also the barrier that makes the
+            // absence below mean "no strip" rather than "nothing rendered yet".
+            expect(screen.getByTestId('card-value').className).toContain('text-lf-primary');
             // Neutral is the default: a risk number is often neither good nor bad.
             expect(screen.queryByTestId('card-accent')).not.toBeInTheDocument();
         });
 
-        it('draws a green strip for positive and a red strip for negative', async () => {
+        it('draws the gain role for positive and the loss role for negative', async () => {
             await setupI18n();
+            // Colour roles, not palette shades: `bg-lf-gain` and `text-lf-loss` take their value
+            // from the theme, so there is no `dark:` half left to pin. Each half also asserts the
+            // other role is absent — after the flip the gain role must be gone, not merely joined
+            // by the loss one, and a swap of the two fails on either side.
             const rendered = render(RiskMetricCard, {props: {...BASE, sentiment: 'positive'}});
-            expect(screen.getByTestId('card-accent').className).toContain('bg-green-500');
-            expect(screen.getByTestId('card-value').className).toContain('text-green-700');
+            expect(screen.getByTestId('card-accent').className).toContain('bg-lf-gain');
+            expect(screen.getByTestId('card-accent').className).not.toContain('bg-lf-loss');
+            expect(screen.getByTestId('card-value').className).toContain('text-lf-gain');
+            expect(screen.getByTestId('card-value').className).not.toContain('text-lf-loss');
 
             await rendered.rerender({...BASE, sentiment: 'negative'});
-            expect(screen.getByTestId('card-accent').className).toContain('bg-red-500');
-            expect(screen.getByTestId('card-value').className).toContain('text-red-700');
+            expect(screen.getByTestId('card-accent').className).toContain('bg-lf-loss');
+            expect(screen.getByTestId('card-accent').className).not.toContain('bg-lf-gain');
+            expect(screen.getByTestId('card-value').className).toContain('text-lf-loss');
+            expect(screen.getByTestId('card-value').className).not.toContain('text-lf-gain');
         });
     });
 
@@ -231,6 +242,64 @@ describe('RiskMetricCard', () => {
             // without `@container` on an ancestor, so both are pinned together.
             expect(screen.getByTestId('card').className).toContain('@container');
             expect(screen.getByTestId('card-value').className).toContain('cqw');
+        });
+    });
+
+    // F8 (06/11/2026): the loss cards of L1 share one shape — title and subtitle, the number with its caption on one line, a rule,
+    // the detail rows. Geometry is the E2E's; what a DOM can pin is the order of the parts and that the ids did not change.
+    describe('layout="figure"', () => {
+        const FIGURE = {...BASE, layout: 'figure' as const, caption: '-1,175.80 EUR', docsPath: 'financial-theory/x/', submetrics: probe('detail')};
+
+        it('keeps every test id of the side layout', async () => {
+            await setupI18n();
+            render(RiskMetricCard, {props: FIGURE});
+
+            for (const part of ['label', 'technical', 'value', 'caption', 'docs']) expect(screen.getByTestId(`card-${part}`), part).toBeInTheDocument();
+            expect(screen.getByTestId('card-label')).toHaveTextContent('A bad day');
+            expect(screen.getByTestId('card-value')).toHaveTextContent('-2.10%');
+        });
+
+        it('puts the number and its caption on one line, the number first, and the detail rows under a rule', async () => {
+            await setupI18n();
+            render(RiskMetricCard, {props: FIGURE});
+
+            const value = screen.getByTestId('card-value');
+            const caption = screen.getByTestId('card-caption');
+            expect(value.parentElement, 'the number and the caption are not on one line').toBe(caption.parentElement);
+            expect(value.compareDocumentPosition(caption) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            const details = screen.getByTestId('card-details');
+            expect(details.className).toContain('border-t');
+            expect(details).toContainElement(screen.getByTestId('detail'));
+            expect(caption.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        });
+
+        it('has no rule when there are no detail rows', async () => {
+            await setupI18n();
+            render(RiskMetricCard, {props: {...FIGURE, submetrics: undefined}});
+
+            expect(screen.queryByTestId('card-details')).not.toBeInTheDocument();
+        });
+
+        it('keeps the title and the subtitle wrapping to two lines, with no native title', async () => {
+            await setupI18n();
+            render(RiskMetricCard, {props: FIGURE});
+
+            for (const part of ['label', 'technical']) {
+                expect(screen.getByTestId(`card-${part}`).className).toContain('line-clamp-2');
+                expect(screen.getByTestId(`card-${part}`)).not.toHaveAttribute('title');
+            }
+        });
+
+        it('keeps the value in the DOM while loading, so nothing moves when it arrives', async () => {
+            await setupI18n();
+            const {rerender} = render(RiskMetricCard, {props: {...FIGURE, loading: true}});
+            const before = screen.getByTestId('card-value');
+
+            expect(screen.getByTestId('card-skeleton')).toBeInTheDocument();
+            await rerender({...FIGURE, loading: false});
+
+            expect(screen.getByTestId('card-value')).toBe(before);
+            expect(screen.queryByTestId('card-skeleton')).not.toBeInTheDocument();
         });
     });
 });

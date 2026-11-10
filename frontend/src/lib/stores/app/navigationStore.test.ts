@@ -20,6 +20,7 @@
  * Every test starts from a fresh module (`vi.resetModules()` + dynamic import): the stack and the
  * expectation are module state, and a characterization must not lean on the new reset semantics.
  */
+import {get} from 'svelte/store';
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 const {goto} = vi.hoisted(() => ({goto: vi.fn()}));
@@ -221,5 +222,180 @@ describe('navigationStore — expectReplaceNavigation (asset prev/next)', () => 
         nav.trackNavigation('goto', DETAIL_5);
         nav.trackNavigation('link', FX);
         expect(backTrail()).toEqual([DETAIL_5]);
+    });
+});
+
+describe('navigationStore — is there a page to go back to (the ← of the main pages, B-6)', () => {
+    const DASHBOARD = '/dashboard?start=2026-01-01&end=2026-06-30';
+    const BROKERS = '/brokers';
+
+    it('says no before anything was tracked', () => {
+        expect(nav.hasPreviousPage()).toBe(false);
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+
+    it('says no on a direct address (enter): nothing below the page', () => {
+        nav.trackNavigation('enter', BROKERS);
+        expect(nav.hasPreviousPage()).toBe(false);
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+
+    it('says no after a sidebar click: the stack was reset, the section is its own floor', () => {
+        nav.trackNavigation('enter', DASHBOARD);
+        nav.trackNavigation('link', LIST);
+        nav.resetNavDepth(); // the sidebar button, at click time
+        nav.trackNavigation('link', BROKERS); // the navigation it started
+        expect(nav.hasPreviousPage()).toBe(false);
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+
+    it('says yes after an in-app link, and the reactive twin follows', () => {
+        nav.trackNavigation('enter', DASHBOARD);
+        nav.trackNavigation('link', LIST);
+        expect(nav.hasPreviousPage()).toBe(true);
+        expect(get(nav.canGoBack)).toBe(true);
+    });
+
+    it('notifies subscribers when it flips', () => {
+        const seen: boolean[] = [];
+        const stop = nav.canGoBack.subscribe((value) => seen.push(value));
+        nav.trackNavigation('enter', DASHBOARD);
+        nav.trackNavigation('link', LIST);
+        nav.resetNavDepth();
+        stop();
+        expect(seen).toEqual([false, true, false]);
+    });
+
+    it('says no again once ← brought the user back to the first page', () => {
+        nav.trackNavigation('enter', DASHBOARD);
+        nav.trackNavigation('link', LIST);
+        nav.goBack(FALLBACK);
+        expect(goto).toHaveBeenLastCalledWith(DASHBOARD);
+        expect(get(nav.canGoBack)).toBe(false); // the page ← just left is gone from the stack
+        nav.trackNavigation('goto', DASHBOARD); // the navigation goBack() issued
+        expect(nav.hasPreviousPage()).toBe(false);
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+
+    it('keeps saying yes while a filter or the period changes on the same page', () => {
+        nav.trackNavigation('enter', DASHBOARD);
+        nav.trackNavigation('link', LIST);
+        nav.trackNavigation('goto', '/assets?start=2026-02-01'); // gotoDateRange
+        expect(nav.hasPreviousPage()).toBe(true);
+    });
+
+    it('says no after the browser Back to the first page', () => {
+        nav.trackNavigation('enter', DASHBOARD);
+        nav.trackNavigation('link', LIST);
+        nav.trackNavigation('popstate', DASHBOARD);
+        expect(nav.hasPreviousPage()).toBe(false);
+    });
+
+    it('says no for another user (client session reset)', async () => {
+        const session = await import('$lib/stores/app/clientSession');
+        session.transitionClientSession('nav-user-a');
+        nav.trackNavigation('enter', DASHBOARD);
+        nav.trackNavigation('link', LIST);
+        session.transitionClientSession('nav-user-b');
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+});
+
+describe('navigationStore — syncCurrentLocation (← restores the page as it was left)', () => {
+    it("records the address a page gave itself behind SvelteKit's back, so ← keeps its period", () => {
+        nav.trackNavigation('enter', '/dashboard');
+        nav.trackNavigation('link', '/fx/EURUSD?start=2026-01-01');
+        // The detail changed its period with a bare history.replaceState: never tracked.
+        nav.syncCurrentLocation('/fx/EURUSD?start=2026-03-01&end=2026-06-30');
+        nav.trackNavigation('link', '/transactions?broker_id=4'); // "see all" from the detail
+        expect(backTrail()).toEqual(['/fx/EURUSD?start=2026-03-01&end=2026-06-30', '/dashboard']);
+    });
+
+    it('leaves the stack alone when the address is of another page', () => {
+        nav.trackNavigation('enter', '/dashboard');
+        nav.trackNavigation('link', LIST);
+        nav.syncCurrentLocation('/brokers?x=1');
+        nav.trackNavigation('link', FX);
+        expect(backTrail()).toEqual([LIST, '/dashboard']);
+    });
+
+    it('ignores an empty stack and an empty address', () => {
+        nav.syncCurrentLocation('/assets?x=9');
+        expect(back()).toBe(FALLBACK);
+        nav.trackNavigation('enter', LIST);
+        nav.trackNavigation('link', DETAIL_3);
+        nav.syncCurrentLocation(undefined);
+        expect(backTrail()).toEqual([LIST]);
+    });
+
+    it('does not change whether there is a page to go back to', () => {
+        nav.trackNavigation('enter', LIST);
+        nav.syncCurrentLocation('/assets?x=2');
+        expect(nav.hasPreviousPage()).toBe(false);
+    });
+});
+
+describe('navigationStore — a page rewriting its own address (B-6, the ← that came back on Brokers)', () => {
+    it('updates its entry in place while it is on top', () => {
+        nav.trackNavigation('enter', '/brokers');
+        nav.trackNavigation('link', '/brokers/4', '/brokers');
+        nav.trackNavigation('goto', '/brokers/4?start=2026-01-01', '/brokers/4'); // the period written into the address
+        nav.trackNavigation('link', '/transactions?broker_id=4', '/brokers/4');
+        expect(backTrail()).toEqual(['/brokers/4?start=2026-01-01', '/brokers']);
+    });
+
+    it('drops a rewrite that lands after ← has already left the page, so the section root has nothing below it', () => {
+        nav.trackNavigation('enter', '/brokers');
+        nav.trackNavigation('link', '/brokers/4', '/brokers');
+        goto.mockClear();
+        nav.goBack(FALLBACK); // ← pressed while the detail is still writing its period
+        expect(goto).toHaveBeenLastCalledWith('/brokers');
+        nav.trackNavigation('goto', '/brokers/4?start=2026-01-01', '/brokers/4'); // the late rewrite
+        nav.trackNavigation('goto', '/brokers', '/brokers/4'); // ← lands
+        expect(get(nav.canGoBack)).toBe(false);
+        expect(back()).toBe(FALLBACK);
+    });
+
+    it('still lets a replacement between two pages take the place of the top entry (asset prev/next)', () => {
+        nav.trackNavigation('enter', LIST);
+        nav.trackNavigation('link', DETAIL_3, '/assets');
+        nav.expectReplaceNavigation(DETAIL_5);
+        nav.trackNavigation('goto', DETAIL_5, '/assets/3');
+        expect(backTrail()).toEqual([LIST]);
+    });
+
+    it('takes the page left as the floor when the entry was never tracked (the layout mounted after it)', () => {
+        // A slow device: /brokers loaded from scratch, its `enter` missed; the first navigation tracked is the card.
+        nav.trackNavigation('link', '/brokers/7', '/brokers');
+        expect(get(nav.canGoBack)).toBe(true);
+        goto.mockClear();
+        nav.goBack(FALLBACK);
+        expect(goto).toHaveBeenLastCalledWith('/brokers');
+        nav.trackNavigation('goto', '/brokers', '/brokers/7');
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+
+    it('lets the fallback take the place of the current page, so the page ← lands on has no ← of its own', () => {
+        nav.trackNavigation('enter', '/brokers/7');
+        goto.mockClear();
+        nav.goBack('/brokers');
+        expect(goto).toHaveBeenLastCalledWith('/brokers');
+        nav.trackNavigation('goto', '/brokers', '/brokers/7');
+        expect(get(nav.canGoBack)).toBe(false);
+        expect(back()).toBe(FALLBACK);
+    });
+
+    it('keeps a stack the sidebar emptied empty: the section it opens is a root, whatever page it was opened from', () => {
+        nav.trackNavigation('enter', '/brokers');
+        nav.trackNavigation('link', '/brokers/7', '/brokers');
+        nav.resetNavDepth(); // the sidebar's Brokers, from deep inside
+        nav.trackNavigation('link', '/brokers', '/brokers/7');
+        expect(get(nav.canGoBack)).toBe(false);
+    });
+
+    it('keeps it empty even when the sidebar is the first thing to shape the stack', () => {
+        nav.resetNavDepth();
+        nav.trackNavigation('link', '/fx', '/brokers/7');
+        expect(get(nav.canGoBack)).toBe(false);
     });
 });

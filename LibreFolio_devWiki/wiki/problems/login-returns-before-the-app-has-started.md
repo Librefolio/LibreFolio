@@ -23,8 +23,8 @@ budget for the page it expects. It is the pattern workstream K fixed on 2026-10-
 ## Solution
 
 V-27 in `BACKLOG_POST_1.2.md`, written by V on 2026-10-13 — «`login()` ritorna appena sparisce il form, prima
-dell'arrivo». V-26 (`c1a42bf4a`, train 82) had moved the auth and AI Export setups off the test's clock; V-27 cured the
-early return itself (`4ebbaab20`, train 87):
+dell'arrivo». V-26 (`0980ffcac`, train 82) had moved the auth and AI Export setups off the test's clock; V-27 cured the
+early return itself (`7b594d46d`, train 87):
 
 - `login()` returns only when the app has **arrived**: one of `app-shell`, `welcome-shell` or
   `onboarding-bootstrap-blocked` is visible, within 30 s; if none comes, the failure names the screen on view;
@@ -35,7 +35,7 @@ early return itself (`4ebbaab20`, train 87):
 
 Verified at one worker: six rounds, 102 of 102 green, the database back at the seed after each.
 
-*Note (2026-10-14, R's final run on `10e646f79`)*: 0 reds, but at an average load of 8.9 against 37.9 on 12/10 —
+*Note (2026-10-14, R's final run on `2a48d6529`)*: 0 reds, but at an average load of 8.9 against 37.9 on 12/10 —
 the cure is proven at normal load only; a run under high load is backlog C-82.
 
 ## Prevention
@@ -44,7 +44,7 @@ A helper that signs in must return in the state its callers expect, the app on s
 every caller compensates on its own short budget, and under load one of them does not. The same family was open for
 `setLanguage`, which waited the default 3 s for `<html lang>` while the chosen dictionary, a chunk of about 290 KB,
 loaded: under load it gave the French toolbar sweep a red on 2026-10-13 (M's lot 37). V-36 closed it the same day
-(`fccf0bee1`, train 92): the three waits of `setLanguage` share a 15 s budget, a deadline and never a delay; with the
+(`7110f95c9`, train 92): the three waits of `setLanguage` share a 15 s budget, a deadline and never a delay; with the
 dictionary held back 5 s the red was deterministic, and it is green with the cure.
 
 ## Source files

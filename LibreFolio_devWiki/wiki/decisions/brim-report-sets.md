@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-09-28
 tags: [backend, frontend, brim, import, report-sets, danske-bank, gap-fix, upload, issue-26]
-related: [features/F-103, features/F-012, features/F-013, decisions/brim-broker-scoped, decisions/brim-parser-only, decisions/brim-fake-asset-id, entities/import-wizard-modal, workflows/brim-import-flow, problems/brim-compatible-plugins-frozen-at-upload, sources/phase00-brim-danske-bank-2026-10]
+related: [features/F-103, features/F-012, features/F-013, decisions/brim-broker-scoped, decisions/brim-parser-only, decisions/brim-fake-asset-id, entities/import-wizard-modal, workflows/brim-import-flow, problems/brim-compatible-plugins-frozen-at-upload, sources/phase00-brim-danske-bank-2026-10, decisions/credit-agricole-securities-only-cash-neutral-brim]
 ---
 
 # Decision: report sets
@@ -45,7 +45,8 @@ several files become one import without changing the single-file plugins.
 ## Consequences
 
 - A new multi-export bank needs a set plugin (roles, `detect_role`, `describe_member`, `combine`), not a new
-  pipeline. Crédit Agricole as a report set is backlog L3.
+  pipeline. Crédit Agricole as a report set is backlog L3 — shipped on 2026-10-28 as plugin 2.0.0 (`d0be8c7f2`, W5-7),
+  which supersedes [[decisions/credit-agricole-securities-only-cash-neutral-brim]] (2026-11-07 lint).
 - Files uploaded by 1.1.0 have no `batch_id`: they must be uploaded again, together.
 - The upload contract gained `batch_id` (a UUID, else 422) and files gained `combined_into` — see
   [[decisions/brim-broker-scoped]].
@@ -59,15 +60,15 @@ several files become one import without changing the single-file plugins.
 
 | Role | Path |
 |------|------|
-| Set service (`collect_members`, `preview_set`, `combine_set`, `apply_history`) | `backend/app/services/brim_report_sets.py` |
-| Gap fix (`compute_gap_fix`) | `backend/app/services/brim_gap_fix.py` |
-| Plugin hooks (`report_roles`, `detect_role`, `describe_member`, `combine`) | `backend/app/services/brim_provider.py` |
+| Set service (`collect_members`, `preview_set`, `combine_set`, `apply_history`) | `backend/app/services/brim/brim_report_sets.py` |
+| Gap fix (`compute_gap_fix`) | `backend/app/services/brim/brim_gap_fix.py` |
+| Plugin hooks (`report_roles`, `detect_role`, `describe_member`, `combine`) | `backend/app/services/brim/brim_provider.py` |
 | `BRIMReportRole`, `batch_id`, `combined_into` | `backend/app/schemas/brim.py` |
 | Upload with `batch_id`; `/sets/preview`, `/sets/combine`, `/gap-fix` | `backend/app/api/v1/brokers.py` |
 | Danske Bank set plugin | `backend/app/services/brim_providers/broker_danske_bank/plugin.py` |
-| Wizard set logic | `frontend/src/lib/utils/transactions/importReportSets.ts` |
-| Set card, gap-fix step | `frontend/src/lib/components/transactions/import/ReportSetCard.svelte` |
-| Gap-fix step | `frontend/src/lib/components/transactions/import/GapFixStep.svelte` |
+| Wizard set logic | `frontend/src/lib/features/transactions/import/importReportSets.ts` |
+| Set card, gap-fix step | `frontend/src/lib/features/transactions/import/ReportSetCard.svelte` |
+| Gap-fix step | `frontend/src/lib/features/transactions/import/GapFixStep.svelte` |
 | Tests | `backend/test_scripts/test_services/test_brim_report_sets.py` |
 | Gap-fix tests | `backend/test_scripts/test_services/test_brim_gap_fix.py` |
 | Developer doc ("Report sets") | `mkdocs_src/docs/developer/backend/brim/architecture.md` |

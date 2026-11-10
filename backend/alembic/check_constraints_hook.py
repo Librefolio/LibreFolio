@@ -68,11 +68,11 @@ def is_check_constraints_eq(cc1: CheckColumnConstraint, cc2: CheckColumnConstrai
 def get_engine_for_check():
     """Get engine respecting DATABASE_URL environment variable if set.
 
-    This function uses get_data_dir() from config.py to ensure consistent
+    This function uses get_data_dir() from backend.app.config to ensure consistent
     path resolution for both prod and test environments.
 
     Priority:
-    1. ALEMBIC_DATABASE_URL (explicit override from dev.sh)
+    1. ALEMBIC_DATABASE_URL (explicit override from dev.py)
     2. get_data_dir() based on LIBREFOLIO_TEST_MODE
     3. DATABASE_URL from environment
     4. DATABASE_URL from .env file
@@ -81,7 +81,7 @@ def get_engine_for_check():
     from backend.app.config import get_data_dir  # noqa: PLC0415 — alembic migration — imports after path setup
 
     # Check for custom override first (won't be overridden by .env loading)
-    # This is set by dev.sh when specifying a non-default database
+    # This is set by dev.py when specifying a non-default database
     database_url = os.environ.get("ALEMBIC_DATABASE_URL")
 
     if not database_url:
@@ -288,13 +288,13 @@ def check_and_add_missing_constraints(auto_fix: bool = False, log_level: LogLeve
 
             print("STEP 3: Apply the fix")
             print("  If migration already applied (most common):")
-            print("    1. ./dev.sh db:downgrade")
+            print("    1. ./dev.py db downgrade")
             print("    2. Edit the migration file as shown above")
-            print("    3. ./dev.sh db:upgrade")
+            print("    3. ./dev.py db upgrade")
             print()
             print("  If migration NOT yet applied:")
             print("    1. Edit the migration file as shown above")
-            print("    2. ./dev.sh db:upgrade")
+            print("    2. ./dev.py db upgrade")
             print()
             print("📚 See: docs/alembic-guide.md (SQLite CHECK Constraints section)")
             print()

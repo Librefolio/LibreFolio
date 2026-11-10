@@ -49,11 +49,13 @@ from typing import Dict, List, Optional, Tuple
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers import _brim_io as io
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -85,11 +87,15 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "custody fee": TransactionType.FEE,
 }
 
-# Types to skip
+# Types left out quietly: no economic effect (W-B86: a log line only).
 SKIP_TYPES = [
     "transfer",
-    "stock split",
 ]
+
+# A multiplicative stock split: ``Quantity`` is the number of shares ADDED (the sample's TSLA 3 for 1: 0.0822 held, 0.1643 added,
+# 0.2465 after). It enters as an incoming ADJUSTMENT at no cost, flagged ``possible_split`` for the Bulk editor (W-B87). A split
+# with no readable positive quantity (a reverse split, if the file ever has one) is not imported: it is listed.
+SPLIT_TYPE = "stock split"
 
 CRYPTO_TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "buy": TransactionType.BUY,
@@ -264,6 +270,16 @@ def _is_crypto_header(fieldnames: Optional[List[str]]) -> bool:
 # =============================================================================
 
 
+def _most_frequent_currency(rows: List[Dict[str, str]]) -> Optional[str]:
+    """The currency most rows of the file name in their ``Currency`` column, None when none does."""
+    counts: Dict[str, int] = {}
+    for row in rows:
+        code = (row.get(COL_CURRENCY) or "").strip().upper()
+        if len(code) == 3 and code.isalpha():
+            counts[code] = counts.get(code, 0) + 1
+    return max(counts, key=lambda code: counts[code]) if counts else None
+
+
 @register_provider(BRIMProviderRegistry)
 class RevolutBrokerProvider(BRIMProvider):
     """Revolut Trading CSV export import plugin."""
@@ -294,7 +310,9 @@ class RevolutBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.1.0"
+        # 1.3.0 — a stock split in an Invest file becomes an incoming ADJUSTMENT at no cost, flagged ``possible_split`` (W-B87).
+        # 1.2.0 — a stock split in an Invest file is listed in a notice with the link to open an issue (W-B87).
+        return "1.3.0"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Revolut invest or crypto format by checking distinctive headers."""
@@ -327,14 +345,14 @@ class RevolutBrokerProvider(BRIMProvider):
                     return self._parse_invest(reader, broker_id)
                 if _is_crypto_header(reader.fieldnames):
                     return self._parse_crypto(reader, broker_id)
-                raise BRIMParseError("Unsupported Revolut CSV header")
+                raise BRIMParseError("Unsupported Revolut CSV header", details={"code": "header_mismatch"})
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
     def _parse_invest(self, reader: csv.DictReader, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type field mapping, no nested logic
         """Parse Revolut Invest rows."""
@@ -344,22 +362,35 @@ class RevolutBrokerProvider(BRIMProvider):
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
+        skips = io.RowSkips(reader.fieldnames)
+        field_todos: List[BRIMFieldTodo] = []
+        quiet = 0
+        rows = list(reader)
+        file_currency = _most_frequent_currency(rows)
+        held: Dict[str, Decimal] = {}  # shares per ticker, from the rows above: what a split row multiplies
 
         row_num = 1
 
-        for row in reader:
+        for row in rows:
             row_num += 1
 
             tx_type_raw = row.get(COL_TYPE, "").strip().lower()
             if not tx_type_raw:
                 continue
 
-            if any(skip in tx_type_raw for skip in SKIP_TYPES):
+            is_split = SPLIT_TYPE in tx_type_raw
+            split_quantity = _parse_revolut_quantity(row.get(COL_QUANTITY, "")) if is_split else None
+            if is_split and (split_quantity is None or split_quantity <= 0 or not row.get(COL_TICKER, "").strip()):
+                skips.unknown(row_num, row, f"not imported yet: {tx_type_raw}")
                 continue
 
-            tx_type = None
+            if any(skip in tx_type_raw for skip in SKIP_TYPES):
+                quiet += 1
+                continue
+
+            tx_type = TransactionType.ADJUSTMENT if is_split else None
             for pattern, mapped_type in TYPE_MAPPINGS.items():
-                if pattern in tx_type_raw:
+                if tx_type is None and pattern in tx_type_raw:
                     tx_type = mapped_type
                     break
 
@@ -379,6 +410,7 @@ class RevolutBrokerProvider(BRIMProvider):
                 TransactionType.BUY,
                 TransactionType.SELL,
                 TransactionType.DIVIDEND,
+                TransactionType.ADJUSTMENT,
             ]
             asset_optional = tx_type in [TransactionType.FEE, TransactionType.TAX]
 
@@ -413,7 +445,12 @@ class RevolutBrokerProvider(BRIMProvider):
             if tx_type == TransactionType.BUY and amount and amount > 0:
                 amount = -amount
 
-            self._create_transaction(
+            if is_split:
+                quantity = split_quantity  # the shares added, as the file wrote them
+                # A zero cost needs a currency but no rate: the row's own, else the file's usual one, else the symbol's.
+                cost_currency = row.get(COL_CURRENCY, "").strip().upper() or file_currency or currency
+            held_before = held.get(ticker) if ticker else None
+            created = self._create_transaction(
                 row_num=row_num,
                 transactions=transactions,
                 validation_issues=validation_issues,
@@ -423,10 +460,15 @@ class RevolutBrokerProvider(BRIMProvider):
                 type=tx_type,
                 date=tx_date,
                 quantity=quantity,
-                cash=Currency(code=currency, amount=amount) if amount else None,
+                cash=None if is_split else (Currency(code=currency, amount=amount) if amount else None),
+                cost_basis_override=Currency(code=cost_currency, amount=Decimal("0")) if is_split else None,
                 description=f"{tx_type_raw}: {ticker}" if ticker else tx_type_raw,
                 tags=["import", "revolut"],
             )
+            if created is not None and asset_id is not None and quantity:
+                held[ticker] = held.get(ticker, Decimal("0")) + quantity
+            if is_split and created is not None:
+                field_todos.append(io.possible_split_todo(len(transactions) - 1, row_num, reader.fieldnames or [], row, ticker=ticker, added_quantity=quantity, held_before=held_before))
 
         if not transactions:
             warnings.append("No valid transactions found in file")
@@ -441,6 +483,8 @@ class RevolutBrokerProvider(BRIMProvider):
             for fake_id, info in extracted_assets.items()
         }
 
+        if quiet:
+            logger.info("Revolut rows left out without a notice", count=quiet)
         logger.info(
             "Revolut file parsed",
             transaction_count=len(transactions),
@@ -450,8 +494,9 @@ class RevolutBrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=warnings,
+            warnings=[*warnings, *skips.notices()],
             validation_issues=validation_issues,
+            field_todos=field_todos,
             extracted_assets=extracted_assets_typed,
         )
 

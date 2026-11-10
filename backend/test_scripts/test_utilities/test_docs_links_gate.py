@@ -27,7 +27,7 @@ it, dev.py still builds its whole CLI, and ``mkdocs check-links`` says what it n
 anything.
 
 dev.py is never imported here: its import changes directory and ``sys.path``, in a pytest process other units share.
-These cases run it in child interpreters. Red phase, against the dev.py of f4a42bf4a (HEAD), run from a copy of the
+These cases run it in child interpreters. Red phase, against the dev.py of 61eaaaef2 (HEAD), run from a copy of the
 tree: 5 red, 3 green.
 
 * red (5): fr named among the languages lacking ``#details``, which its heading «Détails» gives; the text slug of a
@@ -45,7 +45,7 @@ where the file is not. The check run after ``mkdocs build`` looked only at ``sta
 file) from its page's folder as a browser does, inside the site, HTML comments left out, and ``cmd_mkdocs_build``
 exits 1 when one is broken. The cases build a site under ``tmp_path``; ``cmd_mkdocs_build`` runs in a child with
 ``mkdocs build``, ``copy_docs_assets`` and the admonition check stubbed and ``PROJECT_ROOT`` pointing at a tree under
-``tmp_path``. Red phase, against the dev.py of c0d933abf (HEAD), run from a copy of the tree: 22 red, 1 green.
+``tmp_path``. Red phase, against the dev.py of 046df7818 (HEAD), run from a copy of the tree: 22 red, 1 green.
 
 * red on a missing function (20): every case of ``_check_asset_paths_in_built_site``;
 * red on behaviour (1): a broken image that is not an icon, with which HEAD's build returned 0;

@@ -69,6 +69,15 @@ The backend builds one request-scoped `BuildContext`. Shared DB reports, prices,
 rates, FIFO results, signal results, and component envelopes are memoized so
 overlapping datasets do not repeat work.
 
+Before anything is built, `prepare_request()` bounds the requested period
+(R13-SEC7-1): it ends no later than `latest_range_end()` (tomorrow,
+`utils/datetime_utils.py`) and starts at most 100 calendar years before that end,
+never after it. Components walk the period day by day, and an unbounded one held
+the instance. The scope, every component, the bucket plan and the response meta
+(`exported_period`, `snapshot_as_of`, the FX `history_coverage.requested_period`)
+all read the bounded period; a request inside the bounds is unchanged, and no
+component contract changes.
+
 The profile/assembler runtime that preceded the component runtime during
 development was removed before release. The first released snapshot schema is V1
 (`AI_EXPORT_SCHEMA_VERSION = 1`), so there is no older schema to accept or migrate.
@@ -119,6 +128,7 @@ all-accessible requests that did not send an explicit Broker filter.
 | `409` | `version_mismatch`         | Catalog, selection, instruction, or response-contract identity differs. |
 | `422` | `unsupported_selection`    | Dataset or analysis is unknown or belongs to another domain.            |
 | `422` | `selection_not_applicable` | Runtime facts do not satisfy an analysis applicability rule.            |
+| `422` | `selection_not_applicable` | `reason_code` `too_many_price_days`: the prices a required component reads exceed one request's budget (J-50). |
 | `503` | `snapshot_source_failure`  | A required component raised while building.                             |
 
 Required failures fail closed. Optional failures may be omitted and remain

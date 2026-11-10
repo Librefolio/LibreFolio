@@ -108,3 +108,51 @@ export function nextAvailableIdentifierType(rows: IdentifierRow[]): string | nul
 export function fieldToIdType(field: string): string {
     return field.replace('identifier_', '').toUpperCase();
 }
+
+/** The value of the first row of `type`, or `''` when there is none. */
+export function identifierValue(rows: IdentifierRow[], type: string): string {
+    return rows.find((r) => r.type === type)?.value ?? '';
+}
+
+/** Set the row of `type` to `value`, marked auto-filled, adding the row when the type is absent. */
+export function withIdentifier(rows: IdentifierRow[], type: string, value: string): IdentifierRow[] {
+    const existing = rows.find((r) => r.type === type);
+    if (existing) return rows.map((r) => (r.type === type ? {...r, value, autoFilled: true} : r));
+    return [...rows, {id: generateUUID(), type, value, autoFilled: true}];
+}
+
+/**
+ * Merge a provider's "soft" identifiers (`identifier_other`, a JSON list) as separate OTHER rows: additive and
+ * deduplicated against the OTHER rows already there, never routed through the string compare (which would stuff
+ * the whole list into one row and throw `.trim` at save time). `rows` comes back unchanged when nothing is added.
+ */
+export function mergeOtherIdentifierValues(rows: IdentifierRow[], raw: unknown): {rows: IdentifierRow[]; added: number} {
+    const values = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
+    const seen = new Set(rows.filter((r) => r.type === 'OTHER').map((r) => (typeof r.value === 'string' ? r.value.trim() : String(r.value ?? '').trim())));
+    const additions: IdentifierRow[] = [];
+    for (const v of values) {
+        const s = (typeof v === 'string' ? v : String(v ?? '')).trim();
+        if (!s || seen.has(s)) continue;
+        seen.add(s);
+        additions.push({id: generateUUID(), type: 'OTHER', value: s, autoFilled: true});
+    }
+    return {rows: additions.length > 0 ? [...rows, ...additions] : rows, added: additions.length};
+}
+
+/**
+ * Write the elected `primary` into the row of `type` and demote the other `choices` to OTHER rows, where they no
+ * longer quote but still recognise the asset. Case-insensitive; an alternate already among the OTHER rows is not
+ * added twice.
+ */
+export function withElectedPrimary(rows: IdentifierRow[], type: string, primary: string, choices: string[]): IdentifierRow[] {
+    const alternates = choices.filter((v) => v.toUpperCase() !== primary.toUpperCase());
+    const known = new Set(rows.filter((r) => r.type === 'OTHER').map((r) => r.value.trim().toUpperCase()));
+    const next = rows.map((r) => (r.type === type ? {...r, value: primary} : r));
+    for (const value of alternates) {
+        const key = value.toUpperCase();
+        if (known.has(key)) continue;
+        known.add(key);
+        next.push({id: generateUUID(), type: 'OTHER', value});
+    }
+    return next;
+}

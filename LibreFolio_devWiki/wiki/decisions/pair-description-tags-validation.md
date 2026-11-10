@@ -33,7 +33,8 @@ Frontend handles legacy mismatched data by concatenating descriptions with `[aut
 
 ## Consequences
 
-- New linked pairs can never have divergent description/tags (400 from backend)
+- New linked pairs can never have divergent description/tags (400 from backend; *2026-11-07 lint:* through validate/commit
+  it is a batch issue in an HTTP 200 answer, and nothing is committed — [[decisions/unified-batch-pipeline]])
 - Legacy mismatched data gets merged visibly on first edit (user sees concatenation)
 - Mock data aligned: all 8 pairs now use symmetrical `"↔"` format
 - Enables future Promote wizard to require resolution before commit
@@ -49,8 +50,8 @@ Frontend handles legacy mismatched data by concatenating descriptions with `[aut
 
 | Role | Path |
 |------|------|
-| Validation method | `backend/app/services/transaction_service.py` |
+| Validation method | `backend/app/services/transactions/validation.py` |
 | Backend tests | `backend/test_scripts/test_api/test_transactions_api.py` |
-| FormModal merge logic | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| FormModal merge logic | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | Mock data (aligned) | `backend/test_scripts/test_db/populate_mock_data.py` |
 

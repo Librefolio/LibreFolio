@@ -2,12 +2,13 @@
     /**
      * Files Page - Manage static uploads and broker reports
      *
-     * Two tabs:
+     * Two tabs, and a third for administrators:
      * 1. Static Resources - User uploaded files (/api/v1/uploads)
      * 2. Broker Reports - BRIM files (/api/v1/brokers/import/files)
+     * 3. Backups (administrators only) - the backups the instance keeps (/api/v1/backup/instance/jobs)
      *
      * URL Deep-Linking:
-     * - ?tab=static|brim - Active tab
+     * - ?tab=static|brim|backup - Active tab (backup: administrators only, anyone else gets the static tab)
      * - ?filename=... - Text filter on filename
      * - ?uploader=... - Uploader filter
      * - ?broker=1,2,3 - Filter by broker IDs (BRIM only)
@@ -22,7 +23,14 @@
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {generateUUID} from '$lib/utils/core/uuid';
-    import {formatBytes, uploadFile} from '$lib/utils/files/upload';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+    import {auth} from '$lib/stores/app/auth';
+    import BackupsSection from '$lib/features/backup/BackupsSection.svelte';
+    import StorageBar from '$lib/features/files/StorageBar.svelte';
+    import {notifyBackupListChanged} from '$lib/features/backup/backupList.svelte';
+    import {storageLimitNumbersOfError, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
+    import StorageLimitRefusal from '$lib/components/ui/feedback/StorageLimitRefusal.svelte';
+    import {formatBytes, setUploadScope, uploadFile} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/app/globalSettings';
@@ -32,30 +40,34 @@
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal, ImageEditModal} from '$lib/components/ui/media';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, RefreshCw, Trash2, X} from 'lucide-svelte';
-    import FilesTable from '$lib/components/files/FilesTable.svelte';
-    import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
+    import FilesTable from '$lib/features/files/FilesTable.svelte';
+    import FilePreviewModal from '$lib/features/files/FilePreviewModal.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import {matchesColumnFilter} from '$lib/components/table/dataTableLogic';
-    import FileGrid from '$lib/components/files/FileGrid.svelte';
+    import FileGrid from '$lib/features/files/FileGrid.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
-    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
-    import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile} from '$lib/types';
+    import {fetchFilePreview} from '$lib/utils/files/filePreview';
+    import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
+    import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile, UploadScope} from '$lib/types';
     import type {ColumnDef, FilterValue} from '$lib/components/table/types';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
-    type Tab = 'static' | 'brim';
+    type Tab = 'static' | 'brim' | 'backup';
     type PreviewTarget = {source: 'static'; file: UploadedFile} | {source: 'brim'; file: BrimFile};
 
     // URL filter configuration - defines which columns can be filtered via URL
     const urlFilterColumns: UrlFilterConfig[] = [
         {urlKey: 'filename', type: 'text'},
         {urlKey: 'uploader', type: 'enum'},
+        {urlKey: 'scope', type: 'enum'},
         {urlKey: 'broker', type: 'enum'},
         {urlKey: 'status', type: 'enum'},
         {urlKey: 'size', type: 'size'},
@@ -76,9 +88,10 @@
         setUserStorage(STORAGE_KEY_VIEW_MODE, mode);
     }
 
-    // Load active tab from user-scoped localStorage (default: static)
+    // Load active tab from user-scoped localStorage (default: static). The backup tab is the administrators' only.
     function loadActiveTab(): Tab {
         const stored = getUserStorage(STORAGE_KEY_ACTIVE_TAB, 'static');
+        if (stored === 'backup' && isAdmin) return 'backup';
         return stored === 'brim' ? 'brim' : 'static';
     }
 
@@ -89,11 +102,19 @@
     // Load broker filter from user-scoped localStorage
 
     let activeTab: Tab = 'static';
+    // The tab of the backups the instance keeps is for administrators (FB-24); the server refuses everyone else anyway.
+    $: isAdmin = $auth.user?.is_superuser ?? false;
+    $: tabs = [{id: 'static', label: $t('uploads.staticResources'), testId: 'files-tab-static'}, {id: 'brim', label: $t('uploads.brokerReports'), testId: 'files-tab-brim'}, ...(isAdmin ? [{id: 'backup', label: $t('uploads.backups'), testId: 'files-tab-backup'}] : [])];
     let staticFiles: UploadedFile[] = [];
     let brimFiles: BrimFile[] = [];
     let loading = true;
     let error: string | null = null;
     let showUploader = false;
+    /** C9-1: the space limit refused an upload: said inside the uploader, or the report dialog, where the user is. */
+    let uploadRefusal: StorageLimitNumbers | null = null;
+    let brimRefusal: StorageLimitNumbers | null = null;
+    // C9-1: `?storage=limit` (an «Open the settings» link) opens the «Advanced» panel of the space bar.
+    $: storageLimitOpen = $page.url.searchParams.get('storage') === 'limit';
     let pendingStaticFiles: globalThis.File[] = []; // Track files in static uploader
 
     // View mode with localStorage persistence (default: list/table)
@@ -169,7 +190,7 @@
 
             // Tab from URL or localStorage
             const tabParam = params.get('tab');
-            if (tabParam === 'static' || tabParam === 'brim') {
+            if (tabParam === 'static' || tabParam === 'brim' || (tabParam === 'backup' && isAdmin)) {
                 activeTab = tabParam;
             } else {
                 activeTab = loadActiveTab();
@@ -185,10 +206,13 @@
             activeTab = loadActiveTab();
         }
 
-        await loadGlobalSettings();
-        await ensurePluginIconsLoaded();
-        await loadBrokers();
-        await loadFiles();
+        // The first load holds the page's Refresh button (Y11), the whole chain.
+        await pageBusy.track('files-first-load', async () => {
+            await loadGlobalSettings();
+            await ensurePluginIconsLoaded();
+            await loadBrokers();
+            await loadFiles();
+        });
 
         // Mark URL as initialized (allow updates now)
         urlInitialized = true;
@@ -234,6 +258,13 @@
             getValue: (row) => getStaticUploaderKey(row),
         },
         {
+            id: 'scope',
+            header: '',
+            cell: (row) => row.scope,
+            type: 'enum',
+            getValue: (row) => row.scope,
+        },
+        {
             id: 'size',
             header: '',
             cell: (row) => row.size_bytes,
@@ -270,7 +301,7 @@
         activeTab = tab;
         saveActiveTab(tab);
         closePreviewModal();
-        loadFiles();
+        void reloadFiles('files-tab');
 
         // Update URL with new tab (keep other filters - user can clear manually)
         if (browser && urlInitialized) {
@@ -312,15 +343,22 @@
     });
     onDestroy(() => _brokerStoreUnsub());
 
+    /** A reload the page decides on (Refresh, tab, after an upload or a delete): it holds the Refresh button (Y11). */
+    function reloadFiles(label: string): Promise<void> {
+        return pageBusy.track(label, loadFiles);
+    }
+
     async function loadFiles() {
         loading = true;
         error = null;
 
         try {
+            // The table of kept backups and the space bar read their own data; the page's Refresh asks them to read again.
+            notifyBackupListChanged();
             if (activeTab === 'static') {
                 const data = await zodiosApi.list_files_api_v1_uploads_get();
                 staticFiles = (data.items || []) as UploadedFile[];
-            } else {
+            } else if (activeTab === 'brim') {
                 // Fetch ALL accessible files — broker filter is applied client-side
                 brimFiles = (await zodiosApi.list_files_api_v1_brokers_import_files_get()) as BrimFile[];
             }
@@ -333,23 +371,27 @@
 
     async function handleUpload(event: CustomEvent<{files: globalThis.File[]}>) {
         const {files} = event.detail;
+        uploadRefusal = null;
 
         try {
             // Upload ALL files directly (user should use Edit button to crop before upload)
             for (const file of files) {
-                await uploadFile(file);
+                // A file uploaded here is personal: its owner shares it from the list (decision 36)
+                await uploadFile(file, undefined, 'personal');
             }
 
             // Close uploader and refresh
             showUploader = false;
             pendingStaticFiles = [];
-            await loadFiles();
+            await reloadFiles('files-reload');
             // No toast: the new rows appear in the list, which is the confirmation.
             notify({name: 'file.uploaded', detail: {count: files.length}});
         } catch (e) {
-            error = e instanceof Error ? e.message : 'Upload failed';
-            // No toast: `error` is rendered in the page.
-            notify({name: 'file.upload.failed', detail: {reason: error}});
+            uploadRefusal = storageLimitNumbersOfError(e);
+            const reason = e instanceof Error ? e.message : 'Upload failed';
+            // No toast: a refusal of the space limit is said in the uploader; any other error in the page.
+            if (uploadRefusal === null) error = reason;
+            notify({name: 'file.upload.failed', detail: {reason}});
         }
     }
 
@@ -386,7 +428,7 @@
             // All images processed, close uploader and refresh
             showUploader = false;
             pendingStaticFiles = [];
-            await loadFiles();
+            await reloadFiles('files-reload');
         }
     }
 
@@ -496,6 +538,7 @@
 
     async function confirmBrimUpload() {
         if (!canConfirmBrimUpload()) return;
+        brimRefusal = null;
 
         try {
             // Collect broker IDs used in upload
@@ -519,13 +562,16 @@
 
             // Reset state
             closeBrimUploadModal();
-            await loadFiles();
+            await reloadFiles('files-reload');
         } catch (e) {
-            error = e instanceof Error ? e.message : 'Upload failed';
+            // The space limit refused a report: said in the dialog, with what to do (C9-1); any other error in the page.
+            brimRefusal = storageLimitNumbersOfError(e);
+            if (brimRefusal === null) error = e instanceof Error ? e.message : 'Upload failed';
         }
     }
 
     function closeBrimUploadModal() {
+        brimRefusal = null;
         showBrimUploadModal = false;
         showBrimUploader = false;
         pendingBrimFiles = [];
@@ -599,7 +645,7 @@
             } else {
                 await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
             }
-            await loadFiles();
+            await reloadFiles('files-reload');
             notify({name: 'file.deleted', detail: {fileId, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
@@ -607,24 +653,65 @@
         }
     }
 
+    /** The selected files the user may delete; the others (uploaded by someone else) stay, with a notice. */
+    function deletableSelection(isBrim: boolean): string[] {
+        const files: Array<UploadedFile | BrimFile> = isBrim ? brimFiles : staticFiles;
+        const blocked = new Set(files.filter((file) => (file as {can_delete?: boolean}).can_delete === false).map((file) => ('file_id' in file ? file.file_id : file.id)));
+        return selectedFileIds.filter((fileId) => !blocked.has(fileId));
+    }
+
     async function handleBulkDeleteFiles() {
         const isBrim = activeTab === 'brim';
+        const deletable = deletableSelection(isBrim);
+        const kept = selectedFileIds.length - deletable.length;
+        if (kept > 0) {
+            notify({name: 'file.delete.skipped', detail: {count: kept, isBrim}, toast: {variant: 'warning', message: $t('uploads.deleteSkipped')}});
+        }
+        if (deletable.length === 0) return;
         try {
-            for (const fileId of selectedFileIds) {
+            for (const fileId of deletable) {
                 if (isBrim) {
                     await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}});
                 } else {
                     await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
                 }
             }
-            const deletedCount = selectedFileIds.length;
+            const deletedCount = deletable.length;
             selectedFileIds = [];
             activeTableRef?.getTableRef()?.clearSelection();
-            await loadFiles();
+            await reloadFiles('files-reload');
             notify({name: 'file.deleted.bulk', detail: {count: deletedCount, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
             notify({name: 'file.delete.failed', detail: {isBrim, reason: error}});
+        }
+    }
+
+    // Scope (decision 36): sharing is immediate; making a file personal asks first, since the others lose it
+    let scopeConfirmFile: UploadedFile | null = null;
+
+    function requestScopeChange(file: UploadedFile, scope: UploadScope) {
+        if (scope === 'personal') {
+            scopeConfirmFile = file;
+            return;
+        }
+        void applyScopeChange(file, scope);
+    }
+
+    function confirmMakePersonal() {
+        const file = scopeConfirmFile;
+        scopeConfirmFile = null;
+        if (file) void applyScopeChange(file, 'personal');
+    }
+
+    async function applyScopeChange(file: UploadedFile, scope: UploadScope) {
+        try {
+            const updated = await setUploadScope(file.id, scope);
+            staticFiles = staticFiles.map((candidate) => (candidate.id === updated.id ? updated : candidate));
+            const message = scope === 'common' ? $t('uploads.scope.nowShared', {values: {name: file.original_name}}) : $t('uploads.scope.nowPersonal', {values: {name: file.original_name}});
+            notify({name: 'file.scope.changed', detail: {fileId: file.id, scope}, toast: {variant: 'success', message}});
+        } catch (e) {
+            notify({name: 'file.scope.change.failed', detail: {fileId: file.id, scope, reason: e instanceof Error ? e.message : String(e)}, toast: {variant: 'error', message: $t('uploads.scope.changeFailed')}});
         }
     }
 
@@ -659,7 +746,7 @@
         } catch (error) {
             if (token === previewRequestToken) {
                 previewData = null;
-                previewError = getFilePreviewError(error, 'Preview failed');
+                previewError = resolveParseFailureMessage(error, $t, 'Preview failed');
             }
         } finally {
             if (token === previewRequestToken) {
@@ -702,12 +789,17 @@
             <!-- View mode toggle (only for static tab) -->
             {#if activeTab === 'static' && staticFiles.length > 0}
                 <div class="view-toggle" data-testid="view-mode-toggle">
-                    <button class="view-btn" class:active={viewMode === 'grid'} on:click={() => setViewMode('grid')} title="Grid view" data-testid="view-mode-grid" aria-pressed={viewMode === 'grid'}>
-                        <LayoutGrid size={18} />
-                    </button>
-                    <button class="view-btn" class:active={viewMode === 'list'} on:click={() => setViewMode('list')} title="List view" data-testid="view-mode-list" aria-pressed={viewMode === 'list'}>
-                        <List size={18} />
-                    </button>
+                    <!-- Each button says what it does in the design system's tooltip, as the Assets and FX lists do (FB-8) -->
+                    <Tooltip text={$t('sharedResource.viewGrid')} position="bottom" interactiveChild testId="view-mode-grid-tooltip">
+                        <button class="view-btn" class:active={viewMode === 'grid'} on:click|stopPropagation={() => setViewMode('grid')} aria-label={$t('sharedResource.viewGrid')} data-testid="view-mode-grid" aria-pressed={viewMode === 'grid'}>
+                            <LayoutGrid size={18} />
+                        </button>
+                    </Tooltip>
+                    <Tooltip text={$t('sharedResource.viewTable')} position="bottom" interactiveChild testId="view-mode-list-tooltip">
+                        <button class="view-btn" class:active={viewMode === 'list'} on:click|stopPropagation={() => setViewMode('list')} aria-label={$t('sharedResource.viewTable')} data-testid="view-mode-list" aria-pressed={viewMode === 'list'}>
+                            <List size={18} />
+                        </button>
+                    </Tooltip>
                 </div>
             {/if}
 
@@ -720,24 +812,21 @@
                     {showBrimUploader ? $t('common.close') : $t('uploads.upload')}
                 </button>
             {/if}
-            <button class="btn btn-secondary" data-testid="files-refresh-button" title={$t('common.refresh')} disabled={loading} on:click={() => loadFiles()}>
-                <RefreshCw size={16} class={loading ? 'animate-spin' : ''} />
+            <button class="btn btn-secondary" data-testid="files-refresh-button" data-busy={pageBusy.busy ? 'true' : 'false'} title={$t('common.refresh')} disabled={pageBusy.busy} on:click={() => reloadFiles('files-refresh')}>
+                <RefreshCw size={16} class={pageBusy.busy ? 'animate-spin' : ''} />
             </button>
         </div>
     </header>
 
+    <!-- The space the instance takes (administrators), whatever the tab -->
+    {#if isAdmin}
+        <StorageBar openAdvanced={storageLimitOpen} />
+    {/if}
+
     <!-- Tabs -->
     <div class="mb-6 flex items-center gap-2">
-        <TabBar
-            tabs={[
-                {id: 'static', label: $t('uploads.staticResources'), testId: 'files-tab-static'},
-                {id: 'brim', label: $t('uploads.brokerReports'), testId: 'files-tab-brim'},
-            ]}
-            bind:activeTab
-            onchange={(tabId) => setActiveTab(tabId as Tab)}
-            class="flex-1"
-        />
-        {#if viewMode === 'list'}
+        <TabBar {tabs} bind:activeTab onchange={(tabId) => setActiveTab(tabId as Tab)} class="flex-1" />
+        {#if viewMode === 'list' && activeTab !== 'backup'}
             <SelectionBar
                 selectedCount={selectedFileIds.length}
                 actions={[
@@ -761,6 +850,9 @@
     <!-- Upload area (static only) -->
     {#if showUploader && activeTab === 'static'}
         <div class="upload-area">
+            {#if uploadRefusal}
+                <StorageLimitRefusal numbers={uploadRefusal} />
+            {/if}
             <FileUploader bind:this={fileUploaderRef} on:upload={handleUpload} on:change={handleStaticFileChange} on:editImage={handleEditImage} on:editFile={handleEditFile} on:error={(e: CustomEvent<{message: string}>) => (error = e.detail.message)} multiple={true} maxSizeMB={maxUploadSizeMB} />
         </div>
     {/if}
@@ -787,7 +879,16 @@
                     <p>{$t('uploads.noFiles')}</p>
                 </div>
             {:else if viewMode === 'grid'}
-                <FileGrid files={applyStaticGridFilters(staticFiles, currentFilters)} mode="browse" cardSize="full" showSearch={true} showActions={true} ondelete={(e) => deleteFile(e.id, false)} onpreview={(e) => openStaticPreview(e.file)} />
+                <FileGrid
+                    files={applyStaticGridFilters(staticFiles, currentFilters)}
+                    mode="browse"
+                    cardSize="full"
+                    showSearch={true}
+                    showActions={true}
+                    ondelete={(e) => deleteFile(e.id, false)}
+                    onpreview={(e) => openStaticPreview(e.file)}
+                    onscopechange={(e) => requestScopeChange(e.file, e.scope)}
+                />
             {:else}
                 <!-- List View with New DataTable -->
                 <FilesTable
@@ -799,8 +900,14 @@
                     initialFilters={currentFilters}
                     onFiltersChange={handleFiltersChange}
                     onSelectionChange={(ids) => (selectedFileIds = ids)}
+                    onScopeChange={requestScopeChange}
                 />
             {/if}
+        {:else if activeTab === 'backup'}
+            <!-- The backups the instance keeps (administrators) -->
+            <div data-testid="files-backup-panel">
+                <BackupsSection collapsible={false} />
+            </div>
         {:else}
             <!-- BRIM Files -->
             {#if brimFiles.length === 0}
@@ -870,6 +977,9 @@
     </div>
 
     <div class="modal-body upload-modal-body">
+        {#if brimRefusal}
+            <StorageLimitRefusal numbers={brimRefusal} />
+        {/if}
         <!-- Assign All section -->
         <div class="assign-all-section" data-testid="brim-assign-all">
             <span class="assign-all-label">{$t('uploads.assignAll') || 'Assign all to'}:</span>
@@ -940,6 +1050,9 @@
     </div>
 </ModalBase>
 
+<!-- Confirm making a file personal: the other users lose it, also where it shows as an icon or a photo -->
+<ConfirmModal open={scopeConfirmFile !== null} testId="files-scope-confirm" warning title={$t('uploads.scope.makePersonal')} message={$t('uploads.scope.makePersonalConfirm')} confirmText={$t('uploads.scope.makePersonal')} onConfirm={confirmMakePersonal} onCancel={() => (scopeConfirmFile = null)} />
+
 <!-- Confirm close uploader modal -->
 <ModalBase maxWidth="sm" onRequestClose={cancelCloseUploader} open={showCloseUploaderConfirm} zIndex={60}>
     <div class="modal-header">
@@ -973,6 +1086,7 @@
     open={showImageEditModal}
     preset="custom"
     uploadOnComplete={imageEditFileIndex === null}
+    scope="personal"
 />
 
 <!-- File Edit Modal (non-image files) -->
@@ -985,6 +1099,7 @@
     }}
     open={showFileEditModal}
     uploadOnComplete={fileEditFileIndex === null}
+    scope="personal"
 />
 
 <BrokerModal isOpen={createBrokerOpen} mode="create" onclose={() => (createBrokerOpen = false)} />
@@ -996,6 +1111,7 @@
         margin: 0 auto;
         min-width: 0;
         overflow: hidden;
+        color: var(--lf-text-primary);
     }
 
     .files-page .content {
@@ -1013,12 +1129,8 @@
     .page-header h1 {
         font-size: 1.5rem;
         font-weight: 600;
-        color: #1f2937;
+        color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    :global(.dark) .page-header h1 {
-        color: #f3f4f6;
     }
 
     .header-actions {
@@ -1029,42 +1141,28 @@
 
     .view-toggle {
         display: flex;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.5rem;
         overflow: hidden;
     }
 
-    :global(.dark) .view-toggle {
-        border-color: #4b5563;
-    }
-
     .view-btn {
         padding: 0.5rem;
-        background: white;
+        background: var(--lf-surface-card);
         border: none;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.2s ease;
     }
 
-    :global(.dark) .view-btn {
-        background: #374151;
-        color: #9ca3af;
-    }
-
     .view-btn:hover {
-        background: #f3f4f6;
-        color: #1f2937;
-    }
-
-    :global(.dark) .view-btn:hover {
-        background: #4b5563;
-        color: #f3f4f6;
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .view-btn.active {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
     }
 
     .btn {
@@ -1077,34 +1175,26 @@
     }
 
     .btn-primary {
-        background-color: #1a4031;
-        border: 1px solid #1a4031;
-        color: white;
+        background-color: var(--lf-action);
+        border: 1px solid var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover {
-        background-color: #143326;
+        background-color: var(--lf-action-hover);
     }
 
     .upload-area {
         margin-bottom: 1.5rem;
         padding: 1rem;
-        background: #f9fafb;
+        background: var(--lf-surface-panel);
         border-radius: 0.5rem;
-    }
-
-    :global(.dark) .upload-area {
-        background: #374151;
     }
 
     .loading {
         text-align: center;
         padding: 3rem;
-        color: #6b7280;
-    }
-
-    :global(.dark) .loading {
-        color: #9ca3af;
+        color: var(--lf-text-muted);
     }
 
     .empty-state {
@@ -1113,7 +1203,7 @@
         align-items: center;
         justify-content: center;
         padding: 4rem 2rem;
-        color: #9ca3af;
+        color: var(--lf-text-muted);
     }
 
     .empty-state p {
@@ -1129,41 +1219,28 @@
         justify-content: space-between;
         align-items: center;
         padding: 1rem 1.25rem;
-        border-bottom: 1px solid #e5e7eb;
-    }
-
-    :global(.dark) .modal-header {
-        border-bottom-color: #374151;
+        border-bottom: 1px solid var(--lf-border-subtle);
     }
 
     .modal-header h3 {
         margin: 0;
         font-size: 1.125rem;
         font-weight: 600;
-        color: #1f2937;
-    }
-
-    :global(.dark) .modal-header h3 {
-        color: #f3f4f6;
+        color: var(--lf-text-primary);
     }
 
     .modal-close {
         background: none;
         border: none;
         cursor: pointer;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         padding: 0.25rem;
         border-radius: 0.25rem;
     }
 
     .modal-close:hover {
-        background: #f3f4f6;
-        color: #1f2937;
-    }
-
-    :global(.dark) .modal-close:hover {
-        background: #374151;
-        color: #f3f4f6;
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .modal-body {
@@ -1172,21 +1249,13 @@
 
     .modal-body p {
         margin: 0;
-        color: #4b5563;
-    }
-
-    :global(.dark) .modal-body p {
-        color: #9ca3af;
+        color: var(--lf-text-secondary);
     }
 
     .pending-count {
         margin-top: 0.5rem !important;
         font-weight: 500;
-        color: #1f2937 !important;
-    }
-
-    :global(.dark) .pending-count {
-        color: #f3f4f6 !important;
+        color: var(--lf-text-primary) !important;
     }
 
     .modal-footer {
@@ -1194,52 +1263,39 @@
         justify-content: flex-end;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-top: 1px solid #e5e7eb;
-    }
-
-    :global(.dark) .modal-footer {
-        border-top-color: #374151;
+        border-top: 1px solid var(--lf-border-subtle);
     }
 
     .btn-secondary {
-        background: #f3f4f6;
-        border: 1px solid #d1d5db;
-        color: #374151;
-    }
-
-    :global(.dark) .btn-secondary {
-        background: #374151;
-        border-color: #4b5563;
-        color: #e5e7eb;
+        background: var(--lf-surface-panel);
+        border: 1px solid var(--lf-border-subtle);
+        color: var(--lf-text-secondary);
     }
 
     .btn-secondary:hover {
-        background: #e5e7eb;
-    }
-
-    :global(.dark) .btn-secondary:hover {
-        background: #4b5563;
+        background: var(--lf-surface-neutral);
     }
 
     .btn-danger {
-        background: #dc2626;
-        border: 1px solid #dc2626;
-        color: white;
+        background: var(--lf-danger-solid);
+        border: 1px solid var(--lf-danger-solid);
+        color: var(--lf-on-danger-solid);
     }
 
     .btn-danger:hover {
-        background: #b91c1c;
+        background: var(--lf-danger-hover);
     }
 
     .btn-disabled {
-        background: #9ca3af !important;
-        border-color: #9ca3af !important;
+        background: var(--lf-surface-neutral) !important;
+        border-color: var(--lf-surface-neutral) !important;
         cursor: not-allowed;
         opacity: 0.7;
+        color: var(--lf-text-muted);
     }
 
     .btn-disabled:hover {
-        background: #9ca3af !important;
+        background: var(--lf-surface-neutral) !important;
     }
 
     /* BRIM Upload Modal Styles — class applied via ModalBase contentClass */
@@ -1262,24 +1318,16 @@
         align-items: center;
         gap: 0.75rem;
         padding: 0.75rem;
-        background: #f8fafc;
+        background: var(--lf-surface-panel);
         border-radius: 0.5rem;
         margin-bottom: 1rem;
     }
 
-    :global(.dark) .assign-all-section {
-        background: #1e293b;
-    }
-
     .assign-all-label {
         font-weight: 500;
-        color: #374151;
+        color: var(--lf-text-secondary);
         white-space: nowrap;
         flex: 1;
-    }
-
-    :global(.dark) .assign-all-label {
-        color: #e5e7eb;
     }
 
     /* BrokerSelect in assign-all-section should match file-row width */
@@ -1296,12 +1344,8 @@
 
     .files-count {
         font-size: 0.875rem;
-        color: #6b7280;
+        color: var(--lf-text-muted);
         margin: 0 0 0.5rem 0;
-    }
-
-    :global(.dark) .files-count {
-        color: #9ca3af;
     }
 
     .file-row {
@@ -1310,15 +1354,10 @@
         justify-content: space-between;
         gap: 1rem;
         padding: 0.625rem 0.75rem;
-        background: white;
-        border: 1px solid #e5e7eb;
+        background: var(--lf-surface-card);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.5rem;
         position: relative;
-    }
-
-    :global(.dark) .file-row {
-        background: #1f2937;
-        border-color: #374151;
     }
 
     .file-info {
@@ -1331,11 +1370,7 @@
 
     .file-info :global(svg) {
         flex-shrink: 0;
-        color: #6b7280;
-    }
-
-    :global(.dark) .file-info :global(svg) {
-        color: #9ca3af;
+        color: var(--lf-text-muted);
     }
 
     .brim-edit-btn {
@@ -1345,25 +1380,20 @@
         padding: 0.25rem;
         border: none;
         background: transparent;
-        color: #9ca3af;
+        color: var(--lf-text-muted);
         cursor: pointer;
         border-radius: 0.25rem;
         flex-shrink: 0;
     }
 
     .brim-edit-btn:hover {
-        color: #1a4031;
-        background: rgba(26, 64, 49, 0.1);
-    }
-
-    :global(.dark) .brim-edit-btn:hover {
-        color: #a7f3d0;
-        background: rgba(167, 243, 208, 0.1);
+        color: var(--lf-link);
+        background: var(--lf-selected);
     }
 
     .file-row .file-name {
         font-size: 0.875rem;
-        color: #374151;
+        color: var(--lf-text-secondary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1371,13 +1401,9 @@
         min-width: 0;
     }
 
-    :global(.dark) .file-row .file-name {
-        color: #e5e7eb;
-    }
-
     .file-size {
         font-size: 0.75rem;
-        color: #9ca3af;
+        color: var(--lf-text-muted);
         flex-shrink: 0;
     }
 

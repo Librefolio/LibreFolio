@@ -44,6 +44,12 @@ canEdit(id: number): boolean                               // centralized viewer
 invalidate(): void                                         // after commit/delete → triggers reload
 ```
 
+> 2026-11-07 lint: the API above is the Plan C design. In the code the functions are module exports with a `txStore`
+> prefix — `txStoreSetAll`, `txStoreGet`, `txStoreGetAll`, `txStoreGetFiltered`, `txStoreCanEdit`, `txStoreInvalidate`,
+> plus `txStoreGetVersion` and `txStoreCount` (~90 LOC). `getPartner()` was removed in `52ddafdd2` (2026-09-03, audit 08
+> wave): partners are found through `related_transaction_id` and `txStoreGet`. The store also serves the broker page's
+> Transactions tab, not only the transactions page.
+
 ## WorkspaceIntent Pattern
 
 Toolbar actions no longer pass full data objects to BulkModal. Instead they pass a minimal intent:
@@ -56,7 +62,8 @@ type WorkspaceIntent =
   | { action: 'clone', txIds: number[] }
 ```
 
-BulkModal reads the actual data from txStore using the provided IDs.
+BulkModal reads the actual data from txStore using the provided IDs. (2026-11-07 lint: the code also has
+`{action: 'import'}`, which opens the Import Wizard — [[concepts/workspace-intent-pattern]].)
 
 ## PendingOp Model (Plan C3 — final architecture)
 
@@ -94,7 +101,7 @@ type PendingOp = (
    - `fieldsFromTx(tx)` — pure field extraction with auto-sign
    - `editOpFromTx(txId)` — creates edit op, reads from txStore
    - `createOpFromClone(tx)` — creates a create op that **keeps the source row's date**: a clone is the correction
-     workflow, not «the same operation today» (beta finding T3, `59087c74a`, 2026-09-03; it used to reset the date to
+     workflow, not «the same operation today» (beta finding T3, `c51989964`, 2026-09-03; it used to reset the date to
      today, in three places of the bulk modal)
 
 **Status derivation** (never set manually):
@@ -121,11 +128,12 @@ See [[decisions/pendingop-tagged-union]] for rationale.
 - **TransactionPickerModal**: reads `txStore.getAll()` directly — no props needed
 - **TransactionBulkModal**: reads individual rows via `txStore.get(id)`, resolves partners via `txStore.getPartner(id)`
 - **TransactionDeleteModal**: parent reads from txStore before passing to DeleteModal
-- **Page toolbar**: `txStore.canEdit()` for `filterEditableRows()`
+- **Page toolbar**: `txStore.canEdit()` for `filterEditableRows()` (today `guardEditableRows(rows, txStoreCanEdit, …)` in
+  `frontend/src/lib/features/transactions/bulk/selectionGuards.ts`, since `5db705d62`, 2026-10-28)
 
 ## Interface Deduplication
 
-Step 6a created `frontend/src/lib/components/transactions/types.ts` as the canonical source for shared interfaces:
+Step 6a created `frontend/src/lib/features/transactions/types.ts` as the canonical source for shared interfaces:
 - `TXReadItem` — full transaction read model
 - `ValidationIssue` — validation error structure
 - `AssetEvent` — linked asset event
@@ -136,10 +144,10 @@ All components import from this single file instead of declaring local duplicate
 
 | Role | Path |
 |------|------|
-| txStore implementation | `frontend/src/lib/stores/transactions/txStore.svelte.ts` |
-| Interface types (canonical) | `frontend/src/lib/components/transactions/types.ts` |
+| txStore implementation | `frontend/src/lib/features/transactions/txStore.svelte.ts` |
+| Interface types (canonical) | `frontend/src/lib/features/transactions/types.ts` |
 | Page (populates store) | `frontend/src/routes/(app)/transactions/+page.svelte` |
-| Picker (reads from store) | `frontend/src/lib/components/transactions/modals/TransactionPickerModal.svelte` |
-| Bulk modal (reads + PendingOp) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Picker (reads from store) | `frontend/src/lib/features/transactions/bulk/TransactionPickerModal.svelte` |
+| Bulk modal (reads + PendingOp) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | Plan (designed here) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md` |
 

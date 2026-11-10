@@ -23,6 +23,21 @@ from ._common import (
     print_warning,
 )
 
+#: The frontend tools the runner's actions call: Vitest, and Playwright (`npx vitest`, `npx playwright test`, `npm run test:e2e`).
+FRONTEND_TEST_BINARIES = ("vitest", "playwright")
+
+
+def require_frontend_tools() -> bool:
+    """True when ``frontend/node_modules/.bin`` holds the tools the frontend actions call; otherwise say what is missing.
+
+    The actions call ``npx`` directly, and without ``node_modules`` ``npx`` does not fail: it fetches whatever version the
+    registry serves instead of the one the lock pins (J-8). The check is dev.py's own, with its message (and ``npm ci``).
+    """
+    from dev import require_frontend_dependencies  # noqa: PLC0415 — avoid dev.py import cycle
+
+    return require_frontend_dependencies(FRONTEND_TEST_BINARIES, purpose="the frontend tests") == 0
+
+
 # Setup already performed in the current scope. A scope is one run of one
 # category: `reset_setup_scope()` opens it, and the first `_ensure_*` call
 # inside it does the real work while the rest find it warm.
@@ -32,6 +47,13 @@ from ._common import (
 # database and recreate the eight users once per action; with it, the cost is
 # paid exactly once per category — which is what the hand-written lists did.
 _SETUP_DONE: set[str] = set()
+
+
+#: The mode the shared test server builds in: ``dev.py server --test`` always serves a debug build (the Designer Lab is only
+#: in it). The runner builds the same, so the server that follows finds a build of its own mode and rebuilds nothing:
+#: a production build here was rebuilt in debug by the server at every run (C-67, J-7), and an instrumented one lost
+#: its marker doing so; the runner in turn rebuilt in release under a server already serving (L-12).
+TEST_SERVER_BUILDS_DEBUG = True
 
 
 def reset_setup_scope() -> None:
@@ -50,7 +72,8 @@ def _ensure_frontend_build() -> bool:
     ``Could not resolve "./generated" from src/lib/api/index.ts``. Routing the
     build through ``cmd_fe_build`` — the same path ``dev.py server --force`` uses —
     regenerates them first. ``auto_build_frontend`` still only rebuilds when the
-    sources actually changed.
+    sources actually changed. The build is a debug one, like the test server's
+    (``TEST_SERVER_BUILDS_DEBUG``), so the server started next rebuilds nothing.
     """
     from dev import cmd_fe_build  # noqa: PLC0415 — avoid dev.py import cycle
 
@@ -90,7 +113,7 @@ def _ensure_frontend_build() -> bool:
 
     try:
         result = auto_build_frontend(
-            debug=False,
+            debug=TEST_SERVER_BUILDS_DEBUG,
             force=force,
             build_func=lambda debug=False: cmd_fe_build(SimpleNamespace(debug=debug)),
         )
@@ -177,19 +200,20 @@ def _ensure_test_users() -> bool:
 
     print_info("Ensuring E2E test users exist...")
 
+    # Only e2e_test_admin is an administrator: the others are ordinary users (backlog 38, L12).
     users = [
-        ("e2e_test_user", "e2e@test.example.com", "E2eTestPass123!"),
-        ("e2e_test_admin", "e2eadmin@test.example.com", "E2eAdminPass123!"),
-        ("e2e_test_user2", "e2e2@test.example.com", "E2eTestPass456!"),
-        ("e2e_user_alice", "alice@test.example.com", "AlicePass123!"),
-        ("e2e_user_bob", "bob@test.example.com", "BobPass123!"),
-        ("e2e_user_carol", "carol@test.example.com", "CarolPass123!"),
-        ("e2e_user_dave", "dave@test.example.com", "DavePass123!"),
-        ("e2e_user_eve", "eve@test.example.com", "EvePass123!"),
+        ("e2e_test_user", "e2e@test.example.com", "E2eTestPass123!", "create-user"),
+        ("e2e_test_admin", "e2eadmin@test.example.com", "E2eAdminPass123!", "create-superuser"),
+        ("e2e_test_user2", "e2e2@test.example.com", "E2eTestPass456!", "create-user"),
+        ("e2e_user_alice", "alice@test.example.com", "AlicePass123!", "create-user"),
+        ("e2e_user_bob", "bob@test.example.com", "BobPass123!", "create-user"),
+        ("e2e_user_carol", "carol@test.example.com", "CarolPass123!", "create-user"),
+        ("e2e_user_dave", "dave@test.example.com", "DavePass123!", "create-user"),
+        ("e2e_user_eve", "eve@test.example.com", "EvePass123!", "create-user"),
     ]
 
-    for username, email, password in users:
-        result = subprocess.run(["python", "scripts/user_cli.py", "--test-db", "create-superuser", username, email, password], capture_output=True, text=True)
+    for username, email, password, command in users:
+        result = subprocess.run(["python", "scripts/user_cli.py", "--test-db", command, username, email, password], capture_output=True, text=True)
         # The CLI exits 1 on failure and reports on stdout ("Username already taken",
         # "Email already registered"): an existing user is fine, anything else is not.
         output = f"{result.stdout}\n{result.stderr}".lower()

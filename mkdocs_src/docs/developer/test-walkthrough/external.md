@@ -15,12 +15,13 @@ To ensure that external providers (like Yahoo Finance, ECB, etc.) are reachable 
 | `justetf-multicurrency` | The JustETF provider in its four currencies (EUR, USD, CHF, GBP): current price, history, search, parameter validation |
 | `brim-providers` | Broker Report Import Manager parsers (local sample files, no network) |
 | `brim-danske-bank` | The Danske Bank report-set plugin: file roles, combining a set into one file, parsing it (local sample files, no network) |
+| `brim-credit-agricole` | Crédit Agricole report-set plugin: roles, rule M, pairing, balances and holes, combining, parsing (local sample files, no network) |
 | `brim-degiro` | The DEGIRO plugin: recognition, reading by position, types, FX pairs, numbers, messages, orders list (local sample files, no network) |
 | `all` | All of the above |
 
 `--providers` and `--exclude-providers` (see [Provider Filtering](#provider-filtering)) filter
-`fx-providers`, `asset-providers` and `brim-providers`. `justetf-multicurrency`, `brim-danske-bank`
-and `brim-degiro` take no provider filter: `all` runs them in full whatever the filter says.
+`fx-providers`, `asset-providers` and `brim-providers`. `justetf-multicurrency`, `brim-danske-bank`,
+`brim-credit-agricole` and `brim-degiro` take no provider filter: `all` runs them in full whatever the filter says.
 
 ## 🚀 Running
 
@@ -93,17 +94,22 @@ Provider codes are discovered by **regex-parsing** the Python source files — t
 
 ## 🔄 yfinance Retry Logic
 
-The Yahoo Finance provider includes automatic retry with exponential backoff for transient network errors (API instability, rate limiting, timeouts).
+The Yahoo Finance provider includes automatic retry with exponential backoff for transient network errors (API instability, timeouts).
 
 | Parameter | Value |
 |-----------|-------|
-| Max retries | 3 |
-| Base delay | 1.5 s (→ 1.5 s, 3 s, 6 s) |
-| Transient keywords | `curl`, `connection`, `timeout`, `reset`, `503`, `429`, `rate limit`, etc. |
+| Attempts | At most 3 (`_YF_MAX_RETRIES`) |
+| Delays | 1.5 s, then 3 s |
+| Transient keywords | `curl`, `connection`, `timeout`, `reset`, `503`, `ssl`, `broken pipe`, etc. |
 
 **Wrapped operations:** `get_current_value`, `get_history_value`, `search`, `fetch_asset_metadata`.
 
-Non-transient errors (e.g., `INVALID_IDENTIFIER_TYPE`) are raised immediately without retry.
+Non-transient errors (e.g., `INVALID_IDENTIFIER_TYPE`) are raised immediately without retry. So is a
+refusal for too many requests (`YFRateLimitError`, or «429», «too many requests», «rate limit» in the
+message): it leaves at once as `AssetRateLimitedError` (`RATE_LIMITED`), for the core to pause the
+provider (see [Yahoo Finance Provider](../backend/assets/provider_yahoo_finance.md#limitations)).
+These tests call the provider directly, not through the core's boundary: a refusal fails the test
+with that error, and no pause follows.
 
 !!! note "Thread safety"
 

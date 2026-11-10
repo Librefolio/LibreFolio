@@ -32,11 +32,14 @@ libreria» non equivale a «usare il C». riskfolio-lib serves first as the **te
 
 ## Consequences
 
-Checked on the code at `b4acfb250`:
+Checked on the code at `ef563d91c`:
 
 - `historical_var_cvar` returns the empirical VaR and the coherent CVaR (Acerbi-Tasche / Rockafellar-Uryasev) in
   `metrics.py`;
 - rolling compounding is vectorised (`np.expm1(np.log1p(series).rolling(window).sum())` in `signal_helpers.py`);
+  *2026-11-07 lint:* `signal_helpers.py` became `backend/app/services/signals/risk_adapters.py` in `195197af8` (2026-10-17);
+  that literal expression is no longer in `backend/app`, and the rolling metrics go through `rolling_single_values()`
+  and `rolling_pair_values()` there;
 - the oracle pins the hand-written maths before any migration ([[decisions/histogram-grid-pinned-to-var-cut]]).
 
 ## Source files
@@ -44,6 +47,6 @@ Checked on the code at `b4acfb250`:
 | Role | Path |
 |------|------|
 | VaR, CVaR, histogram | `backend/app/services/risk/metrics.py` |
-| Rolling signals | `backend/app/services/risk/signal_helpers.py` |
+| Rolling signals | `backend/app/services/signals/risk_adapters.py` |
 | riskfolio-lib in its process | `backend/app/services/risk/quant/riskfolio_worker.py` |
 | Journal | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/06-matematica-librerie-e-reimplementazioni.md` |

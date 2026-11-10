@@ -27,19 +27,21 @@ $$
 \operatorname{mark}(a,t)=
 \begin{cases}
 \text{MARKET}(a,t) & \text{same-day asset-system quote}\\
-\operatorname{avg}(\text{TRADE}(a,t)) & \text{same-day BUY/SELL/priced ADJUSTMENT observations}\\
+\operatorname{avg}(\text{TRADE}(a,t)) & \text{same-day BUY/SELL observations, or transfer cost estimates}\\
 \text{last observation before }t & \text{carried forward (LOCF)}\\
 \varnothing & \text{no observation on or before }t
 \end{cases}
 $$
 
 - The unified resolver is the single valuation brain: `MARKET → TRADE_AVG → CARRIED → MISSING`.
+- Market quotes and BUY/SELL trades are observations. An ADJUSTMENT never is, incoming or outgoing, with or without a cost basis: its cost basis is a cost, not what the asset was worth that day.
+- The cost of an incoming TRANSFER (its per-unit cost basis, in the cost basis's currency) is a TRADE observation, estimated, only while the asset has, on or before that day, no market quote and no other operation — no BUY or SELL, no ADJUSTMENT, no outgoing transfer; other incoming transfers do not stop it. It is carried forward until a real quote or trade replaces it, and never overrides one: a quoted security moved between brokers keeps its carried quote ([Transfer cost as an estimate](price-resolution.md#transfer-cost-estimate)).
 - `CARRIED` is last-observation-carried-forward. It carries `days_back` staleness metadata.
 - `estimated=True` means TRADE-origin. A stale carried MARKET quote is stale, not estimated.
 - Marks stay in native currency; each consumer converts to $C^*$ at valuation date $t$.
 - Cost-basis FX remains pinned to the transaction date.
 - Cash stays in the currency it was recorded in, broker by broker, and is valued at the rate of $t$ (§5); each cash movement is still booked, and each external cash flow enters the capital, at the rate of its own date.
-- WAC is **never** used as valuation price.
+- WAC is **never** used as valuation price. A position whose asset has no mark at all ($\varnothing$) is counted at its cost basis instead, as a declared estimate, not a price (§3).
 
 See [Price Resolution](price-resolution.md) for the resolver contract and data-quality semantics.
 
@@ -47,13 +49,14 @@ See [Price Resolution](price-resolution.md) for the resolver contract and data-q
 
 ## 📐 3. Position State {: #3-position-state }
 
-For each position $(a, b)$ with $q(a,b,t) > 0$:
+A position $(a, b)$ is **held** on $t$ when its quantity is above the dust threshold $\varepsilon = 10^{-5}$ units: $q(a,b,t) > \varepsilon$. For each position held:
 
 $$
 \mathrm{MV}(a,b,t) =
-\frac{q(a,b,t)}{qbq(a)}\cdot
-\operatorname{mark}(a,t)\cdot
-\mathrm{fx}\bigl(\mathrm{ccy}_{mark}, C^*, t\bigr)
+\begin{cases}
+\dfrac{q(a,b,t)}{qbq(a)}\cdot \operatorname{mark}(a,t)\cdot \mathrm{fx}\bigl(\mathrm{ccy}_{mark}, C^*, t\bigr) & \operatorname{mark}(a,t) \neq \varnothing\\
+\mathrm{CB}(a,b,t) & \operatorname{mark}(a,t) = \varnothing \text{ and the cost of } (a,b) \text{ is complete}
+\end{cases}
 $$
 
 $$
@@ -65,6 +68,10 @@ $$
 $$
 
 Where $w(a,b,t)$ is the [Weighted Average Cost](../weighted-average-cost.md) for position $(a,b)$ at date $t$, kept in $C^*$ at historical rates (§4): the cost basis takes no exchange rate at $t$, so for a foreign asset the exchange-rate effect is part of $\mathrm{UGL}$.
+
+The second case covers an asset with no observation yet — no quote, no BUY or SELL and no transfer cost estimate on or before $t$, as for a holding received through adjustments, or through transfers without a cost basis. The position is valued at its cost basis, valuation source `ESTIMATED_AT_COST`: a declared estimate, not a price. It reports no unit price, it does not move with exchange rates, and its $\mathrm{UGL}$ is zero, with neither a price effect nor an exchange-rate effect. The choice is made day by day, with no look-ahead: from the first observation on, the mark wins, even an old one carried forward. A position whose cost is incomplete (§4) has no market value on such a day (`MISSING`) and is left out of $\mathrm{MV}(t)$. The valuation sources therefore rank `MARKET_PRICE` > `LAST_TRADE_PRICE` > `ESTIMATED_AT_COST` > `MISSING` ([Price Resolution](price-resolution.md)).
+
+A quantity of $\varepsilon$ units or fewer — the dust a sale of almost every unit can leave behind — is not held: it has no position state, so no market value, no cost basis, no allocation slice and no snapshot, and dust without a mark does not make the day incomplete. The same threshold decides which positions the Performance rows hold (§7), so the portfolio and its rows count the same positions; where the cost of the dust goes is in §7.
 
 ---
 
@@ -116,6 +123,8 @@ $$
 \mathrm{UGL}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)
 $$
 
+$\mathrm{MV}(t)$ and $\mathrm{OCB}(t)$ run over the positions held on $t$ (§3): dust, at or below the threshold, is in neither, so neither in NAV nor in Book.
+
 $\mathrm{Cash}(t)$ is each broker's cash, kept in the currencies it was recorded in and valued at the rate of $t$:
 
 $$
@@ -123,6 +132,29 @@ $$
 $$
 
 where $N_{b,c}(t)$ is the balance of broker $b$ in currency $c$ after its movements dated on or before $t$, scaled by the broker's [ownership share](../../../../user/brokers/sharing.md), and $\mathrm{fx}(c, C^*, t)$ is the latest rate on or before $t$ ($1$ for $c = C^*$). The same term is in NAV and in Book, so the exchange-rate effect on cash cancels in UGL: it is booked as an exchange result (§6) and belongs to the Total P&L.
+
+### 🔀 Two Unrealized Figures {: #two-unrealized-figures }
+
+$\mathrm{InTransit}(t)$ and $\mathrm{InTransitBook}(t)$ hold the same cash in transit, and the securities travelling between two brokers of $S$ at market value, $\mathrm{MV}^{\mathrm{tr}}(t)$, in the first and at historical cost, $\mathrm{CB}^{\mathrm{tr}}(t)$, in the second. Cash cancels, so with $\mathrm{OCB}(t)$ the cost basis of the positions held (§3):
+
+$$
+\mathrm{UGL}(t) = \bigl[\mathrm{MV}(t) - \mathrm{OCB}(t)\bigr] + \bigl[\mathrm{MV}^{\mathrm{tr}}(t) - \mathrm{CB}^{\mathrm{tr}}(t)\bigr]
+$$
+
+The engine reports two unrealized figures:
+
+| Figure | Definition | Where it shows |
+|--------|-----------|----------------|
+| Portfolio unrealized | $\mathrm{UGL}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)$, securities in transit included | `unrealized_gain_loss` of the portfolio report's summary and history points (`POST /portfolio/report`) and of the AI Export portfolio and broker summaries; [Book Value — Unrealized](book-value.md) |
+| Period unrealized | $\mathrm{MV}(t) - \mathrm{OCB}(t)$ at each period boundary, positions held only | `period_unrealized_gain_loss_start`, `_end`, `_delta` and their split by currency; the Dashboard's **Unrealized change**; the $\Delta\mathrm{UGL}$ of [Period P&L](period-pnl.md) and the per-position rows of §7 |
+
+They differ only by the securities in transit: on a day when none is travelling, they are equal. A security in transit on a period boundary is in NAV, so in the period P&L, but in no position's state: its part of the result is in the residual of §7, not in $\Delta\mathrm{UGL}$.
+
+### 🏦 The Whole Broker {: #whole-broker }
+
+Every amount of broker $b$ — its quantities, cash and flows — counts at the broker's [ownership share](../../../../user/brokers/sharing.md) $s_b$: an owner's share, $1$ for an editor or a viewer. The **whole-broker** view, meant for the broker page, sets $s_b = 1$ for every broker, as an editor sees it, whatever the user's share; the Dashboard keeps the owner's share. A broker worth 10 000 € owned at 30 % is 3 000 € on the Dashboard and 10 000 € whole; owned at 0 %, 0 € and 10 000 €.
+
+For a single broker the ratios are the same in both views: every flow and every value is multiplied by the same constant $s_b$, which cancels in TWRR, MWRR, simple ROI, the weights and the period percentages. Only the amounts change.
 
 ---
 
@@ -150,9 +182,14 @@ Three accumulator pools track cash provenance. $K$ and $R$ are maintained **per-
 | ![](../../../../static/icons/transactions/fee.png){: width="24" } ![](../../../../static/icons/transactions/tax.png){: width="24" }<br>**FEE / TAX**<br>$F > 0$ | $R_b \mathrel{-}= F$<br>$\text{if } R_b < 0\text{: } K_b \mathrel{+}= R_b,\; R_b = 0$ | Consumes returns $R_b$ first; if $R_b$ becomes negative, it drains from capital $K_b$. |
 | ![](../../../../static/icons/transactions/buy.png){: width="24" }<br>**BUY**<br>$B > 0$ | $\rho = \min(B,\, R_b)$<br>$R_b \mathrel{-}= \rho$<br>$K_b \mathrel{-}= (B - \rho)$ | Consumes returns $R_b$ first, then drains the rest from capital $K_b$. |
 | ![](../../../../static/icons/transactions/sell.png){: width="24" }<br>**SELL** | $G = P - C$<br>$K_b \mathrel{+}= C$<br>$R_b \mathrel{+}= G$<br>$\text{if } R_b < 0\text{: } K_b \mathrel{+}= R_b, \quad R_b = 0$ | Cost basis $C = |q_s| \cdot w_{\text{pre}}$ returns to capital $K_b$; gain $G$ goes to returns $R_b$ (if $G < 0$, it behaves like a fee).<br><br>!!! warning "Critical ordering"<br><br>    $C$ must be computed **before** the WAC pool is reduced (full-sell would give $C = 0$ otherwise). |
-| ![](../../../../static/icons/transactions/cash-transfer.png){: width="24" }<br>**CASH TRANSFER**<br>(Internal, $s \to d$, $X > 0$) | **Departure Leg ($s$):**<br>$\rho = \min(X,\, R_s)$<br>$R_s \mathrel{-}= \rho$<br>$\kappa = X - \rho$<br>$K_s \mathrel{-}= \kappa$<br><br>**Arrival Leg ($d$):**<br>$K_d \mathrel{+}= \kappa$<br>$R_d \mathrel{+}= \rho$ | Internal cash transfers move pool allocations ($R_s \to R_d$, $K_s \to K_d$) proportional to the departure balance.<br>The global tracker $W$ is **never** touched (capital remains inside the system). |
+| ![](../../../../static/icons/transactions/cash-transfer.png){: width="24" } ![](../../../../static/icons/transactions/fx-conversion.png){: width="24" }<br>**CASH TRANSFER / FX CONVERSION**<br>(Internal, $s \to d$, $X > 0$ leaves, $Y > 0$ arrives) | **Departure Leg ($s$):**<br>$\rho = \min(X,\, R_s)$<br>$R_s \mathrel{-}= \rho$<br>$\kappa = X - \rho$<br>$K_s \mathrel{-}= \kappa$<br><br>**Arrival Leg ($d$):**<br>$K_d \mathrel{+}= \kappa$<br>$R_d \mathrel{+}= \rho + (Y - X)$<br>$\text{if } R_d < 0\text{: } K_d \mathrel{+}= R_d,\; R_d = 0$ | The departure takes returns $R_s$ first, then capital $K_s$. The arrival brings back what the departure took from each pool. $X$ and $Y$ are in $C^*$ at the rate of each leg's own date, each weighted by its broker's ownership share, so they can differ: a conversion's spread against the reference rate, the rate move while the cash travels, two brokers owned at different shares. Neither leg is an external flow, so the capital baseline does not move and Total P&L already counts the gap $Y - X$: it is a **result**, booked like the [exchange result on cash at rest](#exchange-result-on-foreign-cash) — a gain to the returns, a loss out of the returns first and then of the capital, as a FEE. With $Y = X$: $K_d \mathrel{+}= \kappa$, $R_d \mathrel{+}= \rho$.<br>An FX CONVERSION has both legs at the same broker ($s = d$), in two currencies.<br>The global tracker $W$ is **never** touched (capital remains inside the system). |
+| ![](../../../../static/icons/transactions/cash-transfer.png){: width="24" } ![](../../../../static/icons/transactions/fx-conversion.png){: width="24" }<br>**CASH TRANSFER / FX CONVERSION**<br>(External or orphan leg on $b$: $Y > 0$ arrives, or $X > 0$ leaves) | **Incoming ($Y$), as a DEPOSIT:**<br>$r = \min(Y,\, W)$<br>$R_b \mathrel{+}= r$<br>$W \mathrel{-}= r$<br>$K_b \mathrel{+}= Y - r$<br><br>**Outgoing ($X$), as a WITHDRAWAL:**<br>$k = \min(X,\, K_b)$<br>$K_b \mathrel{-}= k$<br>$\rho = \min(X - k,\, R_b)$<br>$R_b \mathrel{-}= \rho$<br>$W \mathrel{+}= \rho$ | A leg whose other leg sits at a broker outside $S$, or that has lost its pair — the link cleared, or the paired row gone — is an external flow: the capital baseline counts it at its amount, like a deposit or a withdrawal. Its pools move as that deposit or withdrawal would: an arrival first restores withdrawn returns $W$ into $R_b$, the rest is capital $K_b$; a departure takes capital $K_b$ first, then returns $R_b$, which go to $W$. Unlike an internal pair, this leg **does** touch $W$, and it records or takes up no split. |
 
-If departure and arrival dates differ, the transfer is in-transit: subtracted from $s$ at departure day, added to $d$ at arrival day. Between those dates, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ by the in-transit amount — handled by proportional reconciliation.
+For example, with $C^* = \mathrm{EUR}$, a broker with $K = 1000$, $R = 300$ converts 650 EUR into 715 USD at a reference rate of 0.92 EUR per USD ($Y = 657.80$): afterwards $K = 1000$ and $R = 307.80$ — the capital still equals what was deposited, and the 7.80 spread is a result. Between brokers owned at different shares, $A$ at 100 % sending 400 to $B$ at 50 % gives $X = 400$, $Y = 200$: a loss of 200, out of the returns first.
+
+Each departure records its split $(\rho, X)$ until its arrival takes it up, once. An arrival whose departure is unknown — no recorded split, or $X = 0$ — goes entirely to $K_d$. When both legs fall on the same day, the arrival is applied after that day's other movements, whatever their transaction ids, so it always finds its departure's split. A transfer or conversion whose other leg is outside $S$, or that has lost its pair, is not internal and does not follow this rule: it moves the pools as a DEPOSIT or a WITHDRAWAL (the row above). In a view of broker $B$ alone, $650$ arriving from a broker $A$ outside the view makes an empty $B$ hold $K_B = 650$, $R_B = 0$; a $B$ holding $K_B = 100$, $R_B = 100$ ends at $K_B = 750$, $R_B = 100$. If the $B$ holding $K_B = 100$, $R_B = 100$ sends $150$ out of the view instead, it keeps $K_B = 0$, $R_B = 50$, and $W = 50$: the next inflow — a deposit or another leg from outside — restores those $50$ into $R_B$ first, and a later BUY spends $R_B$ first, as usual. In the view of $A$ and $B$ together the same pair is internal and follows the rule above.
+
+If departure and arrival dates differ, the transfer is in-transit: subtracted from $s$ at departure day, added to $d$ at arrival day. Between those dates, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ by the in-transit amount — the reconciliation below reads that cash with the pools' current mix until the arrival brings back the departure's split.
 
 ### 💱 Exchange Result on Foreign Cash {: #exchange-result-on-foreign-cash }
 
@@ -193,7 +230,10 @@ $$
 \mathrm{CashFromReturns}(t) = \mathrm{Cash}_{\text{like}}(t) - \mathrm{CashFromCapital}(t)
 $$
 
-Otherwise $\mathrm{CashFromCapital}(t) = \min\bigl(\sum_b K_b(t),\, \mathrm{Cash}_{\text{like}}(t)\bigr)$ and $\mathrm{CashFromReturns}$ is the rest, floored at zero. The exchange results on cash at rest are booked into the pools (above), so the drift left comes from in-transit timing: cash in transit — and the move of its exchange rate while it travels — is in no broker's pools.
+Otherwise $\mathrm{CashFromCapital}(t) = \min\bigl(\sum_b K_b(t),\, \mathrm{Cash}_{\text{like}}(t)\bigr)$ and $\mathrm{CashFromReturns}$ is the rest, floored at zero. The exchange results on cash at rest are booked into the pools (above); the scaling absorbs two drifts:
+
+- **Cash in transit.** The departure has left the pools, while $\mathrm{Cash}_{\text{like}}$ still counts the cash in transit — and the move of its exchange rate while it travels — so $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$. Until the arrival, the scale reads that cash with the pools' current mix. A broker with $K = 1000$, $R = 300$ sends $650$ in $C^*$ to an empty broker of $S$: it keeps $K = 650$, $R = 0$, the scale is $1300 / 650 = 2$, so $\mathrm{CashFromCapital} = 1300$ and $\mathrm{CashFromReturns} = 0$ during the transit. On arrival the split comes back: $1000$ and $300$.
+- **Negative cash (overdraft).** Both pools are clamped at zero per broker, so a broker whose cash goes below zero leaves pools that no longer sum to its cash — also on the following days, since the clamped values are kept.
 
 ---
 
@@ -202,7 +242,7 @@ Otherwise $\mathrm{CashFromCapital}(t) = \min\bigl(\sum_b K_b(t),\, \mathrm{Cash
 For period $[t_0, t_1]$, per-position $(a,b)$:
 
 $$
-\Delta\mathrm{UGL}(a,b) = \mathrm{UGL}(a,b,t_1) - \mathrm{UGL}(a,b,t_0)
+\Delta\mathrm{UGL}(a,b) = \mathrm{UGL}(a,b,t_1) - \mathrm{UGL}(a,b,t_0) + T(a,b)
 $$
 
 $$
@@ -214,6 +254,36 @@ Contribution position set:
 $$
 \mathcal{P} = \text{positions with BUY/SELL/ADJUSTMENT/TRANSFER activity or boundary quantity}
 $$
+
+$\mathrm{UGL}(a,b,t)$ is the position state of §3 at the end of day $t$, the one the portfolio aggregates (§5): the mark of §2 — a trade-derived mark restated through any later split —, the cost basis when the asset has no mark at all, the exchange rate of $t$ itself. A position not held on $t$ counts 0. A position held on $t$ whose $\mathrm{UGL}(a,b,t)$ is unknown — no rate, an incomplete cost — makes $\Delta\mathrm{UGL}(a,b)$ unknown, never the known side minus zero. When every row is known, the rows add up to the portfolio's change, that of the positions held — the period unrealized of [§5](#two-unrealized-figures), securities in transit left out:
+
+$$
+\sum_{(a,b) \in \mathcal{P}} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL} = \bigl[\mathrm{MV}(t_1) - \mathrm{OCB}(t_1)\bigr] - \bigl[\mathrm{MV}(t_0) - \mathrm{OCB}(t_0)\bigr]
+$$
+
+The identity holds with dust too: a row and the portfolio state of §3 use the same threshold, so a position left with $10^{-5}$ units or fewer is not held on either side — no value, no unrealized, in no row and not in $\Delta\mathrm{UGL}$. Its cost leaves the open cost basis without being sold, so it is in neither $\Delta\mathrm{UGL}$ nor Realized: it ends in the period's residual (below).
+
+**Internal transfers.** $T(a,b)$ splits the result of a security moved between two brokers of $S$: each broker answers for its own stretch. For each linked TRANSFER of $a$ from broker $s$ to broker $d$ that departs after $t_0$ and arrives on or before $t_1$, with $V$ the value of the moved units on the arrival day (§3) and $C$ the historical cost the sender's pool gave up for them (§4):
+
+$$
+T(a,s) \mathrel{+}= V - C, \qquad T(a,d) \mathrel{-}= V - C
+$$
+
+The sender answers for the units until they arrive, transit included, the receiver from their arrival; the terms cancel, so the total is unchanged. A transfer already in transit at $t_0$, still in transit at $t_1$, or with $V$ or $C$ unknown adds nothing: the boundary values stand.
+
+??? example "Example: 10 units moved from broker A to broker B"
+
+    A holds 10 units bought at 80 ($C = 800$). The price is 100 at $t_0$, 120 on the day they move to B ($V = 1{,}200$), 150 at $t_1$:
+
+    $$
+    \Delta\mathrm{UGL}(a,A) = 0 - (1{,}000 - 800) + (1{,}200 - 800) = +200
+    $$
+
+    $$
+    \Delta\mathrm{UGL}(a,B) = (1{,}500 - 800) - 0 - (1{,}200 - 800) = +300
+    $$
+
+    A answers for 100 → 120, B for 120 → 150: +500 in all, the portfolio's $\Delta\mathrm{UGL}$ ($700 - 200$). Without $T$, A would show −200 and B +700.
 
 Portfolio-level period P&L also exposes a residual:
 
@@ -230,32 +300,84 @@ $$
 
 Unallocated fees/income without `asset_id` are grouped per broker as other period effects, and so is $\mathrm{FXonCash}_b$: one row per broker holding foreign cash, shown when its result is not zero. See [Period P&L — FX on Cash](period-pnl.md#fx-on-cash).
 
+When every row is known, the rows and the other period effects together close $\mathrm{PnL}_{period}$. Since the rows are valued as the portfolio is, the residual holds no valuation difference between them, only what no position holds: what travels between two brokers, the cost of a currency exchange, a disposal left out of Realized, the cost of dust.
+
+??? example "Example: a sale that leaves 0.00001 units"
+
+    10 units are bought at 100,000 before the period, and the price is 100,000 at $t_0$: NAV is 1,000,000 and the unrealized 0. Inside the period, 9.99999 units are sold at 120,000 for 1,199,998.80: Realized is $9.99999 \times 20{,}000 = 199{,}999.80$, and 0.00001 units are left; the price is 120,000 at $t_1$ too, so they are worth 1.20 at a cost of 1.00. They are dust: they are in no row and not in NAV, so the row's and the portfolio's $\Delta\mathrm{UGL}$ are both 0, and NAV at $t_1$ is the cash of the sale. $\mathrm{PnL}_{period} = 1{,}199{,}998.80 - 1{,}000{,}000 = 199{,}998.80$, and
+
+    $$
+    \mathrm{Other} = 199{,}998.80 - 0 - 199{,}999.80 = -1.00
+    $$
+
+    the cost of the dust. Valued in NAV, the dust would have put $1.20 - 1.00 = 0.20$ into the portfolio's $\Delta\mathrm{UGL}$ that no row had.
+
 ---
 
-## 📐 8. Realized Gain/Loss
+## 📐 8. Realized Gain/Loss {: #8-realized-gain-loss }
 
-On SELL of $|q_s|$ units from position $(a,b)$ on date $t$:
+On a disposal of $|q_s|$ units from position $(a,b)$ on date $t$ — a SELL, or an outgoing ADJUSTMENT not linked to a split:
 
 $$
 C = |q_s| \cdot w_{\text{pre}}(a,b)
 $$
 
 $$
-\mathrm{Realized} = P_{\text{sell}} \cdot \mathrm{fx}(\mathrm{ccy}_{\text{sell}}, C^*, t) - C
+\mathrm{Realized} = P \cdot \mathrm{fx}(c_P, C^*, t) - C
 $$
 
-Where $w_{\text{pre}}$ is the WAC in $C^*$ **before** the pool reduction (same value used by 3-pool SELL rule above): the units sold leave at their historical cost, with no conversion at the sale date. A sale whose proceeds cannot be converted, or drawn from a position whose cost is incomplete, is left out of Realized.
+$P$ is what the units leave for, in its currency $c_P$: a SELL's proceeds, in the currency of its cash; $0$ for an outgoing ADJUSTMENT, which has no value whatever cost basis the row holds ([Outgoing Adjustments](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)), so it realizes $-C$. $w_{\text{pre}}$ is the WAC in $C^*$ **before** the pool reduction (same value used by 3-pool SELL rule above): the units leave at their historical cost, with no conversion at $t$, while $P$ converts at $t$. A disposal whose $P$ cannot be converted, or drawn from a position whose cost is incomplete, is left out of Realized.
+
+An outgoing ADJUSTMENT moves no cash, so no pool of §6 changes, and no capital either: the capital baseline does not move ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
 
 ---
 
-## 📐 9. Pre-Frame / Frame Architecture
+## 📐 9. One Daily Replay
 
-| Phase | Date range | Computes |
-|-------|-----------|----------|
-| Pre-frame | $[t_{\mathrm{first}},\ t_0)$ | Cash, qty, WAC, pools — no market evaluation |
-| Frame | $[t_0,\ t_1]$ | Full daily: prices, FX, position states, portfolio states |
+| Range | Date range | Role |
+|-------|-----------|------|
+| Replay | $[\min(t_{\mathrm{first}},\ t_0),\ t_1]$ | Every day, with the same rules: cash, qty, WAC, pools, prices, FX, position and portfolio states |
+| Frame | $[t_0,\ t_1]$ | The days whose states are returned |
 
-Pre-frame transactions update accumulators (cash ledger, WAC pools, 3-pool K/R/W) without any market evaluation: no price is read and no position is valued. Each movement is converted at the rate of its own date, as in the frame, and on every day the rate of a held foreign currency changes, the cash is revalued at that day's rate and the exchange result enters the pools (§6), so the pools are correct at $t_0$. This enables efficient range-based caching.
+There is one replay, from the first movement $t_{\mathrm{first}}$ (or $t_0$, when earlier) to $t_1$. A movement dated before $t_0$ follows the same rules as any other: it is converted at the rate of its own date and moves the WAC pools and the 3-pool K/R/W, and on every day the rate of a held foreign currency changes the cash is revalued and the exchange result enters the pools (§6). The states are returned from $t_0$, so a day's state does not depend on the frame it is read in. A day on which no term of the model changes carries the previous day's state. A day changes it when it brings a movement, a change of a rate the day reads, a quote, a split, a transit boundary, a price turning stale or a rate turning stale; the first replayed day and the start of the frame are always computed.
+
+**When a price turns stale.** A carried price is stale once its last observation $o$ (a quote or a BUY/SELL trade) is more than $\theta = 7$ days old. The flag of every day is computed as before, but the engine starts a new state on the first stale day, $o+\theta+1$, only when the price is still carried then:
+
+$$
+\text{stale turn at } o+\theta+1 \iff \text{no observation of the asset falls in } (o,\ o+\theta+1]
+$$
+
+A newer observation inside that stretch is a change of its own and renews the age of the price: with a Friday quote followed by a Monday quote, Friday + 8 days is not a turn, because the price in use then is Monday's and is not stale.
+
+**When a rate turns stale.** A rate read to value the held securities (the currency of the asset and of its quotes against $C^*$) turns stale in the same way: when the stored row it comes from, dated $r$, is more than $\theta$ days old, the day $r+\theta+1$ starts a new state, unless a newer row replaces it first. The state then carries the pair `CCY/C*` with the date $r$ of its row, and the report lists it in `data_quality.stale_fx_pairs` as `{pair, last_rate_date, stale_days}` for the valuation day. The rate is still the last one known: staleness is a flag, not a different value.
+
+### 🪜 Daily States as Steps {: #daily-states-as-steps }
+
+Between two days that change the state, every value of the report is identical. The portfolio report therefore does not return one point per calendar day: it returns **one point per stretch without news**, which holds from its `date` to its `through`, both included. The response carries `range {start, end}`, the window after clipping to the days that have a state.
+
+```json
+{
+  "range": {"start": "2026-10-23", "end": "2026-10-26"},
+  "history": [
+    {"date": "2026-10-23", "through": "2026-10-25", "nav_value": {"code": "EUR", "amount": "10450.00"}, "twrr": "0", "roi": "0.045000"},
+    {"date": "2026-10-26", "through": "2026-10-26", "nav_value": {"code": "EUR", "amount": "10462.50"}, "twrr": "0.001196", "roi": "0.046250"}
+  ],
+  "mwrr_line": [
+    {"date": "2026-10-23", "annualized": "0", "cumulative": "0"},
+    {"date": "2026-10-25", "annualized": "0", "cumulative": "0"},
+    {"date": "2026-10-26", "annualized": "0.156557", "cumulative": "0.001196"}
+  ]
+}
+```
+
+A fund held on Friday 23, Saturday 24, Sunday 25 and Monday 26 October, quoted on Friday and on Monday (the figures are illustrative, and the other fields of a point are left out). Saturday's NAV is the NAV of the step that contains it: $\mathrm{NAV}(t)$ is read from the point with `date` $\le t \le$ `through`, with a search by date and no calculation.
+
+- **Which series.** `history`, `allocation_history.*`, `broker_pnl_history[].points` and `pnl_candles.points`. The event series (income, cost, deposit, acquisition funding) are unchanged: one point per event.
+- **Maximal steps.** Two adjacent steps never carry identical values; the steps of a broker are maximal for its own P&L, not for the portfolio's.
+- **Gaps.** A day that no step covers has no value: a broker that starts mid-window, or a day without a P&L candle (a held asset could not be valued).
+- **TWRR and ROI** stay inside the steps. On a quiet day the TWRR factor is exactly 1 and the ROI does not change. The first point of the TWRR is pinned to 0, being period-relative. A step on which the NAV is zero or less carries no TWRR (`null`), under the same rule as the card ([When No TWRR Is Shown](twrr.md#when-no-twrr)); the chain keeps compounding through it, so the TWRR returns once the NAV is above zero again. The ROI's capital is the card's ([The ROI of a Period](roi.md#dashboard-period-roi)).
+- **MWRR** moves every day, because time passes, and with several flows it has no closed form: it does not sit in the steps but in `mwrr_line`, a series of **true values**, each equal to the [MWRR](mwrr.md) of the period ending that day, under the same rule as the card (no rate when the portfolio's value or the net invested capital is not positive). The line has a point at the `date` and at the `through` of every step; inside a step longer than 62 days it adds the last day of each calendar month strictly inside it, at most 24 per step, evenly spread. Its first point is pinned to 0.
+- **Data quality** follows the same idea: `incomplete_nav_ranges`, `incomplete_book_value_ranges`, `incomplete_allocation_ranges` and `incomplete_valuation_ranges` are lists of `{start, end}` with consecutive days merged. `missing_fx_pairs[].dates` holds only the dates of the movements, and `missing_fx_pairs[].ranges` the valuation days, merged. The older `incomplete_*_dates` lists are transitional.
 
 ---
 

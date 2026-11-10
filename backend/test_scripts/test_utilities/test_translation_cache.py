@@ -5,7 +5,7 @@
 ``langs`` holds the per-language records. ``run_translate`` skips ``(page, lang)`` when the EN md5 equals ``md5`` and
 ``lang`` is in ``langs_done``.
 
-The defect, in ``translate_docs.py`` up to 01c6f1ae4:
+The defect, in ``translate_docs.py`` up to 353d9a76c:
 
 * once the analysis of a changed EN page succeeded, both execution paths (the parallel pipeline, ``--workers`` > 1,
   and the sequential loop) moved ``md5`` to the new EN and kept ``langs_done``. A language that then failed (a
@@ -36,7 +36,7 @@ it took the path under test. The plan of the next run is what ``translate --dry-
 Red phase, in two steps. The new functions are reached only through fixtures and test bodies, never at module level,
 so the module always collects.
 
-* Against 01c6f1ae4, before the transitions:
+* Against 353d9a76c, before the transitions:
 
   * red, the masking: the failed language (both paths), the languages left out by ``--lang`` or by an interruption,
     ``translate-stamp --lang it`` on a changed EN, the edit saved during the analysis (both paths, LF and CRLF);

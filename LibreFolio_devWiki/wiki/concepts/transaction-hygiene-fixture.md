@@ -64,7 +64,7 @@ whoever commits cleans up — over a transactional fixture with rollback. The da
 | Risk | rewrites fixtures that work today | none for tests that do not write |
 
 Every backend `session` fixture already flushed and rolled back, so the only possible culprits were fixtures that
-commit on purpose. The first implementation (`78a0103ae`, 2026-08-13) deleted by id difference; the definition that
+commit on purpose. The first implementation (`3c5e815e0`, 2026-08-13) deleted by id difference; the definition that
 replaced it is the next section.
 
 ## The correct successor definition

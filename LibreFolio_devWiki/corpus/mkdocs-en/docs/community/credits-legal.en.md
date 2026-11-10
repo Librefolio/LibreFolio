@@ -1,1 +1,0 @@
-../../../../../mkdocs_src/docs/community/credits-legal.en.md

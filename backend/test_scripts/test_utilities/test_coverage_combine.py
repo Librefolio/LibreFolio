@@ -20,7 +20,7 @@ backend's ``.coverage.*`` files in the working directory.
 
 Evidence
 --------
-Full coverage run of 07/10 (``d07412899``, 2 workers): the parallel passes of 111 and of 54
+Full coverage run of 07/10 (``d0e7eb405``, 2 workers): the parallel passes of 111 and of 54
 units both ended in ``coverage combine failed: Couldn't combine from non-existent path
 '….pid10917.Xm9GZYYx'`` / ``'….pid24531.X0pJBznx'``, while the parts directory still held
 ``….pid24531.X0pJBznx.HNQIp837rWOh`` — the missing path plus coverage's completion suffix.

@@ -13,7 +13,7 @@ placeholder builders for these without touching any `component_id`/`domains`/
   `ASSET_PRICE_RESULTS_RESOURCE` cache entry across all three components.
 - FX builders load the daily base->quote rate series once
   (`technical_shared.load_fx_rate_series`, routed through the existing
-  `backend.app.services.fx.convert_bulk` service - no invented economics) and
+  `backend.app.services.fx.conversion.convert_bulk` service - no invented economics) and
   the curated signal bundle computed over it once
   (`technical_shared.load_fx_technical_bundle`), reused across all four
   components.
@@ -46,6 +46,7 @@ from backend.app.services.ai_export.components.technical_payloads import (
     TechnicalEventsPayload,
 )
 from backend.app.services.ai_export.components.technical_shared import (
+    NO_PRICE_IN_PERIOD,
     OHLC_BUCKET_AGGREGATOR,
     SIGNAL_PROFILE_BUCKET_AGGREGATOR,
     build_events_payload,
@@ -56,8 +57,12 @@ from backend.app.services.ai_export.components.technical_shared import (
     load_asset_price_results,
     load_fx_rate_series,
     load_fx_technical_bundle,
+    load_series_gaps,
     observations_to_rate_points,
     price_result_to_close_points,
+    price_series_gap,
+    price_series_seed,
+    rate_series_seed,
     signal_results_to_discrete_events,
 )
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
@@ -90,20 +95,25 @@ async def _build_asset_ohlc_returns(context: BuildContext, dependencies: Mapping
     context.register_price_sampling()
     buckets = build_price_buckets(points, context.bucket_plan, key="close")
     latest_close, latest_date = latest_point_value(points, key="close")
-    currency = coherent_price_currency(result)
+    reason_code = price_series_gap(result)
+    # E-23: the runs of empty buckets with a market-open day; with no price inside the period, the whole period, with
+    # the last price stored before it. No gap without a series (no stored price, mixed currencies).
+    price_gaps = await load_series_gaps(points, context.bucket_plan, key="close", seed=price_series_seed(result)) if reason_code in (None, NO_PRICE_IN_PERIOD) else ()
 
     return AssetOhlcReturnsPayload(
         asset_id=scope.asset_id,
-        currency=currency,
+        currency=coherent_price_currency(result),
+        reason_code=reason_code,
         buckets=buckets,
         latest_close=latest_close,
         latest_date=latest_date,
+        price_gaps=price_gaps,
     )
 
 
 ASSET_OHLC_RETURNS_SPEC = ComponentSpec(
     component_id="asset.ohlc_returns",
-    version=1,
+    version=2,
     domains=frozenset({Domain.ASSET}),
     output_model=AssetOhlcReturnsPayload,
     builder=_build_asset_ohlc_returns,
@@ -182,6 +192,8 @@ async def _build_fx_rate_ohlc(context: BuildContext, dependencies: Mapping[str, 
     context.register_price_sampling()
     buckets = build_price_buckets(points, context.bucket_plan, key="rate")
     latest_rate, latest_date = latest_point_value(points, key="rate")
+    # E-23: the runs of empty buckets with a market-open day, each with the last rate stored before it
+    rate_gaps = await load_series_gaps(points, context.bucket_plan, key="rate", seed=rate_series_seed(rate_series, scope.period_start))
 
     return FxRateOhlcPayload(
         base_currency=scope.base_currency,
@@ -189,12 +201,13 @@ async def _build_fx_rate_ohlc(context: BuildContext, dependencies: Mapping[str, 
         buckets=buckets,
         latest_rate=latest_rate,
         latest_date=latest_date,
+        rate_gaps=rate_gaps,
     )
 
 
 FX_RATE_OHLC_SPEC = ComponentSpec(
     component_id="fx.rate_ohlc",
-    version=1,
+    version=2,
     domains=frozenset({Domain.FX}),
     output_model=FxRateOhlcPayload,
     builder=_build_fx_rate_ohlc,

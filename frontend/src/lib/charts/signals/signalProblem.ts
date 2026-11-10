@@ -42,6 +42,12 @@ export interface SignalProblem {
     selectedStartDate: string | null;
     selectedEndDate: string | null;
     excludedPoints: number | null;
+    /** The undefined points of a calendar return and where they are (Z5-F1): their count, their first and last day, and the period whose prices to sync again. */
+    unavailablePoints: number | null;
+    unavailableStart: string | null;
+    unavailableEnd: string | null;
+    resyncStart: string | null;
+    resyncEnd: string | null;
     message: string | null;
 }
 
@@ -82,6 +88,27 @@ function firstString(value: unknown): string | null {
     if (typeof value === 'string') return value;
     if (!Array.isArray(value)) return null;
     return value.find((item): item is string => typeof item === 'string') ?? null;
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+function isoDay(value: unknown): string | null {
+    return typeof value === 'string' && ISO_DAY.test(value) ? value : null;
+}
+
+const NO_UNDEFINED_WINDOW = {unavailablePoints: null, unavailableStart: null, unavailableEnd: null, resyncStart: null, resyncEnd: null} as const;
+
+/** What the `undefined_metric_window` warning says of the undefined points (Z5-F1): all null when it has no such details. */
+function undefinedWindowOf(warnings: Record<string, unknown>[]): Pick<SignalProblem, 'unavailablePoints' | 'unavailableStart' | 'unavailableEnd' | 'resyncStart' | 'resyncEnd'> {
+    const details = firstRecord(warnings.find((warning) => firstString(warning.code) === 'undefined_metric_window')?.details);
+    if (!details) return {...NO_UNDEFINED_WINDOW};
+    return {
+        unavailablePoints: finiteNumber(details.unavailable_points),
+        unavailableStart: isoDay(details.unavailable_start),
+        unavailableEnd: isoDay(details.unavailable_end),
+        resyncStart: isoDay(details.resync_start),
+        resyncEnd: isoDay(details.resync_end),
+    };
 }
 
 function stringList(value: unknown): string[] {
@@ -151,6 +178,7 @@ function resolveSignalProblem(item: SignalProblemInput | undefined): SignalProbl
             selectedStartDate: null,
             selectedEndDate: null,
             excludedPoints: null,
+            ...NO_UNDEFINED_WINDOW,
             message: item.error,
         };
     }
@@ -195,6 +223,7 @@ function resolveSignalProblem(item: SignalProblemInput | undefined): SignalProbl
             selectedStartDate: null,
             selectedEndDate: null,
             excludedPoints: null,
+            ...NO_UNDEFINED_WINDOW,
             message: item.error,
         };
     }
@@ -224,6 +253,7 @@ function resolveSignalProblem(item: SignalProblemInput | undefined): SignalProbl
         selectedStartDate: firstString(coverageWarningDetails?.selected_start_date),
         selectedEndDate: firstString(coverageWarningDetails?.selected_end_date),
         excludedPoints: finiteNumber(coverageWarningDetails?.excluded_points),
+        ...undefinedWindowOf(warnings),
         message: firstString(nonCoverageWarning?.message) ?? firstString(coverageWarning?.message) ?? firstString(warning?.message) ?? item.error,
     };
 }

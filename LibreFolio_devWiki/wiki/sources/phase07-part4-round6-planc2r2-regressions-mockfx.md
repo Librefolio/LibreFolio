@@ -81,19 +81,19 @@ i18n keys + balance walk tests (8/8 pass) + FormModal context-aware validate + D
 | Role | Path |
 |------|------|
 | MockFX providers | `backend/app/services/fx_providers/mockfx/plugin.py` |
-| FX API (filter MOCKFX) | `backend/app/api/v1/fx.py` |
-| Asset source (auto-populate removed) | `backend/app/services/asset_source.py` |
+| FX API (filter MOCKFX) | `backend/app/api/v1/fx/providers.py` |
+| Asset source (auto-populate removed) | `backend/app/services/assets/provider_management.py` |
 | DistributionEditor | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |
 | FX pair page | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` |
-| FX service (errors fix) | `backend/app/services/fx.py` |
+| FX service (errors fix) | `backend/app/services/fx/sync.py` |
 | dev.py (build order) | `dev.py` |
 | AssetModal (data-testid) | `frontend/src/lib/components/assets/AssetModal.svelte` |
 | Test asset source | `backend/test_scripts/test_services/test_asset_source.py` |
 | Test FX sync (MOCKFX) | `backend/test_scripts/test_api/test_fx_sync.py` |
 | E2E asset classification | `frontend/e2e/assets/asset-classification.spec.ts` |
 | Balance walk tests | `backend/test_scripts/test_api/test_tx_balance_walk.py` |
-| FormModal (contextual validate) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| BulkModal (getBulkContext) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| FormModal (contextual validate) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| BulkModal (getBulkContext) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | FxPairAddModal (RotateCw fix) | `frontend/src/lib/components/fx/FxPairAddModal.svelte` |
 | Dockerfile + entrypoint.sh | `Dockerfile`, `entrypoint.sh` |
 | Test runner frontend asset | `scripts/test_runner/_frontend_asset.py` |

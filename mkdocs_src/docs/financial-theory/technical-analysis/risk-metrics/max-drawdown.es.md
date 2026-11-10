@@ -92,7 +92,7 @@ Estas cifras son historia general del mercado, no una medición de LibreFolio, y
     Una pérdida del 50% requiere una **ganancia del 100%** para recuperarse:
 
     $$
-    \text{Ganancia requerida} = \frac{1}{1 + MDD} - 1
+    \text{Ganancia requerida} = \frac{1}{1 + MDD} - 1 = \frac{-MDD}{1 + MDD}
     $$
 
     <div style="display: flex; justify-content: center;">
@@ -106,7 +106,11 @@ Estas cifras son historia general del mercado, no una medición de LibreFolio, y
 
     </div>
 
-La tabla anterior es la aritmética general de la asimetría, tabulada frente a la profundidad de la caída **máxima**. La cifra que calcula el sistema aplica esa misma fórmula a la caída **actual**: responde a cuánta ganancia se necesita para volver al máximo *desde donde se encuentra hoy la cartera*, que es la única versión de la pregunta sobre la que se puede actuar. Ambas lecturas coinciden solo cuando la cartera resulta estar situada en su punto más profundo de toda su historia; véase [Caída actual](current-drawdown.md).
+    Una pérdida total no tiene una ganancia de recuperación finita: con $MDD = -100\%$ el denominador $1 + MDD$ es cero, y ninguna ganancia recupera un valor que ha quedado en nada.
+
+La tabla anterior es la aritmética general de la asimetría, tabulada frente a la profundidad de la caída **máxima**, y el resultado de la caída lleva esa cifra para la peor caída misma. Junto a su profundidad publica la **ganancia de mínimo a máximo**, $-MDD / (1 + MDD)$: la ganancia necesaria para subir desde el peor mínimo hasta el máximo que lo precede — $+33,3\%$ de 90 a 120 en el ejemplo anterior. La cifra se da tanto para un episodio abierto como para uno recuperado, porque describe lo profunda que fue la caída, no si se ha remontado. Es cero cuando no hubo caída; una pérdida total la deja sin número, y el resultado lleva un aviso que explica el motivo.
+
+La misma fórmula, calculada por una única función compartida por ambas cifras, se aplica también a la caída **actual**: allí responde a cuánta ganancia se necesita para volver al máximo *desde donde se encuentra hoy la cartera*, que es la única versión de la pregunta sobre la que aún se puede actuar. Ambas lecturas coinciden solo cuando la cartera resulta estar situada en su punto más profundo de toda su historia; véase [Caída actual](current-drawdown.md#what-it-takes-to-get-back).
 
 ---
 

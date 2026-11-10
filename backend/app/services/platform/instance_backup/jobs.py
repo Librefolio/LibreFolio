@@ -1,0 +1,721 @@
+"""Background backups for the API, and the same run in the foreground for the CLI: one at a time, state on disk.
+
+A job runs in a thread of the worker that received the request; the next requests may reach any worker, so its state
+lives in a file, ``backups/.jobs/<id>/state.json``, written atomically. One backup runs at a time: the run holds an
+exclusive ``flock`` on ``backups/.jobs/.lock`` from its start to its end, and a second start finds it taken and is
+refused. The lock is what says "running": a state that still says running while nobody holds the lock belongs to a run
+that died with its process (a restart, a crash), and reads as interrupted. The final state is written before the lock is
+released, so a finished run never reads as interrupted. A backup that ends ``done`` is **kept** (FB-24): its folder moves
+in one ``rename`` to ``backups/<kept name>/`` (``paths.kept_folder_name``), where it stays until it is deleted or the
+clean-up of ``retention.py`` removes it; the job id still finds it (``get_job``, ``job_archive``, ``delete_job``). A run
+that failed, or that was asked not to keep its backup (``keep=False``, the command line with ``--output``), stays in
+``.jobs/`` and keeps what it has for an hour: after that a read of the job answers that there is none and removes it, and
+the next start removes every such job.
+
+A secure backup (lot B4, decisions 38 and 39) is the same archive, with the instance key when LibreFolio generated it,
+then encrypted with the password into an ``.lfbk`` envelope; the clear archive is removed with the job's work files. The
+password lives in the job's thread only: never in its state, its log or its folder.
+
+A sealed backup (L3, for a hosting panel) is a secure backup whose password LibreFolio draws itself, then encrypts with
+age for the panel's recipients into a ``.tar`` (``sealed.py``); the instance key never goes in. The password lives in
+the job's thread only, as a secure backup's does.
+
+Without ``fcntl`` (not POSIX) the lock only serialises the runs of one process.
+"""
+
+from __future__ import annotations
+
+import errno
+import json
+import os
+import secrets
+import shutil
+import sqlite3
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, fields, replace
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Literal
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - not POSIX: runs are serialised per process only
+    fcntl = None  # type: ignore[assignment]
+
+from backend.app.config import get_data_dir
+from backend.app.logging_config import get_logger
+from backend.app.services.platform.instance_backup import sealed as sealed_backup
+from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, build_archive
+from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX, EncryptedFile, encrypt_file
+from backend.app.services.platform.instance_backup.manifest import BackupManifest, BackupOrigin
+from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, NotRegularFileError, backups_dir, ensure_private_dir, is_job_id, is_kept_name, is_plain_dir, job_dir, jobs_dir, kept_dir, kept_folder_name, lock_path, read_regular_file, stages_dir
+from backend.app.services.platform.instance_backup.secure import exportable_instance_key, generated_key_unusable
+
+logger = get_logger(__name__)
+
+#: How long a job that is not kept (a failed one, or one run with ``keep=False``) keeps its archive and its state.
+JOB_RETENTION = timedelta(hours=1)
+#: How often a running job writes its progress.
+_PROGRESS_INTERVAL_S = 0.5
+#: How many left-out entries a job's state lists.
+_SKIPPED_KEPT = 50
+#: Free space kept beyond the envelope of a secure backup, written beside its archive.
+_ENVELOPE_MARGIN = 64 * 1024 * 1024
+_PROCESS_LOCKS: dict[Path, threading.Lock] = {}
+#: The job each process-local lock was taken for (no fcntl), as the lock file's content says it with fcntl (B-8).
+_PROCESS_HOLDERS: dict[Path, str] = {}
+#: The most bytes of a lock file read back: a job id is 32.
+_HOLDER_MAX_BYTES = 64
+
+JobStatus = Literal["running", "done", "failed"]
+#: The archive's phases (``archive.Phase``), then the encryption of a secure backup and the seal of a sealed one.
+Phase = Literal["preparing", "database", "files", "finalizing", "encrypting", "sealing"]
+#: Why a job failed, as a stable code: no space, an error during the build, or its process died while it ran.
+JobError = Literal["backup_no_space", "backup_failed", "backup_interrupted"]
+
+
+class BackupBusyError(RuntimeError):
+    """Another backup is running on this data directory. ``running``: that backup, when its run lock names it and its
+    state says it runs (B-8); ``None`` otherwise."""
+
+    def __init__(self, message: str, running: BackupJob | None = None):
+        super().__init__(message)
+        self.running = running
+
+
+class BackupJobNotFoundError(LookupError):
+    """No job has this id, or its files are gone."""
+
+
+class BackupJobUnreadableError(BackupJobNotFoundError):
+    """The job's state cannot be read: a content that is no job's state, a folder, a link or a special file in its place,
+    or no permission to read it (B-50, B-53). Not found to every caller, never a 500; ``error`` is the cause's class
+    name, for the log."""
+
+    def __init__(self, error: str):
+        super().__init__("The backup job's state cannot be read")
+        self.error = error
+
+
+class BackupJobStateError(RuntimeError):
+    """The job cannot do this in its state: its archive is not ready, or it is still running."""
+
+    def __init__(self, status: JobStatus):
+        super().__init__(f"The backup job is {status}")
+        self.status = status
+
+
+@dataclass(frozen=True)
+class BackupJob:
+    """The state of one backup run."""
+
+    job_id: str
+    origin: BackupOrigin
+    status: JobStatus
+    phase: Phase | None
+    done_bytes: int
+    total_bytes: int
+    created_at: datetime
+    finished_at: datetime | None = None
+    file_name: str | None = None
+    file_size: int | None = None
+    file_sha256: str | None = None
+    warnings: tuple[str, ...] = ()
+    #: The entries the build left out (links, special files, files that vanished or could not be read), at most 50.
+    skipped: tuple[str, ...] = ()
+    error_code: JobError | None = None
+    #: A secure backup: its file is an ``.lfbk`` envelope.
+    encrypted: bool = False
+    #: The archive carries the instance key (decision 39): a secure backup, when LibreFolio generated the key. A state
+    #: written before L3 has no such key and reads False.
+    instance_key_included: bool = False
+    #: A sealed backup (L3): its file is a ``.tar`` whose password only these recipients' private keys open.
+    sealed: bool = False
+    sealed_recipients: tuple[str, ...] = ()
+    #: A10 (T-10): what the archive holds once restored, not compressed, from its manifest: every entry, then the
+    #: database, the uploaded files and the broker reports among them. ``None`` for a job not done, and in a state written
+    #: before (the list then says it is not known): a password-protected or sealed archive cannot be opened to measure it.
+    content_bytes: int | None = None
+    content_database_bytes: int | None = None
+    content_uploads_bytes: int | None = None
+    content_broker_reports_bytes: int | None = None
+
+    def to_json(self) -> str:
+        data = asdict(self)
+        data["created_at"] = self.created_at.isoformat()
+        data["finished_at"] = self.finished_at.isoformat() if self.finished_at else None
+        data["warnings"] = list(self.warnings)
+        data["skipped"] = list(self.skipped)
+        data["sealed_recipients"] = list(self.sealed_recipients)
+        return json.dumps(data, sort_keys=True)
+
+    @classmethod
+    def from_json(cls, text: str) -> BackupJob:
+        """The job a state describes. ``ValueError`` for a document that is not a JSON object, or a date without a time
+        zone (B-50: either made every start fail, comparing or reading it)."""
+        document = json.loads(text)
+        if not isinstance(document, dict):
+            raise ValueError("a backup job's state is not a JSON object")
+        known = {item.name for item in fields(cls)}
+        data = {key: value for key, value in document.items() if key in known}
+        data["created_at"] = _aware(datetime.fromisoformat(data["created_at"]))
+        data["finished_at"] = _aware(datetime.fromisoformat(data["finished_at"])) if data.get("finished_at") else None
+        data["warnings"] = tuple(data.get("warnings") or ())
+        data["skipped"] = tuple(data.get("skipped") or ())
+        data["sealed_recipients"] = tuple(data.get("sealed_recipients") or ())
+        return cls(**data)
+
+
+def _aware(moment: datetime) -> datetime:
+    """``moment``, which must carry a time zone, as every state this module writes does; ``ValueError`` otherwise."""
+    if moment.tzinfo is None:
+        raise ValueError("a date of a backup job's state has no time zone")
+    return moment
+
+
+def archive_name(created_at: datetime, *, encrypted: bool = False, sealed: bool = False) -> str:
+    """The file name of an archive made at ``created_at``: ``librefolio-backup-YYYYMMDD-HHMMSS.zip``, in UTC; ``.lfbk``
+    for the envelope of a secure backup, ``.tar`` for a sealed one (L3)."""
+    suffix = sealed_backup.FILE_SUFFIX if sealed else FILE_SUFFIX if encrypted else ".zip"
+    return f"librefolio-backup-{created_at.astimezone(UTC):%Y%m%d-%H%M%S}{suffix}"
+
+
+class _RunLock:
+    """The exclusive lock of the backup runs of one data directory."""
+
+    def __init__(self, path: Path):
+        self._path = path
+        self._fd: int | None = None
+        self._local: threading.Lock | None = None
+
+    def try_acquire(self) -> bool:
+        if fcntl is None:
+            local = _PROCESS_LOCKS.setdefault(self._path, threading.Lock())
+            if not local.acquire(blocking=False):
+                return False
+            self._local = local
+            return True
+        fd = os.open(self._path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            return False
+        self._fd = fd
+        return True
+
+    def record(self, job_id: str) -> None:
+        """Name the job this lock is held for, while it is held (B-8): the lock file's content, which a refused start
+        reads back; in memory where there is no ``fcntl``."""
+        if self._local is not None:
+            _PROCESS_HOLDERS[self._path] = job_id
+        if self._fd is not None:
+            os.ftruncate(self._fd, 0)
+            os.pwrite(self._fd, job_id.encode("ascii"), 0)
+
+    def release(self) -> None:
+        if self._local is not None:
+            self._local.release()
+            self._local = None
+        if self._fd is not None:
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
+            os.close(self._fd)
+            self._fd = None
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+_NO_SPACE_ERRNOS = frozenset(code for code in (errno.ENOSPC, getattr(errno, "EDQUOT", None)) if code is not None)
+
+
+def out_of_space(exc: BaseException) -> bool:
+    """Whether a failure, or one of its causes, is a full disk or quota: the file system's, or SQLite's ``SQLITE_FULL``.
+
+    Public: the routes of the backup and of the restore tell a full disk from any other failure with it too (B-30).
+    """
+    seen: BaseException | None = exc
+    for _ in range(8):
+        if seen is None:
+            return False
+        if isinstance(seen, OSError) and seen.errno in _NO_SPACE_ERRNOS:
+            return True
+        if isinstance(seen, sqlite3.Error) and getattr(seen, "sqlite_errorcode", None) == sqlite3.SQLITE_FULL:
+            return True
+        seen = seen.__cause__ or seen.__context__
+    return False
+
+
+def _write_state(folder: Path, job: BackupJob) -> None:
+    """Write the state of a job atomically: a reader sees the old state or the new one, never half of one."""
+    partial = folder / (STATE_FILE + ".part")
+    fd = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(job.to_json())
+    os.replace(partial, folder / STATE_FILE)
+
+
+def _read_state(folder: Path) -> BackupJob:
+    """The state of the job in ``folder``, read without following a link nor waiting on a FIFO (B-53).
+    ``BackupJobNotFoundError`` when there is none; ``BackupJobUnreadableError`` (one) when it cannot be read (B-50,
+    B-53); any other ``OSError`` (a transient one) as it came."""
+    try:
+        return BackupJob.from_json(read_regular_file(folder / STATE_FILE).decode("utf-8"))
+    except (FileNotFoundError, NotADirectoryError):
+        raise BackupJobNotFoundError("No such backup job") from None
+    except (ValueError, TypeError, KeyError, IsADirectoryError, PermissionError, NotRegularFileError) as exc:
+        raise BackupJobUnreadableError(type(exc).__name__) from None
+
+
+def _prepare(data_dir: Path, origin: BackupOrigin) -> tuple[_RunLock, BackupJob]:
+    """Take the run lock and create the job's folder and first state. ``BackupBusyError`` when a run holds the lock."""
+    ensure_private_dir(jobs_dir(data_dir), data_dir)
+    remove_expired_jobs(data_dir)
+    lock = _RunLock(lock_path(data_dir))
+    if not lock.try_acquire():
+        raise BackupBusyError("Another backup is running", running=_running_job(data_dir))
+    try:
+        job_id = secrets.token_hex(16)
+        folder = ensure_private_dir(job_dir(data_dir, job_id), data_dir)
+        job = BackupJob(job_id=job_id, origin=origin, status="running", phase="preparing", done_bytes=0, total_bytes=0, created_at=_now())
+        _write_state(folder, job)
+        lock.record(job_id)
+    except BaseException:
+        lock.release()
+        raise
+    return lock, job
+
+
+def _run(
+    data_dir: Path,
+    job: BackupJob,
+    lock: _RunLock,
+    progress: Callable[[Phase, int, int], None] | None = None,
+    password: str | None = None,
+    recipients: tuple[str, ...] | None = None,
+    keep: bool = True,
+) -> BackupJob:
+    """Build the archive of a prepared job, keep its state up to date, and release the lock once the end is recorded.
+
+    A job that ends ``done`` with ``keep`` is moved to ``backups/<kept name>/`` before the lock is released; the clean-up of
+    the kept backups runs once the lock is free (FB-24).
+
+    With ``password``, a secure backup: the archive carries the instance key when LibreFolio generated it (decision 39),
+    and is encrypted into the job's envelope. With ``recipients``, a sealed backup (L3): a password of its own, never the
+    instance key, and the envelope sealed for them into a ``.tar``.
+    """
+    if recipients:
+        password = sealed_backup.new_password()
+    folder = job_dir(data_dir, job.job_id)
+    name = archive_name(job.created_at)
+    current = job
+    last_write = 0.0
+
+    def on_progress(phase: Phase, done: int, total: int) -> None:
+        nonlocal current, last_write
+        current = replace(current, phase=phase, done_bytes=done, total_bytes=total)
+        if progress is not None:
+            progress(phase, done, total)
+        now = time.monotonic()
+        if now - last_write >= _PROGRESS_INTERVAL_S:
+            last_write = now
+            _write_state(folder, current)
+
+    started = time.monotonic()
+    try:
+        # A sealed backup leaves for a hosting panel, which configured the instance key itself: never in it (decision 39).
+        key = exportable_instance_key() if password is not None and not recipients else None
+        built = build_archive(data_dir, folder, folder / name, origin=job.origin, progress=on_progress, instance_key=key)
+        file_name, file_size, file_sha256, warnings = name, built.size, built.sha256, built.warnings
+        if password is not None:
+            # Only a secure backup of its maker's misses a generated key it cannot use: a sealed one never takes it.
+            if key is None and not recipients and generated_key_unusable():
+                warnings = (*warnings, "instance_key_unusable")
+            file_name, written = _protect(folder, name, job.created_at, password, recipients, built.manifest, on_progress)
+            file_size, file_sha256 = written.size, written.sha256
+    except BackupNoSpaceError as exc:
+        current = replace(current, status="failed", phase=None, finished_at=_now(), error_code="backup_no_space")
+        logger.warning("Instance backup refused: not enough free space", job_id=job.job_id, needed_bytes=exc.needed, free_bytes=exc.free)
+    except Exception as exc:  # noqa: BLE001 — any failure ends the job as failed, with the cause in the log
+        error_code: JobError = "backup_no_space" if out_of_space(exc) else "backup_failed"
+        current = replace(current, status="failed", phase=None, finished_at=_now(), error_code=error_code)
+        logger.error("Instance backup failed", job_id=job.job_id, error_code=error_code, error=f"{type(exc).__name__}: {exc}")
+    else:
+        current = replace(
+            current,
+            status="done",
+            phase=None,
+            done_bytes=current.total_bytes,
+            finished_at=_now(),
+            file_name=file_name,
+            file_size=file_size,
+            file_sha256=file_sha256,
+            warnings=warnings,
+            skipped=built.skipped[:_SKIPPED_KEPT],
+            encrypted=password is not None,
+            instance_key_included=key is not None,
+            sealed=bool(recipients),
+            sealed_recipients=tuple(recipients or ()),
+            **_content(built.manifest),
+        )
+        logger.info(
+            "Instance backup written",
+            job_id=job.job_id,
+            origin=job.origin,
+            encrypted=password is not None,
+            instance_key_included=key is not None,
+            sealed=bool(recipients),
+            recipients=len(recipients or ()),
+            size_bytes=file_size,
+            files=len(built.manifest.files),
+            alembic_revision=built.manifest.alembic_revision,
+            seconds=round(time.monotonic() - started, 1),
+            warnings=list(warnings),
+            skipped=list(built.skipped[:_SKIPPED_KEPT]),
+        )
+    finally:
+        _end_run(data_dir, folder, current, keep, lock)
+    return current
+
+
+def _end_run(data_dir: Path, folder: Path, current: BackupJob, keep: bool, lock: _RunLock) -> None:
+    """Record the end of a run: remove its work files, write its final state, move a finished backup to its kept folder
+    when it is to be kept, and release the lock whatever happens; then, for a backup that was kept, the clean-up."""
+    kept = False
+    try:
+        _remove_work_files(folder, keep=current.file_name)
+        _write_state(folder, current)
+        kept = keep and current.status == "done" and _keep(data_dir, folder, current)
+    finally:
+        lock.release()
+    if kept:
+        _clean_up_kept(data_dir, current)
+
+
+def _keep(data_dir: Path, folder: Path, job: BackupJob) -> bool:
+    """Move the folder of a finished job to ``backups/<kept name>/`` in one ``rename``: whether it moved. A move that
+    fails leaves the job where it is, valid, to expire after its hour: the failure is logged, never the backup's."""
+    try:
+        os.rename(folder, kept_dir(data_dir, kept_folder_name(job.created_at, job.origin, job.job_id)))
+    except OSError as exc:
+        logger.error("Instance backup could not be kept: it stays in its job folder", job_id=job.job_id, exc_info=exc)
+        return False
+    return True
+
+
+def _clean_up_kept(data_dir: Path, job: BackupJob) -> None:
+    """The clean-up of the kept backups, after a backup was kept; it never changes how the backup ended."""
+    from backend.app.services.platform.instance_backup import retention  # noqa: PLC0415 — retention reads this module
+
+    try:
+        retention.apply_cleanup(data_dir)
+    except Exception as exc:  # noqa: BLE001 — isolation boundary: a clean-up never fails the backup it follows
+        logger.warning("The clean-up of the kept backups failed after a backup", job_id=job.job_id, exc_info=exc)
+
+
+def _encrypt(folder: Path, name: str, sealed_name: str, password: str, on_progress: Callable[[Phase, int, int], None]) -> EncryptedFile:
+    """Encrypt the job's archive into its envelope, once the space for it is checked; the archive is left to the clean-up."""
+    archive = folder / name
+    size = archive.stat().st_size
+    needed = size + _ENVELOPE_MARGIN
+    free = shutil.disk_usage(folder).free
+    if free < needed:
+        raise BackupNoSpaceError(needed, free)
+    on_progress("encrypting", 0, size)
+    return encrypt_file(archive, folder / sealed_name, password, progress=lambda done, total: on_progress("encrypting", done, total))
+
+
+def _protect(folder: Path, name: str, created_at: datetime, password: str, recipients: tuple[str, ...] | None, manifest, on_progress: Callable[[Phase, int, int], None]) -> tuple[str, EncryptedFile]:
+    """Encrypt the job's archive with ``password`` into its envelope, then, for ``recipients``, seal it into its ``.tar``
+    (L3): the name of the file the job hands out, and its size and SHA-256."""
+    envelope_name = archive_name(created_at, encrypted=True)
+    envelope = _encrypt(folder, name, envelope_name, password, on_progress)
+    if not recipients:
+        return envelope_name, envelope
+    # The clear zip goes before the seal: the disk holds 2× the envelope at most, never zip, envelope and tar together
+    # (contract L3 §4), and the data in clear no longer than needed.
+    (folder / name).unlink(missing_ok=True)
+    sealed_name = archive_name(created_at, sealed=True)
+    return sealed_name, _seal(folder, envelope, envelope_name, sealed_name, password, recipients, created_at, manifest, on_progress)
+
+
+def _seal(folder: Path, envelope: EncryptedFile, envelope_name: str, sealed_name: str, password: str, recipients: tuple[str, ...], created_at: datetime, manifest, on_progress: Callable[[Phase, int, int], None]) -> EncryptedFile:
+    """Seal the job's envelope for ``recipients`` into its ``.tar`` (L3), once the space for it is checked; the envelope
+    is left to the clean-up. ``manifest``: the archive's, which names the LibreFolio and the revision that made it."""
+    needed = envelope.size + _ENVELOPE_MARGIN
+    free = shutil.disk_usage(folder).free
+    if free < needed:
+        raise BackupNoSpaceError(needed, free)
+    on_progress("sealing", 0, envelope.size)
+    document = sealed_backup.build_manifest(
+        created_at=created_at,
+        lfbk_sha256=envelope.sha256,
+        lfbk_size=envelope.size,
+        recipients=recipients,
+        librefolio_version=manifest.app_version,
+        db_revision=manifest.alembic_revision,
+    )
+    written = sealed_backup.write_sealed(folder / sealed_name, manifest=document, password_age=sealed_backup.seal_password(password, recipients), envelope=folder / envelope_name, mtime=int(created_at.timestamp()))
+    on_progress("sealing", envelope.size, envelope.size)
+    return written
+
+
+def _content(manifest: BackupManifest) -> dict[str, int]:
+    """What the archive holds once restored (A10, T-10), from the sizes its manifest lists: the database is its first
+    entry, the uploaded files and the broker reports are under their folders."""
+    files = manifest.files
+    return {
+        "content_bytes": sum(entry.size for entry in files),
+        "content_database_bytes": files[0].size,
+        "content_uploads_bytes": sum(entry.size for entry in files if entry.path.startswith("custom-uploads/")),
+        "content_broker_reports_bytes": sum(entry.size for entry in files if entry.path.startswith("broker_reports/")),
+    }
+
+
+def _remove_work_files(folder: Path, keep: str | None) -> None:
+    """Remove what a run leaves in its folder (the database copy, a partial archive) but its state and its archive."""
+    for path in folder.iterdir():
+        if path.name in (STATE_FILE, keep):
+            continue
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            path.unlink(missing_ok=True)
+
+
+def _end_interrupted(folder: Path, job: BackupJob) -> BackupJob:
+    """A run that died with its process: failed, ``backup_interrupted``, and what it left in its folder removed (the
+    database's copy, a clear zip, a partial archive): only its state stays (lot B4b)."""
+    job = replace(job, status="failed", phase=None, finished_at=_now(), error_code="backup_interrupted")
+    _write_state(folder, job)
+    _remove_work_files(folder, keep=None)
+    return job
+
+
+def start_backup(*, origin: BackupOrigin = "ui", data_dir: Path | None = None, password: str | None = None, recipients: tuple[str, ...] | None = None) -> BackupJob:
+    """Start a backup in a background thread and return its first state. ``BackupBusyError`` if one is running.
+
+    ``password``: a secure backup, whose password goes to the thread and nowhere else. ``recipients``: a sealed backup
+    (L3), never with a password.
+    """
+    _one_protection(password, recipients)
+    data_dir = data_dir or get_data_dir()
+    lock, job = _prepare(data_dir, origin)
+    try:
+        thread = threading.Thread(target=_run, args=(data_dir, job, lock, None, password, recipients), name=f"backup-{job.job_id[:8]}", daemon=True)
+        thread.start()
+    except BaseException:
+        lock.release()
+        raise
+    return job
+
+
+def run_backup(
+    *,
+    origin: BackupOrigin = "cli",
+    data_dir: Path | None = None,
+    progress: Callable[[Phase, int, int], None] | None = None,
+    password: str | None = None,
+    recipients: tuple[str, ...] | None = None,
+    keep: bool = True,
+) -> tuple[BackupJob, Path]:
+    """Run a backup in this thread, holding the same lock as the API's jobs: the job's end state and the folder its
+    archive is in now (the kept folder; the job's own with ``keep=False``, or when it could not be kept).
+
+    ``password``: a secure backup. ``recipients``: a sealed backup (L3), never with a password. ``keep=False``: the caller
+    takes the archive away itself and removes the folder.
+    """
+    _one_protection(password, recipients)
+    data_dir = data_dir or get_data_dir()
+    lock, job = _prepare(data_dir, origin)
+    ended = _run(data_dir, job, lock, progress, password, recipients, keep)
+    return ended, _locate(data_dir, job.job_id)
+
+
+def _one_protection(password: str | None, recipients: tuple[str, ...] | None) -> None:
+    """A backup has a password of its maker's or recipients to seal it for, never both: ``ValueError``."""
+    if password is not None and recipients:
+        raise ValueError("A backup is protected by a password or sealed for recipients, not both")
+
+
+def _locate(data_dir: Path, job_id: str) -> Path:
+    """The folder of a job: its own in ``.jobs/`` while it runs, after a failure, or when it was not kept; otherwise its
+    kept folder in ``backups/``, found by the end of its name and checked against the id in its state. The job's own
+    folder when none holds it (a read of it then says there is none). ``job_id`` must be a job id."""
+    own = job_dir(data_dir, job_id)
+    if is_plain_dir(own):
+        return own
+    root = backups_dir(data_dir)
+    if is_plain_dir(root):
+        try:
+            entries = list(root.iterdir())
+        except OSError:
+            entries = []
+        for path in entries:
+            if not is_kept_name(path.name) or not path.name.endswith(f"-{job_id[:8]}") or not is_plain_dir(path):
+                continue
+            try:
+                if _read_state(path).job_id == job_id:
+                    return path
+            except (BackupJobNotFoundError, OSError):
+                continue
+    return own
+
+
+def _read_located(data_dir: Path, job_id: str) -> tuple[Path, BackupJob]:
+    """The folder of a job and its state. A run's move into ``backups/`` can land between the search and the read: the
+    read is tried once more from the search."""
+    folder = _locate(data_dir, job_id)
+    try:
+        return folder, _read_state(folder)
+    except BackupJobNotFoundError:
+        again = _locate(data_dir, job_id)
+        if again == folder:
+            raise
+        return again, _read_state(again)
+
+
+def get_job(job_id: str, *, data_dir: Path | None = None) -> BackupJob:
+    """The state of a job; a run that died with its process reads as failed, ``backup_interrupted``, its work files
+    removed. A kept backup never expires; a job in ``.jobs/`` that finished more than an hour ago does."""
+    data_dir = data_dir or get_data_dir()
+    if not is_job_id(job_id):
+        raise BackupJobNotFoundError("No such backup job")
+    try:
+        folder, job = _read_located(data_dir, job_id)
+        in_jobs = folder.parent == jobs_dir(data_dir)
+        if in_jobs and job.finished_at is not None and _now() - job.finished_at > JOB_RETENTION:
+            shutil.rmtree(folder, ignore_errors=True)
+            raise BackupJobNotFoundError("The backup job has expired")
+        if in_jobs and job.status == "running" and not _run_lock_held(data_dir):
+            job = _read_state(folder)
+            if job.status == "running":
+                job = _end_interrupted(folder, job)
+    except BackupJobUnreadableError as exc:
+        # Not found to the caller (a 404, never a 500); the folder stays until it expires by its date (B-50).
+        logger.warning("A backup job's state cannot be read", job_id=job_id, error=exc.error)
+        raise
+    return job
+
+
+def job_archive(job_id: str, *, data_dir: Path | None = None) -> tuple[Path, str]:
+    """The archive of a finished job and its file name. ``BackupJobStateError`` until it is done."""
+    data_dir = data_dir or get_data_dir()
+    job = get_job(job_id, data_dir=data_dir)
+    if job.status != "done" or job.file_name is None:
+        raise BackupJobStateError(job.status)
+    path = _locate(data_dir, job_id) / job.file_name
+    if not path.is_file():
+        raise BackupJobNotFoundError("The backup archive is gone")
+    return path, job.file_name
+
+
+def delete_job(job_id: str, *, data_dir: Path | None = None) -> None:
+    """Remove a finished job and its archive. ``BackupJobStateError`` while it runs."""
+    data_dir = data_dir or get_data_dir()
+    job = get_job(job_id, data_dir=data_dir)
+    if job.status == "running":
+        raise BackupJobStateError(job.status)
+    shutil.rmtree(_locate(data_dir, job_id), ignore_errors=True)
+
+
+def end_interrupted_jobs(data_dir: Path) -> int:
+    """End every run its process left running, as ``get_job`` ends one it reads, while no run holds the lock; how many
+    (at every start, lot B4b). A folder whose state cannot be read is left to ``remove_expired_jobs``."""
+    folder = jobs_dir(data_dir)
+    if not is_plain_dir(backups_dir(data_dir)) or not is_plain_dir(folder) or _run_lock_held(data_dir):
+        return 0
+    ended = 0
+    for path in folder.iterdir():
+        if not is_job_id(path.name) or not is_plain_dir(path):
+            continue
+        try:
+            job = _read_state(path)
+        except (BackupJobNotFoundError, ValueError, TypeError, KeyError):
+            continue
+        if job.status == "running" and not _run_lock_held(data_dir):
+            _end_interrupted(path, job)
+            ended += 1
+    return ended
+
+
+def remove_expired_jobs(data_dir: Path, *, now: datetime | None = None) -> int:
+    """Remove the jobs that finished more than ``JOB_RETENTION`` ago, or died that long ago; how many were removed.
+
+    Nothing through a link: a ``backups`` or ``.jobs`` that is not a plain folder is left alone (it runs at every start,
+    lot B4b)."""
+    folder = jobs_dir(data_dir)
+    if not is_plain_dir(backups_dir(data_dir)) or not is_plain_dir(folder):
+        return 0
+    now = now or _now()
+    removed = 0
+    for path in folder.iterdir():
+        if not is_job_id(path.name) or path.is_symlink() or not path.is_dir():
+            continue
+        try:
+            job = _read_state(path)
+            ended = job.finished_at or (job.created_at if not _run_lock_held(data_dir) else None)
+        except (BackupJobNotFoundError, ValueError, TypeError, KeyError):
+            ended = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+        if ended is not None and now - ended > JOB_RETENTION:
+            shutil.rmtree(path, ignore_errors=True)
+            removed += 1
+    return removed
+
+
+def _running_job(data_dir: Path) -> BackupJob | None:
+    """The job the held run lock names, while its state says it runs (B-8); ``None`` when the lock names none, or a job
+    that is gone or has ended. The lock file is read, never followed through a link, and only its first bytes."""
+    path = lock_path(data_dir)
+    holder = _PROCESS_HOLDERS.get(path)
+    if fcntl is not None:
+        try:
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        except OSError:
+            return None
+        try:
+            holder = os.read(fd, _HOLDER_MAX_BYTES).decode("ascii", errors="replace").strip()
+        except OSError:
+            return None
+        finally:
+            os.close(fd)
+    if not holder or not is_job_id(holder):
+        return None
+    try:
+        job = get_job(holder, data_dir=data_dir)
+    except (BackupJobNotFoundError, OSError, ValueError, TypeError, KeyError):
+        # A state this module cannot read names no job: the refusal stays a 409, never a 500.
+        return None
+    return job if job.status == "running" else None
+
+
+def _run_lock_held(data_dir: Path) -> bool:
+    """Whether a run holds the lock now (a probe: taken and released at once when free)."""
+    return _lock_held(lock_path(data_dir))
+
+
+def _lock_held(path: Path) -> bool:
+    """Whether some process holds the lock at ``path`` now: a probe, taken and released at once when free. Where the lock
+    file does not exist nobody holds it, and none is created."""
+    if fcntl is not None and not path.exists():
+        return False
+    probe = _RunLock(path)
+    if probe.try_acquire():
+        probe.release()
+        return False
+    return True
+
+
+def backup_in_progress(*, data_dir: Path | None = None) -> bool:
+    """Whether backup work runs now, in any process: a backup (from the Settings tab, the hosting panel or the CLI), or
+    the check of an archive for a restore, which runs in a thread after its request has been answered.
+
+    For the idle monitor of workstream Z (decision D-S2: the instance is never suspended during a backup). Read only:
+    no file is created; a free lock is taken and released at once, so a backup starting in that very instant would be
+    refused as busy, a window the probes of this module already accept.
+    """
+    data_dir = data_dir or get_data_dir()
+    return _lock_held(lock_path(data_dir)) or _lock_held(stages_dir(data_dir) / STAGE_LOCK_FILE)

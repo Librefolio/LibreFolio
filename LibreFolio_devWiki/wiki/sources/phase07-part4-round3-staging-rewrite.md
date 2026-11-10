@@ -41,10 +41,10 @@ Complete rewrite of the transaction staging system from a monolithic `Transactio
 
 | Role | Path |
 |------|------|
-| Single-row form | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| Multi-row bulk editor | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| Compact cash input | `frontend/src/lib/components/ui/display/CompactCashCell.svelte` |
-| Validate scheduler | `frontend/src/lib/utils/transactions/useValidateScheduler.svelte.ts` |
+| Single-row form | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| Multi-row bulk editor | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| Compact cash input | `frontend/src/lib/features/transactions/form/CompactCashCell.svelte` |
+| Validate scheduler | `frontend/src/lib/features/transactions/useValidateScheduler.svelte.ts` |
 | Original plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round1-3/plan-phase07-transaction-Part4_Round3-stagingModalRewrite.prompt.md` |
 
 > `PromotePairWizardModal.svelte`, `TransactionStagingModal.svelte` and

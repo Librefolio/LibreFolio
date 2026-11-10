@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, event, pool
 
 # Add the backend directory to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -31,7 +31,7 @@ if db_url:
     print(f"[Alembic env.py] Using DATABASE_URL from -x parameter: {db_url}")
     config.set_main_option("sqlalchemy.url", db_url)
 else:
-    # Use URL from config.py (reads from environment/env file)
+    # Use URL from backend.app.config (reads from environment/env file)
     settings = get_settings()
     print(f"[Alembic env.py] Using DATABASE_URL from config: {settings.DATABASE_URL}")
     config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
@@ -78,6 +78,20 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _schema_untrusted(dbapi_connection, _connection_record) -> None:
+    """Every connection of an upgrade keeps ``trusted_schema`` off (B-37): a restore's check upgrades an archive's
+    database (``-x sqlalchemy.url``), whose schema LibreFolio did not write. The process's own listener,
+    ``set_sqlite_pragma()`` (``db/session.py``, loaded by this module's imports), runs first on every connection: it
+    turns it off before anything else and resets the schema's reading last (H-51). This one runs after the dialect has
+    registered ``regexp`` and ``floor``, and repeats it, so the upgrade keeps the rule whatever that listener becomes.
+    LibreFolio's own schema calls only the built-in ``lower()``, so the live upgrade is the same."""
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA trusted_schema=OFF")
+    finally:
+        cursor.close()
+
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
@@ -90,6 +104,7 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    event.listen(connectable, "connect", _schema_untrusted)
 
     with connectable.connect() as connection:
         context.configure(

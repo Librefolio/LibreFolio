@@ -13,8 +13,8 @@ from uuid import uuid4
 import pytest
 
 from backend.app.schemas.uploads import FilePreviewType
-from backend.app.services import file_preview
-from backend.app.services.file_preview import UnsupportedPreviewError
+from backend.app.services.files import file_preview
+from backend.app.services.files.file_preview import UnsupportedPreviewError
 from backend.test_scripts.test_utils import print_section, print_success
 
 ARTIFACTS_DIR = Path(__file__).resolve().parents[3] / "backend" / "data" / "test" / "_file_preview_pytest"

@@ -15,7 +15,7 @@ related:
 # Problem: a raw-HTML image path is one folder short in every translation
 
 > Written by workstream M as a note for the devWiki on 2026-10-11, filed by the historian on 2026-10-12 with its paths
-> and commits checked at `5d0585595`.
+> and commits checked at `4bc7be91b`.
 
 ## Symptom
 
@@ -38,14 +38,14 @@ counted only WARNING/ERROR lines did not see it.
 
 ## Fix (batch 14)
 
-- The 21 paths got one more `../` (`720ca8008`).
+- The 21 paths got one more `../` (`d49013bbf`).
 - `dev.py mkdocs build` resolves every relative file URL of the built site (img/source `src`/`srcset`, video
   `src`/`poster`, audio `src`, `<a href>` to a file) from its page's folder, as a browser does, and exits 1 on a
-  broken one (`d23fac443`): the release workflow's build steps now fail on it.
+  broken one (`9116167cf`): the release workflow's build steps now fail on it.
 - `translate-validate` reports `html-asset-depth` (ERROR): a raw-HTML relative file path copied unchanged from the
-  English, with the line and the path to write, computed from the page's build folder (`90d146111`).
+  English, with the line and the path to write, computed from the page's build folder (`4360c7256`).
 - Tests: `./dev.py test utils gate-docs-links`, `./dev.py test utils translation-validator`.
-- All three commits reached `dev_release2` with train 37 (merge `6fa720752`).
+- All three commits reached `dev_release2` with train 37 (merge `8d146f2cc`).
 
 ## Prevention
 
@@ -55,6 +55,8 @@ counted only WARNING/ERROR lines did not see it.
 - Read build logs for ⚠️/❌ as well as WARNING/ERROR; with the new check, the exit code is enough.
 - Still open (backlog): a deterministic pipeline step for the `../` of translations, only if the case recurs (M-2);
   the `../` of `srcset` and `poster` in `html-attr-mismatch` (M-6).
+  2026-11-07 lint: both were discarded by the developer on 22/10 — M-2 because the case did not recur, M-6 because no
+  page uses `srcset` or `poster` with `../`.
 
 ## Links
 

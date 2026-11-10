@@ -33,7 +33,6 @@ from backend.app.schemas.common import (
     SafeDecimal,
     StrictModel,
 )
-from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================
@@ -136,68 +135,6 @@ class BRListResponse(BaseListResponse[BRReadItem]):
     """Response for listing accessible brokers plus optional discovery items."""
 
     inaccessible: List[BRDiscoveryItem] = Field(default_factory=list, description="Existing brokers without access for current user")
-
-
-# =============================================================================
-# BROKER WITH BALANCES AND HOLDINGS
-# =============================================================================
-
-
-class BRAssetHolding(StrictModel):
-    """
-    Single asset holding within a broker.
-
-    Represents current position in an asset with cost basis and market value.
-    """
-
-    asset_id: int = Field(..., description="Asset ID")
-    asset_name: str = Field(..., description="Asset display name")
-
-    quantity: SafeDecimal = Field(..., description="Current quantity held")
-
-    # Cost basis: historical cost of the quantity held, in the asset currency (average cost)
-    total_cost: Optional[Currency] = Field(
-        default=None,
-        description="Historical cost of the quantity held, in the asset currency: each purchase converted at its own date, sales removing their share of the average cost. None when part of it is unknown (see missing_fx_pairs, or a transfer without cost basis).",
-    )
-    average_cost_per_unit: Optional[SafeDecimal] = Field(default=None, description="total_cost per unit held; None when total_cost is unknown")
-
-    # Current valuation (if price available)
-    current_price: Optional[SafeDecimal] = Field(default=None, description="Latest price per unit")
-    current_value: Optional[Currency] = Field(default=None, description="Current market value")
-
-    # Unrealized P&L
-    unrealized_pnl: Optional[Currency] = Field(default=None, description="Unrealized profit/loss")
-    unrealized_pnl_percent: Optional[SafeDecimal] = Field(default=None, description="Unrealized P&L %")
-
-
-class BRSummary(BRReadItem):
-    """
-    Broker with computed cash balances and asset holdings.
-
-    Includes:
-    - Current cash balance per currency (computed from transactions)
-    - Asset holdings with cost basis and market value
-    - Total portfolio value in base currency (if FX rates available)
-    - Current user's role and share percentage on this broker
-    """
-
-    # Cash balances as list of Currency objects
-    cash_balances: List[Currency] = Field(default_factory=list, description="Current cash balance per currency")
-
-    # Asset holdings with full details
-    holdings: List[BRAssetHolding] = Field(default_factory=list, description="Current asset holdings with cost basis and market value")
-
-    # Conversions the holdings' cost needed and could not get (pair "FROM/TO" with the dates)
-    missing_fx_pairs: List[WACMissingPairInfo] = Field(default_factory=list, description="FX pairs missing for the holdings' cost, with the purchase dates that needed them")
-
-    # Optional: Total portfolio value in user's base currency
-    total_value_base_currency: Optional[Currency] = Field(default=None, description="Total portfolio value in base currency (cash + holdings)")
-
-    @property
-    def currencies(self) -> List[str]:
-        """List of currencies used in this broker's cash balances."""
-        return [c.code for c in self.cash_balances]
 
 
 # =============================================================================

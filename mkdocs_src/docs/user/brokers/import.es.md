@@ -1,12 +1,12 @@
 # 📥 Transacciones del bróker
 
-La pestaña **Transacciones** de un bróker enumera todas sus transacciones, las más recientes primero. Siempre muestra todo el historial del bróker: el rango de fechas de la barra de herramientas no filtra la lista.
+La pestaña **Transacciones** de un bróker enumera sus transacciones, las más recientes primero, para el rango de fechas elegido en la barra de herramientas. Para ver todo el historial, elige **Todo** ahí.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Pestaña Transacciones del bróker">
 </div>
 
-Por encima de la lista encontrarás **Informes Cargados**, **Ver en Transacciones** y el selector de columnas. Los propietarios y editores también disponen de **Importar** y **Agregar Transacción**.
+Por encima de la lista encontrarás **Informes Cargados**, **Ver en Transacciones** y el selector de columnas. Los propietarios y editores también disponen de **Importar**, **Agregar Transacción** y, una vez marcadas filas, de la barra para editarlas, clonarlas o eliminarlas. Un Lector ve la tabla, los informes cargados y **Ver en Transacciones**.
 
 ---
 
@@ -23,7 +23,8 @@ No se guarda nada antes de **Guardar todo**: hasta entonces puedes añadir más 
 ## 🔎 Abrir, editar o eliminar transacciones
 
 - **Haz doble clic** en una fila para abrirla en modo solo lectura.
-- Para editar, clonar o eliminar filas, haz clic en **Ver en Transacciones**: se abre la página [Transacciones](../transactions/index.md), filtrada por este bróker y por los filtros de columna que establezcas aquí.
+- Los propietarios y editores pueden editar, clonar o eliminar filas aquí: usa las acciones de una fila, o marca filas y usa la barra sobre la tabla.
+- **Ver en Transacciones** abre la página [Transacciones](../transactions/index.md), filtrada por este bróker, por el periodo de la barra de herramientas y por los filtros de columna que establezcas aquí.
 
 ---
 
@@ -54,3 +55,5 @@ El mismo asistente se abre desde **Importar** en la página [Transacciones](../t
 - **Gestionar todos los archivos** abre la página [Archivos y subidas](../files/index.md#broker-reports), filtrada por este bróker.
 
 Subir y eliminar informes requiere acceso de propietario o editor al bróker.
+
+Los informes que una versión anterior de LibreFolio guardó sin bróker no están en esta lista: quien los subió y los administradores los encuentran en la página [Archivos y subidas](../files/index.md#broker-reports).

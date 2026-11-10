@@ -40,7 +40,8 @@ obvious implementation that gives a wrong answer.
 - Different ownership shares leave (s_B − s_A)·X on the receiver's line; the total is unaffected.
 - Filtered views: a securities TRANSFER leg whose partner is outside the view, or whose partner was deleted,
   is capital at market value on its own date (`_transfer_leg_capital()`); a cash leg in the same position is
-  capital at its amount. B alone equals B in the combined view; A alone loses the in-transit move at departure.
+  capital at its amount (*2026-11-07 lint:* since 1.3 deleting a broker turns the surviving half into an ADJUSTMENT, or a
+  DEPOSIT/WITHDRAWAL for cash — [[decisions/orphan-transfer-becomes-an-adjustment]]). B alone equals B in the combined view; A alone loses the in-transit move at departure.
 - ADJUSTMENT pairs keep their capital at cost and get no internal flow.
 - **Broker cards read the same capital** (lot 41, step H). `PortfolioService.get_summary(include_breakdown=True)`
   no longer keeps its own per-broker capital (`broker_total_invested`: DEPOSIT/WITHDRAWAL plus in-kind
@@ -81,7 +82,7 @@ obvious implementation that gives a wrong answer.
 
 - Every optional flag enters the backend L2 cache key, the frontend cache key and `included_features`; the
   frontend passes them as a typed options object, not positional booleans.
-- Bucket labels follow the calendar (commit `8c7b0c0a7`, "P&L periods follow the calendar"), superseding the
+- Bucket labels follow the calendar (commit `86b392454`, "P&L periods follow the calendar"), superseding the
   first end-anchored buckets (Round 4, D16).
 
 ## Consequences
@@ -99,6 +100,7 @@ obvious implementation that gives a wrong answer.
 - [[concepts/echarts-chart-gotchas]] — the rendering traps met on the way.
 - [[decisions/broker-card-aggregation-no-n-plus-one]] — the broker cards that read the same capital since lot 41.
 - [[decisions/native-cash-daily-revaluation]] — lot 41 F, the cash the lines and cards are valued with.
+- [[decisions/pnl-day-change-against-yesterdays-nav]] — the P&L day change of 1.3, a share of yesterday's NAV.
 - Source: [[sources/phase00-performance-charts-2026-09]]; lot 41: [[sources/phase00-broker-pnl-flows-2026-10]].
 
 ## Source files
@@ -109,8 +111,9 @@ obvious implementation that gives a wrong answer.
 | `get_broker_pnl_history`, report assembly | `backend/app/services/portfolio_service.py` |
 | `get_summary`, the per-broker breakdown (card capital from the engine, lot 41 H) | `backend/app/services/portfolio_service.py` |
 | Report flags (`include_*`) and series schemas | `backend/app/schemas/portfolio.py` |
-| Growth chart (P&L mode, sub-modes, candles, income) | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
-| Axis label planner | `frontend/src/lib/components/dashboard/growthLadderAxis.ts` |
+| Growth chart (P&L mode, sub-modes, candles, income) | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
+| Growth chart P&L series (sign split, candles, reference line) | `frontend/src/lib/features/dashboard/growthChartSeries.ts` |
+| Axis label planner | `frontend/src/lib/features/dashboard/growthLadderAxis.ts` |
 | Engine tests (identity, candles) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_broker_pnl_contributions.py` |
 | Candle tests | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_pnl_candles.py` |
 | Internal flows, filtered views, orphans, aggregate guard (lot 41) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_broker_internal_flows.py` |

@@ -6,7 +6,8 @@ import type {VerifiedToolCatalog} from './contracts';
 import type {LoadedToolRenderer, ToolRendererBinding, ToolRendererResolution} from './registry';
 import ToolsHub from './ToolsHub.svelte';
 
-const {fetchCatalogMock, resolveRendererMock, afterNavigateMock, guideAnchorMock} = vi.hoisted(() => ({
+const {fetchCatalogMock, resolveRendererMock, afterNavigateMock, guideAnchorMock, startGuideMock} = vi.hoisted(() => ({
+    startGuideMock: vi.fn(),
     fetchCatalogMock: vi.fn(),
     resolveRendererMock: vi.fn(),
     afterNavigateMock: vi.fn(),
@@ -15,6 +16,7 @@ const {fetchCatalogMock, resolveRendererMock, afterNavigateMock, guideAnchorMock
 
 vi.mock('$app/navigation', () => ({afterNavigate: afterNavigateMock}));
 vi.mock('$lib/features/onboarding/guideAnchors.svelte', () => ({guideAnchor: guideAnchorMock}));
+vi.mock('$lib/features/onboarding/onboardingGuide.svelte', () => ({onboardingGuide: {maybeStartContextual: startGuideMock}}));
 vi.mock('./client', () => ({fetchToolCatalog: fetchCatalogMock}));
 vi.mock('./registry', () => ({resolveToolRenderer: resolveRendererMock}));
 
@@ -78,6 +80,7 @@ beforeEach(() => {
     resolveRendererMock.mockReset();
     afterNavigateMock.mockReset();
     guideAnchorMock.mockReset();
+    startGuideMock.mockReset();
     fetchCatalogMock.mockResolvedValue(catalog);
 });
 
@@ -87,6 +90,17 @@ afterEach(() => {
 });
 
 describe('ToolsHub', () => {
+    // 21-7: the page guide starts once the catalog has answered, when its anchors are on the page.
+    it('anchors its overview and its refresh button, and offers the tools page guide once the catalog answered', async () => {
+        resolveRendererMock.mockReturnValue(readyResolution(vi.fn(() => Promise.resolve(renderer))));
+
+        render(ToolsHub);
+
+        await screen.findByTestId('tool-card-pac_allocator');
+        expect(guideAnchorMock).toHaveBeenCalledWith(screen.getByTestId('tools-hub-refresh'), 'tools.page.refresh');
+        await waitFor(() => expect(startGuideMock).toHaveBeenCalledWith('tools_page_guide'));
+    });
+
     it('keeps a compatible card disabled until preload completes, then makes the whole card the tool link', async () => {
         const preload = deferred<LoadedToolRenderer>();
         const load = vi.fn(() => preload.promise);
@@ -96,7 +110,7 @@ describe('ToolsHub', () => {
         render(ToolsHub);
 
         const card = await screen.findByTestId('tool-card-pac_allocator');
-        expect(guideAnchorMock).toHaveBeenCalledWith(screen.getByTestId('tools-hub'), 'tools.hub');
+        expect(guideAnchorMock).toHaveBeenCalledWith(screen.getByTestId('tools-hub'), 'tools.page.overview');
         await waitFor(() => expect(card).toHaveAttribute('data-interface-state', 'loading'));
         expect(within(card).queryByTestId('tool-open')).toBeNull();
         expect(within(card).getByTestId('tool-interface-loading')).toBeInTheDocument();

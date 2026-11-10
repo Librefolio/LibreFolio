@@ -37,6 +37,14 @@ Luego añade los periodos con **Añadir Primer Período**, y **Añadir Período*
 Los periodos deben sucederse, sin huecos ni solapamientos. **Dividir** corta un periodo en dos; selecciona
 periodos vecinos y haz clic en **Fusionar** para unirlos.
 
+!!! note "Límites de un calendario"
+
+    Cada periodo debe estar comprendido entre el 1 de enero de 1900 y el 31 de diciembre de 2200, y todo el
+    calendario puede abarcar como máximo 100 años, con un máximo de 1.200 periodos. Los días de gracia del
+    [interés de demora](#late-interest) son también como máximo 100 años (36.525 días). Un calendario fuera
+    de estos límites se rechaza: **Probar Configuración** y el cálculo del precio (**Recalcular** en la
+    página del activo) informan de parámetros no válidos.
+
 ### ⚡ Interés de demora {: #late-interest }
 
 Para un préstamo reembolsado con retraso, activa **⚡ Interés de demora** debajo de los periodos: el activo sigue creciendo
@@ -56,6 +64,7 @@ Cada evento cuenta desde su fecha en adelante.
 |---|---|
 | **Interés** | Un pago de intereses que recibiste: el valor disminuye en esa cantidad |
 | **Ajuste de precio** | Una reducción (negativa) o un aumento (positivo) |
+| **Liquidación al Vencimiento** | El activo llega al vencimiento y devuelve su capital; su valor deja de cambiar. **Generar cupón** añade uno en la última fecha de vencimiento |
 
 ## 🧮 Cómo se calcula el valor {: #how-value-is-calculated }
 
@@ -77,7 +86,8 @@ como un evento de interés: el valor vuelve a empezar desde $V_0$, y $I$ y las s
 
 - **Antes del primer periodo**, el valor es el Valor inicial.
 - **Después del último periodo**, se mantiene en su importe final, a menos que el interés de demora esté activado. Con
-  **Generar cupón** en el último periodo y sin interés de demora, un evento de liquidación al vencimiento cierra el activo en ese importe.
+  **Generar cupón** en el último periodo y sin interés de demora, el último cupón se paga en la fecha de fin y un
+  evento de liquidación al vencimiento cierra el activo en el valor que queda tras él: el Valor inicial.
 - **El gráfico** obtiene un punto en cada fecha de **Frecuencia**: elige **Diaria** para una línea suave.
 
 ??? example "🧮 Un préstamo de 10.000 € al 5 %, con un cupón cada mes"

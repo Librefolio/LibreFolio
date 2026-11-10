@@ -15,7 +15,9 @@
  * @module utils/currencyGraph
  */
 
-import MultiDirectedGraph from 'graphology';
+// The named export (X-R75): graphology's default export is the simple Graph, which refuses a second edge between two
+// currencies in the same direction, so two providers covering it made the whole route picker fail.
+import {MultiDirectedGraph} from 'graphology';
 
 // ============================================================================
 // TYPES
@@ -35,6 +37,8 @@ export interface ProviderInfo {
     base_currency: string;
     base_currencies: string[];
     target_currencies: string[];
+    /** True when `target_currencies` is empty because the list could not be fetched (not because the provider covers nothing). */
+    currencies_unavailable?: boolean;
     /** Provider icon URL (for UI display) */
     icon_url?: string | null;
     /** Provider description (for UI display) */

@@ -6,6 +6,7 @@ date: 2026-09-02
 tags: [backend, roi, mwrr, xirr, fifo, portfolio]
 related:
   - concepts/fifo-lot-tracking
+  - decisions/financial-math-one-home
 ---
 
 # Problem: MWRR pole when the period starts on a data-less day
@@ -38,6 +39,12 @@ short windows to catch it.
 - Reproduced and pinned with a probe: Sunday 2026-03-01 start, deposit on the first NAV
   day → before: pole; after: ≈ −0.15% cumulative, matching TWRR/ROI.
 
+2026-11-07 lint: the two re-basing branches are gone from `portfolio_service.py`. Since `bebf7f0e7` (15/10, lot U4b)
+one function, `rebase_to_period()` in `backend/app/services/financial_math/returns.py`, rebases both the summary and
+the history series ([[decisions/financial-math-one-home]]), and keeps this rule: with `date_from` before every
+snapshot, the flows of the first snapshot's date are left out. The series solver now keeps a warm start only where it
+gives the same rate (`_mwrr_solve`).
+
 ## Verification
 
 - Probe scripts reproduced the pole and validated the fix against the two reference shapes.
@@ -47,6 +54,7 @@ short windows to catch it.
 
 | Role | Path |
 |------|------|
-| Fix | `backend/app/services/portfolio_service.py` (period re-basing, two branches) |
+| Fix | `backend/app/services/portfolio_service.py` (period re-basing, two branches, at the time) |
+| Period re-basing since `bebf7f0e7` (`rebase_to_period`) | `backend/app/services/financial_math/returns.py` |
 | XIRR solver | `backend/app/services/financial_math/returns.py` (calculate_mwrr, calculate_mwrr_series) |
 | Tests | `backend/test_scripts/test_services/test_financial/` |

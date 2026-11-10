@@ -3,9 +3,10 @@
  *
  *   node scripts/js-coverage-report.js <outDir> "<Report name>" <input…>
  *
- * Every input is either a `coverage-final.json` or a directory of per-test JSON
- * files. They are merged with `istanbul-lib-coverage`, which is the canonical
- * operation for this format: same file, same statement map, hit counts summed.
+ * Every input is either a `coverage-final.json` or a directory of JSON files
+ * (`e2e-raw/`: one per Playwright worker, each the sum of its tests). They are
+ * merged with `istanbul-lib-coverage`, which is the canonical operation for
+ * this format: same file, same statement map, hit counts summed.
  *
  * Why istanbul end to end, and no monocart. Monocart's job was to take the V8
  * ranges Chromium reports about *bundles* and walk them back through sourcemaps

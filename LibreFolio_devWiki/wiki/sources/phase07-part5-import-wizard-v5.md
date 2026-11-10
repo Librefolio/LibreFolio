@@ -50,8 +50,8 @@ This is the complete v5 redesign of the BRIM Import Wizard, superseding the v4 "
 | M1 milestone plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/plan-phase07Part5-M1-ParseAndSee.prompt.md` |
 | Final UI polish | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/05-ui-final-polish.md` |
 | Plugin sign audit | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/brim-plugin-sign-audit-2026-06-08.md` |
-| Import Wizard Modal | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| BulkModal (recipient) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Import Wizard Modal | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| BulkModal (recipient) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | BRIM providers dir | `backend/app/services/brim_providers/` |
 | Schwab plugin | `backend/app/services/brim_providers/broker_schwab/plugin.py` |
 | Coinbase plugin (fixed) | `backend/app/services/brim_providers/broker_coinbase/plugin.py` |

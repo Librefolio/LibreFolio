@@ -9,6 +9,8 @@ Supported resource types:
   - "js"   → single-file JS library (MathJax, etc.), plus the "companions" it
              loads from beside itself (MathJax's fonts), as its bundle names them
   - "font" → multi-file Google Fonts resource (CSS + woff2 subsets)
+  - "npm-esm" → the ES modules of an npm package (Mermaid's ELK layout), read from the package's tarball and
+                served only if its SRI hash is the pinned one
 
 Usage:
     python scripts/update_js_cache.py [--force]
@@ -18,11 +20,14 @@ Called automatically by:
     - Docker build (at build time)
 """
 
+import base64
 import hashlib
+import io
 import json
 import re
 import shutil
 import sys
+import tarfile
 import urllib.parse
 import urllib.request
 from contextlib import suppress
@@ -80,6 +85,7 @@ def _hard_fail(name: str, reason: str) -> None:
     consumer = CONSUMERS.get(vendor_key) if vendor_key else None
     _HARD_FAILURES.append(_Failure(f"{name}: {reason}", consumer))
 
+
 # Libraries to cache
 # type="js"   → single file download
 # type="font" → fetch CSS from Google Fonts, parse woff2 URLs, download all
@@ -95,6 +101,28 @@ LIBRARIES = {
             "pattern": r"MathJax_[A-Za-z0-9-]+\.woff",
             "dir": "output/chtml/fonts/woff-v2",
         },
+    },
+    # H6-3 (M-22): the documentation's diagrams are drawn by our own copy, pinned to one version and to the hash of that
+    # file; without internet they still draw.
+    "mermaid": {
+        "type": "js",
+        "url": "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js",
+        "target": "mermaid.min.js",
+        "sha256": "581ed7d74bd9048d0e3a91363927d72ef22942d7722546b27f7cc29e35390eb8",
+        "vendor_dir_key": "mkdocs",
+    },
+    # The ELK layout of Mermaid, for the diagrams that say `layout: elk`. Same rule as Mermaid: our own copy, an exact version
+    # compatible with the pinned Mermaid (0.2.x takes `^11.0.2`; 1.x is for Mermaid 12), nothing asked of a CDN when a page
+    # opens. It is an ES module build: the entry point and ~100 chunks that the browser fetches from beside it, as it needs
+    # them (5 MB on disk, ~1 KB to start). The tarball is checked against the npm SRI hash before anything is written.
+    "mermaid-layout-elk": {
+        "type": "npm-esm",
+        "tarball": "https://registry.npmjs.org/@mermaid-js/layout-elk/-/layout-elk-0.2.3.tgz",
+        "integrity": "sha512-m46RVGfvKK1PSMdAFGDz2nksI4jusEkFxvf0lb48bYWmqLQxZpjtpruiw29MbOy9rlWJtuMf9EzG9fAF8CVZbg==",
+        "dist": "package/dist/",
+        "include": r"mermaid-layout-elk\.esm\.min\.mjs|chunks/mermaid-layout-elk\.esm\.min/[A-Za-z0-9_.-]+\.mjs",
+        "entry": "mermaid-layout-elk.esm.min.mjs",
+        "vendor_dir_key": "mkdocs",
     },
     "noto-color-emoji": {
         "type": "font",
@@ -134,11 +162,7 @@ def get_file_hash(content: bytes) -> str:
 def get_remote_headers(url: str, timeout: int = 10) -> Optional[dict]:
     """Get headers from URL using HEAD request (no download)."""
     try:
-        req = urllib.request.Request(
-            url,
-            method="HEAD",
-            headers={"User-Agent": "LibreFolio-CacheManager/1.0"}
-            )
+        req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "LibreFolio-CacheManager/1.0"})
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return dict(response.headers)
     except Exception:
@@ -148,10 +172,7 @@ def get_remote_headers(url: str, timeout: int = 10) -> Optional[dict]:
 def download_file(url: str, timeout: int = 30, ua: str = "LibreFolio-CacheManager/1.0") -> Optional[bytes]:
     """Download file from URL, return content or None on failure."""
     try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": ua}
-            )
+        req = urllib.request.Request(url, headers={"User-Agent": ua})
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return response.read()
     except Exception as e:
@@ -195,7 +216,7 @@ def should_skip_check(manifest: dict) -> bool:
         return False
 
     try:
-        last_check_dt = datetime.fromisoformat(last_check.replace('Z', '+00:00'))
+        last_check_dt = datetime.fromisoformat(last_check.replace("Z", "+00:00"))
         if last_check_dt.tzinfo is None:
             last_check_dt = last_check_dt.replace(tzinfo=UTC)
         hours_since = (datetime.now(UTC) - last_check_dt).total_seconds() / 3600
@@ -218,10 +239,12 @@ def _parse_google_fonts_css(css_text: str):
         url_match = re.search(r"src:\s*url\(([^)]+)\)", block)
         range_match = re.search(r"unicode-range:\s*([^;]+);", block)
         if url_match and range_match:
-            subsets.append({
-                "src_url": url_match.group(1).strip(),
-                "unicode_range": range_match.group(1).strip(),
-            })
+            subsets.append(
+                {
+                    "src_url": url_match.group(1).strip(),
+                    "unicode_range": range_match.group(1).strip(),
+                }
+            )
     return subsets
 
 
@@ -238,9 +261,7 @@ def _kept_ranges_fingerprint(config: dict) -> Optional[list[str]]:
     return sorted({_normalise_unicode_range(r) for r in keep})
 
 
-def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, no nested logic
-    vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False
-) -> bool:
+def _download_font_resource(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat download/manifest pipeline, no nested logic
     """
     Download a Google Fonts resource (CSS + woff2 files).
 
@@ -266,8 +287,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
     # Fetch CSS from Google Fonts (need a modern User-Agent to get woff2)
     css_bytes = download_file(
         config["css_url"],
-        ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-           "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     )
     if css_bytes is None:
         if file_exists:
@@ -334,18 +354,20 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
         total_size += len(woff2_content)
 
         # Build CSS block
-        local_css_lines.extend([
-            f"/* Subset {i} */",
-            "@font-face {",
-            f"\tfont-family: '{font_family}';",
-            "\tfont-style: normal;",
-            "\tfont-weight: 400;",
-            "\tfont-display: swap;",
-            f"\tsrc: url('./{local_filename}') format('woff2');",
-            f"\tunicode-range: {subset['unicode_range']};",
-            "}",
-            "",
-        ])
+        local_css_lines.extend(
+            [
+                f"/* Subset {i} */",
+                "@font-face {",
+                f"\tfont-family: '{font_family}';",
+                "\tfont-style: normal;",
+                "\tfont-weight: 400;",
+                "\tfont-display: swap;",
+                f"\tsrc: url('./{local_filename}') format('woff2');",
+                f"\tunicode-range: {subset['unicode_range']};",
+                "}",
+                "",
+            ]
+        )
 
     if failed_subsets:
         # Do not write a partial CSS/manifest: the cached previous version (if
@@ -381,15 +403,101 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
     manifest["libraries"][name]["subset_count"] = len(subsets)
     manifest["libraries"][name]["total_size"] = total_size
     manifest["libraries"][name]["updated_at"] = datetime.now(UTC).isoformat()
-    manifest["libraries"][name]["versions"].append({
-        "hash": css_hash,
-        "downloaded_at": datetime.now(UTC).isoformat(),
-        "subset_count": len(subsets),
-        "total_size": total_size,
-    })
+    manifest["libraries"][name]["versions"].append(
+        {
+            "hash": css_hash,
+            "downloaded_at": datetime.now(UTC).isoformat(),
+            "subset_count": len(subsets),
+            "total_size": total_size,
+        }
+    )
 
     cleanup_old_versions(vendor_dir, manifest, name)
     print(f"  ✅ Updated {len(subsets)} subsets ({total_size / 1024:.0f} KB total)")
+    return True
+
+
+def _sri_of(content: bytes) -> str:
+    """The Subresource Integrity string npm publishes for a tarball: ``sha512-`` and the base64 of its SHA-512."""
+    return "sha512-" + base64.b64encode(hashlib.sha512(content).digest()).decode()
+
+
+def _update_npm_esm(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat download/manifest pipeline, no nested logic
+    """
+    Cache the ES modules of an npm package from its tarball.
+
+    The tarball is served only if its SRI hash is exactly ``config["integrity"]``: anything else is not written, and the
+    cached copy, if any, stays. Only the files under ``dist`` that match ``include`` are written (no source maps, no
+    types, no other builds), at their path below ``dist``; files of an earlier version that the new one no longer has are
+    removed once the new ones are in place. Returns True when the files were written.
+    """
+    print(f"📦 Checking {name}...")
+    lib_data = manifest.get("libraries", {}).get(name, {})
+    target_dir = vendor_dir / name
+    entry = target_dir / config["entry"]
+
+    if not force and entry.exists() and lib_data.get("integrity") == config["integrity"]:
+        print(f"  ✓ Already up-to-date ({lib_data.get('file_count', '?')} files)")
+        return False
+
+    content = download_file(config["tarball"], timeout=120)
+    if content is None:
+        if entry.exists():
+            print("  ⚠️  Download failed, keeping cached version")
+        else:
+            print("  ❌ Download failed and no cached version exists")
+            _hard_fail(name, "download failed, no cached version")
+        return False
+    if _sri_of(content) != config["integrity"]:
+        print("  ❌ The download does not match the pinned integrity, keeping what is cached")
+        _hard_fail(name, f"the download does not match the pinned integrity {config['integrity'][:19]}…")
+        return False
+
+    include = re.compile(config["include"])
+    dist = config["dist"]
+    files: dict[str, bytes] = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as archive:
+            for member in archive.getmembers():
+                if not member.isfile() or not member.name.startswith(dist):
+                    continue
+                relative = member.name[len(dist) :]
+                if ".." in relative.split("/") or not include.fullmatch(relative):
+                    continue
+                extracted = archive.extractfile(member)
+                if extracted is not None:
+                    files[relative] = extracted.read()
+    except (tarfile.TarError, OSError, EOFError) as error:
+        print(f"  ❌ The tarball cannot be read: {error}")
+        _hard_fail(name, "the tarball cannot be read")
+        return False
+    if config["entry"] not in files:
+        print(f"  ❌ The tarball has no {config['entry']}")
+        _hard_fail(name, f"the tarball has no {config['entry']}")
+        return False
+
+    for relative, data in files.items():
+        path = target_dir / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    removed = 0
+    for stale in [p for p in target_dir.rglob("*") if p.is_file() and p.relative_to(target_dir).as_posix() not in files]:
+        stale.unlink()
+        removed += 1
+
+    record = manifest.setdefault("libraries", {}).setdefault(name, {"versions": []})
+    record.update(
+        {
+            "type": "npm-esm",
+            "url": config["tarball"],
+            "integrity": config["integrity"],
+            "current_hash": get_file_hash(content),
+            "file_count": len(files),
+            "size": sum(len(data) for data in files.values()),
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    )
+    print(f"  ✅ Updated {len(files)} files ({record['size'] / 1024:.0f} KB)" + (f", {removed} removed" if removed else ""))
     return True
 
 
@@ -398,12 +506,14 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
     Update a single library.
 
     Returns True if updated, False if already up-to-date.
-    Dispatches to type-specific handler (js or font). A js library's companions
+    Dispatches to type-specific handler (js, font or npm-esm). A js library's companions
     are checked on every run, whether the script itself changed or not.
     """
     resource_type = config.get("type", "js")
     if resource_type == "font":
         return _download_font_resource(vendor_dir, manifest, name, config, force)
+    if resource_type == "npm-esm":
+        return _update_npm_esm(vendor_dir, manifest, name, config, force)
     updated = _update_js_file(vendor_dir, manifest, name, config, force)
     if config.get("companions"):
         updated = _update_companions(vendor_dir, manifest, name, config, force) or updated
@@ -450,6 +560,14 @@ def _update_js_file(vendor_dir: Path, manifest: dict, name: str, config: dict, f
             _hard_fail(name, "download failed, no cached version")
         return False
 
+    # A library pinned by `sha256` is served only if the download is exactly the file that was reviewed: anything
+    # else is not written, and the cached copy, if any, stays (H6-3)
+    expected_sha256 = config.get("sha256")
+    if expected_sha256 and hashlib.sha256(content).hexdigest() != expected_sha256:
+        print("  ❌ The download does not match the pinned sha256, keeping what is cached")
+        _hard_fail(name, f"the download does not match the pinned sha256 {expected_sha256[:12]}…")
+        return False
+
     # Calculate hash
     content_hash = get_file_hash(content)
 
@@ -483,11 +601,7 @@ def _update_js_file(vendor_dir: Path, manifest: dict, name: str, config: dict, f
     manifest["libraries"][name]["size"] = len(content)
     manifest["libraries"][name]["etag"] = etag
     manifest["libraries"][name]["updated_at"] = datetime.now(UTC).isoformat()
-    manifest["libraries"][name]["versions"].append({
-        "hash": content_hash,
-        "downloaded_at": datetime.now(UTC).isoformat(),
-        "size": len(content)
-        })
+    manifest["libraries"][name]["versions"].append({"hash": content_hash, "downloaded_at": datetime.now(UTC).isoformat(), "size": len(content)})
 
     # Cleanup old versions
     cleanup_old_versions(vendor_dir, manifest, name)
@@ -543,8 +657,7 @@ def _update_companions(vendor_dir: Path, manifest: dict, name: str, config: dict
     for file_name in names:
         path = target_dir / file_name
         if path.exists() and not refresh:
-            files[file_name] = record.get("files", {}).get(file_name) or {
-                "hash": get_file_hash(path.read_bytes()), "size": path.stat().st_size}
+            files[file_name] = record.get("files", {}).get(file_name) or {"hash": get_file_hash(path.read_bytes()), "size": path.stat().st_size}
             continue
         content = download_file(base_url + file_name)
         if not _usable(file_name, content):
@@ -558,14 +671,12 @@ def _update_companions(vendor_dir: Path, manifest: dict, name: str, config: dict
 
     if missing:
         print(f"  ❌ {len(missing)} of {len(names)} companion file(s) not downloaded and not cached")
-        _hard_fail(name, f"{len(missing)} of {len(names)} companion file(s) not downloaded, no cached copy: "
-                         f"{', '.join(missing)}")
+        _hard_fail(name, f"{len(missing)} of {len(names)} companion file(s) not downloaded, no cached copy: " f"{', '.join(missing)}")
         return written > 0
     removed = 0
     if target_dir.exists():
         # Only what the pattern names is a companion: the folder may hold the script itself, or other files.
-        for stale in sorted(p for p in target_dir.iterdir()
-                            if p.is_file() and re.fullmatch(spec["pattern"], p.name) and p.name not in names):
+        for stale in sorted(p for p in target_dir.iterdir() if p.is_file() and re.fullmatch(spec["pattern"], p.name) and p.name not in names):
             stale.unlink()
             removed += 1
     if kept:
@@ -613,19 +724,14 @@ def update_all_libraries(force: bool = False):
 
 def add_arguments(parser) -> None:
     """Add arguments to a parser (reusable for both standalone and subparser)."""
-    parser.add_argument("--force", "-f", action="store_true",
-                        help="Force re-download even if cached")
-    parser.add_argument("--required-for", action="append", choices=sorted(set(CONSUMERS.values())),
-                        metavar="CONSUMER",
-                        help="Only fail for resources this build ships (repeatable). "
-                             "Default: every consumer, so a standalone cache refresh "
-                             "still reports everything.")
+    parser.add_argument("--force", "-f", action="store_true", help="Force re-download even if cached")
+    parser.add_argument("--required-for", action="append", choices=sorted(set(CONSUMERS.values())), metavar="CONSUMER", help="Only fail for resources this build ships (repeatable). " "Default: every consumer, so a standalone cache refresh " "still reports everything.")
 
 
 def run_from_args(args) -> int:
     """Execute the command from parsed args."""
     try:
-        update_all_libraries(force=getattr(args, 'force', False))
+        update_all_libraries(force=getattr(args, "force", False))
         required = set(getattr(args, "required_for", None) or CONSUMERS.values())
         fatal, deferred = [], []
         for failure in _HARD_FAILURES:
@@ -663,11 +769,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="JS Library Cache Manager",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
-    )
+    parser = argparse.ArgumentParser(description="JS Library Cache Manager", formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     add_arguments(parser)
     args = parser.parse_args()
     sys.exit(run_from_args(args))

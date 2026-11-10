@@ -2,7 +2,8 @@
  * FX Sync Modal — E2E Tests
  *
  * The sync modal from both entry points: the list page's «Sync all», opened and closed but never started, and the
- * pair detail page's sync button, started and followed to its verdict (Test 7).
+ * pair detail page's sync button, started and followed to its verdict (Test 7). The last block reads the list dialog's
+ * warning before a sync that replaces stored rates (C-66): opened over a period chosen by data, never started.
  *
  * Test 7 is end to end on the real backend — route table, provider registry, rate store and modal are the
  * application's own — but it never reaches the network and never touches a row another test reads. It used to sync the
@@ -27,7 +28,8 @@ import {expect, test as base, type Locator, type Page, type Request} from '../fi
 import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {localIso, todayIso} from '../fixtures/dates';
+import {daysAgoIso, localIso, todayIso} from '../fixtures/dates';
+import {describeShown, overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedFxRates} from '../fixtures/sync-overwrite';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxPage} from './fx-helpers';
 
@@ -251,5 +253,154 @@ test.describe('FX Sync', () => {
             conversion.results.map((item) => ({day: item.conversion_date, rate: Number(item.rate), backfilled: item.backward_fill_info ?? null})),
             'one stored rate per day of the period, none carried from another day',
         ).toEqual(days.map((day) => ({day, rate: MOCKFX_RATE, backfilled: null})));
+    });
+});
+
+// ============================================================================
+// The list dialog's warning before it replaces stored rates (C-66, F-094)
+// ============================================================================
+
+/**
+ * «Sync all» syncs every pair with a route but a lone MANUAL one over the page's period, and a sync replaces the rates
+ * stored in that period with the provider's, manual edits included. Before the start the dialog says so, in one warning
+ * for its one section: `fx-sync-modal-overwrite-warning`, `data-existing` of its `data-total` pairs storing a rate in
+ * the period. A day the page shows filled backward from an earlier rate — a weekend, a holiday, a day still to come —
+ * is not a stored row of the period, so it is never counted.
+ *
+ * Both periods are chosen by data, read through the endpoint the page reads its rates from (`storedFxRates`), never
+ * assumed from the seed:
+ *   · the 30 days up to yesterday, where some pair the dialog syncs stores rates — verified;
+ *   · a past weekend where some pair the dialog syncs shows its Friday's rate carried forward — filled backward, no
+ *     rate stored (the seed stores weekdays only: populate_mock_data.py, populate_fx_rates). The page shows rates in
+ *     that period and must not count that pair. Other pairs of the shared lane may store weekend rates of their own
+ *     (`fx-sync-mock`, `fx-detail` sync and edit theirs, every day): the warning may count those, and only those. So the
+ *     test reads what every pair stores before and after the dialog, and checks the dialog's count lies between the pairs
+ *     storing a rate in both reads and those storing one in either — never above: a pair counted for rates filled
+ *     backward would push it there. Chosen by data among the weekends from two weeks back
+ *     (`pastWeekendFilledBackward`), never a period still to come: since X-R55 (17/10) a conversion range ends at
+ *     tomorrow, so a week from now shows nothing at all.
+ *
+ * Neither test starts the dialog — no sync request may leave the page — and neither writes anything: the list does not
+ * poll live rates, and every request here is a read.
+ */
+/** How many past weekends `pastWeekendFilledBackward` looks at, from two weeks back. */
+const WEEKENDS_PROBED = 8;
+
+/** The pairs of `targets` that show a rate in the period and store none: every rate they show is filled backward. */
+function filledBackwardOnly(targets: Awaited<ReturnType<typeof storedFxRates>>): string[] {
+    return targets.filter((target) => target.shown > 0 && target.stored === 0).map((target) => target.name);
+}
+
+/**
+ * The most recent weekend, from two weeks back, where some pair «Sync all» syncs shows rates and stores none — every rate
+ * it shows filled backward — read through `storedFxRates`, the endpoint the page reads its rates from, with what each
+ * pair shows of it; null when none of the `WEEKENDS_PROBED` weekends has one (the failure message then lists what each
+ * showed). The other pairs may store weekend rates: the test reads them, it does not assume them away.
+ */
+async function pastWeekendFilledBackward(page: Page): Promise<{period: SyncPeriod; targets: Awaited<ReturnType<typeof storedFxRates>>} | {period: null; seen: string[]}> {
+    // Fourteen days back is today's weekday again; `getDay()` days further back (Sunday 0 … Saturday 6) is a Sunday.
+    const firstSundayBack = 14 + new Date().getDay();
+    const seen: string[] = [];
+    for (let weekend = 0; weekend < WEEKENDS_PROBED; weekend += 1) {
+        const sundayBack = firstSundayBack + 7 * weekend;
+        const period: SyncPeriod = {start: daysAgoIso(sundayBack + 1), end: daysAgoIso(sundayBack)};
+        const targets = await storedFxRates(page, period);
+        if (filledBackwardOnly(targets).length > 0) return {period, targets};
+        seen.push(`${period.start} → ${period.end}: ${describeShown(targets)}`);
+    }
+    return {period: null, seen};
+}
+
+test.describe('FX Sync — the list dialog warns before replacing stored rates (C-66)', () => {
+    // A ceiling, never a delay: each test converts every syncable pair over its period before loading the list's two
+    // waves, and a describe's timeout also covers the sign-in below. Only the timeout is set: the file's parallel mode
+    // is inherited unchanged.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('sync all over a period holding stored rates warns once, counting among the pairs it syncs', async ({page}) => {
+        const period: SyncPeriod = {start: daysAgoIso(30), end: daysAgoIso(1)};
+        const targets = await storedFxRates(page, period);
+        if (!targets.some((target) => target.stored > 0)) {
+            throw new Error(`precondition: no pair «Sync all» syncs stores a rate between ${period.start} and ${period.end} (${describeShown(targets)}) — check populate_mock_data.py (populate_fx_rates, populate_fx_currency_pair_sources)`);
+        }
+
+        const syncRequests = recordSyncRequests(page);
+        await goToFxPage(page, period);
+        await page.getByTestId('fx-sync-all-button').click();
+
+        const modal = page.getByTestId('fx-sync-modal');
+        await expect(modal).toBeVisible();
+        const scope = modal.getByTestId('sync-modal-count');
+        // The dialog syncs the page's period: the one the targets were read over.
+        await expect(scope).toContainText(period.start);
+        await expect(scope).toContainText(period.end);
+        await expect(scope).toHaveAttribute('data-section-count', '1');
+
+        const warning = modal.getByTestId('fx-sync-modal-overwrite-warning');
+        await expect(warning, 'one warning: the dialog has one section').toHaveCount(1);
+        const {section, existing, total} = await overwriteCounts(warning);
+        expect(section).toBe('fx');
+        expect(total, 'counted out of every pair the dialog syncs').toBe(Number(await scope.getAttribute('data-item-count')));
+        expect(existing, 'some pair the dialog syncs stores a rate in the period').toBeGreaterThanOrEqual(1);
+        expect(existing, 'only pairs the dialog syncs are counted').toBeLessThanOrEqual(total);
+        // One section: the sentence alone — the catalogue's, for these counts, in the page's language.
+        await expect(warning).toHaveText(overwriteWarningSentence(await pageLanguage(page), existing, total));
+
+        // Still before the start, and closed from there: the dialog is never started.
+        await expect(modal.getByTestId('sync-modal-start')).toBeEnabled();
+        await expect(modal.getByTestId('sync-modal-results')).toHaveCount(0);
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+        expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
+    });
+
+    test('sync all over a weekend counts no pair whose rates there are all filled backward', async ({page}) => {
+        // A past weekend, chosen by data: some pair shows its Friday's rate there and stores none.
+        const probe = await pastWeekendFilledBackward(page);
+        if (probe.period === null) {
+            throw new Error(
+                `precondition: none of the last ${WEEKENDS_PROBED} weekends from two weeks back has a pair «Sync all» syncs showing rates filled backward and storing none (${probe.seen.join(' | ')}) — check populate_mock_data.py (populate_fx_rates stores weekdays only): this test is about rates shown but not stored, not about an empty period`,
+            );
+        }
+        const {period, targets: before} = probe;
+
+        const syncRequests = recordSyncRequests(page);
+        await goToFxPage(page, period);
+        await page.getByTestId('fx-sync-all-button').click();
+
+        const modal = page.getByTestId('fx-sync-modal');
+        await expect(modal).toBeVisible();
+        // Presence barrier: the dialog has drawn its body before the start — this period, pairs to sync, the controls a
+        // start needs — so the count read below is the rule's, not a dialog still on its way.
+        const scope = modal.getByTestId('sync-modal-count');
+        await expect(scope).toContainText(period.start);
+        await expect(scope).toContainText(period.end);
+        expect(Number(await scope.getAttribute('data-item-count')), 'the dialog has pairs to sync').toBeGreaterThanOrEqual(1);
+        await expect(modal.getByTestId('sync-modal-timeout')).toBeVisible();
+        await expect(modal.getByTestId('sync-modal-start')).toBeEnabled();
+        const warning = modal.getByTestId('fx-sync-modal-overwrite-warning');
+        const existing = (await warning.count()) === 0 ? 0 : (await overwriteCounts(warning)).existing;
+
+        await modal.getByTestId('sync-modal-close').click();
+        await expect(modal).toBeHidden();
+        expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
+
+        // What every pair stores, read again: a neighbour of the shared lane may have written its own pairs meanwhile.
+        const after = await storedFxRates(page, period);
+        const storing = (targets: typeof before) => new Set(targets.filter((target) => target.stored > 0).map((target) => target.name));
+        const storingBefore = storing(before);
+        const storingAfter = storing(after);
+        const storingThroughout = [...storingBefore].filter((name) => storingAfter.has(name));
+        const storingEither = new Set([...storingBefore, ...storingAfter]);
+        const backfilledThroughout = filledBackwardOnly(before).filter((name) => filledBackwardOnly(after).includes(name));
+        expect(backfilledThroughout.length, `premise: some pair shows only rates filled backward on ${period.start} → ${period.end}, in both reads (${describeShown(after)})`).toBeGreaterThan(0);
+
+        const story = `the dialog counted ${existing}; storing a rate in both reads: ${storingThroughout.join(', ') || 'none'}; in either: ${[...storingEither].join(', ') || 'none'}; filled backward only: ${backfilledThroughout.join(', ')}`;
+        expect(existing, `every pair storing a rate in the period is counted — ${story}`).toBeGreaterThanOrEqual(storingThroughout.length);
+        expect(existing, `a rate filled backward is not a stored row: no pair showing only those is counted — ${story}`).toBeLessThanOrEqual(storingEither.size);
     });
 });

@@ -103,10 +103,10 @@
     {/if}
 
     {#if outcome.kind !== 'result'}
-        <h2 id="pac-planner-result-title" tabindex="-1" class="text-lg font-semibold text-gray-900 focus:outline-none dark:text-gray-100">{$t(`${KEY}.title`, {default: 'Calculation result'})}</h2>
+        <h2 id="pac-planner-result-title" tabindex="-1" class="text-lg font-semibold text-lf-primary focus:outline-none">{$t(`${KEY}.title`, {default: 'Calculation result'})}</h2>
         <ToolErrorPanel {outcome} disabled={busy} {onretry} {onedit} />
     {:else if failure}
-        <h2 id="pac-planner-result-title" tabindex="-1" class="text-lg font-semibold text-gray-900 focus:outline-none dark:text-gray-100">{$t(`${KEY}.title`, {default: 'Calculation result'})}</h2>
+        <h2 id="pac-planner-result-title" tabindex="-1" class="text-lg font-semibold text-lf-primary focus:outline-none">{$t(`${KEY}.title`, {default: 'Calculation result'})}</h2>
         <FailurePanel result={failure} {draft} ids={outcome.built.ids} {ongoto} {onedit} />
     {:else if ready && names && lookup && outcome.kind === 'result'}
         <OutcomeHeader result={ready} revision={outcome.built.revision} {apiVersion} {digits} disabled={busy} {onedit} {oncalculate} ongotoproof={gotoProof} />
@@ -142,7 +142,7 @@
                 id="exposures"
                 title={title('exposures', 'Exposures – ideal vs actual')}
                 help={$t(`${KEY}.exposures.help`, {
-                    default: 'How the Assets spread by country, type and sector, according to their declared exposures: the ideal distribution follows your target shares, the actual one the shares after the plan. The charts do not change the plan.',
+                    default: 'How the Assets spread by country, type and sector, according to their declared exposures: the ideal distribution follows your target shares, the actual one the shares at the end of the plan. The charts do not change the plan.',
                 })}
                 open={open.has('exposures')}
                 ontoggle={toggle}

@@ -40,6 +40,7 @@
 
 import {expect, type APIRequestContext, type Locator, type Page} from './playwright';
 import {frameFromTop, parkPointer} from './galleryRiskLab';
+import {extendScreenToBlock} from './galleryTallShots';
 import type {Language} from './test-users';
 
 export type Theme = 'light' | 'dark';
@@ -91,13 +92,33 @@ export async function setAccountLanguage(api: APIRequestContext, lang: Language)
 }
 
 /**
- * The Welcome page from its end. A screen that holds the whole page does not move; on one that
- * does not, the top gives way: the picture, both fields and both actions — what the shot is about —
- * are wholly in the shot either way, or this fails.
+ * The Welcome page as the shot frames it. The card — the picture, the language and currency fields, the line-shape picker, the
+ * two actions — is taller than a 720 px screen, in every language.
+ *
+ * DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the screen grows to the page, which holds the whole
+ * card and the legal notice under it, and the picture, both fields and both actions are wholly in the shot or this fails. The
+ * caller puts the project's screen back (`restoreTallScreen`) after the shot.
+ *
+ * PHONE — a screen cannot grow (the same rule), so the frame is the card alone: the page is scrolled until the card's bottom
+ * edge stands 8 px above the screen's, never past the page's end, which leaves the legal notice out. The card's top, with the
+ * avatar picture, is above the frame: both fields and both actions are what must be wholly in the shot.
  */
-export async function frameWelcome(page: Page): Promise<void> {
-    await page.evaluate(() => window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'instant'}));
-    for (const testId of ['welcome-avatar-preview', 'welcome-language', 'welcome-currency', 'welcome-skip', 'welcome-continue']) {
+export async function frameWelcome(page: Page, shot: string): Promise<void> {
+    const required = ['welcome-language', 'welcome-currency', 'welcome-skip', 'welcome-continue'];
+    const phone = await page.evaluate(() => window.innerWidth < 768);
+    if (phone) {
+        const card = page.getByTestId('welcome-form').locator('xpath=ancestor::section[1]');
+        await expect(card, 'the card around the Welcome form').toBeVisible();
+        await card.evaluate((element) => {
+            const root = document.scrollingElement ?? document.documentElement;
+            const wanted = element.getBoundingClientRect().bottom + window.scrollY + 8 - window.innerHeight;
+            window.scrollTo({top: Math.min(Math.max(0, wanted), root.scrollHeight - root.clientHeight), behavior: 'instant'});
+        });
+    } else {
+        await extendScreenToBlock(page, page.getByTestId('welcome-page'), shot);
+        required.unshift('welcome-avatar-preview');
+    }
+    for (const testId of required) {
         await expect(page.getByTestId(testId), `${testId} is not wholly in the shot`).toBeInViewport({ratio: 1});
     }
 }
@@ -282,12 +303,12 @@ export async function chooseOnboardingCategory(page: Page, viewport: 'desktop' |
 
 /** The areas of the Onboarding category, in order (OnboardingReplaySection.svelte): the first two open on every load. */
 const OPEN_GROUPS = ['setup', 'core'] as const;
-const FOLDED_GROUPS = ['transactions', 'broker', 'fx', 'asset'] as const;
+const FOLDED_GROUPS = ['transactions', 'broker', 'fx', 'asset', 'tools'] as const;
 
 /**
  * The Onboarding category as every load opens it, settled: only its section on the page, the flows
  * loaded and nothing running (Replay all enabled), the first two areas open on their flow — each with
- * its status, its version line and its Replay action — the other four folded, no replay armed (a
+ * its status, its version line and its Replay action — the other five folded, no replay armed (a
  * fresh browser holds none, and none is armed here), no error. Returns the section.
  */
 export async function expectOnboardingCategory(page: Page): Promise<Locator> {

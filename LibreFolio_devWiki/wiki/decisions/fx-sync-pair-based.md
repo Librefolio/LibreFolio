@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-03-06
 tags: [fx, api, sync, breaking-change]
-related_features: [F-017, F-016, F-018]
+related: [features/F-017, features/F-016, features/F-018]
 ---
 
 # Decision: FX Sync API — Pair-Based Bulk Sync
@@ -42,7 +42,8 @@ Replace with `POST /api/v1/fx/currencies/sync` accepting explicit **pair list** 
 
 | Role | Path |
 |------|------|
-| FX service (sync logic) | `backend/app/services/fx.py` |
+| `POST /fx/currencies/sync` | `backend/app/api/v1/fx/currencies.py` |
+| FX service (sync logic) | `backend/app/services/fx/sync.py` |
 | FX providers directory | `backend/app/services/fx_providers/` |
 | DB model (FxConversionRoute) | `backend/app/db/models.py` |
 | mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |

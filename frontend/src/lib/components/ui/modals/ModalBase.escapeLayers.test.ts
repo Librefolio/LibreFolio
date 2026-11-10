@@ -85,16 +85,19 @@ function searchSelect(testId: string) {
     return {root, trigger: within(root).getByTestId(`${testId}-trigger`)};
 }
 
-/** Open means usable: the trigger says so, and this select's own list is there. */
-function expectListOpen(root: HTMLElement, trigger: HTMLElement, why: string) {
+/**
+ * Open means usable: the trigger says so, and this select's own list is there. A SearchSelect keeps its list
+ * inside its root; a SimpleSelect moves it to <body> while open (H6-1), so its caller passes `document.body`.
+ */
+function expectListOpen(root: HTMLElement, trigger: HTMLElement, why: string, scope: HTMLElement = root) {
     expect(trigger, why).toHaveAttribute('aria-expanded', 'true');
-    expect(within(root).queryByRole('listbox'), why).not.toBeNull();
+    expect(within(scope).queryByRole('listbox'), why).not.toBeNull();
 }
 
 /** Closed means gone: the trigger says so, and this select has no list at all. */
-function expectListClosed(root: HTMLElement, trigger: HTMLElement, why: string) {
+function expectListClosed(root: HTMLElement, trigger: HTMLElement, why: string, scope: HTMLElement = root) {
     expect(trigger, why).toHaveAttribute('aria-expanded', 'false');
-    expect(within(root).queryByRole('listbox'), why).toBeNull();
+    expect(within(scope).queryByRole('listbox'), why).toBeNull();
 }
 
 /** Opens a select with a click on its trigger, and returns once the select has handed the focus to its own search box. */
@@ -123,8 +126,9 @@ async function openSimpleList() {
     // A click leaves the focus on the button it pressed, in a browser; jsdom moves no focus on a click.
     trigger.focus();
     await fireEvent.click(trigger);
-    expectListOpen(root, trigger, 'premise: a click on the trigger opens the list');
-    expect(within(root).queryByTestId('esc-simple-dropdown'), 'premise: the open select shows its dropdown').not.toBeNull();
+    // The open list is a child of <body> (H6-1), not of the select's container: look for it there.
+    expectListOpen(root, trigger, 'premise: a click on the trigger opens the list', document.body);
+    expect(screen.queryByTestId('esc-simple-dropdown'), 'premise: the open select shows its dropdown').not.toBeNull();
     expect(trigger, 'premise: the open SimpleSelect keeps the focus on its trigger').toHaveFocus();
     expect(trigger, 'premise: the trigger drives the open list, naming its highlighted option').toHaveAttribute('aria-activedescendant');
     return {root, trigger};
@@ -227,8 +231,8 @@ describe('ModalBase — one Escape closes the top layer only', () => {
 
         await pressEscape(modal, trigger);
 
-        expectListClosed(root, trigger, 'the Escape on the trigger must close the open list');
-        expect(within(root).queryByTestId('esc-simple-dropdown'), 'the Escape on the trigger must close the open list').toBeNull();
+        expectListClosed(root, trigger, 'the Escape on the trigger must close the open list', document.body);
+        expect(screen.queryByTestId('esc-simple-dropdown'), 'the Escape on the trigger must close the open list').toBeNull();
         expect(onRequestClose, 'one Escape on the trigger of an open SimpleSelect must close its list only, not the modal under it').not.toHaveBeenCalled();
 
         // The focus stays on the trigger, and a closed SimpleSelect consumes no Escape: the next one is the modal's.
@@ -276,7 +280,7 @@ describe('ModalBase — an Escape that no layer consumed still closes the modal 
         const {modal, onRequestClose} = await mountModal();
         const {root, trigger} = simpleSelect();
         trigger.focus();
-        expectListClosed(root, trigger, 'premise: the list is closed');
+        expectListClosed(root, trigger, 'premise: the list is closed', document.body);
 
         await pressEscape(modal, trigger);
 

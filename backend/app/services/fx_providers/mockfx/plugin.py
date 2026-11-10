@@ -20,8 +20,10 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
-from backend.app.services.provider_registry import FXProviderRegistry, register_provider
+from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateLimitedError, FXRateProvider, FXServiceError
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType
+from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
 
@@ -41,6 +43,17 @@ class MockFXProvider(FXRateProvider):
 
     WARNING: FOR TESTING ONLY — DO NOT USE IN PRODUCTION
     """
+
+    test_only = True
+    #: The «too many requests» mode, for in-process tests only (never the shared test backend, where a pause would
+    #: outlive the test): while ``rate_limited`` is true every call refuses with ``rate_limited_retry_after`` as its
+    #: ``Retry-After`` (None: no header). Set them with ``monkeypatch.setattr`` on the class.
+    rate_limited: bool = False
+    rate_limited_retry_after: float | None = None
+    settings_fields = (
+        PluginSettingField(key="api_key", type=SettingType.STRING, scope=SettingScope.SYSTEM, secret=True, label="API key (testing)"),
+        PluginSettingField(key="decimals", type=SettingType.INTEGER, scope=SettingScope.SYSTEM, label="Decimals (testing)", default=6, minimum=0, maximum=10),
+    )
 
     @property
     def code(self) -> str:
@@ -62,7 +75,12 @@ class MockFXProvider(FXRateProvider):
     def docs_url(self) -> str | None:
         return None
 
+    def _refuse_if_asked(self) -> None:
+        if type(self).rate_limited:
+            raise FXRateLimitedError("MockFX refused for too many requests (testing)", retry_after=type(self).rate_limited_retry_after)
+
     async def get_supported_currencies(self) -> list[str]:
+        self._refuse_if_asked()
         return list(_SUPPORTED)
 
     async def fetch_rates(
@@ -71,7 +89,8 @@ class MockFXProvider(FXRateProvider):
         currencies: list[str],
         base_currency: str | None = None,
     ) -> dict[str, list[tuple[date, str, str, Decimal]]]:
-        """Return the fixed rate MOCKFX_FIXED_RATE for every date/currency."""
+        """Return the fixed rate MOCKFX_FIXED_RATE for every date/currency; refuse while ``rate_limited`` is set."""
+        self._refuse_if_asked()
         start, end = date_range
         if start == "min":
             start = FX_HISTORY_MIN_FALLBACK
@@ -105,6 +124,8 @@ class MockFXFailProvider(FXRateProvider):
 
     WARNING: FOR TESTING ONLY — DO NOT USE IN PRODUCTION
     """
+
+    test_only = True
 
     # Distinctive error message — tests assert on this string
     FAIL_MESSAGE = "MOCKFX_FAIL: simulated provider failure for testing"

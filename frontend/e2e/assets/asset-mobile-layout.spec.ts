@@ -626,7 +626,7 @@ async function openLongNamedPriceChart(page: Page, owned: Owned, viewport: Viewp
     const {assetId, displayName} = await createLongNamedPricedEtf(page, owned);
     // The page posts this on load and every 30 s: it asks the live providers and writes today's row. Answered
     // empty, nothing is written and the summary shows the last stored close. The fixture detaches the route.
-    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
     await page.setViewportSize(viewport);
     await goToAssetDetailPage(page, String(assetId));
     await expect(page.getByTestId('asset-detail-live-price'), 'precondition: the price summary shows a price — the stored closes are in the window').toBeVisible({timeout: 15_000});

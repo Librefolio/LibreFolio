@@ -71,14 +71,16 @@ from backend.app.db import (
     UserRole,
     UserSettings,
 )
-from backend.app.db.models import UserOnboardingStepProgress
-from backend.app.services.auth_service import hash_password
-from backend.app.services.brim_provider import save_uploaded_file
+from backend.app.db.models import GlobalSetting, UserOnboardingStepProgress
+from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
+from backend.app.services.accounts.auth_service import hash_password
+from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
+from backend.app.services.brim.brim_provider import save_uploaded_file
+from backend.app.services.files.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
-from backend.app.services.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
-from backend.app.services.transaction_service import BalanceValidationError, TransactionService
+from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
+from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 
 # Create engine AFTER setup_test_database() has set DATABASE_URL
@@ -190,6 +192,36 @@ def _stable_seed(*parts: object) -> int:
     """Return a deterministic RNG seed independent from Python hash randomization."""
     payload = "|".join(str(part) for part in parts).encode("utf-8")
     return int(hashlib.sha256(payload).hexdigest()[:16], 16)
+
+
+def seed_missing_global_settings(session: Session) -> None:
+    """Create the global-settings rows that are missing, as the server does at startup (no route does it any more)."""
+    created = 0
+    for key, config in GLOBAL_SETTINGS_DEFAULTS.items():
+        if session.get(GlobalSetting, key) is None:
+            session.add(GlobalSetting(key=key, value=config["value"], value_type=config["type"], description=config.get("description"), updated_at=utcnow()))
+            created += 1
+    session.commit()
+    print(f"  ✅ Global settings defaults present ({created} created)")
+
+
+def open_lane_registration(session: Session) -> None:
+    """Registration open on the test database: the API and E2E tests register accounts of their own.
+
+    A new install starts by invitation (decision 36), and the server's startup seeding creates only the rows that are
+    missing: the row written here is the one it keeps.
+    """
+    key = "registration_mode"
+    default = GLOBAL_SETTINGS_DEFAULTS[key]
+    row = session.get(GlobalSetting, key)
+    if row is None:
+        session.add(GlobalSetting(key=key, value="open", value_type=default["type"], description=default.get("description"), updated_at=utcnow()))
+    else:
+        row.value = "open"
+        row.updated_at = utcnow()
+        session.add(row)
+    session.commit()
+    print("  ✅ Registration open on the test database (registration_mode = open)")
 
 
 def cleanup_all_tables(session: Session):
@@ -307,7 +339,7 @@ def populate_brokers(session: Session):
             "name": "Interactive Brokers",
             "description": "Low-cost global broker with multi-currency support",
             "portal_url": "https://www.interactivebrokers.com",
-            "brim_plugin_key": "broker_ibkr",
+            "default_import_plugin": "broker_ibkr",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -315,7 +347,7 @@ def populate_brokers(session: Session):
             "name": "DEGIRO",
             "description": "European low-cost broker",
             "portal_url": "https://www.degiro.com",
-            "brim_plugin_key": "broker_degiro",
+            "default_import_plugin": "broker_degiro",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -323,7 +355,7 @@ def populate_brokers(session: Session):
             "name": "Directa SIM",
             "description": "Italian online broker for stocks, ETFs, and bonds",
             "portal_url": "https://www.directa.it",
-            "brim_plugin_key": "broker_directa",
+            "default_import_plugin": "broker_directa",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -331,7 +363,7 @@ def populate_brokers(session: Session):
             "name": "eToro",
             "description": "Social trading platform with stocks and CFDs",
             "portal_url": "https://www.etoro.com",
-            "brim_plugin_key": "broker_etoro",
+            "default_import_plugin": "broker_etoro",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -339,7 +371,7 @@ def populate_brokers(session: Session):
             "name": "Coinbase",
             "description": "Cryptocurrency exchange for Bitcoin and altcoins",
             "portal_url": "https://www.coinbase.com",
-            "brim_plugin_key": "broker_coinbase",
+            "default_import_plugin": "broker_coinbase",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -347,7 +379,7 @@ def populate_brokers(session: Session):
             "name": "Recrowd",
             "description": "Real estate crowdfunding platform",
             "portal_url": "https://www.recrowd.com",
-            "brim_plugin_key": "broker_generic_csv",
+            "default_import_plugin": "broker_generic_csv",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -355,7 +387,7 @@ def populate_brokers(session: Session):
             "name": "Charles Schwab",
             "description": "US full-service broker for stocks, ETFs, and options",
             "portal_url": "https://www.schwab.com",
-            "brim_plugin_key": "broker_schwab",
+            "default_import_plugin": "broker_schwab",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -364,7 +396,7 @@ def populate_brokers(session: Session):
     for broker_data in brokers:
         broker = Broker(**broker_data)
         session.add(broker)
-        plugin = broker_data.get("brim_plugin_key", "N/A")
+        plugin = broker_data.get("default_import_plugin", "N/A")
         print(f"  ✅ {broker.name} (BRIM: {plugin})")
 
     session.commit()
@@ -790,8 +822,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Real estate development loan in Milan (closed position)",
-                    "geographic_area": {"ITA": 1.0},
-                    "sector": "Real Estate",
+                    "geographic_area": {"distribution": {"ITA": 1.0}},
+                    "sector_area": {"distribution": {"Real Estate": 1.0}},
                 }
             ),
         },
@@ -802,8 +834,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Residential project in Rome",
-                    "geographic_area": {"ITA": 1.0},
-                    "sector": "Real Estate",
+                    "geographic_area": {"distribution": {"ITA": 1.0}},
+                    "sector_area": {"distribution": {"Real Estate": 1.0}},
                 }
             ),
         },
@@ -816,8 +848,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Digital gold, store of value",
-                    "geographic_area": {"GLOBAL": 1.0},
-                    "sector": "Cryptocurrency",
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -829,8 +860,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Smart contract platform",
-                    "geographic_area": {"GLOBAL": 1.0},
-                    "sector": "Cryptocurrency",
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -843,8 +873,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "GPU and AI computing leader",
-                    "geographic_area": {"USA": 1.0},
-                    "sector": "Technology",
+                    "geographic_area": {"distribution": {"USA": 1.0}},
+                    "sector_area": {"distribution": {"Technology": 1.0}},
                 }
             ),
         },
@@ -857,15 +887,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Global developed markets ETF (accumulating) — served via JustETF",
-                    "geographic_area": {
-                        "USA": 0.65,
-                        "DEU": 0.08,
-                        "GBR": 0.08,
-                        "JPN": 0.07,
-                        "FRA": 0.06,
-                        "CHN": 0.06,
-                    },
-                    "sector": "Diversified",
+                    "geographic_area": {"distribution": {"USA": 0.65, "DEU": 0.08, "GBR": 0.08, "JPN": 0.07, "FRA": 0.06, "CHN": 0.06}},
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -878,8 +901,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Standard & Poor's 500 — US large-cap benchmark index",
-                    "geographic_area": {"USA": 1.0},
-                    "sector": "Diversified",
+                    "geographic_area": {"distribution": {"USA": 1.0}},
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -898,6 +921,11 @@ def populate_assets(session: Session):
                             "GBR": 0.04,
                             "FRA": 0.03,
                             "DEU": 0.03,
+                            "CAN": 0.04,
+                            "CHE": 0.03,
+                            "AUS": 0.03,
+                            "NLD": 0.02,
+                            "SWE": 0.02,
                         }
                     },
                 }
@@ -926,8 +954,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Gold spot price (XAU/USD) via web scraping",
-                    "geographic_area": {"distribution": {"GLOBAL": 1.0}},
-                    "sector_area": {"distribution": {"Precious Metals": 1.0}},
+                    "sector_area": {"distribution": {"Basic Materials": 1.0}},
                 }
             ),
         },
@@ -943,7 +970,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Semiconductors sector ETF tracking MSCI World Semiconductors & Semiconductor Equipment index",
-                    "geographic_area": {"distribution": {"USA": 0.80, "ASIA": 0.15, "EUROPE": 0.05}},
+                    "geographic_area": {"distribution": {"USA": 0.80, "TWN": 0.08, "KOR": 0.04, "JPN": 0.03, "NLD": 0.03, "DEU": 0.02}},
                     "sector_area": {"distribution": {"Technology": 1.0}},
                 }
             ),
@@ -967,9 +994,14 @@ def populate_assets(session: Session):
                             "GBR": 0.04,
                             "FRA": 0.03,
                             "DEU": 0.03,
+                            "CAN": 0.04,
+                            "CHE": 0.03,
+                            "AUS": 0.03,
+                            "NLD": 0.02,
+                            "SWE": 0.02,
                         }
                     },
-                    "sector_area": {"distribution": {"Technology": 0.25, "Financials": 0.15, "Healthcare": 0.12}},
+                    "sector_area": {"distribution": {"Technology": 0.25, "Financials": 0.15, "Health Care": 0.12, "Industrials": 0.12, "Consumer Discretionary": 0.11, "Other": 0.25}},
                 }
             ),
         },
@@ -1039,7 +1071,7 @@ def populate_asset_provider_assignments(session: Session):
         ("S&P 500", "yfinance", "^GSPC", IdentifierType.TICKER, None),
         ("MSCI World Index", "yfinance", "URTH", IdentifierType.TICKER, None),
         # Scheduled Investment — BTP Italia with interest schedule.
-        # Schema: FAScheduledInvestmentSchedule (see schemas/assets.py). Periods
+        # Schema: FAScheduledInvestmentSchedule (see schemas/assets/scheduled_investment.py). Periods
         # must be contiguous + non-overlapping. `asset_events` is optional.
         # Config: DAILY maturation + generate_interest=False → smooth growing line
         # (no auto-coupon reset). Useful for visual regression testing and to
@@ -2212,7 +2244,7 @@ def populate_wac_test_transactions(session: Session):
         tags="wac-test",
     )
 
-    # ADJUSTMENT -3 shares with cost_basis_override (simulates internal transfer)
+    # ADJUSTMENT -3 shares: units leaving without a value (N78-1, the developer's decision of 21/10/2026)
     tx_wac_transfer = Transaction(
         broker_id=ib.id,
         asset_id=apple.id,
@@ -2221,9 +2253,7 @@ def populate_wac_test_transactions(session: Session):
         quantity=Decimal("-3"),
         amount=Decimal("0"),
         currency="USD",
-        cost_basis_override=Decimal("160.00"),
-        cost_basis_currency="USD",
-        description="[wac-test] ADJUSTMENT AAPL -3 with override $160",
+        description="[wac-test] ADJUSTMENT AAPL -3, no value",
         tags="wac-test",
     )
 
@@ -2232,7 +2262,7 @@ def populate_wac_test_transactions(session: Session):
     print(f"  🛡️ WAC prefund DEPOSIT #{tx_wac_prefund.id}: +$3000 USD (day -60)")
     print(f"  📈 WAC test BUY #{tx_wac_buy1.id}: 10@$150 (day -50)")
     print(f"  📈 WAC test BUY #{tx_wac_buy2.id}: 5@$180 (day -36)")
-    print(f"  📈 WAC test ADJ #{tx_wac_transfer.id}: -3 override=$160 (day -20)")
+    print(f"  📈 WAC test ADJ #{tx_wac_transfer.id}: -3, no value (day -20)")
 
 
 def _daily_variation(
@@ -2580,7 +2610,7 @@ def link_transactions_to_events(session: Session):  # noqa: C901 — sequential 
 
     This produces fixture data needed to test the RESTRICT-aware delete flow on
     AssetEvent (Phase 7 Part 1):
-    - The linked AssetEvent cannot be deleted via DELETE /assets/events?ids=...
+    - The linked AssetEvent cannot be deleted (event delete / asset market-data wipe)
       and the response must include the referencing transaction id in
       `accessible_transactions` (since the referencing tx belongs to a broker
       the test user can access).
@@ -3758,7 +3788,9 @@ async def validate_portfolio_math_async() -> int:  # noqa: C901 — flat anomaly
 
         svc = PortfolioService(session)
         summary = await svc.get_summary(user_id=admin.id)
-        history = await svc.get_history(user_id=admin.id, date_from=None, date_to=None)
+        # The history in steps (D-P4): TWRR in the steps, the MWRR on the line of true points
+        history_steps = await svc.get_history_steps(user_id=admin.id, date_from=None, date_to=None)
+        history = history_steps.history
 
         if summary.twrr_percent is not None and abs(summary.twrr_percent) > MAX_RETURN:
             anomalies.append(f"    summary: TWRR = {summary.twrr_percent} (> {MAX_RETURN}× = 1 000 %)")
@@ -3768,8 +3800,9 @@ async def validate_portfolio_math_async() -> int:  # noqa: C901 — flat anomaly
         for point in history:
             if point.twrr is not None and abs(point.twrr) > MAX_RETURN:
                 anomalies.append(f"    {point.date}: TWRR = {point.twrr} (> {MAX_RETURN}× = 1 000 %)")
-            if point.mwrr_annualized is not None and abs(point.mwrr_annualized) > MAX_RETURN:
-                anomalies.append(f"    {point.date}: MWRR = {point.mwrr_annualized} (> {MAX_RETURN}× = 1 000 %)")
+        for line_point in history_steps.mwrr_line:
+            if line_point.annualized is not None and abs(line_point.annualized) > MAX_RETURN:
+                anomalies.append(f"    {line_point.date}: MWRR = {line_point.annualized} (> {MAX_RETURN}× = 1 000 %)")
 
     await async_eng.dispose()
 
@@ -3869,6 +3902,8 @@ def main():  # noqa: C901 — sequential populate step driver
     with Session(engine) as session:
         try:
             cleanup_all_tables(session)
+            seed_missing_global_settings(session)
+            open_lane_registration(session)
 
             populate_brokers(session)
             populate_broker_user_access(session)  # Associate brokers with test users

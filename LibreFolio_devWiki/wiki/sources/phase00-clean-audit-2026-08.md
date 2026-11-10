@@ -27,7 +27,7 @@ do not remove)?
 - **The debt sat in a few places**: three features shown to users but never wired (for example, `/auth/register` did
   not check the «Allow new user registration» switch), the pre-engine leftovers of `portfolio_service.py`, a 4,800-line
   `asset_source.py` (split later, P4-1), twelve dead `index.ts` barrels.
-- **Remediation** in bands S1–S3 (`52c8d0d70`); report 16 lists features lost in redesigns, report 17 made the full
+- **Remediation** in bands S1–S3 (`cd7b24bb4`); report 16 lists features lost in redesigns, report 17 made the full
   suite pass end to end — finding [[problems/asset-events-lost-on-price-cache-hit]], and that `test all` could not pass
   by construction, because the services category recreated an empty database before the API category
   ([[concepts/test-isolation-classes]]).

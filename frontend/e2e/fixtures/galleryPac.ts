@@ -1,7 +1,7 @@
 /**
- * Gallery, Tools — the PAC allocator: one realistic draft per language and viewport, then the nine shots of its
+ * Gallery, Tools — the PAC allocator: one realistic draft per language and viewport, then the ten shots of its
  * page (mkdocs_src/docs/user/tools/pac-allocator/index.en.md, one placeholder per wizard step and
- * three for the result).
+ * three for the result; a fourth result shot, `tools/pac-result-exposures`, has no placeholder there yet).
  *
  * ## The draft
  *
@@ -132,6 +132,12 @@ const READ_TIMEOUT = 20_000;
  * assertion then names. The engine needs milliseconds for a draft this size.
  */
 const CALCULATION_TIMEOUT = 75_000;
+/**
+ * The result's Exposures: the world map, read once per page — a static file of the app (`/data/world.json`, about 1 MB), no
+ * third-party host — then each chart's first drawing, its animation included (chartReady.ts). The budget the shot's settle gives
+ * a chart (galleryShot.ts).
+ */
+const DRAW_TIMEOUT = 15_000;
 
 // ---------------------------------------------------------------------------
 // Ids and the page
@@ -262,7 +268,7 @@ async function chooseCurrency(scope: Locator, testId: string, code: string): Pro
 }
 
 /**
- * Tick one owned Broker in a copy dialog (BrokerScopeCopyDialog.svelte) and copy it. The dialog reads the snapshot of every
+ * Press one owned Broker's tile in a copy dialog (BrokerScopeCopyDialog.svelte) and copy it. The dialog reads the snapshot of every
  * Broker the admin owns first; the row must be selectable — owned — and, for liquidity, list `currency` among its cash.
  */
 async function copyFromBroker(page: Page, kind: 'liquidity' | 'broker', brokerId: number, currency?: string): Promise<void> {
@@ -279,7 +285,9 @@ async function copyFromBroker(page: Page, kind: 'liquidity' | 'broker', brokerId
         const cashRows = row.getByTestId(`${testid}-cash`).locator(`:scope > [data-currency="${currency}"]`);
         await expect(cashRows, `Broker ${brokerId} holds no ${currency} cash: check populate_mock_data.py`).not.toHaveCount(0);
     }
-    await row.getByTestId(`${testid}-check`).check();
+    // A Broker is a tile pressed to choose it (P2), not a tick box.
+    await row.getByTestId(`${testid}-check`).click();
+    await expect(row.getByTestId(`${testid}-check`)).toHaveAttribute('aria-pressed', 'true');
     await expect(row).toHaveAttribute('data-selected', 'true');
     await dialog.getByTestId(`${testid}-apply`).click();
     await expect(dialog).toHaveCount(0);
@@ -392,7 +400,8 @@ export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> 
         await kind.click();
         await expect(kind).toHaveAttribute('aria-expanded', 'true');
         // Two order types and the current one marked: the other is «By amount». The block says which one it took.
-        await eur.getByTestId('pac-planner-mode-kind-dropdown').locator('[role="option"][aria-selected="false"]').click();
+        // The list of a SimpleSelect is in a portal on <body>, not inside the select: looked up from the page
+        await eur.page().getByTestId('pac-planner-mode-kind-dropdown').locator('[role="option"][aria-selected="false"]').click();
         await expect(eur).toHaveAttribute('data-kind', 'monetary_amount');
         // By amount, the increment becomes the currency's smallest unit (BrokerEditor.svelte, `setKind`).
         await expect(eur.getByTestId('pac-planner-mode-step')).toHaveValue('0.01');
@@ -879,6 +888,111 @@ export async function framePacPlan(page: Page, draft: PacDraft): Promise<Locator
     // From the section's title whatever fits: the numbered steps come first, the orders follow them.
     await framePacBlock(page, {first: plan, last: ibOrders, fallback: plan});
     return plan;
+}
+
+/** The undeclared share of an exposure dimension, by its identity (planner_report.py, `UNCATEGORISED_EXPOSURE_CATEGORY_ID`; result/model.ts). */
+const UNCATEGORISED_EXPOSURE = 'allocation.uncategorised';
+
+/**
+ * The rows the plan's Exposures publish for this draft, in the order they are drawn: planner_report.py sorts the declared
+ * categories and puts the undeclared share last.
+ * - Geography: Apple and Microsoft are 100% USA; the Manual Asset declares no country, so its share is «Uncategorised» — listed
+ *   under the maps, which cannot place it.
+ * - Asset type: Apple and Microsoft are stocks (the seed's `asset_type`) and the Manual Asset an ETF, as a new one is until
+ *   another type is picked (AssetEditor.svelte, `emptyManual`): nothing is left undeclared.
+ * - Sector: «Uncategorised» alone, which the section folds into one line (result/model.ts, `onlyUncategorised`). The seed splits
+ *   Apple into Technology and Services and Microsoft into Technology and Cloud; Services and Cloud are not sectors LibreFolio
+ *   knows (FinancialSector), so the planner's source rejects both splits whole (pac_allocator/source/classifications.py,
+ *   `allocation.classification_invalid`) and the draft holds no sector at all.
+ */
+const PAC_EXPOSURE_ROWS = {geography: [SEEDED_COUNTRY, UNCATEGORISED_EXPOSURE], asset_type: ['ETF', 'STOCK']} as const;
+
+/**
+ * `tools/pac-result-exposures`: «Exposures – ideal vs actual» — the two world maps, target shares and shares after the plan, the
+ * bars by Asset type, and the sector folded into its one line ({@link PAC_EXPOSURE_ROWS} says why). The section starts closed
+ * (ResultView.svelte, `OPEN_BY_DEFAULT`) and renders its body only while open (ResultSection.svelte): it is opened from its title
+ * and the outcome asserted, so a lost click fails here instead of shooting the closed section; {@link closePacExposures} closes it
+ * after the shot. The body is then waited for on what it publishes: the three dimensions, each folded or not, with their rows; the
+ * world map read (`data-state`) — not the list of weights that stands in for the maps when the file fails; every chart drawn
+ * (`data-chart-ready`, read on each chart's own box: `waitForChart` takes the first chart inside a scope, and the two maps share
+ * theirs). Framed by viewport, the same for every language and theme:
+ * - desktop: from the section's title; the spec's tall-screen rule (galleryTallShots.ts, `extendScreenToBlock`) then grows the
+ *   screen down to the section's end, so the whole section is in one image;
+ * - mobile: the section is far taller than the phone's screen, and the bars are the subject — the colours of the two
+ *   distributions — so the body ends at the bottom of the screen with as much of the maps above it as fits, and the type and sector
+ *   blocks are asserted whole in the shot.
+ * Returns the section, the region the shot settles.
+ */
+export async function framePacExposures(page: Page, viewport: 'desktop' | 'mobile'): Promise<Locator> {
+    await expect(page.getByTestId('pac-planner-result'), 'the result no longer matches the draft').toHaveAttribute('data-stale', 'false');
+    const section = resultSection(page, 'exposures');
+    const toggle = section.getByTestId('pac-planner-result-section-toggle');
+    if ((await section.getAttribute('data-open')) !== 'true') await toggle.click();
+    await expect(section, 'the Exposures section did not open').toHaveAttribute('data-open', 'true');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // The maps follow the pointer — the country under it highlighted in both, its box shown (ExposureMaps.svelte, `follow`) — and
+    // the frame is about to scroll them under it: the pointer leaves first.
+    await parkPointer(page);
+
+    const exposures = section.getByTestId('pac-planner-exposures');
+    await expect(exposures).toBeVisible();
+    // Always the three dimensions (result/model.ts, `exposureGroups`), the countries first.
+    await expect(exposures.getByTestId('pac-planner-exposures-dimension')).toHaveCount(3);
+    const dimension = (id: 'geography' | 'asset_type' | 'sector') => exposures.locator(`[data-testid="pac-planner-exposures-dimension"][data-dimension="${id}"]`);
+    const geography = dimension('geography');
+    const types = dimension('asset_type');
+    const sectors = dimension('sector');
+    await expect(geography, 'the plan has no declared country').toHaveAttribute('data-folded', 'false');
+    await expect(types, 'the plan has no declared Asset type').toHaveAttribute('data-folded', 'false');
+    await expect(sectors, 'the sectors are no longer all «Uncategorised»: the draft holds a sector now (populate_mock_data.py) — see PAC_EXPOSURE_ROWS').toHaveAttribute('data-folded', 'true');
+    await expect(sectors.getByTestId('pac-planner-exposures-show')).toBeVisible();
+    // The accessible list under each chart carries its rows by category id, in the order the chart draws them.
+    const rowIds = (block: Locator) =>
+        block
+            .getByTestId('pac-planner-exposures-values')
+            .getByTestId('pac-planner-exposures-row')
+            .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-id')));
+    await expect.poll(() => rowIds(geography), {message: 'the countries of the plan are not those of the draft: check populate_mock_data.py'}).toEqual(PAC_EXPOSURE_ROWS.geography);
+    await expect.poll(() => rowIds(types), {message: 'the Asset types of the plan are not those of the draft: check populate_mock_data.py'}).toEqual(PAC_EXPOSURE_ROWS.asset_type);
+
+    // The maps are drawn once the world map is read (once per page); a file that fails leaves the list of weights in their place.
+    const maps = geography.getByTestId('pac-planner-exposures-maps');
+    await expect(maps, 'the world map was never read').toHaveAttribute('data-state', /^(ready|failed)$/, {timeout: DRAW_TIMEOUT});
+    await expect(maps, 'the world map (/data/world.json) could not be loaded: the section lists the weights instead of drawing them').toHaveAttribute('data-state', 'ready');
+    for (const side of ['target', 'final'] as const) {
+        await expect(maps.locator(`[data-testid="pac-planner-exposures-map"][data-side="${side}"]`), `the ${side} map is not drawn`).toHaveAttribute('data-chart-ready', 'true', {timeout: DRAW_TIMEOUT});
+    }
+    // The undeclared share, which no map can place, listed under them.
+    await expect(maps.getByTestId('pac-planner-exposures-off-map')).toBeVisible();
+    await expect(types.getByTestId('pac-planner-exposures-bars'), 'the bars by Asset type are not drawn').toHaveAttribute('data-chart-ready', 'true', {timeout: DRAW_TIMEOUT});
+
+    if (viewport === 'desktop') {
+        await framePacBlock(page, {first: section, last: section});
+        return section;
+    }
+    await framePacBlock(page, {first: section, last: exposures, keep: 'bottom'});
+    await expect(types, 'the bars by Asset type are not whole in the shot').toBeInViewport({ratio: 1});
+    await expect(sectors, 'the sector line is not whole in the shot').toBeInViewport({ratio: 1});
+    return section;
+}
+
+/**
+ * Close «Exposures – ideal vs actual» after its shot — the outcome asserted, so a lost click fails here — and end with its body
+ * gone, nothing focused and the pointer parked. The click leaves the focus on the toggle: when Proof and solver is already open (a
+ * language's second theme) nothing moves it before the proof shot, whose 🔎 line records the focus (galleryShot.ts). Left open, the
+ * section would change the page under the shots that follow: the page's height, which their 🔎 line records, and what lies below
+ * the frames of the next combination's result and plan shots. Its next opening draws it anew, in that combination's theme.
+ */
+export async function closePacExposures(page: Page): Promise<void> {
+    const section = resultSection(page, 'exposures');
+    const toggle = section.getByTestId('pac-planner-result-section-toggle');
+    if ((await section.getAttribute('data-open')) === 'true') await toggle.click();
+    await expect(section, 'the Exposures section did not close').toHaveAttribute('data-open', 'false');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(section.getByTestId('pac-planner-exposures')).toHaveCount(0);
+    await toggle.blur();
+    await expect(toggle).not.toBeFocused();
+    await parkPointer(page);
 }
 
 /**

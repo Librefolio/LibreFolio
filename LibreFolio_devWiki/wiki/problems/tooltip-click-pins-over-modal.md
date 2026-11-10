@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-09-24
 tags: [frontend, tooltip, modal, ux]
-related: [datatable-tooltip-custom-cell]
+related: [decisions/datatable-tooltip-custom-cell, problems/popover-pointerdown-swallows-click, problems/svelte5-teardown-reads-stale-state-timers]
 ---
 
 # Problem: A button inside Tooltip pins its hint for 30 s over the modal it opens
@@ -36,5 +36,5 @@ Found while writing the feature (F-3b V1), before any review. No user impact.
 |------|------|
 | Tooltip (pin on click) | `frontend/src/lib/components/ui/feedback/Tooltip.svelte` |
 | Toolbar buttons | `frontend/src/routes/(app)/assets/+page.svelte` |
-| "+" trigger | `frontend/src/lib/components/risk/LabAssetPicker.svelte` |
-| Chip remove button | `frontend/src/lib/components/risk/AssetSetRiskPanel.svelte` |
+| "+" trigger | `frontend/src/lib/features/risk/LabAssetPicker.svelte` |
+| Chip remove button | `frontend/src/lib/features/risk/AssetSetRiskPanel.svelte` |

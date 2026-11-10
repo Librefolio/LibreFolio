@@ -34,13 +34,14 @@ After Round 6 Plans A/B/B1/B23, the transactions frontend had accumulated 5 cate
 
 ## Consequences
 
-- **Created**: `frontend/src/lib/stores/transactions/txStore.svelte.ts` (~120 LOC)
-- **Created**: `frontend/src/lib/components/transactions/types.ts` (interface deduplication)
+- **Created**: `frontend/src/lib/features/transactions/txStore.svelte.ts` (~120 LOC)
+- **Created**: `frontend/src/lib/features/transactions/types.ts` (interface deduplication)
 - **Simplified**: BulkModal 1766→~1200 LOC (-30%), +page.svelte 1035→~700 LOC (-30%)
 - **Eliminated**: `allMainRows`/`allPartnerRows` variables and their prop drilling
 - **Eliminated**: `link_uuid` generation (partners resolved via `related_transaction_id` from DB)
 - **Eliminated**: manual `markEdited()` calls (status derived from diff)
-- **Eliminated**: `mergePairedRows()` complexity (partners from `txStore.getPartner()`)
+- **Eliminated**: `mergePairedRows()` complexity (partners from `txStore.getPartner()`; *2026-11-07 lint:* `txStore.svelte.ts`
+  exports no `getPartner` today — `txStoreGet`, `txStoreGetAll`, `txStoreGetFiltered` and the version helpers)
 - **Enabled**: Piano D (Split/Promote) can be implemented as 1 new WorkspaceIntent + ~50 LOC
 - **Execution order updated**: in master plan, old "Piano C" (Split/Promote) → "Piano D", txStore inserted as new "Piano C" prerequisite
 
@@ -49,4 +50,13 @@ After Round 6 Plans A/B/B1/B23, the transactions frontend had accumulated 5 cate
 - [[concepts/txstore-pattern]]
 - [[concepts/entity-store-pattern]]
 - Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md`
+- [[decisions/pendingop-tagged-union]] — Plan C3, the bulk editor's ops built on this store
+
+## Source files
+
+| Role | Path |
+|------|------|
+| The store | `frontend/src/lib/features/transactions/txStore.svelte.ts` |
+| Shared transaction types | `frontend/src/lib/features/transactions/types.ts` |
+| Plan C | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-transaction-Part4_Round6_PlanC_TxStoreRefactor.prompt.md` |
 

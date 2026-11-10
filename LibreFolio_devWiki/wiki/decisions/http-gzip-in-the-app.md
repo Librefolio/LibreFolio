@@ -17,7 +17,7 @@ related:
 
 LibreFolio is one container that serves the API, the SvelteKit build and the documentation site
 ([[features/F-062]]), and an install may reach it with no reverse proxy in between, or through one that does not
-compress. The cloud sizing study of workstream M measured what a browser downloads (report, item 7): a first visit
+compress. A sizing study of workstream M measured what a browser downloads (report, item 7): a first visit
 of about 7.5 MB and an eight-page session of about 5.8 MB, nearly all of it text — API JSON, JavaScript, CSS and the
 docs' HTML, about 200 KiB per docs page.
 
@@ -25,8 +25,8 @@ docs' HTML, about 200 KiB per docs page.
 
 The developer, on M's proposal (plan of the release images, §0, 2026-10-06): «direi proprio che va fatta».
 
-`backend/app/main.py` adds `GZipMiddleware(minimum_size=1024, compresslevel=6)` beside the CORS middleware
-(`16238e220`, «feat(server): gzip HTTP responses»), with Starlette's default exclusions kept:
+`backend/app/main.py` adds `GZipMiddleware(minimum_size=1024, compresslevel=6)` outside the CORS middleware (since CP2b of 1.3.0 an entry of `MIDDLEWARE_STACK` in `services/platform/middleware.py`)
+(`49aaeab29`, «feat(server): gzip HTTP responses»), with Starlette's default exclusions kept:
 
 - images, fonts, archives, Server-Sent Events, 206 range replies and responses that are already encoded pass
   untouched — the provider search stream keeps arriving result by result;
@@ -66,6 +66,6 @@ compressed, what must be left alone (small bodies, PNG, SSE, `Range`) and the ca
 
 | Role | Path |
 |------|------|
-| Middleware | `backend/app/main.py` |
+| Middleware | `backend/app/services/platform/middleware.py` |
 | Contract tests | `backend/test_scripts/test_api/test_http_compression_api.py` |
 | Journal (§0, steps 2 and 4) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00ReleaseImages.prompt.md` |

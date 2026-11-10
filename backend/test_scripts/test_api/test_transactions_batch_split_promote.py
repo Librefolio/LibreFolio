@@ -5,12 +5,16 @@ Covers:
 - B1: Split via batch pipeline (commit with splits[])
 - B2: Promote via batch pipeline (commit with promotes[])
 - B3: Promote-suggest endpoint (POST /transactions/promote-suggest)
+- B4: Edits of rows an older version stored without a cost basis (N2)
 
 Reference: plan-phase07-transaction-Part4_Round6_PlanD1_BackendBatchSuggest.prompt.md
 """
 
+import contextlib
+import io
+import json
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -216,7 +220,7 @@ async def create_standalone_tx(
 async def create_split_event(client: httpx.AsyncClient, asset_id: int, event_date: str, ratio: str, currency: str = "USD") -> int:
     """Create a manual SPLIT AssetEvent (value = ratio, e.g. "2" for 2:1) and return its id.
 
-    Same approach as ``create_split_event`` in test_portfolio_wac.py: upsert the manual event,
+    Same approach as ``create_split_event`` in test_lots_wac_history.py: upsert the manual event,
     then read it back by asset and date to learn its id.
     """
     resp = await client.post(
@@ -838,6 +842,36 @@ class TestBatchPromote:
             assert any(i["code"] == "noPromoteRule" for i in data["issues"]), f"Expected noPromoteRule: {data['issues']}"
             print_success("Promote same-broker W+D → noPromoteRule ✓")
 
+    async def test_commit_promote_same_broker_different_currencies_is_fx_conversion(self):
+        """Saved WITHDRAWAL EUR + DEPOSIT USD on one broker, promoted via ``promotes[]`` → an FX_CONVERSION pair.
+
+        Took over the happy path of the removed ``POST /transactions/transfers/promote`` (``test_transfer_promotion.py``).
+        """
+        print_section("B2.7b — Promote saved+saved, same broker, EUR→USD → FX_CONVERSION")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker = await create_broker(client, "PromFxSameBroker")
+
+            w_id = await create_standalone_tx(client, broker, "WITHDRAWAL", cash={"code": "EUR", "amount": "-500"})
+            d_id = await create_standalone_tx(client, broker, "DEPOSIT", cash={"code": "USD", "amount": "540"})
+
+            resp = await client.post(f"{API_BASE}/transactions/commit", json={"promotes": [{"id_a": w_id, "id_b": d_id}]}, timeout=TIMEOUT)
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            assert data["committed"] is True, f"Promote not committed: {data}"
+            assert data["issues"] == []
+
+            rows = await client.get(f"{API_BASE}/transactions", params={"ids": [w_id, d_id]}, timeout=TIMEOUT)
+            assert rows.status_code == 200, rows.text
+            by_id = {tx["id"]: tx for tx in rows.json()}
+            assert set(by_id) == {w_id, d_id}
+            assert all(tx["type"] == "FX_CONVERSION" for tx in by_id.values())
+            assert by_id[w_id]["related_transaction_id"] == d_id
+            assert by_id[d_id]["related_transaction_id"] == w_id
+            assert Decimal(by_id[w_id]["cash"]["amount"]) == Decimal("-500")
+            assert Decimal(by_id[d_id]["cash"]["amount"]) == Decimal("540")
+            print_success("Promote same-broker EUR/USD W+D → FX_CONVERSION pair ✓")
+
     async def test_adjustment_without_cost_basis_is_rejected(self):
         """Control: positive ADJUSTMENT with no cost basis and no mode → costBasisRequired, not committed."""
         print_section("B2.8 — Positive ADJUSTMENT without cost basis → costBasisRequired")
@@ -1200,6 +1234,130 @@ class TestBatchPromote:
             assert any(i.get("code") == "pairQuantityMismatch" for i in data["issues"]), f"Expected pairQuantityMismatch: {data}"
             print_success("TRANSFER pair create -3 / +5 → pairQuantityMismatch ✓")
 
+    @pytest.mark.parametrize("endpoint", ["commit", "validate"])
+    async def test_adjustment_pair_create_is_rejected(self, endpoint):
+        """ADJUSTMENT -2 on A / +2 on B under one link_uuid → pairAdjustmentNotAllowed on create 0, not committed, nothing written.
+
+        Two Adjustments cannot be linked (decision of 22/10/2026): units that move between brokers are an Asset
+        Transfer. The refusal is at entry only: this is a create of a linked pair that no promote consumes.
+        """
+        print_section(f"B2.13b — ADJUSTMENT pair create under one link_uuid (/{endpoint}) → pairAdjustmentNotAllowed")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PairAdjA")
+            broker_b = await create_broker(client, "PairAdjB")
+            asset_id = await get_or_create_asset(client)
+
+            # A: +10 (the helper adds its USD 50 cost basis), enough units for the outgoing -2
+            seed_id = await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+
+            link_uuid = str(uuid.uuid4())
+            description = f"adjustment pair {uuid.uuid4().hex[:8]}"
+            resp = await client.post(
+                f"{API_BASE}/transactions/{endpoint}",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_a,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-03-02",
+                            "quantity": "-2",
+                            "description": description,
+                            "link_uuid": link_uuid,
+                        },
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-03-02",
+                            "quantity": "2",
+                            "description": description,
+                            "link_uuid": link_uuid,
+                            # The receiver carries its cost basis: the cost basis is not the issue here
+                            "cost_basis_override": {"code": "EUR", "amount": "10"},
+                        },
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            refusal = [(i["operation"], i["index"], i.get("ref_id"), i["code"], i.get("params")) for i in data["issues"]]
+            expected = [("create", 0, None, "pairAdjustmentNotAllowed", {"type": "ADJUSTMENT"})]
+            what = f"ADJUSTMENT pair create -2 on broker {broker_a} / +2 on broker {broker_b} (link_uuid {link_uuid}, /{endpoint})"
+            assert refusal == expected, f"{what}: expected exactly one pairAdjustmentNotAllowed on create 0 and none on create 1, got {data['issues']}"
+            assert data["committed"] is False, f"ADJUSTMENT pair create (/{endpoint}) was reported committed: {data}"
+
+            # Nothing was written: broker B (this test's own) holds no row, broker A only its seed
+            rows_b = await client.get(f"{API_BASE}/transactions", params={"broker_id": broker_b}, timeout=TIMEOUT)
+            assert rows_b.status_code == 200, rows_b.text
+            assert [tx["id"] for tx in rows_b.json()] == [], f"A refused ADJUSTMENT pair left rows on broker {broker_b}: {rows_b.json()}"
+            rows_a = await client.get(f"{API_BASE}/transactions", params={"broker_id": broker_a}, timeout=TIMEOUT)
+            assert rows_a.status_code == 200, rows_a.text
+            assert {tx["id"] for tx in rows_a.json()} == {seed_id}, f"A refused ADJUSTMENT pair changed broker {broker_a}: {rows_a.json()}"
+            print_success(f"ADJUSTMENT pair -2 / +2 (/{endpoint}) → pairAdjustmentNotAllowed, nothing written ✓")
+
+    @pytest.mark.parametrize("endpoint", ["commit", "validate"])
+    async def test_transfer_pair_arrival_before_departure_warns_but_is_saved(self, endpoint):
+        """TRANSFER departing on the 5th (-2 on A) and arriving on the 3rd (+2 on B) → not blocked, one pairArrivalBeforeDeparture warning.
+
+        Lot W5-3 (23/10/2026): an arrival dated before its departure is saved exactly as sent and the batch carries a
+        NON-BLOCKING warning in `warnings` (create 0, ref_id null, params with both ISO dates); `issues` stays empty.
+        /validate says the same and writes nothing. The same pair in a normal order has `warnings: []`, the key always present.
+        """
+        print_section(f"B2.13c — TRANSFER pair arriving before it departs (/{endpoint}) → pairArrivalBeforeDeparture warning")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PairOrderA")
+            broker_b = await create_broker(client, "PairOrderB")
+            asset_id = await get_or_create_asset(client)
+            # Broker A's own seed: it holds the 10 units that let it give 2 away
+            await create_standalone_tx(client, broker_a, "ADJUSTMENT", asset_id=asset_id, quantity="10", tx_date="2026-03-01")
+
+            def pair(departure_day: str, arrival_day: str) -> dict:
+                link_uuid = str(uuid.uuid4())
+                description = f"pair order {uuid.uuid4().hex[:8]}"
+                return {
+                    "creates": [
+                        {"broker_id": broker_a, "asset_id": asset_id, "type": "TRANSFER", "date": departure_day, "quantity": "-2", "description": description, "link_uuid": link_uuid},
+                        {"broker_id": broker_b, "asset_id": asset_id, "type": "TRANSFER", "date": arrival_day, "quantity": "2", "description": description, "link_uuid": link_uuid, "cost_basis_override": {"code": "EUR", "amount": "10"}},
+                    ]
+                }
+
+            resp = await client.post(f"{API_BASE}/transactions/{endpoint}", json=pair("2026-03-05", "2026-03-03"), timeout=TIMEOUT)
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            what = f"TRANSFER -2 on broker {broker_a} (5 March) / +2 on broker {broker_b} (3 March), /{endpoint}"
+            assert data["issues"] == [], f"{what}: an inverted pair must never be blocked, got issues {data['issues']}"
+            assert data["committed"] is (endpoint == "commit"), f"{what}: committed={data['committed']}"
+            assert "warnings" in data, f"{what}: the response has no `warnings` key: {sorted(data)}"
+            views = [(w["operation"], w["index"], w.get("ref_id"), w["code"]) for w in data["warnings"]]
+            assert views == [("create", 0, None, "pairArrivalBeforeDeparture")], f"{what}: expected exactly one pairArrivalBeforeDeparture warning on create 0, got {data['warnings']}"
+            params = data["warnings"][0]["params"] or {}
+            assert (params.get("departureDate"), params.get("arrivalDate")) == ("2026-03-05", "2026-03-03"), f"{what}: params must carry both ISO dates: {params}"
+
+            rows_b = await client.get(f"{API_BASE}/transactions", params={"broker_id": broker_b}, timeout=TIMEOUT)
+            assert rows_b.status_code == 200, rows_b.text
+            if endpoint == "commit":
+                (arrival,) = rows_b.json()
+                assert arrival["date"] == "2026-03-03", f"{what}: the arrival must be saved on the date sent, got {arrival['date']}"
+                assert arrival["related_transaction_id"] is not None, f"{what}: the pair must be saved linked: {arrival}"
+            else:
+                assert [tx["id"] for tx in rows_b.json()] == [], f"{what}: /validate wrote rows on broker {broker_b}: {rows_b.json()}"
+
+            normal = await client.post(f"{API_BASE}/transactions/validate", json=pair("2026-03-03", "2026-03-05"), timeout=TIMEOUT)
+            assert normal.status_code == 200, normal.text
+            assert normal.json().get("warnings") == [], f"a normal-order pair must carry `warnings: []`, got {normal.json().get('warnings')!r} (issues {normal.json()['issues']})"
+            print_success(f"TRANSFER arriving before departure (/{endpoint}) → warning, saved as sent ✓")
+
     async def test_transfer_pair_create_different_assets_is_rejected(self):
         """TRANSFER pair create asset X -3 on A / asset Y +3 on B under one link_uuid → pairAssetMismatch, not committed."""
         print_section("B2.14 — TRANSFER pair create across two assets → pairAssetMismatch")
@@ -1428,6 +1586,42 @@ class TestBatchPromote:
 # ============================================================================
 # B3 — PROMOTE-SUGGEST
 # ============================================================================
+
+# W-B71: promote_suggest_bulk searches each input's date ± tolerance_days. Around WINDOW_DAY one standalone WITHDRAWAL
+# EUR -600 is stored at each offset (days): at tolerance_days=7 the offsets 0 and ±7 are inside the window, ±8 just
+# outside. The calendar's edge days, 0001-01-01 and 9999-12-31, are where the window leaves the calendar.
+WINDOW_DAY = date(2026, 3, 10)
+WINDOW_INSIDE = (0, -7, 7)
+WINDOW_OUTSIDE = (-8, 8)
+CALENDAR_EDGES = (date.min, date.max)
+
+
+async def create_window_withdrawals(client: httpx.AsyncClient, broker_id: int) -> dict[int, int]:
+    """One standalone WITHDRAWAL EUR -600 on ``broker_id`` at each offset of WINDOW_INSIDE and WINDOW_OUTSIDE from WINDOW_DAY: ``{offset: id}``."""
+    ids: dict[int, int] = {}
+    for offset in (*WINDOW_INSIDE, *WINDOW_OUTSIDE):
+        ids[offset] = await create_standalone_tx(client, broker_id, "WITHDRAWAL", cash={"code": "EUR", "amount": "-600"}, tx_date=(WINDOW_DAY + timedelta(days=offset)).isoformat())
+    return ids
+
+
+def deposit_input(input_id: int, broker_id: int, day: date) -> dict:
+    """An unsaved DEPOSIT EUR 600 on ``broker_id`` dated ``day``: on another broker, each WITHDRAWAL EUR -600 is its CASH_TRANSFER other half."""
+    return {"id": input_id, "type": "DEPOSIT", "broker_id": broker_id, "date": day.isoformat(), "currency": "EUR", "amount": "600"}
+
+
+def candidate_ids(results: dict, input_id: int) -> list[int]:
+    """The candidates of one input of a promote-suggest answer, by id, sorted."""
+    return sorted(candidate["id"] for candidate in results.get(str(input_id), []))
+
+
+async def post_on_its_own_connection(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
+    """POST with ``client``'s session on a connection of its own, for a request that may end in an unhandled exception.
+
+    After such a 500 the server closes the connection; sent on the client's own, the next request (the cleanup) could be
+    written to it and fail with a ReadError, leaving the test's rows behind.
+    """
+    async with httpx.AsyncClient(cookies=client.cookies) as own:
+        return await own.post(url, **kwargs)
 
 
 @pytest.mark.asyncio
@@ -1885,3 +2079,250 @@ class TestPromoteSuggest:
             ids = sorted(c["id"] for c in resp.json()["results"].get("-1", []))
             assert ids == [same_day_id], f"tolerance_days=0 must offer the ADJUSTMENT(-5) id={same_day_id} of {day} alone, never id={day_before_id} of {day_before}; candidates {ids}"
             print_success("Suggest: tolerance_days=0 offers the same day only ✓")
+
+    async def test_suggest_window_guard_inside_the_calendar(self):
+        """B3.12 — W-B71 guard (passes before and after the cure): the window of an ordinary input, and the edge days at tolerance_days=0.
+
+        At tolerance_days=7 a new DEPOSIT EUR 600 dated 2026-03-10 on broker B is offered the WITHDRAWALs EUR -600 of
+        broker A 0 and 7 days away, either side, never those 8 days away. At tolerance_days=0 the same input, batched with
+        two more dated 0001-01-01 and 9999-12-31, is answered today: a window of the day itself moves nothing past the
+        calendar. One entry per input, the ordinary one keeps its same-day candidate, the edge ones have none. So the edge
+        dates are accepted as such: what B3.13 adds is the window around them.
+        """
+        print_section("B3.12 — Suggest: the window inside the calendar (W-B71 guard)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_a = await create_broker(client, "SugEdgeGuardA")
+                broker_ids.append(broker_a)
+                broker_b = await create_broker(client, "SugEdgeGuardB")
+                broker_ids.append(broker_b)
+                rows = await create_window_withdrawals(client, broker_a)
+                inside = sorted(rows[offset] for offset in WINDOW_INSIDE)
+                ordinary = deposit_input(-1, broker_b, WINDOW_DAY)
+
+                week = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[ordinary], timeout=TIMEOUT)
+                assert week.status_code == 200, week.text
+                found = candidate_ids(week.json()["results"], -1)
+                assert found == inside, f"At tolerance_days=7 a DEPOSIT EUR 600 dated {WINDOW_DAY} on broker {broker_b} must be offered the WITHDRAWALs 0 and 7 days away {inside}, never those 8 days away {[rows[offset] for offset in WINDOW_OUTSIDE]}; candidates {found} (rows by offset {rows})"
+
+                batch = [ordinary, deposit_input(-2, broker_b, date.min), deposit_input(-3, broker_b, date.max)]
+                same_day = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 0}, json=batch, timeout=TIMEOUT)
+                assert same_day.status_code == 200, f"At tolerance_days=0 a batch with inputs dated 0001-01-01 and 9999-12-31 must be answered (the window is the day itself): HTTP {same_day.status_code} {same_day.text}"
+                results = same_day.json()["results"]
+                assert sorted(results) == ["-1", "-2", "-3"], f"One entry per input expected: {sorted(results)}"
+                assert candidate_ids(results, -1) == [rows[0]], f"At tolerance_days=0 the ordinary input keeps its same-day WITHDRAWAL id={rows[0]}, next to the edge-dated inputs: {results}"
+                assert (results["-2"], results["-3"]) == ([], []), f"Nothing is stored on 0001-01-01 or 9999-12-31: {results}"
+                print_success("Suggest: the window reaches 7 days and no further; the edge days are answered at tolerance 0 ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=[])
+            assert cleanup_problems == [], f"Cleanup of the test's brokers: {cleanup_problems}"
+
+    async def test_suggest_cuts_the_window_at_the_calendar_edges(self):
+        """B3.13 — RED until W-B71: inputs dated 0001-01-01 and 9999-12-31 at tolerance_days=7 are answered with no candidate, and the ordinary input of the same batch keeps its own.
+
+        promote_suggest_bulk searches date ± tolerance_days: 7 days before 0001-01-01 or after 9999-12-31 is outside the
+        calendar, OverflowError, a 500 for the whole batch: every draft of the bulk editor loses its suggestions for one row
+        with a mistyped year. The window must be cut at the calendar's edge (shift_date, saturating at date.min /
+        date.max); not a 422, since the save refuses such a date already (N74). Then: one entry per input, none for the
+        edge ones (nothing is stored that early or that late), and the DEPOSIT dated 2026-03-10 is still offered the
+        WITHDRAWALs 0 and 7 days away and never those 8 days away, as in B3.12: the window is still the window.
+        """
+        print_section("B3.13 — Suggest: the window cut at the calendar's edges (W-B71)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_a = await create_broker(client, "SugEdgeA")
+                broker_ids.append(broker_a)
+                broker_b = await create_broker(client, "SugEdgeB")
+                broker_ids.append(broker_b)
+                rows = await create_window_withdrawals(client, broker_a)
+                inside = sorted(rows[offset] for offset in WINDOW_INSIDE)
+                batch = [deposit_input(-1, broker_b, WINDOW_DAY), deposit_input(-2, broker_b, date.min), deposit_input(-3, broker_b, date.max)]
+
+                resp = await post_on_its_own_connection(client, f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=batch, timeout=TIMEOUT)
+                if resp.status_code != 200:
+                    alone: dict[str, int] = {}
+                    for edge in CALENDAR_EDGES:
+                        probe = await post_on_its_own_connection(client, f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[deposit_input(-1, broker_b, edge)], timeout=TIMEOUT)
+                        alone[edge.isoformat()] = probe.status_code
+                    pytest.fail(
+                        f"W-B71: promote-suggest answered HTTP {resp.status_code} ({resp.text[:200]}) to a batch with an input dated 0001-01-01 and one dated 9999-12-31 at tolerance_days=7, next to an ordinary input dated {WINDOW_DAY}; each edge input alone: {alone}. promote_suggest_bulk computes date ∓ timedelta(days=7), which raises OverflowError (a 500) past the calendar, so the whole batch loses its suggestions; a window at the calendar's edge must be cut there (shift_date, saturating at date.min / date.max)",
+                        pytrace=False,
+                    )
+                results = resp.json()["results"]
+                assert sorted(results) == ["-1", "-2", "-3"], f"One entry per input expected: {sorted(results)}"
+                assert (results["-2"], results["-3"]) == ([], []), f"Nothing is stored within 7 days of 0001-01-01 or of 9999-12-31, so the edge inputs have no candidate: {results}"
+                found = candidate_ids(results, -1)
+                assert found == inside, f"Next to the edge inputs, the DEPOSIT dated {WINDOW_DAY} on broker {broker_b} must still be offered the WITHDRAWALs 0 and 7 days away {inside}, never those 8 days away {[rows[offset] for offset in WINDOW_OUTSIDE]}; candidates {found} (rows by offset {rows})"
+                print_success("Suggest: the window is cut at the calendar's edges, the batch keeps its suggestions ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=[])
+            assert cleanup_problems == [], f"Cleanup of the test's brokers: {cleanup_problems}"
+
+
+# ============================================================================
+# B4 — EDITS OF ROWS STORED WITHOUT A COST BASIS (N2)
+# ============================================================================
+
+
+def write_legacy_cost_rows(*, user_id: int, source_broker: int, dest_broker: int, asset_id: int, day: str, marker: str) -> dict[str, int]:
+    """Write a TRANSFER pair and an ADJUSTMENT +5 without cost basis, as a version before the mandatory cost stored them.
+
+    Through the lane-database helper ``test_db/legacy_cost_rows.py`` — the one the E2E data-quality spec runs as a
+    script — called in-process: same lane (TEST_PORT / LIBREFOLIO_TEST_DATA_DIR, exported by the runner), same guards
+    (this lane's test database only, both brokers owned by ``user_id``), one database transaction. TRANSFER 4 units of
+    ``asset_id`` from ``source_broker`` to ``dest_broker`` and ADJUSTMENT +5 of it at ``dest_broker``, all on ``day``:
+    amount 0, no currency, no cost basis; every description carries ``marker`` (the helper gives each leg its own).
+    Returns the helper's three ids: ``transfer_out``, ``transfer_in``, ``adjustment_in``.
+    """
+    from backend.test_scripts.test_db import legacy_cost_rows  # noqa: PLC0415 — imported where used: the module runs setup_test_database() on import, which this one test needs and the collection of the whole file does not
+
+    argv = ["--user-id", str(user_id), "--source-broker", str(source_broker), "--dest-broker", str(dest_broker), "--transfer-asset", str(asset_id), "--adjustment-asset", str(asset_id), "--date", day, "--marker", marker]
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        exit_code = legacy_cost_rows.main(argv)
+    assert exit_code == 0, f"legacy_cost_rows refused, exit {exit_code}: {stderr.getvalue()}"
+    lines = stdout.getvalue().strip().splitlines()
+    assert len(lines) == 1, f"legacy_cost_rows prints one line of JSON; it printed {stdout.getvalue()!r}"
+    return json.loads(lines[0])
+
+
+async def delete_owned(client: httpx.AsyncClient, *, broker_ids: list[int], asset_ids: list[int]) -> list[str]:
+    """Delete what a test created, by id: each broker with force, one request each as the E2E data-quality teardown
+    does (their transactions go with them, rows written by ``legacy_cost_rows`` included), then the assets, which a
+    remaining transaction would block.
+
+    Returns the problems instead of raising, so that a failed cleanup never hides the test's own failure.
+    """
+    problems: list[str] = []
+    try:
+        for broker_id in broker_ids:
+            resp = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": "true"}, timeout=TIMEOUT)
+            if resp.status_code != 200 or not any(item["id"] == broker_id and item["success"] for item in resp.json()["results"]):
+                problems.append(f"broker {broker_id} not deleted: HTTP {resp.status_code} {resp.text}")
+        if asset_ids:
+            resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
+            deleted = {item["asset_id"] for item in resp.json()["results"] if item["success"]} if resp.status_code == 200 else set()
+            problems.extend(f"asset {asset_id} not deleted: HTTP {resp.status_code} {resp.text}" for asset_id in asset_ids if asset_id not in deleted)
+    except httpx.HTTPError as exc:
+        problems.append(f"cleanup request failed: {exc!r}")
+    return problems
+
+
+@pytest.mark.asyncio
+class TestRowsStoredWithoutCostBasis:
+    @pytest.fixture(autouse=True)
+    def server(self, test_server):
+        yield
+
+    async def test_legacy_rows_description_only_update_commits(self):
+        """B4.1 — RED until N2: a notes-only edit of rows an older version stored without a cost basis commits.
+
+        The rows are ``legacy_cost_rows``': a TRANSFER pair (−4 / +4) and an ADJUSTMENT +5, amount 0, no currency, no
+        cost basis. The edit sends a new description, and nothing else, for all three — both legs of the pair alike,
+        as a pair keeps one description. It changes no type, quantity or cost: N2 lets it commit and repairs nothing.
+        Today ``_check_update_cost_basis`` checks every update, and refuses the receiving leg (update 1) and the
+        ADJUSTMENT (update 2) with ``costBasisRequired``: ``committed: false``. Service-level twin, with tags and
+        both shapes apart: ``test_services/test_transaction_cost_basis_rule.py``.
+        """
+        print_section("B4.1 — Notes-only edit of rows stored without a cost basis → committed (N2)")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            me = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            assert me.status_code == 200, me.text
+            user_id = me.json()["user"]["id"]
+            broker_ids: list[int] = []
+            asset_ids: list[int] = []
+            cleanup_problems: list[str] = []
+            try:
+                broker_src = await create_broker(client, "LegacyCbSrc")
+                broker_ids.append(broker_src)
+                broker_dst = await create_broker(client, "LegacyCbDst")
+                broker_ids.append(broker_dst)
+                asset_id = await get_or_create_asset(client, "LegacyCbAsset")
+                asset_ids.append(asset_id)
+                # The source holds 10 units before the legacy transfer takes 4: the edit's balance replay re-reads that day.
+                await create_standalone_tx(client, broker_src, "BUY", asset_id=asset_id, quantity="10", cash={"code": "USD", "amount": "-1000"}, tx_date="2026-03-01")
+                marker = f"B4.1 legacy-cost {uuid.uuid4().hex}"
+                legacy = write_legacy_cost_rows(user_id=user_id, source_broker=broker_src, dest_broker=broker_dst, asset_id=asset_id, day="2026-03-10", marker=marker)
+                notes = f"{marker} notes edited"
+
+                resp = await client.post(
+                    f"{API_BASE}/transactions/commit",
+                    json={"updates": [{"id": legacy[key], "description": notes} for key in ("transfer_out", "transfer_in", "adjustment_in")]},
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, resp.text
+                data = resp.json()
+                if not data["committed"]:
+                    pytest.fail(f"N2: a notes-only edit of rows stored without a cost basis (TRANSFER out id={legacy['transfer_out']}, in id={legacy['transfer_in']}, ADJUSTMENT +5 id={legacy['adjustment_in']}) changes no type, quantity or cost and must commit; it was refused: {data['issues']}")
+
+                rows_resp = await client.get(f"{API_BASE}/transactions", params={"ids": list(legacy.values())}, timeout=TIMEOUT)
+                assert rows_resp.status_code == 200, rows_resp.text
+                by_id = {tx["id"]: tx for tx in rows_resp.json()}
+                for key, tx_id in legacy.items():
+                    tx = by_id.get(tx_id)
+                    assert tx is not None, f"{key} id={tx_id} not found after the commit: {rows_resp.json()}"
+                    assert tx["description"] == notes, f"{key} id={tx_id}: description {tx['description']!r} after a committed notes edit"
+                for key in ("transfer_in", "adjustment_in"):
+                    assert by_id[legacy[key]]["cost_basis_override"] is None, f"N2 repairs nothing: {key} id={legacy[key]} now has cost_basis_override={by_id[legacy[key]]['cost_basis_override']}"
+                print_success("Notes-only edit of rows stored without a cost basis → committed, still no cost basis ✓")
+            finally:
+                cleanup_problems = await delete_owned(client, broker_ids=broker_ids, asset_ids=asset_ids)
+            assert cleanup_problems == [], f"Cleanup of the test's brokers and asset: {cleanup_problems}"
+
+
+async def login_user_id(client: httpx.AsyncClient) -> int:
+    """The id of the user the client is signed in as."""
+    resp = await client.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+    assert resp.status_code == 200, f"auth/me failed: {resp.text}"
+    return resp.json()["user"]["id"]
+
+
+@pytest.mark.asyncio
+class TestPromoteSuggestRoles:
+    """W6-9 (C-45): a suggestion is offered only from a broker the asker can edit (the bulk picker disables the rest)."""
+
+    @pytest.fixture(autouse=True)
+    def server(self, test_server):
+        yield
+
+    async def test_suggest_offers_only_candidates_from_editable_brokers(self):
+        print_section("B3.x — Suggest leaves out a broker the asker only views")
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as asker:
+            await create_test_user(owner)
+            owner_id = await login_user_id(owner)
+            await create_test_user(asker)
+            asker_id = await login_user_id(asker)
+            shared_broker = await create_broker(owner, "SuggestShared")
+            own_broker = await create_broker(asker, "SuggestOwn")
+            withdrawal = await create_standalone_tx(owner, shared_broker, "WITHDRAWAL", cash={"code": "EUR", "amount": "-600"}, tx_date="2026-04-01")
+            asked = [{"id": -1, "type": "DEPOSIT", "broker_id": own_broker, "date": "2026-04-01", "currency": "EUR", "amount": "600"}]
+
+            async def grant(role: str) -> None:
+                resp = await owner.put(
+                    f"{API_BASE}/brokers/{shared_broker}/access",
+                    json=[{"user_id": owner_id, "role": "OWNER", "share_percentage": 0.6}, {"user_id": asker_id, "role": role, "share_percentage": 0}],
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, f"access {role} failed: {resp.text}"
+
+            async def suggested() -> list[int]:
+                resp = await asker.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=asked, timeout=TIMEOUT)
+                assert resp.status_code == 200, resp.text
+                return candidate_ids(resp.json()["results"], -1)
+
+            try:
+                await grant("EDITOR")
+                assert withdrawal in await suggested(), "control: an EDITOR's broker is offered"
+                await grant("VIEWER")
+                assert withdrawal not in await suggested(), "a broker the asker can only view cannot be merged: the bulk picker shows it disabled"
+            finally:
+                problems = await delete_owned(owner, broker_ids=[shared_broker], asset_ids=[])
+                problems += await delete_owned(asker, broker_ids=[own_broker], asset_ids=[])
+                assert not problems, problems

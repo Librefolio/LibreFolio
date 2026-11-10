@@ -52,11 +52,20 @@ in other people's files.
 - Run `./dev.py api sync` **before** trusting any `front check` result in a new
   worktree or clone. Treat a first-run error count as an environment reading, not a
   code reading.
+- A merge can make the client stale as well. On 2026-10-15 a base merge into workstream R
+  brought H's `GET /system/instance`. `front check` then reported 2 errors in
+  `frontend/src/lib/features/instance/instanceConfig.svelte.ts` (`InstanceConfigResponse`,
+  `get_instance_config_api_v1_system_instance_get`) until the client was regenerated:
+  `front build` runs `api sync` first. After a merge that touches `backend/app/api` or
+  `backend/app/schemas`, sync before checking.
 - When the count is large and spread across untouched files, verify one instance
   against `git show HEAD:<path>` before believing it. A type error on a line identical
   to `HEAD` is evidence about the toolchain, not about the diff.
 - Never cite a `front check` pass as evidence that an E2E spec is type-correct.
   The only real gate on specs is running them.
+- *2026-11-07 lint: the false green is closed.* Since `4e51e8c9c` (2026-10-31, «E2E tsc gate») `./dev.py front check`
+  also runs `npm run check:e2e` (`tsc -p tsconfig.e2e.json`), so the specs are type-checked; svelte-check itself
+  still never opens them. A type-correct spec is still not a passing one.
 
 ## Prevention
 
@@ -78,6 +87,7 @@ reporting the absence of a generated file.
 | Role | Path |
 |------|------|
 | Excludes `e2e/**` | `frontend/tsconfig.json` |
-| Exists, referenced by no gate | `frontend/tsconfig.e2e.json` |
+| Referenced by no gate until `4e51e8c9c`; now run by `front check` (`check:e2e`) | `frontend/tsconfig.e2e.json` |
+| `cmd_fe_check` (svelte-check, then `check:e2e`) | `dev.py` |
 | Placeholder for the generated client | `frontend/src/lib/api/generated.ts.gitkeep` |
 | Post-generation fixup, evidence the class of problem is known | `frontend/scripts/fix-openapi-discriminators.mjs` |

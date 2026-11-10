@@ -1,6 +1,6 @@
 ---
 title: "Stateless Preview Pattern — Controlled Components for Computed Values"
-category: Concept
+category: concept
 tags: [frontend, svelte5, reactivity, pattern, controlled-component, wac]
 related_features: [F-097, F-048]
 related_problems: [problems/wac-feedback-loop, problems/svelte5-effect-read-write-loop]
@@ -89,6 +89,6 @@ type PendingOp = {
 
 | Role | Path |
 |------|------|
-| WacPreviewSection (controlled) | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
-| FormModal (mode state owner) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| BulkModal (_wacCache on PendingOp) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| WacPreviewSection (controlled) | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
+| FormModal (mode state owner) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| BulkModal (_wacCache on PendingOp) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |

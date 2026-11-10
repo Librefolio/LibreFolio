@@ -50,12 +50,28 @@ LibreFolio/
 - **Incremental Alembic migrations (released)** — ship schema changes as new migrations to protect existing installs; edit `001_initial.py` only for brand-new never-shipped tables; `db create-clean` only for fresh/test DBs
 - **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
 - **After modifying DB models** — add an incremental Alembic migration (`./dev.py db migrate "…"`); use `db create-clean` only for fresh/test DBs
-- **NEVER run `git commit`** — the agent must only *propose* commit messages
-  (e.g. write them to `/tmp/libreFolio_commit_*.txt` or print them inline).
-  The user performs the actual commit manually. Staging (`git add`) and read-only
-  git commands (`git status`, `git diff`, `git log --no-pager`) are allowed.
-  Same rule for `git push`, `git reset --hard`, `git rebase`, `git checkout -- …`
-  and any other history-mutating operation: **never** execute, only suggest.
+- **Git: local yes, remote only the developer** (developer decision, 14/10/2026).
+  - **Allowed locally**, when the task needs it: commit, merge, fast-forward,
+    cherry-pick, branch create and rename.
+  - **The developer's alone:** `git push`, force-push, and any change to remotes or to
+    remote branches and tags. They push when they want, after their own review.
+  - **Coordinated work:** only the coordinator mutates history; child workstreams never
+    commit or merge. See `.github/agents/release-coordinator.agent.md` («Git authority»)
+    and `.github/agents/coordinated-workstream.agent.md` («Git policy»).
+  - **Guardrails, always:**
+    - **Never destroy work you do not own.** No `reset --hard`, `checkout -- …`,
+      `restore`, `clean -fd` or `stash drop` on changes you did not create: a dirty tree
+      is someone's open work.
+    - **Never rewrite history that already exists on `origin`.** No amend or rebase of
+      pushed commits.
+    - Delete or force-update a branch only if all of its commits are already in the
+      target or preserved elsewhere.
+    - Before every history operation, record HEAD and `git status --porcelain`. After
+      it, verify HEAD, parents and cleanliness, and report the resulting SHAs.
+    - Stage explicit, reviewed paths only. Never `git add -A` on a checkout shared with
+      other sessions or with the developer's IDE.
+    - Never commit secrets or ignored/generated artifacts.
+    - Commit messages follow Conventional Commits (skill `caveman-commit`).
 
 ## Terminal Command Rules
 
@@ -70,7 +86,7 @@ LibreFolio/
     <command> > /tmp/libreFolio_<descr>.log 2>&1; head -n 40 /tmp/libreFolio_<descr>.log
     <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | { head -n 40; cat >/dev/null; }
     ```
-- ⚠️ **Never `npx` for frontend tools.** Without a local `node_modules/.bin`, npx (npm 11) queries the registry: plain `npx` installs a missing package into the user cache without asking (no TTY), and even `npx --no-install` silently runs a cached copy when it is the latest published version — in both cases not the version pinned by the lock. Call the locked binary explicitly, `frontend/node_modules/.bin/<tool>`, or an `npm run <script>` from `package.json`: a missing binary then fails with "No such file". The test runner and some `dev.py` commands still call `npx` internally, so in a **fresh worktree** run the approved `npm ci` before any `dev.py test front-*`, `front build` or `front check`.
+- ⚠️ **Never `npx` for frontend tools.** Without a local `node_modules/.bin`, npx (npm 11) queries the registry: plain `npx` installs a missing package into the user cache without asking (no TTY), and even `npx --no-install` silently runs a cached copy when it is the latest published version — in both cases not the version pinned by the lock. Call the locked binary explicitly, `frontend/node_modules/.bin/<tool>`, or an `npm run <script>` from `package.json`: a missing binary then fails with "No such file". `dev.py front build` and `dev.py api client`/`api sync` check `frontend/node_modules/.bin` first and stop with exit 1, naming the missing tools and `npm ci`; `dev.py test` stops before anything starts when `frontend/node_modules/.bin` lacks Vitest or Playwright (J-8). So in a **fresh worktree** run the approved `npm ci` before the first `dev.py test` run that starts the shared backend, even a backend-only one (`server --test` builds the frontend when the build is missing), and before any `dev.py test front-*`, `front build` or `front check`. No manual build is needed after it: the runner and `dev.py mkdocs gallery` run `dev.py server --test --build-only` in the foreground before they start the test server, so a missing or stale debug build and site are built, visibly, outside the startup timeout (300 s, `LIBREFOLIO_TEST_STARTUP_TIMEOUT`), which measures the server start only.
 - **Rationale**: avoid re-running expensive commands (tests, builds, db operations) just to see output that was truncated earlier.
 
 ## Async I/O Rule (Event Loop Safety)
@@ -81,14 +97,22 @@ In `async def` handlers, **every sync library doing I/O** MUST be wrapped in `aw
 
 - **Svelte 5 Runes**: use `$state()`, `$derived()`, `$effect()` — never old `$:` reactive
 - **Tailwind CSS 4**: config via `@theme {}` in `app.css` — no `tailwind.config.ts`
-- **Dark mode**: `html.dark` with Tailwind `dark:*` classes
+- **Colours and dark mode**: the colour roles of `lib/theme/tokens.css` through their utilities (`bg-lf-card`, `text-lf-muted`, `border-lf-input`…), which change value under `html.dark` — never `dark:` on a role, no new palette class or hand-written colour (ratchet gate). For any new or changed UI: skill `design-system` (the two themes, the palette, the rules); details in `frontend.instructions.md` «Design System»; migrating legacy classes: skill `theme-roles`
 - **Icons**: lucide-svelte
 - **Selectors**: always use `data-testid` — never CSS classes or text (fragile with i18n)
 - **Flag emoji**: the `'LF Flags'` face (`static/lf-flags.css`, flags-only `unicode-range`) leads every font stack — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere, Windows included. Never name an emoji font in a `font-family`; a component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`
 
 ## Developer Journal & Plan Methodology
 
-Development history is tracked in `LibreFolio_developer_journal/`. We follow a structured plan-driven workflow:
+Development history is tracked in a separate local repository, beside the main checkout: `../LibreFolio_developer_journal/`. It has no remote and is not part of the public repository, so a plan is never committed here. Every journal path in these rules is relative to the main checkout; from a worktree, reach it with:
+
+```bash
+"$(git rev-parse --path-format=absolute --git-common-dir)/../../LibreFolio_developer_journal"
+```
+
+The journal is one shared checkout, with no worktrees of its own: a workstream writes only its own files there and never runs Git in it; the coordinator commits them, on `main`, by explicit path. Outside coordinated work, whoever writes a plan commits it.
+
+We follow a structured plan-driven workflow:
 
 1. **Plan** → create a detailed implementation plan (`.prompt.md`)
 2. **Execute** → implement the plan
@@ -120,21 +144,25 @@ When executing a plan, after completing **EVERY step**, immediately return to th
 
 ### Archive Structure
 
-Completed plan chains are moved into `LibreFolio_developer_journal/RoadmapV4_UI/phases/`:
+Since Release 2 the journal is organised by release (`Release_N/`), and the active phase holds one folder per theme:
 
 ```
-phases/
-├── phase-{NN}-{name}.md          # Summary plan for the phase
-├── phase-{NN}-subplan/           # All sub-plans, bugfix rounds, checklists
-│   ├── README.md                 # Index of all sub-plans with status
-│   ├── Bugfix-Step{N}/           # Grouped by step
-│   │   ├── plan-phase{NN}...md
-│   │   └── checklist-...md
-│   └── ...
-└── 00-index.md                   # Master index of all phases
+Release_N/
+├── Phase_K/                      # ACTIVE release (Phase_1 = 1.3, Phase_2 = 1.4, …)
+│   ├── plan-phaseKK<Release>.prompt.md
+│   ├── 00_coordination/ondataN/  # coordinator papers, one folder per wave
+│   └── NN_<theme>/               # plan-phaseKK<Theme>.prompt.md + notes/
+├── Phase_0/BACKLOG_POST_x.y.md   # single backlog index, dated sign lines per item
+└── phases/                       # ARCHIVE, original folder names kept
+    ├── 00-index.md               # one row per archived folder
+    ├── NN_<stream>/              # archived Phase_0 streams
+    └── Phase_K/NN_<theme>/       # archived folders of a release phase
 ```
 
-Each `phase-{NN}-subplan/README.md` contains a table of all sub-plans with step, description, and status (✅/⏳).
+A folder is archived only after its open items are verified **on the code**, not on the plan's own ✅; whatever stays open
+goes to the next phase (`ATTIVITA_INIZIO_*.md`, `RESIDUO_CLOUD.md`) or to `TODO_FUTURI.md`, by the developer's decision.
+The move is a `git mv` inside the journal repository, followed by the link fixer of the `plan-archive` skill.
+`RoadmapV4_UI/phases/` and older roadmaps are history (`phase-{NN}-subplan/`, plans grouped by step): leave them as they are.
 
 ### Skills
 
@@ -159,17 +187,17 @@ Use the `find-skills` skill when looking for new capabilities to install (see `~
 
 ### Graphify Knowledge Graph
 
-The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`). Read its real size from `graphify-out/GRAPH_REPORT.md` rather than from here: as of 2026-09-01 it holds ~1 617 nodes / 2 277 edges / 167 communities, built from **100 files**. A number written in prose ages; the report does not.
+The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`), built from **docs and code**. graphify scans the repository root, filtered by the allow-list in `/.graphifyignore`: devWiki pages, English MkDocs pages, `backend/app`, `backend/alembic/versions`, `frontend/src/lib` and `frontend/src/routes`. Read its real size from `graphify-out/GRAPH_REPORT.md`, not from here: on 2026-11-08 it held ~38 800 nodes / 104 000 edges / 619 communities from 2 668 files (1 627 code, extracted by AST; 1 041 docs, extracted semantically). A number written in prose ages; the report does not.
 
-> ⚠️ **The graph covers the wiki, not the code.** Its manifest holds ~363 wiki pages against ~91 code files, out of a corpus of ~2 750. So a BFS/DFS query about *accumulated knowledge* is reliable, while one about *the code* answers partially and **looks complete** — which is the dangerous half. A lint on 2026-09-01 found 144 broken source-file references that no graph query would have surfaced, because the graph does not contain the files that were missing; a filesystem check found all of them in a fraction of a second.
+> ⚠️ **The code is in the graph, but the bridge from docs to code is thin.** Only ~2 450 of 104 000 edges (2%) join a doc to the code. A query about *what the code does* is well covered, and so is one about *what the docs say*. A query about *how a doc page maps to the code* answers partially and **looks complete**.
 >
-> Before writing a wiki page, run `python3 LibreFolio_devWiki/check_source_paths.py`. Every path cited in a `## Source files` table must exist. And remember that **a plan is not a chronicle**: a path read out of a proposal is not a path that was delivered.
+> Before writing a wiki page, run `python3 LibreFolio_devWiki/check_source_paths.py`: every path cited in a `## Source files` table must exist. And remember that **a plan is not a chronicle**: a path read out of a proposal is not a path that was delivered.
 
 - `wiki-search` uses graphify BFS/DFS as primary lookup (much faster than reading raw files)
-- `./dev.py graph update` — incremental code-only rebuild after code changes (no LLM, ~5s)
-- `./dev.py graph viz` — regenerate `graph.html` for browser visualization
-- `./dev.py graph query "TOPIC"` — quick BFS query from the CLI
-- Full semantic rebuild (new .md files): invoke the `graphify` skill through the AI assistant
+- `./dev.py graph update` — incremental rebuild after code changes (AST, no LLM); a run with nothing changed leaves graphify-out untouched
+- New or changed `.md` pages need the semantic pass: the `graphify` skill run from the repository root with `GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out` (see the `wiki-file` skill)
+- `./dev.py graph viz` — regenerates `graph.html` without reclustering; above 15 000 nodes it shows one node per community
+- `./dev.py graph query "TOPIC"` and `./dev.py graph path "A" "B"` — BFS query and shortest path from the CLI
 
 ## Changelog Rules (CHANGELOG.md)
 

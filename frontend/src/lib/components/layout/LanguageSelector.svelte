@@ -57,9 +57,9 @@
     }
 </script>
 
-<div bind:this={containerRef} class="relative" data-menu-open={isOpen ? 'true' : 'false'} data-testid="language-selector">
+<div bind:this={containerRef} class="relative" data-language={$currentLanguage} data-menu-open={isOpen ? 'true' : 'false'} data-testid="language-selector">
     <button
-        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all"
+        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
         data-testid="language-selector-button"
         aria-label={$currentLanguageName}
         aria-haspopup="menu"
@@ -69,21 +69,21 @@
         type="button"
     >
         <span class="text-xl emoji-flag">{$currentLanguageFlag}</span>
-        <ChevronDown class="text-gray-600 dark:text-gray-300 transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
+        <ChevronDown class="text-lf-secondary transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
     </button>
 
     {#if isOpen}
-        <div id="language-selector-panel" class="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden z-50" role="menu" data-menu-open="true" data-testid="language-selector-panel">
+        <div id="language-selector-panel" class="absolute right-0 mt-2 w-40 bg-lf-card rounded-lg shadow-xl shadow-lf-shadow border border-lf-raised overflow-hidden z-50" role="menu" data-menu-open="true" data-testid="language-selector-panel">
             {#each availableLanguages as lang}
                 <button
                     onclick={() => handleLanguageChange(lang.code)}
                     role="menuitem"
                     type="button"
-                    class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all text-left
-                           {$currentLanguage === lang.code ? 'bg-libre-green/10 dark:bg-libre-green/20' : ''}"
+                    class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-lf-hover transition-all text-left
+                           {$currentLanguage === lang.code ? 'bg-lf-selected' : ''}"
                 >
                     <span class="text-xl emoji-flag">{lang.flag}</span>
-                    <span class="text-sm text-gray-700 dark:text-gray-200">{lang.name}</span>
+                    <span class="text-sm text-lf-primary">{lang.name}</span>
                 </button>
             {/each}
         </div>

@@ -34,7 +34,7 @@ where a funding source was in a currency different from the scenario's. Two diff
 
 ## Solution
 
-`bffc634b0` (2026-10-09, «exact FX residual, coherent cross rates»), with the contract kept at `1.0.0`:
+`f62a38cad` (2026-10-09, «exact FX residual, coherent cross rates»), with the contract kept at `1.0.0`:
 
 - **A**: `PlannerLedgerRow.rounding_delta` becomes an `ExactNumber` — a finite decimal or an exact ratio
   (`ratio_to_exact_number()`); the schema fingerprint moved (`4f061103…` → `a999932e…`). The page shows such a
@@ -42,8 +42,8 @@ where a funding source was in a currency different from the scenario's. Two diff
 - **2A**: `validate_fx_coherence()` in the normalizer refuses a buy conversion when
   `r(c,q)·(1−s)·r(q,V) > r(c,V)`, with the new issue `allocation.fx_rate_inconsistent` (an `invalid` outcome; one
   i18n key in four languages).
-- `b3843e2f8` logs up to two caller frames of an engine failure — never its message — so the next one names its
-  origin; `f720f7879` tells the user that exchange rates must agree.
+- `67ab101fe` logs up to two caller frames of an engine failure — never its message — so the next one names its
+  origin; `2492acda2` tells the user that exchange rates must agree.
 
 The developer accepted the plan on 2026-10-08 with one remark: «se l'inverso è un numero periodico, arrotondare alla
 prima untà valida per quella valuta, in eccesso o difetto, non credo sia corretto dire che non è più l'ottimo, al
@@ -69,7 +69,7 @@ and the conversion is planned at the triangle — [[decisions/pac-rounding-again
 | Role | Path |
 |------|------|
 | `ExactNumber` writer | `backend/app/services/pac_allocator/wire_numbers.py` |
-| Ledger row field | `backend/app/schemas/pac_allocator.py` |
+| Ledger row field | `backend/app/schemas/pac_allocator/rows.py` |
 | Coherence check | `backend/app/services/pac_allocator/normalize.py` |
 | Report | `backend/app/services/pac_allocator/planner_report.py` |
 | Adaptive display | `frontend/src/lib/features/tools/pac-allocator/planner/format.ts` |

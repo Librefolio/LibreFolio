@@ -2,7 +2,7 @@
 title: "TimeSeriesStore pattern"
 category: concept
 tags: [frontend, stores, timeseries, cache, fx, assets]
-related: [concepts/editbuffer-pattern, decisions/zodios-api-client]
+related: [concepts/editbuffer-pattern, decisions/zodios-api-client, concepts/stale-while-revalidate-page-cache]
 ---
 
 # Concept: TimeSeriesStore Pattern
@@ -27,6 +27,12 @@ class TimeSeriesStore<T extends TimeSeriesPoint> {
   invalidateAll(): void                 // full clear
 }
 ```
+
+> 2026-11-07 lint: the class has since grown `markFetched(start, end)` (intervals fetched, even when empty),
+> `getMissingIntervals(start, end)`, `markStale()` / `isStale` (a price catch-up marks the store stale and keeps its
+> points — [[concepts/stale-while-revalidate-page-cache]], `3c5f5140f`, 2026-10-17) and a `generation` counter renewed
+> by `invalidateAll()`, `invalidateRange()` and `markStale()` (N64, signal-result cache). `removeFxStore()` returns a
+> `boolean`.
 
 `RangeResult<T>` contains:
 - `data`: all cached points in range (in order)

@@ -28,15 +28,15 @@ The most architecturally significant feature of this domain is currency triangul
 | [[F-018]] | FX Multi-Provider Fallback (priority chain) | backend | core — resilient sync across multiple providers per pair | implemented |
 | [[F-019]] | MANUAL Sentinel Provider (auto-insert/remove) | backend | support — handles exotic pairs with no real provider | implemented |
 | [[F-020]] | FX Currency Conversion Graph (triangulation) | fullstack | core — enables cross-pair conversions via graph traversal | implemented |
-| [[F-021]] | FX List View (dual view: card + table) | frontend | display — card grid + DataTable, toggle persisted | implemented |
-| [[F-022]] | FX Detail Page (rate history, provider mgmt) | frontend | display — full history chart + inline rate editor | implemented |
+| [[F-021]] | FX List View (dual view: card + table) | frontend | display — card grid + DataTable, toggle persisted | documented |
+| [[F-022]] | FX Detail Page (rate history, provider mgmt) | frontend | display — full history chart + inline rate editor | documented |
 | [[F-023]] | FX Chart & Signal Overlay | frontend | display — rate history chart with signal library | documented |
 
 ## Architecture at a glance
 
 ```mermaid
 graph TD
-    User -->|POST /fx/pairs| PairDB[(FxConversionRoute<br/>FxRate DB)]
+    User -->|POST /fx/providers/routes| PairDB[(FxConversionRoute<br/>FxRate DB)]
     PairDB --> Sync[F-017 Sync]
     Sync -->|priority 1| ECB[ECB provider<br/>EUR base, XML feed]
     Sync -->|fallback| FED[FED provider<br/>USD base, JSON]
@@ -50,7 +50,7 @@ graph TD
     MANUAL -->|user enters| RateDB
     RateDB --> ConvGraph[F-020 Conversion Graph<br/>directed graph traversal]
     ConvGraph -->|triangulation| AssetPrices[F-024 Asset prices<br/>in user currency]
-    ConvGraph -->|/fx/convert| DASH[F-054 Dashboard NAV]
+    ConvGraph -->|/fx/currencies/convert| DASH[F-054 Dashboard NAV]
     RateDB --> FXList[F-021 FX List View]
     RateDB --> FXDetail[F-022 FX Detail Page]
     FXDetail --> FXChart[F-023 FX Chart<br/>+ Signal Overlay]
@@ -61,6 +61,10 @@ graph TD
 
 - [[decisions/manual-fx-sentinel]] — MANUAL is a sentinel, not a real provider: it exists only when no real provider covers a pair, is automatically managed (inserted/removed/reinstated) by the system, and is hidden from the UI provider list. This keeps the UX simple while ensuring no pair is ever left without a mechanism for rate entry.
 - [[decisions/fx-sync-pair-based]] — FX sync was redesigned from a currency-list approach (GET with query params) to a pair-based POST model. This broke backward compatibility but aligned with the data model and enabled proper multi-provider assignment per pair.
+
+> 2026-11-07 lint: today's routes (`backend/app/api/v1/fx/`) — pairs are conversion routes under
+> `GET|POST|DELETE /fx/providers/routes`; sync, rate upsert/delete, convert, signals and period changes sit under
+> `/fx/currencies/...` (`POST /fx/currencies/sync`, `POST /fx/currencies/convert`). The diagram above uses these names.
 
 ## Known problems / limitations
 
@@ -85,8 +89,8 @@ No open problems. The FX domain is fully implemented and stable.
 | FX plugin guide | `mkdocs_src/docs/developer/architecture/patterns/fx_plugin_guide.md` |
 | Conversion chain algorithm | `mkdocs_src/docs/developer/frontend/fx-chain-algorithm.md` |
 | User FX docs | `mkdocs_src/docs/user/fx/` |
-| FX API | `backend/app/api/v1/fx.py` |
-| FX service + abstract base | `backend/app/services/fx.py` |
+| FX API | `backend/app/api/v1/fx/` |
+| FX service + abstract base | `backend/app/services/fx/` |
 | FX providers | `backend/app/services/fx_providers/` |
 | DB models (FxRate, FxConversionRoute) | `backend/app/db/models.py` |
 | FX pages | `frontend/src/routes/(app)/fx/` |

@@ -10,11 +10,13 @@ L'outil Mesure répond à la question *de combien cela a-t-il changé entre ces 
 
 ## 🛠️ Prendre une mesure
 
-1. Cliquez sur **📏 Ajouter une mesure** en haut à droite du graphique : le panneau **Mesures** s'ouvre en dessous.
-2. Cliquez sur le point de **début** sur le graphique, puis sur le point de **fin**.
+1. Cliquez sur **📏 Ajouter une mesure** en haut à droite du graphique : le panneau **Mesures** s'ouvre en dessous, et au-dessus du graphique le pointeur devient un réticule.
+2. Cliquez sur le point de **début** sur le graphique : une ligne en tirets suit le pointeur à partir de là. Puis cliquez sur le point de **fin**, un autre jour.
 3. La nouvelle mesure s'ouvre avec son tableau, et le graphique la trace dans sa propre couleur.
 
-**+ Ajouter une mesure** dans l'en-tête du panneau mesure l'ensemble du graphique à la place, de son premier à son dernier point : pratique sur mobile. L'en-tête de chaque mesure contient sa couleur et 🗑️ pour la supprimer ; développez la mesure pour modifier ses dates.
+Une mesure demande deux jours différents. De retour sur le jour du point de début, la ligne en tirets disparaît et le pointeur affiche le signe *interdit* (🚫) : un second clic à cet endroit ne fait rien, et le point de début reste choisi.
+
+**+ Ajouter une mesure** dans l'en-tête du panneau mesure l'ensemble du graphique à la place, de son premier à son dernier point : pratique sur mobile. L'en-tête de chaque mesure contient sa couleur et 🗑️ pour la supprimer ; développez la mesure pour modifier ses dates, là encore deux jours différents.
 
 Les mesures ne sont pas sauvegardées : le rechargement de la page vide le panneau. **Prix** et **Rendement glissant** conservent des mesures distinctes.
 
@@ -25,8 +27,8 @@ Les mesures ne sont pas sauvegardées : le rechargement de la page vide le panne
 Le tableau comporte une ligne pour l'actif (une seconde dans sa propre devise lorsque le graphique est converti) et une pour chaque ligne tracée sur l'axe des prix, comme un actif de comparaison ou une moyenne mobile. À côté des valeurs **Début** et **Fin** :
 
 - **Δ Abs** — la différence $V_{end} - V_{start}$, dans l'unité de la ligne.
-- **Δ %** — la variation $\frac{V_{end} - V_{start}}{V_{start}}$ → [Rendements et taux de croissance](../../../financial-theory/fundamentals/returns.md)
-- **Δ%/an** — la même variation en taux annuel sur les $d$ jours calendaires entre les points, $(1 + \Delta\%)^{365/d} - 1$ → [Rendements et taux de croissance](../../../financial-theory/fundamentals/returns.md)
+- **Δ %** — la variation $\frac{V_{end} - V_{start}}{V_{start}}$, ou `—` quand la ligne part de 0 → [Rendements et taux de croissance](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/an** — la même variation en taux annuel sur les $d$ jours calendaires entre les points, $(1 + \Delta\%)^{365/d} - 1$, à partir de 30 jours : `—` sur un intervalle plus court, sans **Δ %**, ou quand la ligne finit de l'autre côté de zéro → [Rendements et taux de croissance](../../../financial-theory/fundamentals/returns.md)
 
 La ligne de résumé de la mesure ajoute le nombre de jours.
 

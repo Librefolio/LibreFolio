@@ -15,7 +15,8 @@ related:
 
 ## Symptom
 
-`backend/app/utils/currency_utils.py::normalize_currency("ZZZZZZ")` returned
+`backend/app/utils/currency_utils.py::normalize_currency("ZZZZZZ")` (since 2026-10-12
+`backend/app/utils/fx/currency.py`) returned
 `"ZZZZZZ"` as if it were a valid currency. Any random string was accepted as
 a currency code by the helper, defeating its entire purpose. The downstream
 hard-400 rejection in `upsert_prices_bulk` (Blocco I.2 — see
@@ -50,7 +51,10 @@ resolution (e.g. `€` → `EUR`) still uses the curated `SYMBOL_TO_ISO` map +
 fuzzy name search, but every path now returns either a real ISO 4217 code
 from `pycountry` or `None`.
 
-Commit: `4ddf7797a` (G-batch7, 2026-04-25).
+Commit: `ac40b75bd` (G-batch7, 2026-04-25).
+
+*2026-11-07 lint: `normalize_currency` returns a dict (`query`, `iso_codes`, `match_type`, `error`); a miss answers
+`match_type: "not_found"` with empty `iso_codes` and an error message, not a bare `None`.*
 
 ## Prevention
 
@@ -68,7 +72,8 @@ Commit: `4ddf7797a` (G-batch7, 2026-04-25).
   with codes from a controlled dropdown), but the helper is also called from
   CSV-import paths where user-supplied strings can reach it. Any garbage
   there would have been persisted as a "currency".
-- Discovered by `test_currency_utils.py::TestNormalizeCurrency::test_unknown_garbage_returns_none`.
+- Discovered by `test_currency_utils.py::TestNormalizeCurrency::test_unknown_garbage_returns_not_found` (named
+  `..._returns_none` at the time).
 - Sister bug to [[problems/assets-wipe-error-attr-mismatch]] — both were
   surfaced by the BlockG coverage push that took backend coverage from
   ~57% to **87.06%** in 2 days.

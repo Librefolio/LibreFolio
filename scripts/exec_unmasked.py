@@ -12,11 +12,7 @@ def main() -> int:
         return 2
 
     if hasattr(signal, "pthread_sigmask"):
-        teardown_signals = {
-            getattr(signal, name)
-            for name in ("SIGINT", "SIGTERM", "SIGHUP")
-            if hasattr(signal, name)
-        }
+        teardown_signals = {getattr(signal, name) for name in ("SIGINT", "SIGTERM", "SIGHUP") if hasattr(signal, name)}
         signal.pthread_sigmask(signal.SIG_UNBLOCK, teardown_signals)
 
     command = sys.argv[1:]

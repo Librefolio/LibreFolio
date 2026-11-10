@@ -55,7 +55,8 @@ LibreFolio rejoue chaque transaction pour un actif **dans l'ordre chronologique*
 |-----------|-------|
 | ACHAT | Ferme d'abord tout lot SHORT ouvert sur ce courtier ; tout reliquat ouvre un nouveau lot LONG |
 | VENTE | Ferme les lots LONG ouverts dans l'ordre FIFO sur ce courtier ; tout reliquat ouvre un nouveau lot SHORT uniquement lorsque le courtier autorise la vente à découvert |
-| Ajustement entrée/sortie | Même logique d'appariement que ACHAT/VENTE, à coût nul |
+| Ajustement entrant | Même logique d'appariement que ACHAT, au coût de base unitaire de l'ajustement (nul s'il n'en a pas) : tout reliquat ouvre un nouveau lot LONG à ce coût — dans la devise du coût de base lorsqu'il en a une |
+| Ajustement sortant | Ferme les lots LONG ouverts dans l'ordre FIFO sur ce courtier, comme une VENTE, à zéro : il n'a aucune valeur, donc chaque lot réalise moins le coût des unités qu'il cède ; il n'ouvre jamais de lot SHORT |
 | DIVISION | Redimensionne la quantité et le coût unitaire pour chaque lot ouvert de l'actif |
 | Transfert (départ / arrivée) | Déplace la conservation de la quantité ouverte d'un lot d'un courtier à un autre |
 
@@ -83,7 +84,11 @@ $$
 \text{PnLRéalisé}_{\text{SHORT}} = \text{QuantitéAppariée} \times (\text{CoûtUnitaireLot} - \text{PrixClôture})
 $$
 
+$\text{PrixClôture}$ est le prix unitaire de la transaction pour une VENTE, ou pour un ACHAT qui ferme un lot SHORT. Un ajustement n'échange rien : un ajustement entrant se ferme à son **remplacement du coût de base** unitaire, ou à **zéro** s'il n'en a pas. Un ajustement sortant n'a aucune valeur : il se ferme toujours à **zéro**, de sorte que chaque lot qu'il consomme réalise moins le coût de ces unités, quel que soit le coût de base que porte la ligne (voir [Ajustements sortants](../../../instruments/transaction-types/adjustment.md#outgoing-adjustments)).
+
 C'est pourquoi deux lots du même actif, achetés à des moments et à des prix différents, peuvent afficher des résultats réalisés très différents même s'ils sont appariés plus tard le même jour au même prix — voir l'exemple pratique dans [Analyse des Lots FIFO](fifo-lot-analysis.md).
+
+Les deux formules prennent les deux prix dans la devise propre du lot. Dans la devise cible de l'analyse, chaque jambe de la clôture est convertie à sa propre date — le coût du lot à la date d'ouverture, le prix de clôture, dans sa propre devise, à la date de clôture — et le PnL réalisé est leur différence (voir [Lots dans une autre devise](fifo-lot-analysis.md#lots-in-another-currency)).
 
 ---
 

@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
+import {get} from 'svelte/store';
+import {addMessages} from 'svelte-i18n';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {_ as translate} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
 import ToastContainer from './ToastContainer.svelte';
@@ -12,7 +19,11 @@ import ToastContainer from './ToastContainer.svelte';
  * The close-button cases require the production owner's additive
  * data-testid="toast-dismiss" hook, requested during source-only authoring.
  */
-beforeEach(() => toasts.clear());
+// The dismiss button reads its name from the catalogues: every test starts in English, as the app does.
+beforeEach(async () => {
+    toasts.clear();
+    await setupI18n('en');
+});
 afterEach(() => {
     cleanup();
     toasts.clear();
@@ -255,5 +266,170 @@ describe('ToastContainer — a hostile message is sanitised, not executed (K ste
         // Fire the image error a browser would fire: a handler that survived runs now.
         fireImageErrors(root);
         expect.soft(inPage('window.__k13Toast'), 'the payload ran as script in the toast').toBe('undefined');
+    });
+});
+
+describe('H-18 — toasts announced to screen readers', () => {
+    type Variant = 'success' | 'info' | 'warning' | 'error';
+
+    const LIVE_SELECTOR = '[role="alert"], [role="status"]';
+
+    /** The single live element of one toast root — fails when there is none, or more than one. */
+    function liveOf(root: HTMLElement): HTMLElement {
+        const live = [...root.querySelectorAll<HTMLElement>(LIVE_SELECTOR)];
+        expect(live, 'each toast exposes exactly one live element').toHaveLength(1);
+        return live[0];
+    }
+
+    it.each([
+        {variant: 'error' as Variant, role: 'alert', politeness: 'assertive', otherRole: 'status'},
+        {variant: 'success' as Variant, role: 'status', politeness: 'polite', otherRole: 'alert'},
+        {variant: 'info' as Variant, role: 'status', politeness: 'polite', otherRole: 'alert'},
+        {variant: 'warning' as Variant, role: 'status', politeness: 'polite', otherRole: 'alert'},
+    ])('a $variant toast is one $role live region, aria-live=$politeness, atomic', ({variant, role, politeness, otherRole}) => {
+        toasts[variant](`Owned ${variant} notification`, 0);
+        render(ToastContainer);
+        const root = screen.getByTestId(`toast-${variant}`);
+
+        const live = liveOf(root);
+        expect(live).toHaveAttribute('role', role);
+        expect(live).toHaveAttribute('aria-live', politeness);
+        expect(live).toHaveAttribute('aria-atomic', 'true');
+        expect(within(root).getAllByRole(role)).toHaveLength(1);
+        expect(within(root).queryAllByRole(otherRole)).toHaveLength(0);
+    });
+
+    it.each([
+        {name: 'plain text', message: 'Owned plain message', expected: 'Owned plain message'},
+        {
+            name: 'HTML with a span',
+            message: '<span data-testid="toast-html-part">Owned</span> rich message',
+            expected: 'Owned rich message',
+        },
+    ])('reads the $name message alone, with the dismiss button outside the live element', ({message, expected}) => {
+        toasts.success(message, 0);
+        render(ToastContainer);
+        const root = screen.getByTestId('toast-success');
+
+        const live = liveOf(root);
+        expect(live.textContent?.trim()).toBe(expected);
+
+        const dismiss = within(root).getByTestId('toast-dismiss');
+        expect(root).toContainElement(dismiss);
+        expect(live, 'the label of the dismiss button must not be read as part of the message').not.toContainElement(dismiss);
+    });
+
+    it.each(['success', 'info', 'warning', 'error'] as Variant[])('hides every icon inside the %s live element from assistive tech', (variant) => {
+        toasts[variant](`Owned ${variant} notification`, 0);
+        render(ToastContainer);
+        const live = liveOf(screen.getByTestId(`toast-${variant}`));
+
+        for (const svg of live.querySelectorAll('svg')) expect(svg).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('keeps the toast region in the DOM before, during and after toasts, without intercepting clicks', async () => {
+        render(ToastContainer);
+        // Live-region parents must exist before content arrives, or the first toast goes unheard.
+        const region = screen.getByTestId('toast-region');
+        expect(region.classList.contains('pointer-events-none')).toBe(true);
+
+        toasts.info('Owned arriving notification', 0);
+        const root = await screen.findByTestId('toast-info');
+        expect(region).toContainElement(root);
+
+        toasts.clear();
+        await waitFor(() => expect(root).not.toBeInTheDocument());
+        expect(screen.getByTestId('toast-region')).toBe(region);
+        expect(region.classList.contains('pointer-events-none')).toBe(true);
+    });
+
+    it('announces an error and a success shown together, each from its own toast', () => {
+        toasts.error('Owned failure', 0);
+        toasts.success('Owned success', 0);
+        render(ToastContainer);
+        const errorRoot = screen.getByTestId('toast-error');
+        const successRoot = screen.getByTestId('toast-success');
+
+        const alerts = screen.getAllByRole('alert');
+        const statuses = screen.getAllByRole('status');
+        expect(alerts).toHaveLength(1);
+        expect(statuses).toHaveLength(1);
+        expect(errorRoot).toContainElement(alerts[0]);
+        expect(successRoot).toContainElement(statuses[0]);
+        expect(liveOf(errorRoot)).toBe(alerts[0]);
+        expect(liveOf(successRoot)).toBe(statuses[0]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Marker locale — the pattern of DataEditor.test.ts (W-B8). A private-use language where every key of the
+// English catalogue reads as a marker of itself (`⟦common.close⟧`): a label the component takes from the
+// catalogue reads its marker, a literal written in the component reads as itself. That asks whether the
+// code uses the key, never what a language says; whether the four catalogues have it is asked of the JSON.
+
+/** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
+const MARKER_LOCALE = 'qaa';
+/** The four shipped catalogues, by language. */
+const SHIPPED_CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+/** How a label reads in the marker locale: `⟦key⟧`. */
+const marked = (key: string): string => `⟦${key}⟧`;
+
+/** The value behind a dotted key of a catalogue, if any. */
+const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+/** Every dotted key of a catalogue that holds a string. */
+function stringKeysOf(node: unknown, prefix = ''): string[] {
+    if (typeof node === 'string') return [prefix];
+    if (node === null || typeof node !== 'object') return [];
+    return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
+}
+
+/** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker. */
+async function useMarkerLocale(): Promise<void> {
+    addMessages(MARKER_LOCALE, Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)])));
+    await setupI18n(MARKER_LOCALE);
+}
+
+describe('H-18 — the dismiss button is named from the catalogues', () => {
+    // The ✕ of every toast is named aria-label «Dismiss», English written in the component: a screen reader
+    // in Italian, French or Spanish hears English. The contract: the button's accessible name is the
+    // existing common key `common.close` — the key the app already uses to name a close ✕ (e.g.
+    // AssetModalSelectionPrompts, DataImportModal) — present in all four catalogues.
+    //
+    // Read in the marker locale: the name reads `⟦common.close⟧` when the component takes it from the
+    // catalogue, «Dismiss» when it is a literal. The control: the i18n store itself reads the marker, or the
+    // locale never switched and nothing here means anything.
+    //
+    // Red today: «Dismiss».
+
+    type Variant = 'success' | 'info' | 'warning' | 'error';
+    const VARIANTS: Variant[] = ['success', 'info', 'warning', 'error'];
+
+    beforeEach(async () => {
+        await useMarkerLocale();
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    it('common.close has a string in all four shipped catalogues', () => {
+        const missing = Object.entries(SHIPPED_CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, 'common.close') === 'string' ? [] : [lang]));
+        expect(missing).toEqual([]);
+    });
+
+    it('control: the marker locale is live', () => {
+        expect(get(translate)('common.close')).toBe(marked('common.close'));
+    });
+
+    it.each(VARIANTS)('the dismiss button of a %s toast is named common.close', (variant) => {
+        toasts[variant](`Owned ${variant} notification`, 0);
+        render(ToastContainer);
+        expect(get(translate)('common.close'), 'control: the marker locale is live').toBe(marked('common.close'));
+        const dismiss = within(screen.getByTestId(`toast-${variant}`)).getByTestId('toast-dismiss');
+
+        expect(dismiss).toHaveAttribute('aria-label', marked('common.close'));
+        expect(dismiss).toHaveAccessibleName(marked('common.close'));
     });
 });

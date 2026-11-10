@@ -29,7 +29,8 @@ the decision that made everything after it possible — and expensive.»
 - **A flow is due** while it is `pending` or older than its current version:
   `progress.status === 'pending' || progress.version < progress.current_version` (`isOnboardingProgressDue()` in
   `frontend/src/lib/types/onboarding.ts`). Bumping a flow in `ONBOARDING_FLOW_VERSIONS` therefore re-offers it to
-  everybody, completed or skipped. All fifteen flows are at version 1.
+  everybody, completed or skipped. All fifteen flows are at version 1. *2026-11-07 lint:* sixteen since `ad2910b54`
+  (2026-10-31), which added `tools_page_guide`; all still at version 1.
 - **Every transition carries `expected_version`.** The server answers 409 (`onboarding_version_mismatch`) when the
   client rendered other content, so content nobody saw cannot be recorded as seen.
 - **Step-managed flows** (`import_guide`, `transaction_bulk_guide`) also keep one row per step in
@@ -50,7 +51,7 @@ the decision that made everything after it possible — and expensive.»
 
 Rounds 0–5 kept the tables in an unpublished `003_user_onboarding_progress` and edited it in place, because onboarding
 was never shipped (Round 2: «Non creare `004`»), and in Round 5 a developer correction removed every v1/v2
-compatibility layer for the same reason. On 2026-09-22 (`22fa0aed7`) the unpublished `003` files were
+compatibility layer for the same reason. On 2026-09-22 (`7cb1474ee`) the unpublished `003` files were
 consolidated into `004_release_1_2_0_schema.py`, which removed a fork that left a fresh database with two Alembic heads.
 That is the released-phase rule applied as written: an existing file is edited only while it was never shipped
 ([[concepts/single-migration-strategy]] keeps the older rule as history).
@@ -61,6 +62,9 @@ That is the released-phase rule applied as written: an existing file is edited o
 - Two lists must agree by convention: the TS flow list (`ONBOARDING_FLOWS`, the Zod schemas in `onboardingApi.ts`)
   and the Python registry. A flow unknown to the client makes the progress load fail. **Open**: no test compares the
   two, and the bump path has never run end to end (main plan, «Cosa resta aperto» 2 and 3).
+  *2026-11-07 lint:* the first half is closed — `onboardingGuideCatalog.contract.test.ts` (`ad2910b54`) reads
+  `onboarding_service.py` and checks its flows, steps and versions against the TypeScript catalogue and
+  `ONBOARDING_FLOWS`. The bump path was not verified here.
 - A step that a clean import never reaches (`import.assets`, `import.fix`, `import.duplicates`, `import.gapFix`) keeps
   its flow `pending`: Settings can show the Import guide as *Pending* after a first import.
 
@@ -68,11 +72,12 @@ That is the released-phase rule applied as written: an existing file is edited o
 
 | Role | Path |
 |------|------|
-| Registry, transitions, lazy insert | `backend/app/services/onboarding_service.py` |
+| Registry, transitions, lazy insert | `backend/app/services/accounts/onboarding_service.py` |
 | Endpoints and 409/422 | `backend/app/api/v1/settings.py` |
 | Tables | `backend/alembic/versions/004_release_1_2_0_schema.py` |
 | Due predicates | `frontend/src/lib/types/onboarding.ts` |
 | Client with strict schemas | `frontend/src/lib/features/onboarding/onboardingApi.ts` |
+| TS ↔ Python contract test (since `ad2910b54`) | `frontend/src/lib/features/onboarding/onboardingGuideCatalog.contract.test.ts` |
 | Registry test | `backend/test_scripts/test_services/test_settings_service.py` |
 | API test | `backend/test_scripts/test_api/test_settings_api.py` |
 | Developer doc | `mkdocs_src/docs/developer/frontend/onboarding.md` |

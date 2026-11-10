@@ -20,8 +20,8 @@ gallery probes. On the import wizard's step 1, «Next» worked before the broker
 every broker panel collapsed and the uploaded files hidden. The developer chose to disable the button until the list
 arrives. On I's analysis the coordinator approved covering the refresh after a broker created from step 1 as well (B)
 and reusing the upload's spinner, and dropped a second E2E. The red tests came first, from `test-author`; the fix
-(`3cd25af4f`) entered with train 48. The same lot also carried I's journal work: the F-AI (b) row in section I of the
-post-1.2 backlog and the closing notes of plan 41 (`8339b0a06`).
+(`aa12286e1`) entered with train 48. The same lot also carried I's journal work: the F-AI (b) row in section I of the
+post-1.2 backlog and the closing notes of plan 41 (`aa12286e1`).
 
 ## Key Takeaways
 
@@ -48,4 +48,4 @@ post-1.2 backlog and the closing notes of plan 41 (`8339b0a06`).
 | Plan 44 | `LibreFolio_developer_journal/Release_2/Phase_0/44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md` |
 | Post-1.2 backlog, section I (F-AI (b)) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | Plan 41, the closing notes | `LibreFolio_developer_journal/Release_2/Phase_0/41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md` |
-| The wizard | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| The wizard | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |

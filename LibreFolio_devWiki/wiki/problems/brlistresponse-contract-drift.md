@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-07-13
 tags: [backend, frontend, api-contract, testing, brokers]
-related: []
+related: [decisions/broker-list-visibility-non-members]
 ---
 
 # Problem: Several Callers Still Treated `/brokers` as a Bare Array
@@ -62,6 +62,6 @@ response shape can evolve.
 | Role | Path |
 |------|------|
 | Contract | `backend/app/schemas/brokers.py` (`BRListResponse`) |
-| Producer | `backend/app/services/broker_service.py::get_all` |
+| Producer | `backend/app/services/brokers/broker_service.py::get_all` |
 | Fixed (backend) | `backend/test_scripts/test_services/test_broker_service.py` |
 | Fixed (frontend) | `frontend/e2e/transactions/tx-bulk-suggest-ux.spec.ts`, `frontend/e2e/portfolio/broker-icons.spec.ts` |

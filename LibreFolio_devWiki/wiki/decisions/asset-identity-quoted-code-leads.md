@@ -61,8 +61,8 @@ against one of them landed on half the instrument, invisibly.
 - **Order of the steps**: `upload → select → analyze → assets → fix → duplicates → review` (`STEP_DEFS` in
   `ImportWizardModal.svelte`), plus the report-set gap step. `v1.1.0` already had `assets` before `fix`.
   The [1.1.0] CHANGELOG line «Wizard rework» lists *corrections* before *unify assets*, which does not match the code.
-- **Similarity** (`assetSimilarity.ts`): the first version (`0e07359b4`, 08/08) kept a list of neutral suffixes
-  (`NEUTRAL_SUFFIX_TOKENS`: `CUM`, `EX`, `ACC`, `DIST`, …). `d1e04b2b8` (12/08) replaced it with a structural rule,
+- **Similarity** (`assetSimilarity.ts`): the first version (`db7620f01`, 08/08) kept a list of neutral suffixes
+  (`NEUTRAL_SUFFIX_TOKENS`: `CUM`, `EX`, `ACC`, `DIST`, …). `ca69c1a25` (12/08) replaced it with a structural rule,
   `onlyMinorTokenDiff`: at most two differing tokens, short and non-numeric, on an otherwise identical name. A list
   knew only the markers someone had thought of; the price of the rule is that `… ESG` against the plain fund name is
   *proposed*, one click on «Separate». A weak signal only ever proposes; it never merges on its own.
@@ -76,11 +76,11 @@ against one of them landed on half the instrument, invisibly.
   good asset yields both candidates side by side; the wizard offers **Merge** only when at least two candidates are
   `EXACT` or `HIGH` (`duplicateCandidates()`). The pickers (`AssetSelect`, `ImportAssetPicker`) search
   `identifier_other` too.
-- **Merge** (`POST /assets/merge`, `AssetMergeModal`, `0e07359b4`): the target always survives and the endpoint never
+- **Merge** (`POST /assets/merge`, `AssetMergeModal`, `db7620f01`): the target always survives and the endpoint never
   picks it; `dry_run` returns the counts the dialog shows before anything is destroyed; the whole merge is one
   transaction. Two ordering traps were found by its tests: [[problems/asset-merge-cascade-deleted-the-migrated-events]].
 
-Everything above shipped in **1.1.0** (`0e07359b4` and `d1e04b2b8` are ancestors of `v1.1.0`), under the CHANGELOG
+Everything above shipped in **1.1.0** (`db7620f01` and `ca69c1a25` are ancestors of `v1.1.0`), under the CHANGELOG
 section «🔁 Import flow & asset identity (post-beta)», line «Instrument unification inside the wizard».
 
 ## Consequences
@@ -98,14 +98,14 @@ section «🔁 Import flow & asset identity (post-beta)», line «Instrument uni
 | Similarity engine | `frontend/src/lib/utils/assetSimilarity.ts` |
 | Grouping and overrides | `frontend/src/lib/utils/assetGrouping.ts` |
 | Identifier ordering | `frontend/src/lib/utils/assetIdentifiers.ts` |
-| Unify step | `frontend/src/lib/components/transactions/import/AssetGroupStep.svelte` |
+| Unify step | `frontend/src/lib/features/transactions/import/AssetGroupStep.svelte` |
 | Primary chooser | `frontend/src/lib/components/assets/IdentifierPrimaryChooser.svelte` |
 | Merge dialog | `frontend/src/lib/components/assets/AssetMergeModal.svelte` |
 | Picker (D4) | `frontend/src/lib/components/ui/select/AssetSelect.svelte` |
-| Duplicate notice in the wizard | `frontend/src/lib/utils/transactions/importResolutionHelpers.ts` |
-| Candidate search | `backend/app/services/brim_provider.py` |
-| Merge endpoint | `backend/app/api/v1/assets.py` |
-| Merge service | `backend/app/services/asset_sources/crud.py` |
+| Duplicate notice in the wizard | `frontend/src/lib/features/transactions/import/importResolutionHelpers.ts` |
+| Candidate search | `backend/app/services/brim/brim_provider.py` |
+| Merge endpoint | `backend/app/api/v1/assets/crud.py` |
+| Merge service | `backend/app/services/assets/crud.py` |
 | Merge tests | `backend/test_scripts/test_db/test_asset_merge.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` |
 | Developer docs | `mkdocs_src/docs/developer/frontend/components/features/asset-identity.md` |

@@ -10,11 +10,13 @@ Lo strumento Misure risponde alla domanda: *quanto è cambiato tra questi due gi
 
 ## 🛠️ Effettua una misura
 
-1. Clicca **📏 Aggiungi misura** in alto a destra del grafico: il pannello **Misure** si apre sotto di esso.
-2. Clicca il punto **iniziale** sul grafico, poi il punto **finale**.
+1. Clicca **📏 Aggiungi misura** in alto a destra del grafico: il pannello **Misure** si apre sotto di esso, e sopra il grafico il puntatore diventa un mirino.
+2. Clicca il punto **iniziale** sul grafico: una linea tratteggiata segue il puntatore da lì. Poi clicca il punto **finale**, in un altro giorno.
 3. La nuova misura si apre con la sua tabella, e il grafico la disegna con il suo colore.
 
-Il pulsante **+ Aggiungi misura** nell'intestazione del pannello, invece, misura l'intero grafico, dal primo all'ultimo punto: comodo sul telefono. L'intestazione di ogni misura contiene il suo colore e 🗑️ per rimuoverla; espandi la misura per modificarne le date.
+Una misura richiede due giorni diversi. Tornando sul giorno del punto iniziale, la linea tratteggiata scompare e il puntatore mostra il segnale di *non consentito* (🚫): un secondo clic lì non fa nulla, e il punto iniziale resta scelto.
+
+Il pulsante **+ Aggiungi misura** nell'intestazione del pannello, invece, misura l'intero grafico, dal primo all'ultimo punto: comodo sul telefono. L'intestazione di ogni misura contiene il suo colore e 🗑️ per rimuoverla; espandi la misura per modificarne le date, sempre due giorni diversi.
 
 Le misure non vengono salvate: ricaricare la pagina svuota il pannello. **Prezzi** e **Rendimento mobile** mantengono misure separate.
 
@@ -25,8 +27,8 @@ Le misure non vengono salvate: ricaricare la pagina svuota il pannello. **Prezzi
 La tabella ha una riga per l'asset (una seconda riga nella sua valuta quando il grafico è convertito) e una per ogni linea tracciata sull'asse dei prezzi, come un asset di confronto o una media mobile. Accanto ai valori **Inizio** e **Fine**:
 
 - **Δ Ass** — la differenza $V_{end} - V_{start}$, nell'unità della linea.
-- **Δ %** — la variazione $\frac{V_{end} - V_{start}}{V_{start}}$ → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
-- **Δ%/anno** — la stessa variazione come tasso annuo sui $d$ giorni di calendario tra i punti, $(1 + \Delta\%)^{365/d} - 1$ → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
+- **Δ %** — la variazione $\frac{V_{end} - V_{start}}{V_{start}}$, oppure `—` quando la linea parte da 0 → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/anno** — la stessa variazione come tasso annuo sui $d$ giorni di calendario tra i punti, $(1 + \Delta\%)^{365/d} - 1$, da 30 giorni in su: `—` su un intervallo più breve, senza un **Δ %**, o quando la linea finisce dall'altra parte dello zero → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
 
 La riga di riepilogo della misura aggiunge il numero di giorni.
 

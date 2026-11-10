@@ -43,7 +43,7 @@ Imported examples: Intesa Sanpaolo `patrimonio` snapshots use positive `ADJUSTME
 Adjustments with positive quantity **increase** the lot count (FIFO). The cost basis
 for adjustment-created lots depends on whether a **Cost Basis Override** is provided:
 
-- **With override**: the specified value is used as the **per-unit acquisition cost** (WAC — Weighted Average Cost); an override of **zero** records a free acquisition, such as an airdrop
+- **With override**: the specified value is used as the **per-unit acquisition cost** (WAC — Weighted Average Cost), in the cost basis's own currency, which is also the currency of the FIFO lot the adjustment opens (not the row's own currency, often empty since an adjustment moves no cash); an override of **zero** records a free acquisition, such as an airdrop
 - **Without override**: the FIFO lot opens at zero cost, but the average cost (WAC) treats the cost as **unknown**, not free: the units join the position without a cost, its WAC stays incomplete until the position is closed, the Dashboard shows its average cost and unrealized P&L as unavailable, and a data-quality warning names the asset (see [Cost Basis Override](../../technical-analysis/performance-metrics/weighted-average-cost.md#cost-basis-override))
 
 A positive adjustment cannot be saved without a cost basis: enter one, or choose **Auto**, which stores the average cost of the position the units join (zero if it holds none yet). Two kinds of rows can still lack one: an adjustment linked to a **split**, which Auto saves without one because the split keeps the cost already held and spreads it over the new quantity, and rows saved before the cost basis became mandatory.
@@ -54,6 +54,25 @@ A positive adjustment cannot be saved without a cost basis: enter one, or choose
     To get the total cost of the transferred block, multiply by the quantity:
 
     $$\text{Total cost} = \text{WAC} \times \text{quantity}$$
+
+### 📤 Outgoing Adjustments {: #outgoing-adjustments }
+
+Adjustments with negative quantity **decrease** the position: units given away, sent to an account LibreFolio does not track, or removed by a correction. Such an adjustment **has no value** — it only lowers the quantity — so it takes no **Cost Basis Override**:
+
+- **Capital and returns**: no capital leaves, so the adjustment is no flow for the [capital baseline](../../technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#outgoing-adjustments), TWRR or MWRR: the value of the units leaves the NAV, and the returns read it as a loss.
+- **Average cost**: the position gives up the average cost of those units, so the average cost (WAC) of what remains does not change.
+- **Realized**: the units leave at **zero**, so the adjustment realizes minus their cost, $-q \times \text{AverageCost}$ on the Dashboard. The FIFO lots consume the broker's open lots oldest first, as a sale does, and close them at zero: $q$ units taken from a lot realize $-q \times \text{LotUnitCost}$, with no proceeds.
+
+To record units that left for money, use a **Sell**. The API refuses a cost basis on an outgoing adjustment (`costBasisNotAllowed`); one stored on such a row by an earlier version stays in the database but is ignored. An adjustment linked to a **split** is the exception: the split only spreads the cost already held over the new quantity, and realizes nothing.
+
+!!! example "Two shares given away"
+
+    Every amount is in the report currency. Buy 10 shares at 50 (invested 500); the price rises to 80, so the position is worth 800 and its Total P&L is $800 - 500 = +300$. An adjustment of −2 shares gives two away:
+
+    - 8 shares remain, worth $8 \times 80 = 640$; the invested capital stays 500 and the average cost 50;
+    - realized: $0 - 2 \times 50 = -100$; unrealized: $8 \times (80 - 50) = +240$;
+    - Total P&L: $640 - 500 = +140$, that is $-100 + 240$;
+    - the day's TWRR: $640 / 800 - 1 = -20\%$, since no flow offsets the value that left.
 
 ### 🏦 Automatic Cost Basis on Transfers and Seeds
 
@@ -75,7 +94,7 @@ This records in-kind capital, not P&L: the adjustment creates/changes lots but d
 
     | Scenario | What to set |
     |----------|------------|
-    | **Normal transfer** | Leave empty — auto-calculated |
+    | **Normal transfer** | Keep the cost on **Auto** — calculated from your purchases |
     | **Exit Tax** | Market value at transfer date (jurisdiction-specific) |
     | **Inheritance** | Fair market value at date of death (or stepped-up basis) |
     | **Gift** | Donor's original cost basis (carryover basis) |

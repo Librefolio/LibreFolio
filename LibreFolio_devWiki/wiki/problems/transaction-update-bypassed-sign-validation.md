@@ -42,8 +42,8 @@ before release, zero anomalies found in existing data.
 ## Source files
 | File |
 |------|
-| `backend/app/schemas/transactions.py` |
-| `backend/app/services/transaction_service.py` |
+| `backend/app/schemas/transactions/transactions.py` |
+| `backend/app/services/transactions/batch_edits.py` |
 | `backend/test_scripts/test_db/audit_transaction_signs.py` |
 | `backend/test_scripts/test_api/test_transactions_validate.py` |
 | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/feasibility-analysis-v4.1.md` §5.2-5.6 |

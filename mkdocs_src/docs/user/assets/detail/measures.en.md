@@ -10,11 +10,13 @@ The Measure tool answers *how much did it change between these two days?* Pick t
 
 ## 🛠️ Take a measure
 
-1. Click **📏 Add measurement** at the top right of the chart: the **Measures** panel opens below it.
-2. Click the **start** point on the chart, then the **end** point.
+1. Click **📏 Add measurement** at the top right of the chart: the **Measures** panel opens below it, and over the chart the pointer becomes a crosshair.
+2. Click the **start** point on the chart: a dashed line follows the pointer from it. Then click the **end** point, on another day.
 3. The new measure opens with its table, and the chart draws it in its own colour.
 
-**+ Add measurement** in the panel's header measures the whole chart instead, from its first to its last point: handy on a phone. Each measure's header holds its colour and 🗑️ to remove it; expand the measure to change its dates.
+A measure needs two different days. Back over the start's day, the dashed line disappears and the pointer shows the *not allowed* sign (🚫): a second click there does nothing, and the start stays picked.
+
+**+ Add measurement** in the panel's header measures the whole chart instead, from its first to its last point: handy on a phone. Each measure's header holds its colour and 🗑️ to remove it; expand the measure to change its dates, again two different days.
 
 Measures are not saved: reloading the page empties the panel. **Prices** and **Rolling Return** keep separate measures.
 
@@ -25,8 +27,8 @@ Measures are not saved: reloading the page empties the panel. **Prices** and **R
 The table has a row for the asset (a second one in its own currency when the chart is converted) and one for each line drawn on the price axis, such as a comparison asset or a moving average. Next to the **Start** and **End** values:
 
 - **Δ Abs** — the difference $V_{end} - V_{start}$, in the line's unit.
-- **Δ %** — the change $\frac{V_{end} - V_{start}}{V_{start}}$ → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
-- **Δ%/yr** — the same change as a yearly rate over the $d$ calendar days between the points, $(1 + \Delta\%)^{365/d} - 1$ → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
+- **Δ %** — the change $\frac{V_{end} - V_{start}}{V_{start}}$, or `—` when the line starts at 0 → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/yr** — the same change as a yearly rate over the $d$ calendar days between the points, $(1 + \Delta\%)^{365/d} - 1$, from 30 days on: `—` on a shorter span, without a **Δ %**, or when the line ends on the other side of zero → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
 
 The measure's summary line adds the number of days.
 

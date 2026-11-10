@@ -4,6 +4,8 @@ This guide installs LibreFolio with the official pre-built Docker image: the sim
 
 You only need Docker: no Python, Node.js or Pipenv, and nothing to compile.
 
+🍓 The official image is published for `amd64` and `arm64`, so it runs natively, without emulation, on a Raspberry Pi 4/5 (64-bit OS) and on Apple Silicon Macs (32-bit ARM is not published).
+
 ---
 
 ## ✅ Prerequisites
@@ -108,6 +110,7 @@ The stack runs the official image from the GitHub Container Registry (GHCR) and 
         environment:
           - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
           - HOST=0.0.0.0
+          - PORT=6040
         healthcheck:
           test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
           interval: 30s
@@ -132,7 +135,7 @@ Docker downloads the official image from GHCR and starts LibreFolio. The `latest
 
 Open your browser at **`http://localhost:6040`**.
 
-On your first visit, LibreFolio shows the registration page: the first account you create automatically becomes the **administrator**.
+On your first visit, LibreFolio shows the login page: click **Register here** to create your account. The first account automatically becomes the **administrator**; to let other people in, send them an [invitation link](../admin/users.md#invitations).
 
 ??? tip "🖥️ Watch the status and the logs (optional)"
 
@@ -223,6 +226,7 @@ Database migrations run automatically when the container starts and are designed
 
 - With the `latest` tag you always get the newest release, along with any change it brings.
 - To update only when you decide, pin a version instead of `latest`: `ghcr.io/librefolio/librefolio:1.1.0` (full variant) or `ghcr.io/librefolio/librefolio:1.1.0-light` (light variant). See [Image Variants](#image-variants-full-and-light).
+- After the update, each user sees once what changed since the version they last used: see [What's new after an update](settings/about.md#whats-new).
 
 ### 🛠️ 1. Manual Update {: #manual-update }
 

@@ -28,8 +28,8 @@
     "deleteConfirmMultiple": "¿Estás seguro de que quieres eliminar estos archivos?",
     "files": "archivos",
     "filesToDelete": "Archivos a eliminar",
-    "selectBroker": "Seleccionar Broker",
-    "chooseBroker": "-- Elegir broker --",
+    "selectBroker": "Seleccionar bróker",
+    "chooseBroker": "-- Elegir bróker --",
     "assignAll": "Asignar todos a",
     "assignBrokers": "Asignar brókeres",
     "file": "archivo",
@@ -76,9 +76,73 @@
     "uploader": "Subido por",
     "uploaderHint": "Usuario que subió el archivo.",
     "noUploader": "Usuario no indicado",
-    "uploaderLookupFailed": "No se pudieron cargar los nombres de usuario. Los archivos siguen disponibles con los ID de usuario."
+    "uploaderLookupFailed": "No se pudieron cargar los nombres de usuario. Los archivos siguen disponibles con los ID de usuario.",
+    "scope": {
+      "column": "Visibilidad",
+      "columnHint": "Los archivos compartidos los ve cualquier usuario; los personales, solo quien los subió y los administradores.",
+      "common": "Compartido",
+      "personal": "Personal",
+      "share": "Compartir con todos",
+      "makePersonal": "Hacer personal",
+      "makePersonalConfirm": "Los demás usuarios dejarán de ver este archivo, tampoco donde se usa como icono o foto.",
+      "nowShared": "{name} ahora es visible para todos los usuarios",
+      "nowPersonal": "{name} ahora solo lo ven quien lo subió y los administradores",
+      "changeFailed": "No se pudo cambiar la visibilidad del archivo",
+      "sharedOnPick": "{name} era personal: ahora es visible para todos los usuarios, para que todos lo vean aquí"
+    },
+    "deleteSkipped": "Los archivos que no puedes eliminar se han quedado en su sitio",
+    "backups": "Copias",
+    "systemUploader": "Sistema"
   },
   "files": {
     "deleteFailed": "Error al eliminar el archivo"
+  },
+  "storage": {
+    "title": "Espacio ocupado",
+    "parts": {
+      "database": "Base de datos",
+      "uploads": "Archivos subidos",
+      "brokerReports": "Informes de brókeres",
+      "backups": "Copias de seguridad",
+      "dataOther": "Otros archivos de LibreFolio",
+      "disk": "Otros en el disco",
+      "free": "Libre",
+      "restore": "Restauración en curso"
+    },
+    "summary": {
+      "limit": "{used} usados de {limit}",
+      "volume": "LibreFolio usa {used} de un disco de {total}",
+      "data": "LibreFolio usa {used}"
+    },
+    "overLimit": "Se ha superado el límite de espacio: elimina copias o archivos, o sube el límite.",
+    "limit": {
+      "label": "Espacio total de LibreFolio (MB)",
+      "hint": "El espacio máximo que LibreFolio puede ocupar en total: base de datos, archivos, informes, copias de seguridad y una restauración en curso (el archivo subido y su versión abierta). Más allá, los archivos, los informes y las copias hechas a mano se rechazan; tus datos y las copias automáticas nunca se detienen. Escribe 0 para no poner límite.",
+      "locked": "El límite de espacio lo fija quien aloja esta instancia.",
+      "save": "Guardar",
+      "saved": "Guardado.",
+      "errors": {
+        "invalid": "Escribe un número entero de 0 o más.",
+        "forbidden": "Solo los administradores pueden cambiarlo.",
+        "locked": "El límite de espacio lo fija quien aloja esta instancia: aquí no se puede cambiar.",
+        "network": "Sin respuesta del servidor. Inténtalo de nuevo.",
+        "unexpected": "No se pudo guardar el límite. Inténtalo de nuevo."
+      },
+      "exceeded": {
+        "raise": "Espacio insuficiente: así LibreFolio superaría su espacio total. Sube el espacio total a al menos {required} en Configuración › Administración › Configuración Global, o elimina archivos o copias de seguridad.",
+        "locked": "Espacio insuficiente: así LibreFolio superaría su espacio total. Pide a quien aloja esta instancia que suba el límite a al menos {required}, o elimina archivos o copias de seguridad.",
+        "disk": "El disco también necesita al menos {missing} más libres.",
+        "member": "Espacio insuficiente: así LibreFolio superaría su espacio total. Libera al menos {free} eliminando archivos o informes, o pide a un administrador que suba el límite."
+      },
+      "openSettings": "Abrir la configuración",
+      "marker": "Límite {limit}"
+    },
+    "errors": {
+      "load": "No se pudo cargar el espacio ocupado. Inténtalo de nuevo."
+    },
+    "retry": "Reintentar",
+    "advanced": {
+      "title": "Avanzado"
+    }
   }
 }

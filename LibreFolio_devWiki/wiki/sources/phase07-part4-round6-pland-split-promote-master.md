@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 — Plan D: Split/Promote Full Stack (master pla
 category: source
 source_type: plan
 date_ingested: 2026-05-31
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanD_SplitPromoteFullStack.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-phase07-PlanD_SplitPromoteFullStack.prompt.md
 tags: [phase07, transactions, split, promote, batch-pipeline, promote-suggest, merge-modal, fullstack]
 related:
   - sources/phase07-part4-round6-pland1-backend-batch-suggest
@@ -34,6 +34,8 @@ Master plan (2026-05-12, in-progress) for integrating split and promote operatio
 - **18 backend tests** covering split in batch, promote (saved+saved, new+new, saved+new), promote-suggest
 - **D3 merged into D2-bugfix3**: E2E test scope absorbed into the largest bugfix round
 - **D2-round2 still planning**: cost_basis with FX, AssetEvent picker, paired TX store-first pattern
+
+The archive's README for the same chain, with the payload-centralization plan: [[sources/phase07-pland-split-promote]].
 
 ## Sub-plan chain
 | Sub-plan | Status | Focus |

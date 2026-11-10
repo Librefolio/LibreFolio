@@ -45,6 +45,6 @@ See [[decisions/fifo-v4-gross-net-status-model]] for the full decision record, i
 |------|
 | `backend/app/services/financial_math/fifo/models.py`, `backend/app/services/financial_math/fifo/engine.py` |
 | `backend/app/schemas/portfolio.py` |
-| `frontend/src/lib/components/brokers/lots/UnifiedLotsTable.svelte` |
-| `frontend/src/lib/components/brokers/lots/LotCustodyModal.svelte` |
+| `frontend/src/lib/features/brokers/lots/UnifiedLotsTable.svelte` |
+| `frontend/src/lib/features/brokers/lots/LotCustodyModal.svelte` |
 | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.en.md` §"Costs & Net Metrics" → "Gross vs net" |

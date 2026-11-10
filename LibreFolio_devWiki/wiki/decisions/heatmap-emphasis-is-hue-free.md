@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-09-24
 tags: [frontend, charts, echarts, heatmap, colour, accessibility]
-related: [echarts-canvas-mismeasures-emoji-labels, asset-global-page-shows-no-money]
+related: [problems/echarts-canvas-mismeasures-emoji-labels, decisions/asset-global-page-shows-no-money, decisions/colour-factorisation-at-pixel-parity]
 ---
 
 # Decision: The chosen cell of a diverging heatmap is marked without a hue
@@ -31,13 +31,17 @@ its border.
 ## Consequences
 - `emphasis.itemStyle` depends on the theme: `#0f172a` border with a white halo on light, white border with a
   near-black halo on dark.
+  *2026-11-07 lint:* the hex values are gone; the border and halo now read colour roles —
+  `correlation.emphasisBorder` = `--lf-text-primary`, `correlation.emphasisHalo` = translucent `--lf-surface-card`
+  (`lib/theme/chartTheme.ts`), so the rule (luminance, no hue) holds on both themes by construction.
 - Any future emphasis on a diverging scale (other heatmaps, the risk levels) should reuse this rather than pick a hue.
 
 ## Source files
 | Role | Path |
 |------|------|
-| Emphasis style | `frontend/src/lib/components/risk/CorrelationHeatmap.svelte` |
-| Ranking that picks a cell | `frontend/src/lib/components/risk/CorrelationPairsList.svelte` |
+| Emphasis style | `frontend/src/lib/features/risk/CorrelationHeatmap.svelte` |
+| Ranking that picks a cell | `frontend/src/lib/features/risk/CorrelationPairsList.svelte` |
+| Emphasis colour roles | `frontend/src/lib/theme/chartTheme.ts` |
 
 ## Links
 - [[problems/echarts-canvas-mismeasures-emoji-labels]]

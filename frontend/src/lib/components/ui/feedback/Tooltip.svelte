@@ -460,12 +460,12 @@
         font-weight: 400;
         text-transform: none;
         letter-spacing: normal;
-        color: white;
-        background-color: #1f2937;
+        color: var(--lf-text-on-inverse);
+        background-color: var(--lf-surface-inverse);
         border-radius: 0.375rem;
         box-shadow:
-            0 4px 6px -1px rgb(0 0 0 / 0.1),
-            0 2px 4px -2px rgb(0 0 0 / 0.1);
+            0 4px 6px -1px var(--lf-shadow-raised),
+            0 2px 4px -2px var(--lf-shadow-raised);
         white-space: pre-line;
         word-wrap: break-word;
         pointer-events: auto;
@@ -486,14 +486,12 @@
         }
     }
 
-    /* Dark mode tooltip */
-    :global(html.dark) .tooltip-fixed {
-        background-color: #61666f;
-    }
+    /* The inverted surface (Q10): dark in the light theme, light in the dark theme — the role follows the theme by
+       itself. Content written for it uses the -on-inverse roles (the other theme's colours). */
 
     /* KaTeX inside tooltip needs adjusted styles */
     .tooltip-fixed :global(.katex) {
-        color: #93c5fd;
+        color: var(--lf-info-on-inverse);
         font-size: 0.9em;
     }
 </style>

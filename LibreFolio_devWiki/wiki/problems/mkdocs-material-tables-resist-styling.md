@@ -39,7 +39,7 @@ M found the causes in a browser with Playwright and measured the result at 1280 
 
 ## Solution
 
-`11339afa6` («docs: review Scalable and the security guide»), styles scoped to a wrapper class, never to all tables:
+`30ca24392` («docs: review Scalable and the security guide»), styles scoped to a wrapper class, never to all tables:
 
 - **`lf-accounts-table`** (`<div class="lf-accounts-table" markdown>` on the Scalable page): `white-space: nowrap` on
   the first two columns, `vertical-align: middle` on `table td`, `max-width: none` on the icons, a minimum width on the

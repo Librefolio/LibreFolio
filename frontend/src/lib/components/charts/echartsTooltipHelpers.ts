@@ -1,6 +1,9 @@
 import type {ECharts} from 'echarts';
+import {chartFontLoaded, chartFontReady} from './chartFont';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatPercent} from '$lib/utils/core/formatPercent';
+import {chartNeutrals} from '$lib/theme/chartTheme';
+import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
 /**
  * echartsTooltipHelpers.ts — Shared tooltip and lifecycle utilities for ALL ECharts charts.
@@ -21,15 +24,12 @@ export interface TooltipTheme {
 }
 
 /**
- * Get tooltip colors for the current theme.
+ * Get tooltip colors for the current theme: the roles of the shared box (`chartNeutrals().tooltip.box`), read on
+ * `scope`, the chart's own element (`<html>` when omitted).
  */
-export function buildTooltipTheme(isDark: boolean): TooltipTheme {
-    return {
-        bg: isDark ? '#1e293b' : '#ffffff',
-        border: isDark ? '#334155' : '#e2e8f0',
-        textColor: isDark ? '#e2e8f0' : '#1e293b',
-        mutedColor: isDark ? '#94a3b8' : '#64748b',
-    };
+export function buildTooltipTheme(isDark: boolean, scope?: Element | null): TooltipTheme {
+    const {box} = chartNeutrals(isDark, scope).tooltip;
+    return {bg: box.background, border: box.border, textColor: box.text, mutedColor: box.muted};
 }
 
 // =============================================================================
@@ -43,11 +43,21 @@ export function buildDot(color: string): string {
     return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;flex-shrink:0"></span>`;
 }
 
+/** The days a tooltip header stands for, as ISO dates: one day (`from === to`) or a bucket (a week, a month). */
+export interface TooltipDaySpan {
+    from: string;
+    to: string;
+}
+
 /**
  * Build the tooltip date header line.
+ *
+ * `span` publishes the days the header stands for as `data-tooltip-from` / `data-tooltip-to` (ISO): the text is written in the
+ * interface language, so a test that asks which day a chart opened on reads these, never the text.
  */
-export function buildTooltipHeader(date: string, textColor: string): string {
-    return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
+export function buildTooltipHeader(date: string, textColor: string, span?: TooltipDaySpan): string {
+    const days = span ? ` data-tooltip-from="${span.from}" data-tooltip-to="${span.to}"` : '';
+    return `<div${days} style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
 }
 
 /**
@@ -65,6 +75,29 @@ export function buildTooltipRow(label: string, valueHtml: string, dotColor?: str
  */
 export function buildFittedTooltipRow(labelHtml: string, valueHtml: string): string {
     return `<span style="display:inline-flex;align-items:baseline;max-width:100%;min-width:0;vertical-align:bottom"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${labelHtml}</span><span style="flex-shrink:0;white-space:nowrap">${valueHtml}</span></span>`;
+}
+
+/**
+ * `buildFittedTooltipRow` as a line of its own, with an optional colour dot before the label: the label (and its dot) shrinks and ends in
+ * an ellipsis, the value keeps its whole width and sits at the right edge. For a tooltip made of stacked rows (`fitTooltipToWidth` caps it).
+ * Both arguments are HTML: the caller escapes.
+ */
+export function buildFittedTooltipBlockRow(labelHtml: string, valueHtml: string, dotColor?: string): string {
+    const dot = dotColor ? buildDot(dotColor) : '';
+    return `<div data-tooltip-row style="display:flex;align-items:baseline;max-width:100%;min-width:0;gap:16px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dot}${labelHtml}</span><b style="flex-shrink:0;white-space:nowrap;margin-left:auto">${valueHtml}</b></div>`;
+}
+
+/**
+ * `buildFittedTooltipBlockRow` whose label scrolls instead of ending in an ellipsis (F-1, B8): inside a box narrower than the row, the label
+ * (and its dot) shrinks, the value keeps its whole width, and a name that does not fit is the project's marquee: it scrolls by itself, as the
+ * names of the cards and the badges do. The marquee is attached by the chart (`attachOverflowMarqueeToDescendants` on its element, which the
+ * ECharts tooltip lives in), through the class `overflowScrollTextClass` carries; the inline styles keep the label one line and clipped
+ * without depending on a stylesheet reaching the tooltip's HTML. Both arguments are HTML: the caller escapes.
+ */
+export function buildMarqueeTooltipBlockRow(labelHtml: string, valueHtml: string, dotColor?: string): string {
+    const dot = dotColor ? buildDot(dotColor) : '';
+    const label = `<span class="${overflowScrollTextClass}" style="display:block;min-width:0;overflow:hidden;white-space:nowrap">${labelHtml}</span>`;
+    return `<div data-tooltip-row style="display:flex;align-items:baseline;max-width:100%;min-width:0;gap:16px"><span style="display:flex;align-items:baseline;min-width:0;flex:1 1 auto">${dot}${label}</span><b style="flex-shrink:0;white-space:nowrap;margin-left:auto">${valueHtml}</b></div>`;
 }
 
 /**
@@ -156,13 +189,12 @@ export interface ChartGridColors {
 }
 
 /**
- * Standard grid colors for axes and split lines.
+ * Standard grid colors for axes and split lines: the roles of the dashboard charts (`chartNeutrals().dashboard`), read
+ * on `scope`, the chart's own element (`<html>` when omitted).
  */
-export function buildGridColors(isDark: boolean): ChartGridColors {
-    return {
-        textColor: isDark ? '#94a3b8' : '#64748b',
-        gridColor: isDark ? '#1e293b' : '#f1f5f9',
-    };
+export function buildGridColors(isDark: boolean, scope?: Element | null): ChartGridColors {
+    const {dashboard} = chartNeutrals(isDark, scope);
+    return {textColor: dashboard.text, gridColor: dashboard.gridLine};
 }
 
 // =============================================================================
@@ -272,10 +304,12 @@ function pollStableRect(el: HTMLElement, onStable: () => void, maxFrames = 180):
  * each one forces a full internal ECharts re-render and can interrupt an already
  * visible tap-triggered tooltip on mobile.
  *
- * Uses 3 non-magic-number signals:
+ * Uses 4 non-magic-number signals:
  *  1) immediate corrective resize right after first paint,
  *  2) rect-stability polling via rAF for late reflows above the chart,
- *  3) browser `load` + `document.fonts.ready` for cold-load resource/font settling.
+ *  3) browser `load` + `document.fonts.ready` for cold-load resource/font settling,
+ *  4) the flag face (K-13), when the first paint came before it: `document.fonts.ready` waits only for the faces the
+ *     page has asked for, and canvas text asks for none, so the request of `chartFontReady` is awaited instead.
  */
 export function scheduleFirstRenderStabilityFix(chart: ECharts, container: HTMLElement, afterResize?: (chart: ECharts) => void): void {
     const resizeOnce = () => {
@@ -297,6 +331,8 @@ export function scheduleFirstRenderStabilityFix(chart: ECharts, container: HTMLE
             resizeOnce();
         })
         .catch(() => {});
+
+    if (!chartFontLoaded()) void chartFontReady().then(resizeOnce);
 }
 
 /**

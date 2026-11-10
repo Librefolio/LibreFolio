@@ -4,5 +4,27 @@
       "name": "Generic CSV",
       "description": "Import transactions from a generic CSV file. Auto-detects columns based on header names. Supports various date and number formats."
     }
+  },
+  "pluginSettings": {
+    "brim": {
+      "broker_generic_csv": {
+        "label": {
+          "date_order": "Date format"
+        },
+        "description": {
+          "date_order": "How the dates in a generic CSV are written: the order of day, month and year, with a four-digit or a two-digit year (yy: 00–68 are 2000–2068, 69–99 are 1969–1999). With dd/mm/yyyy and mm/dd/yyyy a date that cannot be read the chosen way is read the other way (25/12/2025 is always 25 December); a date with a four-digit year still reads in the two-digit-year formats."
+        },
+        "option": {
+          "date_order": {
+            "day_first": "dd/mm/yyyy — 03/04/2025 = 3 April 2025",
+            "month_first": "mm/dd/yyyy — 03/04/2025 = 4 March 2025",
+            "day_first_short": "dd/mm/yy — 03/04/26 = 3 April 2026",
+            "month_first_short": "mm/dd/yy — 03/04/26 = 4 March 2026",
+            "year_first_short": "yy/mm/dd — 26/04/03 = 3 April 2026",
+            "year_first": "yyyy-mm-dd — 2026-04-03 = 3 April 2026"
+          }
+        }
+      }
+    }
   }
 }

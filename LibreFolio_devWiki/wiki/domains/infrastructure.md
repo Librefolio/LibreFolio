@@ -20,6 +20,12 @@ On the frontend, the **Zodios API client** (F-066) provides full TypeScript type
 
 The project's single Docker image (F-062) and the `dev.py` CLI (F-063) encapsulate the full build/test/deploy lifecycle. The MkDocs documentation (F-069) is multi-language (EN/IT/FR/ES) via a suffix strategy, with translation handled by the Aphra LLM pipeline (F-070). The test suite — 276+ backend pytest tests (F-068) and 181+ Playwright E2E tests (F-067) — is the quality gate for every domain.
 
+> 2026-11-07 lint: the counts above are those of 2026-05; the runner's catalogue is the live count
+> ([[entities/test-runner]]). The registry pattern now serves six families, not three: `@register_provider`/
+> `@register_plugin` decorate asset (8), FX (8) and BRIM (35) providers, risk analytics (15), signal plugins (22) and Tool
+> plugins (1) — `grep` of the decorators in `backend/app/services/`, mocks included. [[F-073]]'s restore has shipped
+> (`documented`, 2026-11-07): [[decisions/restore-waits-and-restores-from-kept-backup]].
+
 ## Feature cluster
 
 | Code | Feature | Layer | Role in domain | Status |
@@ -28,7 +34,7 @@ The project's single Docker image (F-062) and the `dev.py` CLI (F-063) encapsula
 | [[F-060]] | Thread Isolation for Providers | backend | core pattern — async-safe sync I/O in providers | implemented |
 | [[F-061]] | 5-layer Provider Cache | backend | core pattern — TTL cache for provider responses | implemented |
 | [[F-062]] | Docker Single-Image Deploy | infra | deploy — Python backend + SvelteKit + MkDocs in one image | documented |
-| [[F-063]] | dev.py CLI (single entry point) | infra | tooling — all dev operations via one CLI | implemented |
+| [[F-063]] | dev.py CLI (single entry point) | infra | tooling — all dev operations via one CLI | documented |
 | [[F-064]] | Data Separation prod/test (isolated SQLite) | backend | pattern — completely isolated data environments | implemented |
 | [[F-065]] | JWT Cookie Auth (stateless, multi-worker) | backend | core pattern — HttpOnly cookie JWT, no session store | implemented |
 | [[F-066]] | Zodios API Client (OpenAPI types + Zod validation) | frontend | core pattern — type-safe, auto-generated API client | implemented |
@@ -38,7 +44,7 @@ The project's single Docker image (F-062) and the `dev.py` CLI (F-063) encapsula
 | [[F-070]] | Aphra LLM Translation Pipeline | infra | docs — EN→IT/FR/ES translation via LLM pipeline | implemented |
 | [[F-071]] | EditBuffer Pattern (bidirectional inline editor) | frontend | core pattern — click/CSV/form sync with bulk save | implemented |
 | [[F-072]] | TimeSeriesStore Pattern (delta-fetching client cache) | frontend | core pattern — gap-aware client-side time-series cache | implemented |
-| [[F-073]] | Backup & Restore | fullstack | ops — export and import the full SQLite database | implemented |
+| [[F-073]] | Backup & Restore | fullstack | ops — per-series exports, and a zip backup of the whole instance (1.3); its restore is in progress *(2026-11-07 lint: restore shipped, C9)* | documented |
 | [[F-074]] | E2E Test Gallery (auto-screenshots for docs) | infra | docs — Playwright generates gallery images for mkdocs | implemented |
 | [[F-106]] | Tool platform (atomic Tool plugins, an owned process per item) | fullstack | core pattern — a fourth plugin family: typed calculations in owned processes, compiled renderers | documented |
 
@@ -97,13 +103,13 @@ graph TD
 
 ## Known problems / limitations
 
-- [[problems/tanstack-svelte5-incompatibility]] — TanStack Table v8's official Svelte adapter is incompatible with Svelte 5 runes; a workaround is in place. [[F-075]] will address this when TanStack v9 ships a Svelte 5 adapter. *Resolved by removal on 2026-08-05: TanStack left the frontend (`52c8d0d70`), so F-075 is superseded (lint 2026-10-12).*
+- [[problems/tanstack-svelte5-incompatibility]] — TanStack Table v8's official Svelte adapter is incompatible with Svelte 5 runes; a workaround is in place. [[F-075]] will address this when TanStack v9 ships a Svelte 5 adapter. *Resolved by removal on 2026-08-05: TanStack left the frontend (`cd7b24bb4`), so F-075 is superseded (lint 2026-10-12).*
 - [[problems/event-loop-blocking]] — the original provider calls (sync I/O in async handlers) froze the entire uvicorn event loop; resolved by F-060 thread isolation.
 
 ## What comes next
 
 - [[F-075]] TanStack Table v9 Migration — resolve the Svelte 5 incompatibility in the DataTable component. *Superseded: nothing left to migrate (lint 2026-10-12).*
-- [[F-076]] Log Level Policy & TRACE Level — structured logging policy across all services.
+- [[F-076]] Log Level Policy & TRACE Level — structured logging policy across all services. *2026-11-07 lint: delivered — `implemented`, see [[concepts/log-level-policy]].*
 - [[F-091]] Multi-Worker Cache Server — Redis-backed cache to replace per-process `theine` if multi-host deployment becomes needed.
 - [[F-089]] FX Provider Per-Plugin Documentation — dedicated mkdocs pages per central bank provider. *Delivered on 2026-06-19 (lint 2026-10-12).*
 
@@ -121,7 +127,7 @@ graph TD
 | Provider registry | `backend/app/services/provider_registry.py` |
 | Tool platform | `backend/app/services/tools/registry.py` |
 | Tool plugins pattern | `mkdocs_src/docs/developer/architecture/patterns/tool_plugins.en.md` |
-| Thread isolation + 5-layer cache | `backend/app/services/asset_source.py` |
+| Thread isolation + 5-layer cache | `backend/app/services/assets/core.py` |
 | Zodios client | `frontend/src/lib/api/` |
 | TimeSeriesStore | `frontend/src/lib/stores/core/TimeSeriesStore.ts` |
 | EditBuffer | `frontend/src/lib/stores/core/EditBuffer.ts` |

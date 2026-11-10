@@ -16,7 +16,7 @@ related:
 
 ## Summary
 
-One plan (~165 lines), shipped in `916f12bdd` (2026-09-10) and archived on 2026-10-09. It made it possible to run
+One plan (~165 lines), shipped in `4588506b9` (2026-09-10) and archived on 2026-10-09. It made it possible to run
 several development servers and test campaigns in parallel — one per worktree or agent — each with its own port and
 data directory, guarded against touching production. Every later Release 2 workstream ran in such a lane.
 
@@ -47,5 +47,5 @@ None besides the accepted gallery limit.
 | Plan | `LibreFolio_developer_journal/Release_2/phases/15_parallelRuntimeIsolation/plan-phase00ParallelRuntimeIsolation.prompt.md` |
 | Lane configuration | `scripts/cli_base.py` |
 | Test runner options | `scripts/test_runner/_cli.py` |
-| Data-dir guard | `backend/app/config.py` |
+| Data-dir guard | `backend/app/config/__init__.py` |
 | Tests | `backend/test_scripts/test_utilities/test_runtime_isolation.py` |

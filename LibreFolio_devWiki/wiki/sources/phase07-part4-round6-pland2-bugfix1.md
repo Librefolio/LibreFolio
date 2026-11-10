@@ -3,7 +3,7 @@ title: "Phase 07 Part 4 Round 6 — Plan D2 Bugfix 1: Split/Promote Polish"
 category: source
 source_type: plan
 date_ingested: 2026-05-31
-original_path: LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part4_Round6_PlanD2_bugfix_1_SplitPromotePolish.prompt.md
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/Bugfix/plan-bugfix1_SplitPromotePolish.prompt.md
 tags: [phase07, transactions, bugfix, split, promote, ux, race-condition, findPromoteMatch, constraints]
 related:
   - sources/phase07-part4-round6-pland2-frontend-split-promote

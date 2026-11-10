@@ -115,7 +115,9 @@
           "stop": "Dejar de esperar",
           "stopHint": "Detener solo detiene la espera: el servidor puede terminar de todos modos, y esa respuesta se descarta.",
           "title": "Cálculo en curso",
-          "refreshing": "Releyendo de LibreFolio los datos copiados…"
+          "refreshing": "Releyendo de LibreFolio los datos copiados…",
+          "elapsed": "Esperando {elapsed} s de un máximo de {limit} s",
+          "barLabel": "Tiempo de espera"
         },
         "cash": {
           "custody": "Disponible (custodia) {amount}",
@@ -196,23 +198,24 @@
           "weight": "Peso",
           "subtitle": "Cuánto pesa hoy cada uno de estos activos en los brókeres marcados, contando solo estos activos: juntos suman el 100 %. El efectivo y los demás activos que tienes no cuentan.",
           "changeColumn": "Objetivo",
-          "confirmApply": "Reemplazar"
+          "confirmApply": "Reemplazar",
+          "valuedAtCost": "valorado al coste · sin precio"
         },
         "fx": {
           "intro": "Los tipos que necesita el cálculo, uno por cada par de divisas en juego. «Auto» usa el tipo guardado en LibreFolio, «Manual» un tipo propio.",
           "none": "No hace falta ninguna conversión: cada divisa en juego es la divisa de valoración.",
           "spread": "Spread de conversión *",
-          "spreadHint": "Un recargo de margen, en porcentaje del importe convertido, para cubrir posibles variaciones del tipo oficial o comisiones del Broker.",
+          "spreadHint": "Un recargo de margen, en porcentaje del importe convertido, para cubrir posibles variaciones del tipo oficial o comisiones del bróker.",
           "autoHelp": "«Auto» lee el último tipo que LibreFolio ya tiene, al abrir este paso y otra vez justo antes del cálculo: no se llama a ningún proveedor. «Manual» usa tu tipo tal como lo escribes y nunca lo vuelve a leer. Si convertir, y cuánto, lo decide el cálculo.",
           "pairMode": "Tipo {pair}",
           "purpose": {
             "valuation": "Valoración",
             "valuationHelp": "Expresa en {currency} la liquidez, los precios y las aportaciones en la otra divisa, para poder comparar pesos y totales. Se usa el tipo oficial, sin spread.",
             "conversion": "Conversión",
-            "conversionHelp": "Un Broker puede pagar un activo cotizado en una de estas divisas con liquidez en la otra: el cálculo puede convertir a este tipo, con el spread de conversión."
+            "conversionHelp": "Un bróker puede pagar un activo cotizado en una de estas divisas con liquidez en la otra: el cálculo puede convertir a este tipo, con el spread de conversión."
           },
           "reading": "Leyendo el tipo guardado en LibreFolio…",
-          "ownerless": "LibreFolio lee sus tipos guardados a través de un Broker del que eres propietario, y no tienes ninguno: cambia a «Manual» y escribe el tipo.",
+          "ownerless": "LibreFolio lee sus tipos guardados a través de un bróker del que eres propietario, y no tienes ninguno: cambia a «Manual» y escribe el tipo.",
           "readLater": "Se lee de LibreFolio justo antes del cálculo.",
           "rateHelp": "Tipo guardado en LibreFolio, del {date}{hasSource, select, yes { (fuente: {source})} other {}}. Se vuelve a leer justo antes del cálculo.",
           "manualHelp": "Tu tipo: el cálculo lo usa tal como lo escribes y nunca lo vuelve a leer. {hasCopy, select, yes {LibreFolio tiene {rate}, del {date}: «Auto» lo restablece.} other {En «Auto» el cálculo usa el tipo guardado en LibreFolio, cuando lo hay.}}",
@@ -295,7 +298,8 @@
             "wac_fx_missing": "Falta el tipo de cambio necesario para el precio medio de compra.",
             "wac_missing": "Falta el precio medio de compra.",
             "zero_selected_funding": "La liquidez seleccionada es cero.",
-            "fx_rate_inconsistent": "Este tipo de cambio no es coherente con los tipos de cambio de {source_currency} y {destination_currency} frente a {valuation_currency}: convertir {source_currency} a {destination_currency} crearía valor. Alinea los tipos de cambio o define un spread de conversión."
+            "fx_rate_inconsistent": "Este tipo de cambio no es coherente con los tipos de cambio de {source_currency} y {destination_currency} frente a {valuation_currency}: convertir {source_currency} a {destination_currency} crearía valor. Alinea los tipos de cambio o define un spread de conversión.",
+            "saved_fx_skipped": "El tipo de cambio {pair} guardado del {skipped_date} no es válido y se ha omitido: en su lugar se ha usado el del {used_date}. Corrígelo en el editor del tipo de cambio {pair} (Editar tipos de cambio); hasta entonces, los resultados pueden ser ligeramente aproximados."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Esta herramienta no acepta posiciones existentes.",
@@ -425,7 +429,11 @@
           "structureInvalid": "Un campo no cumple el contrato del planificador: {path}.",
           "targetInvalid": "El objetivo no es un número desde 0.",
           "targetTotalNotHundred": "El total de los objetivos es {total} %, debe ser 100 % (control).",
-          "valuationCurrencyMissing": "Falta la divisa de valoración."
+          "valuationCurrencyMissing": "Falta la divisa de valoración.",
+          "selectedNegative": "«Importe a usar» no puede ser negativo.",
+          "declaredNegative": "«Liquidez declarada» no puede ser negativo.",
+          "contributionAmountNegative": "El importe de la aportación no puede ser negativo.",
+          "modeStepNotPositive": "El paso de orden debe ser mayor que cero."
         },
         "removal": {
           "cash": "Fila de efectivo {broker} · {currency}",
@@ -440,19 +448,19 @@
           "assets": {
             "asset": "Activo",
             "buyMid": "Valor comprado",
-            "finalValue": "Valor después del plan",
+            "finalValue": "Valor final",
             "residual": "Diferencia con el ideal",
-            "residualHint": "Valor después del plan menos valor ideal: positivo si el activo acaba por encima de su parte, negativo si por debajo.",
+            "residualHint": "Valor final menos valor ideal: positivo si el activo acaba por encima de su parte, negativo si por debajo.",
             "targetValue": "Valor ideal",
             "totals": "Totales (contabilidad)",
             "bars": "Objetivo y después",
-            "buyMidHelp": "El valor de lo que el plan compra de este activo, al precio de cotización: sin comisiones ni margen de precio. En un PAC, que parte de cero, coincide con el valor después del plan. Lo que sale realmente del efectivo está en el Plan operativo.",
+            "buyMidHelp": "El valor de lo que el plan compra de este activo, al precio de cotización: sin comisiones ni margen de precio. En un PAC, que parte de cero, coincide con el valor al final del plan. Lo que sale realmente del efectivo está en el Plan operativo.",
             "targetShare": "Parte objetivo",
-            "finalShare": "Parte después del plan",
+            "finalShare": "Parte final",
             "targetShareHelp": "La parte que elegiste para este activo en el paso Objetivos.",
-            "finalShareHelp": "La parte del activo en el valor de todos estos activos después del plan. Compárala con la parte objetivo para ver cómo cambia el equilibrio entre los activos.",
-            "targetValueHelp": "Lo que valdría el activo con exactamente su parte objetivo: parte objetivo × base de los objetivos (lo ya invertido en estos activos más el efectivo utilizable).",
-            "finalValueHelp": "Lo que vale el activo después del plan: las unidades que tenías más las compradas, al precio de cotización y, cuando hace falta, al tipo de cambio del paso Cambio."
+            "finalShareHelp": "La parte del activo en el valor de todos estos activos al final del plan. Compárala con la parte objetivo para ver cómo cambia el equilibrio entre los activos.",
+            "targetValueHelp": "Lo que valdría el activo con exactamente su parte objetivo: parte objetivo × base de los objetivos. En un PAC, que parte de cero, la base es el efectivo utilizable.",
+            "finalValueHelp": "Lo que vale el activo al final del plan: las unidades que compra el plan, al precio de cotización y, cuando hace falta, al tipo de cambio del paso Cambio. En un PAC, que parte de cero, coincide con el valor comprado."
           },
           "badges": {
             "decimalVerified": "Verificado en Decimal",
@@ -520,7 +528,7 @@
             "scaleHelp": "Una sola escala para los dos mapas: el mismo color es el mismo peso. Pasa sobre un país, o tócalo, para ver sus dos pesos.",
             "mapUnavailable": "No se pudo cargar el mapa: los pesos aparecen aquí.",
             "hairline": "por menos de 0,01 puntos",
-            "help": "Cómo se reparten los activos por país, tipo y sector, según sus exposiciones declaradas: la distribución ideal sigue tus partes objetivo; la real, las partes después del plan. Los gráficos no cambian el plan.",
+            "help": "Cómo se reparten los activos por país, tipo y sector, según sus exposiciones declaradas: la distribución ideal sigue tus partes objetivo; la real, las partes al final del plan. Los gráficos no cambian el plan.",
             "ideal": "Distribución ideal",
             "actual": "Distribución real"
           },
@@ -559,7 +567,7 @@
             "title": "Cifras clave",
             "help": {
               "fixedReference": "El importe al que se aplican los porcentajes objetivo: lo que ya tienes de los activos elegidos, más el efectivo que el plan puede alcanzar.",
-              "finalInvested": "El valor de los activos elegidos después del plan.",
+              "finalInvested": "El valor de los activos elegidos al final del plan.",
               "shortfall": "La parte de la base que no acaba en los activos: efectivo que queda libre, costes y redondeos.",
               "explicitCost": "Comisiones de los brókeres, spreads de cambio de divisa y márgenes de precio que fijaste, en todo el plan.",
               "orders": "Cuántas órdenes te pide el plan que coloques.",
@@ -611,7 +619,7 @@
               "self_reserved_tax": "Impuestos reservados por ti",
               "sell_fees": "Comisiones de venta"
             },
-            "freeCash": "Efectivo que queda libre después del plan, en total: {amount}",
+            "freeCash": "Efectivo que queda libre al final del plan, en total: {amount}",
             "hideZero": "Mostrar menos columnas",
             "item": "Bróker y divisa",
             "showZero": "Mostrar {count, plural, one {# columna más} other {# columnas más}}",
@@ -625,7 +633,7 @@
               "buy_debit": "Los importes de las órdenes en este bróker en esta divisa, sin comisiones.",
               "buy_fees": "Las comisiones del bróker de esas órdenes.",
               "rounding_delta": "Cuánto de los importes de esta fila viene del redondeo a la unidad mínima de la divisa. Ya está incluido en ellos.",
-              "final_spendable": "Lo que queda en este efectivo después del plan.",
+              "final_spendable": "Lo que queda en este efectivo al final del plan.",
               "final_physical": "Lo que queda disponible más los impuestos que reservaste.",
               "alwaysZero": "Siempre 0 en un PAC: solo compra."
             }
@@ -656,7 +664,12 @@
             "fxEstimateHelp": "Introduce el importe en {source} en la conversión del bróker. Lo que recibes en {destination} depende del tipo de cambio en ese momento: el plan usa el tipo de cambio y el spread del paso Cambio.",
             "autoConversion": "Conversión automática",
             "autoConversionAmounts": "aprox. {debit} → {credit}",
-            "autoConversionHelp": "No tienes que hacer nada: el bróker convierte cuando introduces las órdenes en {destination}. Toma aproximadamente este importe de tu efectivo en {source}; la cifra exacta depende de su tipo de cambio en ese momento, mientras que el plan usa el tipo de cambio y el spread del paso Cambio."
+            "autoConversionHelp": "No tienes que hacer nada: el bróker convierte cuando introduces las órdenes en {destination}. Toma aproximadamente este importe de tu efectivo en {source}; la cifra exacta depende de su tipo de cambio en ese momento, mientras que el plan usa el tipo de cambio y el spread del paso Cambio.",
+            "sentence": {
+              "deposit": "Realiza la aportación «{source}» de {amount} en el bróker «{destination}»",
+              "transfer": "Transfiere {amount} desde «{source}» al bróker «{destination}»",
+              "cash": "Usa {amount} del efectivo disponible en el bróker «{source}»"
+            }
           },
           "platform": {
             "draftIntact": "El borrador está intacto.",
@@ -889,11 +902,11 @@
           "intro": "Entre todos los planes de compra que respetan lo que configuraste en los pasos anteriores, la estrategia elige el mejor.",
           "none": "El contrato del backend no ofrece ninguna estrategia: el plan no se puede calcular.",
           "cascadeRule": "Cada criterio decide solo entre los planes que siguen empatados en los de arriba.",
-          "l2Help": "Distancia a los objetivos: para cada activo, la diferencia entre su valor después del plan y su parte objetivo de R, al cuadrado, luego sumada sobre todos los activos. R es lo ya invertido en estos activos más el efectivo que puedes usar. Gana el plan con la suma más baja; el cuadrado hace pesar más las diferencias grandes. Valores al precio de cotización, sin comisiones ni margen.",
+          "l2Help": "Distancia a los objetivos: para cada activo, la diferencia entre su valor al final del plan y su parte objetivo de R, al cuadrado, luego sumada sobre todos los activos. R es lo ya invertido en estos activos más el efectivo que puedes usar. Gana el plan con la suma más baja; el cuadrado hace pesar más las diferencias grandes. Valores al precio de cotización, sin comisiones ni margen.",
           "priorityHelp": "Los números los eliges en el paso Rutas, para los activos que varios brókeres pueden comprar, y en el paso Brókeres, para las fuentes de efectivo: gana el más bajo. Todos a 0 = sin preferencia.",
           "tieBreakTitle": "Desempate final",
           "tieBreak": "Si aún queda un empate, decide un orden fijo de activos y brókeres. Una búsqueda que termina por sí misma da siempre el mismo plan con los mismos datos; una búsqueda detenida por un límite de tiempo o de nodos puede dar un plan distinto.",
-          "l2Formula": "Distancia a los objetivos:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: valor del activo después del plan\n• $p_i$: su objetivo\n• $R$: lo ya invertido más el efectivo utilizable\nGana el plan con la suma más baja: el cuadrado hace pesar más las diferencias grandes. Al precio de cotización, sin comisiones ni margen."
+          "l2Formula": "Distancia a los objetivos:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: valor del activo al final del plan\n• $p_i$: su objetivo\n• $R$: lo ya invertido más el efectivo utilizable\nGana el plan con la suma más baja: el cuadrado hace pesar más las diferencias grandes. Al precio de cotización, sin comisiones ni margen."
         },
         "summary": {
           "assets": "Activos",

@@ -6,24 +6,24 @@ date: 2026-09-30
 first_seen: 2026-06-19
 resolved: 2026-09-30
 tags: [portfolio, data-quality, dashboard, prices, risk, testing, e2e, mockprov]
-related: [problems/fx-backward-fill-unbounded-stale-rates, features/F-054, features/F-025, domains/dashboard, sources/phase00-taxonomy-select-2026-10]
+related: [problems/fx-backward-fill-unbounded-stale-rates, features/F-054, features/F-025, domains/dashboard, sources/phase00-taxonomy-select-2026-10, problems/open-panels-stale-after-fx-sync]
 ---
 
 # Problem: the stale-price banner existed, the report never filled it
 
 > Backlog **K-25** asked for this page (workstream K, step 13, item 9 — decision D8 of 2026-09-30, commit
-> `f1fe176a2`).
+> `e4e8baddc`).
 
 ## What was wrong
 
 - The Dashboard's data-quality report had a `STALE_PRICE` issue ("prices not updated"), with a banner, an i18n
   message and a CTA — but `PortfolioService.get_summary` never passed `stale_prices_dto` to
-  `build_data_quality_report`. It had stopped doing so with the scope-aware engine rewrite (`77b976ebc`,
+  `build_data_quality_report`. It had stopped doing so with the scope-aware engine rewrite (`35c61f98b`,
   2026-06-19): a holding whose price had been carried forward for weeks raised nothing.
 - The cure could not simply forward the engine's flag: the engine's per-position `valuation_stale` means "the mark
   used for this valuation is more than `STALE_PRICE_THRESHOLD_DAYS` (7) days old" **whatever the mark is** — a real
   quote carried forward (`MARKET_PRICE`) **or a trade-derived mark** (`LAST_TRADE_PRICE`: the last BUY/SELL/priced
-  ADJUSTMENT). Forwarding it raw would have flagged every manual asset (crowdfunding, a held bond with no provider),
+  ADJUSTMENT). Since J-17 (2026-10-16) only BUY and SELL are marks: see [[decisions/adjustment-is-never-a-price]]. Forwarding it raw would have flagged every manual asset (crowdfunding, a held bond with no provider),
   which is valued at its last trade price by design, and would have double-reported provider assets with no quote at
   all, which `TRANSACTION_IMPLIED` already reports.
 
@@ -66,14 +66,15 @@ reports partial portfolio results while a filtered asset is stale.
 |------|------|
 | The D8 rule, `stale_prices_dto` | `backend/app/services/portfolio_service.py` |
 | `valuation_stale`, `STALE_PRICE` issue and CTA | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/data_quality.py` |
-| Threshold (7 days) | `backend/app/services/data_quality_thresholds.py` |
+| Threshold (7 days) | `backend/app/services/platform/data_quality_thresholds.py` |
 | `StalePriceAsset`, `DataQualityStatus` derivation | `backend/app/schemas/portfolio.py` |
-| Risk: stale assets → partial results | `backend/app/services/risk/service.py` |
-| Current price write-back | `backend/app/services/asset_sources/price_query.py` |
+| Risk: stale assets → partial results | `backend/app/services/risk/data_quality.py`, `backend/app/services/risk/results.py` |
+| Current price write-back | `backend/app/services/assets/price_query.py` |
 | Mock provider refusal | `backend/app/services/asset_source_providers/mockprov/plugin.py` |
-| Dashboard CTA branch | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Dashboard CTA branch (at the time; since 04/11 in `portfolioBannerActions.svelte.ts`, `5f8dac5df`) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| The CTA today (`sync_asset_prices`) | `frontend/src/lib/features/portfolio-view/portfolioBannerActions.svelte.ts` |
 | Banner (icon per CTA) | `frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte` |
-| Lab action mapping | `frontend/src/lib/components/risk/syncTargets.ts` |
+| Lab action mapping | `frontend/src/lib/features/risk/syncTargets.ts` |
 | Service tests (`TestStalePriceDataQuality`) | `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` |
 | Pure test (CTA) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_data_quality_report.py` |
 | E2E | `frontend/e2e/portfolio/stale-price-banner.spec.ts` |

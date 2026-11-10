@@ -13,11 +13,12 @@ from backend.app.schemas.risk import (
     RiskValueStatus,
     RiskWarning,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import prepared_asset_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation
 from backend.app.services.risk.metrics import pairwise_correlation_matrix
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class CorrelationParams(BaseModel):

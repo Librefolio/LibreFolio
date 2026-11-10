@@ -32,5 +32,6 @@ LibreFolio legge le operazioni di una **Activity Flex Query** esportata come CSV
 - **Commissioni**, ciascuna come **commissione** separata sullo stesso asset e alla stessa data, in
   `IBCommissionCurrency` (o nella valuta dell'operazione quando quella colonna è vuota).
 - **Non importati**: dividendi, interessi, imposte, depositi e prelievi, conversioni di valuta
-  (le righe senza un ISIN vengono saltate con un avviso) e operazioni societarie. Aggiungili
+  (le operazioni in valuta, che non hanno un ISIN, sono elencate in un avviso ambra con un link per aprire una
+  issue su GitHub) e operazioni societarie. Aggiungili
   manualmente, oppure con un file [CSV generico](generic-csv.md).

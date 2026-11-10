@@ -37,7 +37,7 @@ it could mislead:
 
 ## Solution
 
-`8fa96ac28` (2026-10-06, «harden the solver cascade and its proofs»), after a mathematical review and red tests,
+`63700657d` (2026-10-06, «harden the solver cascade and its proofs»), after a mathematical review and red tests,
 with the contract and its fingerprint unchanged:
 
 - **Pin at the exact value**: `max(SCIP primal, exact value)` plus a relative slack of 1e-12

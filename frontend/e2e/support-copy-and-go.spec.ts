@@ -8,7 +8,7 @@ import {uniqueSuffix} from './fixtures/unique';
 const PUBLIC_PROJECT_URL = 'https://librefolio.github.io/LibreFolio/';
 // One hashtag set on every share, the same in every language and on all five socials, appended by
 // the modal after one blank line. Duplicated on purpose, like PUBLIC_PROJECT_URL above: it mirrors
-// SHARE_HASHTAGS in src/lib/components/support/supportLinks.ts — change both together.
+// SHARE_HASHTAGS in src/lib/features/support/supportLinks.ts — change both together.
 const SHARE_HASHTAG_LINE = '#LibreFolio #OpenSource #SelfHosted #PortfolioTracker #PersonalFinance';
 const SOCIAL_DESTINATION_RE = /^https:\/\/(?:twitter\.com\/intent\/tweet|www\.reddit\.com\/submit|www\.facebook\.com\/sharer\/sharer\.php|www\.instagram\.com\/|www\.tiktok\.com\/upload)(?:\?.*)?$/;
 const TIKTOK_DESTINATION_RE = /^https:\/\/www\.tiktok\.com\/upload$/;
@@ -322,7 +322,7 @@ test.describe('Support copy-and-go', () => {
         const [payload] = await clipboardWrites(page);
         expect(payload).toBe(`${message}\n${PUBLIC_PROJECT_URL}`);
         await expect(page.getByTestId('support-social-share-copy')).toHaveAttribute('data-copy-state', 'pending');
-        await expect(page).toHaveURL(/\/settings$/);
+        await expect(page).toHaveURL(/\/settings\/about$/);
         await expect(page.getByTestId('about-tab')).toBeVisible();
         await expect(page.getByTestId('support-social-share-modal')).toBeVisible();
         expect(popup.url()).toBe('about:blank');

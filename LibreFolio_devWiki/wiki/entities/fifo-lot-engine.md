@@ -34,12 +34,12 @@ previously pointed at `transaction_service.py`, which is stale (see History belo
 `backend/app/services/financial_math/fifo/` (since 2026-10-12), three modules — imports flow models → eligibility →
 engine:
 
-- `models.py` (360 lines) — input and output types, dataclasses, the result, the `_require_*` validators;
+- `models.py` (360 lines at the cut; 387 on 2026-11-07) — input and output types, dataclasses, the result, the `_require_*` validators;
 - `eligibility.py` (34) — `eligible_income_quantity()`;
-- `engine.py` (1 258) — `FifoLotEngine`, `run_fifo_lot_engine()` and the private helpers.
+- `engine.py` (1 258 at the cut; 1 331 on 2026-11-07) — `FifoLotEngine`, `run_fifo_lot_engine()` and the private helpers.
 
 Until 2026-10-12 one file, `backend/app/services/fifo_lot_engine.py` (~1550 lines; 1 604 before the move). Moved by
-T-1's rename commit (`1cc9cd8f5`, so `git log --follow` on `fifo/engine.py` keeps the history), then cut (`a57a43fbd`)
+T-1's rename commit (`5dcfdec4f`, so `git log --follow` on `fifo/engine.py` keeps the history), then cut (`94901d98a`)
 — [[decisions/financial-math-one-home]].
 
 ## Key Interfaces
@@ -71,18 +71,21 @@ T-1's rename commit (`1cc9cd8f5`, so `git log --follow` on `fifo/engine.py` keep
 - **Only asset-linked FEE/TAX enter this engine.** Rows with `asset_id = null` never reach it — they remain
   portfolio/broker-level, handled by [[entities/portfolio-engine]] instead.
 - `FAILED` status is reserved for non-isolable quantitative (topology/replay) corruption; local economic
-  issues (e.g. an orphan cost/income event) are `DEGRADED`, not `FAILED` — the frontend still renders data
-  under `FAILED` ("warn but show").
+  issues (e.g. an orphan cost/income event) are `DEGRADED`, not `FAILED`. ~~The frontend still renders data
+  under `FAILED` ("warn but show").~~ *2026-11-07 lint:* since 2026-10-17 (J-12, N81) the calling service withholds
+  every lot figure of a `FAILED` replay and keeps only the replay-free analyses — see
+  [[entities/lots-analysis-service]].
 
 ## Known Gotchas
 
 - **Pre-v4 helper methods removed**: qbq-unsafe helpers like `value_for_lot()` were deleted as part of this
   work because they were not quote-base-quantity aware and risked silent bond-valuation errors; any external
   code still calling them needs to move to the qbq-aware service paths instead.
-- **`net_metrics_status` (`LotNetMetricsStatus`) is currently unreachable in practice**: the implemented service
+- ~~**`net_metrics_status` (`LotNetMetricsStatus`) is currently unreachable in practice**: the implemented service
   always falls back to the native amount on an FX miss and always computes a net value, so no real code path
-  emits `UNAVAILABLE` today — treat it as latent/placeholder, not as evidence that per-lot net data can
-  actually be missing right now.
+  emits `UNAVAILABLE` today.~~ *2026-11-07 lint:* reachable since 2026-10-11 (`c171402d8`, "withhold pools without a
+  rate"): `lots_analysis_service.py` sets `UNAVAILABLE` on every lot that a withheld economic pool reaches
+  (`withheld_economics(...)`), and a missing rate no longer falls back to the native amount.
 - **Portfolio Engine reconciliation is not implemented here**: this engine's fee/tax/income totals are not
   currently cross-checked at runtime against Portfolio Engine's independent accumulators — see
   [[decisions/fifo-v4-validation-and-scope]].
@@ -92,8 +95,8 @@ T-1's rename commit (`1cc9cd8f5`, so `git log --follow` on `fifo/engine.py` keep
 | Date | Change |
 |------|--------|
 | v3 | Quantitative-only replay (open/closed lots, custody, quantity). No income/cost allocation. |
-| 2026-07 (v4/v5, commits `8ca7b72da`, `29769258e`) | Added economic pooling/allocation (D-1/broker-scoped income, deterministic FEE/TAX ladders, gross/net metrics, 3-state status, inline 3-level audit). Became the single canonical FIFO path — the old service-level income allocator was deleted. See [[sources/fifo-v4-fee-tax-integration]]. |
-| 2026-10-12 (`1cc9cd8f5`, `a57a43fbd`) | T-1: moved into the financial math layer as `financial_math/fifo/`, then cut into `models`, `eligibility`, `engine`; no behaviour change (`roi-fifo-utils` 652 before and after). See [[decisions/financial-math-one-home]]. |
+| 2026-07 (v4/v5, commits `ff7479a3b`, `e4d417381`) | Added economic pooling/allocation (D-1/broker-scoped income, deterministic FEE/TAX ladders, gross/net metrics, 3-state status, inline 3-level audit). Became the single canonical FIFO path — the old service-level income allocator was deleted. See [[sources/fifo-v4-fee-tax-integration]]. |
+| 2026-10-12 (`5dcfdec4f`, `94901d98a`) | T-1: moved into the financial math layer as `financial_math/fifo/`, then cut into `models`, `eligibility`, `engine`; no behaviour change (`roi-fifo-utils` 652 before and after). See [[decisions/financial-math-one-home]]. |
 
 ## Source files
 

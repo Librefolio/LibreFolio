@@ -1,13 +1,13 @@
 ---
 title: "Clone Link UUID Duplication — Paired Rows From DB"
-category: Problem
+category: problem
 status: resolved
+date: 2026-05-27
 date_encountered: 2026-05-27
 date_resolved: 2026-05-27
 severity: high
 tags: [frontend, clone, link-uuid, paired, transfer, bulkModal]
-related_features: [F-097, F-048]
-related_decisions: [decisions/tx-link-uuid-semantics]
+related: [features/F-097, features/F-048, decisions/tx-link-uuid-semantics]
 ---
 
 # Clone Link UUID Duplication — Paired Rows From DB
@@ -69,6 +69,6 @@ Eliminated 30-line `linkUuidMap` workaround (3 branches: create with link_uuid, 
 
 | Role | Path |
 |------|------|
-| BulkModal (cloneRow, collapsePairedOps) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| PendingOp type definition | `frontend/src/lib/components/transactions/types.ts` |
+| BulkModal (cloneRow, collapsePairedOps) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| PendingOp type definition | `frontend/src/lib/features/transactions/types.ts` |
 | E2E commit all types | `frontend/e2e/transactions/tx-commit-all-types.spec.ts` |

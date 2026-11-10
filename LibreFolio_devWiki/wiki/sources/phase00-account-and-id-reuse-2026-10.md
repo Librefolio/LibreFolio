@@ -21,7 +21,7 @@ related:
 
 Two plans of workstream L, born from two defects that plan 33 found while chasing flaky import tests: deleting an
 account orphaned the brokers it alone owned (A), and SQLite reused the ids of deleted rows (B). Step 1 (train 12,
-merge `637c5d105`) fixed both at the root; step 2 (train 22, merge `47c56581b`) guarded the last active administrator
+merge `84d7afa2d`) fixed both at the root; step 2 (train 22, merge `5a1fd6ba3`) guarded the last active administrator
 and closed three neighbouring defects of the CLI and the session.
 
 ## Key takeaways
@@ -59,7 +59,7 @@ L12 — E2E users are created as administrators.
 |------|------|
 | Plan, step 1 | `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` |
 | Plan, step 2 (last admin) | `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuseStep2LastAdmin.prompt.md` |
-| User service | `backend/app/services/user_service.py` |
+| User service | `backend/app/services/accounts/user_service.py` |
 | Post-migration fixes | `backend/app/db/post_migration/autoincrement.py` |
 | User CLI | `scripts/user_cli.py` |
 | Shared JWT secret | `dev.py` |

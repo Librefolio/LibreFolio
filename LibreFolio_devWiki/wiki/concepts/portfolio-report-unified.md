@@ -16,7 +16,7 @@ related:
 
 ## Definition
 
-`POST /portfolio/report` is the single API entry point for all dashboard data. Instead of the frontend making 3–5 separate calls (`/summary`, `/history`, `/allocation-history`, `/contribution`), it calls `/report` once and receives all data in one response. The engine runs ONCE internally, and all views are derived from the same `EngineResult`.
+`POST /portfolio/report` is the single API entry point for all dashboard data. Instead of the frontend making 3–5 separate calls (`/summary`, `/history`, `/allocation-history`, `/contribution`), it calls `/report` once and receives all data in one response. The engine runs ONCE internally, and all views are derived from the same engine result (`PortfolioCalculationResult`, `backend/app/services/financial_math/portfolio/models.py`).
 
 This is the key architectural pattern that prevents redundant engine runs and ensures all dashboard widgets are always consistent (same NAV, same scope, same time range).
 
@@ -36,6 +36,10 @@ interface PortfolioReportResponse {
   positions_contribution?: PositionsContrib; // Per-asset period P&L (optional)
 }
 ```
+
+> 2026-11-07 lint: the sketch above is the original core. `PortfolioReportResponse` (`backend/app/schemas/portfolio.py`)
+> now also carries a mandatory `metadata`, plus optional `range`, `mwrr_line`, `broker_pnl_history`, `pnl_candles`,
+> `income_history`, `cost_history`, `deposit_history` and `acquisition_funding`, each behind its own `include_*` flag.
 
 All sections are optional (`include_*` flags). The frontend requests all sections in one call.
 
@@ -60,6 +64,10 @@ Cache TTL = session duration (invalidated by content fingerprint, not time).
 cache_key = broker_ids|dateFrom|dateTo|currency|contrib_flag
 ```
 
+> 2026-11-07 lint: today the key (`reportKey()`) starts with the client-session user id, then brokers, dates and
+> currency, then one suffix per include flag (`|contrib`, `|breakdown`, `|nohist`, `|noalloc`, `|brokerpnl`,
+> `|pnlcandles`, …).
+
 If the key matches a cached entry, `fetchReport()` returns immediately without hitting the API. Cache invalidated on: any transaction CRUD, manual refresh button.
 
 ### Callers that need only the holdings (2026-09-24)
@@ -83,7 +91,7 @@ The previous `/summary` + `/history` separate calls caused:
 
 An earlier proposal for a standalone `/allocation-history` endpoint (in early Milestone 2 architecture drafts)
 was never built — superseded by this unified endpoint. As of the Holdings/Performance panel refactor (commit
-`13052a006`), this was explicitly re-confirmed: *"Endpoint `/portfolio/report` confermato come entrypoint
+`35c2740c4`), this was explicitly re-confirmed: *"Endpoint `/portfolio/report` confermato come entrypoint
 unico — nessun nuovo endpoint creato."* No separate endpoint is planned. See
 [[decisions/portfolio-summary-direct-wiring]] for the full rationale.
 

@@ -6,9 +6,11 @@ fills the error and branch gaps those leave open: the pure inference helpers,
 the library-error → AssetSourceError mappings for current value / history /
 fund NAV, the ISIN scheda metadata assembly and its failure, and the search /
 resolve_url failure branches. It also pins where an ISIN instrument's currency
-comes from: the chart API that prices it, never the scheda page. Every
-scraping-library call is monkeypatched, so no request reaches borsaitaliana.it
-and each assertion is exact.
+comes from: the chart API that prices it, never the scheda page. And «too many
+requests» (X-RL X3): the library's RateLimitRaggiunto becomes
+AssetRateLimitedError in each handler. Every scraping-library call is
+monkeypatched, so no request reaches borsaitaliana.it and each assertion is
+exact.
 """
 
 from __future__ import annotations
@@ -19,13 +21,14 @@ from types import SimpleNamespace
 
 import pytest
 from borsa_italiana_scraping import StrumentoNonRisolto
+from borsa_italiana_scraping.eccezioni import ErroreConnessione, RateLimitRaggiunto
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.asset_source import AssetSourceError
 from backend.app.services.asset_source_providers.borsa_italiana import plugin as bi
 from backend.app.services.asset_source_providers.borsa_italiana.plugin import BorsaItalianaProvider
+from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError
 
 # Captured at import, before the autouse fixture stubs the module name, so the
 # lazy-init contract of the real _get_session stays testable.
@@ -154,6 +157,9 @@ def test_map_asset_type():
     assert bi._map_asset_type("Azione") == AssetType.STOCK
     assert bi._map_asset_type("bond") == AssetType.BOND
     assert bi._map_asset_type("ETF") == AssetType.ETF
+    # ETC/ETN: exchange-traded commodities and notes, almost always on a commodity, not a plain ETF (D-X7).
+    assert bi._map_asset_type("ETC/ETN") == AssetType.ETF_COMMODITY
+    assert bi._map_asset_type(" etc/etn ") == AssetType.ETF_COMMODITY
     assert bi._map_asset_type("Fondi Comuni") == AssetType.FUND
     assert bi._map_asset_type("nonsense") is None
     assert bi._map_asset_type("") is None
@@ -809,7 +815,13 @@ async def test_metadata_currency_follows_stored_mic_retry(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("api_error", [bi.DatiNonDisponibili, StrumentoNonRisolto, RuntimeError], ids=["DatiNonDisponibili", "StrumentoNonRisolto", "RuntimeError"])
+@pytest.mark.parametrize(
+    "api_error",
+    [bi.DatiNonDisponibili, StrumentoNonRisolto, RuntimeError, RateLimitRaggiunto],
+    # RateLimitRaggiunto included on purpose (X-RL, docs review): this currency lookup is best-effort and swallows a
+    # refusal too; the scheda read and the metadata handler around it are what raise one.
+    ids=["DatiNonDisponibili", "StrumentoNonRisolto", "RuntimeError", "RateLimitRaggiunto"],
+)
 async def test_metadata_currency_unknown_when_price_api_fails(monkeypatch, api_error):
     """Unknown beats guessed: when the chart API fails, the currency is left unset
     (it reads None) even though the scheda offers a plausible EUR. The rest of the
@@ -870,7 +882,12 @@ async def test_resolve_url_scheda_currency_from_one_price_api_call(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("api_error", [bi.DatiNonDisponibili, RuntimeError], ids=["DatiNonDisponibili", "RuntimeError"])
+@pytest.mark.parametrize(
+    "api_error",
+    [bi.DatiNonDisponibili, RuntimeError, RateLimitRaggiunto],
+    # RateLimitRaggiunto included on purpose (X-RL, docs review): the currency lookup stays best-effort for a refusal.
+    ids=["DatiNonDisponibili", "RuntimeError", "RateLimitRaggiunto"],
+)
 async def test_resolve_url_scheda_currency_unknown_when_price_api_fails(monkeypatch, api_error):
     """A failing chart API leaves every row's currency unknown. The scheda's EUR
     is not a fallback, and the rows are still returned."""
@@ -884,6 +901,161 @@ async def test_resolve_url_scheda_currency_unknown_when_price_api_fails(monkeypa
     assert {it["identifier"] for it in items} == {_GOLD_ETC}
     assert {it["type"] for it in items} == {AssetType.ETF.value}
     assert len(calls) == 1  # once per resolution, not once per row
+
+
+# ── «too many requests» (X-RL X3): the library's RateLimitRaggiunto ──────────
+#
+# borsa_italiana_scraping raises RateLimitRaggiunto (a BorsaItalianaErrore) for a
+# 429 after its own retries, or for a 403 of the site's firewall. Each handler —
+# resolve_url's page reads and market discovery included — turns it into
+# AssetRateLimitedError, so the core pauses the provider; a sibling library error
+# (ErroreConnessione) keeps the handler's old answer. Two lookups stay
+# best-effort on purpose (docs review): the price-API currency of a scheda and
+# the fund page behind a search result swallow a refusal like any failure.
+
+#: handler → (the library function it calls, the call)
+_BORSA_HANDLERS = {
+    "current": ("ottieni_prezzo_corrente", lambda p: p.get_current_value("IT0003128367", IdentifierType.ISIN, {"mic": "MTAA"})),
+    "history": ("ottieni_storico", lambda p: p.get_history_value("IT0003128367", IdentifierType.ISIN, None, date(2026, 1, 1), date(2026, 1, 31))),
+    "fund-current": ("ottieni_dati_fondo", lambda p: p.get_current_value("LU123", IdentifierType.ISIN, {"codice_fondo": "ABC"})),
+    "fund-history": ("ottieni_dati_fondo", lambda p: p.get_history_value("LU123", IdentifierType.ISIN, {"codice_fondo": "ABC"}, date(2026, 1, 1), date(2026, 1, 31))),
+    "search": ("cerca", lambda p: p.search("ENEL")),
+    "metadata": ("ottieni_scheda", lambda p: p.fetch_asset_metadata("IT0005436693", IdentifierType.ISIN, {"mic": "MOTX"})),
+    "fund-metadata": ("ottieni_dati_fondo", lambda p: p.fetch_asset_metadata("IT0001111111", IdentifierType.ISIN, {"codice_fondo": "ABC123"})),
+}
+#: What ErroreConnessione gives on the same path: the handler's error code, or None returned.
+_BORSA_OTHER = {"current": "FETCH_ERROR", "history": "FETCH_ERROR", "fund-current": "FETCH_ERROR", "fund-history": "FETCH_ERROR", "search": "SEARCH_ERROR", "metadata": None, "fund-metadata": None}
+
+
+def _failing(error: Exception, calls: list[int]):
+    """A library function that fails with ``error`` whatever its arguments, counting its calls."""
+
+    def fail(*_args, **_kwargs):
+        calls.append(1)
+        raise error
+
+    return fail
+
+
+@pytest.mark.parametrize("handler", list(_BORSA_HANDLERS))
+@pytest.mark.asyncio
+async def test_rate_limit_raggiunto_is_a_refusal_in_every_handler(monkeypatch, handler):
+    """``AssetRateLimitedError`` from the library's error, after one call: the stored MIC retry of the current value does not fire on it."""
+    function, call = _BORSA_HANDLERS[handler]
+    calls: list[int] = []
+    blocked = RateLimitRaggiunto("HTTP 429 dopo 3 tentativi")
+    monkeypatch.setattr(bi, function, _failing(blocked, calls), raising=False)
+
+    with pytest.raises(AssetRateLimitedError) as refused:
+        await call(_provider())
+
+    assert (refused.value.error_code, refused.value.retry_after, refused.value.scope) == ("RATE_LIMITED", None, None)
+    assert refused.value.__cause__ is blocked
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("handler", list(_BORSA_HANDLERS))
+@pytest.mark.asyncio
+async def test_another_library_error_keeps_its_old_handling(monkeypatch, handler):
+    """ErroreConnessione, a sibling of RateLimitRaggiunto: the handler's own code (or ``None``), never ``RATE_LIMITED``."""
+    function, call = _BORSA_HANDLERS[handler]
+    monkeypatch.setattr(bi, function, _failing(ErroreConnessione("connection reset"), []), raising=False)
+    other = _BORSA_OTHER[handler]
+
+    if other is None:
+        assert await call(_provider()) is None
+        return
+    with pytest.raises(AssetSourceError) as failed:
+        await call(_provider())
+    assert not isinstance(failed.value, AssetRateLimitedError)
+    assert failed.value.error_code == other
+
+
+_FUND_PAGE = "https://www.borsaitaliana.it/borsa/fondi/dettaglio/ABC123.html"
+_SCHEDA_PAGE = "https://www.borsaitaliana.it/borsa/azioni/scheda/IT0003128367.html"
+
+
+@pytest.mark.asyncio
+async def test_resolve_url_fund_page_refused_raises_instead_of_answering_none(monkeypatch):
+    """resolve_url's fund page: a refusal is no miss — it leaves as ``AssetRateLimitedError``, after one request."""
+    monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: "ABC123", raising=False)
+    calls: list[int] = []
+    blocked = RateLimitRaggiunto("HTTP 403: firewall")
+    monkeypatch.setattr(bi, "ottieni_dati_fondo_da_url", _failing(blocked, calls), raising=False)
+
+    with pytest.raises(AssetRateLimitedError) as refused:
+        await _provider().resolve_url(_FUND_PAGE)
+
+    assert refused.value.__cause__ is blocked
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_resolve_url_market_discovery_refused_raises_before_reading_the_page(monkeypatch):
+    """resolve_url's scheda page: a refused market discovery leaves as ``AssetRateLimitedError``; the page itself is never read."""
+    monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: None, raising=False)
+    searches: list[int] = []
+    page_reads: list[int] = []
+    blocked = RateLimitRaggiunto("HTTP 429 dopo 3 tentativi")
+    monkeypatch.setattr(bi, "cerca", _failing(blocked, searches), raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", _failing(AssertionError("the page was read after a refusal"), page_reads), raising=False)
+
+    with pytest.raises(AssetRateLimitedError) as refused:
+        await _provider().resolve_url(_SCHEDA_PAGE)
+
+    assert refused.value.__cause__ is blocked
+    assert (len(searches), len(page_reads)) == (1, 0)
+
+
+@pytest.mark.asyncio
+async def test_resolve_url_scheda_read_refused_raises_instead_of_answering_none(monkeypatch):
+    """resolve_url's scheda page: the discovery answers, the page read is refused — ``AssetRateLimitedError``, not a miss."""
+    monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: None, raising=False)
+    monkeypatch.setattr(bi, "cerca", lambda q, lingua=None, sessione=None: [_cerca_result("IT0003128367", "ENEL", "Azione")], raising=False)
+    page_reads: list[int] = []
+    blocked = RateLimitRaggiunto("HTTP 403: firewall")
+    monkeypatch.setattr(bi, "ottieni_scheda", _failing(blocked, page_reads), raising=False)
+
+    with pytest.raises(AssetRateLimitedError) as refused:
+        await _provider().resolve_url(_SCHEDA_PAGE)
+
+    assert refused.value.__cause__ is blocked
+    assert len(page_reads) == 1
+
+
+@pytest.mark.asyncio
+async def test_resolve_url_other_errors_stay_best_effort(monkeypatch):
+    """The other side: ErroreConnessione on the fund page or on the page read is still a miss, and on the discovery still falls back to the URL's own params."""
+    monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: "ABC123", raising=False)
+    monkeypatch.setattr(bi, "ottieni_dati_fondo_da_url", _failing(ErroreConnessione("connection reset"), []), raising=False)
+    assert await _provider().resolve_url(_FUND_PAGE) is None
+
+    monkeypatch.setattr(bi, "estrai_codice_da_url", lambda url: None, raising=False)
+    monkeypatch.setattr(bi, "cerca", _failing(ErroreConnessione("connection reset"), []), raising=False)
+    monkeypatch.setattr(bi, "ottieni_scheda", _failing(ErroreConnessione("connection reset"), []), raising=False)
+    assert await _provider().resolve_url(_SCHEDA_PAGE) is None
+
+    scheda = _scheda(tipo="Azione", nome="ENEL", valuta="EUR", isin="IT0003128367")
+    monkeypatch.setattr(bi, "ottieni_scheda", lambda ident, mic=None, lingua=None, sessione=None, platform=None, url_diretto=None: scheda, raising=False)
+    _price_api(monkeypatch, "EUR")
+
+    items = await _provider().resolve_url(_SCHEDA_PAGE)
+
+    assert items is not None and {it["identifier"] for it in items} == {"IT0003128367"}
+    assert {it["provider_params"]["url"] for it in items} == {_SCHEDA_PAGE}, "without the discovery, the page read is the URL itself"
+
+
+@pytest.mark.asyncio
+async def test_search_fund_page_refused_stays_best_effort(monkeypatch):
+    """On purpose (X-RL, docs review): the fund-page lookup inside search swallows a refusal; the fund is still listed by its code."""
+    monkeypatch.setattr(bi, "cerca", lambda q, lingua=None, sessione=None: [SimpleNamespace(isin="ABC123", nome="Fondo Prova", tipo="Fondi Comuni")], raising=False)
+    fund_pages: list[int] = []
+    monkeypatch.setattr(bi, "ottieni_dati_fondo", _failing(RateLimitRaggiunto("HTTP 429 dopo 3 tentativi"), fund_pages), raising=False)
+
+    items = await _provider().search("Fondo Prova")
+
+    assert items and {(it["identifier"], it["provider_params"]["codice_fondo"]) for it in items} == {("ABC123", "ABC123")}
+    assert len(fund_pages) == 1, "one lookup per fund and search, its failure kept for every language row"
 
 
 if __name__ == "__main__":

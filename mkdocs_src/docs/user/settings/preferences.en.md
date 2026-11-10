@@ -10,7 +10,7 @@ The **Preferences** tab controls **how the app looks and behaves for you** — c
 |---------|----------|-------------|
 | **Language** | 🌍 Display | Interface language — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Applies as soon as you save it, and also decides how numbers and dates are written |
 | **Default Currency** | 💰 Currency | Your own base currency. The Dashboard, the Brokers page and each broker's page, and the **Correlation** tab of the Assets page open in it, and the AI Export of a currency pair uses it too; a currency you pick on the Dashboard stays for the session. It is also proposed when you create something new — an asset, a new broker's first cash balance, a PAC plan. This menu lists every currency |
-| **Theme** | 🎨 Appearance | ☀️ Light / 🌙 Dark / 🖥️ Auto (follows your operating system) |
+| **Theme** | 🎨 Appearance | ☀️ Light / 🌙 Dark / 🖥️ Auto (follows your operating system). Kept with your account, so it follows you to every browser and device. Until you choose one, it follows the administrator's default and a **Global** badge shows beside it; the **↺** button beside a theme you chose goes back to that default, like any change once you **Save** it. The sun/moon button in the header still switches only this browser |
 
 <style>
 /* Keep the first two columns on one line (long setting names would wrap otherwise) */
@@ -28,6 +28,10 @@ article table:first-of-type td:nth-child(-n + 2) {
     adds only its region, and only when it uses the same language: in English, a browser set to US English writes
     `14,788.01` and `Oct 12, 2026`, and a browser in another language gets the British format, `14,788.01` and
     `12 Oct 2026`.
+
+!!! tip "Line shape of the charts"
+
+    **Preferences** also holds the **Line shape** of every chart — segments, steps or a smooth curve. It is kept with your account and applies once you **Save** it, like the other fields. Until you pick one it follows the administrator's default (a **Global** badge shows beside it); **↺** goes back to that default once saved. How the shapes look: **[Dashboard charts](../dashboard/charts.md#line-shape)**.
 
 Pick a category in the sidebar — on a phone, in the **Category** menu — to show only its settings;
 **All Settings** shows everything.
@@ -64,6 +68,7 @@ reach it.
 | **Brokers** | Brokers overview, Broker guide, Broker details guide |
 | **FX** | FX overview, FX guide, FX pair details guide |
 | **Assets** | Assets overview, Asset guide, Asset details guide |
+| **Tools** | Tools page |
 
 ### 🔁 Replay a guide
 

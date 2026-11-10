@@ -56,7 +56,6 @@ plugins:
 | Gallery | ✅ | 3 × 4 languages |
 | Root (Home, FAQ, Credits) | ✅ | 3 × 4 languages |
 | **Developer Manual** | ❌ | ~45 files (EN-only) |
-| POC UX | ❌ | 1 file (EN-only) |
 
 **Total**: ~36 source files → ~108 translated files (3 target languages).
 
@@ -64,7 +63,9 @@ plugins:
 
 `EN_ONLY_SECTIONS` in `translate_docs.py` skips:
 - `developer/` — technical audience, EN standard
-- `POC_UX/` — historical artifact
+
+`POC_UX/`, the early UI mockups, was skipped too until 2026-10-14, when it left the repository (it is still in the
+history up to v1.2.0).
 
 Rationale: developer audience expects English technical docs, translation overhead not justified.
 
@@ -94,7 +95,7 @@ The suffix strategy is **required** for Aphra integration:
 - **Cache tracking**: `mkdocs_src/aphra-pipeline/.translate-hashes.json` stores, per page, only the English MD5, with
   per-language records (`translated_at`, `stamped_at`, failure keys) and `langs_done`; the translated files never enter
   the skip decision. An entry's MD5 is the English version its `langs_done` were translated or stamped from: a changed
-  MD5 empties `langs_done`, and a failure never marks a language done (since 2026-10-10, `a516e4e73`).
+  MD5 empties `langs_done`, and a failure never marks a language done (since 2026-10-10, `95410bc98`).
 
 > *Corrected 2026-10-12*, from workstream M's note on stamps: the first line used to say «never modify
 > `.it.md`/`.fr.md`/`.es.md` by hand», and the third that the cache stores the MD5 of `.en.md` and of every `.XX.md`.
@@ -120,7 +121,7 @@ Two ways to hit it:
   explicit id (`## Title {: #my-id }`) in the English source, and make sure the translations keep it.
 - **An English page rewritten and not translated yet**: the section does not exist in the other languages at all.
   On 24/09 the risk-metrics index had the four-questions sections (`#how-much-can-it-hurt`,
-  `#am-i-paid-for-the-risk`) in English only: it had been rewritten on 18/09 (`b35a8581e`) and not translated. The
+  `#am-i-paid-for-the-risk`) in English only: it had been rewritten on 18/09 (`5d15fd389`) and not translated. The
   lab's L1/L3 icons point at the page root until the translation lands.
 
 `MKDOCS_ANCHOR_EXCEPTIONS` may only shrink: it is not the place to park a new anchor. Check an anchor in all four

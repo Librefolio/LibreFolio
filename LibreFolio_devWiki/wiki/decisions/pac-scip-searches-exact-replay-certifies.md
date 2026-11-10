@@ -38,7 +38,7 @@ e vincoli, ma in produzione oracolo non deve MAI essere usato e si assume che la
 - **SCIP's status is the proof**: `optimal` on every stage of the cascade means proven optimal; `infeasible` on the
   first stage means proven infeasible; a time or node limit publishes the best plan found as **Optimality not
   proven**.
-- **The exhaustive oracle is test-only** (`b48b3cec9`, 2026-09-28): moved to
+- **The exhaustive oracle is test-only** (`85ff3b18d`, 2026-09-28): moved to
   `backend/test_scripts/test_services/_pac_exhaustive_oracle.py` as an agreement gate on small domains
   (`test_solver_incumbent_equals_exhaustive_oracle_optimum`); `test_exhaustive_oracle_is_test_only` fails if a
   production module imports it.
@@ -77,7 +77,7 @@ e vincoli, ma in produzione oracolo non deve MAI essere usato e si assume che la
 
 | Role | Path |
 |------|------|
-| Exact replay | `backend/app/services/pac_allocator/evaluator.py` |
+| Exact replay | `backend/app/services/pac_allocator/evaluation/evaluator.py` |
 | Solver cascade and stage statuses | `backend/app/services/pac_allocator/solver.py` |
 | Proof objects | `backend/app/services/pac_allocator/proof.py` |
 | Replay rejection → `execution_failed` | `backend/app/services/pac_allocator/planner.py` |

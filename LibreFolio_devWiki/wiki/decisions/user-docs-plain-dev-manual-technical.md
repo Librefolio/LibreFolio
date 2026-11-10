@@ -17,7 +17,7 @@ related:
 
 ## Context
 
-Between v1.1.0 (commit `837a8f2c7`, 2026-09-07) and the start of the 1.2 docs work on 2026-10-07 the repository took 809
+Between v1.1.0 (commit `785d78a4e`, 2026-09-07) and the start of the 1.2 docs work on 2026-10-07 the repository took 809
 commits, and 205 files under `mkdocs_src/docs` changed. Workstream Q received the English documentation to align:
 user, admin and theory pages first (Q1), then the developer manual (Q2), the second kept separable so that it could
 be cut from 1.2. 58 English pages were already stale against the translation cache, and 22 new ones had never been
@@ -55,9 +55,9 @@ translated.
 
 ## Consequences
 
-- Three waves simplified the user and admin pages and moved the internals to the developer manual (`eee56b42a`,
-  `1c2f88d67`, `22d80282a`, 2026-10-08). New developer pages took what left the user pages: the Risk UI and the Danske
-  Bank and Crédit Agricole importers; the risk subsystem page had come with Q2 (`7b06e9f9f`).
+- Three waves simplified the user and admin pages and moved the internals to the developer manual (`6220dfb2f`,
+  `c3b8a4290`, `a93c8227a`, 2026-10-08). New developer pages took what left the user pages: the Risk UI and the Danske
+  Bank and Crédit Agricole importers; the risk subsystem page had come with Q2 (`bf30d01a2`).
 - Writing from the code, the waves found and fixed pages that described something the code did not do
   ([[problems/docs-claimed-what-the-code-did-not-do]]).
 - DEGIRO went Stable: «abbiamo avuto degli export veri, direi che è uscito dalla fase beta». The import list shows a
@@ -65,7 +65,7 @@ translated.
 - English-only pages link translated pages **without anchors**: a strict build of a translated site checks the anchor
   in the translated page, where a heading's slug differs ([[decisions/docs-anchors-from-the-render]]).
 - The eight broker-portal screenshots stay hidden placeholders after 1.2, by the developer's decision; the translation
-  round ran afterwards, in M's batch 11 (train 29, `e32f47133`).
+  round ran afterwards, in M's batch 11 (train 29, `90997fa46`).
 
 ## Source files
 

@@ -27,6 +27,7 @@ import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/compo
 vi.mock('$lib/api', () => ({
     zodiosApi: {
         sync_prices_bulk_api_v1_assets_prices_sync_post: vi.fn(),
+        count_stored_prices_api_v1_assets_prices_stored_count_post: vi.fn(),
         // The open-effect warms the provider icon cache through this endpoint;
         // it is not the subject, but it must not reject into nothing. Exactly one
         // provider carries an icon, so both halves of the badge — image and code
@@ -39,6 +40,7 @@ import AssetSyncModal from './AssetSyncModal.svelte';
 import {zodiosApi} from '$lib/api';
 
 const syncPrices = vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post);
+const countStored = vi.mocked(zodiosApi.count_stored_prices_api_v1_assets_prices_stored_count_post);
 
 type WireResult = Record<string, unknown>;
 
@@ -95,6 +97,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
     syncPrices.mockReset();
+    countStored.mockReset();
+    // No stored price anywhere unless a case says so
+    countStored.mockImplementation((async (items: Array<{asset_id: number}>) => ({items: items.map((item) => ({asset_id: item.asset_id, stored_count: 0, manual_count: 0}))})) as never);
 });
 
 // =========================================================================
@@ -153,6 +158,68 @@ describe('AssetSyncModal — target selection', () => {
         await settled();
 
         expect(syncPrices).toHaveBeenCalledWith([{asset_id: 1, date_range: {start: '2024-03-01', end: '2024-03-31'}}], {timeout: 305_000});
+    });
+});
+
+// =========================================================================
+// What the page already holds in the range (C-66)
+// =========================================================================
+
+/**
+ * The dialog counts, before Start, the prices stored in the range it is about to sync: it asks
+ * `POST /assets/prices/stored-count` for the assets it will sync (the ones with a provider), over its own range, and hands
+ * the ids that hold some to its one section as `existingIds` — strings, like its targets — with the total of the ones entered
+ * by hand as `manualCount`. SyncModalBase warns and names them; what it says is SyncModalBase.test.ts's. A count that
+ * cannot be read leaves the dialog as it was: no warning, Start available.
+ */
+describe('AssetSyncModal — the stored prices the sync would replace', () => {
+    it('asks the count for the syncable assets alone, over its own range, and warns with the counts it gets', async () => {
+        respondWith();
+        countStored.mockResolvedValue({
+            items: [
+                {asset_id: 1, stored_count: 5, manual_count: 2},
+                {asset_id: 2, stored_count: 0, manual_count: 0},
+                {asset_id: 3, stored_count: 1, manual_count: 1},
+            ],
+        } as never);
+        // 4 has no provider: it is not synced, so nothing of it is replaced and nothing of it is asked
+        mount({assets: [asset(1), asset(2), asset(3), asset(4, {provider_code: null})]});
+
+        const warning = await screen.findByTestId('asset-sync-modal-overwrite-warning');
+        expect(countStored).toHaveBeenCalledWith([
+            {asset_id: 1, date_range: {start: '2024-03-01', end: '2024-03-31'}},
+            {asset_id: 2, date_range: {start: '2024-03-01', end: '2024-03-31'}},
+            {asset_id: 3, date_range: {start: '2024-03-01', end: '2024-03-31'}},
+        ]);
+        expect(warning).toHaveAttribute('data-section', 'assets');
+        expect(warning).toHaveAttribute('data-existing', '2');
+        expect(warning).toHaveAttribute('data-total', '3');
+        expect(warning, 'the manual prices of the assets that hold some: 2 of asset 1 and 1 of asset 3').toHaveAttribute('data-manual', '3');
+    });
+
+    it('nothing stored in the range: no warning', async () => {
+        respondWith();
+        mount({assets: [asset(1), asset(2)]});
+
+        await waitFor(() => expect(countStored).toHaveBeenCalledTimes(1));
+        expect(screen.queryByTestId('asset-sync-modal-overwrite-warning')).toBeNull();
+    });
+
+    it('a count that fails leaves no warning and Start available', async () => {
+        respondWith();
+        countStored.mockRejectedValue(new Error('boom'));
+        mount({assets: [asset(1)]});
+
+        await waitFor(() => expect(countStored).toHaveBeenCalledTimes(1));
+        expect(screen.queryByTestId('asset-sync-modal-overwrite-warning')).toBeNull();
+        expect(screen.getByTestId('sync-modal-start')).toBeEnabled();
+    });
+
+    it('closed, it counts nothing', () => {
+        respondWith();
+        mount({open: false, assets: [asset(1)]});
+
+        expect(countStored).not.toHaveBeenCalled();
     });
 });
 

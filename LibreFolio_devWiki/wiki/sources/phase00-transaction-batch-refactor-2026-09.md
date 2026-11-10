@@ -15,7 +15,7 @@ related:
 
 ## Summary
 
-One plan (~480 lines), shipped in `846aefb24` (2026-09-11; journal closed in `27b6f2aec`) and archived on 2026-10-09.
+One plan (~480 lines), shipped in `fa1a2db04` (2026-09-11; journal closed in `fa1a2db04`) and archived on 2026-10-09.
 An internal decomposition only: `TransactionService.execute_batch` became an orchestrator over thirteen named stages
 sharing a `TransactionBatchContext`; no API, schema, policy or frontend change. It closed backlog P4-2 (alias S6 6.8)
 and realigned five developer pages (service, balance validation, split/promote, WAC, lint gates).
@@ -41,6 +41,6 @@ None.
 | Role | Path |
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/phases/23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md` |
-| Stages | `backend/app/services/transaction_batch_stages.py` |
-| Context | `backend/app/services/transaction_batch_context.py` |
+| Stages | `backend/app/services/transactions/transaction_batch_stages.py` |
+| Context | `backend/app/services/transactions/transaction_batch_context.py` |
 | Developer doc | `mkdocs_src/docs/developer/backend/transactions/service.md` |

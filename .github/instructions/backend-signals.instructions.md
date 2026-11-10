@@ -1,5 +1,5 @@
 ---
-applyTo: "backend/app/services/signal_plugins/**,backend/app/services/signal_*.py,backend/app/services/series_preparation.py"
+applyTo: "backend/app/services/signals/**,backend/app/services/signal_plugins/**,backend/app/services/market_series.py"
 ---
 
 # Technical Signals (backend)
@@ -7,14 +7,18 @@ applyTo: "backend/app/services/signal_plugins/**,backend/app/services/signal_*.p
 ## Architecture
 
 - **Plugins**: one folder per indicator, `services/signal_plugins/<code>/` (`__init__.py` with the docstring only,
-  `plugin.py` with the code, `i18n/` with its `signals.<ns>.*` texts), extending `SignalPlugin` (`signal_plugins/base.py`,
-  which discovery skips) and registered with `@register_plugin(SignalPluginRegistry)` (`services/provider_registry.py`).
+  `plugin.py` with the code, `i18n/` with its `signals.<ns>.*` texts), extending `SignalPlugin` (`services/signals/base.py`,
+  outside the plugin folder) and registered with `@register_plugin(SignalPluginRegistry)` (`services/signals/registry.py`; the decorator is in
+  `services/provider_registry.py`).
   Import and patch from `….signal_plugins.<code>.plugin`. Keys several indicators share (`signals.reference.*`,
-  `signals.riskRollingReturn.*`) stay in the `charts` subsystem of the catalogue.
-- **Runtime**: `signal_service.py` (planning, execution, annotations, validation), `signal_runtime.py`,
-  `signal_annotations.py`, `signal_series_preparation.py` (quote days, prepared series). `series_preparation.py` is
-  shared with the risk engine.
-- **API**: the Asset and FX catalogs and executions are served by `api/v1/assets.py` and `api/v1/fx.py`. The frontend
+  `signals.tooltips.riskWindow`) stay in the `charts` subsystem of the catalogue.
+- **Runtime**: the `services/signals/` package — `service.py` (`SignalService`, the façade), `planning.py` (the batch
+  plan: validation, dedup, warm-up, preflight failures), `execution.py` (prepared inputs, availability, the plugin
+  call, failure isolation, the visible slice), `validation.py` (the output contract, sanitization, availability
+  rewrites), `runtime.py`, `annotations.py` (crossings and their attachment to results), `series.py` (input coverage,
+  quote days, availability, the visible slice), `base.py` (the contract), `registry.py` and `risk_adapters.py` (the
+  rolling risk helpers the risk-based indicators share). `market_series.py` is shared with the risk engine.
+- **API**: the Asset and FX catalogs and executions are served by `api/v1/assets/prices.py` and `api/v1/fx/currencies.py`. The frontend
   renders the declaration with no indicator-specific code (`frontend-signals.instructions.md`).
 
 ## Rules

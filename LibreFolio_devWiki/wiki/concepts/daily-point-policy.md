@@ -3,6 +3,7 @@ title: "Daily-Point Policy"
 category: concept
 tags: [backend, db, prices, fx, data-model]
 related_features: [F-030, F-017]
+related: [concepts/prices-current-side-effect]
 ---
 
 # Concept: Daily-Point Policy
@@ -22,6 +23,10 @@ LibreFolio stores **exactly one data record per day** per asset (price history) 
 
 ## Consequences
 - Intraday price changes are not captured (live ticker [[F-047]] is ephemeral — not stored)
+  - *2026-11-07 lint:* [[F-047]] is the Transaction List Page, not a live ticker. And the live quote is not purely
+    ephemeral: `/prices/current` upserts today's OHLC row into `PriceHistory` when the provider's quote is dated today,
+    so the intraday ticks mature into the one-row-per-day series — still one row, overwritten
+    ([[concepts/prices-current-side-effect]]).
 - Historical backfill jobs are idempotent — safe to re-run
 - FIFO ([[F-056]]) works with daily closing prices, not exact execution times
 
@@ -33,5 +38,5 @@ LibreFolio stores **exactly one data record per day** per asset (price history) 
 | Role | Path |
 |------|------|
 | DB model (PriceHistory, FxRate) | `backend/app/db/models.py` |
-| Asset API (price history) | `backend/app/api/v1/assets.py` |
-| FX API (rate history) | `backend/app/api/v1/fx.py` |
+| Asset API (price history) | `backend/app/api/v1/assets/prices.py` |
+| FX API (rate history) | `backend/app/api/v1/fx/currencies.py` |

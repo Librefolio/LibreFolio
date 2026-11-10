@@ -9,6 +9,14 @@ file, redirected into a per-test sandbox directory through ``joblog.get_data_dir
 parallel workers never share a log. Because that file is owned entirely by the test
 that wrote it, asserting on its exact number of lines is asserting on the test's own
 data.
+
+Lot Z7b: an item whose ``error_code`` is ``"RATE_LIMITED"`` is deferred, whatever its
+status or value — neither ok nor failed. Each builder marks it ``"deferred": true``, with
+``"retry_after"`` when known, counts it apart in its summary (``deferred``, or
+``assets_deferred`` and ``fx_deferred``) and out of the ``ok``/``err`` counters, and writes
+the ``retry_at`` it is given at the top level, None when not given. The shape tests pin
+the zeros and the None of a run with nothing deferred; one case per builder pins a run
+with deferred items.
 """
 
 from __future__ import annotations
@@ -24,7 +32,7 @@ import pytest
 from backend.app.config import DEFAULT_TEST_DATA_DIR
 from backend.app.schemas.prices import FACurrentPriceItem
 from backend.app.schemas.refresh import FARefreshResult, FXSyncPairResult, SyncStatus
-from backend.app.services.scheduler import joblog
+from backend.app.services.platform.scheduler import joblog
 
 
 @pytest.fixture
@@ -46,6 +54,12 @@ def _pick(items: list[dict], key: str, value) -> dict:
     matches = [item for item in items if item.get(key) == value]
     assert len(matches) == 1, f"expected one item with {key}={value!r}, got {len(matches)}"
     return matches[0]
+
+
+#: Lot Z7b, the literals of the contract, never read from the module under test: the ``error_code`` of an item a
+#: provider's pause refused, and a ``retry_at`` as the jobs pass it, ISO-8601 in UTC.
+RATE_LIMITED = "RATE_LIMITED"
+RETRY_AT = datetime(2026, 6, 8, 10, 0, 45, tzinfo=UTC).isoformat()
 
 
 # ============================================================================
@@ -171,7 +185,7 @@ def test_read_entries_drops_entries_without_a_usable_ts_when_filtering(isolated_
 
 
 def test_build_current_price_entry_shape():
-    """Per-item flags, optional keys and the summary derived from them."""
+    """Per-item flags, optional keys and the summary derived from them; nothing deferred: ``deferred`` 0, ``retry_at`` None."""
     results = [
         FACurrentPriceItem(asset_id=11, value=Decimal("10.5"), currency="EUR", source="provider:double"),
         FACurrentPriceItem(asset_id=12, value=Decimal("7.25"), currency="EUR", source="provider:double"),
@@ -185,7 +199,8 @@ def test_build_current_price_entry_shape():
     assert entry["job"] == "current_price"
     assert entry["status"] == "partial"
     assert entry["duration_s"] == 1.25
-    assert entry["summary"] == {"ok": 2, "err": 1}
+    assert entry["summary"] == {"ok": 2, "err": 1, "deferred": 0}
+    assert entry["retry_at"] is None
     assert datetime.fromisoformat(entry["ts"]).tzinfo is not None
 
     with_icon = _pick(entry["items"], "asset_id", 11)
@@ -204,10 +219,33 @@ def test_build_current_price_entry_without_icons_or_results():
     entry = joblog.build_current_price_entry([], {}, 0.0, "ok")
 
     assert entry["items"] == []
-    assert entry["summary"] == {"ok": 0, "err": 0}
+    assert entry["summary"] == {"ok": 0, "err": 0, "deferred": 0}
+    assert entry["retry_at"] is None
 
     single = joblog.build_current_price_entry([FACurrentPriceItem(asset_id=21, value=Decimal("1"))], {21: "Solo"}, 0.1, "ok")
     assert _pick(single["items"], "asset_id", 21) == {"asset_id": 21, "name": "Solo", "ok": True}
+
+
+def test_build_current_price_entry_marks_rate_limited_items_deferred():
+    """Lot Z7b: an item RATE_LIMITED is deferred whatever its value — the one that kept its last stored price is not ok —: ``"deferred": true``, ``"retry_after"`` when known and omitted otherwise, its error kept. The summary counts the two deferred apart, out of ``ok`` and ``err``; the ``retry_at`` passed is the entry's. The items not deferred keep the shape they had."""
+    results = [
+        FACurrentPriceItem(asset_id=81, value=Decimal("10.5"), currency="EUR", source="provider:double"),
+        FACurrentPriceItem(asset_id=82, value=Decimal("9.75"), currency="EUR", source="db:last_known", error="too many requests", error_code=RATE_LIMITED, retry_after=120.0),
+        FACurrentPriceItem(asset_id=83, error="too many requests", error_code=RATE_LIMITED),
+        FACurrentPriceItem(asset_id=84, error="provider timeout"),
+    ]
+    names = {81: "Priced", 82: "Paused, Last Price Kept", 83: "Paused, No Retry-After", 84: "Timed Out"}
+    icons = {82: "https://example.invalid/82.png"}
+
+    entry = joblog.build_current_price_entry(results, names, 0.75, "partial", asset_icons=icons, retry_at=RETRY_AT)
+
+    assert (entry["job"], entry["status"]) == ("current_price", "partial")
+    assert entry["summary"] == {"ok": 1, "err": 1, "deferred": 2}
+    assert entry["retry_at"] == RETRY_AT
+    assert _pick(entry["items"], "asset_id", 81) == {"asset_id": 81, "name": "Priced", "ok": True}
+    assert _pick(entry["items"], "asset_id", 82) == {"asset_id": 82, "name": "Paused, Last Price Kept", "ok": False, "deferred": True, "retry_after": 120.0, "icon_url": "https://example.invalid/82.png", "error": "too many requests"}
+    assert _pick(entry["items"], "asset_id", 83) == {"asset_id": 83, "name": "Paused, No Retry-After", "ok": False, "deferred": True, "error": "too many requests"}
+    assert _pick(entry["items"], "asset_id", 84) == {"asset_id": 84, "name": "Timed Out", "ok": False, "error": "provider timeout"}
 
 
 # ============================================================================
@@ -237,7 +275,7 @@ def _fx_result(pair: str, *, ok: bool, provider: str | None, errors: list[str]) 
 
 
 def test_build_history_sync_entry_shape():
-    """Assets and FX halves, their optional keys, and the four summary counters."""
+    """Assets and FX halves, their optional keys, and the six summary counters; nothing deferred: both deferred counters 0, ``retry_at`` None."""
     assets = [
         _asset_result(31, ok=True, provider="mockprov", errors=[]),
         _asset_result(32, ok=False, provider=None, errors=["boom"]),
@@ -254,7 +292,8 @@ def test_build_history_sync_entry_shape():
     assert entry["job"] == "history_sync"
     assert entry["status"] == "partial"
     assert entry["duration_s"] == 4.5
-    assert entry["summary"] == {"assets_ok": 1, "assets_err": 1, "fx_ok": 1, "fx_err": 1}
+    assert entry["summary"] == {"assets_ok": 1, "assets_err": 1, "assets_deferred": 0, "fx_ok": 1, "fx_err": 1, "fx_deferred": 0}
+    assert entry["retry_at"] is None
     assert datetime.fromisoformat(entry["ts"]).tzinfo is not None
 
     ok_asset = _pick(entry["assets"], "asset_id", 31)
@@ -292,7 +331,8 @@ def test_build_history_sync_entry_without_icons_or_results():
 
     assert entry["assets"] == []
     assert entry["fx"] == []
-    assert entry["summary"] == {"assets_ok": 0, "assets_err": 0, "fx_ok": 0, "fx_err": 0}
+    assert entry["summary"] == {"assets_ok": 0, "assets_err": 0, "assets_deferred": 0, "fx_ok": 0, "fx_err": 0, "fx_deferred": 0}
+    assert entry["retry_at"] is None
 
     no_icons = joblog.build_history_sync_entry([_asset_result(41, ok=True, provider=None, errors=[])], [], {41: "Solo"}, 0.1, "ok")
     solo = _pick(no_icons["assets"], "asset_id", 41)
@@ -314,9 +354,39 @@ def test_build_history_sync_entry_counts_partial_and_skipped_as_not_ok():
 
     entry = joblog.build_history_sync_entry(assets, fx, {}, 0.5, "partial")
 
-    assert entry["summary"] == {"assets_ok": 1, "assets_err": 2, "fx_ok": 0, "fx_err": 2}
+    assert entry["summary"] == {"assets_ok": 1, "assets_err": 2, "assets_deferred": 0, "fx_ok": 0, "fx_err": 2, "fx_deferred": 0}
+    assert entry["retry_at"] is None
     assert _pick(entry["assets"], "asset_id", 51)["status"] == "partial"
     assert _pick(entry["fx"], "pair", "EUR-SEK")["status"] == "skipped"
+
+
+def test_build_history_sync_entry_marks_rate_limited_items_deferred_whatever_their_status():
+    """Lot Z7b: an asset or a pair RATE_LIMITED is deferred whatever its status — FAILED, or OK with part of the data saved —: ``"deferred": true``, ``"retry_after"`` when known and omitted otherwise, the rest of the item as it was. ``assets_deferred`` and ``fx_deferred`` count them apart, out of the ``*_ok`` and ``*_err`` counters; the ``retry_at`` passed is the entry's. The items not deferred keep the shape they had."""
+    assets = [
+        _asset_result(91, ok=True, provider="mockprov", errors=[]),
+        FARefreshResult(asset_id=92, status=SyncStatus.FAILED, errors=["too many requests"], error_code=RATE_LIMITED, retry_after=300.0),
+        FARefreshResult(asset_id=93, status=SyncStatus.OK, provider_used="mockprov", points_changed=2, errors=["too many requests"], error_code=RATE_LIMITED),
+        _asset_result(94, ok=False, provider=None, errors=["boom"]),
+    ]
+    fx = [
+        _fx_result("EUR-USD", ok=True, provider="MOCKFX", errors=[]),
+        FXSyncPairResult(pair="GBP-USD", status=SyncStatus.FAILED, errors=["too many requests"], error_code=RATE_LIMITED, retry_after=45.0),
+        _fx_result("CHF-EUR", ok=False, provider=None, errors=["no data"]),
+    ]
+    names = {91: "Synced", 92: "Refused", 93: "Partly Saved, Refused", 94: "Failed"}
+
+    entry = joblog.build_history_sync_entry(assets, fx, names, 2.5, "partial", retry_at=RETRY_AT)
+
+    assert (entry["job"], entry["status"]) == ("history_sync", "partial")
+    assert entry["summary"] == {"assets_ok": 1, "assets_err": 1, "assets_deferred": 2, "fx_ok": 1, "fx_err": 1, "fx_deferred": 1}
+    assert entry["retry_at"] == RETRY_AT
+    assert _pick(entry["assets"], "asset_id", 91) == {"asset_id": 91, "name": "Synced", "status": "ok", "provider": "mockprov", "prices_changed": 3, "events_changed": 1}
+    assert _pick(entry["assets"], "asset_id", 92) == {"asset_id": 92, "name": "Refused", "status": "failed", "deferred": True, "retry_after": 300.0, "errors": ["too many requests"], "prices_changed": 0, "events_changed": 0}
+    assert _pick(entry["assets"], "asset_id", 93) == {"asset_id": 93, "name": "Partly Saved, Refused", "status": "ok", "deferred": True, "errors": ["too many requests"], "provider": "mockprov", "prices_changed": 2, "events_changed": 0}
+    assert _pick(entry["assets"], "asset_id", 94) == {"asset_id": 94, "name": "Failed", "status": "failed", "errors": ["boom"], "prices_changed": 0, "events_changed": 0}
+    assert _pick(entry["fx"], "pair", "EUR-USD") == {"pair": "EUR-USD", "status": "ok", "base": "EUR", "quote": "USD", "provider": "MOCKFX", "points_changed": 4}
+    assert _pick(entry["fx"], "pair", "GBP-USD") == {"pair": "GBP-USD", "status": "failed", "deferred": True, "retry_after": 45.0, "base": "GBP", "quote": "USD", "errors": ["too many requests"], "points_changed": 0}
+    assert _pick(entry["fx"], "pair", "CHF-EUR") == {"pair": "CHF-EUR", "status": "failed", "base": "CHF", "quote": "EUR", "errors": ["no data"], "points_changed": 0}
 
 
 def test_sync_status_must_stay_a_strenum_or_every_summary_counter_silently_zeroes():

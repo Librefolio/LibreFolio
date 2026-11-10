@@ -14,11 +14,11 @@ from backend.app.utils.decimal_utils import parse_decimal_value
 
 def test_get_model_column_precision_price_history():
     """Test getting precision from PriceHistory columns."""
-    # All price columns should be NUMERIC(18, 6)
+    # C-97a: the price columns are RealDecimal(24, 12): a PEPE close of 0.0000034573 keeps its digits
     for column in ["open", "high", "low", "close", "adjusted_close"]:
         precision, scale = get_model_column_precision(PriceHistory, column)
-        assert precision == 18, f"{column}: expected precision 18, got {precision}"
-        assert scale == 6, f"{column}: expected scale 6, got {scale}"
+        assert precision == 24, f"{column}: expected precision 24, got {precision}"
+        assert scale == 12, f"{column}: expected scale 12, got {scale}"
 
 
 def test_get_model_column_precision_fx_rate():
@@ -30,10 +30,10 @@ def test_get_model_column_precision_fx_rate():
 
 def test_get_model_column_precision_transaction():
     """Test getting precision from Transaction numeric columns."""
-    for column in ["quantity", "amount"]:
-        precision, scale = get_model_column_precision(Transaction, column)
-        assert precision == 18, f"{column}: expected precision 18, got {precision}"
-        assert scale == 6, f"{column}: expected scale 6, got {scale}"
+    # C-97a: quantity is RealDecimal(22, 10) (crypto quantities); amount stays NUMERIC(18, 6)
+    for column, expected in {"quantity": (22, 10), "amount": (18, 6)}.items():
+        found = get_model_column_precision(Transaction, column)
+        assert found == expected, f"{column}: expected {expected}, got {found}"
 
 
 def test_get_model_column_precision_price_history_volume():
@@ -57,12 +57,12 @@ def test_get_model_column_precision_non_numeric():
 
 
 def test_truncate_to_db_precision_price():
-    """Test truncating price values to NUMERIC(18, 6)."""
-    value = Decimal("175.123456789")
+    """Test truncating price values to the price_history scale (C-97a: RealDecimal(24, 12))."""
+    value = Decimal("175.1234567890123")
     truncated = truncate_to_db_precision(value, PriceHistory, "close")
 
-    assert truncated == Decimal("175.123456")
-    assert len(str(truncated).split(".")[1]) == 6  # Exactly 6 decimals
+    assert truncated == Decimal("175.123456789012")
+    assert -truncated.normalize().as_tuple().exponent == 12  # 12 decimals left
 
 
 def test_truncate_to_db_precision_fx_rate():
@@ -76,10 +76,10 @@ def test_truncate_to_db_precision_fx_rate():
 
 def test_truncate_price_to_db_precision_convenience():
     """Test convenience function for price truncation."""
-    value = Decimal("99.999999999")
+    value = Decimal("99.9999999999999")
     truncated = truncate_priceHistory(value)
 
-    assert truncated == Decimal("99.999999")
+    assert truncated == Decimal("99.999999999999")  # C-97a: 12 decimals, ROUND_DOWN
 
 
 def test_truncate_fx_rate_to_db_precision_convenience():
@@ -108,7 +108,8 @@ def test_truncate_large_values():
     value = Decimal("999999999999.123456789")
     truncated = truncate_to_db_precision(value, PriceHistory, "close")
 
-    assert truncated == Decimal("999999999999.123456")
+    # C-97a: a price keeps at most 15 significant digits (what a REAL holds), ROUND_DOWN
+    assert truncated == Decimal("999999999999.123")
 
 
 def test_truncate_negative_values():
@@ -129,14 +130,14 @@ def test_truncate_zero():
 
 def test_no_false_update_detection():
     """Test that truncation prevents false update detection."""
-    # Simulate a value that came from an external API
-    external_value = Decimal("175.123456789")
+    # Simulate a value that came from an external API (more decimals than price_history keeps: 12)
+    external_value = Decimal("175.1234567890123")
 
     # Truncate before comparing with DB value
     truncated = truncate_priceHistory(external_value)
 
-    # Simulate DB value (already truncated by SQLite)
-    db_value = Decimal("175.123456")
+    # Simulate DB value (already truncated on write)
+    db_value = Decimal("175.123456789012")
 
     # They should match after truncation
     assert truncated == db_value

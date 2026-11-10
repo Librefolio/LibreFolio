@@ -41,6 +41,13 @@ async function statusOf(api: APIRequestContext, path: string): Promise<number> {
     return (await api.get(`${API}${path}`)).status();
 }
 
+/** Whether `api` sees the report `fileId` in the file list (there is no per-file read route): the list holds only the files its user may see. */
+async function reportListed(api: APIRequestContext, fileId: string): Promise<boolean> {
+    const response = await api.get(`${API}/brokers/import/files`);
+    expect(response.status(), 'List the import files').toBe(200);
+    return ((await response.json()) as Array<{file_id: string}>).some((file) => file.file_id === fileId);
+}
+
 /** Open a session for `user` on `api`; `null` when the account no longer exists (the login answers 401). */
 async function signIn(api: APIRequestContext, user: DisposableUser): Promise<{id: number; is_superuser: boolean} | null> {
     const response = await api.post(`${API}/auth/login`, {data: {username: user.username, password: user.password}});
@@ -188,7 +195,7 @@ async function cleanUp(owned: Owned, admin: Administrator): Promise<string[]> {
     const reportId = owned.reportId;
     if (reportId) {
         await attempt(`report ${reportId}`, async () => {
-            if ((await statusOf(await reader(), `/brokers/import/files/${reportId}`)) === 404) return;
+            if (!(await reportListed(await admin.session(), reportId))) return;
             const removed = await (await admin.session()).delete(`${API}/brokers/import/files/${reportId}`);
             expect(removed.ok(), `HTTP ${removed.status()}`).toBe(true);
         });
@@ -285,7 +292,7 @@ test.describe('Account deletion: the last-owner rule', () => {
                 ]),
             );
             expect(await statusOf(asB, `/brokers/${x}`), 'B, VIEWER of X, reads X').toBe(200);
-            expect(await statusOf(asB, `/brokers/import/files/${report}`), "B, VIEWER of X, reads X's report").toBe(200);
+            expect(await reportListed(asB, report), "B, VIEWER of X, lists X's report").toBe(true);
             expect(await readableTransactions(asB, [xDeposit, yDeposit]), 'B reads both deposits').toEqual({[xDeposit]: x, [yDeposit]: y});
 
             // Act, through the UI: A deletes the account from Settings → Profile.
@@ -303,7 +310,7 @@ test.describe('Account deletion: the last-owner rule', () => {
             // What B sees. Soft: a red lists every broken expectation, not only the first.
             expect.soft(await statusOf(asB, `/brokers/${x}`), 'X went with A, its last OWNER, although B could see it').toBe(404);
             expect.soft(await accessOf(asB, x), 'X has no access list left: the broker does not exist').toBeNull();
-            expect.soft(await statusOf(asB, `/brokers/import/files/${report}`), "X's report went with X").toBe(404);
+            expect.soft(await reportListed(asB, report), "X's report went with X").toBe(false);
             const listed = await listedBrokers(asB);
             expect.soft(listed.mentioned, "B's broker list, accessible or not, no longer mentions X").not.toContain(x);
             expect.soft(listed.accessible, "Y is still among B's brokers").toContain(y);

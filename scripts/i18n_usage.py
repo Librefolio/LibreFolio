@@ -100,9 +100,7 @@ _INTERP = re.compile(r"\$\{([^}]*)\}")
 # contribute junk "namespaces" such as `#` or `<strong>`.
 _KEY_TEMPLATE = re.compile(r"(?:[A-Za-z0-9_.]|\$\{[^}]*\})+")
 
-_CONST_DECL = re.compile(
-    r"\bconst\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*['\"]([^'\"]+)['\"]"
-)
+_CONST_DECL = re.compile(r"\bconst\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*['\"]([^'\"]+)['\"]")
 
 # A prefix chosen between two literals, e.g.
 #   let keyPrefix = $derived(scope === 'simulation' ? 'risk.betaBanner.simulation' : 'risk.betaBanner');
@@ -263,9 +261,7 @@ def _is_entry(relative: Path) -> bool:
 
 def _parameter_literal_type(text: str, name: str) -> list[str] | None:
     """Expand ``name: 'a'`` (or ``'a' | 'b'``) when it types a function parameter."""
-    member = re.compile(
-        rf"(?<![\w$.]){re.escape(name)}\s*\??\s*:\s*((?:'[^']*'|\"[^\"]*\")(?:\s*\|\s*(?:'[^']*'|\"[^\"]*\"))*)\s*(?=[,=]|$)"
-    )
+    member = re.compile(rf"(?<![\w$.]){re.escape(name)}\s*\??\s*:\s*((?:'[^']*'|\"[^\"]*\")(?:\s*\|\s*(?:'[^']*'|\"[^\"]*\"))*)\s*(?=[,=]|$)")
     for params in _PARAM_LIST.finditer(text):
         m = member.search(params.group(1).strip())
         if m:
@@ -281,9 +277,7 @@ def _union_members(text: str, name: str) -> list[str] | None:
     A single literal (``prefix: 'errors'``) is a union of one, but only where it
     types a parameter: as an object property it is a value, not a type (R3).
     """
-    pattern = re.compile(
-        rf"\b{re.escape(name)}\s*:\s*((?:'[^']*'|\"[^\"]*\")(?:\s*\|\s*(?:'[^']*'|\"[^\"]*\"))+)"
-    )
+    pattern = re.compile(rf"\b{re.escape(name)}\s*:\s*((?:'[^']*'|\"[^\"]*\")(?:\s*\|\s*(?:'[^']*'|\"[^\"]*\"))+)")
     m = pattern.search(text)
     if m:
         return re.findall(r"['\"]([^'\"]+)['\"]", m.group(1))
@@ -309,18 +303,14 @@ def _expand(template: str, consts: dict[str, list[str]], text: str) -> tuple[lis
         members = _union_members(text, key.split(".")[0]) if key else None
         resolved.append(members)
 
-    last_unresolved = max(
-        (i for i, r in enumerate(resolved) if r is None), default=-1
-    )
+    last_unresolved = max((i for i, r in enumerate(resolved) if r is None), default=-1)
     if last_unresolved == -1:
         trailing_only = True
         cut = len(names)
     else:
         # Everything after the last unresolved interpolation must be empty for
         # the prefix to be a genuine prefix.
-        trailing_only = all(r is not None for r in resolved[:last_unresolved]) and not "".join(
-            literals[last_unresolved + 1:]
-        ).strip()
+        trailing_only = all(r is not None for r in resolved[:last_unresolved]) and not "".join(literals[last_unresolved + 1 :]).strip()
         cut = last_unresolved
 
     candidates = [literals[0]]
@@ -343,9 +333,9 @@ def _argument_region(content: str, start: int) -> str:
         elif ch == ")":
             depth -= 1
             if depth == 0:
-                return content[start + 1: i]
+                return content[start + 1 : i]
         i += 1
-    return content[start: start + 400]
+    return content[start : start + 400]
 
 
 def _skip_string(content: str, i: int) -> int:
@@ -414,7 +404,7 @@ def _iter_key_templates(content: str) -> Iterator[tuple[int, str]]:
         end = _template_end(content, start)
         if end is None:
             continue
-        body = content[start + 1: end]
+        body = content[start + 1 : end]
         if "${" in body and _KEY_TEMPLATE.fullmatch(body):
             yield start, body
 
@@ -480,7 +470,7 @@ class _FileContext:
         if not m:
             return set()
         end = _matching_brace(self.content, m.end() - 1)
-        return set(re.findall(r":\s*['\"]([^'\"]+)['\"]", self.content[m.end(): end]))
+        return set(re.findall(r":\s*['\"]([^'\"]+)['\"]", self.content[m.end() : end]))
 
 
 def _directed_values(expression: str, ctx: _FileContext) -> set[str]:
@@ -502,15 +492,11 @@ def _directed_values(expression: str, ctx: _FileContext) -> set[str]:
     return values
 
 
-def _template_verdict(
-    template: str, consts: dict[str, list[str]], text: str
-) -> tuple[list[str], bool, bool]:
+def _template_verdict(template: str, consts: dict[str, list[str]], text: str) -> tuple[list[str], bool, bool]:
     """Resolve one key template into ``(candidates, trailing_only, fully_resolved)``."""
     candidates, trailing_only = _expand(template, consts, text)
     unresolved = [u.strip() for u in _INTERP.findall(template)]
-    fully_resolved = not any(
-        u not in consts and _union_members(text, u.split(".")[0]) is None for u in unresolved
-    )
+    fully_resolved = not any(u not in consts and _union_members(text, u.split(".")[0]) is None for u in unresolved)
     return candidates, trailing_only, fully_resolved
 
 
@@ -529,9 +515,7 @@ def _family_rests(prefix: str, last_expression: str, ctx: _FileContext | None) -
     return rests
 
 
-def _keep_union_family(
-    usage: Usage, template: str, consts: dict[str, list[str]], text: str, origin: str, ctx: _FileContext | None
-) -> None:
+def _keep_union_family(usage: Usage, template: str, consts: dict[str, list[str]], text: str, origin: str, ctx: _FileContext | None) -> None:
     """Keep the family of a template whose last segment was resolved by a union.
 
     A union is found by its name anywhere in the file, so it may type another
@@ -542,7 +526,7 @@ def _keep_union_family(
     if not template.endswith("}"):
         return
     cut = template.rfind("${")
-    last = template[cut + 2: -1].strip()
+    last = template[cut + 2 : -1].strip()
     if last in consts:
         return
     prefixes, _trailing = _expand(template[:cut], consts, text)
@@ -551,9 +535,7 @@ def _keep_union_family(
             _record_family(usage, prefix, origin, _family_rests(prefix, last, ctx))
 
 
-def _record_candidates(
-    usage: Usage, candidates: list[str], trailing_only: bool, last_expression: str, origin: str, ctx: _FileContext | None
-) -> None:
+def _record_candidates(usage: Usage, candidates: list[str], trailing_only: bool, last_expression: str, origin: str, ctx: _FileContext | None) -> None:
     """A trailing interpolation makes a family; a mid-template one, an unverified prefix."""
     for cand in candidates:
         if "." not in cand:
@@ -584,9 +566,7 @@ def _record_shape(usage: Usage, template: str, consts: dict[str, list[str]], tex
         usage.shapes[shape] = re.compile(shape[0])
 
 
-def _record_template(
-    usage: Usage, template: str, consts: dict[str, list[str]], text: str, origin: str, ctx: _FileContext | None = None
-) -> None:
+def _record_template(usage: Usage, template: str, consts: dict[str, list[str]], text: str, origin: str, ctx: _FileContext | None = None) -> None:
     """Fold one template literal into the accumulated evidence."""
     candidates, trailing_only, fully_resolved = _template_verdict(template, consts, text)
     head = template.split("${", 1)[0].rstrip(".")
@@ -786,7 +766,7 @@ def _family_verdict(key: str, usage: Usage) -> str | None:
     for family in usage.families:
         if not key.startswith(family) or len(key) == len(family):
             continue
-        rest = key[len(family):]
+        rest = key[len(family) :]
         if rest in usage.family_vocab.get(family, ()) or rest in usage.vocabulary:
             return USED
         if "." in rest:

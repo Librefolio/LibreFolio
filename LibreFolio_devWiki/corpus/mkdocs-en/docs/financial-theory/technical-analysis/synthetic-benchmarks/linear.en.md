@@ -1,1 +1,0 @@
-../../../../../../../mkdocs_src/docs/financial-theory/technical-analysis/synthetic-benchmarks/linear.en.md

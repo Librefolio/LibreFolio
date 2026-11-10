@@ -23,9 +23,9 @@ appears (inline validate)» went red: after the clone, the WAC «auto» cell sta
 - **It took a pair by position.** WB5 cloned the first suitable pair in the list: the seed's MSFT pair from Interactive
   Brokers to DEGIRO, built for the asymmetric-access cases — on DEGIRO `e2e_test_user` is only a VIEWER.
 - **The product was right.** Validate answered `accessDenied` («EDITOR required for broker 2») with no WAC result,
-  and `compute_wac_and_fx_issues` (`transaction_batch_stages.py`) proposes no cost for a batch with errors: `empty` is
+  and `compute_wac_and_fx_issues` (`transaction_batch_stages.py` at the time, `batch_costs.py` since `93e1d522d`) proposes no cost for a batch with errors: `empty` is
   the correct state, and the banner says why.
-- **Why it had passed**: since `9a254f812` (2026-08-14) WB5 has required `ready`, and from then on it passed only when
+- **Why it had passed**: since `c43c0fe69` (2026-08-14) WB5 has required `ready`, and from then on it passed only when
   the first pair was one left by another test — the IB→Directa pair that WB4, before it in the same file, commits and
   never deletes, or the leftovers of `tx-commit-all-types`. Alone it always failed; at four workers it started beside
   WB4 and failed; in sequence it passed.
@@ -34,7 +34,7 @@ appears (inline validate)» went red: after the clone, the WAC «auto» cell sta
 
 ## Solution
 
-`1ea16aace` («test(e2e): own the WB5 pair, clean up WB4», train 72):
+`7351f5b17` («test(e2e): own the WB5 pair, clean up WB4», train 72):
 
 - **WB5 owns its data**: two brokers and an EUR asset created through the API, two ADJUSTMENT +10 at 100 and 200 EUR,
   a linked TRANSFER −4/+4 with a manual cost of 175 on the receiving side; it clones that pair by id and asserts
@@ -57,6 +57,6 @@ appears (inline validate)» went red: after the clone, the WAC «auto» cell sta
 | Role | Path |
 |------|------|
 | The spec (WB4, WB5, `cleanupOwned`) | `frontend/e2e/transactions/tx-wac-bulk.spec.ts` |
-| WAC and FX issues of a batch | `backend/app/services/transaction_batch_stages.py` |
+| WAC and FX issues of a batch | `backend/app/services/transactions/batch_costs.py` |
 | Plan 46 (step 2b) | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |
 | Backlog (V-23) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

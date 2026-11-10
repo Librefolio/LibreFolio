@@ -65,6 +65,7 @@ Cliquez sur **Tester la configuration** : **Prix actuel** doit afficher le nombr
 | **Élément de prix introuvable** | La mise en page a peut-être changé : copiez à nouveau le sélecteur. |
 | **Échec de l'analyse syntaxique du prix** | Vérifiez `decimal_format`. L'élément doit contenir uniquement le nombre : les espaces, €, $, £, ¥ et % sont ignorés, les lettres telles que `EUR` ne le sont pas. |
 | **Erreur HTTP** ou **Échec de la requête** | Vérifiez l'URL ; augmentez `timeout` pour un site lent. L'erreur 403 signifie que le site refuse les visites automatisées. |
+| **En pause pour trop de requêtes jusqu'à …** | Le site a refusé car LibreFolio l'a visité trop souvent : LibreFolio le laisse tranquille jusque-là. Vos autres sites ne sont pas concernés. |
 | Un nombre incorrect | Le sélecteur correspond à un autre élément (LibreFolio utilise la première correspondance) : rendez-le plus spécifique. |
 
 ## ⚠️ Limites

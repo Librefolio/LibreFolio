@@ -3,7 +3,7 @@
 ## 💡 What is it?
 TWRR measures the **"pure" performance** of your chosen assets and strategy (The Market), completely ignoring the timing and size of your deposits or withdrawals. 
 
-LibreFolio detects external sub-period breaks from capital-baseline deltas. This includes priced in-kind ADJUSTMENT/TRANSFER capital, so seeded assets are treated as investor capital entering the portfolio, not as market return.
+LibreFolio detects external sub-period breaks from capital-baseline deltas. This includes priced in-kind ADJUSTMENT/TRANSFER capital, so seeded assets are treated as investor capital entering the portfolio, not as market return. An outgoing ADJUSTMENT has no value and is no flow ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)): the value of its units leaves the NAV, and the day's return reads it as a loss.
 
 It is the standard metric used by mutual funds and ETFs because fund managers have no control over when clients deposit or withdraw capital; they must be evaluated solely on the returns of the underlying investments.
 
@@ -102,6 +102,16 @@ $$
 ## 🎯 When to use it
 * To judge the quality of the **assets and strategy you chose**, independent of your personal savings rate or timing.
 * To compare your portfolio performance directly against external benchmarks (like the S&P 500 or an index ETF).
+
+---
+
+## 🚫 When No TWRR Is Shown {: #when-no-twrr }
+
+The KPI card and the TWRR line of the Dashboard chart follow the same rule on every day of the period: a day has a TWRR only when the portfolio's value on that day is above zero. A portfolio you emptied — everything sold and the cash withdrawn — or one whose debts exceed what it holds has no time-weighted return to show.
+
+On such a day the card shows `—` and the line has a gap. The card always shows the line's last point, so a card without TWRR goes with a line that ends in a gap, and the [Timing Effect](timing-effect.md), which needs the TWRR, shows `—` too. When new deposits bring the value back above zero, the line resumes from the return it had reached before the gap: the days at zero add no gain and no loss, and the chain of sub-periods keeps compounding from there.
+
+The first point of the line is the exception: it is always 0, the point every return of the period starts from.
 
 ---
 

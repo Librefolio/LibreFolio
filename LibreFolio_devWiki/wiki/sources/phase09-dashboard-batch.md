@@ -1,6 +1,9 @@
 ---
 title: "Phase 09 Dashboard Batch"
 category: "source"
+source_type: plan
+date_ingested: 2026-06-17
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/
 tags: ["phase-09", "dashboard", "kpi", "twrr", "mwrr", "fifo", "portfolio"]
 related: ["F-054"]
 ---
@@ -24,7 +27,7 @@ The Phase 09 batch encompasses the master plan, algorithmic design, UI wireframe
 ## Source files
 | File | Git Hash | Date |
 |------|----------|------|
-| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_financial_algorithms.md` (moved 2026-07-07, was phase-09-subplan/ before archive) | `63ae8ccee` | 2026-06-17 |
-| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/implementation_roadmap.md` (moved 2026-07-07, was phase-09-subplan/ before archive) | `63ae8ccee` | 2026-06-17 |
-| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_ui_dashboard.md` (moved 2026-07-07, was phase-09-subplan/ before archive) | `63ae8ccee` | 2026-06-17 |
-| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-dashboard.md` | `63ae8ccee` | 2026-06-17 |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_financial_algorithms.md` (moved 2026-07-07, was phase-09-subplan/ before archive) | `530f74292` | 2026-06-17 |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/implementation_roadmap.md` (moved 2026-07-07, was phase-09-subplan/ before archive) | `530f74292` | 2026-06-17 |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_ui_dashboard.md` (moved 2026-07-07, was phase-09-subplan/ before archive) | `530f74292` | 2026-06-17 |
+| `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-dashboard.md` | `530f74292` | 2026-06-17 |

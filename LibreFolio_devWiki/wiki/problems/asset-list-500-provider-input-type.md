@@ -59,6 +59,6 @@ Critical: the entire assets list page was broken as soon as any user had a sched
 
 | Role | Path |
 |------|------|
-| Fix location | `backend/app/services/asset_source.py` |
+| Fix location | `backend/app/services/assets/crud.py` |
 | Enum definitions | `backend/app/db/models.py` (ProviderInputType, IdentifierType) |
-| Response schema | `backend/app/schemas/assets.py` (FAinfoResponse) |
+| Response schema | `backend/app/schemas/assets/assets.py` (FAinfoResponse) |

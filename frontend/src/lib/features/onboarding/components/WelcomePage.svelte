@@ -2,6 +2,7 @@
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import type {WelcomeCopy, WelcomeDraft} from '$lib/features/onboarding/welcome';
     import WelcomeForm from './WelcomeForm.svelte';
+    import LegalNotice from '$lib/features/legal/LegalNotice.svelte';
 
     interface Props {
         copy: WelcomeCopy;
@@ -44,31 +45,31 @@
     }
 </script>
 
-<div class="min-h-full bg-libre-beige px-4 py-6 dark:bg-slate-950 sm:px-6 sm:py-10" data-testid="welcome-page" data-outcome={outcome ?? 'pending'}>
+<div class="min-h-full bg-lf-page px-4 py-6 text-lf-primary sm:px-6 sm:py-10" data-testid="welcome-page" data-outcome={outcome ?? 'pending'}>
     <div class="mx-auto max-w-3xl">
         <header class="mb-6 flex items-center justify-between gap-4">
-            <span class="flex items-center gap-2 text-lg font-bold text-libre-green dark:text-emerald-300">
-                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-white p-1 shadow-sm ring-1 ring-gray-200 dark:ring-slate-700">
+            <span class="flex items-center gap-2 text-lg font-bold text-lf-link">
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-lf-logo p-1 shadow-sm ring-1 ring-lf-subtle">
                     <img src="/logo.png" alt="" class="h-full w-full object-contain" />
                 </span>
                 {copy.productName}
             </span>
-            <button type="button" class="rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:text-gray-300 dark:hover:bg-slate-800" onclick={onlogout} data-testid="welcome-logout">
+            <button type="button" class="rounded-lg px-3 py-2 text-sm text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" onclick={onlogout} data-testid="welcome-logout">
                 {copy.logout}
             </button>
         </header>
 
-        <section class="rounded-3xl border border-white/70 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900 sm:p-8">
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">
+        <section class="rounded-3xl border border-lf-subtle bg-lf-card p-5 shadow-xl shadow-lf-shadow-card sm:p-8">
+            <h1 class="text-2xl font-bold text-lf-primary sm:text-3xl">
                 {copy.title}
             </h1>
-            <p class="mt-2 text-gray-600 dark:text-gray-300">{copy.description}</p>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p class="mt-2 text-lf-secondary">{copy.description}</p>
+            <p class="mt-1 text-sm text-lf-muted">
                 {copy.defaultsHint}
             </p>
 
             {#if outcome}
-                <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" role="status" data-testid="welcome-outcome">
+                <div class="mt-6 rounded-xl border border-lf-success-line bg-lf-success-soft p-4 text-sm text-lf-success-on-soft" role="status" data-testid="welcome-outcome">
                     {outcome === 'completed' ? copy.completed : copy.skipped}
                 </div>
             {:else}
@@ -90,6 +91,11 @@
                 </div>
             {/if}
         </section>
+
+        <!-- The legal notice of the instance (F09): under the card, before and after the welcome -->
+        <div class="mt-4 px-1">
+            <LegalNotice />
+        </div>
     </div>
 </div>
 

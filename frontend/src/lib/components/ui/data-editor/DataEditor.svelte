@@ -19,7 +19,7 @@
     import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {Plus, Trash2, Undo2, Upload, Eye, EyeOff} from 'lucide-svelte';
+    import {Download, Plus, Trash2, Undo2, Upload, Eye, EyeOff} from 'lucide-svelte';
     import type {ParsedRow} from './CsvEditor.svelte';
     import type {ColumnDef, DataRow, RowStatus} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -29,7 +29,9 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ErasableNumberCell from './ErasableNumberCell.svelte';
+    import {CLEARED_CELL} from './DataEditorTypes';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
 
     // =========================================================================
     // Props
@@ -44,6 +46,11 @@
         readonly?: boolean;
         /** Snippet that renders the import modal. Receives {open, onimport} props via callback. */
         importModal?: Snippet<[{open: boolean; setOpen: (v: boolean) => void; onimport: (rows: ParsedRow[]) => void}]>;
+        /**
+         * Snippet that renders the export dialog (FB-30). With it, an «Export» button sits beside «Import CSV», and stays
+         * when the editor is read-only: a file can always be taken out.
+         */
+        exportModal?: Snippet<[{open: boolean; setOpen: (v: boolean) => void}]>;
         /** Emits only dirty rows (status !== 'original') */
         onchange?: (dirtyRows: DataRow[]) => void;
         /**
@@ -60,13 +67,14 @@
         importMatchKeys?: string[];
     }
 
-    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, onchange, defaultRowValues = {}, importMatchKeys = []}: Props = $props();
+    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, exportModal, onchange, defaultRowValues = {}, importMatchKeys = []}: Props = $props();
 
     // =========================================================================
     // State
     // =========================================================================
 
     let importModalOpen = $state(false);
+    let exportModalOpen = $state(false);
     let dataTableRef: DataTable<DataRow> | undefined = $state(undefined);
     let selectedIds: string[] = $state([]);
     let hideStale = $state(false);
@@ -137,8 +145,14 @@
         return '';
     }
 
-    /** Set of all existing dates for duplicate prevention */
-    let existingDates = $derived(new Set(rows.map((r) => r.date)));
+    /**
+     * The dates `row` may not move to: those of the other rows, or, with `importMatchKeys`
+     * (events), only those of the rows with the same key values: one date holds a DIVIDEND
+     * and an INTEREST.
+     */
+    function takenDates(row: DataRow): Set<string> {
+        return new Set(rows.filter((other) => other.rowId !== row.rowId && importMatchKeys.every((k) => String(other.values[k] ?? '') === String(row.values[k] ?? ''))).map((other) => other.date));
+    }
 
     /** Catalog keys of the status badges and of the status filter's options: one wording for both. */
     const STATUS_LABEL_KEYS: Record<RowStatus, string> = {
@@ -157,8 +171,8 @@
                 cell: (r) => {
                     // Editable date for appended rows
                     if (r.status === 'appended' && !isReadonly) {
-                        // disabledDates: all dates except this row's current date
-                        const disabled = new Set(existingDates);
+                        // disabledDates: the dates taken for this row, except its current date
+                        const disabled = takenDates(r);
                         disabled.delete(r.date);
                         return {
                             type: 'custom',
@@ -177,12 +191,12 @@
                     if (stale > 0) {
                         return {
                             type: 'html',
-                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-amber-600 dark:text-amber-400" title="${escapeHtml($t('chart.tooltip.stale', {values: {days: stale}}))}">⚠️ ${stale}d</span></span>`,
+                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-lf-muted text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-lf-warning" title="${escapeHtml($t('chart.tooltip.stale', {values: {days: stale}}))}">⚠️ ${escapeHtml($t('chart.tooltip.staleBadge', {values: {days: stale}}))}</span></span>`,
                         };
                     }
                     return {
                         type: 'html',
-                        html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span></span>`,
+                        html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-lf-muted text-[10px]">${wd}</span></span>`,
                     };
                 },
                 getValue: (r) => r.date,
@@ -203,16 +217,17 @@
                         cell: (r) => {
                             if (r.readonly) {
                                 const val = r.values[col.key];
-                                const display = val != null ? Number(val).toLocaleString(uiLocale(), {maximumFractionDigits: 4}) : '—';
+                                // C-97c: up to 4 decimals as before, more for a value under 1 (4 significant digits), at most 12
+                                const display = val != null ? formatPrice(Number(val), {minDecimals: 0, floorDecimals: 4}) || '—' : '—';
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${display}</span>`,
+                                    html: `<span class="text-xs font-mono text-lf-secondary">${display}</span>`,
                                 };
                             }
-                            // F.5 — erasable columns use the ErasableNumberCell with sentinel -1 semantics.
+                            // F.5 — erasable columns use the ErasableNumberCell; a cleared field holds CLEARED_CELL (N92).
                             if (col.erasable) {
                                 const raw = r.values[col.key];
-                                const numVal = raw === undefined || raw === null ? null : Number(raw);
+                                const numVal = raw === undefined || raw === null ? null : raw === CLEARED_CELL ? CLEARED_CELL : Number(raw);
                                 return {
                                     type: 'custom',
                                     component: ErasableNumberCell,
@@ -221,7 +236,7 @@
                                         step: col.step ?? 0.0001,
                                         min: col.min,
                                         placeholder: col.placeholder ?? '',
-                                        onchange: (newValue: number | null) => handleCellEditByRowId(r.rowId, col.key, newValue),
+                                        onchange: (newValue: number | typeof CLEARED_CELL | null) => handleCellEditByRowId(r.rowId, col.key, newValue),
                                     },
                                 };
                             }
@@ -235,7 +250,8 @@
                                 onchange: (newValue) => handleCellEditByRowId(r.rowId, col.key, newValue),
                             };
                         },
-                        getValue: (r) => Number(r.values[col.key] ?? 0),
+                        // N92: an erased cell (CLEARED_CELL) sorts and filters as an empty one, as it is once saved
+                        getValue: (r) => (r.values[col.key] === CLEARED_CELL ? 0 : Number(r.values[col.key] ?? 0)),
                         sortable: true,
                         filterable: true,
                         width: 140,
@@ -249,7 +265,7 @@
                             if (r.readonly) {
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
+                                    html: `<span class="text-xs text-lf-secondary">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                                 };
                             }
                             return {
@@ -286,14 +302,14 @@
                                     const docsUrl = opt.docsPath ? `/mkdocs/${prefix}${opt.docsPath}/` : '';
                                     return {
                                         type: 'html',
-                                        html: `<span class="text-xs text-gray-600 dark:text-gray-400">${opt.emoji ? `<span class="cursor-help" title="${escapeHtml(opt.tooltip ?? '')}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${escapeHtml(docsUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}${readonlyBadge}</span>`,
+                                        html: `<span class="text-xs text-lf-secondary">${opt.emoji ? `<span class="cursor-help" title="${escapeHtml(opt.tooltip ?? '')}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${escapeHtml(docsUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}${readonlyBadge}</span>`,
                                         tooltip: tooltipMeta,
                                     };
                                 }
                                 const label = opt ? `${opt.emoji ? opt.emoji + ' ' : ''}${opt.label}` : String(r.values[col.key] ?? '—');
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(label)}${readonlyBadge}</span>`,
+                                    html: `<span class="text-xs text-lf-secondary">${escapeHtml(label)}${readonlyBadge}</span>`,
                                     tooltip: tooltipMeta,
                                 };
                             }
@@ -318,7 +334,7 @@
                             if (r.readonly) {
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
+                                    html: `<span class="text-xs text-lf-secondary">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                                 };
                             }
                             return {
@@ -345,7 +361,7 @@
                     type: 'number',
                     cell: (r) => ({
                         type: 'html',
-                        html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
+                        html: `<span class="text-xs font-mono text-lf-secondary">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                     }),
                     getValue: (r) => Number(r.values[col.key] ?? 0),
                     sortable: true,
@@ -416,7 +432,7 @@
     function handleDateChange(rowId: string, newDate: string) {
         const row = rows.find((r) => r.rowId === rowId && r.status === 'appended');
         if (!row || row.date === newDate) return;
-        if (rows.some((r) => r.date === newDate)) return;
+        if (takenDates(row).has(newDate)) return;
         row.date = newDate;
         row.rowId = uniqueRowId(newDate); // the date itself for price rows
         rows = [...rows];
@@ -611,66 +627,65 @@
 <!-- Toolbar -->
 <!-- ========================================================================= -->
 
-<div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700" data-testid="data-editor-root">
-    <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-gray-100 dark:border-slate-700">
+<div class="bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle" data-testid="data-editor-root">
+    <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-lf-subtle">
         <!-- Left: actions -->
         <div class="flex items-center gap-2">
             {#if !isReadonly}
-                <button
-                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={() => (importModalOpen = true)}
-                    data-testid="fx-data-import-btn"
-                >
+                <button class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={() => (importModalOpen = true)} data-testid="fx-data-import-btn">
                     <Upload size={13} />
                     {$t('dataEditor.importCsv')}
                 </button>
-                <button
-                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={handleAddRow}
-                    data-testid="fx-data-add-row-btn"
-                >
+                <button class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={handleAddRow} data-testid="fx-data-add-row-btn">
                     <Plus size={13} />
                     {$t('common.addRow')}
+                </button>
+            {/if}
+            {#if exportModal}
+                <button class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={() => (exportModalOpen = true)} data-testid="data-editor-export-btn">
+                    <Download size={13} />
+                    {$t('dataEditor.exportCsv')}
                 </button>
             {/if}
         </div>
 
         <!-- Right: Selection bar + Counters + Stale toggle + Column visibility -->
-        <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+        <div class="flex items-center gap-3 text-xs text-lf-muted">
             {#if hasStaleRows}
                 <div class="flex items-center gap-1.5" data-testid="data-editor-stale-toggle">
                     <Tooltip text={$t('dataEditor.staleTooltip')} position="bottom" maxWidth="220px">
-                        <span class="text-[10px] text-amber-600 dark:text-amber-400 cursor-help">⚠️ {staleCount}</span>
+                        <span class="text-[10px] text-lf-warning cursor-help" data-testid="data-editor-stale-count">⚠️ {staleCount}</span>
                     </Tooltip>
                     <!-- Horizontal switch lever -->
+                    <!-- colour: closest role, to review: the «hide stale» switch was amber when on (it sits beside the amber warning count); switch roles bg-lf-checked, alt bg-lf-warning -->
                     <button
                         class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
-                                   {hideStale ? 'bg-amber-500 dark:bg-amber-600' : 'bg-gray-300 dark:bg-slate-600'}"
+                                   {hideStale ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
                         onclick={() => (hideStale = !hideStale)}
                         role="switch"
                         aria-checked={hideStale}
-                        aria-label={hideStale ? `Show ${staleCount} stale rows` : `Hide ${staleCount} stale rows`}
+                        aria-label={hideStale ? $t('dataEditor.staleShow', {values: {n: staleCount}}) : $t('dataEditor.staleHide', {values: {n: staleCount}})}
                     >
                         <span
-                            class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform
-                                     {hideStale ? 'translate-x-4.5' : 'translate-x-0.5'}"
+                            class="inline-block h-3.5 w-3.5 transform rounded-full shadow-sm transition-transform
+                                     {hideStale ? 'translate-x-4.5 bg-lf-switch-knob-on' : 'translate-x-0.5 bg-lf-switch-knob-off border border-lf-input'}"
                         ></span>
                     </button>
                 </div>
             {/if}
             {#if modifiedCount > 0}
-                <span class="text-blue-600 dark:text-blue-400">{modifiedCount} modified</span>
+                <span class="text-lf-info">{$t('dataEditor.counter.edited', {values: {n: modifiedCount}})}</span>
             {/if}
             {#if deletedCount > 0}
-                <span class="text-red-600 dark:text-red-400">{deletedCount} deleted</span>
+                <span class="text-lf-danger">{$t('dataEditor.counter.deleted', {values: {n: deletedCount}})}</span>
             {/if}
             {#if appendedCount > 0}
-                <span class="text-emerald-600 dark:text-emerald-400">{appendedCount} new</span>
+                <span class="text-lf-success">{$t('dataEditor.counter.appended', {values: {n: appendedCount}})}</span>
             {/if}
             {#if selectedIds.length > 0}
                 <button
                     type="button"
-                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-libre-green/10 text-libre-green dark:bg-emerald-400/10 dark:text-emerald-400 font-medium hover:bg-libre-green/20 dark:hover:bg-emerald-400/20 transition-colors"
+                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-lf-selected text-lf-link font-medium hover:bg-lf-checked/20 hover:text-lf-primary transition-colors"
                     onclick={() => {
                         dataTableRef?.clearSelection();
                         selectedIds = [];
@@ -682,7 +697,7 @@
                 </button>
                 <button
                     type="button"
-                    class="flex items-center justify-center w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                    class="flex items-center justify-center w-7 h-7 rounded-md bg-lf-danger-soft text-lf-danger hover:bg-lf-danger-line transition-colors"
                     onclick={() => {
                         handleBulkDelete(selectedIds);
                         dataTableRef?.clearSelection();
@@ -728,6 +743,10 @@
 </div>
 
 <!-- Import Modal (injected via snippet) -->
+{#if exportModal}
+    {@render exportModal({open: exportModalOpen, setOpen: (v) => (exportModalOpen = v)})}
+{/if}
+
 {#if importModal}
     {@render importModal({open: importModalOpen, setOpen: (v) => (importModalOpen = v), onimport: handleImport})}
 {/if}

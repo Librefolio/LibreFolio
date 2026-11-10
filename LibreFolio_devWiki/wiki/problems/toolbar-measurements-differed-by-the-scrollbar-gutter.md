@@ -8,6 +8,7 @@ related:
   - concepts/responsive-4mode-layout
   - sources/phase00-ui-polish-2026-10
   - sources/phase00-data-quality-e2e-2026-10
+  - decisions/broker-page-is-a-portfolio-view
 ---
 
 # Problem: the same bar, measured twice, 15 px apart
@@ -33,7 +34,7 @@ at a 1310 px viewport, and the asset detail's by up to 11.8 px at 1210 px
 
 ## Solution
 
-`7f8febd9d` («fix(layout): Spanish toolbar no longer overflows», train 72): `denseRow` from 950 to 990 on the
+`25b453fbe` («fix(layout): Spanish toolbar no longer overflows», train 72): `denseRow` from 950 to 990 on the
 Dashboard (below its `oneRow`, 1000) and from 850 to 890 on the asset detail — margins of 22 and 21.2 px over the
 measured need. `front-utility toolbar-width-sweep` for Spanish was red before (2 failed) and green after; the full
 sweep passed 15 of 15, and the served bundle was checked for the new values.
@@ -44,14 +45,17 @@ sweep passed 15 of 15, and the served bundle was checked for the new values.
   case, not from where a sweep's grid happens to fall.
 - When two measurements of the same element disagree by a constant, look for a layout input measured at load, such
   as the scrollbar gutter, before suspecting the code.
-- Left in the backlog: 48-1, the AI Export button padded wider than its neighbours in the same bar. V-19 itself is
-  closed in the backlog (`2166eeb90`).
+- 48-1, the AI Export button padded wider than its neighbours in the same bar, was closed in 1.3 by workstream Y,
+  lot Y8 (2026-10-15): its trigger and the Dashboard's `sync-button` beside it now use `gap-1.5 px-2.5`, like the
+  toolbars of the asset, broker and FX pages. V-19 itself is closed in the backlog (`365d0ce55`).
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Dashboard thresholds | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Dashboard thresholds (at the time) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
+| Dashboard thresholds since 04/11 (`denseRow: 990`, the `portfolio` scope; `90dad9c25`) | `frontend/src/lib/features/portfolio-view/portfolioScopeProfile.ts` |
 | Asset detail thresholds | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
 | Plan 48 (step 5, the correction) | `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` |
 | Backlog (V-19, 48-1) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
+| AI Export trigger (48-1) | `frontend/src/lib/features/ai-export/AiExportMenu.svelte` |

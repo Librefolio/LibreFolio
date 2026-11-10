@@ -88,14 +88,6 @@ Una forma sencilla pero poderosa de ayudar: **¡dale una estrella al repositorio
 
 ---
 
-## :globe_with_meridians: ¿Qué sigue? — LibreFolio Cloud
-
-Para aquellos que quieran usar LibreFolio pero no tengan el tiempo, los conocimientos o la infraestructura para autoalojarlo, estamos planeando una **plataforma alojada**: **LibreFolio Cloud**. Ofrecerá todas las mismas funciones potentes sin necesidad de configuración técnica, además de próximas **analíticas impulsadas por IA** para ayudarte a tomar decisiones de inversión más inteligentes.
-
-Para mantener la infraestructura, el mantenimiento y el desarrollo continuo, la plataforma en la nube se ofrecerá como un **servicio de suscripción**; el precio se determinará más adelante.
-
----
-
 !!! tip "¡Gracias!"
 
     Cada forma de apoyo —código, ideas, reportes de errores o donaciones— es profundamente apreciada. ¡Juntos podemos construir el mejor rastreador de cartera autoalojado! :rocket:

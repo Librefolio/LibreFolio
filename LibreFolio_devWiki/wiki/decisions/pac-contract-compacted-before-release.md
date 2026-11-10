@@ -29,8 +29,8 @@ stata rilasciata» (hand-off §0). Two days later, at Round 14, he asked for a s
 
 **When**: the coordinator's decision (a) — the slice runs **before** the contract enters `dev_release2`, so «nessun
 fingerprint `1.0.0` pubblicato cambia senza cambiare versione»: «La versione resta `1.0.0`: non è mai stata
-rilasciata. Il fingerprint cambia **una volta**, qui.» Delivered in `ac18ce097` (2026-10-05), merged with
-`68483ddda`.
+rilasciata. Il fingerprint cambia **una volta**, qui.» Delivered in `b679661e0` (2026-10-05), merged with
+`677031cde`.
 
 **The rule: a compact wire, a resolved request.**
 - Defaults live in the schema, always as `Field(default=…)`, never `default_factory` — which emits no `default` in the
@@ -68,7 +68,7 @@ floor is zero; a BUY route without a fee schedule pays no commission — the nor
 
 | Role | Path |
 |------|------|
-| Contract (defaults, optional fields, strict model config) | `backend/app/schemas/pac_allocator.py` |
+| Contract (defaults, optional fields, strict model config) | `backend/app/schemas/pac_allocator/request.py`, `backend/app/schemas/pac_allocator/base.py` |
 | Implicit fee schedules, babel minor units | `backend/app/services/pac_allocator/normalize.py` |
 | Issue codes | `backend/app/services/pac_allocator/issues.py` |
 | Request builder (compact form) | `frontend/src/lib/features/tools/pac-allocator/planner/request.ts` |

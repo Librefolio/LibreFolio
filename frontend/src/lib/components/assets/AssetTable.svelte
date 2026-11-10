@@ -17,14 +17,15 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
-    import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {assetTypeBadgeHtml, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {publishAssetTableOrder, type AssetPanelId} from './assetBrowse';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatFixed, priceFractionDigits} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     // =========================================================================
     // Types
@@ -40,8 +41,6 @@
         active: boolean;
         quote_base_quantity?: number | null;
         lastPrice?: number | null;
-        deltaAbs?: number | null;
-        deltaPercent?: number | null;
         deltas?: Record<string, number | null>;
         /** F15 — transactions using this asset. */
         txCount?: number;
@@ -105,9 +104,9 @@
     function assetIconHtml(row: AssetRow): string {
         const iconSrc = row.icon_url || (row.asset_type ? getAssetTypeIconUrl(row.asset_type) : null);
         if (iconSrc) {
-            return `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`;
+            return `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" data-hide-on-error="display" />`;
         }
-        return `<div class="w-5 h-5 rounded-full bg-libre-green/10 flex items-center justify-center shrink-0 text-libre-green"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>`;
+        return `<div class="w-5 h-5 rounded-full bg-lf-selected flex items-center justify-center shrink-0 text-lf-link"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></div>`;
     }
 
     function formatDelta(val: number | null | undefined, suffix: string = ''): string {
@@ -117,18 +116,15 @@
     }
 
     function deltaColorClass(val: number | null | undefined): string {
-        if (val === null || val === undefined) return 'text-gray-400 dark:text-gray-500';
-        return Number(val) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
+        if (val === null || val === undefined) return SIGN_TEXT.market.none;
+        return Number(val) >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss;
     }
 
     function typeBadgeHtml(type: string | null | undefined): string {
-        if (!type) return '<span class="text-gray-400">—</span>';
-        const imgSrc = getAssetTypeIconUrl(type);
-        // Badge colour follows the *content*, icon and label follow the *wrapper*.
-        // The map is shared with AssetCard — see assetTypeBadgeClass().
-        const cls = assetTypeBadgeClass(type);
-        const label = $t(`assets.types.${type}`) || type;
-        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}"><img src="${escapeHtml(imgSrc)}" alt="" class="w-3.5 h-3.5 object-contain" onerror="this.style.display='none'" />${label}</span>`;
+        if (!type) return '<span class="text-lf-muted">—</span>';
+        // The badge colour follows the *family*, the wrapper; a subtype's dot, like its icon's pastille, says what
+        // it contains (designer, round 3). The markup is shared with the asset pie's tooltip — see assetTypeBadgeHtml().
+        return assetTypeBadgeHtml(type, $t(`assets.types.${type}`) || type);
     }
 
     // =========================================================================
@@ -143,10 +139,10 @@
                 header: () => $t('common.name'),
                 cell: (row) => {
                     const icon = assetIconHtml(row);
-                    const activeDot = row.active ? '<span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>' : '<span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>';
+                    const activeDot = row.active ? '<span data-lifecycle="active" class="w-2 h-2 rounded-full bg-lf-success shrink-0"></span>' : '<span data-lifecycle="inactive" class="w-2 h-2 rounded-full bg-lf-danger shrink-0"></span>';
                     return {
                         type: 'html',
-                        html: `<div class="flex items-center gap-2 min-w-0">${icon}<span class="min-w-0 flex-1 font-medium text-gray-800 dark:text-gray-100 ${overflowScrollTextClass}">${escapeHtml(row.display_name)}</span>${activeDot}</div>`,
+                        html: `<div class="flex items-center gap-2 min-w-0">${icon}<span class="min-w-0 flex-1 font-medium text-lf-primary ${overflowScrollTextClass}">${escapeHtml(row.display_name)}</span>${activeDot}</div>`,
                     };
                 },
                 type: 'text',
@@ -159,11 +155,11 @@
                 header: () => $t('assets.table.txCount'),
                 headerTooltip: () => $t('assets.table.txCountTooltip'),
                 cell: (row) => {
-                    const scopeCls =
-                        row.txScope === 'own' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : row.txScope === 'others' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400';
+                    /* colour: closest role, to review: own = success tint, others = info tint, none = neutral chip (secondary text for contrast on the neutral fill) */
+                    const scopeCls = row.txScope === 'own' ? 'bg-lf-success-soft text-lf-success-on-soft' : row.txScope === 'others' ? 'bg-lf-info-soft text-lf-info-on-soft' : 'bg-lf-neutral text-lf-secondary';
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded-md text-[11px] font-mono font-medium ${scopeCls}">${row.txCount ?? 0}</span>`,
+                        html: `<span data-scope="${row.txScope ?? 'none'}" class="inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded-md text-[11px] font-mono font-medium ${scopeCls}">${row.txCount ?? 0}</span>`,
                     };
                 },
                 type: 'number',
@@ -213,11 +209,13 @@
                     const price = live?.value ?? row.lastPrice;
                     if (price == null) return '—';
                     const dir = live?.direction ?? 'neutral';
-                    const colorCls = dir === 'up' ? 'text-emerald-600 dark:text-emerald-400' : dir === 'down' ? 'text-red-500 dark:text-red-400' : '';
+                    const colorCls = dir === 'up' ? SIGN_TEXT.market.gain : dir === 'down' ? SIGN_TEXT.market.loss : '';
                     // A market quote is the same figure for every user and reveals
                     // nothing about this one's holdings. No masked amount shares the
                     // row, so nothing can be reconstructed from it here.
-                    const inner = formatCurrencyAmountHtml(price, row.currency, {sensitivity: 'public'});
+                    // C-97c: a price under a cent keeps 4 significant digits instead of reading 0.00.
+                    const {min, max} = priceFractionDigits(price);
+                    const inner = formatCurrencyAmountHtml(price, row.currency, {minFraction: min, maxFraction: max, sensitivity: 'public'});
                     return {
                         type: 'html',
                         html: `<span class="font-mono transition-colors duration-300 ${colorCls}">${inner}</span>`,
@@ -269,7 +267,7 @@
                 header: () => $t('common.provider'),
                 cell: (row) => ({
                     type: 'html' as const,
-                    html: row.provider_code ? assetProviderBadgeHtml(row.provider_code) : '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">✏️ Manual</span>',
+                    html: row.provider_code ? assetProviderBadgeHtml(row.provider_code) : '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-lf-warning-soft text-lf-warning-on-soft">✏️ Manual</span>',
                 }),
                 type: 'text',
                 getValue: (row) => row.provider_code ?? '',
@@ -367,19 +365,14 @@
 </div>
 
 <style>
+    /* An inactive asset's row: the warning tint, a step stronger under the pointer — the roles follow the theme. Set as the
+       row's tint of DataTable (`--dt-row-tint`), never as its background: so the fixed columns show the same colour,
+       opaque. */
     :global(tr.asset-row-inactive:not(.selected):not(.highlighted)) {
-        background-color: #fffbeb !important;
+        --dt-row-tint: var(--lf-warning-soft) !important;
     }
 
     :global(tr.asset-row-inactive:not(.selected):not(.highlighted):hover) {
-        background-color: #fef3c7 !important;
-    }
-
-    :global(.dark) :global(tr.asset-row-inactive:not(.selected):not(.highlighted)) {
-        background-color: rgb(120 53 15 / 0.24) !important;
-    }
-
-    :global(.dark) :global(tr.asset-row-inactive:not(.selected):not(.highlighted):hover) {
-        background-color: rgb(120 53 15 / 0.36) !important;
+        --dt-row-tint: color-mix(in oklab, var(--lf-warning-line) 50%, transparent) !important;
     }
 </style>

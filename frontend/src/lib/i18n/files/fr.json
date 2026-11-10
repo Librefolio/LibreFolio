@@ -76,9 +76,73 @@
     "uploader": "Téléversé par",
     "uploaderHint": "Utilisateur ayant téléversé le fichier.",
     "noUploader": "Utilisateur non indiqué",
-    "uploaderLookupFailed": "Impossible de charger les noms des utilisateurs. Les fichiers restent accessibles avec leurs identifiants."
+    "uploaderLookupFailed": "Impossible de charger les noms des utilisateurs. Les fichiers restent accessibles avec leurs identifiants.",
+    "scope": {
+      "column": "Visibilité",
+      "columnHint": "Les fichiers partagés sont visibles par tous les utilisateurs ; les fichiers personnels, seulement par la personne qui les a téléversés et par les administrateurs.",
+      "common": "Partagé",
+      "personal": "Personnel",
+      "share": "Partager avec tout le monde",
+      "makePersonal": "Rendre personnel",
+      "makePersonalConfirm": "Les autres utilisateurs ne verront plus ce fichier, pas même là où il sert d'icône ou de photo.",
+      "nowShared": "{name} est désormais visible par tous les utilisateurs",
+      "nowPersonal": "{name} n'est désormais visible que par la personne qui l'a téléversé et par les administrateurs",
+      "changeFailed": "Impossible de modifier la visibilité du fichier",
+      "sharedOnPick": "{name} était personnel : il est désormais visible par tous les utilisateurs, pour que chacun le voie ici"
+    },
+    "deleteSkipped": "Les fichiers que vous n'avez pas le droit de supprimer sont restés en place",
+    "backups": "Sauvegardes",
+    "systemUploader": "Système"
   },
   "files": {
     "deleteFailed": "Échec de la suppression du fichier"
+  },
+  "storage": {
+    "title": "Espace occupé",
+    "parts": {
+      "database": "Base de données",
+      "uploads": "Fichiers téléversés",
+      "brokerReports": "Relevés des courtiers",
+      "backups": "Sauvegardes",
+      "dataOther": "Autres fichiers de LibreFolio",
+      "disk": "Autres sur le disque",
+      "free": "Libre",
+      "restore": "Restauration en cours"
+    },
+    "summary": {
+      "limit": "{used} utilisés sur {limit}",
+      "volume": "LibreFolio utilise {used} d'un disque de {total}",
+      "data": "LibreFolio utilise {used}"
+    },
+    "overLimit": "La limite d'espace est dépassée : supprimez des sauvegardes ou des fichiers, ou relevez la limite.",
+    "limit": {
+      "label": "Espace total de LibreFolio (Mo)",
+      "hint": "L'espace maximal que LibreFolio peut occuper au total : base de données, fichiers, rapports, sauvegardes et une restauration en cours (l'archive téléversée et sa version ouverte). Au-delà, les fichiers, les rapports et les sauvegardes faites à la main sont refusés ; vos données et les sauvegardes automatiques ne sont jamais arrêtées. Saisissez 0 pour aucune limite.",
+      "locked": "La limite d'espace est fixée par l'hébergeur de cette instance.",
+      "save": "Enregistrer",
+      "saved": "Enregistré.",
+      "errors": {
+        "invalid": "Saisissez un nombre entier d'au moins 0.",
+        "forbidden": "Seuls les administrateurs peuvent modifier ceci.",
+        "locked": "La limite d'espace est fixée par l'hébergeur de cette instance : vous ne pouvez pas la modifier ici.",
+        "network": "Pas de réponse du serveur. Réessayez.",
+        "unexpected": "La limite n'a pas pu être enregistrée. Réessayez."
+      },
+      "exceeded": {
+        "raise": "Espace insuffisant : LibreFolio dépasserait ainsi son espace total. Portez l'espace total à au moins {required} dans Paramètres › Administration › Paramètres Globaux, ou supprimez des fichiers ou des sauvegardes.",
+        "locked": "Espace insuffisant : LibreFolio dépasserait ainsi son espace total. Demandez à l'hébergeur de cette instance de porter la limite à au moins {required}, ou supprimez des fichiers ou des sauvegardes.",
+        "disk": "Le disque doit aussi avoir au moins {missing} de plus de libre.",
+        "member": "Espace insuffisant : LibreFolio dépasserait ainsi son espace total. Libérez au moins {free} en supprimant des fichiers ou des rapports, ou demandez à un administrateur d'augmenter la limite."
+      },
+      "openSettings": "Ouvrir les paramètres",
+      "marker": "Limite {limit}"
+    },
+    "errors": {
+      "load": "L'espace occupé n'a pas pu être chargé. Réessayez."
+    },
+    "retry": "Réessayer",
+    "advanced": {
+      "title": "Avancé"
+    }
   }
 }

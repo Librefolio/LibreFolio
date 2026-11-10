@@ -28,7 +28,7 @@ export const POLICY_OBJECTIVES: Readonly<Record<string, readonly string[]>> = {
 
 /** The L2 tip (`strategy.l2Formula`): in Strategy, behind the «?», and on the L2 badge of the Result (R11.4). */
 export const L2_FORMULA_FALLBACK =
-    'Distance from the targets:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: value of the Asset after the plan\n• $p_i$: its target\n• $R$: already invested plus usable cash\nThe plan with the lowest sum wins: the square makes big gaps weigh more. At the quote price, without fees or margin.';
+    'Distance from the targets:\n$D = \\min \\sum_i (V_i - p_i R)^2$\n• $V_i$: value of the Asset at the end of the plan\n• $p_i$: its target\n• $R$: already invested plus usable cash\nThe plan with the lowest sum wins: the square makes big gaps weigh more. At the quote price, without fees or margin.';
 
 export const OBJECTIVE_FALLBACKS: Readonly<Record<string, string>> = {
     fixed_l2: 'Closeness to the targets (L2 distance)',
@@ -68,7 +68,7 @@ export const OBJECTIVE_TIPS: Readonly<Record<string, ObjectiveTip>> = {
         spoken: {
             key: 'tools.pacAllocator.planner.strategy.l2Help',
             fallback:
-                'Distance from the targets: for each Asset, the difference between its value after the plan and its target share of R, squared, then summed over the Assets. R is what is already invested in these Assets plus the cash you can use. The plan with the lowest sum wins; squaring makes big gaps weigh more. Values at the quote price, without fees or margin.',
+                'Distance from the targets: for each Asset, the difference between its value at the end of the plan and its target share of R, squared, then summed over the Assets. R is what is already invested in these Assets plus the cash you can use. The plan with the lowest sum wins; squaring makes big gaps weigh more. Values at the quote price, without fees or margin.',
         },
     },
     route_priority: {

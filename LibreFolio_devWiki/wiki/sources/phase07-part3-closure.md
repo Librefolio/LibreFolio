@@ -1,6 +1,9 @@
 ---
 type: source
 title: "Phase 07 — Part 3 Closure: Blocco I decisions + I-bis issues + Blocco H implementation"
+category: source
+source_type: plan
+original_path: LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure.md
 date_ingested: 2026-04-24
 date_updated: 2026-04-25
 git_hash: a61b0dfa
@@ -59,7 +62,7 @@ The manual testing session on 2026-04-22 produced 26 I-bis follow-up issues. Not
 
 When `PATCH /assets/{id}` changes `currency` and the asset has price/event history,
 the chosen semantics is **Policy D — destructive symmetric wipe + transaction
-disconnection** (commit `c7cf528c4`, 2026-04-24):
+disconnection** (commit `4dc4ac8da`, 2026-04-24):
 
 - All `price_history` rows for the asset → DELETED
 - All `asset_events` rows for the asset → DELETED (manual + provider-generated)
@@ -71,6 +74,9 @@ Because the wipe is irrecoverable, a **new read-only backup router** was introdu
 to allow the user to export a snapshot before confirming the destructive PATCH.
 
 ### New router: `backend/app/api/v1/backup.py`
+
+> *2026-11-07 lint*: today the package `backend/app/api/v1/backup/` (`038d629a1`); the three export routes below live
+> in `backend/app/api/v1/backup/exports.py`.
 
 | Endpoint | Purpose |
 |----------|---------|
@@ -135,8 +141,8 @@ without requiring a page reload.
 
 | Role | Path |
 |------|------|
-| Transaction service | `backend/app/services/transaction_service.py` |
-| Asset source (wipe logic) | `backend/app/services/asset_source.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
+| Asset source (wipe logic) | `backend/app/services/assets/currency_change.py` |
 | Schemas (common FxBackwardFillInfo) | `backend/app/schemas/common.py` |
 | Scheduled investment provider | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |
 | Asset currency change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |

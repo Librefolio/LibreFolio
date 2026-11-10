@@ -6,6 +6,12 @@ It's registered in the provider registry for testing the asset source framework
 without external dependencies.
 
 WARNING: This provider is for TESTING ONLY. Do not use in production code.
+
+It declares one plugin setting of every kind (system and user, plain and secret), so that the settings infrastructure is
+exercised end to end. Searching for ``SETTINGS_ECHO_QUERY`` answers with one item that describes the settings the call
+received: the plain values, and for each secret only whether it is set — never its value. Searching for
+``MINOR_UNIT_QUERY`` answers a line quoted in pence, ``MINOR_UNIT_IDENTIFIER``, with a quote base suggestion of 100,
+which ``suggest_quote_base`` gives for it too (Z-32 d).
 """
 
 from datetime import date, timedelta
@@ -14,17 +20,47 @@ from typing import Dict
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
-from backend.app.schemas.assets import (
-    FAAssetPatchItem,
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
-    FACurrentValue,
     FAGeographicArea,
-    FAHistoricalData,
-    FAPricePoint,
     FASectorArea,
 )
-from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.schemas.prices import (
+    FACurrentValue,
+    FAHistoricalData,
+    FAPricePoint,
+)
+from backend.app.schemas.provider import FAQuoteBaseSuggestion
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
+from backend.app.services.provider_registry import register_provider
+
+#: The search query that makes the mock describe the settings it received.
+SETTINGS_ECHO_QUERY = "lf-settings-echo"
+#: The search query that makes the mock refuse for too many requests, with a ``Retry-After`` of 30 s.
+RATE_LIMITED_QUERY = "lf-rate-limited"
+#: The provider parameter that makes the mock refuse for too many requests: a number of seconds (its ``Retry-After``) or
+#: ``true`` (no ``Retry-After``). For in-process tests only: never on the shared test backend, where a pause would
+#: outlive the test.
+RATE_LIMITED_PARAM = "mock_rate_limited"
+#: The search query that makes the mock answer a line quoted in pence (Z-32 d): ``MINOR_UNIT_IDENTIFIER``, currency
+#: ``GBp``, with a quote base suggestion of 100 units per price.
+MINOR_UNIT_QUERY = "lf-minor-unit"
+#: The identifier of that line: ``suggest_quote_base`` suggests 100 units per price for it, nothing for any other.
+MINOR_UNIT_IDENTIFIER = "MOCK_MINOR_UNIT"
+#: The suggestion for that line.
+_MINOR_UNIT_SUGGESTION = {"quantity": 100, "quote_currency": "GBp"}
+
+
+def _refuse_if_asked(provider_params: Dict | None) -> None:
+    """Raise ``AssetRateLimitedError`` when the parameters ask the mock to refuse for too many requests."""
+    asked = (provider_params or {}).get(RATE_LIMITED_PARAM)
+    if asked is None or asked is False:
+        return
+    retry_after = float(asked) if isinstance(asked, (int, float)) and not isinstance(asked, bool) else None
+    raise AssetRateLimitedError("Mock provider refused for too many requests (testing)", retry_after=retry_after)
 
 
 @register_provider(AssetProviderRegistry)
@@ -34,6 +70,39 @@ class MockProvider(AssetSourceProvider):
 
     WARNING: FOR TESTING ONLY - DO NOT USE IN PRODUCTION
     """
+
+    test_only = True
+    settings_fields = (
+        PluginSettingField(
+            key="api_key",
+            type=SettingType.STRING,
+            scope=SettingScope.SYSTEM,
+            secret=True,
+            label="API key (testing)",
+            description="A secret the tests set: the mock only reports whether it is set.",
+            env="LIBREFOLIO_MOCKPROV_API_KEY",
+        ),
+        PluginSettingField(
+            key="region",
+            type=SettingType.SELECT,
+            scope=SettingScope.SYSTEM,
+            label="Region (testing)",
+            default="eu",
+            options=(SettingOption("eu", "Europe"), SettingOption("us", "United States")),
+        ),
+        PluginSettingField(key="price_tolerance", type=SettingType.NUMBER, scope=SettingScope.SYSTEM, label="Price tolerance (testing)", default=0.5, minimum=0, maximum=10),
+        PluginSettingField(key="verbose", type=SettingType.BOOLEAN, scope=SettingScope.SYSTEM, label="Verbose (testing)", default=False),
+        PluginSettingField(
+            key="preferred_language",
+            type=SettingType.SELECT,
+            scope=SettingScope.USER,
+            label="Preferred language (testing)",
+            default="all",
+            options=(SettingOption("all", "All"), SettingOption("it", "Italian"), SettingOption("en", "English")),
+        ),
+        PluginSettingField(key="results_limit", type=SettingType.INTEGER, scope=SettingScope.USER, label="Results limit (testing)", default=10, minimum=1, maximum=50),
+        PluginSettingField(key="personal_token", type=SettingType.STRING, scope=SettingScope.USER, secret=True, label="Personal token (testing)"),
+    )
 
     @property
     def provider_code(self) -> str:
@@ -76,6 +145,7 @@ class MockProvider(AssetSourceProvider):
 
         Always returns: 100.0 USD as of today
         """
+        _refuse_if_asked(provider_params)
         if identifier == "INVALID_TICKER_12345":
             raise AssetSourceError("Invalid identifier for mock provider.", error_code="NOT_FOUND")
         return FACurrentValue(
@@ -103,6 +173,7 @@ class MockProvider(AssetSourceProvider):
 
         Returns daily prices of 100.0 for the entire date range.
         """
+        _refuse_if_asked(provider_params)
         prices = []
         current = ASSET_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
 
@@ -130,7 +201,26 @@ class MockProvider(AssetSourceProvider):
     async def search(self, query: str) -> list[dict]:
         """
         Mock search - returns dummy result for any query.
+
+        ``SETTINGS_ECHO_QUERY`` returns one item whose display name describes the settings this call received;
+        ``RATE_LIMITED_QUERY`` refuses for too many requests; ``MINOR_UNIT_QUERY`` returns a line quoted in pence with
+        its quote base suggestion.
         """
+        if query == RATE_LIMITED_QUERY:
+            raise AssetRateLimitedError("Mock provider refused for too many requests (testing)", retry_after=30.0)
+        if query == MINOR_UNIT_QUERY:
+            return [
+                {
+                    "identifier": MINOR_UNIT_IDENTIFIER,
+                    "identifier_type": IdentifierType.TICKER,
+                    "display_name": "Mock Asset: quoted in pence",
+                    "currency": "GBp",
+                    "type": "STOCK",
+                    "quote_base_suggestion": dict(_MINOR_UNIT_SUGGESTION),
+                }
+            ]
+        if query == SETTINGS_ECHO_QUERY:
+            return [{"identifier": "MOCK_SETTINGS", "identifier_type": IdentifierType.TICKER, "display_name": self._settings_summary(), "currency": "USD", "type": "MOCK"}]
         return [
             {
                 "identifier": f"MOCK_{query.upper()}",
@@ -140,6 +230,16 @@ class MockProvider(AssetSourceProvider):
                 "type": "MOCK",
             }
         ]
+
+    def _settings_summary(self) -> str:
+        """The settings of this call, in a stable order: plain values as they are, secrets only as set or unset."""
+        parts = []
+        for declared in self.settings_fields:
+            if declared.secret:
+                parts.append(f"{declared.key}={'set' if self.settings.secret(declared.key) else 'unset'}")
+            else:
+                parts.append(f"{declared.key}={self.settings.get(declared.key)}")
+        return "settings: " + "; ".join(parts)
 
     def validate_params(self, params: Dict | None) -> None:
         """
@@ -169,6 +269,7 @@ class MockProvider(AssetSourceProvider):
         Returns:
             FAAssetPatchItem object with classification_params populated
         """
+        _refuse_if_asked(provider_params)
         # Return mock data for testing as FAAssetPatchItem
         classification_params = FAClassificationParams(
             sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
@@ -177,3 +278,13 @@ class MockProvider(AssetSourceProvider):
         )
 
         return FAAssetPatchItem(asset_id=0, classification_params=classification_params)  # Will be set by caller
+
+    async def suggest_quote_base(
+        self,
+        identifier: str,
+        identifier_type: IdentifierType,
+        provider_params: Dict | None = None,
+    ) -> FAQuoteBaseSuggestion | None:
+        """100 units per price for ``MINOR_UNIT_IDENTIFIER``, a line quoted in pence; nothing for any other (Z-32 d)."""
+        _refuse_if_asked(provider_params)
+        return FAQuoteBaseSuggestion(**_MINOR_UNIT_SUGGESTION) if identifier == MINOR_UNIT_IDENTIFIER else None

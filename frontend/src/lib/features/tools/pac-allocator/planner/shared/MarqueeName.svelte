@@ -13,4 +13,4 @@
     let {text}: Props = $props();
 </script>
 
-<span use:scrollOnOverflow class="{overflowScrollTextClass} font-medium text-gray-900 dark:text-gray-100" title={text}>{text}</span>
+<span use:scrollOnOverflow class="{overflowScrollTextClass} font-medium text-lf-primary" title={text}>{text}</span>

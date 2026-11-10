@@ -30,7 +30,7 @@
     margin-top: 2rem;
 }
 
-/* Logo (Now with solid white background to match main app) */
+/* Logo (on the app's logo tile) */
 .premium-logo-img {
     width: clamp(44px, 11.25vw, 80px) !important;
     height: clamp(44px, 11.25vw, 80px) !important;
@@ -38,9 +38,9 @@
     object-fit: contain;
     margin: 0 !important;
     padding: clamp(5px, 1.5vw, 10px) !important;
-    background-color: #ffffff !important;
+    background-color: var(--lf-surface-logo) !important;
     border-radius: clamp(8px, 2vw, 12px) !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 4px 15px var(--lf-shadow-card) !important;
     flex-shrink: 0;
 }
 
@@ -113,7 +113,7 @@
 }
 
 [data-md-color-scheme="slate"] .premium-hero h2 {
-    background: linear-gradient(135deg, #f8fafc 0%, #22c55e 100%);
+    background: linear-gradient(135deg, var(--lf-text-primary) 0%, var(--lf-focus) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -127,9 +127,9 @@
     aspect-ratio: 16 / 9;
     border-radius: 20px;
     overflow: hidden;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px var(--lf-shadow-raised);
+    background: var(--lf-surface-overlay);
+    border: 1px solid var(--lf-border-raised);
     backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
@@ -137,7 +137,7 @@
 }
 
 [data-md-color-scheme="slate"] .premium-video-wrapper {
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 20px 40px var(--lf-shadow-raised);
 }
 
 .premium-video-wrapper iframe {
@@ -148,80 +148,101 @@
 
 /* Video Placeholder (until video is ready) */
 .video-placeholder {
-    color: white;
+    color: var(--lf-on-overlay);
     font-size: 1.5rem;
     font-weight: bold;
     opacity: 0.8;
 }
 
-/* Badges */
-.premium-badges {
+/* Project badges: the three of librefolio.eu, same voices, icons, colours and band, always together. One row, or one
+   column where the row does not fit (founder, 06/11/2026: never two and one). */
+.md-typeset ul.project-badges {
     display: flex;
+    gap: 1em 2em;
+    width: fit-content;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: -1rem auto 0;
+    padding: 1.25em 1.5em;
+    border-radius: 1em;
+    background: var(--lf-brand);
+    list-style: none;
+    text-align: left;
+}
+
+@media (max-width: 43.999rem) {
+    .md-typeset ul.project-badges {
+        flex-direction: column;
+    }
+}
+
+.md-typeset ul.project-badges > li.project-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.75em;
+    min-width: 0;
+    margin: 0;
+}
+
+.project-badge__icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
     justify-content: center;
-    gap: clamp(0.5rem, 3vw, 2rem);
-    flex-wrap: wrap;
-    margin-top: -1rem;
+    width: 2.75em;
+    height: 2.75em;
+    border-radius: 50%;
+    background: var(--lf-surface-card);
 }
 
-.badge {
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    padding: 0.5rem 1.2rem;
-    border-radius: 50px;
+.project-badge__icon svg {
+    width: 1.5em;
+    height: 1.5em;
+}
+
+/* The icons' colours of librefolio.eu: the lock in the text role (the brand green would vanish on the dark card), the
+   code in amber, the brokers in the link role. */
+.project-badge--private .project-badge__icon {
+    color: var(--lf-text-primary);
+}
+
+.project-badge--open .project-badge__icon {
+    color: var(--lf-warning);
+}
+
+.project-badge--brokers .project-badge__icon {
+    color: var(--lf-link);
+}
+
+.project-badge__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.3;
+    overflow-wrap: break-word;
+}
+
+.project-badge__title {
+    color: var(--lf-on-brand);
     font-weight: 700;
-    font-size: clamp(0.7rem, 2.5vw, 0.9rem);
-    color: var(--md-primary-fg-color);
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    transition: all 0.3s ease;
-    cursor: default;
 }
 
-.badge-open-source:hover {
-    background: rgba(251, 191, 36, 0.15);
-    border-color: #fbbf24;
-    color: #fbbf24;
-    transform: translateY(-2px);
+.project-badge__subtitle {
+    /* The text on the brand green, softened toward it: 6.96:1 light, 6.44:1 dark. */
+    color: color-mix(in oklab, var(--lf-on-brand) 78%, var(--lf-brand));
+    font-size: 0.875em;
 }
 
-.badge-self-hosted:hover {
-    background: rgba(48, 80, 192, 0.15);
-    border-color: #3050c0;
-    color: #3050c0;
-    transform: translateY(-2px);
+/* Heard, not seen: a screen reader says «Private, by design» as one phrase. */
+.project-badge__separator {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
-.badge-expandable:hover {
-    background: rgba(112, 200, 48, 0.15);
-    border-color: #70c830;
-    color: #70c830;
-    transform: translateY(-2px);
-}
-
-[data-md-color-scheme="slate"] .badge {
-    background: rgba(30, 41, 59, 0.8);
-    color: #94a3b8; /* neutral default instead of green */
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-[data-md-color-scheme="slate"] .badge-open-source:hover {
-    background: rgba(240, 192, 48, 0.25);
-    color: #f0c030;
-    border-color: #f0c030;
-}
-
-[data-md-color-scheme="slate"] .badge-self-hosted:hover {
-    background: rgba(48, 80, 192, 0.25);
-    color: #a0b4f0;
-    border-color: #3050c0;
-}
-
-[data-md-color-scheme="slate"] .badge-expandable:hover {
-    background: rgba(168, 224, 96, 0.25);
-    color: #A8E060;
-    border-color: #A8E060;
-}
 
 /* Quick Install Section Redesign */
 .lf-quick-install-section {
@@ -232,22 +253,16 @@
 }
 
 .lf-quick-install-card {
-    background: rgba(255, 255, 255, 0.7);
+    background: color-mix(in oklab, var(--lf-surface-card) 85%, transparent);
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--lf-border-subtle);
+    box-shadow: 0 10px 30px var(--lf-shadow-card);
     border-radius: 24px;
     padding: clamp(2.5rem, 5vw, 3.5rem);
     width: 100%;
     max-width: 800px;
     display: grid;
     gap: clamp(1.6rem, 3vw, 2.35rem);
-}
-
-[data-md-color-scheme="slate"] .lf-quick-install-card {
-    background: rgba(30, 41, 59, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
 .md-typeset .lf-quick-install-title {
@@ -262,8 +277,8 @@
 
 .lf-quick-install-docker {
     position: relative;
-    background: rgba(59, 130, 246, 0.04);
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: var(--lf-info-soft);
+    border: 1px solid var(--lf-info-line);
     border-radius: 16px;
     padding: 2rem;
     display: flex;
@@ -273,16 +288,12 @@
     /* margin-bottom removed for grid gap */
 }
 
-[data-md-color-scheme="slate"] .lf-quick-install-docker {
-    background: rgba(59, 130, 246, 0.1);
-}
-
 .lf-quick-install-eyebrow {
     position: absolute;
     top: -12px;
     left: 24px;
-    background: var(--md-primary-fg-color);
-    color: white;
+    background: var(--lf-brand);
+    color: var(--lf-on-brand);
     padding: 2px 12px;
     border-radius: 12px;
     font-size: 0.75rem;
@@ -292,11 +303,7 @@
 }
 
 .lf-quick-install-docker-body h3 {
-    color: var(--md-primary-fg-color);
-}
-
-[data-md-color-scheme="slate"] .lf-quick-install-docker-body h3 {
-    color: #93c5fd;
+    color: var(--lf-info-on-soft);
 }
 
 .lf-quick-install-docker-body p {
@@ -306,19 +313,14 @@
 }
 
 .lf-quick-install-dev {
-    background: rgba(0, 0, 0, 0.02);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    background: var(--lf-surface-panel);
+    border: 1px solid var(--lf-border-subtle);
     border-radius: 12px;
     padding: 1.5rem 2rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 2rem;
-}
-
-[data-md-color-scheme="slate"] .lf-quick-install-dev {
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .lf-quick-install-dev-body h4 {
@@ -361,40 +363,26 @@
 }
 
 .lf-quick-install-icon-primary {
-    color: #0f172a;
-    background: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: var(--lf-brand);
+    background: var(--lf-surface-logo);
+    border: 1px solid var(--lf-border-input);
 }
 
 .lf-quick-install-icon-primary svg {
-    stroke: #0f172a;
-}
-
-[data-md-color-scheme="slate"] .lf-quick-install-icon-primary {
-    color: #0f172a;
-    background: rgba(255, 255, 255, 0.92);
-    border-color: rgba(148, 163, 184, 0.45);
-}
-
-[data-md-color-scheme="slate"] .lf-quick-install-icon-primary svg {
-    stroke: #0f172a;
+    stroke: var(--lf-brand);
 }
 
 .lf-quick-install-icon-secondary {
     color: var(--md-default-fg-color);
-    background: rgba(148, 163, 184, 0.12);
-    border: 1px solid rgba(148, 163, 184, 0.24);
-}
-
-[data-md-color-scheme="slate"] .lf-quick-install-icon-secondary {
-    color: #cbd5e1;
+    background: var(--lf-surface-panel);
+    border: 1px solid var(--lf-border-subtle);
 }
 
 /* Buttons */
 .lf-btn-primary {
     display: inline-block;
-    background: var(--md-primary-fg-color);
-    color: white !important;
+    background: var(--lf-action);
+    color: var(--lf-on-action) !important;
     padding: clamp(0.55rem, 1.4vw + 0.15rem, 0.75rem) clamp(0.9rem, 3vw + 0.2rem, 1.5rem);
     border-radius: 8px;
     font-weight: 600;
@@ -405,7 +393,7 @@
 }
 
 .lf-btn-primary:hover {
-    background: var(--md-accent-fg-color);
+    background: var(--lf-action-hover);
     transform: translateY(-2px);
 }
 
@@ -413,7 +401,7 @@
     display: inline-block;
     background: transparent;
     color: var(--md-default-fg-color) !important;
-    border: 1px solid var(--md-default-fg-color--light);
+    border: 1px solid var(--lf-border-input);
     padding: clamp(0.45rem, 1vw + 0.15rem, 0.5rem) clamp(0.8rem, 2.6vw + 0.2rem, 1.25rem);
     border-radius: 8px;
     font-weight: 600;
@@ -423,17 +411,9 @@
     white-space: nowrap;
 }
 
-[data-md-color-scheme="slate"] .lf-btn-secondary {
-    color: #e2e8f0 !important;
-    border-color: rgba(255, 255, 255, 0.2);
-}
-
 .lf-btn-secondary:hover {
-    background: rgba(0, 0, 0, 0.05);
-}
-
-[data-md-color-scheme="slate"] .lf-btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--lf-surface-panel);
+    border-color: var(--lf-border-input-hover);
 }
 
 /* Mobile adjustments */
@@ -570,7 +550,7 @@
 
 .deep-dive-image img {
     border-radius: 16px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 20px 40px var(--lf-shadow-raised);
     width: 100%;
     display: block;
     background-color: transparent !important;
@@ -579,7 +559,7 @@
 
 .deep-dive-image img:not(.lf-screenshot-carousel-item):hover {
     transform: scale(1.03);
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 30px 60px var(--lf-shadow-raised);
 }
 
 .deep-dive-image .lf-screenshot-carousel {
@@ -591,11 +571,11 @@
 }
 
 [data-md-color-scheme="slate"] .deep-dive-image img {
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 20px 40px var(--lf-shadow-raised);
 }
 
 [data-md-color-scheme="slate"] .deep-dive-image img:not(.lf-screenshot-carousel-item):hover {
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 30px 60px var(--lf-shadow-raised);
 }
 
 /* Providers Vertical Box */
@@ -609,22 +589,17 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    background: rgba(255, 255, 255, 0.6);
+    background: color-mix(in oklab, var(--lf-surface-card) 85%, transparent);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border-radius: 12px;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--lf-border-subtle);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-[data-md-color-scheme="slate"] .provider-row {
-    background: rgba(30, 41, 59, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .provider-row svg {
     flex-shrink: 0;
-    color: #22c55e;
+    color: var(--lf-link);
 }
 
 .provider-info h4 {
@@ -641,7 +616,7 @@
 
 .provider-row:hover {
     transform: translateX(5px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 20px var(--lf-shadow-card);
 }
 
 /* Radial Plugin Architecture */
@@ -672,16 +647,16 @@
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 5;
-    background: #ffffff;
+    background: var(--lf-surface-logo);
     padding: 18px;
     border-radius: 24px;
-    box-shadow: 0 0 40px rgba(34, 197, 94, 0.4);
+    box-shadow: 0 0 40px color-mix(in oklab, var(--lf-focus) 40%, transparent);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .hub-core:hover {
     transform: translate(-50%, -50%) scale(1.05);
-    box-shadow: 0 0 60px rgba(34, 197, 94, 0.6);
+    box-shadow: 0 0 60px color-mix(in oklab, var(--lf-focus) 60%, transparent);
 }
 
 .hub-core img {
@@ -731,7 +706,7 @@
 }
 
 .hub-lines line {
-    stroke: #22c55e;
+    stroke: var(--lf-focus);
     stroke-width: 3;
     stroke-dasharray: 8 8;
     opacity: 0.5;
@@ -928,15 +903,10 @@
 
 
 .hub-node-unscale .provider-row {
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--lf-surface-card);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-}
-
-[data-md-color-scheme="slate"] .hub-node-unscale .provider-row {
-    background: rgba(30, 41, 59, 0.95);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 10px 30px var(--lf-shadow-card);
 }
 
 /* Mobile Break */
@@ -1034,32 +1004,21 @@
 
 /* Is LibreFolio right for you? Section */
 .lf-fit-section {
-  --lf-fit-green: #16a34a;
-  --lf-fit-green-bright: #22c55e;
-  --lf-fit-green-soft: color-mix(in srgb, var(--md-default-bg-color) 89%, var(--lf-fit-green) 11%);
-  --lf-fit-green-border: rgba(34, 197, 94, 0.28);
+  /* Fit for you: the success roles; less of a fit: the warning roles (amber is «worth a look», never an error) */
+  --lf-fit-green: var(--lf-success);
+  --lf-fit-green-soft: var(--lf-success-soft);
+  --lf-fit-green-border: var(--lf-success-line);
 
-  --lf-fit-warm: #f43f5e;
-  --lf-fit-warm-bright: #fb7185;
-  --lf-fit-warm-soft: color-mix(in srgb, var(--md-default-bg-color) 91%, var(--lf-fit-warm) 9%);
-  --lf-fit-warm-border: rgba(244, 63, 94, 0.24);
+  --lf-fit-warm: var(--lf-warning);
+  --lf-fit-warm-soft: var(--lf-warning-soft);
+  --lf-fit-warm-border: var(--lf-warning-line);
 
-  --lf-fit-surface: color-mix(in srgb, var(--md-default-bg-color) 92%, white 8%);
-  --lf-fit-card: color-mix(in srgb, var(--md-default-bg-color) 96%, white 4%);
-  --lf-fit-border: rgba(148, 163, 184, 0.22);
+  --lf-fit-surface: var(--lf-surface-card);
+  --lf-fit-card: var(--lf-surface-card);
+  --lf-fit-border: var(--lf-border-subtle);
 
   margin: 0 auto clamp(3rem, 6vw, 5rem);
   max-width: 1000px;
-}
-
-[data-md-color-scheme="slate"] .lf-fit-section {
-  --lf-fit-surface: color-mix(in srgb, var(--md-default-bg-color) 92%, white 8%);
-  --lf-fit-card: color-mix(in srgb, var(--md-default-bg-color) 94%, white 6%);
-  --lf-fit-border: rgba(148, 163, 184, 0.20);
-  --lf-fit-green-soft: color-mix(in srgb, var(--md-default-bg-color) 83%, var(--lf-fit-green) 17%);
-  --lf-fit-green-border: rgba(34, 197, 94, 0.36);
-  --lf-fit-warm-soft: color-mix(in srgb, var(--md-default-bg-color) 85%, var(--lf-fit-warm) 15%);
-  --lf-fit-warm-border: rgba(251, 113, 133, 0.34);
 }
 
 .lf-fit-header {
@@ -1103,14 +1062,14 @@
   padding: 1.5rem;
   display: flex;
   gap: 1rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 4px 20px var(--lf-shadow-card);
   overflow: visible;
   transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease, border-color 0.3s ease;
 }
 
 [data-md-color-scheme="slate"] .lf-fit-heading-card,
 [data-md-color-scheme="slate"] .lf-fit-cell {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 20px var(--lf-shadow-raised);
 }
 
 .lf-fit-heading-positive {
@@ -1212,12 +1171,12 @@
 
 .lf-fit-heading-positive .lf-fit-heading-icon {
   background: var(--lf-fit-green);
-  color: #fff;
+  color: var(--lf-on-status);
 }
 
 .lf-fit-heading-secondary .lf-fit-heading-icon {
   background: var(--lf-fit-warm);
-  color: #fff;
+  color: var(--lf-on-status);
 }
 
 .lf-fit-cell-positive .lf-fit-icon {
@@ -1271,16 +1230,16 @@
 
 .lf-fit-row:hover .lf-fit-cell-positive,
 .lf-fit-row:active .lf-fit-cell-positive {
-  background: color-mix(in srgb, var(--md-default-bg-color) 80%, var(--lf-fit-green-bright) 20%);
+  background: color-mix(in oklab, var(--lf-fit-green-soft) 80%, var(--lf-fit-green));
   border-color: var(--lf-fit-green-border);
-  box-shadow: 0 18px 45px rgba(34, 197, 94, 0.18);
+  box-shadow: 0 18px 45px color-mix(in oklab, var(--lf-focus) 18%, transparent);
 }
 
 .lf-fit-row:hover .lf-fit-cell-secondary,
 .lf-fit-row:active .lf-fit-cell-secondary {
-  background: color-mix(in srgb, var(--md-default-bg-color) 82%, var(--lf-fit-warm-bright) 18%);
+  background: color-mix(in oklab, var(--lf-fit-warm-soft) 80%, var(--lf-fit-warm));
   border-color: var(--lf-fit-warm-border);
-  box-shadow: 0 18px 45px rgba(251, 113, 133, 0.16);
+  box-shadow: 0 18px 45px color-mix(in oklab, var(--lf-focus) 16%, transparent);
 }
 
 .lf-fit-row:hover .lf-fit-axis,
@@ -1343,22 +1302,14 @@
 
 .lf-fit-mobile-badge-positive {
   color: var(--lf-fit-green);
-  background: rgba(34, 197, 94, 0.12);
+  background: var(--lf-fit-green-soft);
   border-color: var(--lf-fit-green-border);
 }
 
 .lf-fit-mobile-badge-secondary {
   color: var(--lf-fit-warm);
-  background: rgba(244, 63, 94, 0.10);
+  background: var(--lf-fit-warm-soft);
   border-color: var(--lf-fit-warm-border);
-}
-
-[data-md-color-scheme="slate"] .lf-fit-mobile-badge-positive {
-  background: rgba(34, 197, 94, 0.18);
-}
-
-[data-md-color-scheme="slate"] .lf-fit-mobile-badge-secondary {
-  background: rgba(251, 113, 133, 0.16);
 }
 
 @media (max-width: 899px) {
@@ -1379,14 +1330,9 @@
     margin-bottom: 0;
     padding: 1rem;
     border-radius: 1.5rem;
-    background: linear-gradient(180deg, rgba(148, 163, 184, 0.10), rgba(148, 163, 184, 0.04));
+    background: var(--lf-surface-panel);
     border: 1px solid var(--lf-fit-border);
-    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
-  }
-
-  [data-md-color-scheme="slate"] .lf-fit-row {
-    background: linear-gradient(180deg, rgba(30, 41, 59, 0.90), rgba(15, 23, 42, 0.88));
-    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
+    box-shadow: 0 18px 45px var(--lf-shadow-card);
   }
 
   .lf-fit-axis-spacer {
@@ -1406,15 +1352,10 @@
     letter-spacing: 0.14em;
     font-weight: 900;
     color: var(--md-default-fg-color);
-    background: rgba(148, 163, 184, 0.10);
+    background: var(--lf-surface-panel);
     border: 1px solid var(--lf-fit-border);
   }
 
-  [data-md-color-scheme="slate"] .lf-fit-axis {
-    background: rgba(51, 65, 85, 0.72);
-    border-color: rgba(148, 163, 184, 0.22);
-    color: var(--md-default-fg-color);
-  }
   
   .lf-fit-mobile-badge {
     display: inline-flex;
@@ -1424,7 +1365,7 @@
     flex-direction: column;
     align-items: stretch;
     gap: 0.85rem;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 10px 28px var(--lf-shadow-card);
   }
 
   .lf-fit-cell-main {
@@ -1468,7 +1409,7 @@
   object-fit: contain;
   border-radius: 12px;
   background-color: transparent !important;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 30px var(--lf-shadow-raised);
   transition: transform 2s cubic-bezier(0.25, 1, 0.5, 1), opacity 2s ease, filter 2s ease !important;
   will-change: transform, opacity, filter;
   cursor: default;
@@ -1526,8 +1467,8 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: rgba(15, 23, 42, 0.6);
-  color: white;
+  background: var(--lf-surface-overlay);
+  color: var(--lf-on-overlay);
   border: none;
   cursor: pointer;
   z-index: 3;
@@ -1536,14 +1477,14 @@
   justify-content: center;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 15px var(--lf-shadow-raised);
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.3s ease, background 0.3s ease, visibility 0.3s;
 }
 
 .lf-screenshot-carousel-arrow:hover {
-  background: rgba(15, 23, 42, 0.9);
+  background: var(--lf-surface-inverse);
 }
 
 .lf-screenshot-carousel-arrow svg {
@@ -1571,15 +1512,15 @@
   left: 50%;
   transform: translateX(-50%) translateY(-10px);
   z-index: 3;
-  background: rgba(15, 23, 42, 0.85);
-  color: white;
+  background: var(--lf-surface-overlay);
+  color: var(--lf-on-overlay);
   padding: 0.35rem 0.9rem;
   border-radius: 8px;
   font-size: 0.8rem;
   font-weight: 600;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 15px var(--lf-shadow-raised);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -1603,9 +1544,9 @@
   gap: 0.45rem;
   padding: 0.35rem 0.5rem;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.42);
+  background: var(--lf-surface-overlay);
   backdrop-filter: blur(10px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 8px 20px var(--lf-shadow-raised);
   transform: translateX(-50%);
 }
 
@@ -1615,14 +1556,14 @@
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
+  background: color-mix(in oklab, var(--lf-on-overlay) 55%, transparent);
   cursor: pointer;
   transition: width 180ms ease, background-color 180ms ease, opacity 180ms ease;
 }
 
 .lf-screenshot-carousel-dot.is-active {
   width: 1.25rem;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--lf-on-overlay);
 }
 
 .lf-screenshot-carousel-dot:focus-visible {

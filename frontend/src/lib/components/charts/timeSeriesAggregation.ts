@@ -9,10 +9,23 @@
  */
 
 import type {RenderedSignal} from '$lib/charts/signals';
+import {daysBetween, utcMs} from '$lib/utils/dateOnly';
 
 import type {LineDataPoint} from './LineChart.svelte';
 
-export type ChartResolution = 'daily' | 'weekly' | 'monthly';
+/**
+ * The levels a chart groups its days into. `yearly` is the coarsest, for a history of many decades whose months are still too many
+ * for the plot: only a caller that counts years (`yearlyCount`) can reach it from the cascade.
+ */
+export type ChartResolution = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+/** How many buckets of each level the visible range holds; what the density cascade weighs. `yearlyCount` is optional: without it the year is never chosen. */
+export interface ResolutionCounts {
+    dailyCount: number;
+    weeklyCount: number;
+    monthlyCount: number;
+    yearlyCount?: number;
+}
 
 export interface BucketMeta {
     bucketStart: string;
@@ -72,15 +85,23 @@ const DENSITY_THRESHOLDS: Record<ChartGrammar, {high: number; low: number}> = {
     candle: {high: 1 / CANDLE_MIN_SLOT_PX, low: (1 / CANDLE_MIN_SLOT_PX) * HYSTERESIS_RATIO},
 };
 
+/**
+ * A UTC midnight from a year, a month index and a day. `Date.UTC(24, 0, 1)` reads the year as 1924; setting the year on its
+ * own takes it as it is, so a date typed in the year 24 stays there.
+ */
+function utcMidnight(year: number, monthIndex: number, day: number): Date {
+    return new Date(utcMs(year, monthIndex, day));
+}
+
 /** Parse ISO YYYY-MM-DD into UTC Date at midnight. */
 function parseDate(iso: string): Date {
     const [year, month, day] = iso.split('-').map(Number);
-    return new Date(Date.UTC(year, month - 1, day));
+    return utcMidnight(year, month - 1, day);
 }
 
 /** Format UTC Date back to ISO YYYY-MM-DD. */
 function formatDate(date: Date): string {
-    const year = date.getUTCFullYear();
+    const year = String(date.getUTCFullYear()).padStart(4, '0');
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
     const day = String(date.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
@@ -151,9 +172,14 @@ export function mapDateToBucket(date: string, resolution: ChartResolution): {buc
     }
 
     const year = parsed.getUTCFullYear();
+
+    if (resolution === 'yearly') {
+        return {bucketStart: formatDate(utcMidnight(year, 0, 1)), bucketEnd: formatDate(utcMidnight(year, 11, 31))};
+    }
+
     const month = parsed.getUTCMonth();
-    const monthStart = new Date(Date.UTC(year, month, 1));
-    const monthEnd = new Date(Date.UTC(year, month + 1, 0));
+    const monthStart = utcMidnight(year, month, 1);
+    const monthEnd = utcMidnight(year, month + 1, 0);
 
     return {
         bucketStart: formatDate(monthStart),
@@ -194,17 +220,17 @@ export function aggregateSumSeries(points: LineDataPoint[], resolution: ChartRes
     if (points.length === 0) return [];
 
     return groupPointsByBucket(points, resolution).map((group) => {
-        const sum = group.points.reduce((total, point) => total + point.value, 0);
-        const lastPoint = group.points[group.points.length - 1];
-        return withBucketMeta(
-            {...lastPoint, value: sum},
-            {
-                bucketStart: group.bucketStart,
-                bucketEnd: group.bucketEnd,
-                resolution,
-                sourcePointCount: group.points.length,
-            },
-        );
+        // A missing point exists but has no value: it adds nothing to the sum, and the bucket is a gap only when
+        // nothing in it has a value — a missing last day must not hide the flows of the days before it (I-01).
+        const present = group.points.filter((point) => !point.missing);
+        const sum = present.reduce((total, point) => total + point.value, 0);
+        const {missing: _lastMissing, ...lastPoint} = group.points[group.points.length - 1];
+        return withBucketMeta(present.length === 0 ? {...lastPoint, value: 0, missing: true} : {...lastPoint, value: sum}, {
+            bucketStart: group.bucketStart,
+            bucketEnd: group.bucketEnd,
+            resolution,
+            sourcePointCount: present.length,
+        });
     });
 }
 
@@ -474,13 +500,85 @@ export function computeDensity(bucketCount: number, plotWidthPx: number): number
     return bucketCount / plotWidthPx;
 }
 
+// =========================================================================
+// The compact chart's sizing rule (Z-29b)
+// =========================================================================
+//
+// A card draws as many points as its plot has room for: at most 1.3 per pixel, the line grammar's own density. The page
+// asks the backend for exactly that many (`max_points`), and the backend picks the finest step whose count fits
+// (`choose_resolution()`): the same rule as `LineChart`'s static one. They are tied by the case table
+// `__tests__/compactDensityCases.json`, which `test_price_query_sampling.py` and `compactDensity.test.ts` both read.
+
+/** The most points per pixel a compact chart draws; its static resolution and the `max_points` a card sends read it. */
+export const COMPACT_DENSITY_THRESHOLD = LINE_HIGH_DENSITY_THRESHOLD;
+/** The compact chart's grid: the room left of the plot, right of it, and right of it with the mini axis on. */
+export const COMPACT_GRID_LEFT_PX = 5;
+export const COMPACT_GRID_RIGHT_PX = 5;
+export const COMPACT_GRID_RIGHT_WITH_AXIS_PX = 45;
+/** The plot width assumed for a card not measured yet (the table view has no card), about a three-column grid's. */
+export const DEFAULT_COMPACT_PLOT_WIDTH_PX = 300;
+/** The backend's cap on `max_points` (`FAPriceQueryItem.max_points`, `le=10_000`). */
+export const COMPACT_MAX_POINTS_CAP = 10_000;
+
+/** The width of a compact chart's plot inside its container: the grid's paddings taken out; 0 when nothing is left. */
+export function compactPlotWidth(containerWidthPx: number, showMiniAxis = true): number {
+    const rightPadding = showMiniAxis ? COMPACT_GRID_RIGHT_WITH_AXIS_PX : COMPACT_GRID_RIGHT_PX;
+    return Math.max(containerWidthPx - COMPACT_GRID_LEFT_PX - rightPadding, 0);
+}
+
+/**
+ * The `max_points` a card sends for a plot `plotWidthPx` wide: the most points the plot takes at 1.3 per pixel, never
+ * fewer than 1 nor more than the backend takes. A series with that many points or fewer is drawn as it is.
+ */
+export function compactMaxPoints(plotWidthPx: number): number {
+    if (!Number.isFinite(plotWidthPx) || plotWidthPx <= 0) return 1;
+    // The epsilon keeps 1.3 × 100 from falling to 129 on the float's last digit; no width in the table sits that close.
+    return Math.min(COMPACT_MAX_POINTS_CAP, Math.max(1, Math.floor(plotWidthPx * COMPACT_DENSITY_THRESHOLD + 1e-9)));
+}
+
+/** The first Monday on or before an ISO day (the start of its ISO week). */
+function isoWeekStart(isoDay: string): string {
+    const [year, month, day] = isoDay.split('-').map(Number);
+    const weekday = utcMidnight(year, month - 1, day).getUTCDay();
+    const sinceMonday = (weekday + 6) % 7;
+    return utcMidnight(year, month - 1, day - sinceMonday)
+        .toISOString()
+        .slice(0, 10);
+}
+
+/** How many days, ISO weeks (Monday to Sunday) and calendar months a fill from `first` to `end` touches (`fill_counts()`). */
+export function fillCounts(first: string, end: string): {days: number; weeks: number; months: number} {
+    const days = daysBetween(first, end) + 1;
+    const weeks = daysBetween(isoWeekStart(first), isoWeekStart(end)) / 7 + 1;
+    const months = (Number(end.slice(0, 4)) - Number(first.slice(0, 4))) * 12 + Number(end.slice(5, 7)) - Number(first.slice(5, 7)) + 1;
+    return {days, weeks, months};
+}
+
+/**
+ * The static resolution of a compact chart: daily while the days fit the plot at the threshold, else weekly while the
+ * weeks do, else monthly. What `LineChart` applies to the daily series it is given, and what the backend answers a card
+ * whose `max_points` is `compactMaxPoints()` of the same plot.
+ */
+export function chooseCompactResolution(counts: {dailyCount: number; weeklyCount: number}, plotWidthPx: number): ChartResolution {
+    if (computeDensity(counts.dailyCount, plotWidthPx) <= COMPACT_DENSITY_THRESHOLD) return 'daily';
+    if (computeDensity(counts.weeklyCount, plotWidthPx) <= COMPACT_DENSITY_THRESHOLD) return 'weekly';
+    return 'monthly';
+}
+
+/** The step the backend picks for an item with `max_points` over a fill of these counts: the finest whose count fits. */
+export function stepForMaxPoints(counts: {days: number; weeks: number}, maxPoints: number): ChartResolution {
+    if (counts.days <= maxPoints) return 'daily';
+    if (counts.weeks <= maxPoints) return 'weekly';
+    return 'monthly';
+}
+
 /**
  * Choose chart resolution using shared hysteresis thresholds.
  *
  * `grammar` defaults to 'line', so every existing caller keeps its exact previous behavior
  * by construction rather than by remembering to pass the old value.
  */
-export function chooseResolution(current: ChartResolution, counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
+export function chooseResolution(current: ChartResolution, counts: ResolutionCounts, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
     const {high, low} = DENSITY_THRESHOLDS[grammar];
 
     if (current === 'daily') {
@@ -497,8 +595,15 @@ export function chooseResolution(current: ChartResolution, counts: {dailyCount: 
         return 'weekly';
     }
 
+    if (current === 'yearly') {
+        return computeDensity(counts.monthlyCount, plotWidthPx) < low ? 'monthly' : 'yearly';
+    }
+
     const densityWeekly = computeDensity(counts.weeklyCount, plotWidthPx);
-    return densityWeekly < low ? 'weekly' : 'monthly';
+    if (densityWeekly < low) return 'weekly';
+    // The months are too many for the plot, and the caller counts years: the next level.
+    if (counts.yearlyCount !== undefined && computeDensity(counts.monthlyCount, plotWidthPx) > high) return 'yearly';
+    return 'monthly';
 }
 
 /**
@@ -520,10 +625,10 @@ export function chooseResolution(current: ChartResolution, counts: {dailyCount: 
  * correct answer depends on where you came from — cascading from the real `current`
  * preserves that "stay put" memory, it only closes the gap for multi-tier jumps.
  */
-export function cascadeResolution(current: ChartResolution, counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
+export function cascadeResolution(current: ChartResolution, counts: ResolutionCounts, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
     let resolution = current;
-    // At most 2 hops (daily->weekly->monthly, or the reverse) can ever be needed; loop defensively.
-    for (let i = 0; i < 3; i++) {
+    // At most 3 hops (daily->weekly->monthly->yearly, or the reverse) can ever be needed; loop defensively.
+    for (let i = 0; i < 4; i++) {
         const next = chooseResolution(resolution, counts, plotWidthPx, grammar);
         if (next === resolution) break;
         resolution = next;
@@ -536,7 +641,7 @@ export function cascadeResolution(current: ChartResolution, counts: {dailyCount:
  * resolution to be hysteretic about (e.g. first paint, or the visible range just reset
  * to the dataset's full span). Equivalent to cascading from 'daily'.
  */
-export function chooseInitialResolution(counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
+export function chooseInitialResolution(counts: ResolutionCounts, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
     return cascadeResolution('daily', counts, plotWidthPx, grammar);
 }
 

@@ -25,7 +25,7 @@ Contabilità aggregata basata su PMC per l'intero portafoglio (o qualsiasi ambit
 
 | Metrica / Concetto | Descrizione |
 |------------------|-------------|
-| **[Panoramica del Motore di Portafoglio](portfolio-engine/index.md)** | Modello matematico completo: resolver unificato dei prezzi, PMC, aggregazione, modello a 3 pool, contribuzione, architettura pre-frame/frame. |
+| **[Panoramica del Motore di Portafoglio](portfolio-engine/index.md)** | Modello matematico completo: resolver unificato dei prezzi, PMC, aggregazione, modello a 3 pool, contribuzione, un unico replay giornaliero. |
 | **[Risoluzione dei Prezzi](portfolio-engine/price-resolution.md)** | Livelli del resolver unificato: MARKET → TRADE_AVG → CARRIED → MISSING, con mark nativi e FX per data. |
 | **[Valore Patrimoniale Netto (NAV)](portfolio-engine/nav.md)** | Valutazione di mercato totale del portafoglio (asset + contante + in transito), utilizzando il resolver unificato. |
 | **[Valore Contabile](portfolio-engine/book-value.md)** | Costo contabile storico delle posizioni aperte (PMC × quantità) più contante. Differenza dal NAV = P&L non realizzato. |
@@ -34,7 +34,7 @@ Contabilità aggregata basata su PMC per l'intero portafoglio (o qualsiasi ambit
 | **[Effetto di Tempismo](portfolio-engine/timing-effect.md)** | Differenza tra MWRR Cumulativo e TWRR Cumulativo — quantifica l'impatto del tempismo dei flussi di cassa sui rendimenti. |
 | **[ROI Semplice](portfolio-engine/roi.md)** | Rendimento percentuale rispetto al capitale investito netto. Semplice ma soggetto alla diluizione dei flussi di cassa. |
 | **[Rendimento Annualizzato Netto](portfolio-engine/net-annualized-return.md)** | Definizioni del CAGR netto per posizioni, contributo di periodo e lotti FIFO, con finestra minima di 30 giorni. |
-| **[Rendimento sul costo](portfolio-engine/yield-on-cost.md)** | Dividendi/interessi lordi non negativi degli ultimi 365 giorni per unità storica ammissibile, divisi per il prezzo medio di carico (PMC) di ogni coppia asset/broker. |
+| **[Rendimento sul costo](portfolio-engine/yield-on-cost.md)** | Dividendi/interessi lordi degli ultimi 365 giorni, ogni importo con il proprio segno, per unità storica ammissibile, divisi per il prezzo medio di carico (PMC) di ogni coppia asset/broker. |
 | **[TWRR](portfolio-engine/twrr.md)** | Tasso di Rendimento Ponderato nel Tempo. Performance pura di asset/strategia, che neutralizza il tempismo di depositi/prelievi. |
 | **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Tasso di Rendimento Ponderato per il Capitale. Performance personale dell'investitore che tiene conto del tempismo dei flussi di cassa. Forme annualizzate e cumulative. |
 
@@ -101,7 +101,7 @@ Per aiutarti a scegliere la metrica giusta per la tua analisi, utilizza questa g
 
 ### 💸 9. [Rendimento sul costo](portfolio-engine/yield-on-cost.md)
 * **Domanda Chiave:** "Quanto reddito lordo da dividendi e interessi ha prodotto ogni unità attuale negli ultimi 365 giorni di calendario rispetto al suo prezzo medio di carico?"
-* **Concetto della Formula:** Somma il reddito non negativo, convertito al cambio della data della transazione, per ogni unità long ammissibile del giorno precedente, rettifica per gli split collegati, poi divide per il prezzo medio di carico (PMC) alla data di fine del report.
+* **Concetto della Formula:** Somma il reddito con segno, convertito al cambio della data della transazione, per ogni unità long ammissibile del giorno precedente, rettifica per gli split collegati, poi divide per il prezzo medio di carico (PMC) alla data di fine del report.
 * **Caso d'Uso Ideale:** Confrontare la produttività di reddito registrata delle posizioni aperte asset/broker senza confonderla con il dividend yield di mercato, il CAGR o il rendimento a scadenza (YTM) di un'obbligazione.
 
 ---

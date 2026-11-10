@@ -9,11 +9,16 @@
  *        its own dividend, paid before the dashboard period starts but inside [T−364, T]. The report gives each row its
  *        own YOC, exactly the oracle's, and so does the screen, on the Dashboard and on the broker page. A YOC computed
  *        per asset would read 2.10% on both rows; one that counted only the report period would find no income at all.
- *   Y2 — no cost, no YOC (P-10). An acquisition saved without a purchase cost (the ADJUSTMENT linked to a SPLIT whose
- *        event is then retyped, the one path the app still allows, `data-quality-real.spec.ts` E2) leaves the average
- *        cost unknown. The position has a dividend in the window, so the dash means «unknown cost», not «no income»:
- *        the report answers unavailable / missing_wac and the cell shows the dash with its info icon, never a figure.
- *        An explicit cost of 0 per unit turns it into a figure, the oracle's.
+ *   Y2 — no cost, no YOC. An acquisition without a purchase cost leaves the average cost unknown. The app can no
+ *        longer save one: an ADJUSTMENT adding quantity needs a cost (COST_BASIS_REQUIRED), and the last path, P-10 —
+ *        an ADJUSTMENT linked to a SPLIT, saved in Auto, whose event is then retyped — is closed too (the retype is
+ *        refused with EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, pinned by E2 of `data-quality-real.spec.ts`). Such rows
+ *        exist only in data an older version left behind, so the test writes one the way `data-quality-legacy.spec.ts`
+ *        does, through the shared `fixtures/legacy-cost-rows.ts`: `backend/test_scripts/test_db/legacy_cost_rows.py`, run against this lane's test database only, adds an
+ *        ADJUSTMENT-in with no cost to the position (plus the TRANSFER pair the helper always writes, on a second owned
+ *        broker and asset that nothing here asserts on). The position has a dividend in the window, so the dash means
+ *        «unknown cost», not «no income»: the report answers unavailable / missing_wac and the cell shows the dash
+ *        with its info icon, never a figure. An explicit cost of 0 per unit turns it into a figure, the oracle's.
  *
  * The oracle is the backend contract restated independently (`_oracle_yoc` in `test_yield_on_cost.py`):
  *
@@ -37,6 +42,7 @@ import {expect, test as base, type APIRequestContext, type Locator, type Page, t
 import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
+import {writeLegacyRows} from '../fixtures/legacy-cost-rows';
 import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 
@@ -69,7 +75,7 @@ type ReportHolding = {asset_id: number; broker_id?: number | null; quantity: str
 type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: string; end?: string} | null};
 type ReportBody = {metadata?: {target_currency?: string} | null; summary?: {holdings?: unknown[]} | null};
 type CommitBody = {committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index: number; ids: number[]}>};
-type TransactionRead = {id: number; asset_event_id?: number | null; cost_basis_override?: Money | null};
+type TransactionRead = {id: number; broker_id: number; asset_id?: number | null; type: string; date: string; quantity: string; cash?: unknown; description?: string | null; asset_event_id?: number | null; cost_basis_override?: Money | null};
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
 type Owned = {user: DisposableUser | null; brokerIds: number[]; assetIds: number[]};
 
@@ -148,37 +154,11 @@ async function commitTransactions(page: Page, batch: {creates?: unknown[]; updat
     return committed;
 }
 
-function createdId(committed: CommitBody, index: number): number {
-    const id = committed.results?.find((item) => item.operation === 'create' && item.index === index)?.ids[0];
-    if (typeof id !== 'number') throw new Error(`The commit returned no id for create #${index}: ${JSON.stringify(committed.results)}`);
-    return id;
-}
-
 async function readTransaction(page: Page, id: number): Promise<TransactionRead> {
     const rows = await jsonFrom<TransactionRead[]>(await page.request.get(`${API}/transactions?ids=${id}`), `read transaction ${id}`);
     const row = rows.find((candidate) => candidate.id === id);
     if (!row) throw new Error(`GET /transactions?ids=${id} did not return the transaction: ${JSON.stringify(rows)}`);
     return row;
-}
-
-async function eventsOn(page: Page, assetId: number, day: string): Promise<Array<{id: number; type: string}>> {
-    const body = await jsonFrom<{items: Array<{asset_id: number; events: Array<{id: number; type: string}>}>}>(await page.request.post(`${API}/assets/events/query`, {data: [{asset_id: assetId, date_range: {start: day, end: day}}]}), `query the events of asset ${assetId} on ${day}`);
-    const item = body.items.find((candidate) => candidate.asset_id === assetId);
-    return (item?.events ?? []).map((event) => ({id: event.id, type: event.type}));
-}
-
-/** A SPLIT carries its ratio in `value`; its currency is the asset's and means nothing. */
-async function createSplitEvent(page: Page, assetId: number, day: string, ratio: string): Promise<number> {
-    await jsonFrom(await page.request.post(`${API}/assets/events`, {data: [{asset_id: assetId, events: [{date: day, type: 'SPLIT', value: {code: 'EUR', amount: ratio}}]}]}), 'create the SPLIT event');
-    const events = await eventsOn(page, assetId, day);
-    const splits = events.filter((event) => event.type === 'SPLIT');
-    expect(splits, `exactly one SPLIT on ${day}: ${JSON.stringify(events)}`).toHaveLength(1);
-    return splits[0].id;
-}
-
-/** Edit an event in place, by id, as the event editor does. */
-async function retypeEvent(page: Page, assetId: number, eventId: number, day: string, type: string, amount: string): Promise<void> {
-    await jsonFrom(await page.request.post(`${API}/assets/events`, {data: [{asset_id: assetId, events: [{id: eventId, date: day, type, value: {code: 'EUR', amount}}]}]}), `retype event ${eventId} to ${type}`);
 }
 
 /**
@@ -459,19 +439,26 @@ test.describe('Yield on Cost on real data — release 1.2, gap 4', () => {
         const d2 = daysAgoIso(30);
         const d3 = daysAgoIso(20);
         const period = dashboardPeriod();
-        // 10 units bought for 1000 EUR, 10 more from the «split» at an unknown cost, then a 40 EUR dividend on 20 units.
-        // Once those 10 are given a cost of 0 per unit: WAC 1000 / 20 = 50, YOC 40 / 20 / 50 = 4.00%.
+        // 10 units bought for 1000 EUR, 10 more from a legacy ADJUSTMENT at an unknown cost, then a 40 EUR dividend on
+        // 20 units. Once those 10 are given a cost of 0 per unit: WAC 1000 / 20 = 50, YOC 40 / 20 / 50 = 4.00%.
         const healed = yieldOnCostOracle([{amount: 40, eligibleQuantity: 20, laterSplitRatio: 1}], 50);
 
-        const {brokerId, assetId, adjustmentId} = await test.step('seed (P-10): a purchase, an ADJUSTMENT linked to a SPLIT saved without a cost, the event retyped, then a dividend', async () => {
+        const {brokerId, assetId, adjustmentId} = await test.step('seed: a purchase, a legacy ADJUSTMENT-in without a cost (written as an older version stored it), then a dividend', async () => {
             await openAccount(page, request, owned, 'yoc2');
+            const user = owned.user;
+            if (!user) throw new Error('openAccount registered no account');
             const suffix = uniqueSuffix();
             const brokerId = await createBroker(page, owned, `yoc-cost-broker-${suffix}`);
             const assetId = await createManualAsset(page, owned, `YOC unknown cost ${suffix}`);
+            // The helper always writes a TRANSFER pair too: its own broker and asset, owned and deleted like the rest,
+            // with a purchase at the source so the transfer out moves units that are there. Nothing asserts on them.
+            const sideBroker = await createBroker(page, owned, `yoc-side-broker-${suffix}`);
+            const sideAsset = await createManualAsset(page, owned, `YOC side transfer ${suffix}`);
             await seedPrices(page, assetId, [
                 {date: d1, close: 100},
                 {date: d2, close: 50},
             ]);
+            await seedPrices(page, sideAsset, [{date: d1, close: 10}]);
             await commitTransactions(
                 page,
                 {
@@ -479,22 +466,32 @@ test.describe('Yield on Cost on real data — release 1.2, gap 4', () => {
                         {broker_id: brokerId, type: 'DEPOSIT', date: d0, cash: {code: 'EUR', amount: '10000'}, description: `yoc-real funding ${suffix}`},
                         {broker_id: brokerId, asset_id: assetId, type: 'BUY', date: d1, quantity: '10', cash: {code: 'EUR', amount: '-1000'}, description: `yoc-real purchase ${suffix}`},
                         {broker_id: brokerId, asset_id: assetId, type: 'DIVIDEND', date: d3, cash: {code: 'EUR', amount: '40'}, description: `yoc-real dividend ${suffix}`},
+                        {broker_id: sideBroker, type: 'DEPOSIT', date: d0, cash: {code: 'EUR', amount: '100'}, description: `yoc-real side funding ${suffix}`},
+                        {broker_id: sideBroker, asset_id: sideAsset, type: 'BUY', date: d1, quantity: '2', cash: {code: 'EUR', amount: '-20'}, description: `yoc-real side purchase ${suffix}`},
                     ],
                 },
-                'commit the funding, the purchase and the dividend',
+                'commit the funding, the purchases and the dividend',
             );
-            const eventId = await createSplitEvent(page, assetId, d2, '2');
-            const adjustment = await commitTransactions(
-                page,
-                {creates: [{broker_id: brokerId, asset_id: assetId, type: 'ADJUSTMENT', date: d2, quantity: '10', asset_event_id: eventId, cost_basis_mode: 'auto', description: `yoc-real split shares ${suffix}`}]},
-                'commit the ADJUSTMENT linked to the split, in Auto',
-            );
-            const adjustmentId = createdId(adjustment, 0);
+
+            const marker = `yoc-real legacy ${suffix}`;
+            const legacy = writeLegacyRows({userId: user.id, sourceBroker: sideBroker, destBroker: brokerId, transferAsset: sideAsset, adjustmentAsset: assetId, date: d2, transferQty: 1, adjustmentQty: 10, marker});
+            const adjustmentId = legacy.adjustment_in;
+            // The precondition, read back through the app rather than taken on the helper's word.
             const saved = await readTransaction(page, adjustmentId);
-            expect(saved.asset_event_id, 'the ADJUSTMENT is linked to the split').toBe(eventId);
-            expect(saved.cost_basis_override ?? null, 'precondition (P-10): a split-linked ADJUSTMENT in Auto is saved without a cost').toBeNull();
-            await retypeEvent(page, assetId, eventId, d2, 'PRICE_ADJUSTMENT', '2');
-            expect(await eventsOn(page, assetId, d2), 'the event keeps its id and is now a PRICE_ADJUSTMENT').toEqual([{id: eventId, type: 'PRICE_ADJUSTMENT'}]);
+            expect(
+                {
+                    type: saved.type,
+                    broker_id: saved.broker_id,
+                    asset_id: saved.asset_id ?? null,
+                    date: saved.date,
+                    quantity: Number(saved.quantity),
+                    cash: saved.cash ?? null,
+                    cost_basis_override: saved.cost_basis_override ?? null,
+                    asset_event_id: saved.asset_event_id ?? null,
+                    marked: (saved.description ?? '').includes(marker),
+                },
+                'precondition: an ADJUSTMENT-in of 10 units on this position, with no cost, no cash and no event — the legacy shape the app now refuses',
+            ).toEqual({type: 'ADJUSTMENT', broker_id: brokerId, asset_id: assetId, date: d2, quantity: 10, cash: null, cost_basis_override: null, asset_event_id: null, marked: true});
             return {brokerId, assetId, adjustmentId};
         });
 

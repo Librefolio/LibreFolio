@@ -47,7 +47,7 @@ import {uniqueSuffix} from '../fixtures/unique';
 const API = '/api/v1';
 const COMMIT_PATH = `${API}/transactions/commit`;
 const REPORT_PATH = `${API}/portfolio/report`;
-const WAC_PATH = `${API}/portfolio/wac`;
+const LOTS_PATH = `${API}/portfolio/lots/analysis`;
 const UI_TIMEOUT = 15_000;
 /** The dashboard period: it starts before the first movement and ends today. */
 const PERIOD_START_DAYS_AGO = 90;
@@ -108,10 +108,12 @@ type CommitBody = {
 };
 type SentCreate = Record<string, unknown>;
 type TransactionRead = {id: number; broker_id: number; asset_id?: number | null; type: string; date: string; quantity: string; related_transaction_id?: number | null; cost_basis_override?: Money | null};
-type WacBody = {results: Array<{broker_id: number; asset_id: number; currency: string; series: Array<{date: string; wac: string; pool_qty: string}>}>};
+type WacBody = {asset_id: number; target_currency: string; broker_wac_history: Array<{broker_id: number; date: string; through: string; wac: string; pool_qty: string}> | null};
 type ReportHolding = {asset_id: number; broker_id?: number | null; quantity: string; wac_per_unit?: string | null; current_value?: string | null; gain_loss?: string | null};
 type ReportBody = {metadata?: {target_currency?: string} | null; summary?: {holdings?: ReportHolding[]} | null};
-type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: string; end?: string} | null};
+type ReportRequestBody = {include_summary?: boolean; include_positions_contribution?: boolean; date_range?: {start?: string; end?: string} | null};
+type ContributionRow = {asset_id: number; broker_id?: number | null; is_fully_sold?: boolean; closed_by?: string | null; closed_to_broker_id?: number | null};
+type ContributionBody = {positions_contribution?: {positions?: ContributionRow[]} | null};
 
 /**
  * A wait armed before the action and awaited later. If the test fails in between, the pending wait would reject
@@ -201,15 +203,15 @@ async function commitLedger(page: Page, from: Broker, asset: Asset, marker: stri
     expect(body.committed, `the ledger of broker A rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
 }
 
-/** The average-cost series of `broker` for `asset`, one point per movement: date, average and units after it. */
+/** The average-cost line of `broker` for `asset` (BROKER_WAC_HISTORY of the lots analysis), one step per change: date, average and units. */
 async function averageSeries(page: Page, broker: Broker, asset: Asset): Promise<Array<{date: string; wac: number; pool_qty: number}>> {
-    const query = {queries: [{broker_id: broker.id, asset_id: asset.id}]};
-    schemas.WACAnalyticsRequest.parse(query);
-    const body = await jsonFrom<WacBody>(await page.request.post(WAC_PATH, {data: query}), `the average cost of ${broker.name}`);
-    const result = body.results.find((item) => item.broker_id === broker.id && item.asset_id === asset.id);
-    if (!result) throw new Error(`POST /portfolio/wac answered nothing for broker ${broker.id}: ${JSON.stringify(body)}`);
-    expect(result.currency, 'the average is in the asset currency').toBe('EUR');
-    return result.series.map((point) => ({date: point.date, wac: Number(point.wac), pool_qty: Number(point.pool_qty)}));
+    const query = {asset_id: asset.id, broker_ids: [broker.id], target_currency: 'EUR', requested_analyses: ['BROKER_WAC_HISTORY']};
+    schemas.LotsAnalysisQuery.parse(query);
+    const body = await jsonFrom<WacBody>(await page.request.post(LOTS_PATH, {data: query}), `the average cost of ${broker.name}`);
+    expect(body.asset_id, 'the lots analysis answers for the asked asset').toBe(asset.id);
+    expect(body.target_currency, 'the average is in the asset currency').toBe('EUR');
+    const line = (body.broker_wac_history ?? []).filter((point) => point.broker_id === broker.id);
+    return line.sort((a, b) => a.date.localeCompare(b.date)).map((point) => ({date: point.date, wac: Number(point.wac), pool_qty: Number(point.pool_qty)}));
 }
 
 async function ledgerOf(page: Page, broker: Broker): Promise<TransactionRead[]> {
@@ -381,13 +383,15 @@ function dashboardUrl(): string {
 }
 
 /** A full load of the dashboard, with the report it asked for: the application's own response, captured, never routed. */
-async function openDashboard(page: Page): Promise<{range: ReportRequestBody['date_range']; report: ReportBody}> {
+async function openDashboard(page: Page): Promise<{range: ReportRequestBody['date_range']; report: ReportBody; contribution: Promise<ContributionBody>}> {
     const reportResponse = armed(page.waitForResponse((response) => isSummaryReport(response.request()), {timeout: 30_000}));
+    // The Portfolio table asks the period's contribution for the positions closed inside it (FB-13): armed here, read where a spec needs it.
+    const contributionResponse = armed(page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === REPORT_PATH && (response.request().postDataJSON() as ReportRequestBody | null)?.include_positions_contribution === true, {timeout: 60_000}));
     await page.goto(dashboardUrl());
     const answer = await reportResponse;
     const range = (answer.request().postDataJSON() as ReportRequestBody).date_range;
     const report = await jsonFrom<ReportBody>(answer, 'dashboard report');
-    return {range, report};
+    return {range, report, contribution: contributionResponse.then((response) => jsonFrom<ContributionBody>(response, 'dashboard contribution'))};
 }
 
 function holdingsOf(report: ReportBody, asset: Asset, broker: Broker): ReportHolding[] {
@@ -600,8 +604,14 @@ async function transferInAuto(page: Page, request: APIRequestContext, owned: Own
             await expect(remainingRow, 'the units left on A are listed').toBeVisible();
             await expectPositionOnScreen(remainingRow, scenario.remaining, 'A');
         } else {
-            // B's row above is the presence barrier: the table is drawn from the same holdings.
-            await expect(remainingRow, 'nothing is left on A: no row').toHaveCount(0);
+            // B's row above is the presence barrier: the table is drawn from the same holdings. Nothing is left on A, and the units
+            // moved to B, which is in the report and holds them: the engine names the closure (`closed_by` TRANSFER, to B), and the
+            // Portfolio table does not list A as a position sold out (T1) — B's full row is where the units are.
+            const closure = ((await load.contribution).positions_contribution?.positions ?? []).find((position) => position.asset_id === asset.id && position.broker_id === from.id);
+            expect(closure, 'precondition: the period’s contribution brings A as a closed position, closed by a transfer to B').toMatchObject({is_fully_sold: true, closed_by: 'TRANSFER', closed_to_broker_id: to.id});
+            // The page says every wave is in (the contribution included) before the absence is read.
+            await waitForSettled(dashboard, 25_000);
+            await expect(remainingRow, 'A is not listed as sold out: the units moved to B, they were not sold').toHaveCount(0);
         }
     });
 }

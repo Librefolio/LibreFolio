@@ -83,7 +83,6 @@
     "swapDirection": "Inverti direzione",
     "sync": "Sincronizza",
     "syncing": "Sincronizzazione...",
-    "totalValue": "Valore Totale",
     "type": "Tipo",
     "amount": "Importo",
     "description": "Descrizione",
@@ -118,7 +117,36 @@
     "user": "Utente",
     "backToDefault": "Torna al default",
     "createForex": "Crea forex…",
-    "unknownError": "errore sconosciuto"
+    "unknownError": "errore sconosciuto",
+    "decimalPlacesExceeded": "{max, plural, =0 {Solo numeri interi} one {Al massimo # decimale} other {Al massimo # decimali}}",
+    "decimalExponentOutOfRange": "Scrivi il numero per intero: la notazione scientifica si legge solo da sola, con un esponente fino a ±{max}",
+    "bulkRefusal": {
+      "tooManyItems": "Alcuni valori non sono stati caricati: il server accetta al massimo {max, number} elementi per richiesta, e questa ne conteneva {count, number}.",
+      "tooManyDays": "Alcuni valori non sono stati caricati: il server costruisce al massimo {max, number} valori giornalieri per richiesta, e questa ne chiedeva di più. Scegli un periodo più breve."
+    },
+    "nonIsoCurrency": {
+      "suggestion": "{value} non è un codice ISO: sta per {suggestion}",
+      "candidates": "{value} non è un codice ISO: può stare per {candidates}",
+      "unknown": "{value} non è un codice valuta ISO"
+    },
+    "writeRefusal": {
+      "dateOutOfRange": "{count, plural, one {# data è successiva} other {# date sono successive}} al {max}: {dates}. Non è stato salvato nulla.",
+      "currencyMismatch": "{count, plural, one {# prezzo è} other {# prezzi sono}} in {found}, non nella valuta dell'asset {expected}: {dates}. Non è stato salvato nulla.",
+      "notSaved": "{count, plural, one {# valore non è stato salvato} other {# valori non sono stati salvati}}: {items}",
+      "more": "e altre {n}",
+      "reason": {
+        "ohlc_inconsistent": "chiusura fuori da minimo–massimo",
+        "date_out_of_range": "data fuori intervallo",
+        "value_not_storable": "valore troppo grande o troppo piccolo da salvare",
+        "rate_not_storable": "tasso troppo grande o troppo piccolo da salvare",
+        "same_currency": "stessa valuta dai due lati",
+        "invalid_rate": "tasso non valido",
+        "internal_error": "errore del server",
+        "other": "rifiutato dal server"
+      },
+      "tooManyItems": "Non è stato salvato nulla: il server accetta al massimo {max, number} valori per salvataggio, e questo ne conteneva {count, number}. Salvali in più parti."
+    },
+    "errorWithRequestId": "{message} (codice: {requestId})"
   },
   "csvImport": {
     "title": "Importa dati CSV",
@@ -153,7 +181,11 @@
       "invalidNumber": "Numero non valido in \"{column}\": \"{value}\"",
       "invalidValue": "Valore non valido in \"{column}\": \"{value}\"",
       "duplicate": "Valore duplicato per {label}: {key}"
-    }
+    },
+    "statusValidRows": "{count, plural, one {# riga valida} other {# righe valide}}",
+    "statusErrors": "{count, plural, one {# errore} other {# errori}}",
+    "statusDuplicates": "{label} duplicato",
+    "duplicatesShort": "duplicati"
   },
   "dataEditor": {
     "staleTooltip": "Nascondi righe riempite all'indietro (⚠️ non aggiornate). Sono punti di riempimento copiati dal dato reale più vicino.",
@@ -184,7 +216,22 @@
       "edited": "Modificato",
       "deleted": "Eliminato",
       "appended": "Nuovo"
-    }
+    },
+    "counter": {
+      "edited": "{n, plural, one {# modificato} other {# modificati}}",
+      "deleted": "{n, plural, one {# eliminato} other {# eliminati}}",
+      "appended": "{n, plural, one {# nuovo} other {# nuovi}}"
+    },
+    "staleShow": "{n, plural, one {Mostra # riga non aggiornata} other {Mostra # righe non aggiornate}}",
+    "staleHide": "{n, plural, one {Nascondi # riga non aggiornata} other {Nascondi # righe non aggiornate}}",
+    "importProviderEventsLeftOut": "{n, plural, one {# evento segnato PROVIDER è stato escluso} other {# eventi segnati PROVIDER sono stati esclusi}}: sincronizza l'asset per {n, plural, one {caricarlo} other {caricarli}}.",
+    "savePartial": "Già salvato: {saved, plural, one {# prezzo scritto} other {# prezzi scritti}}, {deleted, plural, one {# prezzo cancellato} other {# prezzi cancellati}}. Correggi la causa e salva di nuovo per il resto.",
+    "exportCsv": "Esporta",
+    "exportChoose": "Scegli il formato del file.",
+    "exportAction": "Esporta",
+    "exportPrices": "Esporta i prezzi",
+    "exportEvents": "Esporta gli eventi",
+    "exportRates": "Esporta i tassi"
   },
   "datePicker": {
     "presets": {
@@ -269,7 +316,12 @@
   },
   "nav": {
     "dashboard": "Dashboard",
-    "settings": "Impostazioni"
+    "settings": "Impostazioni",
+    "toggleMenu": "Apri o chiudi il menu",
+    "checkingAuthentication": "Controllo dell'accesso…",
+    "closeSidebar": "Chiudi il menu",
+    "expandSidebar": "Espandi il menu",
+    "collapseSidebar": "Comprimi il menu"
   },
   "prices": {
     "sync": {
@@ -304,7 +356,12 @@
     "syncAll": "Sinc. Tutto",
     "refreshAll": "Ricarica Tutto",
     "settings": "Impostazioni",
-    "syncSelection": "Sinc. selezione"
+    "syncSelection": "Sinc. selezione",
+    "settingsHint": "Cambia l'aspetto dei grafici e gli indicatori e i confronti che disegnano. Vale per tutti i grafici della lista.",
+    "syncAllHint": "Chiede ai fornitori di dati i dati nuovi e li salva in LibreFolio.",
+    "refreshAllHint": "Ricarica quello che vedi da LibreFolio, senza interrogare i fornitori di dati.",
+    "viewGrid": "Mostra come schede",
+    "viewTable": "Mostra come tabella"
   },
   "table": {
     "columns": "Colonne",
@@ -320,7 +377,8 @@
       "empty": "Nessuna opzione"
     },
     "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su",
-    "filterLabel": "Filtro"
+    "filterLabel": "Filtro",
+    "resetLayout": "Ripristina disposizione"
   },
   "date": {
     "today": "Oggi",

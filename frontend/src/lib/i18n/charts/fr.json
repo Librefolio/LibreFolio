@@ -1,7 +1,7 @@
 {
   "chart": {
     "tooltip": {
-      "stale": "Périmé : {days} jour(s)",
+      "stale": "Périmé : {days, plural, one {# jour} other {# jours}}",
       "fxStale": "Taux FX : {days}j",
       "percentNote": "% par rapport à la date de début",
       "upper": "Supérieure",
@@ -14,11 +14,14 @@
       "currentBucket": "En cours : {days} sur {total} jours",
       "originalValue": "orig. {value}",
       "fxRateDate": "change au {date}",
-      "fxDaysBack": "({days}j avant)"
+      "fxDaysBack": "({days}j avant)",
+      "yearLabel": "{year}",
+      "staleBadge": "{days}j"
     },
     "resolution": {
       "weekly": "Hebdomadaire",
-      "monthly": "Mensuel"
+      "monthly": "Mensuel",
+      "yearly": "Annuel"
     },
     "marketPrice": "Prix du marché",
     "showPercentage": "Afficher le pourcentage",
@@ -136,7 +139,9 @@
       "resultMissing": "Le backend n'a renvoyé aucun résultat pour ce signal. Relancez la requête des signaux.",
       "partialResult": "Ce signal n'est que partiellement disponible avec les données actuelles.",
       "unavailable": "Ce signal ne peut pas être calculé avec les données disponibles.",
-      "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points."
+      "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points.",
+      "undefinedWindowPartial": "{count} points de ce rendement ne peuvent pas être calculés, du {start} au {end}, car un prix nécessaire est absent ou inutilisable. Resynchronisez les prix de cet actif du {resyncStart} au {resyncEnd} puis réessayez.",
+      "undefinedWindowUnavailable": "Ce rendement ne peut pas être calculé : les {count} points, du {start} au {end}, n'ont pas de prix utilisable. Resynchronisez les prix de cet actif du {resyncStart} au {resyncEnd} puis réessayez."
     },
     "axes": {
       "exchangeRate": "Axe du taux de change ({pair})",
@@ -145,7 +150,12 @@
       "signal": "Axe {name}",
       "volume": "Axe des volumes"
     },
-    "yAxisAuto": "Auto"
+    "yAxisAuto": "Auto",
+    "lineShape": "Forme des lignes",
+    "lineShapeDesc": "Comment les graphiques relient leurs points. Ne vaut que pour ce graphique.",
+    "lineShapeSegments": "Segments",
+    "lineShapeSteps": "Marches",
+    "lineShapeSpline": "Courbe lissée"
   },
   "measure": {
     "pending": "Début: {startDate} ({startValue}) — cliquez sur le graphique pour le point final",
@@ -194,7 +204,8 @@
     "units": {
       "days": "jours",
       "sessions": "séances",
-      "percentPerYear": "%/an"
+      "percentPerYear": "%/an",
+      "observations": "observations"
     },
     "visual": {
       "components": "Composants",
@@ -204,6 +215,9 @@
     "reference": {
       "zero": "Zéro"
     },
+    "gapsJoined": {
+      "label": "vides reliés"
+    },
     "regions": {
       "oversoldDescription": "Extrême inférieur sous le seuil configuré.",
       "neutralDescription": "Plage centrale entre les seuils configurés.",
@@ -211,13 +225,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Sélectionner l’actif de comparaison",
-      "loadError": "Impossible de charger les actifs."
-    },
-    "riskRollingReturn": {
-      "name": "Rendement glissant",
-      "description": "Rendement composé du prix seul sur une fenêtre glissante.",
-      "output": "Rendement",
-      "outputDescription": "Rendement composé de la période de détention, en points de pourcentage."
+      "loadError": "Impossible de charger les actifs.",
+      "blocked": "Non disponibles",
+      "isMainAsset": "C'est l'actif du graphique",
+      "alreadyCompared": "Déjà comparé dans un autre signal"
     }
   }
 }

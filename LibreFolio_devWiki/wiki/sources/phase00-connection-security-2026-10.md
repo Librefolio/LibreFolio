@@ -17,7 +17,7 @@ related:
 
 ## Summary
 
-One plan (~480 lines), merged in train 24 (`01da03047`, commits `3392c4f05`, `07da532fb`, `28c85d34f`) and archived on
+One plan (~480 lines), merged in train 24 (`b83945c79`, commits `97bee5f28`, `d895a9421`) and archived on
 2026-10-09. It added a shield in the sidebar that tells the user whether their connection is secure, local or
 insecure — with the server's help but without the server ever upgrading the browser's verdict or revealing the
 client address — and, on the way, closed an account-enumeration leak in the login.
@@ -46,6 +46,6 @@ client address — and, on the way, closed an account-enumeration leak in the lo
 | Plan | `LibreFolio_developer_journal/Release_2/phases/36_connectionSecurity/plan-phase00ConnectionSecurity.prompt.md` |
 | Verdict | `frontend/src/lib/utils/security/connectionSecurity.ts` |
 | Indicator | `frontend/src/lib/components/layout/ConnectionSecurityIndicator.svelte` |
-| Endpoint | `backend/app/api/v1/system.py` |
+| Endpoint | `backend/app/api/v1/system/connection.py` |
 | Login | `backend/app/api/v1/auth.py` |
 | User doc | `mkdocs_src/docs/user/connection-security.en.md` |

@@ -77,11 +77,14 @@ mkdocs_src/site/
 /mkdocs_src/mkdocs_src/site/
 mkdocs_src/docs/javascripts/vendor/
 /mkdocs_src/docs/gallery/**/*.png
+/mkdocs_src/docs/gallery/**/*.webp
 
 
-# VideoClipPrject
-/mkdocs_src/videoClipPrject/external_src/
+# Video renders (heavy binaries, never versioned)
 *.mp4
+
+# graphify run from the repository root instead of LibreFolio_devWiki/
+/graphify-out/
 
 # Cached fonts (auto-downloaded by scripts/update_js_cache.py)
 frontend/static/fonts/
@@ -102,13 +105,20 @@ frontend/coverage-js/
 _backup_docs/
 release-roadmap/
 
-# graphify - generated graph outputs (rebuild with: cd LibreFolio_devWiki && graphify corpus/ --update)
+# graphify - devWiki knowledge graph (./dev.py graph ...). It scans the repository root,
+# filtered by /.graphifyignore, and writes to LibreFolio_devWiki/graphify-out/.
+# Tracked: GRAPH_REPORT.md, manifest.json (repo-relative keys), cost.json.
 LibreFolio_devWiki/graphify-out/graph.json
 LibreFolio_devWiki/graphify-out/graph.html
 LibreFolio_devWiki/graphify-out/.graphify_*
-LibreFolio_devWiki/corpus/.graphify_*
-# corpus/graphify-out is now a symlink → ../graphify-out (tracked in git)
-# graphify-out/cache/ IS committed: enables cheap --update (no LLM re-extraction on unchanged files)
+# the community names chosen by hand: small, repo-relative, kept with the repository
+!LibreFolio_devWiki/graphify-out/.graphify_labels.json
+!LibreFolio_devWiki/graphify-out/.graphify_labels.json.sig
+# Per-machine caches: stat index (mtimes/inodes), AST and semantic extraction caches.
+LibreFolio_devWiki/graphify-out/cache/
+LibreFolio_devWiki/graphify-out/converted/
+# graphify's own dated backup of the previous outputs, written by each rebuild
+LibreFolio_devWiki/graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*/
 
 # Stray debug artifacts (e.g. saved error pages from failed chart/screenshot runs)
 chart-error-page.html
@@ -117,3 +127,7 @@ chart-error-page.html
 
 # Per-unit test logs (default --log-dir)
 .testLog/
+
+# Claude Code session worktrees
+.claude/worktrees/
+mkdocs_src/docs/stylesheets/lf-tokens.css

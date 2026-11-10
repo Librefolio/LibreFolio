@@ -41,7 +41,10 @@ El panel se abre con una selección lista para usar: cambia solo lo que necesite
 
 Bajo **Tipo de exportación**:
 
-- **Exportar datos** copia solo los hechos: guarda una instantánea o plantea tu propia pregunta.
+- **Exportar datos** copia solo los hechos, para guardarlos como instantánea o para plantear tu propia pregunta.
+  Si los pegas solos, la IA solo confirma que los ha recibido, en el idioma de tu interfaz, quizá
+  enumerando los temas principales; si en el mismo mensaje haces una pregunta, responde a esa
+  pregunta.
 - **Solicitar análisis** añade una pregunta enfocada, reglas para comprobar las cifras y la
   estructura de la respuesta esperada.
 
@@ -85,15 +88,24 @@ LibreFolio recuerda tus últimas elecciones en cada página durante unos minutos
 
 Copias texto sin formato: un encabezado breve (qué se exportó, la fecha, el período, la divisa y el nivel de detalle)
 y tus datos en tablas compactas. **Solicitar análisis** añade la pregunta y la estructura de respuesta esperada
-alrededor de ellos.
+alrededor de ellos. Cada exportación incluye el
+[aviso legal](../settings/about.md#legal-notice) de LibreFolio hacia el final, en el idioma de tu
+interfaz y sin sus enlaces; solo le sigue una breve instrucción para la IA: con **Exportar datos**,
+cómo responder; con **Solicitar análisis**, la línea que le pide que responda en tu idioma.
 
 1. Abre un chat nuevo en un asistente de IA en el que confíes con datos financieros.
-2. Pega el texto y envíalo. Con **Solicitar análisis**, la pregunta ya está incluida.
+2. Pega el texto y envíalo. Con **Solicitar análisis**, la pregunta ya está incluida; con
+   **Exportar datos**, añade tu pregunta en el mismo mensaje, o envía los datos solos y pregunta
+   cuando la IA confirme que los tiene.
 3. Responde a las preguntas de la IA: se le indica que pregunte solo por lo que cambia el resultado (un presupuesto, un
    objetivo, tu situación fiscal) y que nunca lo adivine.
 
 Conviene saber:
 
+- Ambos tipos de exportación le indican a la IA que no repita las cifras que ya has visto en
+  LibreFolio, sino que las use para responder solo a la pregunta planteada. Cuando tus datos no
+  bastan, se le pide que busque también en la web las últimas noticias y que diga qué conclusiones
+  se apoyan en ellas.
 - Con **Solicitar análisis**, se le pide a la IA que responda en el idioma de tu interfaz de LibreFolio y
   que mantenga tus cifras separadas de su interpretación.
 - Los análisis de **Rendimiento e impulsores del mercado** necesitan un asistente que pueda buscar en la web;

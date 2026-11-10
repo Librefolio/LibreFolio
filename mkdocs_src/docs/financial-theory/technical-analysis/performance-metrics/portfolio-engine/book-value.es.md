@@ -15,10 +15,10 @@ $$
 Donde el coste base abierto:
 
 $$
-\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w^{C^*}(a,b,t)
+\mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 10^{-5}}} q(a,b,t) \cdot w^{C^*}(a,b,t)
 $$
 
-Aquí $w^{C^*}(a,b,t)$ es el [PMC](../weighted-average-cost.md) mantenido directamente en la divisa solicitada $C^*$: cada adquisición entró en él al tipo de cambio de su propia fecha $d_i$, como $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ para un importe $P_i$ realmente pagado. Por tanto, OCB **no utiliza ningún tipo de cambio en la fecha de valoración** $t$: es la suma de costes históricos — lo que se pagó — y no se mueve cuando se mueven los tipos de cambio.
+La suma recorre las posiciones mantenidas: una posición que se queda con $10^{-5}$ unidades o menos no se mantiene ([Portfolio Engine — §3](index.md#3-position-state)). Aquí $w^{C^*}(a,b,t)$ es el [PMC](../weighted-average-cost.md) mantenido directamente en la divisa solicitada $C^*$: cada adquisición entró en él al tipo de cambio de su propia fecha $d_i$, como $P_i \cdot \mathrm{fx}(\mathrm{ccy}(P_i), C^*, d_i)$ para un importe $P_i$ realmente pagado. Por tanto, OCB **no utiliza ningún tipo de cambio en la fecha de valoración** $t$: es la suma de costes históricos — lo que se pagó — y no se mueve cuando se mueven los tipos de cambio.
 
 El efectivo, en cambio, es el de cada bróker, mantenido en las divisas en que se registró y valorado al tipo de cambio de $t$:
 

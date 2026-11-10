@@ -28,7 +28,7 @@ and the banner appeared. The retry worked because the cache was warm by then.
 
 ## Solution
 
-`59087c74a` (03/09/2026; its subject says «docs(journal)», but the commit carries this code):
+`c51989964` (03/09/2026; its subject says «docs(journal)», but the commit carries this code):
 
 - the conversion errors are deduplicated **once per job**, against a set;
 - the list is **capped at ten**, followed by one summary line («… and N more FX conversion failures»); the frontend
@@ -48,5 +48,6 @@ The plan records the in-process reproduction, before and after: from never finis
 
 | Role | Path |
 |------|------|
-| Dedup and cap | `backend/app/services/asset_sources/price_query.py` (`get_prices_bulk`) |
+| Dedup and cap at the time | `backend/app/services/assets/price_query.py` (`get_prices_bulk`) |
+| Cap today (`MAX_CONVERSION_ERRORS = 10`, `_capped`), since `004bce169` (2026-10-23) | `backend/app/services/assets/observed_prices.py` |
 | Plan (E1 detour) | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00EngineAccountingAndSignals.prompt.md` |

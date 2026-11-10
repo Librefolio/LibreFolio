@@ -135,6 +135,8 @@ Cambia entre Cartera y Periodo, luego compara datos en vistas de tabla o mapa, a
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Cartera / Mapa" alt="Posiciones — Mapa de la cartera">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Periodo / Tabla" alt="Posiciones — Tabla del período">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Periodo / Mapa" alt="Posiciones — Mapa del período">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-yoc" data-title="💰 Rendimiento sobre coste" alt="Posiciones — Rendimiento sobre coste">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-fx-on-cash" data-title="💱 Efecto del tipo de cambio sobre el efectivo" alt="Posiciones — Efecto del tipo de cambio sobre el efectivo">
 </div>
 
 ### 💸 Pestaña de transacciones
@@ -197,6 +199,14 @@ El panel con el modo privacidad activado: el botón del ojo en la cabecera y cad
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Modo privacidad">
+</div>
+
+### 🤖 Exportación IA
+
+Elige qué exportar para tu asistente de IA: la categoría, el conjunto de datos, el nivel de detalle, el período y tus notas.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="ai-export" data-name="dialog-dataset" alt="Exportación IA">
 </div>
 
 ---
@@ -313,12 +323,52 @@ La categoría Introducción de Preferencias con el estado de cada guía y su bot
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Repetición de guías">
 </div>
 
+### 🧩 Ajustes de los plugins
+
+La pestaña Plugins en móvil: los ajustes de cada plugin en su propio formulario.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Ajustes de los plugins">
+</div>
+
 ### 🛡️ Configuración global (Administrador)
 
 Configuración de todo el sistema en móvil.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Configuración global">
+</div>
+
+### 📧 Correo (Administrador)
+
+El estado del correo de la instancia y el correo de prueba en móvil.
+
+<div class="screenshot-container mobile">
+    <img class="gallery-img" data-category="settings" data-name="email" alt="Correo">
+</div>
+
+### 🚨 Comprobaciones de seguridad (Administrador)
+
+Los administradores ven qué requiere atención y cómo actuar; las comprobaciones superadas quedan plegadas abajo, y una insignia en Administración cuenta los errores y las advertencias.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="security" alt="Comprobaciones de seguridad (Administrador)">
+</div>
+
+### ↩️ Restauración deshecha (Administrador)
+
+Si una restauración falla, LibreFolio deja los datos como estaban y explica el motivo.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-rolled-back" alt="Restauración deshecha (Administrador)">
+</div>
+
+### 🧾 Resultado de la última restauración (Administrador)
+
+La tarjeta de restauración conserva el resultado del último intento.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="restore-last-result" alt="Resultado de la última restauración (Administrador)">
 </div>
 
 ### 🕐 Planificador de datos de mercado — Configuración
@@ -385,6 +435,14 @@ La búsqueda desciende en los pliegues y los chips de resultado saltan al punto 
     <img class="gallery-img" data-category="settings" data-name="changelog-modal-search" alt="🔎 Búsqueda en el registro de cambios">
 </div>
 
+### 🆕 Novedades
+
+Tras una actualización, una ventana muestra qué ha cambiado desde tu última versión.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="whats-new-modal" alt="Novedades">
+</div>
+
 ### 🧩 Diagnóstico de plugins
 
 Estado de carga de plugins por registro: qué falló al cargar y por qué.
@@ -435,6 +493,22 @@ Navegación visual de archivos con vistas previas de imágenes en móvil.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vista de cuadrícula de archivos estáticos">
+</div>
+
+### 💾 Copias de seguridad (Administrador)
+
+Los administradores ven las copias conservadas y configuran su limpieza automática.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="backups" alt="Copias de seguridad (Administrador)">
+</div>
+
+### 📊 Espacio ocupado (Administrador)
+
+Una barra muestra cómo se reparte el espacio entre la base de datos, los archivos subidos, los informes y las copias, respecto al límite fijado.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="storage-bar" alt="Espacio ocupado (Administrador)">
 </div>
 
 ### 📋 Informes del bróker (BRIM)
@@ -538,6 +612,7 @@ El selector Cartera / Periodo cambia la vista; los iconos Tabla / Mapa la muestr
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Cartera / Mapa" alt="Posiciones del bróker — Mapa de la cartera">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo / Tabla" alt="Posiciones del bróker — Tabla del período">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo / Mapa" alt="Posiciones del bróker — Mapa del período">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-yoc" data-title="💰 Rendimiento sobre coste" alt="Posiciones del bróker — Rendimiento sobre coste">
 </div>
 
 ### ℹ️ Información del bróker
@@ -724,6 +799,14 @@ Crea un nuevo activo en móvil, o lánzalo desde el Asistente de importación co
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-7" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="create-modal" data-title="➕ Creación manual" alt="Modal de crear activo">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 Desde el asistente de importación" alt="Crear activo desde el Asistente de importación">
+</div>
+
+### ⭐ Buscar en Línea — Fuentes premium
+
+Los resultados de las fuentes premium aparecen primero, en una sección propia.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="search-premium" alt="Buscar en Línea — Fuentes premium">
 </div>
 
 ### 🧬 Selector de tipo de activo

@@ -25,6 +25,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup Python
+        id: setup-python
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -40,13 +41,14 @@ jobs:
       # ==========================================
       # 2. CACHES
       # ==========================================
+      # The virtualenv links to the exact Python of the runner: a patch bump breaks it, so it is in the key.
       - name: Cache Pipenv
         uses: actions/cache@v5
         with:
           path: ~/.local/share/virtualenvs
-          key: ${{ runner.os }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
+          key: ${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
           restore-keys: |
-            ${{ runner.os }}-pipenv-
+            ${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-pipenv-
 
       - name: Cache NPM
         uses: actions/cache@v5

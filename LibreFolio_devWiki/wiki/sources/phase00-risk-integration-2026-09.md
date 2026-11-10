@@ -61,4 +61,4 @@ the other parts are ingested in steps R1–R6.
 | Folder README (open items, restart guide, code map) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/README.md` |
 | Decisions and open questions | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md` |
 | Engine | `backend/app/services/risk/service.py` |
-| Levels panel | `frontend/src/lib/components/risk/levels/RiskLevelsPanel.svelte` |
+| Levels panel | `frontend/src/lib/features/risk/levels/RiskLevelsPanel.svelte` |

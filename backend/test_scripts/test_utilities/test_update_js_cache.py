@@ -38,7 +38,12 @@ functions), so these tests monkeypatch the network boundary
 ``tmp_path``. No DB, no server, no network, no writes outside tmp_path — PURE.
 """
 
+import base64
+import hashlib
+import io
+import json
 import re
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -946,3 +951,492 @@ class TestCompanions:
         failure = js_cache._HARD_FAILURES[0]
         assert "MathJax_Main-Regular.woff" in failure
         assert failure.consumer == "mkdocs", "from vendor_dir_key: the docs ship MathJax, the frontend does not"
+
+
+# ---------------------------------------------------------------------------
+# H6-3 (M-22): the documentation serves Mermaid itself, pinned with its hash
+# ---------------------------------------------------------------------------
+#
+# ``mermaid.mjs`` used to import Mermaid (``@11``, unpinned) and the ELK layout from jsDelivr: offline the
+# diagrams stayed code, online every page called a third party. Now ``mermaid.min.js`` is vendored like
+# MathJax, from an EXACT version, and the downloader refuses a body whose SHA-256 is not the pinned one. The ELK
+# layout came back (E9C) under the same rule: ``mermaid-layout-elk`` is vendored from an exact version, read from
+# the npm tarball and refused unless its SRI hash is the pinned one; ``mermaid-early.js`` imports it from the site.
+# A library entry without ``sha256`` (MathJax is ``@3``, unpinned) behaves as before.
+#
+# The page gets it from the template, not from ``extra_javascript``: Material's bundle draws the diagrams as soon
+# as it runs and, if ``window.mermaid`` is not defined yet, fetches its own copy from unpkg. So
+# ``overrides/main.html`` (block ``extrahead``, which runs before the bundle) writes the site's copy and then
+# ``mermaid-early.js``, only on a page that has a diagram.
+
+MERMAID_URL = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"
+MERMAID_SHA256 = "581ed7d74bd9048d0e3a91363927d72ef22942d7722546b27f7cc29e35390eb8"
+MERMAID_BODY = b"/* fake mermaid.min.js, not the real library */ globalThis.mermaid = {};"
+JAVASCRIPTS_DIR = Path(__file__).resolve().parents[3] / "mkdocs_src" / "docs" / "javascripts"
+
+
+def _fake_download(monkeypatch, body: bytes | None) -> list[str]:
+    """Every GET answers ``body`` (None: fails); every HEAD finds nothing. Returns the recorded GETs."""
+    calls: list[str] = []
+
+    def download(url, *args, **kwargs):
+        calls.append(url)
+        return body
+
+    monkeypatch.setattr(js_cache, "download_file", download)
+    monkeypatch.setattr(js_cache, "get_remote_headers", lambda *a, **kw: None)
+    return calls
+
+
+class TestMermaidEntry:
+    def test_the_entry_is_an_exact_version_vendored_beside_mathjax(self):
+        config = js_cache.LIBRARIES["mermaid"]
+        assert config["type"] == "js"
+        assert config["vendor_dir_key"] == "mkdocs"
+        assert config["url"] == MERMAID_URL, "an exact version: no @11, no latest"
+        assert config["target"] == "mermaid.min.js"
+        assert not config.get("companions"), "the UMD bundle loads nothing from beside itself"
+
+    def test_the_entry_pins_the_hash_jsdelivr_publishes(self):
+        assert js_cache.LIBRARIES["mermaid"].get("sha256") == MERMAID_SHA256
+
+    def test_mathjax_stays_unpinned(self):
+        # @3 moves with the CDN: a hash would turn every patch release into a build failure.
+        assert "sha256" not in js_cache.LIBRARIES["mathjax"]
+
+    def test_a_failure_of_mermaid_belongs_to_the_docs_build(self):
+        js_cache._hard_fail("mermaid", "x")
+        assert js_cache._HARD_FAILURES[0].consumer == "mkdocs"
+
+
+ELK_VERSION = "0.2.3"
+ELK_INTEGRITY = "sha512-m46RVGfvKK1PSMdAFGDz2nksI4jusEkFxvf0lb48bYWmqLQxZpjtpruiw29MbOy9rlWJtuMf9EzG9fAF8CVZbg=="
+
+
+class TestMermaidElkEntry:
+    def test_the_entry_is_an_exact_version_that_takes_the_pinned_mermaid(self):
+        config = js_cache.LIBRARIES["mermaid-layout-elk"]
+        assert config["type"] == "npm-esm"
+        assert config["vendor_dir_key"] == "mkdocs"
+        assert re.fullmatch(rf"https://registry\.npmjs\.org/@mermaid-js/layout-elk/-/layout-elk-{re.escape(ELK_VERSION)}\.tgz", config["tarball"]), "an exact version: no range, no latest"
+        # The 0.2.x line takes Mermaid ^11.0.2; 1.x takes Mermaid 12, which the site does not serve.
+        assert ELK_VERSION.startswith("0.2.") and "11." in MERMAID_URL
+
+    def test_the_entry_pins_the_integrity_npm_publishes(self):
+        config = js_cache.LIBRARIES["mermaid-layout-elk"]
+        assert config["integrity"] == ELK_INTEGRITY
+        assert re.fullmatch(r"sha512-[A-Za-z0-9+/]{86}==", config["integrity"])
+
+    def test_only_the_minified_esm_build_is_served(self):
+        include = re.compile(js_cache.LIBRARIES["mermaid-layout-elk"]["include"])
+        for wanted in ("mermaid-layout-elk.esm.min.mjs", "chunks/mermaid-layout-elk.esm.min/render-T4E67GNI.mjs"):
+            assert include.fullmatch(wanted), wanted
+        for refused in ("mermaid-layout-elk.esm.min.mjs.map", "mermaid-layout-elk.core.mjs", "chunks/mermaid-layout-elk.esm/chunk-X.mjs", "chunks/mermaid-layout-elk.esm.min/a.mjs.map", "layouts.d.ts", "../x.mjs"):
+            assert not include.fullmatch(refused), refused
+
+    def test_a_failure_of_the_layout_belongs_to_the_docs_build(self):
+        js_cache._hard_fail("mermaid-layout-elk", "x")
+        assert js_cache._HARD_FAILURES[0].consumer == "mkdocs"
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    """Every file below ``root`` by its path from there, recursively."""
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+def _elk_tarball(files: dict[str, bytes]) -> bytes:
+    """An npm tarball: every file under ``package/``."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        for name, data in files.items():
+            member = tarfile.TarInfo(f"package/{name}")
+            member.size = len(data)
+            archive.addfile(member, io.BytesIO(data))
+    return buffer.getvalue()
+
+
+ELK_FILES = {
+    "dist/mermaid-layout-elk.esm.min.mjs": b"export default [];",
+    "dist/chunks/mermaid-layout-elk.esm.min/render-ABC.mjs": b"export const render = 1;",
+    "dist/chunks/mermaid-layout-elk.esm.min/render-ABC.mjs.map": b"{}",
+    "dist/mermaid-layout-elk.esm.min.mjs.map": b"{}",
+    "dist/mermaid-layout-elk.core.mjs": b"export default 'core';",
+    "dist/chunks/mermaid-layout-elk.core/other.mjs": b"x",
+    "dist/layouts.d.ts": b"declare",
+    "package.json": b"{}",
+}
+
+
+def _elk_config(tarball: bytes) -> dict:
+    config = dict(js_cache.LIBRARIES["mermaid-layout-elk"])
+    config["integrity"] = js_cache._sri_of(tarball)
+    return config
+
+
+class TestNpmEsmPackage:
+    """The mechanism, on a synthetic tarball: the pinned integrity, what is written, what is kept."""
+
+    @pytest.fixture(autouse=True)
+    def _registered(self, monkeypatch):
+        monkeypatch.setitem(js_cache.LIBRARIES, "mermaid-layout-elk", js_cache.LIBRARIES["mermaid-layout-elk"])
+
+    def test_sri_is_the_base64_of_the_sha512(self):
+        assert js_cache._sri_of(b"abc") == "sha512-" + base64.b64encode(hashlib.sha512(b"abc").digest()).decode()
+
+    def test_a_tarball_with_the_pinned_integrity_writes_only_the_served_files(self, tmp_path, monkeypatch):
+        tarball = _elk_tarball(ELK_FILES)
+        _fake_download(monkeypatch, tarball)
+        manifest: dict = {}
+
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", _elk_config(tarball)) is True
+
+        assert js_cache._HARD_FAILURES == []
+        written = _tree(tmp_path / "mermaid-layout-elk")
+        assert written == {
+            "mermaid-layout-elk.esm.min.mjs": b"export default [];",
+            "chunks/mermaid-layout-elk.esm.min/render-ABC.mjs": b"export const render = 1;",
+        }, "no source maps, no other builds, no types, nothing outside dist"
+        record = manifest["libraries"]["mermaid-layout-elk"]
+        assert record["integrity"] == js_cache._sri_of(tarball) and record["file_count"] == 2
+
+    def test_a_tarball_with_another_integrity_is_refused_and_nothing_is_written(self, tmp_path, monkeypatch):
+        good = _elk_tarball(ELK_FILES)
+        _fake_download(monkeypatch, _elk_tarball({**ELK_FILES, "dist/mermaid-layout-elk.esm.min.mjs": b"alert(1)"}))
+        manifest: dict = {}
+
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", _elk_config(good)) is False
+
+        assert len(js_cache._HARD_FAILURES) == 1
+        failure = js_cache._HARD_FAILURES[0]
+        assert "mermaid-layout-elk" in failure and "integrity" in failure and failure.consumer == "mkdocs"
+        assert not (tmp_path / "mermaid-layout-elk").exists() and manifest == {}
+
+    def test_a_refused_tarball_keeps_the_cached_good_copy(self, tmp_path, monkeypatch):
+        good = _elk_tarball(ELK_FILES)
+        config = _elk_config(good)
+        _fake_download(monkeypatch, good)
+        manifest: dict = {}
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", config) is True
+        before = _tree(tmp_path / "mermaid-layout-elk")
+
+        _fake_download(monkeypatch, b"<html>an error page with a 200</html>")
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", config, force=True) is False
+
+        assert len(js_cache._HARD_FAILURES) == 1
+        assert _tree(tmp_path / "mermaid-layout-elk") == before
+
+    def test_up_to_date_costs_no_download(self, tmp_path, monkeypatch):
+        tarball = _elk_tarball(ELK_FILES)
+        config = _elk_config(tarball)
+        manifest: dict = {}
+        _fake_download(monkeypatch, tarball)
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", config) is True
+
+        calls = _fake_download(monkeypatch, None)
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", config) is False
+
+        assert calls == [] and js_cache._HARD_FAILURES == []
+
+    def test_a_new_version_replaces_the_files_and_removes_the_ones_it_no_longer_has(self, tmp_path, monkeypatch):
+        first = _elk_tarball(ELK_FILES)
+        manifest: dict = {}
+        _fake_download(monkeypatch, first)
+        js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", _elk_config(first))
+        second = _elk_tarball({"dist/mermaid-layout-elk.esm.min.mjs": b"export default [1];", "dist/chunks/mermaid-layout-elk.esm.min/render-NEW.mjs": b"new"})
+        _fake_download(monkeypatch, second)
+
+        assert js_cache.update_library(tmp_path, manifest, "mermaid-layout-elk", _elk_config(second)) is True
+
+        assert sorted(_tree(tmp_path / "mermaid-layout-elk")) == ["chunks/mermaid-layout-elk.esm.min/render-NEW.mjs", "mermaid-layout-elk.esm.min.mjs"]
+
+    def test_no_download_and_no_cache_is_a_hard_failure_of_the_docs_build(self, tmp_path, monkeypatch):
+        _fake_download(monkeypatch, None)
+
+        assert js_cache.update_library(tmp_path, {}, "mermaid-layout-elk", js_cache.LIBRARIES["mermaid-layout-elk"]) is False
+
+        assert js_cache._HARD_FAILURES[0].consumer == "mkdocs"
+
+    def test_a_tarball_without_the_entry_point_is_refused(self, tmp_path, monkeypatch):
+        tarball = _elk_tarball({"dist/chunks/mermaid-layout-elk.esm.min/render-ABC.mjs": b"x"})
+        _fake_download(monkeypatch, tarball)
+
+        assert js_cache.update_library(tmp_path, {}, "mermaid-layout-elk", _elk_config(tarball)) is False
+
+        assert "mermaid-layout-elk.esm.min.mjs" in js_cache._HARD_FAILURES[0]
+        assert not (tmp_path / "mermaid-layout-elk").exists()
+
+
+PIN_CONFIG = {
+    "type": "js",
+    "url": "https://cdn.example/pinned@1.2.3/dist/pinned.min.js",
+    "target": "pinned.min.js",
+    "vendor_dir_key": "mkdocs",
+    "sha256": hashlib.sha256(MERMAID_BODY).hexdigest(),
+}
+
+
+class TestSha256Pin:
+    """The mechanism, on a synthetic pinned library: independent of the Mermaid entry (TestMermaidEntry)."""
+
+    @pytest.fixture(autouse=True)
+    def _registered(self, monkeypatch):
+        """Registered by name, so a failure is attributed to the docs build as Mermaid's is."""
+        monkeypatch.setitem(js_cache.LIBRARIES, "pinned", PIN_CONFIG)
+
+    def test_a_body_with_the_pinned_hash_is_accepted_and_recorded(self, tmp_path, monkeypatch):
+        _fake_download(monkeypatch, MERMAID_BODY)
+        manifest: dict = {}
+
+        assert js_cache.update_library(tmp_path, manifest, "pinned", PIN_CONFIG) is True
+
+        assert js_cache._HARD_FAILURES == []
+        assert (tmp_path / "pinned" / "pinned.min.js").read_bytes() == MERMAID_BODY
+        assert manifest["libraries"]["pinned"]["current_hash"] == js_cache.get_file_hash(MERMAID_BODY)
+
+    def test_a_body_with_another_hash_is_refused_and_nothing_is_written(self, tmp_path, monkeypatch):
+        _fake_download(monkeypatch, b"<html>a CDN error page served with a 200</html>")
+        manifest: dict = {}
+
+        assert js_cache.update_library(tmp_path, manifest, "pinned", PIN_CONFIG) is False
+
+        assert len(js_cache._HARD_FAILURES) == 1
+        failure = js_cache._HARD_FAILURES[0]
+        assert "pinned" in failure and "sha256" in failure.lower(), "the failure names the library and the check"
+        assert failure.consumer == "mkdocs"
+        assert not (tmp_path / "pinned").exists(), "no file, no directory"
+        assert manifest == {}, "no manifest entry for a body that was refused"
+
+    @pytest.mark.parametrize("force", [False, True])
+    def test_a_refused_body_keeps_the_cached_good_copy(self, tmp_path, monkeypatch, force):
+        _fake_download(monkeypatch, MERMAID_BODY)
+        manifest: dict = {}
+        assert js_cache.update_library(tmp_path, manifest, "pinned", PIN_CONFIG) is True
+        before = {"files": _snapshot(tmp_path / "pinned"), "manifest": json_roundtrip(manifest)}
+
+        _fake_download(monkeypatch, b"<html>a CDN error page served with a 200</html>")
+        assert js_cache.update_library(tmp_path, manifest, "pinned", PIN_CONFIG, force=force) is False
+
+        assert len(js_cache._HARD_FAILURES) == 1, "a refused body is a hard failure even when a copy is cached"
+        assert js_cache._HARD_FAILURES[0].consumer == "mkdocs"
+        assert _snapshot(tmp_path / "pinned") == before["files"], "the cached good copy is untouched"
+        assert json_roundtrip(manifest) == before["manifest"]
+
+    def test_an_entry_without_sha256_keeps_working(self, tmp_path, monkeypatch):
+        _fake_download(monkeypatch, b"anything")
+        assert js_cache.update_library(tmp_path, {}, "mylib", JS_CONFIG) is True
+        assert js_cache._HARD_FAILURES == []
+
+    @pytest.fixture
+    def lane(self, tmp_path, monkeypatch):
+        """The whole refresh, pointed at tmp_path with the pinned library the only one, served a wrong body."""
+        monkeypatch.setattr(js_cache, "VENDOR_DIRS", {"mkdocs": tmp_path / "docs", "fonts": tmp_path / "fonts"})
+        monkeypatch.setattr(js_cache, "LIBRARIES", {"pinned": PIN_CONFIG})
+        _fake_download(monkeypatch, b"not the pinned body")
+
+    def test_a_refused_body_stops_the_docs_build_and_only_that_one(self, lane):
+        assert js_cache.run_from_args(SimpleNamespace(force=False, required_for=["mkdocs"])) == 1
+        js_cache._HARD_FAILURES.clear()
+        assert js_cache.run_from_args(SimpleNamespace(force=False, required_for=["frontend"])) == 0, "deferred, not silent: the frontend build does not ship it"
+
+
+def json_roundtrip(value: dict) -> dict:
+    """A deep, comparable copy of a manifest."""
+    return json.loads(json.dumps(value, sort_keys=True))
+
+
+class TestMermaidServedLocally:
+    """Source scan of what the browser is given: the early script, the template, the site config, the docs scripts."""
+
+    EARLY = "mermaid-early.js"
+
+    @staticmethod
+    def _version(url: str) -> str:
+        match = re.search(r"mermaid@(\d+\.\d+\.\d+)/", url)
+        assert match, f"{url}: Mermaid must be pinned to an exact x.y.z"
+        return match.group(1)
+
+    @staticmethod
+    def _code_of(name: str) -> str:
+        """A script without its comments: the explanation of why something is gone may name it."""
+        text = (JAVASCRIPTS_DIR / name).read_text(encoding="utf-8")
+        return re.sub(r"(?<!:)//[^\n]*|/\*.*?\*/", "", text, flags=re.S)  # `(?<!:)`: the // of https:// is not a comment
+
+    @staticmethod
+    def _extra_javascript() -> str:
+        """The ``extra_javascript:`` block of mkdocs.yml, up to the next top-level key."""
+        site = (JAVASCRIPTS_DIR.parents[1] / "mkdocs.yml").read_text(encoding="utf-8")
+        match = re.search(r"^extra_javascript:[^\n]*\n((?:[ \t]+[^\n]*\n|[ \t]*\n)*)", site, re.M)
+        assert match, "mkdocs.yml has no extra_javascript block"
+        return match.group(1)
+
+    @staticmethod
+    def _extrahead() -> str:
+        html = (JAVASCRIPTS_DIR.parents[1] / "overrides" / "main.html").read_text(encoding="utf-8")
+        match = re.search(r"\{%-?\s*block extrahead\s*-?%\}(.*?)\{%-?\s*endblock\s*-?%\}", html, re.S)
+        assert match, "overrides/main.html has no block extrahead"
+        return re.sub(r"\{#.*?#\}", "", match.group(1), flags=re.S)  # Jinja comments may name the files too
+
+    def test_the_early_script_pins_the_same_version_as_the_downloader(self):
+        text = self._code_of(self.EARLY)
+        cdn = re.search(r"""["'](https://cdn\.jsdelivr\.net/npm/mermaid@[^"']+)["']""", text)
+        assert cdn, "mermaid-early.js names the pinned CDN copy it falls back on"
+        config_url = js_cache.LIBRARIES["mermaid"]["url"]
+        assert self._version(config_url) == "11.17.2"
+        assert self._version(cdn.group(1)) == self._version(config_url)
+        assert cdn.group(1) == config_url == MERMAID_URL, "the very same file the downloader pins by hash"
+
+    def test_the_early_script_is_a_classic_script_that_imports_the_elk_layout_only_from_the_site_or_the_pinned_file(self):
+        raw = (JAVASCRIPTS_DIR / self.EARLY).read_text(encoding="utf-8")
+        text = self._code_of(self.EARLY)
+        assert not re.search(r"^\s*import\b", text, re.M), "a classic script: no static import"
+        assert not re.search(r"\bexport\b", text), "a classic script: no export"
+        assert len(re.findall(r"\bimport\s*\(", text)) == 1, "one dynamic import, of the ELK layout, in one place"
+        for forbidden in ("mermaid.esm", "mermaid@11/", "unpkg"):
+            assert forbidden not in text, f"{forbidden}: only the exactly pinned files may be named"
+        assert "mermaid@11/" not in raw, "not even in a comment: a pin must not be written unpinned"
+
+    def test_the_early_script_pins_the_elk_layout_like_the_downloader(self):
+        text = self._code_of(self.EARLY)
+        cdn = re.search(r"""["'](https://cdn\.jsdelivr\.net/npm/@mermaid-js/layout-elk@([^/"']+)/dist/mermaid-layout-elk\.esm\.min\.mjs)["']""", text)
+        assert cdn, "mermaid-early.js names the pinned CDN copy of the layout it falls back on"
+        assert cdn.group(2) == ELK_VERSION == re.search(r"layout-elk-(\d+\.\d+\.\d+)\.tgz", js_cache.LIBRARIES["mermaid-layout-elk"]["tarball"]).group(1)
+        # The site's own copy, where the downloader writes it: <vendor>/<library name>/<entry point>
+        config = js_cache.LIBRARIES["mermaid-layout-elk"]
+        assert f"vendor/mermaid-layout-elk/{config['entry']}" in text
+
+    def test_mermaid_waits_for_the_layout_before_it_draws(self):
+        text = self._code_of(self.EARLY)
+        assert "registerLayoutLoaders" in text, "the layout is registered with Mermaid"
+        assert "mermaid.render" in text and re.search(r"ready\s*\.then", text), "a diagram drawn before the registration would use the default layout: render waits"
+        assert ".catch(" in text, "a layout that cannot be imported leaves the default one: the diagrams still draw"
+
+    def test_the_early_script_adds_the_loose_security_level_to_what_material_passes(self):
+        text = self._code_of(self.EARLY)
+        assert re.search(r"""securityLevel\s*:\s*["']loose["']""", text)
+        assert "mermaid.initialize" in text, "initialize is wrapped, so Material's own call gets the level"
+        assert "window.lfMermaidReady" in text
+
+    def test_mkdocs_loads_the_loader_and_neither_mermaid_script(self):
+        block = self._extra_javascript()
+        assert "javascripts/lib-loader.js" in block
+        assert "mermaid.mjs" not in block, "the module is gone: it ran after Material's bundle"
+        assert "mermaid-early" not in block, "it runs before the bundle, from the template; extra_javascript comes after"
+
+    def test_the_mermaid_module_is_gone(self):
+        assert not (JAVASCRIPTS_DIR / "mermaid.mjs").exists()
+        loader = (JAVASCRIPTS_DIR / "lib-loader.js").read_text(encoding="utf-8")
+        assert "name: 'mermaid'" not in loader, "the loader carries MathJax only; Mermaid is not loaded after Material"
+
+    def test_the_template_writes_the_sites_own_copy_then_the_early_script_on_pages_with_a_diagram(self):
+        config = js_cache.LIBRARIES["mermaid"]
+        head = self._extrahead()
+        condition = re.search(r"""\{%-?\s*if\b[^%]*class="mermaid"[^%]*%\}""", head)
+        assert condition, 'only a page whose content has class="mermaid" gets the scripts'
+        # Where the downloader writes it: <vendor>/<library name>/<target>, as for MathJax.
+        local = head.find(f"javascripts/vendor/mermaid/{config['target']}")
+        early = head.find(f"javascripts/{self.EARLY}")
+        assert local != -1, "the site's own copy is written"
+        assert early != -1, "the early script is written"
+        assert condition.start() < local < early, "inside the condition, the library before the script that adjusts it"
+        assert "cdn.jsdelivr.net" not in head and "unpkg" not in head, "the template names no third party"
+        end_if = re.search(r"\{%-?\s*endif\s*-?%\}", head[early:])
+        assert end_if, "both scripts close inside the condition"
+
+    def test_no_docs_script_imports_mermaid_or_elk_from_a_cdn_except_the_pinned_fallbacks(self):
+        offenders = []
+        pinned = re.escape(MERMAID_URL)
+        pinned_elk = re.escape(f"https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@{ELK_VERSION}/dist/mermaid-layout-elk.esm.min.mjs")
+        for path in sorted(JAVASCRIPTS_DIR.iterdir()):
+            if not path.is_file() or path.suffix not in {".js", ".mjs"}:
+                continue  # vendor/ holds the downloaded libraries, not our scripts
+            text = path.read_text(encoding="utf-8")
+            for forbidden in ("cdn.jsdelivr.net/npm/mermaid@11/", "mermaid.esm", "unpkg.com/mermaid"):
+                if forbidden in text:
+                    offenders.append(f"{path.name}: {forbidden}")
+            # Any other CDN address of mermaid or of its layout: only the two exactly pinned files may appear, and only in the early script.
+            for found in re.findall(r"https?://[^\s\"'`)]*(?:mermaid|layout-elk)[^\s\"'`)]*", text):
+                if not (path.name == self.EARLY and (re.fullmatch(pinned, found) or re.fullmatch(pinned_elk, found))):
+                    offenders.append(f"{path.name}: {found}")
+        assert offenders == []
+
+
+# ---------------------------------------------------------------------------
+# H6-4: the full screen view of a diagram, served by the site itself
+# ---------------------------------------------------------------------------
+#
+# ``diagram-zoom.js`` opens a Mermaid diagram full screen with zoom and pan. Material for MkDocs draws each diagram
+# into a *closed* shadow root of its ``div.mermaid``, so the script replaces ``Element.prototype.attachShadow`` to make
+# those roots open: it must run before Material's bundle, hence written in ``<head>`` by ``overrides/main.html`` next
+# to ``mermaid-early.js``, on the pages that have a diagram, and not listed in ``extra_javascript`` / ``extra_css``
+# (which come after the bundle). It loads nothing from outside and carries no word of the private repository.
+
+
+class TestDiagramZoomServedLocally:
+    """Source scan of the script, the template and the site config. The behaviour is pinned by the E2E ``docs-diagram-zoom``."""
+
+    SCRIPT = "diagram-zoom.js"
+    STYLE = "diagram-zoom.css"
+    EARLY = TestMermaidServedLocally.EARLY
+
+    @staticmethod
+    def _raw() -> str:
+        return (JAVASCRIPTS_DIR / TestDiagramZoomServedLocally.SCRIPT).read_text(encoding="utf-8")
+
+    @staticmethod
+    def _extra_css() -> str:
+        """The ``extra_css:`` block of mkdocs.yml, up to the next top-level key."""
+        site = (JAVASCRIPTS_DIR.parents[1] / "mkdocs.yml").read_text(encoding="utf-8")
+        match = re.search(r"^extra_css:[^\n]*\n((?:[ \t]+[^\n]*\n|[ \t]*\n)*)", site, re.M)
+        assert match, "mkdocs.yml has no extra_css block"
+        return match.group(1)
+
+    def test_the_stylesheet_exists_beside_the_other_stylesheets(self):
+        assert (JAVASCRIPTS_DIR.parent / "stylesheets" / self.STYLE).is_file()
+
+    def test_the_script_is_a_classic_script_that_loads_nothing(self):
+        code = TestMermaidServedLocally._code_of(self.SCRIPT)
+        assert not re.search(r"^\s*import\b", code, re.M), "a classic script: no static import"
+        assert not re.search(r"\bimport\s*\(", code), "no dynamic import either"
+        assert not re.search(r"\bexport\b", code), "a classic script: no export"
+        assert "fetch(" not in code, "it asks for nothing"
+        assert "XMLHttpRequest" not in code
+        raw = self._raw()
+        assert "http://" not in raw and "https://" not in raw, "not one address, not even in a comment"
+
+    def test_the_script_names_nothing_of_the_private_repository(self):
+        raw = self._raw().lower()
+        assert "business" not in raw, "the word of the private repository is not written in a public script"
+        assert "business-plan" not in raw
+
+    def test_the_script_opens_the_shadow_roots_of_the_diagrams(self):
+        code = TestMermaidServedLocally._code_of(self.SCRIPT)
+        assert "Element.prototype.attachShadow" in code, "the patch is the reason this script runs before Material's bundle"
+        assert re.search(r"""mode\s*:\s*["']open["']""", code), 'sets mode: "open"'
+        assert "mermaid" in code
+
+    def test_the_script_has_its_texts_in_the_four_languages(self):
+        code = TestMermaidServedLocally._code_of(self.SCRIPT)
+        for lang in ("en", "it", "fr", "es"):
+            assert re.search(rf"^\s*{lang}\s*:\s*\{{", code, re.M), f"texts for «{lang}»"
+        assert "document.documentElement.lang" in code, "the texts follow <html lang>"
+
+    def test_the_template_writes_the_stylesheet_and_the_script_in_the_same_condition_as_the_early_script(self):
+        head = TestMermaidServedLocally._extrahead()
+        condition = re.search(r"""\{%-?\s*if\b[^%]*class="mermaid"[^%]*%\}""", head)
+        assert condition, 'only a page whose content has class="mermaid" gets the scripts'
+        early = head.find(f"javascripts/{self.EARLY}")
+        assert early != -1, "the early script is written"
+        for written in (f"stylesheets/{self.STYLE}", f"javascripts/{self.SCRIPT}"):
+            at = head.find(written)
+            assert at != -1, f"{written} is written by the template"
+            assert condition.end() < at, f"{written} is inside the condition, not before it"
+            assert not re.search(r"\{%-?\s*(end)?if\b", head[condition.end() : at]), f"{written} is in the same condition as {self.EARLY}, with no other if or endif between"
+        end_if = re.search(r"\{%-?\s*endif\s*-?%\}", head[condition.end() :])
+        assert end_if, "the condition closes"
+        closes = condition.end() + end_if.start()
+        for written in (f"stylesheets/{self.STYLE}", f"javascripts/{self.SCRIPT}", f"javascripts/{self.EARLY}"):
+            assert head.find(written) < closes, f"{written} is written before the condition closes"
+
+    def test_the_site_config_does_not_list_them(self):
+        for block, name in ((TestMermaidServedLocally._extra_javascript(), self.SCRIPT), (self._extra_css(), self.STYLE)):
+            assert "diagram-zoom" not in block, f"{name}: it runs before Material's bundle, from the template; extra_javascript and extra_css come after"

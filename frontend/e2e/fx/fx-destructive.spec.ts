@@ -21,7 +21,7 @@
  * only the pairs `beforeAll` created, so the database is left exactly as found.
  *
  * Ownership is verified, not declared. This header once claimed it for SEK, NOK
- * and PLN, and from 2026-03-13 (`a3a9ead52`) the claim was false: the seed stores
+ * and PLN, and from 2026-03-13 (`75917c39b`) the claim was false: the seed stores
  * EUR/PLN and EUR/SEK rates, the ECB legs of its GBP/PLN and SEK/USD chains, and
  * a NOK/SEK manual route. Every run deleted those 2 × 276 seed rates, starting
  * with a "clean slate" sweep in `beforeAll`, and nothing noticed: the net below

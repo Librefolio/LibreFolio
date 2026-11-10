@@ -54,7 +54,9 @@ When one partner is absent from the server response (access-controlled or filter
 When the user applies any column filter or sort → `isGrouped = false`:
 - The reordering algorithm is **not applied**; rows appear in DataTable's natural filtered/sorted order
 - The two rows of a pair may end up on different pages or far apart
-- Ghost rows become ordinary independent rows
+- Ghost rows become ordinary independent rows (*2026-11-07 lint:* the code no longer synthesizes ghost partners in
+  this mode — a partner that does not match the filters stays out; when both halves are in `mainRows`, a flat
+  `sortIndex` still keeps them adjacent, giver then receiver — `displayRows` in `TransactionsTable.svelte`, «Bug7-fix»)
 - DataTable handles pagination internally (`enablePagination={true}`)
 - External `DataTablePagination` shown only in grouped mode
 
@@ -75,6 +77,9 @@ el.classList.add('tx-row-highlight');
 // auto-clear after 1.6s
 ```
 
+*2026-11-07 lint:* `pulseElement()` in the page also sets `data-highlighted="true"` on the row, and the mark stays
+until the next highlight or the page closes (W-B76): the pulse fades, the bar telling which row was opened does not.
+
 CSS target: `tr.tx-row-highlight > td` (animation on `<td>`, not `<tr>` — `box-shadow` on `<tr>` is unreliable cross-browser).
 
 **Implementation note**: DOM-direct manipulation (not Svelte reactive state) because Svelte 5 does not re-trigger CSS animations on function-reference-equal closures. Click uses **capture phase** (`addEventListener('click', h, true)`) to intercept before DataTable's row-selection handler.
@@ -83,6 +88,6 @@ CSS target: `tr.tx-row-highlight > td` (animation on `<td>`, not `<tr>` — `box
 
 | Role | Path |
 |------|------|
-| TransactionsTable (algorithm) | `frontend/src/lib/components/transactions/TransactionsTable.svelte` |
+| TransactionsTable (algorithm) | `frontend/src/lib/features/transactions/TransactionsTable.svelte` |
 | +page.svelte (pulse handler) | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | Plan where designed | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/plan-phase07-transaction-Part4.prompt.md` (Step 5) |

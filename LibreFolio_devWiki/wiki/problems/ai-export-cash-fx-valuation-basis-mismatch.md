@@ -82,7 +82,7 @@ The 27 July Phase 0 gate retained the corrected denominator through the cross-do
 | Portfolio financial components (cash totals, balances, allocations) | `backend/app/services/ai_export/components/portfolio_financial.py` |
 | Composition entrypoint | `backend/app/services/ai_export/composer.py` |
 | Regression tests (successors) | `backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_financial.py`, `backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_integration.py` |
-| Transaction-date cash conversion | `backend/app/services/financial_math/portfolio/daily_state.py` |
+| Engine cash (transaction-date conversion at the time; daily native revaluation since lot 41 F) | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Portfolio summary/history source | `backend/app/services/portfolio_service.py` |
 | Snapshot service / error boundary | `backend/app/services/ai_export/runtime_service.py` |
 | Live browser E2E | `frontend/e2e/ai-export/` |
@@ -93,7 +93,7 @@ The 27 July Phase 0 gate retained the corrected denominator through the cross-do
 > `ai_export/assemblers/` and `ai_export/profiles/` still exist as directories, but they
 > contain nothing except `__pycache__` — stale bytecode of files that are gone. That litter
 > is the only reason `ls` still shows them, and it is what makes them look like a move.
-> They were **deleted** in commit **`c9f840680` (2026-08-05)**, *"refactor(ai-export): remove
+> They were **deleted** in commit **`7f4f59bc7` (2026-08-05)**, *"refactor(ai-export): remove
 > legacy runtime"*, which removed **22 233 lines against 1 577 added**: the whole
 > `assemblers/` + `profiles/` + `resolver.py` + `sampling.py` + `technical.py` +
 > `normalization.py` + `service.py` stack, and the tests that covered it.
@@ -106,6 +106,8 @@ The 27 July Phase 0 gate retained the corrected denominator through the cross-do
 > [[problems/registered-but-unreachable-test-actions]] and
 > [[concepts/silent-no-op-option]]: same family — code that is present, plausible, and
 > not the one that runs.
+>
+> *2026-11-07 lint: the two empty directories are gone as well; `ai_export/` now holds only the V3 path.*
 >
 > The surviving path is **V3 composition**: `components/` (one module per payload),
 > `datasets/` and `analyses/` (catalog + spec), `temporal/`, `composer.py` and

@@ -1,15 +1,15 @@
 <script lang="ts">
     import {onDestroy, onMount} from 'svelte';
     import {t} from '$lib/i18n';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {applyBrokerCopy, applyLiquidityCopy, domainBrokerKey, domainCashKey, newCopyRecord, type CopyOutcome} from '../copies';
     import {compareDecimal} from '../decimal';
     import type {PlannerDraft} from '../draft.svelte';
-    import {formatPlannerMoneyPlain, formatPlannerPercent} from '../format';
+    import {formatPlannerMoneyPlain} from '../format';
     import {loadCopyScope, selectableIds, type ScopeBroker} from '../scope';
     import type {PlannerSource, SourceCash} from '../source';
     import {SourceLoad} from '../sourceLoad.svelte';
-    import {BADGE, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
+    import {BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
+    import BrokerTile from '../shared/BrokerTile.svelte';
     import CurrencyCode from '../shared/CurrencyCode.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
 
@@ -83,8 +83,8 @@
         return share !== null && compareDecimal(share, '1') === -1;
     }
 
-    function toggle(id: number, checked: boolean): void {
-        selected = checked ? [...selected, id] : selected.filter((item) => item !== id);
+    function toggle(id: number, pressed: boolean): void {
+        selected = pressed ? [...selected, id] : selected.filter((item) => item !== id);
     }
 
     const rowCount = $derived(kind === 'liquidity' ? selected.reduce((count, id) => count + newCash(id).length, 0) : selected.length);
@@ -146,66 +146,42 @@
         {/if}
 
         {#if visible.length > 0 && load.status !== 'loading'}
-            <ul class="mt-3 space-y-2" data-testid="{testid}-list">
+            <ul class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="{testid}-list">
                 {#each visible as broker (broker.id)}
                     {@const snapshot = snapshotBroker(broker.id)}
                     {@const checked = selected.includes(broker.id)}
                     <li data-testid="{testid}-broker" data-broker-id={broker.id} data-selectable={broker.selectable ? 'true' : 'false'} data-selected={checked ? 'true' : 'false'}>
-                        {#if broker.selectable}
-                            <label
-                                class="flex items-start gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20' : 'border-gray-200 dark:border-gray-700'} {snapshot
-                                    ? 'cursor-pointer hover:border-libre-green'
-                                    : 'cursor-not-allowed opacity-60'}"
-                            >
-                                <input type="checkbox" class="mt-2 rounded border-gray-300 text-libre-green focus:ring-libre-green" {checked} disabled={!snapshot} data-testid="{testid}-check" onchange={(event) => toggle(broker.id, event.currentTarget.checked)} />
-                                <BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={32} />
-                                <span class="min-w-0 flex-1">
-                                    <span class="flex flex-wrap items-center gap-2">
-                                        <span class="font-medium text-gray-900 dark:text-gray-100">{broker.name}</span>
-                                        {#if partial(broker.share)}
-                                            <span class={HINT}>· {$t('tools.pacAllocator.planner.scope.share', {default: 'share {share}', values: {share: formatPlannerPercent(broker.share)}})}</span>
-                                        {/if}
-                                        {#if !broker.active}<span class={BADGE.warning}>{$t('tools.pacAllocator.planner.scope.inactive', {default: 'Inactive'})}</span>{/if}
+                        <BrokerTile {broker} pressed={checked} disabled={!snapshot} {testid} ontoggle={(next) => toggle(broker.id, next)}>
+                            {#snippet detail()}
+                                {#if kind === 'liquidity' && snapshot}
+                                    {@const rows = newCash(broker.id)}
+                                    <span class="block w-max min-w-full space-y-0.5 text-xs" data-testid="{testid}-cash">
+                                        {#each rows as row (row.cash_id)}
+                                            <span class="flex w-max min-w-full items-center justify-center gap-x-2 whitespace-nowrap tabular-nums" data-currency={row.currency}>
+                                                <CurrencyCode code={row.currency} />
+                                                <span>{$t('tools.pacAllocator.planner.liquidityCopy.custody', {default: 'custody {amount}', values: {amount: formatPlannerMoneyPlain(row.custody_amount, row.currency)}})}</span>
+                                                {#if partial(row.ownership_share)}
+                                                    <span>· {$t('tools.pacAllocator.planner.liquidityCopy.yourShare', {default: 'your share {amount}', values: {amount: formatPlannerMoneyPlain(row.economic_amount, row.currency, {minorUnit: true})}})}</span>
+                                                {:else}
+                                                    <span>· {$t('tools.pacAllocator.planner.liquidityCopy.allYours', {default: '100% yours'})}</span>
+                                                {/if}
+                                            </span>
+                                        {:else}
+                                            <span class="block {HINT}">{$t('tools.pacAllocator.planner.liquidityCopy.noCash', {default: 'No cash balance on this date.'})}</span>
+                                        {/each}
                                     </span>
-                                    {#if kind === 'liquidity' && snapshot}
-                                        {@const rows = newCash(broker.id)}
-                                        <span class="mt-1 block space-y-0.5 text-sm" data-testid="{testid}-cash">
-                                            {#each rows as row (row.cash_id)}
-                                                <span class="flex flex-wrap items-center gap-x-2 tabular-nums" data-currency={row.currency}>
-                                                    <CurrencyCode code={row.currency} />
-                                                    <span>{$t('tools.pacAllocator.planner.liquidityCopy.custody', {default: 'custody {amount}', values: {amount: formatPlannerMoneyPlain(row.custody_amount, row.currency)}})}</span>
-                                                    {#if partial(row.ownership_share)}
-                                                        <span>· {$t('tools.pacAllocator.planner.liquidityCopy.yourShare', {default: 'your share {amount}', values: {amount: formatPlannerMoneyPlain(row.economic_amount, row.currency, {minorUnit: true})}})}</span>
-                                                    {:else}
-                                                        <span>· {$t('tools.pacAllocator.planner.liquidityCopy.allYours', {default: '100% yours'})}</span>
-                                                    {/if}
-                                                </span>
-                                            {:else}
-                                                <span class="block {HINT}">{$t('tools.pacAllocator.planner.liquidityCopy.noCash', {default: 'No cash balance on this date.'})}</span>
-                                            {/each}
-                                        </span>
-                                    {:else if kind === 'brokers' && snapshot}
-                                        <span class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 {HINT}">
-                                            {#if snapshot.observed_currencies.length > 0}
-                                                <span>{$t('tools.pacAllocator.planner.brokerCopy.currenciesSeen', {default: 'Currencies seen:'})}</span>
-                                                {#each snapshot.observed_currencies as currency (currency)}<CurrencyCode code={currency} />{/each}
-                                            {:else}
-                                                {$t('tools.pacAllocator.planner.brokerCopy.noCurrencies', {default: 'No currency seen yet: one mode in the valuation currency is proposed.'})}
-                                            {/if}
-                                        </span>
-                                    {/if}
-                                </span>
-                            </label>
-                        {:else}
-                            <div class="flex items-start gap-3 rounded-lg border border-dashed border-gray-200 p-3 text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                                <input type="checkbox" class="mt-2 rounded border-gray-300" disabled aria-hidden="true" tabindex="-1" />
-                                <span class="opacity-60 grayscale"><BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={32} /></span>
-                                <span class="min-w-0 flex-1">
-                                    <span class="block">{broker.name}</span>
-                                    <span class="block {HINT}" data-testid="{testid}-blocked">{$t('tools.pacAllocator.planner.scope.notSelectable', {default: 'Not selectable: {role} access, not read', values: {role: broker.role ?? '—'}})}</span>
-                                </span>
-                            </div>
-                        {/if}
+                                {:else if kind === 'brokers' && snapshot}
+                                    <span class="flex w-max min-w-full items-center justify-center gap-x-2 whitespace-nowrap {HINT}">
+                                        {#if snapshot.observed_currencies.length > 0}
+                                            <span>{$t('tools.pacAllocator.planner.brokerCopy.currenciesSeen', {default: 'Currencies seen:'})}</span>
+                                            {#each snapshot.observed_currencies as currency (currency)}<CurrencyCode code={currency} />{/each}
+                                        {:else}
+                                            {$t('tools.pacAllocator.planner.brokerCopy.noCurrencies', {default: 'No currency seen yet: one mode in the valuation currency is proposed.'})}
+                                        {/if}
+                                    </span>
+                                {/if}
+                            {/snippet}
+                        </BrokerTile>
                     </li>
                 {/each}
             </ul>

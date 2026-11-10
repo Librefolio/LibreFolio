@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-09-25
 tags: [frontend, svelte, popover, events, ux]
-related: [tooltip-click-pins-over-modal, lab-eligibility-from-risk-engine]
+related: [problems/tooltip-click-pins-over-modal, decisions/lab-eligibility-from-risk-engine, problems/modal-layers-escape-and-backdrop]
 ---
 
 # Problem: A popover that closes on pointerdown swallows the next click
@@ -49,5 +49,5 @@ One extra press when switching filter menus in an overflowing layout. No data im
 |------|------|
 | Popover shell (LabPopover replaced 2026-10-05; the click-capture rule lives here now) | `frontend/src/lib/components/ui/select/SelectPopover.svelte` |
 | Filter menus (LabCheckMenu, moved and renamed 2026-10-05) | `frontend/src/lib/components/ui/select/CheckMenu.svelte` |
-| "+" picker | `frontend/src/lib/components/risk/LabAssetPicker.svelte` |
+| "+" picker | `frontend/src/lib/features/risk/LabAssetPicker.svelte` |
 | Regression test | `frontend/e2e/portfolio/risk-lab.spec.ts` |

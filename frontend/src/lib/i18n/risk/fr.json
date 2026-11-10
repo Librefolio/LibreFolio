@@ -18,7 +18,27 @@
       "includeFrontier": "Inclure la frontière",
       "frontierPoints": "Points de la frontière",
       "includeSensitivity": "Inclure la sensibilité",
-      "optimizationSolver": "Solveur"
+      "optimizationSolver": "Solveur",
+      "horizonExpr": {
+        "units": {
+          "year": "a",
+          "month": "m",
+          "day": "j"
+        },
+        "hintLabel": "Comment saisir l'horizon",
+        "resultDays": "{days, plural, one {# jour} other {# jours}}",
+        "errors": {
+          "empty": "Saisissez l'horizon.",
+          "format": "Horizon non valide : saisissez des jours (365) ou des années, mois et jours (2a3m5j).",
+          "tooShort": "L'horizon doit être d'au moins 1 jour.",
+          "tooLong": "L'horizon ne peut pas dépasser {max} jours."
+        },
+        "hintItems": {
+          "days": "Un nombre de jours : 365",
+          "units": "Ou des années, mois et jours : 2a3m5j",
+          "sum": "Une année compte 365 jours, un mois 30"
+        }
+      }
     },
     "title": "Risque",
     "dashboardTitle": "Risque du portefeuille",
@@ -302,7 +322,8 @@
       "resource_limit_paths_or_horizon": "Cette simulation est trop volumineuse pour être exécutée. Utilisez moins de trajectoires simulées ou un horizon plus court.",
       "resource_limit_horizon_or_sampling": "Cette simulation quasi-Monte-Carlo est trop volumineuse pour être exécutée. Raccourcissez l'horizon ou choisissez l'échantillonnage Monte-Carlo.",
       "resource_limit_period": "Cette simulation est trop volumineuse pour être exécutée : la période contient trop d'historique. Choisissez une période plus courte.",
-      "resource_limit_positions": "Une simulation peut inclure au plus 100 positions, et ce portefeuille en compte davantage. Simulez plutôt un courtier avec moins de positions."
+      "resource_limit_positions": "Une simulation peut inclure au plus 100 positions, et ce portefeuille en compte davantage. Simulez plutôt un courtier avec moins de positions.",
+      "resource_limit_period_or_assets": "Cette analyse est trop volumineuse pour être exécutée : ces actifs couvrent trop de jours de prix. Choisissez une période plus courte ou moins d'actifs."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe est indéfini car la volatilité est nulle.",
@@ -339,7 +360,9 @@
       "historical_replay_excluded_stale_at_start": "Aucun prix dans les {days} jours précédant le début de la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
       "historical_replay_excluded_stale_at_end": "Aucun prix dans les {days} derniers jours de la fenêtre du rejeu : {names} — {treatment, select, zero_return_residual {poids compté comme liquidités à rendement nul} other {hors du rejeu}}.",
       "historical_replay_mostly_excluded": "Le résultat ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu du rejeu.",
-      "assets_excluded_no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucune source de prix attribuée et aucun prix jamais enregistré — {names}."
+      "assets_excluded_no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucune source de prix attribuée et aucun prix jamais enregistré — {names}.",
+      "total_loss_no_recovery": "La valeur est tombée à zéro : aucun gain ne peut la ramener à son sommet, la reprise nécessaire n'est donc pas affichée.",
+      "total_loss_no_recovery_assets": "{count, plural, one {# actif est tombé} other {# actifs sont tombés}} à zéro : aucun gain ne peut {count, plural, one {le ramener à son sommet} other {les ramener à leur sommet}}, la reprise nécessaire n'est donc pas affichée — {names}."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",
@@ -354,8 +377,6 @@
       "title": "Rejeu historique",
       "compositionNotice": "Applique les rendements historiques observés à la composition actuelle ; ne reconstitue pas la détention passée.",
       "preset": "Période prédéfinie",
-      "start": "Date de début",
-      "end": "Date de fin",
       "proxy": "Proxy historique manuel",
       "exclude": "Exclure cet actif du rejeu",
       "results": "Résultats du rejeu historique",
@@ -390,27 +411,25 @@
       "l1": {
         "title": "Quel mal cela peut-il faire ?",
         "rows": {
-          "day": "Une mauvaise journée (pires 5%)",
-          "month": "Un mauvais mois (pires 5%)",
-          "worst": "Le pire repli (réellement vécu)"
+          "day": "Un mauvais jour",
+          "month": "Trente mauvais jours",
+          "worst": "La pire chute"
         },
         "technical": {
-          "day": "CVaR · 1 jour",
-          "month": "CVaR · 1 mois",
+          "day": "Les 5 % de jours les plus mauvais · CVaR",
+          "month": "Les 5 % de périodes les plus mauvaises · CVaR",
           "worst": "Perte maximale",
-          "current": "Repli actuel"
+          "current": "Repli actuel",
+          "lived": "Vécue"
         },
-        "durationDays": "durée {days} jours",
-        "requiredRecovery": "reprise nécessaire {percent}",
-        "currentDrawdown": "Actuellement sous le sommet",
-        "sincePeak": "depuis le {date}",
+        "requiredRecovery": "Reprise nécessaire",
+        "currentDrawdown": "Sous le sommet, aujourd'hui",
         "tails": {
-          "worstRealization": "La pire journée réellement vue",
-          "worstRealizationOn": "le {date}",
+          "worstRealization": "La pire journée",
           "drawdownAtRisk": "Repli à risque ({confidence})",
-          "conditionalDrawdownAtRisk": "Moyenne au-delà de ce seuil",
-          "ulcerIndex": "Indice d'Ulcer {value}",
-          "ulcerIndexHint": "profondeur quadratique moyenne sous le sommet : plus bas, plus calme"
+          "conditionalDrawdownAtRisk": "Moyenne au-delà du seuil",
+          "ulcerIndex": "Indice d'Ulcer",
+          "worstMonth": "Les 30 pires jours"
         },
         "underwater": {
           "title": "Temps passé sous le sommet",
@@ -421,8 +440,19 @@
           "observations": "{count} jours observés",
           "cut": "Seuil VaR à {value}",
           "noCut": "Aucun seuil publié pour cette fenêtre.",
-          "empty": "Aucune distribution des rendements pour cette période."
-        }
+          "empty": "Aucune distribution des rendements pour cette période.",
+          "cutLine": "VaR {value}",
+          "position": {
+            "beyond": "Au-delà du seuil VaR ({value}) : jours que la VaR décrit",
+            "holds": "Contient le seuil VaR ({value})",
+            "above": "Au-dessus du seuil VaR ({value})"
+          },
+          "binDays": "{count, plural, one {# jour} other {# jours}} · {share}"
+        },
+        "when": "Quand",
+        "since": "Depuis",
+        "duration": "Durée",
+        "daysCount": "{days, plural, one {# jour} other {# jours}}"
       },
       "l2": {
         "title": "Suis-je aussi diversifié que je le crois ?",
@@ -433,13 +463,17 @@
         "showLess": "Afficher moins",
         "effectiveAssets": {
           "label": "Combien de paris indépendants ai-je réellement ?",
-          "aboveCount": "Au-dessus des {positions} positions mesurées : l'excédent est de la liquidité, et ne dit rien des poids",
+          "aboveCount": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte ({share} : liquidités et positions sans prix), et ne dit rien des poids",
           "belowCount": "En dessous des {positions} positions mesurées : les poids sont déséquilibrés, et quelques-unes portent le portefeuille",
-          "evenCount": "Égal aux {positions} positions mesurées : poids uniformes et aucune liquidité"
+          "evenCount": "Exactement les {positions} positions mesurées : poids uniformes et rien de non couvert",
+          "name": "Nombre effectif de positions",
+          "aboveCountNoShare": "Au-dessus des {positions} positions mesurées : l'excédent vient de la part non couverte (liquidités et positions sans prix), et ne dit rien des poids"
         },
         "diversificationRatio": {
           "label": "Répartir l'argent a-t-il servi à quelque chose ?",
-          "caption": "1,00 signifie que les positions bougent à l'unisson ; plus haut, plus elles se compensent"
+          "scale": "1,00 signifie aucun bénéfice : les positions évoluent à l'unisson ; plus c'est haut, plus elles se compensent.",
+          "example": "À {value}, la volatilité du portefeuille est d'environ {percent} sous la moyenne pondérée de celles des positions.",
+          "ceiling": "Le maximum est d'environ √N : {max} avec {positions} positions."
         },
         "uncovered": {
           "label": "Quelle part de moi n'est pas mesurée ici ?",
@@ -589,7 +623,14 @@
         "partialTitle": "Certains résultats sont partiels",
         "notesTitle": "À savoir sur ces résultats",
         "noPriceSourceTitle": "Positions sans prix, exclues de certaines mesures",
-        "affected": "Mesures concernées"
+        "affected": "Mesures concernées",
+        "excluded": {
+          "missing_price": "{count, plural, one {# actif exclu} other {# actifs exclus}} : aucun prix de marché sur la période.",
+          "missing_fx": "{count, plural, one {# actif exclu} other {# actifs exclus}} : le taux de change vers votre devise est manquant.",
+          "invalid_currency": "{count, plural, one {# actif exclu} other {# actifs exclus}} : la devise de leurs prix n'est pas valide.",
+          "insufficient_history": "{count, plural, one {# actif exclu} other {# actifs exclus}} : historique insuffisant sur la période.",
+          "no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} : aucune source de prix n'est assignée et aucun prix n'a jamais été enregistré."
+        }
       }
     },
     "eligibility": {

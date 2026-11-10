@@ -3,9 +3,6 @@ site_url: https://librefolio.github.io/LibreFolio/
 repo_url: https://github.com/Librefolio/LibreFolio
 repo_name: Librefolio/LibreFolio
 
-exclude_docs: |
-  POC_UX/**
-
 # Anchor validation — one half of a two-part partition, not a duplicate.
 #
 #   MkDocs (here)  owns links *inside* the docs tree (markdown → markdown). It resolves
@@ -178,15 +175,35 @@ plugins:
             "⚙️ Settings": "⚙️ Impostazioni"
             Profile: Profilo
             User Preferences: Preferenze Utente
+            Plugins: Plugin
             About: Informazioni
             "🛠️ Admin Manual": "🛠️ Manuale Admin"
             "CLI Admin Tools": "Strumenti CLI di amministrazione"
             Global Settings: Impostazioni Globali
+            "Users & Invitations": "Utenti e inviti"
             Filesystem Structure: Struttura Filesystem
+            Backup, Restore & Moving: Backup, ripristino e trasloco
             Advanced Docker: Docker Avanzato
             Host Installation: Installazione su Host
             Expose Securely: Esporre in Sicurezza
             Check Connection Security: Verificare la Sicurezza della Connessione
+            # DOC-1: the nav labels of the split admin guide
+            "Public Access (Funnel)": "Accesso pubblico (Funnel)"
+            "Reverse Proxy": "Reverse Proxy"
+            "Sleep and Wake": "Sospensione e risveglio"
+            "Scheduled Wake-up": "Risveglio programmato"
+            "Secrets and Plugins": "Segreti e plugin"
+            "Checks and Protections": "Controlli e protezioni"
+            "Accounts and Asset Search": "Account e ricerca asset"
+            "Setup": "Impostazione"
+            "Links and Messages": "Link e messaggi"
+            "Troubleshooting": "Risoluzione dei problemi"
+            "Your Instances": "Le tue istanze"
+            "Panel API": "API del pannello"
+            "Backups and Restores": "Backup e ripristini"
+            "Backups": "Backup"
+            "Sealed Backups": "Backup sigillati"
+            "Moving and Troubleshooting": "Trasloco e risoluzione dei problemi"
             "📚 Financial Theory": "📚 Teoria Finanziaria"
             "🏷️ Asset Types": "🏷️ Tipi di Asset"
             "🔄 Transaction Types": "🔄 Tipi di Transazione"
@@ -313,6 +330,7 @@ plugins:
             "🐳 Deployment & Exposure": "🐳 Installazione ed esposizione"
             "⚙️ System Configuration": "⚙️ Configurazione di sistema"
             "Environment Variables": "Variabili d'ambiente"
+            "Email": "Email"
             "🧹 Maintenance & Operations": "🧹 Manutenzione e operazioni"
             "Dividend": "Dividendo"
             "Interest": "Interessi"
@@ -421,16 +439,36 @@ plugins:
             "⚙️ Settings": "⚙️ Paramètres"
             Profile: Profil
             User Preferences: Préférences Utilisateur
+            Plugins: Plugins
             About: À propos
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manuel Admin"
             "CLI Admin Tools": "Outils CLI d'administration"
             Global Settings: Paramètres Globaux
+            "Users & Invitations": "Utilisateurs et invitations"
             Filesystem Structure: Structure du Système de Fichiers
+            Backup, Restore & Moving: Sauvegarde, restauration et déménagement
             Advanced Docker: Docker Avancé
             Host Installation: Installation sur l'Hôte
             Expose Securely: Exposer en Sécurité
             Check Connection Security: Vérifier la Sécurité de la Connexion
+            # DOC-1: the nav labels of the split admin guide
+            "Public Access (Funnel)": "Accès public (Funnel)"
+            "Reverse Proxy": "Reverse proxy"
+            "Sleep and Wake": "Veille et réveil"
+            "Scheduled Wake-up": "Réveil programmé"
+            "Secrets and Plugins": "Secrets et plugins"
+            "Checks and Protections": "Contrôles et protections"
+            "Accounts and Asset Search": "Comptes et recherche d'actifs"
+            "Setup": "Mise en place"
+            "Links and Messages": "Liens et messages"
+            "Troubleshooting": "Dépannage"
+            "Your Instances": "Vos instances"
+            "Panel API": "API du panneau"
+            "Backups and Restores": "Sauvegardes et restaurations"
+            "Backups": "Sauvegardes"
+            "Sealed Backups": "Sauvegardes scellées"
+            "Moving and Troubleshooting": "Déménagement et dépannage"
             "📚 Financial Theory": "📚 Théorie Financière"
             "🏷️ Asset Types": "🏷️ Types d'Actifs"
             "🔄 Transaction Types": "🔄 Types de Transactions"
@@ -557,6 +595,7 @@ plugins:
             "🐳 Deployment & Exposure": "🐳 Installation et exposition"
             "⚙️ System Configuration": "⚙️ Configuration du système"
             "Environment Variables": "Variables d'environnement"
+            "Email": "E-mail"
             "🧹 Maintenance & Operations": "🧹 Maintenance et opérations"
             "Dividend": "Dividende"
             "Interest": "Intérêt"
@@ -665,16 +704,36 @@ plugins:
             "⚙️ Settings": "⚙️ Configuración"
             Profile: Perfil
             User Preferences: Preferencias de Usuario
+            Plugins: Plugins
             About: Acerca de
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manual de Admin"
             "CLI Admin Tools": "Herramientas CLI de administración"
             Global Settings: Configuración Global
+            "Users & Invitations": "Usuarios e invitaciones"
             Filesystem Structure: Estructura del Sistema de Archivos
+            Backup, Restore & Moving: Copia de seguridad, restauración y traslado
             Advanced Docker: Docker Avanzado
             Host Installation: Instalación en Host
             Expose Securely: Exponer en Seguridad
             Check Connection Security: Comprobar la Seguridad de la Conexión
+            # DOC-1: the nav labels of the split admin guide
+            "Public Access (Funnel)": "Acceso público (Funnel)"
+            "Reverse Proxy": "Proxy inverso"
+            "Sleep and Wake": "Suspensión y reactivación"
+            "Scheduled Wake-up": "Reactivación programada"
+            "Secrets and Plugins": "Secretos y plugins"
+            "Checks and Protections": "Comprobaciones y protecciones"
+            "Accounts and Asset Search": "Cuentas y búsqueda de activos"
+            "Setup": "Puesta en marcha"
+            "Links and Messages": "Enlaces y mensajes"
+            "Troubleshooting": "Solución de problemas"
+            "Your Instances": "Tus instancias"
+            "Panel API": "API del panel"
+            "Backups and Restores": "Copias y restauraciones"
+            "Backups": "Copias de seguridad"
+            "Sealed Backups": "Copias selladas"
+            "Moving and Troubleshooting": "Traslado y solución de problemas"
             "📚 Financial Theory": "📚 Teoría Financiera"
             "🏷️ Asset Types": "🏷️ Tipos de Activos"
             "🔄 Transaction Types": "🔄 Tipos de Transacciones"
@@ -801,6 +860,7 @@ plugins:
             "🐳 Deployment & Exposure": "🐳 Instalación y exposición"
             "⚙️ System Configuration": "⚙️ Configuración del sistema"
             "Environment Variables": "Variables de entorno"
+            "Email": "Correo"
             "🧹 Maintenance & Operations": "🧹 Mantenimiento y operaciones"
             "Dividend": "Dividendo"
             "Interest": "Interés"
@@ -822,8 +882,6 @@ plugins:
             "Credits & Legal": "Créditos & Aviso Legal"
 
 extra_javascript:
-  # Mermaid customization (must be loaded as module)
-  - javascripts/mermaid.mjs
   # MathJax configuration (must load before MathJax)
   - javascripts/mathjax.js
   # Library loader with local cache + CDN fallback
@@ -836,8 +894,12 @@ extra_javascript:
   - javascripts/site-lang-selector.js
   # Gallery image loader - auto-resolves screenshot paths on any page
   - javascripts/gallery-img-loader.js
+  # Anchors that moved when the long admin pages were split (DOC-1): old addresses with an anchor reach the new page
+  - javascripts/moved-anchors.js
   # Buy Me a Coffee widget + header button
   - javascripts/bmc-widget.js
+  # Long code in a table cell wraps
+  - javascripts/table-code-wrap.js
 
 nav:
   - Home: index.md
@@ -952,6 +1014,7 @@ nav:
           - Overview: user/settings/index.md
           - Profile: user/settings/profile.md
           - User Preferences: user/settings/preferences.md
+          - Plugins: user/settings/plugins.md
           - About: user/settings/about.md
       - 🧩 Misc:
           - Image Crop: user/misc/image-crop.md
@@ -960,13 +1023,32 @@ nav:
       - 🐳 Deployment & Exposure:
           - Host Installation: admin/host_installation.md
           - Advanced Docker: admin/docker_advanced.md
-          - Expose Securely: admin/service_exposure.md
-          - Check Connection Security: admin/connection_checks.md
+          - Expose Securely:
+              - Overview: admin/service_exposure.md
+              - Public Access (Funnel): admin/service_exposure_funnel.md
+          - Check Connection Security:
+              - Overview: admin/connection_checks.md
+              - Reverse Proxy: admin/connection_proxy.md
       - ⚙️ System Configuration:
-          - Environment Variables: admin/configuration.md
+          - Environment Variables:
+              - Overview: admin/configuration.md
+              - Secrets and Plugins: admin/configuration_secrets.md
+              - Checks and Protections: admin/configuration_security.md
+              - Accounts and Asset Search: admin/configuration_accounts.md
+          - Email:
+              - Setup: admin/email.md
+              - Links and Messages: admin/email_flows.md
+              - Troubleshooting: admin/email_troubleshooting.md
           - Global Settings: admin/settings.md
+          - Users & Invitations: admin/users.md
       - 🧹 Maintenance & Operations:
-          - CLI Admin Tools: admin/cli_tools.md
+          - CLI Admin Tools:
+              - Overview: admin/cli_tools.md
+              - Backups: admin/cli_backup.md
+          - Backup, Restore & Moving:
+              - Overview: admin/backup_restore.md
+              - Sealed Backups: admin/backup_sealed.md
+              - Moving and Troubleshooting: admin/backup_moving.md
           - Filesystem Structure: admin/filesystem.md
   - 📚 Financial Theory:
       - Overview: financial-theory/index.md
@@ -1105,6 +1187,7 @@ nav:
                   - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
+                  - Plugin Settings: developer/architecture/patterns/plugin_settings.md
                   - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
                   - Tool Plugin Guide: developer/architecture/patterns/tool_plugins.md
               - 🧠 AI Export:
@@ -1166,6 +1249,7 @@ nav:
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
+          - "📧 Email (SMTP)": developer/backend/email.md
           - "🧮 Financial Math Layer": developer/backend/financial_math.md
           - "📉 Risk Engine": developer/backend/risk/architecture.md
       - 🎨 Frontend Development:
@@ -1184,6 +1268,7 @@ nav:
               - Pages: developer/frontend/pages/index.md
           - "🎨 Design System & UI":
               - Styling: developer/frontend/styling.md
+              - Designer Lab: developer/frontend/designer-lab.md
               - 🧩 Components:
                   - Overview: developer/frontend/components/index.md
                   - 🏗️ Core UI:
@@ -1247,10 +1332,13 @@ nav:
       - Credits & Legal: community/credits-legal.md
 
 hooks:
+  - hooks/lf_theme_tokens.py
   - hooks/absolute_hreflang.py
   - hooks/jsonld.py
   - hooks/fr_typography.py
+  - hooks/search_language_split.py
 
 extra_css:
+  - stylesheets/lf-tokens.css  # generated by hooks/lf_theme_tokens.py from the app's tokens.css
   - static/extra.css
   - stylesheets/home-custom.css

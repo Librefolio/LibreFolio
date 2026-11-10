@@ -1,7 +1,7 @@
 /**
  * pluginKind — which import plugins are generic fallbacks (the generic CSV), as the backend ranks them.
  *
- * `BRIMProvider.detection_priority` (backend/app/services/brim_provider.py) suggests 100 and up for a
+ * `BRIMProvider.detection_priority` (backend/app/services/brim/brim_provider.py) suggests 100 and up for a
  * plugin made for one broker, 50-99 for a semi-generic one and 0-49 for a generic fallback; the generic
  * CSV answers 0. `isFallbackPlugin` draws that line once, at `FALLBACK_PLUGIN_PRIORITY_LIMIT`, for the
  * two places where a plugin made for the broker must win over a generic one: the import wizard's

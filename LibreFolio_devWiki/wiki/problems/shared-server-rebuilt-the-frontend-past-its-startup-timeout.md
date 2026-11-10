@@ -7,6 +7,7 @@ tags: [testing, test-runner, frontend-build, debug-build, timeout, load, environ
 related:
   - problems/release-images-shipped-debug-frontend
   - decisions/plugin-folders-and-split-i18n
+  - problems/mutation-restore-keeps-old-mtime-skips-frontend-rebuild
 ---
 
 # Problem: the server was still building when the runner stopped waiting
@@ -31,6 +32,12 @@ With the debug build fresh, the same run was relaunched unchanged: the server st
 passed (7 categories of 7, 12 857 passed, 0 failed). U's rule for next time: run `all-backend` before a production
 build, not after — or build in debug first.
 
+2026-11-07 lint: fixed in the runner since `9dc5c407e` (15/10, C-94). `SharedTestServer.start()` first runs
+`dev.py server --test --build-only` in the foreground (`build_server_prerequisites` in
+`scripts/test_runner/_server.py`), and only then spawns the backend and starts `STARTUP_TIMEOUT` (300 s,
+`LIBREFOLIO_TEST_STARTUP_TIMEOUT`): a debug rebuild after a production build is visible and no longer counts against
+the startup. The `mkdocs gallery` command runs the same step. The ordering rule above is no longer needed.
+
 ## Prevention
 
 - Order the work so the shared server finds the build it wants: debug builds before a backend run, production builds
@@ -41,5 +48,6 @@ build, not after — or build in debug first.
 
 | Role | Path |
 |------|------|
-| The server and its frontend rebuild | `dev.py` |
+| The server and its frontend rebuild (`--build-only`) | `dev.py` |
+| The foreground build before the startup timeout (`build_server_prerequisites`, `STARTUP_TIMEOUT`) | `scripts/test_runner/_server.py` |
 | Plan 45 (§10, U-3, the detour of 22:48) | `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` |

@@ -97,3 +97,62 @@ describe('dateArrowStep hold acceleration', () => {
         expect(press(value, {repeat: true, key: 'ArrowDown'})).toBe(shiftIsoDate(value, 'day', -1));
     });
 });
+
+/**
+ * W5-11: Date.UTC reads a year 0..99 as 1900..1999, so stepping a date typed with a short year jumped a century. The
+ * calendar is the proleptic Gregorian one, year 1 is the floor (year 0 is not a date): stepping below it stays put.
+ */
+describe('shiftIsoDate — years below 100 (W5-11)', () => {
+    it('moves a day inside year 24, leap February included', () => {
+        expect(shiftIsoDate('0024-03-01', 'day', 1)).toBe('0024-03-02');
+        expect(shiftIsoDate('0024-03-01', 'day', -1)).toBe('0024-02-29');
+    });
+
+    it('crosses from year 99 to year 100', () => {
+        expect(shiftIsoDate('0099-12-31', 'day', 1)).toBe('0100-01-01');
+        expect(shiftIsoDate('0100-01-01', 'day', -1)).toBe('0099-12-31');
+    });
+
+    it('year 100 has no 29 February', () => {
+        expect(shiftIsoDate('0100-02-28', 'day', 1)).toBe('0100-03-01');
+    });
+
+    it('clamps the day on months and years of a short year', () => {
+        expect(shiftIsoDate('0024-02-29', 'year', 1)).toBe('0025-02-28');
+        expect(shiftIsoDate('0024-01-31', 'month', 1)).toBe('0024-02-29');
+        expect(shiftIsoDate('0099-12-15', 'month', 1)).toBe('0100-01-15');
+    });
+
+    it('year 1 is the floor: stepping below it stays on 0001-01-01', () => {
+        expect(shiftIsoDate('0001-01-01', 'day', -1)).toBe('0001-01-01');
+        expect(shiftIsoDate('0001-01-01', 'month', -1)).toBe('0001-01-01');
+        expect(shiftIsoDate('0001-01-01', 'year', -1)).toBe('0001-01-01');
+    });
+
+    it('still steps up from the floor', () => {
+        expect(shiftIsoDate('0001-01-01', 'day', 1)).toBe('0001-01-02');
+        expect(shiftIsoDate('0001-01-01', 'month', 1)).toBe('0001-02-01');
+        expect(shiftIsoDate('0001-01-01', 'year', 1)).toBe('0002-01-01');
+    });
+});
+
+describe('dateArrowStep — years below 100 (W5-11)', () => {
+    const target = {} as EventTarget;
+    const TODAY = '2024-08-15';
+    const press = (iso: string, key: 'ArrowUp' | 'ArrowDown'): string => {
+        const event = {key, repeat: false, target, ctrlKey: false, metaKey: false, altKey: false, preventDefault: () => {}} as unknown as KeyboardEvent;
+        return dateArrowStep(event, iso, TODAY) as string;
+    };
+
+    beforeEach(() => resetDateArrowHold());
+
+    it('a tap moves a day inside year 24, not a century', () => {
+        expect(press('0024-03-01', 'ArrowUp')).toBe('0024-03-02');
+        resetDateArrowHold();
+        expect(press('0024-03-01', 'ArrowDown')).toBe('0024-02-29');
+    });
+
+    it('ArrowDown on 0001-01-01 stays there', () => {
+        expect(press('0001-01-01', 'ArrowDown')).toBe('0001-01-01');
+    });
+});

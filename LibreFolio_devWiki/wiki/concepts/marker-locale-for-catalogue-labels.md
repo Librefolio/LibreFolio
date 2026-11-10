@@ -27,7 +27,7 @@ English labels in the code:
 - `DateRangePicker` — the presets (`datePicker.presets.{weeks,months,years}` with `{n}`), and then the rolling-return
   window of the asset page (`calendarReturnWindow.ts`, `CALENDAR_RETURN_UNIT_LABEL_KEYS`).
 
-Labels already taken from the catalogue act as controls. The fixes landed with `0de730f3b` (train 38).
+Labels already taken from the catalogue act as controls. The fixes landed with `3d2378626` (train 38).
 
 ## Why
 

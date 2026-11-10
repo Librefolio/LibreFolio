@@ -1509,7 +1509,7 @@ BOOTSTRAP_CONFIGURATIONS = {
     "shock": {"horizon_days": 61, "path_count": 1024, "regime": RiskSimulationRegime.SHOCK_RECOVERY},
     "calm": {"horizon_days": 90, "path_count": 512, "regime": RiskSimulationRegime.CALM},
 }
-# Captured through the worker on 10b0b0d48, from the resampler as it stood before `steps_per_year`:
+# Captured through the worker on 3ec6e7710, from the resampler as it stood before `steps_per_year`:
 # the (p05, p50, p95) band on the first, middle and last day, the terminal statistics and the
 # disclosure. With the frequency unset the engine must still give these numbers. The relative
 # tolerance absorbs libm and BLAS differences between machines; the absolute one covers the day-1

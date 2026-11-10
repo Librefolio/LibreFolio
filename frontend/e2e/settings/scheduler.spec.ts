@@ -14,6 +14,7 @@
 
 import {type APIRequestContext, expect, type Page, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {openSettingsTab} from '../fixtures/settings-tabs';
 import {TEST_ADMIN} from '../fixtures/test-users';
 import {API_BASE, goToAssetDetailPage, openEditAssetModal} from '../assets/assets-helpers';
 import {eventSeq, waitForEvent} from '../fixtures/app-events';
@@ -29,7 +30,7 @@ import {eventSeq, waitForEvent} from '../fixtures/app-events';
 async function goToSchedulerSettings(page: import('@playwright/test').Page) {
     await login(page, TEST_ADMIN);
     await navigateTo(page, '/settings');
-    await page.getByTestId('settings-tab-admin').click();
+    await openSettingsTab(page, 'admin');
     await expect(page.getByTestId('global-settings-tab')).toBeVisible({timeout: 10_000});
 
     // Click the "Scheduler & Upload" category so the scheduler rows are visible.
@@ -234,7 +235,19 @@ const SCHEDULER_KEYS = ['scheduler_current_price_frequency_minutes', 'scheduler_
 type SchedulerSettings = Record<(typeof SCHEDULER_KEYS)[number], string>;
 const BULK_PATH = `${API_BASE}/settings/global/bulk`;
 
-/** The scheduler's global settings as stored (a public read: no session needed). */
+/**
+ * Sign the test's own API context in as the admin: the POST /auth/login the restore makes, and like it independent of
+ * the browser. Once, before the first read: the context keeps the session cookie for every request after it.
+ */
+async function signInAsAdmin(request: APIRequestContext): Promise<void> {
+    const signedIn = await request.post(`${API_BASE}/auth/login`, {data: {username: TEST_ADMIN.username, password: TEST_ADMIN.password}});
+    expect(signedIn.ok(), `The test's API context could not sign in as ${TEST_ADMIN.username} (HTTP ${signedIn.status()})`).toBe(true);
+}
+
+/**
+ * The scheduler's global settings as stored: a signed-in read since decision 36 (A6d), so `request` must be signed in
+ * first (`signInAsAdmin`, or the restore's own sign-in).
+ */
 async function readSchedulerSettings(request: APIRequestContext): Promise<SchedulerSettings> {
     const response = await request.get(`${API_BASE}/settings/global`);
     expect(response.ok(), `GET ${API_BASE}/settings/global returned ${response.status()}`).toBe(true);
@@ -316,6 +329,7 @@ test.describe('Scheduler — Config Modal', () => {
         test.describe.configure({mode: 'serial'});
 
         test('FSCH-006: config modal saves frequency change via PATCH /global/bulk', async ({page, request}) => {
+            await signInAsAdmin(request);
             const before = await readSchedulerSettings(request);
             const frequency = otherFrequency(before, 15);
             try {
@@ -350,6 +364,7 @@ test.describe('Scheduler — Config Modal', () => {
             // Riding on the one operation that already writes: no extra mutation, and the toast
             // it raises is a real one rather than a fabricated fixture. Its write is undone in
             // `finally`, like FSCH-006's.
+            await signInAsAdmin(request);
             const before = await readSchedulerSettings(request);
             try {
                 await openSchedulerConfig(page);

@@ -1,5 +1,6 @@
 ---
 title: "Price Currency: Hard-Reject Mismatch + 409 on Asset Currency Change"
+category: decision
 date: 2026-04-21
 status: resolved
 tags: [prices, currency, assets, api, validation]
@@ -55,12 +56,16 @@ In both cases, failing loudly is better than silently skipping rows.
 **User must**: DELETE all prices first (via bulk delete or DataEditor clear), then PATCH currency.
 
 **Or accept the destructive path** — Phase 7 Part 3 Closure Batch 3 added
-[[decisions/policy-d-currency-wipe]] (commit `c7cf528c4`): when the user explicitly
+[[decisions/policy-d-currency-wipe]] (commit `4dc4ac8da`): when the user explicitly
 confirms in `AssetCurrencyChangeModal`, the PATCH proceeds with a server-side
 symmetric wipe of prices + events (transactions preserved with
 `asset_event_id = NULL`). The 409 + Policy D pair is the canonical flow:
 409 = "stop, confirm" / Policy D = "user said yes, wipe and proceed".
 [[entities/backup-router]] is the mandatory pre-confirm snapshot surface.
+
+*2026-11-07 lint:* superseded by N68 (`f62e303a8`, 2026-10-24): the currency PATCH is never refused — no 409, no
+`CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA` token — and it deletes the prices and the non-SPLIT events itself, keeping the
+SPLITs ([[decisions/policy-d-currency-wipe]], note at the top).
 
 **No auto-conversion** (bulk-convert option was rejected):
 - Would introduce FX rate dependency at asset update time
@@ -100,8 +105,8 @@ This is an intentional asymmetry with `price_history.currency`.
 
 | Role | Path |
 |------|------|
-| Asset source (upsert_prices_bulk) | `backend/app/services/asset_source.py` |
-| Asset API (currency change 409) | `backend/app/api/v1/assets.py` |
+| Asset source (upsert_prices_bulk) | `backend/app/services/assets/price_store.py` |
+| Asset API (currency change 409) | `backend/app/api/v1/assets/crud.py` |
 | DB model (price_history.currency) | `backend/app/db/models.py` |
 | Asset detail page (requiredFxPairs) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
 | Asset currency change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |

@@ -22,7 +22,6 @@
       "quoteCurrency": "Devise Cotée",
       "providerDisabledHint": "Sélectionnez d'abord les deux devises",
       "providerInfoBanner": "Les fournisseurs récupèrent automatiquement les taux de change des banques centrales. Sans fournisseur, vous devrez saisir les taux manuellement.",
-      "noProviderWarning": "Aucun fournisseur configuré. Vous devrez saisir manuellement les taux de change pour chaque date.",
       "createIntermediatePairs": "Créer aussi les paires intermédiaires",
       "createIntermediatePairsHint": "Chaque étape des chaînes sélectionnées sera sauvegardée comme paire autonome avec son fournisseur, afin de pouvoir les synchroniser indépendamment.",
       "titleEdit": "Modifier les Fournisseurs",
@@ -46,7 +45,8 @@
       "timeoutAfter": "Délai dépassé après {seconds} s",
       "requestTimedOut": "La requête a expiré après {seconds} s. Augmentez le délai et réessayez.",
       "failed": "Échec de la synchronisation",
-      "retryFailed": "{n, plural, one {Réessayer l’échec} other {Réessayer les # échecs}}"
+      "retryFailed": "{n, plural, one {Réessayer l’échec} other {Réessayer les # échecs}}",
+      "overwriteWarning": "{existing, plural, one {# sur {total} a déjà} many {# sur {total} ont déjà} other {# sur {total} ont déjà}} des données enregistrées sur cette période : la synchronisation les remplace par les valeurs du fournisseur, modifications manuelles comprises."
     },
     "route": {
       "title": "Routes de Conversion",
@@ -57,6 +57,7 @@
       "unusableHint": "Ces fournisseurs n'ont pas de chemin de conversion automatique pour cette paire de devises.",
       "steps": "étapes",
       "noRoutesAvailable": "Aucune route de conversion automatique trouvée pour cette paire. Vous pouvez quand même sauvegarder sans fournisseur et insérer les taux manuellement.",
+      "providersUnavailable": "Les routes de conversion ne sont pas disponibles pour le moment. Fermez cette fenêtre et rouvrez-la dans un instant.",
       "chainWarning": "Les chaînes nécessitent que TOUTES les étapes intermédiaires réussissent lors de la synchronisation. Si un fournisseur échoue, toute la chaîne échoue pour cette date.",
       "searchPlaceholder": "Rechercher fournisseurs, devises, pays…",
       "noSearchResults": "Aucune route ne correspond à la recherche",
@@ -99,6 +100,7 @@
     "savedCount": "{n, plural, one {# enregistré} other {# enregistrés}}",
     "deletedCount": "{n, plural, one {# supprimé} other {# supprimés}}",
     "skippedCount": "{n, plural, one {# ignoré (invalide)} other {# ignorés (invalides)}}",
-    "saveFailed": "Échec de l’enregistrement des taux FX : {error}"
+    "saveFailed": "Échec de l’enregistrement des taux FX : {error}",
+    "refusedCount": "{n, plural, one {# refusé} other {# refusés}}"
   }
 }

@@ -16,13 +16,13 @@ related:
 
 ## Summary
 
-One plan (~300 lines), shipped in `e50d66408` (2026-09-10) and polished in `cc57b6a38` (2026-09-11), archived on
+One plan (~300 lines), shipped in `c56039fbf` (2026-09-10) and polished in `ab05735e8` (2026-09-11), archived on
 2026-10-09. Three small features with strict contracts.
 
 ## Key takeaways
 
 - **A1 — bond categories**: the sector taxonomy gained `Corporate Bonds` and `Government Bonds` (with aliases such as
-  "corporate", "government"; `backend/app/utils/sector_fin_utils.py`); supranational bonds stay in `Financials`. No
+  "corporate", "government"; `backend/app/utils/sector_fin_utils.py`, now `backend/app/utils/asset/sector.py` after `25e19856d`); supranational bonds stay in `Financials`. No
   migration and no reclassification of existing data.
 - **A2 — distributions CSV import** (sector and geographic weights, not asset events): columns `name,weight`;
   `weight` is always a percentage 0–100, divided by 100 exactly once — never a guessed 0–1 scale, never rebalanced;
@@ -52,6 +52,6 @@ None.
 | Sector taxonomy (bonds) | `backend/app/utils/asset/sector.py` |
 | Distributions CSV import | `frontend/src/lib/components/assets/DistributionDataImportModal.svelte` |
 | Distribution editor | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |
-| Delete with counts | `backend/app/services/asset_sources/crud.py` |
+| Delete with counts | `backend/app/services/assets/crud.py` |
 | User doc (distributions) | `mkdocs_src/docs/user/assets/create-edit.en.md` |
 | User doc (delete) | `mkdocs_src/docs/user/assets/index.en.md` |

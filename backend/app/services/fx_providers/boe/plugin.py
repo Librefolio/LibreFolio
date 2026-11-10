@@ -14,8 +14,9 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
-from backend.app.services.provider_registry import FXProviderRegistry, register_provider
+from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError, raise_if_fx_rate_limited, raise_longest_refusal
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
 
@@ -192,6 +193,7 @@ class BOEProvider(FXRateProvider):
                     return currency, observations
 
             except httpx.HTTPError as e:
+                raise_if_fx_rate_limited(e, self.provider_code)
                 logger.exception(f"Failed to fetch FX rates for {currency} from BOE: {e}")
                 raise FXServiceError(f"BOE API error for {currency}: {e}") from e
             except Exception as e:
@@ -201,6 +203,7 @@ class BOEProvider(FXRateProvider):
         # Launch all HTTP calls in parallel (return_exceptions to avoid cascade failure)
         tasks = [_fetch_one(c) for c in valid_currencies]
         fetched = await asyncio.gather(*tasks, return_exceptions=True)
+        raise_longest_refusal(fetched)  # a currency refused for too many requests: the whole call is refused, the core pauses
 
         for i, result in enumerate(fetched):
             if isinstance(result, BaseException):
@@ -266,7 +269,7 @@ class BOEProvider(FXRateProvider):
 
                 observations.append((rate_date, self.base_currency, currency, rate))
 
-            except (ValueError, IndexError) as e:
+            except (ValueError, IndexError, ArithmeticError) as e:  # ArithmeticError: a value that is no number, the line only (X-R50)
                 logger.debug(f"Skipping invalid line in BOE response: {line[:50]}... ({e})")
                 continue
 

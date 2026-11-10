@@ -58,8 +58,10 @@ Early cells in the TransactionsTable used `title="..."` HTML attributes for tool
 
 ## Affected Files
 
-- `frontend/src/lib/components/transactions/TransactionsTable.svelte` — all custom cells use Tooltip.svelte
+- `frontend/src/lib/features/transactions/TransactionsTable.svelte` — all custom cells use Tooltip.svelte
 - `frontend/src/lib/components/table/DataTable.svelte` — `CustomCell` snippet support
+- `frontend/src/lib/components/table/DataTableCellContent.svelte` — where the cell kinds, `custom` and `html` with its
+  `tooltip` included, are rendered since release 1.3 (Y2 cut out of `DataTable.svelte`)
 
 ## Source
 

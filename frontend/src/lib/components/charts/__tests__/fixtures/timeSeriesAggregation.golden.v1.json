@@ -626,14 +626,14 @@
       "returnsInputByReference": false,
       "mutatedInput": false,
       "result": [
-        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-09", "missing": true, "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 2, "value": 0},
-        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 0}
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-09", "missing": true, "representativeDate": "2026-01-09", "resolution": "weekly", "sourcePointCount": 0, "value": 0},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 0, "value": 0}
       ]
     },
     "aggregateSumSeries|all-missing-values|monthly": {
       "returnsInputByReference": false,
       "mutatedInput": false,
-      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 4, "value": 0}]
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 0, "value": 0}]
     },
     "aggregateSumSeries|partial-missing-bucket|daily": {
       "returnsInputByReference": true,
@@ -650,14 +650,14 @@
       "returnsInputByReference": false,
       "mutatedInput": false,
       "result": [
-        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 3, "value": 202},
-        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 2, "value": 105}
+        {"bucketEnd": "2026-01-11", "bucketStart": "2026-01-05", "date": "2026-01-08", "representativeDate": "2026-01-08", "resolution": "weekly", "sourcePointCount": 2, "value": 202},
+        {"bucketEnd": "2026-01-18", "bucketStart": "2026-01-12", "date": "2026-01-13", "representativeDate": "2026-01-13", "resolution": "weekly", "sourcePointCount": 1, "value": 105}
       ]
     },
     "aggregateSumSeries|partial-missing-bucket|monthly": {
       "returnsInputByReference": false,
       "mutatedInput": false,
-      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "missing": true, "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 5, "value": 307}]
+      "result": [{"bucketEnd": "2026-01-31", "bucketStart": "2026-01-01", "date": "2026-01-13", "representativeDate": "2026-01-13", "resolution": "monthly", "sourcePointCount": 3, "value": 307}]
     },
     "aggregateSumSeries|unaligned-start-midweek|daily": {
       "returnsInputByReference": true,

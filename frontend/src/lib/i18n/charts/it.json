@@ -1,7 +1,7 @@
 {
   "chart": {
     "tooltip": {
-      "stale": "Obsoleto: {days} giorno/i",
+      "stale": "Obsoleto: {days, plural, one {# giorno} other {# giorni}}",
       "fxStale": "Tasso FX: {days}g fa",
       "percentNote": "% relativo alla data di inizio intervallo",
       "upper": "Superiore",
@@ -14,11 +14,14 @@
       "currentBucket": "In corso: {days} su {total} giorni",
       "originalValue": "orig. {value}",
       "fxRateDate": "cambio al {date}",
-      "fxDaysBack": "({days}g prima)"
+      "fxDaysBack": "({days}g prima)",
+      "yearLabel": "{year}",
+      "staleBadge": "{days}g"
     },
     "resolution": {
       "weekly": "Settimanale",
-      "monthly": "Mensile"
+      "monthly": "Mensile",
+      "yearly": "Annuale"
     },
     "marketPrice": "Prezzo di mercato",
     "showPercentage": "Mostra percentuale",
@@ -136,7 +139,9 @@
       "resultMissing": "Il backend non ha restituito un risultato per questo segnale. Riprova la richiesta dei segnali.",
       "partialResult": "Questo segnale è disponibile solo parzialmente con i dati attuali.",
       "unavailable": "Questo segnale non può essere calcolato con i dati disponibili.",
-      "partialContiguousSegment": "Segnale calcolato sul segmento contiguo completo {start}–{end}. Esclusi {excluded} punti caricati perché date o campi richiesti erano incompleti. Input completo: {available}/{requested} ({coverage}%, warm-up incluso). Sequenza massima mancante: {consecutive} punti."
+      "partialContiguousSegment": "Segnale calcolato sul segmento contiguo completo {start}–{end}. Esclusi {excluded} punti caricati perché date o campi richiesti erano incompleti. Input completo: {available}/{requested} ({coverage}%, warm-up incluso). Sequenza massima mancante: {consecutive} punti.",
+      "undefinedWindowPartial": "{count} punti di questo rendimento non si possono calcolare, dal {start} al {end}, perché un prezzo necessario manca o non è utilizzabile. Risincronizza i prezzi di questo asset dal {resyncStart} al {resyncEnd} e riprova.",
+      "undefinedWindowUnavailable": "Questo rendimento non si può calcolare: i {count} punti, dal {start} al {end}, non hanno un prezzo utilizzabile. Risincronizza i prezzi di questo asset dal {resyncStart} al {resyncEnd} e riprova."
     },
     "axes": {
       "exchangeRate": "Asse del cambio ({pair})",
@@ -145,7 +150,12 @@
       "signal": "Asse {name}",
       "volume": "Asse dei volumi"
     },
-    "yAxisAuto": "Auto"
+    "yAxisAuto": "Auto",
+    "lineShape": "Forma delle linee",
+    "lineShapeDesc": "Come i grafici uniscono i punti. Vale solo per questo grafico.",
+    "lineShapeSegments": "Segmenti",
+    "lineShapeSteps": "Gradini",
+    "lineShapeSpline": "Curva morbida"
   },
   "measure": {
     "pending": "Inizio: {startDate} ({startValue}) — clicca sul grafico per il punto finale",
@@ -194,7 +204,8 @@
     "units": {
       "days": "giorni",
       "sessions": "sedute",
-      "percentPerYear": "%/anno"
+      "percentPerYear": "%/anno",
+      "observations": "osservazioni"
     },
     "visual": {
       "components": "Componenti",
@@ -204,6 +215,9 @@
     "reference": {
       "zero": "Zero"
     },
+    "gapsJoined": {
+      "label": "vuoti uniti"
+    },
     "regions": {
       "oversoldDescription": "Estremo inferiore sotto la soglia configurata.",
       "neutralDescription": "Intervallo centrale tra le soglie configurate.",
@@ -211,13 +225,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Seleziona asset di confronto",
-      "loadError": "Impossibile caricare gli asset."
-    },
-    "riskRollingReturn": {
-      "name": "Rendimento mobile",
-      "description": "Rendimento composto del solo prezzo su una finestra mobile.",
-      "output": "Rendimento",
-      "outputDescription": "Rendimento composto del periodo di detenzione, in punti percentuali."
+      "loadError": "Impossibile caricare gli asset.",
+      "blocked": "Non disponibili",
+      "isMainAsset": "È l'asset del grafico",
+      "alreadyCompared": "Già confrontato in un altro segnale"
     }
   }
 }

@@ -5,7 +5,7 @@
  * `openDropdown()` refuses to open for 200 ms after the last close. The guard exists for one
  * gesture: on a touch screen the tap that chooses an option is followed by the click the browser
  * synthesises for it — the ghost click — and if that click lands on the trigger once the list has
- * gone, opening on it throws the user straight back into the list they just left (f9e79d580).
+ * gone, opening on it throws the user straight back into the list they just left (fdd073101).
  * But every close arms the guard: a mouse choice, an Enter, an Escape. So a mouse or keyboard
  * user — or a program — who reopens within 200 ms is ignored in silence: the click lands, nothing
  * opens, and nothing on screen says why. `e2e/transactions/tx-import-asset-inspector.spec.ts`

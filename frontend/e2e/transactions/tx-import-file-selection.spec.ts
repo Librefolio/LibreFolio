@@ -3,10 +3,14 @@
  * inline synthetic Generic CSV reports. No parse/import/commit, shared fixture
  * mutation, global row count, real financial snapshot, or external provider I/O.
  *
+ * C9-1: an upload of Step1 the space limit refuses (a simulated 507) keeps the wizard on Step1, says so, and is sent
+ * again by the next Continue.
+ *
  * Two entry paths: existing files expand both owned brokers; successful Step1
  * uploads expand only their broker and preselect those uploads. Individual row
  * selection must survive paging and destruction/recreation of the folded table.
  */
+import type {Route} from '@playwright/test';
 import {expect, test as base, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
@@ -274,4 +278,44 @@ test('Step1 uploads: only their broker expands and a partial selection survives 
     });
     await expect(control.getByTestId(`dt-row-checkbox-${controlFile.file_id}`)).toHaveAttribute('data-state', 'unchecked');
     await expect(page.getByTestId('import-wizard-parse')).toBeEnabled();
+});
+
+test('Step1 upload refused by the space limit: the wizard stays on Step 1 and says so, and the next Continue sends the file again (C9-1)', async ({page, owned}) => {
+    const mainId = await createBroker(page, owned, 'space-limit');
+    const upload = csvFile(owned, 'space-limit');
+    // The refusal is simulated (the page's own route, removed below): the limit is one value for the whole instance, never
+    // changed from a parallel test. Its numbers are those of the real one.
+    const refusal = {detail: {code: 'storage_limit_exceeded', message: 'The space limit would be passed', limit_mb: 100, used_bytes: 1, required_bytes: 120 * 1024 * 1024, required_mb: 120, disk_missing_bytes: 0, limit_locked: false}};
+    const isUpload = (url: URL) => url.pathname === `${API}/brokers/import/upload`;
+    let refused = 0;
+    const refuse = async (route: Route) => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        refused += 1;
+        await route.fulfill({status: 507, contentType: 'application/json', body: JSON.stringify(refusal)});
+    };
+    const step1 = await openWizard(page);
+    await step1.getByTestId('file-input').setInputFiles(upload);
+    await expect(step1.locator('tbody tr[data-row-id]')).toHaveCount(1, {timeout: UI_TIMEOUT});
+    await optionsClosed(page);
+    await step1.getByTestId('import-wizard-step1-broker-select').getByRole('combobox').click();
+    await page.getByTestId(`search-select-option-${mainId}`).click();
+    await optionsClosed(page);
+
+    await page.route(isUpload, refuse);
+    try {
+        await expect(page.getByTestId('import-wizard-next')).toBeEnabled({timeout: UI_TIMEOUT});
+        await page.getByTestId('import-wizard-next').click();
+        await expect(step1.getByTestId('storage-limit-refusal'), 'the refusal is said in the wizard, on Step 1').toBeVisible({timeout: UI_TIMEOUT});
+        expect(refused).toBe(1);
+        await expect(step1, 'the wizard does not go on without the file').toBeVisible();
+        await expect(page.getByTestId('import-wizard-step2')).toHaveCount(0);
+    } finally {
+        await page.unroute(isUpload, refuse);
+    }
+
+    // Space made (here: the refusal removed): the next Continue sends the same file, and the wizard goes on with it.
+    const step2 = await enterStep2(page);
+    const files = (await listOwnedFiles(page, owned)).filter((file) => file.target_broker_id === mainId);
+    expect(files.map((file) => file.filename)).toEqual([upload.name]);
+    await expect(brokerPanel(step2, mainId).getByTestId(`dt-row-checkbox-${files[0].file_id}`)).toHaveAttribute('data-state', 'checked');
 });

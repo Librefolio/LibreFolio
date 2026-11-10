@@ -29,6 +29,10 @@ getCachedPreview(fileId: string, requestedWidth: number): string | null
 clearImagePreviewCache(): void  // call on logout
 ```
 
+*2026-11-07 lint:* nobody calls it by hand any more: `imagePreviewCache.ts` registers it with
+`registerClientSessionReset('imagePreviewCache', …)`, so it runs on every session change (logout, user switch) with the
+other client caches.
+
 ## Source files
 
 | Role | Path |

@@ -47,6 +47,8 @@ Un Transfert est enregistré comme deux lignes `TRANSFER`, une par courtier, cha
 | **Séparer la paire** (délier) | Transfert → deux Ajustements indépendants |
 | **Promouvoir** (lier) | Deux Ajustements → Transfert |
 
+**Coût de base lors de la séparation et de la promotion** : lors de la séparation de la paire, l'Ajustement entrant conserve son coût de base et l'Ajustement sortant n'en a pas : il n'a pas de valeur, donc chez le courtier émetteur ses unités ne font que sortir de la quantité et leur coût compte comme une perte réalisée (voir [Ajustements sortants](adjustment.md#outgoing-adjustments)). Lors d'une promotion, tout coût de base enregistré sur l'Ajustement sortant est abandonné, puisque le côté émetteur d'un Transfert n'en porte pas.
+
 **Contraintes de promotion** : même actif, courtiers différents, quantités opposées, et aucune des deux lignes liée à un événement d'actif (une division, par exemple), puisqu'un transfert ne peut pas porter ce lien.
 
 ---

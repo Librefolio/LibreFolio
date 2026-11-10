@@ -1,5 +1,6 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {focusHeaderControlByKeyboard} from '../fixtures/headerKeyboardFocus';
 import {findAcrossPages} from '../fixtures/paging';
 import {TEST_USER} from '../fixtures/test-users';
 
@@ -153,13 +154,13 @@ async function expectAmountsClear(scope: Locator, clear: string[], what: string)
  * Flip privacy from the header, asserting the state before and after.
  *
  * The header slides away on scroll (`Header.svelte`), and pages scroll themselves — the lots
- * panel scrolls into view once it has drawn. A focused header control pins the header in
- * place (`handleFocusIn`), so the click cannot land where the toggle *was*.
+ * panel scrolls into view once it has drawn. A header control reached by keyboard pins the header
+ * in place (`handleFocusIn`), so the click cannot land where the toggle *was*.
  */
 async function flipPrivacy(page: Page, on: boolean): Promise<void> {
     const toggle = page.getByTestId('privacy-toggle');
     await expect(toggle, 'privacy must start from the opposite state').toHaveAttribute('aria-pressed', String(!on));
-    await toggle.focus();
+    await focusHeaderControlByKeyboard(page, 'privacy-toggle');
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', String(on));
@@ -171,7 +172,7 @@ async function followNav(page: Page, navTestId: string, url: RegExp): Promise<vo
     // Layout, not timing: the burger is rendered below the lg breakpoint only, and the page
     // has hydrated by the time this runs.
     if (await burger.isVisible()) {
-        await burger.focus();
+        await focusHeaderControlByKeyboard(page, 'mobile-menu-toggle');
         await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
         await burger.click();
         await expect(page.getByTestId('app-header')).toHaveAttribute('data-sidebar-open', 'true');
@@ -268,8 +269,8 @@ async function revealColumns(page: Page, menuScope: Locator, table: Locator, col
 
 type Money = {code: string; amount: string | number};
 type BrokerListItem = {id: number; name: string; user_role?: string | null; user_share_percentage?: string | number | null};
-type BrokerHolding = {asset_id: number; asset_name: string; quantity: string | number; current_price?: string | number | null};
-type BrokerSummary = {holdings: BrokerHolding[]};
+type BrokerHolding = {asset_id: number; asset_name: string; quantity: string | number; current_price?: string | number | null; broker_id?: number | null};
+type PortfolioReport = {summary?: {holdings?: BrokerHolding[] | null} | null};
 type LotSummary = {lot_id: number; states: string[]; open_quantity: string | number; original_quantity: string | number};
 type TxRead = {id: number; asset_id: number | null; type: string; quantity: string | number; cash: Money | null};
 type Position = {brokerId: number; brokerName: string; assetId: number; assetName: string};
@@ -295,8 +296,9 @@ async function ownedBrokers(page: Page): Promise<BrokerListItem[]> {
 async function pricedPositions(page: Page): Promise<Position[]> {
     const positions: Position[] = [];
     for (const broker of await ownedBrokers(page)) {
-        const summary = await getJson<BrokerSummary>(page, `/api/v1/brokers/${broker.id}/summary`);
-        for (const holding of summary.holdings) {
+        // The open holdings of the broker come from the portfolio report (`summary.holdings`): the route `GET /brokers/{id}/summary` no longer exists.
+        const report = await postJson<PortfolioReport>(page, '/api/v1/portfolio/report', {broker_ids: [broker.id], include_summary: true, include_history: false, include_allocation_history: false, include_breakdown: false, include_positions_contribution: false});
+        for (const holding of (report.summary?.holdings ?? []).filter((candidate) => candidate.broker_id == null || candidate.broker_id === broker.id)) {
             if (Number(holding.quantity) > 0 && holding.current_price != null) {
                 positions.push({brokerId: broker.id, brokerName: broker.name, assetId: holding.asset_id, assetName: holding.asset_name});
             }

@@ -14,15 +14,18 @@
  */
 
 import type {LineDataPoint} from './LineChart.svelte';
+import type {RenderedSignal} from '$lib/charts/signals/ChartSignal';
 import type {ViewMode} from './ChartToolbar.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
 import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
 import {getBackendSignalProblem, type SignalProblem} from '$lib/charts/signals/signalProblem';
 import {truncateName} from '$lib/utils/text';
 import {aggregateLineSeries, bucketEventMarkers, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
-import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPrice} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {CHART_GAIN_LOSS, PRICE_SERIES} from '$lib/theme/chartTheme';
+import {changePct} from '$lib/charts/signals/MeasureSignal';
 
 /** A resolved logical date span the chart is currently showing. */
 export interface LogicalVisibleRange {
@@ -62,7 +65,8 @@ const CALENDAR_RETURN_STATUSES = new Set<CalendarReturnPointStatus>(['available'
 const SIGNAL_RESULT_STATUSES = new Set(['ok', 'partial', 'unavailable', 'failed']);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function emptyCalendarReturnView(state: CalendarReturnViewState, problem: SignalProblem | null = null): CalendarReturnView {
+/** A calendar view with no points and no context; `idle` unless a state is given. */
+export function emptyCalendarReturnView(state: CalendarReturnViewState = 'idle', problem: SignalProblem | null = null): CalendarReturnView {
     return {state, points: [], contextByDate: new Map(), problem};
 }
 
@@ -361,14 +365,41 @@ export function computeZoomWindow(points: LineDataPoint[], currentResolution: Ch
 /**
  * The series the chart actually draws for a view mode. Absolute view (and an
  * empty series) draws the raw values; percentage view rebases every point to
- * its change from the first point. A first value of exactly 0 has no defined
- * percentage change, so the series is left untouched rather than dividing by 0.
+ * its change from the first day that has a price (a day the axis was lengthened
+ * with, `missing`, has none and stays empty). A first value of exactly 0 has no
+ * defined percentage change, so the series is left untouched rather than
+ * dividing by 0.
  */
 export function toDisplaySeries(data: LineDataPoint[], viewMode: ViewMode): LineDataPoint[] {
     if (viewMode === 'absolute' || data.length === 0) return data;
-    const baseValue = data[0].value;
-    if (baseValue === 0) return data;
-    return data.map((d) => ({...d, value: ((d.value - baseValue) / baseValue) * 100}));
+    const baseValue = data.find((point) => !point.missing)?.value;
+    if (baseValue === undefined || baseValue === 0) return data;
+    return data.map((d) => (d.missing ? d : {...d, value: ((d.value - baseValue) / baseValue) * 100}));
+}
+
+/**
+ * The series a chart lays its axis on when a comparison is older (or younger) than the main series (Y2-CMP): the main series with, before its first
+ * day and after its last, an empty day (`missing`, no price) for every day of a comparison that says so (`extendsAxis`). The main line is empty there,
+ * the comparison line is drawn. Days inside the main series that it lacks are not added: the axis keeps its own days there, as it always did.
+ *
+ * Returns `data` itself when nothing is added, so a caller can tell by identity that the axis did not change.
+ */
+export function extendToOverlayDays(data: LineDataPoint[], overlays: ReadonlyArray<Pick<RenderedSignal, 'data' | 'extendsAxis'>>): LineDataPoint[] {
+    if (data.length === 0) return data;
+    const first = data[0].date;
+    const last = data[data.length - 1].date;
+    const before = new Set<string>();
+    const after = new Set<string>();
+    for (const overlay of overlays) {
+        if (!overlay.extendsAxis) continue;
+        for (const point of overlay.data) {
+            if (point.date < first) before.add(point.date);
+            else if (point.date > last) after.add(point.date);
+        }
+    }
+    if (before.size === 0 && after.size === 0) return data;
+    const emptyDay = (date: string): LineDataPoint => ({date, value: 0, missing: true});
+    return [...[...before].sort().map(emptyDay), ...data, ...[...after].sort().map(emptyDay)];
 }
 
 /**
@@ -527,7 +558,7 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
     for (const marker of eventMarkers) {
         const isComparison = !!marker.assetLabel;
         const groupKey = isComparison ? `${marker.assetLabel}::${marker.type}` : marker.type;
-        const color = isComparison ? (marker.signalColor ?? '#6b7280') : baseColor;
+        const color = isComparison ? (marker.signalColor ?? PRICE_SERIES.comparisonMarkerFallback) : baseColor;
         const seriesLabel = isComparison ? `${marker.assetLabel} ${marker.type}` : marker.type;
         if (!grouped.has(groupKey)) {
             grouped.set(groupKey, {markers: [], color, label: seriesLabel});
@@ -585,13 +616,15 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
 
 /**
  * The green/red "(Δ …)" delta suffix for the main-axis tooltip row. The colour
- * is *derived from the sign* (≥0 green `#10b981`, otherwise red `#ef4444`) — the
- * contract this asserts. In percentage view the value already is the delta; in
+ * is *derived from the sign* (≥0 green `#10b981`, otherwise red `#ef4444`, both
+ * `CHART_GAIN_LOSS.tooltipDelta` in `$lib/theme/chartTheme`) — the contract
+ * this asserts. In percentage view the value already is the delta; in
  * absolute view both the absolute and percentage delta from `firstValue` are
- * shown (a `firstValue` of 0 yields a 0% delta rather than dividing by 0).
+ * shown. The percentage is the charts' one Δ% rule, `changePct` of
+ * `MeasureSignal.ts`: a `firstValue` of 0 has none, and shows «—» (N65, J-44).
  */
 export function buildDeltaHtml(value: number, firstValue: number, isPercentage: boolean): string {
-    const color = (n: number) => (n >= 0 ? '#10b981' : '#ef4444');
+    const color = (n: number) => (n >= 0 ? CHART_GAIN_LOSS.tooltipDelta.gain : CHART_GAIN_LOSS.tooltipDelta.loss);
 
     // In the interface locale (M-18); a zero carries no sign, as with `formatPercent` everywhere.
     if (isPercentage) {
@@ -599,24 +632,33 @@ export function buildDeltaHtml(value: number, firstValue: number, isPercentage: 
     }
 
     const deltaAbs = value - firstValue;
-    const deltaPct = firstValue !== 0 ? ((value - firstValue) / firstValue) * 100 : 0;
-    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})</span>`;
+    const deltaPct = changePct(firstValue, value);
+    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${formatPrice(deltaAbs, {minDecimals: 4, signed: true})} / ${deltaPct === null ? '—' : formatPercent(deltaPct)})</span>`;
 }
 
 /**
- * The amber stale-data warning line(s) for a tooltip. Nothing is emitted when
- * the point is not stale (`priceStaleDays` undefined). A live FX staleness
- * (`fxStaleDays > 0`) adds a second line. The `{days}` templates are supplied
- * by the caller (translated at the component boundary); the built-in English
- * fallbacks are code constants used only when no template is given.
+ * The stale-data warning line(s) for a tooltip, in `warningColor` — the warning
+ * role, `chartNeutrals().tooltip.staleWarning`, read by the caller for its theme.
+ * Nothing is emitted when the point is not stale (`priceStaleDays` undefined).
+ * A live FX staleness (`fxStaleDays > 0`) adds a second line. The `{days}`
+ * templates are supplied by the caller (translated at the component boundary);
+ * the built-in English fallbacks are code constants used only when no template
+ * is given.
  */
-export function buildStaleTooltipHtml(priceStaleDays: number | undefined, fxStaleDays: number | undefined, staleLabel?: string, fxStaleLabel?: string): string {
+export type StaleLabel = string | ((days: number) => string);
+
+/** A label as text for `days`: a template with a `{days}` placeholder, or a function of the days (so the language can inflect a plural). */
+function staleText(label: StaleLabel, days: number): string {
+    return typeof label === 'function' ? label(days) : label.replace('{days}', String(days));
+}
+
+export function buildStaleTooltipHtml(priceStaleDays: number | undefined, fxStaleDays: number | undefined, warningColor: string, staleLabel?: StaleLabel, fxStaleLabel?: StaleLabel): string {
     if (priceStaleDays === undefined) return '';
-    const warn = (text: string) => `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${text}</span>`;
-    const priceText = staleLabel ? staleLabel.replace('{days}', String(priceStaleDays)) : `Stale: ${priceStaleDays}d`;
+    const warn = (text: string) => `<br/><span style="color:${warningColor};font-size:11px">⚠ ${text}</span>`;
+    const priceText = staleLabel ? staleText(staleLabel, priceStaleDays) : `Stale: ${priceStaleDays}d`;
 
     if (fxStaleDays !== undefined && fxStaleDays > 0) {
-        const fxText = fxStaleLabel ? fxStaleLabel.replace('{days}', String(fxStaleDays)) : `FX rate: ${fxStaleDays}d old`;
+        const fxText = fxStaleLabel ? staleText(fxStaleLabel, fxStaleDays) : `FX rate: ${fxStaleDays}d old`;
         return warn(priceText) + warn(fxText);
     }
     return warn(priceText);

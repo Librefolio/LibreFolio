@@ -1,13 +1,23 @@
 ---
 title: "Auto cost basis without a position: 0 is the correct fallback, and the user corrects that transaction"
 category: decision
-status: resolved
+status: superseded
 date: 2026-10-09
+superseded_date: 2026-10-17
 tags: [backend, frontend, transactions, cost-basis, wac, auto-mode, adjustment, transfer, product-decision]
 related: [decisions/wac-inline-validate-commit, decisions/financial-math-single-average-cost, decisions/cost-basis-currency-object, features/F-097, features/F-046, entities/transaction-batch-pipeline, sources/phase00-auto-cost-no-position-2026-10]
 ---
 
 # Decision: in Auto, an empty pool gives a cost of 0 — by choice
+
+> **Superseded on 2026-10-17 (2026-11-07 lint).** Coordinator's night decision N88 (17/10), confirmed by the developer
+> on 19/10 («J-57 resta e si completa»): the batch now **refuses** an Auto cost whose pool has nothing to average
+> (`3b6bc8e2d`, J-57). Two codes: `autoCostEmptyPool` (no units held on the date — never held or sold out) and
+> `autoCostUnknownPool` (units held, none at a known cost); a pool of free units keeps its 0, and a 0 typed by hand
+> (Manual) is still accepted, for a gift. The engine's state comes from `wac_pool_holding()` (`portfolio_service.py`),
+> the refusal from `NothingToAverageError` in `transactions/auto_cost.py`. The pinned test is now
+> `test_wac_inline.py::test_wacp27_empty_pool_is_refused`. The partly unknown pool is J-58. The page below records the
+> decision of 09/10 as it was taken. Source: `BACKLOG_POST_1.2.md`, J-41/J-57; plan 05, §10 «J-57».
 
 ## Context
 
@@ -15,15 +25,15 @@ Backlog item **P-1** ("Auto cost with no position: cost 0 saved without a warnin
 archive: an incoming `ADJUSTMENT` — or the receiving side of a `TRANSFER` — saved in `cost_basis_mode: auto` on a
 broker whose pool holds no units of the asset on that date gets a cost basis of **0 per unit**, and its whole value
 then reads as gain. Typical cases: an opening position, a gift, the new line of a spin-off. Auto is the default for
-incoming rows, so the default path produces it. Checked at `083ed26dc`:
+incoming rows, so the default path produces it. Checked at `111c2c8f3`:
 
 - the WAC facade `compute_wac_iterative()` returns `Currency(asset_currency, 0)` when there are no rows
   (`backend/app/services/portfolio_service.py`, ~`:185-190`), and a pool emptied by sales has a unit cost of 0
   (`CostStep.unit_cost_report`, `backend/app/services/financial_math/average_cost.py`, ~`:155`);
 - Auto writes that value: `if wac_result.wac:` is true for a `Currency` of amount 0
-  (`_compute_wac_for_auto_items()`, `backend/app/services/transaction_service.py`, ~`:1012-1014`);
+  (`_compute_wac_for_auto_items()`, `backend/app/services/transactions/transaction_service.py`, ~`:1012-1014`);
 - the required-cost-basis check skips Auto rows (`_auto_mode_indices` and its three callers,
-  `backend/app/services/transaction_batch_stages.py`, ~`:875`, `:889`, `:914`, `:935`);
+  `backend/app/services/transactions/transaction_batch_stages.py`, ~`:875`, `:889`, `:914`, `:935`);
 - an explicit 0 is `ADD_ZERO_COST` and raises no `MISSING_COST_BASIS` (`average_cost.py`, ~`:431-432`);
 - Auto is the default in the form (`costBasisMode = $state('auto')`, `TransactionFormModal.svelte`) and for new bulk
   rows that allow a cost basis (`TransactionBulkModal.svelte`);
@@ -59,7 +69,8 @@ incoming rows, so the default path produces it. Checked at `083ed26dc`:
 
 ## Consequences
 
-- `test_wac_inline.py::test_wacp27_empty_pool_wac_zero` now pins the intended behaviour.
+- `test_wac_inline.py::test_wacp27_empty_pool_wac_zero` now pins the intended behaviour (renamed
+  `test_wacp27_empty_pool_is_refused` by `3b6bc8e2d`, which reverses it — see the note at the top).
 - **Not a contradiction of #32.** [[decisions/financial-math-single-average-cost]] forbids silent zeros for *missing
   exchange rates and unknown costs* — a movement whose cost is `None` is `ADD_UNKNOWN_COST` and surfaces as
   `MISSING_COST_BASIS`. Here the cost is not unknown: Auto computed it from an empty pool and wrote 0, a deliberate
@@ -80,10 +91,12 @@ incoming rows, so the default path produces it. Checked at `083ed26dc`:
 | Role | Path |
 |------|------|
 | WAC facade — zero WAC without rows | `backend/app/services/portfolio_service.py` |
-| Auto writes the WAC (`_compute_wac_for_auto_items`) | `backend/app/services/transaction_service.py` |
-| Required-cost-basis check, Auto rows skipped | `backend/app/services/transaction_batch_stages.py` |
+| Auto writes the WAC (`_compute_wac_for_auto_items`) | `backend/app/services/transactions/auto_cost.py` |
+| Required-cost-basis check, Auto rows skipped | `backend/app/services/transactions/batch_costs.py` |
 | `ADD_ZERO_COST`, empty-pool unit cost | `backend/app/services/financial_math/average_cost.py` |
-| Form default (Auto) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| Bulk default for new rows (Auto) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| Test pinning the decision | `backend/test_scripts/test_api/test_wac_inline.py` |
+| Form default (Auto) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| Bulk default for new rows (Auto) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
+| Test pinning the decision (since `3b6bc8e2d` it pins the refusal) | `backend/test_scripts/test_api/test_wac_inline.py` |
+| The refusal (`NothingToAverageError`, `_nothing_to_average`) | `backend/app/services/transactions/auto_cost.py` |
+| Backlog J-41 / J-57 / J-58, N88 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | Analysis and decision (§1, §2, §10) | `LibreFolio_developer_journal/Release_2/phases/39_autoCostNoPosition/plan-phase00AutoCostNoPosition.prompt.md` |

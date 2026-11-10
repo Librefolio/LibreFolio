@@ -22,7 +22,8 @@ Phase 1 of `sync_pairs_bulk` collected legs only from `routes[0]` (primary route
 
 ## Solution
 
-Three-phase fix in `backend/app/services/fx.py`:
+Three-phase fix in `backend/app/services/fx.py` (since split into the package `backend/app/services/fx/`; the sync
+lives in `fx/sync.py`):
 
 1. **Phase 1 (collect legs)**: Changed from `pair_route_map[slug] = route` (single) to `pair_routes_map[slug] = [route1, route2, ...]` (all routes). Legs collected from ALL routes for parallel pre-fetch.
 2. **Phase 2 (fetch)**: Unchanged — now fetches data for all referenced providers.
@@ -41,7 +42,7 @@ Before fix: any primary provider hiccup (BOE bot protection, network timeout) ca
 
 | Role | Path |
 |------|------|
-| FX service (fallback logic) | `backend/app/services/fx.py` |
+| FX service (fallback logic) | `backend/app/services/fx/sync.py` |
 | MockFX providers (test infra) | `backend/app/services/fx_providers/mockfx/plugin.py` |
 | FX fallback tests | `backend/test_scripts/test_api/test_fx_sync.py` |
 

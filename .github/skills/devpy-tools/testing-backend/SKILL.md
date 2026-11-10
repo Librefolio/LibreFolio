@@ -248,14 +248,14 @@ Rules:
 A symbol at 0 % **and** flagged by vulture is dead with near-certainty: static analysis
 can miss dynamic dispatch, but coverage cannot miss code that actually ran. Use the two
 together before proposing any removal. See
-`LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/12_test_coverage.md`.
+`../LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/12_test_coverage.md`.
 
 - **Exclusion belongs in the report, not in reference collection.** Auditing a subset
   of the tree (e.g. signals+risk without `ai_export/`) is legitimate for *readability*;
   it is a methodology bug for *collection*. Any scanner (vulture, grep-for-callers,
   coverage cross-check) must run on the whole codebase first and filter findings
   afterwards — otherwise a symbol used only by the excluded area reads as dead. It
-  happened twice with `resolve_ai_export_temporal_class` (`signal_plugins/base.py`,
+  happened twice with `resolve_ai_export_temporal_class` (`signals/base.py`,
   called only from `ai_export/components/technical_shared.py`): both audits excluded
   ai_export up front and both reported the same false positive. Collect wide, report
   narrow.
@@ -359,7 +359,7 @@ statement (37336 / 3224 / 91.36 %), 38 min 52 s → 31 min 03 s. The parallel pa
 by the serial WRITE-GLOBAL remainder, not by the balancing.
 
 Compare coverage **per file**, not on the total: the two live-network provider modules
-(`asset_source.py`, `borsa_italiana/plugin.py`) vary by a handful of statements between runs depending on
+(`services/assets/`, `borsa_italiana/plugin.py`) vary by a handful of statements between runs depending on
 what the remote site returns, so the total carries ~0.01 % of noise that would otherwise be
 indistinguishable from lost data. Every other module is reproducible exactly.
 

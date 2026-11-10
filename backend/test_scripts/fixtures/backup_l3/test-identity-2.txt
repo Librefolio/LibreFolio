@@ -1,0 +1,4 @@
+# TEST ONLY - LibreFolio L3 sealed backup vectors - never use for real backups
+# created: 2026-10-23T03:00:12Z
+# public key: age1vf5mr7hereqyawsjnzugqd03xs20wwpt8nnu86nv7fkvzaw3gdkqz5xadk
+AGE-SECRET-KEY-1TE2ZXEFHCT6Q64ZTZA6WCRRAAKZYW5GGG2TWTXEDHFJKL7HSG52QVX4NXT

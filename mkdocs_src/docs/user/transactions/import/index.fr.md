@@ -124,7 +124,7 @@ Les importateurs sans étiquette sont bien testés et fiables pour les formats q
     <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Fineco">
     <span class="card-title" style="margin: 0;">Fineco</span>
     </div>
-    <span class="card-desc">🧪 Bêta · L'export au format CSV « Movimenti Dossier Titoli »</span>
+    <span class="card-desc">La liste de titres « Ordini e contabili », enregistrée au format CSV</span>
     </a>
     <a href="intesa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -272,7 +272,7 @@ Les copies entre les fichiers que vous importez ensemble sont traitées de la m�
 
 ## ⛔ Avant la date d'ouverture du courtier {: #before-opening }
 
-Si un courtier a une **date d'ouverture**, les lignes antérieures ne peuvent pas être importées ; le jour d'ouverture lui-même est accepté. Si la date est erronée, corrigez-la à l'étape [Vérification](how-to.md#opening-date) et les lignes sont vérifiées à nouveau.
+Si un courtier a une **date d'ouverture**, les lignes antérieures ne peuvent pas être importées ; le jour d'ouverture lui-même est accepté. Si la date est erronée, corrigez-la à l'étape [Vérification](how-to.md#opening-date) et les lignes sont vérifiées à nouveau. Quelle que soit la date d'ouverture, les dates des transactions peuvent remonter jusqu'à l'an 1 et aller jusqu'à demain : une ligne datée avant 1900 demande une confirmation (c'est le plus souvent une faute de frappe), une ligne datée après demain est refusée quand vous enregistrez les lignes importées, avec un message tel que *Date : Pas après le 2026-10-18*, si nous sommes le 17 octobre 2026.
 
 ---
 

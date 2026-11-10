@@ -11,9 +11,10 @@ The problem is described by plain data only:
   (when it has one), its currency and the share of the broker the caller counts;
 * the report currency T, and the last day the rates are needed on.
 
-All the conversions go to the FX service in one ``convert_bulk`` call: every foreign
-movement at its own date (the flows), and one unit of every foreign currency on every day
-from its first movement on (the valuation). An amount already in T is taken as it is, so
+All the conversions go to the FX service: every foreign movement at its own date (the flows) in one ``convert_bulk``
+call, and one unit of every foreign currency on every day from its first movement on (the valuation), in one
+``unit_rate_steps`` call — the same rates, kept as the days a stored rate changes (P3), so a movement centuries back
+costs its stored rows, not its days. An amount already in T is taken as it is, so
 cash held only in the report currency never needs a rate. A conversion that cannot be made
 never becomes a zero: the movement stays out of values and flows, and its pair is reported
 with every date it was needed on.
@@ -25,7 +26,8 @@ Rules:
   result on cash (:meth:`NativeCash.exchange_results`, by broker and window);
 * a zero amount changes no figure and never needs a rate;
 * the share scales every amount: an owner counts its own share, any other role the whole
-  broker (:func:`effective_share`).
+  broker (:func:`effective_share`); a caller that asks for the whole broker (the broker page, D4) counts 1 for
+  every broker (:func:`broker_shares`).
 """
 
 from __future__ import annotations
@@ -34,12 +36,13 @@ import bisect
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
 from backend.app.schemas.common import Currency
-from backend.app.services.fx import convert_bulk
+from backend.app.services.financial_math.change_days import change_days
+from backend.app.services.financial_math.fx_rates import AskedDayRates
+from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
@@ -62,6 +65,17 @@ def effective_share(role: Any, share_percentage: Decimal | None) -> Decimal:
     if str(getattr(role, "value", role)) != _OWNER:
         return _ONE
     return _ONE if share_percentage is None else share_percentage
+
+
+def broker_shares(accesses: Iterable[Any], *, apply_ownership_share: bool = True) -> dict[int, Decimal]:
+    """The share each broker of ``accesses`` counts, by broker id: :func:`effective_share`, or the whole broker.
+
+    ``apply_ownership_share`` False (the broker page, D4) counts every broker whole, as an editor sees it, whatever the
+    role and the share. ``accesses`` are rows with ``broker_id``, ``role`` and ``share_percentage``.
+    """
+    if not apply_ownership_share:
+        return {access.broker_id: _ONE for access in accesses}
+    return {access.broker_id: effective_share(access.role, access.share_percentage) for access in accesses}
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,12 +187,16 @@ class NativeCash:
 
         counted = [movement for movement, value in zip(movements, converted, strict=True) if self._is_counted(movement, value)]
         foreign = [movement for movement in counted if movement.currency != self.report_currency]
-        rate_days, rate_values = _rate_series(self.unit_rates)
+        # P3: a view on steps gives its steps, not every asked day: the last rate on or before a day, and the days a rate
+        # changes, are the same on the steps (between two of them the rate does not move)
+        rate_days, rate_values = _step_rate_series(self.unit_rates) if isinstance(self.unit_rates, AskedDayRates) else _rate_series(self.unit_rates)
         object.__setattr__(self, "_balances", _running_balances(counted))
         object.__setattr__(self, "_first_counted", _first_dates(counted))
         object.__setattr__(self, "_rate_days", rate_days)
         object.__setattr__(self, "_rate_values", rate_values)
-        object.__setattr__(self, "_change_days", _change_days(rate_days, rate_values, {movement.currency for movement in foreign}))
+        held = {movement.currency for movement in foreign}
+        calendar = sorted({day for currency in held for day in rate_days.get(currency, ())})
+        object.__setattr__(self, "_change_days", change_days(self._rate_at, held, calendar))
         object.__setattr__(self, "_foreign_brokers", frozenset(movement.broker_id for movement in foreign))
 
     def _is_counted(self, movement: CashMovement, value: Decimal | None) -> bool:
@@ -279,17 +297,8 @@ class NativeCash:
         return self._change_days[start:end]
 
     def balances(self, as_of: date_type | None = None) -> dict[int, dict[str, Decimal]]:
-        """Each broker's balance in each currency on ``as_of`` (every movement when None).
-
-        Zero and missing movements are included: a balance in its own currency needs no rate.
-        """
-        result: dict[int, dict[str, Decimal]] = {}
-        for movement in self.movements:
-            if as_of is not None and movement.date > as_of:
-                continue
-            by_currency = result.setdefault(movement.broker_id, {})
-            by_currency[movement.currency] = by_currency.get(movement.currency, _ZERO) + movement.native
-        return result
+        """Each broker's balance in each currency on ``as_of`` (every movement when None); see :func:`native_balances`."""
+        return native_balances(self.movements, as_of)
 
     def flows(self, date_from: date_type | None = None, date_to: date_type | None = None) -> CashFlows:
         """The movements dated in ``(date_from, date_to]``, converted at their own dates.
@@ -330,6 +339,38 @@ class NativeCash:
             unallocated_income=unallocated_income,
             unallocated_costs=unallocated_costs,
         )
+
+    def position_flow_steps(self, date_from: date_type | None = None, date_to: date_type | None = None) -> dict[tuple[int, int], list[tuple[date_type, Decimal, Decimal]]]:
+        """Each position's income and costs of ``(date_from, date_to]`` as running totals, on the days they change.
+
+        ``(broker_id, asset_id)`` → ``[(day, income, costs)]``, ascending, one entry per day holding an income (DIVIDEND,
+        INTEREST) or cost (FEE, TAX) movement of the position: the totals from ``date_from`` (excluded) through that day,
+        by the rules of :meth:`flows` — income signed, costs absolute, at the movement's share, a missing conversion left
+        out. One pass instead of a :meth:`flows` call a day (#48); with the movements in date order (the engine's), each
+        entry equals ``flows(date_from, day)``'s figures for the position exactly.
+        """
+        order = sorted(range(len(self.movements)), key=lambda index: self.movements[index].date)
+        totals: dict[tuple[int, int], list[Decimal]] = {}
+        steps: dict[tuple[int, int], list[tuple[date_type, Decimal, Decimal]]] = {}
+        for index in order:
+            movement, value = self.movements[index], self.converted[index]
+            kind = movement.transaction_type
+            if value is None or movement.asset_id is None or not _in_window(movement.date, date_from, date_to):
+                continue
+            if kind not in _INCOME_TYPES and kind not in _COST_TYPES:
+                continue
+            key = (movement.broker_id, movement.asset_id)
+            total = totals.setdefault(key, [_ZERO, _ZERO])
+            if kind in _INCOME_TYPES:
+                total[0] = total[0] + value * movement.share
+            else:
+                total[1] = total[1] + abs(value) * movement.share
+            entries = steps.setdefault(key, [])
+            if entries and entries[-1][0] == movement.date:
+                entries[-1] = (movement.date, total[0], total[1])
+            else:
+                entries.append((movement.date, total[0], total[1]))
+        return steps
 
     def sums_by_date(
         self,
@@ -414,20 +455,74 @@ def _rate_series(unit_rates: Mapping[tuple[str, date_type], Decimal]) -> tuple[d
     return rate_days, rate_values
 
 
-def _change_days(
-    rate_days: Mapping[str, tuple[date_type, ...]],
-    rate_values: Mapping[str, tuple[Decimal, ...]],
-    currencies: set[str],
-) -> tuple[date_type, ...]:
-    """Days a rate of ``currencies`` differs from its previous known rate; a series' first day counts."""
-    days: set[date_type] = set()
-    for currency in currencies:
-        previous: Decimal | None = None
-        for day, rate in zip(rate_days.get(currency, ()), rate_values.get(currency, ()), strict=True):
-            if previous is None or rate != previous:
-                days.add(day)
-            previous = rate
-    return tuple(sorted(days))
+def _step_rate_series(unit_rates: AskedDayRates) -> tuple[dict[str, tuple[date_type, ...]], dict[str, tuple[Decimal, ...]]]:
+    """The steps of every currency (P3): the days a rate starts and its values, sorted by day."""
+    series = unit_rates.step_series()
+    return {currency: days for currency, (days, _values) in series.items()}, {currency: values for currency, (_days, values) in series.items()}
+
+
+def native_balances(movements: Iterable[CashMovement], as_of: date_type | None = None) -> dict[int, dict[str, Decimal]]:
+    """Each broker's balance in each currency on ``as_of`` (every movement when None).
+
+    Needs no rate, so a caller that only wants native balances calls it without building a
+    :class:`NativeCash`. Zero and missing movements are included: a balance in its own currency
+    needs no rate, and a currency with movements that cancel out keeps its line at zero.
+    """
+    result: dict[int, dict[str, Decimal]] = {}
+    for movement in movements:
+        if as_of is not None and movement.date > as_of:
+            continue
+        by_currency = result.setdefault(movement.broker_id, {})
+        by_currency[movement.currency] = by_currency.get(movement.currency, _ZERO) + movement.native
+    return result
+
+
+@dataclass(frozen=True, slots=True)
+class NegativeCash:
+    """The first day a broker's balance in a currency ends below zero (:func:`first_negative_cash`)."""
+
+    day: date_type
+    currency: str
+    #: The currency's balance at the end of ``day``.
+    balance: Decimal
+    #: The movements of ``currency`` on ``day`` that lowered it, in their input order: the caller picks the one to blame.
+    reducers: tuple[CashMovement, ...]
+
+
+def first_negative_cash(
+    movements: Iterable[CashMovement],
+    *,
+    opening: Mapping[str, Decimal] | None = None,
+    check_days: Iterable[date_type] = (),
+) -> NegativeCash | None:
+    """The first day, in date order, on which one broker's balance in a currency ends below zero; None when none does.
+
+    ``opening`` is the balance of each currency before the first movement (:func:`native_balances` of the earlier rows),
+    ``check_days`` the days to check even without a movement (a validator's first day). The balance is the counted
+    amount (``CashMovement.native``) and is checked at the end of each day, so a deposit and a payment on the same day
+    give no red in between. Only the days with a movement and the ``check_days`` are visited, never the days between: a
+    movement dated 9999-12-31 costs one day. Same-day movements keep their order; on a day with several currencies below
+    zero, the first is the one met first — ``opening``'s order, then the walk's. Only cash: quantities are the caller's.
+    Movements of more than one broker raise ValueError.
+    """
+    by_day: dict[date_type, list[CashMovement]] = {}
+    broker_ids: set[int] = set()
+    for movement in movements:
+        broker_ids.add(movement.broker_id)
+        by_day.setdefault(movement.date, []).append(movement)
+    if len(broker_ids) > 1:
+        raise ValueError(f"first_negative_cash reads one broker's movements, got brokers {sorted(broker_ids)}")
+    balances: dict[str, Decimal] = dict(opening or {})
+    for day in sorted(set(by_day).union(check_days)):
+        todays = by_day.get(day, ())
+        for movement in todays:
+            if movement.native != 0:
+                balances[movement.currency] = balances.get(movement.currency, _ZERO) + movement.native
+        for currency, balance in balances.items():
+            if balance < 0:
+                reducers = tuple(movement for movement in todays if movement.currency == currency and movement.native < 0)
+                return NegativeCash(day=day, currency=currency, balance=balance, reducers=reducers)
+    return None
 
 
 async def compute_native_cash(
@@ -439,20 +534,21 @@ async def compute_native_cash(
 ) -> NativeCash:
     """Every broker's native cash, with its conversions into ``report_currency``.
 
-    One ``convert_bulk`` call answers everything: each foreign movement at its own date, then
-    one unit of each foreign currency on every day from its first movement through
-    ``rates_until`` (its last movement when None). None is made, and ``session`` is not
-    used, when every non-zero amount is already in the report currency.
+    One ``convert_bulk`` call converts each foreign movement at its own date; one ``unit_rate_steps`` call gives one unit
+    of each foreign currency on every day from its first movement through ``rates_until`` (its last movement when None),
+    as steps (P3): the same rates as a request a day, read on the days a rate changes. None is made, and ``session`` is
+    not used, when every non-zero amount is already in the report currency.
     """
     movements = tuple(movements)
     amount_indexes = [index for index, movement in enumerate(movements) if movement.currency != report_currency and movement.amount != 0]
     if not amount_indexes:
         return NativeCash(report_currency=report_currency, movements=movements, converted=tuple(movement.amount for movement in movements), unit_rates={})
 
-    unit_requests = _unit_requests([movements[index] for index in amount_indexes], rates_until)
+    unit_windows = _unit_windows([movements[index] for index in amount_indexes], rates_until)
     requests = [(Currency(code=movements[index].currency, amount=movements[index].amount), report_currency, movements[index].date) for index in amount_indexes]
-    requests += [(Currency(code=currency, amount=_ONE), report_currency, day) for currency, day in unit_requests]
     results, _errors = await convert_bulk(session, requests, raise_on_error=False)
+    windows = {(currency, report_currency): asked for currency, asked in unit_windows.items()}
+    steps = await unit_rate_steps(session, windows) if windows else {}
 
     def _result(position: int) -> Decimal | None:
         result = results[position] if position < len(results) else None
@@ -461,17 +557,17 @@ async def compute_native_cash(
     converted: list[Decimal | None] = [movement.amount for movement in movements]
     for position, index in enumerate(amount_indexes):
         converted[index] = _result(position)
-    unit_rates: dict[tuple[str, date_type], Decimal] = {}
-    offset = len(amount_indexes)
-    for position, key in enumerate(unit_requests):
-        rate = _result(offset + position)
-        if rate is not None:
-            unit_rates[key] = rate
+    unit_rates = AskedDayRates(steps, windows, fixed_destination=report_currency)
     return NativeCash(report_currency=report_currency, movements=movements, converted=tuple(converted), unit_rates=unit_rates)
 
 
-def _unit_requests(foreign: Sequence[CashMovement], rates_until: date_type | None) -> list[tuple[str, date_type]]:
-    """``(currency, day)`` for every day a foreign balance may need a rate, currencies by code."""
+def _unit_windows(foreign: Sequence[CashMovement], rates_until: date_type | None) -> dict[str, list[tuple[date_type, date_type]]]:
+    """By currency, the window of days a foreign balance may need a rate on (P3: the days a request a day asked).
+
+    Every day from the currency's first movement to ``rates_until`` (else its last movement), even when it is centuries
+    back: the rates are read as steps (``unit_rate_steps``), so the cost follows the stored rows, not the days (no date
+    floor, MF-PAV-L1).
+    """
     first: dict[str, date_type] = {}
     last: dict[str, date_type] = {}
     for movement in foreign:
@@ -480,11 +576,9 @@ def _unit_requests(foreign: Sequence[CashMovement], rates_until: date_type | Non
             first[currency] = movement.date
         if currency not in last or movement.date > last[currency]:
             last[currency] = movement.date
-    requests: list[tuple[str, date_type]] = []
+    windows: dict[str, list[tuple[date_type, date_type]]] = {}
     for currency in sorted(first):
-        day = first[currency]
         end = last[currency] if rates_until is None else rates_until
-        while day <= end:
-            requests.append((currency, day))
-            day += timedelta(days=1)
-    return requests
+        if first[currency] <= end:
+            windows[currency] = [(first[currency], end)]
+    return windows

@@ -79,7 +79,7 @@ Un chiffre calculé sur les positions est vérifiable sur ce point : les rapport
 
 ## 🪙 Où se situe la trésorerie {: #where-cash-sits }
 
-La trésorerie doit être traitée d'une manière ou d'une autre, et ce choix change le résultat. Dans les rapports de portefeuille et de courtier, la règle est énoncée dans le code lui-même : les poids correspondent à la valeur de la position rapportée à la **NAV totale**, et la trésorerie est *incluse dans le dénominateur mais ne constitue pas elle-même un terme de l'indice*.
+La trésorerie doit être traitée d'une manière ou d'une autre, et ce choix change le résultat. Dans les rapports de portefeuille et de courtier, la règle est énoncée dans le code lui-même : les poids correspondent à la valeur de la position rapportée à la **NAV totale**, et la trésorerie est *incluse dans le dénominateur mais ne constitue pas elle-même un terme de l'indice*. Ce dénominateur doit être positif : avec une NAV totale — la valeur nette — inférieure ou égale à zéro, il n'existe aucun poids, si bien que le rapport ne fournit ni le poids de la plus grande position ni un indice (les deux sont null) plutôt qu'un chiffre divisé par un substitut arbitraire.
 
 La conséquence mérite d'être explicitée, car elle va dans un sens que la plupart des lecteurs ne devineraient pas. La trésorerie dilue chaque poids sans apporter son propre carré, si bien que détenir plus de trésorerie **abaisse** l'indice et donc **élève** le décompte des actifs effectifs. Un portefeuille détenant la moitié de sa valeur en trésorerie paraît mieux diversifié que les mêmes positions sans cette trésorerie.
 
@@ -101,7 +101,7 @@ C'est défendable — la trésorerie est réellement une position non concentré
 
 Lisez les deux chiffres comme une paire, dans cet ordre :
 
-1. **Les actifs effectifs face au nombre réel de positions.** Le sens de l'écart en détermine la signification : **en dessous** du décompte, les poids sont déséquilibrés et quelques positions portent le portefeuille quel que soit le nombre de lignes ; **au-dessus**, l'excédent est de la trésorerie, et il ne dit rien de la répartition des poids.
+1. **Les actifs effectifs face au nombre réel de positions.** Le sens de l'écart en détermine la signification : **en dessous** du décompte, les poids sont déséquilibrés et quelques positions portent le portefeuille quel que soit le nombre de lignes ; **au-dessus**, l'excédent vient de la part que les poids ne couvrent pas — trésorerie et positions sans série de prix utilisable, pas la seule trésorerie — et il ne dit rien de la répartition des poids.
 2. **Le ratio de diversification.** Une valeur proche de 1 signifie que les positions évoluent d'un seul bloc et que la répartition n'a pas apporté grand-chose. Plus la valeur dépasse 1, plus les positions se compensent mutuellement.
 
 C'est le second chiffre qui peut contredire le premier, et c'est cette contradiction qui porte l'information. Un portefeuille peut être parfaitement équilibré en termes de poids et non diversifié sur le fond — c'est le résultat ordinaire de la détention de plusieurs fonds suivant des marchés qui se recoupent.

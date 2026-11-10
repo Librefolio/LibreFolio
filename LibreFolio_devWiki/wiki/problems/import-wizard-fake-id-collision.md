@@ -15,9 +15,9 @@ emits placeholder ("fake") asset ids counting **down from the same
 `FAKE_ASSET_ID_BASE` (2147483647)**. The Step-4 merge keyed its `assetMap` by the
 bare fake id, so identical fake ids from different files **collided**: the first
 file's resolution won and the second file's instrument silently reused the wrong
-real asset. In prod this bound all 7 Intesa patrimonio seeds (EURIZON funds, correctly
-resolved per-file to assets 16–19) onto Crédit Agricole's BTP assets 31–37, producing
-a nonsensical portfolio value (e.g. `BTP PIU 25-2-33 CUM` at `-917.687,72 € / -99.99%`).
+real asset. In production this bound the fund positions of one broker's file (correctly
+resolved per file) onto the bond assets of another broker's file, producing a nonsensical
+portfolio value (a bond shown at about −99.99 %).
 
 ## Details
 - Each parse response resolves its own assets correctly (`selected_asset_id` was right
@@ -31,7 +31,9 @@ a nonsensical portfolio value (e.g. `BTP PIU 25-2-33 CUM` at `-917.687,72 € / 
   (a `nextFakeId` counter decrementing across all files, kept inside the `isFakeAssetId`
   range), **clone each tx** before rewriting `tx.asset_id`, and key `assetMap` by the new
   id. Added defense-in-depth: auto-bind a lone EXACT-ISIN candidate when the backend left
-  `selected_asset_id` null (`uniqueExactCandidateId`).
+  `selected_asset_id` null (`uniqueExactCandidateId`). *2026-11-07 lint: the merge now lives in
+  `importMerge.ts` (`nextFakeId`), and the auto-bind became `uniqueCandidateId`: one distinct asset id among the
+  candidates of any confidence selects it, two or more are left to the user.*
 - Second, independent bug on the same asset: quantity `91.861` round-tripped to `91861`
   because the tx edit form used `<input type="number">`, which in an Italian-locale
   browser treats `.` as a thousands separator. Fixed separately (see
@@ -40,11 +42,12 @@ a nonsensical portfolio value (e.g. `BTP PIU 25-2-33 CUM` at `-917.687,72 € / 
 
 ## Verification
 - `./dev.py front check` → 0 errors / 0 warnings.
-- Trace of the exact prod fake ids confirms CA and Intesa now receive disjoint global ids.
+- Trace of the exact production fake ids confirms the two files now receive disjoint global ids.
 
 ## Source files
 | Role | Path |
 |------|------|
-| Fix (merge + remap) | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Fake-id range util | `frontend/src/lib/utils/brim/isFakeAssetId.ts` |
+| Fix (merge + remap) | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| Merge today (`nextFakeId`, `uniqueCandidateId`) | `frontend/src/lib/features/transactions/import/importMerge.ts` |
+| Fake-id range util | `frontend/src/lib/features/transactions/import/isFakeAssetId.ts` |
 | Decimal-input fix | `frontend/src/lib/utils/core/parseDecimalInput.ts` |

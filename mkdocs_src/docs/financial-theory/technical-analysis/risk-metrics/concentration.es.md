@@ -79,7 +79,7 @@ Una cifra calculada sobre posiciones es verificable en este punto: los informes 
 
 ## 🪙 Dónde se sitúa el efectivo {: #where-cash-sits }
 
-El efectivo debe tratarse de alguna manera, y la elección cambia el resultado. En los informes de cartera y del bróker, la regla se declara en el propio código: las ponderaciones son el valor de la posición sobre el **NAV total**, y el efectivo está *incluido en el denominador pero no es en sí mismo un término del índice*.
+El efectivo debe tratarse de alguna manera, y la elección cambia el resultado. En los informes de cartera y del bróker, la regla se declara en el propio código: las ponderaciones son el valor de la posición sobre el **NAV total**, y el efectivo está *incluido en el denominador pero no es en sí mismo un término del índice*. Ese denominador tiene que ser positivo: con un NAV total — el patrimonio neto — igual o inferior a cero no existe ponderación alguna, así que el informe no da ni la ponderación de la mayor posición ni un índice (ambos null) en lugar de una cifra dividida por un sustituto arbitrario.
 
 Vale la pena detallar la consecuencia, porque va en una dirección que la mayoría de los lectores no adivinaría. El efectivo diluye cada ponderación sin aportar un cuadrado propio, así que mantener más efectivo **baja** el índice y, por lo tanto, **sube** el recuento de activos efectivos. Una cartera que mantiene la mitad de su valor en efectivo parece mejor diversificada que las mismas posiciones sin él.
 
@@ -101,7 +101,7 @@ Eso es defendible — el efectivo es genuinamente una posición no concentrada, 
 
 Lee las dos cifras como un par, en este orden:
 
-1. **Activos efectivos frente al número real de posiciones.** La dirección de la diferencia determina su significado: **por debajo** del recuento, las ponderaciones están desequilibradas y unas pocas posiciones sostienen la cartera sin importar cuántas filas tenga; **por encima**, el exceso es efectivo, y no dice nada sobre cómo se reparten las ponderaciones.
+1. **Activos efectivos frente al número real de posiciones.** La dirección de la diferencia determina su significado: **por debajo** del recuento, las ponderaciones están desequilibradas y unas pocas posiciones sostienen la cartera sin importar cuántas filas tenga; **por encima**, el exceso viene de la parte que las ponderaciones no cubren — efectivo y posiciones sin una serie de precios utilizable, no solo efectivo — y no dice nada sobre cómo se reparten las ponderaciones.
 2. **Ratio de diversificación.** Un valor cercano a 1 significa que las posiciones se mueven como una sola, y que el reparto aportó poco. Cuanto más por encima de 1, más se compensan unas posiciones con otras.
 
 La segunda cifra es la que puede contradecir a la primera, y es la contradicción la que aporta la información. Una cartera puede estar perfectamente equilibrada por ponderación y no estar diversificada en esencia — es el resultado ordinario de mantener varios fondos que siguen mercados solapados.

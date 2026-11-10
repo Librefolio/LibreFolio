@@ -28,7 +28,7 @@
     "unrealizedDelta": "Variation non réalisée",
     "unrealizedDeltaTooltip": "Variation du gain/perte latent sur les positions encore ouvertes.",
     "realizedSales": "Ventes",
-    "realizedSalesTooltip": "Gain ou perte réalisé sur les ventes de la période, calculé par rapport au prix de revient unitaire.",
+    "realizedSalesTooltip": "Gain ou perte réalisé sur les ventes de la période, et sur les titres cédés à un coût (par exemple à un courtier que LibreFolio ne suit pas), calculé par rapport au prix de revient unitaire.",
     "income": "Dividendes et intérêts",
     "incomeTooltip": "Revenus perçus sur la période via dividendes, intérêts ou coupons.",
     "feesAndTaxes": "Frais et impôts",
@@ -128,7 +128,8 @@
       "missingFx": "Le taux de change nécessaire à un paiement est indisponible.",
       "missingWac": "Le prix de revient unitaire (PRU) n'est pas disponible.",
       "nonPositiveWac": "Le prix de revient unitaire (PRU) est nul ou négatif.",
-      "missingFxDetails": "Le taux de change {pair} requis pour le calcul manque à la date du {date}."
+      "missingFxDetails": "Le taux de change {pair} requis pour le calcul manque à la date du {date}.",
+      "negativeNetIncome": "Les corrections dépassent les revenus de la dernière année."
     },
     "yieldOnCostValue": "Rendement sur coût",
     "yieldOnCostPeriod": "Période",
@@ -147,6 +148,30 @@
     "unrealizedAssetEffect": "Actifs en {currency}",
     "unrealizedFxEffect": "Taux {from} → {to}",
     "unrealizedUnsplit": "{currency}, non décomposé",
-    "fxOnCash": "Effet de change sur les liquidités"
+    "fxOnCash": "Effet de change sur les liquidités",
+    "allocationNegativeCash": "Liquidités négatives : {amount}",
+    "startValueTooltip": "Valeur de la position au début de la période, calculée comme la colonne Valeur du Portefeuille ; 0 si la position n'existait pas encore. C'est la base des pourcentages de la période.",
+    "endValueTooltip": "Valeur de la position à la fin de la période, calculée comme la colonne Valeur du Portefeuille ; 0 si la position était déjà fermée.",
+    "transfersAtMarketValue": "Transferts à la valeur de marché",
+    "assetAllocation": "Par actif",
+    "positionsChart": {
+      "title": "Rendement des positions",
+      "viewAbsolute": "Abs",
+      "viewPercentage": "%",
+      "viewAbsoluteHint": "Gain ou perte en argent, depuis le début de la période",
+      "viewPercentageHint": "Rendement, base 100 au début de la période",
+      "portfolio": "Portefeuille (rendement du tableau de bord)",
+      "portfolioNote": "La ligne du portefeuille est le rendement que mesure le tableau de bord, pas le gain des positions sur le capital employé : les deux peuvent différer.",
+      "hint": "Cochez des lignes du tableau pour comparer leur rendement à celui du portefeuille.",
+      "failed": "Les séries des positions n'ont pas pu être chargées.",
+      "closedOn": "Clôturée le {date}",
+      "incomplete": "Certaines valeurs manquent (un prix ou un taux) : la ligne les laisse de côté.",
+      "rowSelect": "Sélectionnez la ligne pour tracer son rendement",
+      "viewRolling": "Glissant",
+      "viewRollingHint": "Pourcentage dont le prix de l'actif a bougé sur une fenêtre glissante le long de la période : pour comparer les actifs entre eux"
+    },
+    "allocationNoShares": "Aucun pourcentage à afficher : les parts totalisent zéro ou moins (par exemple un découvert qui annule vos positions). Les montants sont listés ci-dessous.",
+    "allocationHistoryNoShares": "Aucun pourcentage à afficher : ces jours-là, les parts totalisent zéro ou moins.",
+    "pnlDeltaDayTooltip": "Variation du jour du P&L total, et cette variation en pourcentage par rapport à la valeur du portefeuille d'hier."
   }
 }

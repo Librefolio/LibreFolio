@@ -18,14 +18,14 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.schemas.assets import FAAssetCreateItem, FABulkAssetCreateResponse
-from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.prices import (
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FABulkAssetCreateResponse
+from backend.app.schemas.assets.events import (
     FAAssetEventPoint,
     FABulkEventUpsertResponse,
     FAEventQueryItem,
     FAEventUpsert,
 )
+from backend.app.schemas.common import Currency, DateRangeModel
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id
 

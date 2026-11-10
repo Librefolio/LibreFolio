@@ -159,7 +159,7 @@ La devise cible dépend de l'endroit où le PRU est affiché :
 |-------|---------------------|
 | Tableau de bord, tableau des positions, ventes réalisées, Rendement sur coût | La devise d'affichage (du rapport) |
 | Lignes de PRU de l'analyse des lots | La devise de l'analyse |
-| Aperçu de transaction, coût de base automatique, série PRU (`POST /portfolio/wac`) | La devise choisie dans l'aperçu, sinon la devise de la **dernière acquisition** |
+| Aperçu de transaction, coût de base automatique | La devise choisie dans l'aperçu, sinon la devise de la **dernière acquisition** |
 | Planificateur PAC | La devise du planificateur |
 
 La devise de la dernière acquisition est la devise payée par la transaction la plus récente qui a ajouté de la quantité — une règle déterministe ; en cas d'égalité, la première enregistrée gagne. Une division, ou une acquisition de coût inconnu, revient à la devise propre de l'actif.
@@ -184,14 +184,14 @@ La devise de la dernière acquisition est la devise payée par la transaction la
 ## 🎯 Où le PRU est utilisé dans LibreFolio
 
 - **Coût de base** : $\text{CB}(a,b,t) = q(a,b,t) \times \text{PRU}^{T}(a,b,t)$, historique, sans conversion à $t$
-- **P&L réalisé sur vente** : $\text{réalisé} = P_{\text{vente}} - q_{\text{vendues}} \times \text{PRU}^{T}_{\text{avant-vente}}$, avec le produit $P_{\text{vente}}$ converti à la date de vente et les unités vendues sortant à leur coût historique
+- **P&L réalisé sur vente** : $\text{réalisé} = P_{\text{vente}} - q_{\text{vendues}} \times \text{PRU}^{T}_{\text{avant-vente}}$, avec le produit $P_{\text{vente}}$ converti à la date de vente et les unités vendues sortant à leur coût historique. Un ajustement sortant se réalise de la même façon avec un produit nul, puisqu'il n'a aucune valeur : moins le coût historique de ses unités (voir [Ajustements sortants](../../instruments/transaction-types/adjustment.md#outgoing-adjustments))
 - **Décomposition du pool de trésorerie** : la vente retourne $C = q_{\text{vendues}} \times \text{PRU}^{T}_{\text{avant-vente}}$ au pool de capital
 - **Rendement sur coût** : le prix d'achat moyen du dénominateur du [Rendement sur coût](portfolio-engine/yield-on-cost.md)
 - **Formulaire de transfert** : suggère automatiquement le cost_basis_override du côté récepteur à partir du PRU de la position émettrice
 
-!!! warning "Le PRU n'est jamais utilisé pour l'évaluation d'un actif"
+!!! warning "Le PRU n'est jamais un prix"
 
-    Le PRU est une construction comptable destinée au coût de base. La valeur de marché utilise les niveaux unifiés du résolveur : `MARKET → TRADE_AVG → CARRIED → MISSING`, exposés aux lignes de portefeuille sous la forme `MARKET_PRICE`, `LAST_TRADE_PRICE` ou `MISSING`. Voir [Résolution des prix](portfolio-engine/price-resolution.md).
+    Le PRU est une construction comptable destinée au coût de base. La valeur de marché utilise les niveaux unifiés du résolveur : `MARKET → TRADE_AVG → CARRIED → MISSING`, exposés aux lignes de portefeuille sous la forme `MARKET_PRICE` ou `LAST_TRADE_PRICE`. Seule une position dont l'actif n'a aucune valorisation de référence — aucun cours, aucun BUY ni SELL, aucune [estimation du coût de transfert](portfolio-engine/price-resolution.md#transfer-cost-estimate) — est comptée à son coût de base $q \times \text{PRU}^{T}$, comme une estimation déclarée, sans prix ni P&L latent (`ESTIMATED_AT_COST`), ou laissée sans valorisation (`MISSING`) lorsque ce coût est incomplet. Voir [Résolution des prix](portfolio-engine/price-resolution.md).
 
 ## ⚙️ Implémentation : portée au niveau de la position
 

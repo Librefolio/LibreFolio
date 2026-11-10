@@ -22,8 +22,8 @@ related:
 Two plans of workstream P, archived on 2026-10-09. The main one answered issue #32 (a foreign asset bought with a
 zero cost in the report currency) not with a patch but with **one average-cost function**, `compute_average_costs()`,
 in a new `backend/app/services/financial_math/` layer, used by the engine, the WAC facade, the lots analysis and the
-broker summary (P0–P12, `de252a38a`, 2026-10-07). The second makes the global settings bulk write validate every
-value and commit all or nothing (`84d9e3360`, 2026-10-09). The #32 work was filed in the wiki on 2026-10-07, while it
+broker summary (P0–P12, `ad6af7184`, 2026-10-07). The second makes the global settings bulk write validate every
+value and commit all or nothing (`910bbb0e7`, 2026-10-09). The #32 work was filed in the wiki on 2026-10-07, while it
 landed; this page indexes it and adds what was not filed then.
 
 ## Key takeaways
@@ -36,7 +36,7 @@ landed; this page indexes it and adds what was not filed then.
   [[concepts/pre-frame-frame-separation]], [[problems/wac-feedback-loop]], [[features/F-058]],
   [[problems/test-transaction-implied-constructor-mismatch]].
 - Not filed then: a missing cost now surfaces as a `MISSING_COST_BASIS` data-quality warning with a
-  `navigate_asset` call to action (`portfolio_engine.py`, group key `missing_cost_basis`) — which is why a
+  `navigate_asset` call to action (`portfolio_engine.py` at the time, today `backend/app/services/financial_math/portfolio/data_quality.py`; group key `missing_cost_basis`) — which is why a
   Dashboard E2E that counted asset links page-wide broke the next day
   ([[sources/phase00-fx-dashboard-sync-2026-10]]).
 - Yield on Cost divides by the same average cost: the engine's `position.wac` comes from `compute_average_costs()`
@@ -51,7 +51,7 @@ fallback for Auto when the data is missing, and the user corrects that transacti
 "entering and leaving the field accepts the 0", was superseded) · P-2 WAC preview mislabels split rows, dead `add_at_wac` branch ·
 P-3 per-position contribution drops unconverted dividends/costs without a signal · P-4 IANA timezone database in the
 Docker image · P-5 migrate `roi_utils`/`valuation_utils` into `financial_math` (decision D1: "later we factor the
-others"; ✅ closed on 2026-10-12 by T-1, `1cc9cd8f5` — [[decisions/financial-math-one-home]]) · **P-6 the graph update for the 2026-10-07 pages — still pending: the graph has not been rebuilt since
+others"; ✅ closed on 2026-10-12 by T-1, `5dcfdec4f` — [[decisions/financial-math-one-home]]) · **P-6 the graph update for the 2026-10-07 pages — still pending: the graph has not been rebuilt since
 2026-09-09** · P-7 close issues #32 and #35 at release · P-8 stale header comment in `tx-clone.spec.ts` · P-9 Black on two
 API test files.
 

@@ -10,9 +10,28 @@
         },
         "description": {
           "language": "Lingua per nomi e metadati dello strumento.",
-          "codice_fondo": "Codice interno del fondo Borsa Italiana (es. 2FADB602822). Compilato automaticamente per i fondi comuni; abilita la quotazione a NAV. Lascia vuoto per azioni/obbligazioni/ETF.",
+          "codice_fondo": "Codice interno del fondo Borsa Italiana (es. 2FADB602822). Compilato automaticamente per i fondi comuni; abilita la quotazione a NAV quando il fondo non è nell'API del mercato XMIL. Lascia vuoto per azioni/obbligazioni/ETF.",
           "mic": "MIC del mercato (es. ETLX per EuroTLX, MOTX per MOT). Compilato automaticamente dalla ricerca; indirizza la pagina dello strumento e i metadati al mercato corretto.",
           "platform": "Piattaforma di negoziazione (es. TLX per EuroTLX). Compilata automaticamente dalla ricerca; richiesta da alcuni mercati per risolvere la pagina dello strumento."
+        }
+      }
+    }
+  },
+  "pluginSettings": {
+    "asset": {
+      "borsa_italiana": {
+        "label": {
+          "preferred_language": "Lingua preferita"
+        },
+        "description": {
+          "preferred_language": "La ricerca mostra ogni strumento solo in questa lingua, quella in cui arrivano il nome e i dettagli. Con Entrambe le lingue, prima l'italiano, poi l'inglese."
+        },
+        "option": {
+          "preferred_language": {
+            "all": "Entrambe le lingue",
+            "it": "🇮🇹 Italiano",
+            "en": "🇬🇧 Inglese"
+          }
         }
       }
     }

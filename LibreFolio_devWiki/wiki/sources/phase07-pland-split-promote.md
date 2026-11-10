@@ -14,6 +14,9 @@ related:
 
 # Source: Phase 07 — PlanD-D1D2 Split/Promote Full Stack
 
+> Same plan chain, plan by plan: [[sources/phase07-part4-round6-pland-split-promote-master]] (master),
+> [[sources/phase07-part4-round6-pland1-backend-batch-suggest]], [[sources/phase07-part4-round6-pland2-frontend-split-promote]].
+
 ## Summary
 
 This source group covers the archived sub-plan bundle for split and promote operations (D1+D2+Centralize+4 bugfix rounds), executed 2026-05-12 to 2026-05-19. D1 integrated split and promote into the unified `execute_batch` pipeline and eliminated the standalone `/split` and `/promote` endpoints. D2 delivered the frontend PromoteMergeModal, suggest banner, and the `resolveOps()` → `ResolvedOp[]` → API call pattern. The `plan-CentralizePayloadCommit.prompt.md` unified all 9 API callsites into `txPayloadHelpers.ts` + `txCommitApi.ts`. Four bugfix rounds polished the UX: split preview rendering, PMC override logic, and E2E tests.
@@ -44,8 +47,8 @@ This source group covers the archived sub-plan bundle for split and promote oper
 | Backend D1 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-PlanD1_BackendBatchSuggest.prompt.md` |
 | Frontend D2 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-PlanD2_FrontendSplitPromoteUI.prompt.md` |
 | Payload centralization | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/PlanD-D1D2/plan-CentralizePayloadCommit.prompt.md` |
-| Transaction schemas | `backend/app/schemas/transactions.py` |
-| Transaction service | `backend/app/services/transaction_service.py` |
-| Payload helpers (FE) | `frontend/src/lib/utils/transactions/txPayloadHelpers.ts` |
-| Commit API (FE) | `frontend/src/lib/utils/transactions/txCommitApi.ts` |
-| BulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Transaction schemas | `backend/app/schemas/transactions/transactions.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
+| Payload helpers (FE) | `frontend/src/lib/features/transactions/txPayloadHelpers.ts` |
+| Commit API (FE) | `frontend/src/lib/features/transactions/txCommitApi.ts` |
+| BulkModal | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |

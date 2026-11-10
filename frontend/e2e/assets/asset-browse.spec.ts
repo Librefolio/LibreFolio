@@ -206,7 +206,7 @@ async function keepOffline(page: Page, baseURL: string | undefined): Promise<voi
         (url) => (url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== origin,
         (route) => route.abort('blockedbyclient'),
     );
-    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
 }
 
 /** How many active assets the backend holds right now — the precondition of AB-004, read over the API. */

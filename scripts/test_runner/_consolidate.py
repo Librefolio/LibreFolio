@@ -76,8 +76,13 @@ def group_frontend_units(scope: str | None) -> dict:
       that re-launches the same four specs the individual actions own. Recording
       every claimant means each action gets a verdict from the one run, instead
       of one action winning the spec and the other being re-run serially.
+
+    An action registered ``named_only`` is left out: it runs only when named
+    (``add_test``), even where its launch was collected — on a managed lane the
+    profile check of ``front-utility cloud-smoke`` passes during collection.
     """
     from ._inventory import ALL_PROJECTS, collect_launches
+    from ._registry import TEST_REGISTRY  # noqa: PLC0415 — _registry imports the runner modules, this one included
 
     launches, errors = collect_launches()
     if errors:
@@ -88,6 +93,8 @@ def group_frontend_units(scope: str | None) -> dict:
         if not category.startswith("front"):
             continue
         if scope is not None and category != scope:
+            continue
+        if TEST_REGISTRY.get(category, {}).get(action, {}).get("named_only"):
             continue
         for kind, path, project in units:
             if kind not in ("playwright", "vitest"):

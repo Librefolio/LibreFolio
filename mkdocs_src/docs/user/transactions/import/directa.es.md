@@ -23,5 +23,6 @@ Guarda el archivo e impórtalo en LibreFolio. Si eliges CSV, no lo abras ni lo v
 - Compatible con operaciones de acciones, bonos y ETF, dividendos, impuestos (*ritenute fiscali*) y comisiones de transacción.
 - Se soportan tanto el formato **CSV** como **XLSX** (Excel) — no ods.
 - Las operaciones de la cuenta están denominadas en EUR.
+- Las filas que LibreFolio no puede leer (muy pocas columnas, una fecha que no entiende, un tipo de operación ausente o desconocido) no se importan: se indican en un aviso ámbar durante la importación, con un enlace para abrir una issue en GitHub.
 - La exportación cubre hasta 3.000 filas por archivo. Para historiales más largos, exporta varios períodos e impórtalos en secuencia.
 

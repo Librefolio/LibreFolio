@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-04-29
 tags: [backend, pydantic, fastapi, validation, transactions, architecture]
-related: [decisions/unified-batch-pipeline, features/F-046]
+related: [decisions/unified-batch-pipeline, features/F-046, entities/transaction-batch-pipeline]
 ---
 
 # Problem: Pydantic 422 Pre-emption Blocks Service-Layer Validation
@@ -26,3 +26,12 @@ When designing APIs where the service layer needs to see all items regardless of
 - Required migration of all 4 frontend modal consumers
 - Led to a net simplification (4 endpoints → 2, −290 lines backend)
 
+## Source files
+
+| Role | Path |
+|------|------|
+| `_parse_lenient()`, the parse stage of the batch pipeline (per-row `model_validate`) | `backend/app/services/transactions/transaction_batch_stages.py` |
+| The two batch routes, `POST /transactions/validate` and `POST /transactions/commit` | `backend/app/api/v1/transactions.py` |
+
+2026-11-07 lint: the per-row parse no longer sits in the handler: `_parse_lenient()` is a stage of the batch pipeline
+([[entities/transaction-batch-pipeline]]), and the two surviving endpoints are `/validate` and `/commit`.

@@ -8,7 +8,7 @@
  * runner's timezone.
  */
 import {describe, expect, it} from 'vitest';
-import {formatAxisDate, parseDisplayDate} from '../formatAxisDate';
+import {formatAxisDate, formatDayRange, parseDisplayDate} from '../formatAxisDate';
 
 // 15 June 2024, noon local — a mid-year day so no timezone can shift it across a
 // year (or even month) boundary and disturb the year-presence assertions.
@@ -109,5 +109,46 @@ describe('parseDisplayDate — the parse, exported so every formatter shares it'
     it('returns null for something that is not a date', () => {
         expect(parseDisplayDate('not-a-date')).toBeNull();
         expect(parseDisplayDate('')).toBeNull();
+    });
+});
+
+// F8 (06/11/2026): the loss cards write the stretch of days a figure is about as one range, in the language of the interface.
+describe('formatDayRange', () => {
+    it('writes one year once when both days fall in it', () => {
+        const out = formatDayRange('2026-10-07', '2026-11-05', 'en');
+
+        expect(out.match(/2026/g)).toHaveLength(1);
+        expect(out).toContain('Oct');
+        expect(out).toContain('Nov');
+        expect(out).toMatch(/[–-]/);
+    });
+
+    it('writes both years when the days are in different ones', () => {
+        const out = formatDayRange('2025-12-05', '2026-01-09', 'en');
+
+        expect(out).toContain('2025');
+        expect(out).toContain('2026');
+    });
+
+    it('writes a single day when the two are one', () => {
+        expect(formatDayRange('2026-11-05', '2026-11-05', 'en')).toBe(formatAxisDate('en', '2026-11-05', true));
+    });
+
+    it('follows the language: the same stretch in Italian names the months in Italian', () => {
+        const out = formatDayRange('2026-10-07', '2026-11-05', 'it');
+
+        expect(out).toMatch(/ott/i);
+        expect(out).toMatch(/nov/i);
+    });
+
+    it('reads a calendar day as a local day, never through UTC', () => {
+        // 1 January: a UTC reading shows 31 December west of Greenwich.
+        expect(formatDayRange('2026-01-01', '2026-01-01', 'en')).toContain('1');
+        expect(formatDayRange('2026-01-01', '2026-01-01', 'en')).toContain('Jan');
+    });
+
+    it('gives back what it cannot read, joined by an en dash, instead of «Invalid Date»', () => {
+        expect(formatDayRange('x', '2026-11-05', 'en')).toBe('x \u2013 2026-11-05');
+        expect(formatDayRange('2026-02-30', '2026-03-01', 'en')).toBe('2026-02-30 \u2013 2026-03-01');
     });
 });

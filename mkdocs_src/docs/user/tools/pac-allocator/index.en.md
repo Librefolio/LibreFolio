@@ -185,7 +185,9 @@ Two actions help you get there:
 
 - **Copy current distribution** reads how much each of these Assets weighs
   today in the Brokers you tick, counting only these Assets and not cash.
-  With $H_i$ the market value of Asset $i$ held there today:
+  With $H_i$ the market value of Asset $i$ held there today — what it cost
+  you, for an Asset with no price at all, whose **Valuation** reads *valued
+  at cost · no price*:
 
     $$
     w_i = \frac{H_i}{\sum_j H_j} \cdot 100\%
@@ -206,8 +208,12 @@ Two actions help you get there:
 This step appears only when the scenario needs exchange rates. It holds one
 rate $x$ per currency pair in play, each **Auto** or **Manual**:
 
-- **Auto**: the latest rate stored in LibreFolio, read when the step opens and
-  again just before the calculation. No data provider is called.
+- **Auto**: the latest valid rate stored in LibreFolio, read when the step opens and
+  again just before the calculation. No data provider is called. A stored rate
+  the planner cannot use (0 or infinite, which an older version could save) is
+  skipped for the previous valid one, with a warning that names the pair, the day
+  skipped and the day used: correct that day in the pair's **Edit Rates**; until
+  then the results may be slightly approximate.
 - **Manual**: your own rate.
 
 It also holds one **Conversion spread** $s$: a percentage of every converted

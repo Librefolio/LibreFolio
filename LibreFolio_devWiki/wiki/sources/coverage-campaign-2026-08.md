@@ -71,6 +71,11 @@ is the scheduler work and the tests covering it.
 > assume it is wrong, and here it is not.
 
 
+Sibling sources of the same campaign (folder `07_coverageAndConsolidationCampaign/`):
+[[sources/p7-js-coverage-instrumentation]], [[sources/coverage-fase012-and-branch-lanes]],
+[[sources/p8-runner-parallel-architecture]], [[sources/p9-test-semantics]], [[sources/frontend-parallelism-tappe-7-11]],
+[[sources/settings-lane-and-sixteen-defects]], [[sources/coda-beta-parametric-forkserver]].
+
 ## Key Takeaways
 
 - **Rate versus volume** is the campaign's central lesson: five lanes covered
@@ -98,7 +103,7 @@ is the scheduler work and the tests covering it.
 
 | area | uncovered lines | coverage | note |
 |---|---|---|---|
-| `components/transactions` | 1 542 | 69,9 % | largest single pool |
+| `features/transactions` | 1 542 | 69,9 % | largest single pool |
 | routes (pages) | 1 074 | 67,8 % | |
 | `components/ui` | 947 | 75,5 % | |
 | `components/assets` | 720 | 69,3 % | |
@@ -159,7 +164,7 @@ formula is not a number; a coverage number without its worker count is not compa
 | Python coverage config | `.coveragerc` |
 | JS merge (istanbul) | `frontend/scripts/js-coverage-report.js` |
 | JS instrumentation | `frontend/vite.config.ts`, `frontend/vitest.config.ts` |
-| Extraction precedent | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| Extraction precedent | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
 | Original plans | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-storico-coverage-campaign.md`, `.../plan-storico-coverage-campaign-2.md` |
 
 > **Path note (2026-09-01)**: this table cited `frontend/mcr.config.js`. **That file

@@ -96,6 +96,19 @@ Focused semantic datasets such as `portfolio.asset_comparison` and
 `fx.market_context` are internal projections. They remain excluded from
 `*.all_data` to avoid exporting both the complete series and a duplicate summary.
 
+Every dataset of the broker domain, public or internal, requires `broker.provenance` as its last section: it carries
+the user's role, the owner's stake and the amounts basis (`whole_broker`), so any export of a broker states them. The
+composer keeps one copy when several datasets of one request ask for it.
+
+Two fields state which amounts a number is, so the AI does not apply a share twice:
+
+- `ownership.amounts_basis` of `broker.provenance` is always `whole_broker`: the export of a broker gives the broker's
+  full amounts, as the broker page does, whatever the role. An owner's own part is one multiplication away
+  (`owner_stake_ratio`); an editor or a viewer has no stake to apply.
+- `amounts_basis` of the `broker.concentration_comparison` (inside `broker.concentration_evidence`) is always
+  `all_brokers_whole`: both sides, the broker and the portfolio, count every broker whole. It is not the Dashboard's
+  portfolio, where an owner's share reduces each broker.
+
 Each `*.all_data` union is composed only from its domain's canonical complete
 datasets:
 
@@ -152,6 +165,69 @@ Weight ratios use gross absolute open-position value:
 targets are not a universe: they report `selected`/`eligible`/`covered` entity
 tallies (0 or 1) and carry no portfolio weight.
 
+In the price components `portfolio.technical_prices` and `broker.technical_prices`
+(version 2), `covered_asset_count` counts instead the eligible assets with a native
+price series, the rows of `assets`. Every other eligible asset stays in
+`eligible_asset_count` and is listed in `uncovered_assets` (`asset_id`,
+`portfolio_weight_ratio`, `reason_code`, ordered by `asset_id`); the payload validator
+checks both counts against the two lists, with no asset listed twice. The
+`reason_code` is decided on the price points the price history returns, never on the
+asset type (E-AI503, E-23), checked in this order: `no_stored_price` when it returns
+none (no price stored up to the period end), `mixed_price_currencies` when they do not
+share one currency, `no_price_in_period` when they are all carried from before the
+period (prices are stored, but none inside it). A `no_price_in_period` row also
+carries `currency`, `last_close` and `last_close_date`, the last price stored before
+the period; the validator requires the three for that code and `null` for the other
+two. A single Asset keeps its section: `asset.ohlc_returns` (version 2) then has a
+`reason_code`, every bucket empty, and `latest_close` and `latest_date` `null`. Its
+`currency` is `null` for the first two codes and stays for `no_price_in_period`,
+whose last stored price is the `last_value` of its whole-period [gap](#series-gaps)
+([Snapshot Data Tables](#snapshot-data-tables)).
+
+### 🕳️ Price and Rate Gaps {: #series-gaps }
+
+A price or rate payload keeps every bucket of its plan, the empty ones included.
+Since version 2 each series also lists its gaps (E-23): `price_gaps` on every series
+in the `assets` of `portfolio.technical_prices` and `broker.technical_prices` and on
+`asset.ohlc_returns`, `rate_gaps` on `fx.rate_ohlc`. A gap (`SeriesGap`:
+`start_date`, `end_date`, `calendar_days`, `last_value`, `last_value_date`) is a
+maximal run of contiguous empty buckets (no observed point) that holds at least one
+market-open day: Monday to Friday and not in the union of the main exchanges'
+holidays of the [Market Calendar](../../backend/risk/architecture.md#market-calendar)
+(weekends alone after a failed build of that table). A weekend or a holiday alone is
+never a gap. Nor is a run that reaches the snapshot day (`snapshot_as_of`, the plan's
+end) when that day is its only market-open day: that is the day's price not yet
+synchronized, and on every asset it would only be noise (E-23.3). A historical period
+that ends on a weekday without a price loses that one-day gap too. The run's buckets
+merge into one gap, from the first start to the last end, closed days at its edges
+included.
+
+`last_value` and `last_value_date` are the last value observed before the gap. For a
+gap that opens the period they are the last value stored before the period: the
+carried point that opens the asset's price points (`price_series_seed()`), or the
+period's first FX observation when it is carried from before the period
+(`rate_series_seed()`). Both are `null` when the history begins inside the period. A
+gap is missing data: never a zero, and never proof that the price or rate stayed the
+same.
+
+`series_gaps()` in `components/technical_shared.py` is pure: it reads the period's
+observed points, the bucket plan, that seed and a holiday set. `load_series_gaps()`
+reads the holiday table through `ensure_market_holidays()` only when some run of empty
+buckets has to be judged. The payload validators keep the gaps in date order, apart,
+never over a populated bucket, with `calendar_days` matching the range and the last
+value dated before the gap. An asset without a series has no gap, with one exception:
+a single Asset with `no_price_in_period`, whose whole period is one gap (when it holds
+a market-open day) carrying the last close stored before it. In the Portfolio and
+Broker components that close sits in the asset's `uncovered_assets` row instead.
+
+The three price components already moved to version 2 for 1.3 (E-AI503) and stay
+there, one bump per release; `fx.rate_ohlc` moves from 1 to 2, with its placeholder in
+`components/catalog.py` and its `COMPACT_COMPONENT_VERSIONS` entry.
+`./dev.py test services ai-export-pure` pins the rule and the validators,
+`services ai-export` the builders, `api ai-export-unpriced-asset` assets whose prices
+all predate the period, and `front-ai-export unit` the tables
+(`snapshotDataRenderer.priceSeriesGap.test.ts`).
+
 ### 🏦 Portfolio Broker Universes
 
 Portfolio financial components distinguish calculation scope, current positions,
@@ -168,7 +244,7 @@ The Portfolio Engine always runs over the full scoped set. A Broker with no curr
 position remains in scope. A historical contributor can appear in the period count
 without appearing in the current-position count.
 
-## 📉 Drawdown Risk Context
+## 📉 Drawdown Risk Context {: #drawdown-risk-context }
 
 `portfolio.drawdown_context`, `broker.drawdown_context`, and
 `asset.drawdown_context` are optional analysis sections that expose the canonical
@@ -207,12 +283,35 @@ If the Risk result is `unavailable`/`failed` (or the call raises) the component
 still builds an honest `unavailable`/`failed` payload with a machine-readable
 `reason_code`, so an optional analysis section never fails closed.
 
+A total loss (a current drawdown of −1) is not a failure. Since version 2, an `ok`
+or `partial` `*.drawdown_summary` payload may leave `remaining_to_peak_ratio`
+`null` when `current_drawdown_ratio` is −1 or below, and only then: no finite gain
+recovers it. Every other metric stays, and Risk's `total_loss_no_recovery` warning
+travels in the payload's `warnings`
+([The Drawdown Episode](../../backend/risk/architecture.md#drawdown-episode)).
+Positive prices, or a TWRR above −1, reach −1 only through float rounding.
+Version 1 failed the section instead. The compact renderer lists versions 1 and 2
+of the four drawdown components (these three and the snapshot below) and prints
+the `null` as `null` ([Snapshot Data Tables](#snapshot-data-tables)).
+
 PAC Planning also uses `portfolio.asset_drawdown_snapshot`. It reuses the
 Portfolio's already-loaded observed native-price series and the canonical
 `drawdown_episodes` primitive to publish one compact row per eligible Asset:
 current Drawdown, maximum Drawdown, maximum-episode recovery status,
 remaining-to-peak, basis, observation count, available range, coverage, and
-data-quality status. It exports no Drawdown history.
+data-quality status. It exports no Drawdown history. Each per-Asset return comes
+from `float_price_return()` (`financial_math/returns.py`) on the Decimal closes,
+the function that builds the Risk series, so a row and `asset.drawdown_summary`
+agree on the same closes. Since version 2, a row with `current_drawdown_ratio`
+at −1 or below keeps its other metrics with `remaining_to_peak_ratio` `null`; a
+row has no `warnings` field, so that `null` alone marks the total loss. When
+`drawdown_episodes` refuses an Asset's series (a one-step fall of more than about
+2⁵³×, for example, takes the float wealth to 0), that row alone becomes `failed`
+with `risk_execution_error` and no metrics, the failure is logged, and the other
+rows and the section are kept: as for an undeclared Risk failure
+([Result Statuses](../../backend/risk/architecture.md#statuses)), it is reported
+as ours, never as a verdict on the data. Before, that row raised and the whole
+section failed.
 
 Unlike the `*.drawdown_summary` sections, this snapshot is window-relative: it reads
 only genuine observed prices (backward-filled points excluded) inside the requested
@@ -236,6 +335,22 @@ Each evidence dataset is bound to its task analysis and complements — never
 replaces — the retained aggregates (for example `portfolio.income_evidence` uses
 the same `(start, end]` window as `portfolio.flows_income` so they cannot
 contradict each other).
+
+`portfolio.flows_income` (version 2) has two lists of `EffectRow`, each row with a `code`. `income_effects` holds the
+income rows (category `Income`). `fx_on_cash_effects` holds each broker's exchange result on foreign cash, one row per
+broker, recognized by the code `fx_on_cash`. It is not income: it belongs to the period's other result, so it stays out
+of `income_effects` and out of `period_income`, and the two lists never repeat a row.
+
+`portfolio.income_evidence` and `broker.cost_efficiency_evidence` read ledger rows
+and count each broker at the report's share (`native_cash.effective_share()`: an
+owner's `share_percentage`, the whole broker when none is recorded; the whole
+broker for an editor or a viewer).
+`portfolio.income_timeline` (version 2, behind `portfolio.income_evidence`) keeps
+every `DIVIDEND`/`INTEREST` amount with its sign, so an older negative correction
+lowers the income exactly as it lowers the report's `period_income`.
+`broker.cost_efficiency` (version 2, behind `broker.cost_efficiency_evidence`)
+still sums BUY/SELL turnover by magnitude, multiplied by that share, which it
+exposes as `ownership_share_ratio`.
 
 ## 🧭 Public Analysis Dataset Bindings
 
@@ -359,9 +474,12 @@ Dataset selections produce `data_only`:
 
 1. **Snapshot Metadata and Dataset Manifest**
 2. **Snapshot Data**
+3. **Legal Notice**
+4. **Reply Instructions**
 
-No analysis objective, verification instructions, response contract, domain notes,
-user notes, or response language is added.
+After the data come only the Legal Notice and the Reply Instructions: no analysis
+objective, verification instructions, response contract, domain notes, user notes, or
+response language is added.
 
 ### 🔬 Request Analysis
 
@@ -375,11 +493,63 @@ Analysis selections produce `full_prompt` in this exact order:
 6. **Additional LibreFolio Data**
 7. **Domain Notes**
 8. **User Notes**, only when non-empty and supported
-9. **Response Language**
+9. **Answer Focus**
+10. **Legal Notice**
+11. **Response Language**
 
 Trusted frontend templates provide instructions. Metadata/manifests use safe YAML;
 Snapshot Data uses deterministic compact text/pipe tables with a safe YAML fallback
 for unknown component versions. User notes remain safely serialized untrusted data.
+
+The Legal Notice (section `legal_notice`, `renderLegalNotice()` in `promptRenderer.ts`)
+is the instance's disclaimer, the one the app shows in Settings › About
+([The legal notice](../../frontend/components/features/settings.md#legal-notice)):
+a `##` heading with `legal.title`, a blank line, then `legal.disclaimer`, both from the
+caller's `translate`, so in the interface language (the probe translates from the same
+catalogue, `probeTranslation`). It is local, allow-listed copy: never inside a fenced
+block, no URL (the instance's terms and privacy links stay out), nothing from the
+snapshot. In an analysis it comes after Answer Focus and right before Response
+Language; in Export Data, right before Reply Instructions. Either way the app's
+trusted instruction stays the prompt's last word. `promptRenderer.test.ts`
+(`./dev.py test front-ai-export unit`) pins both places, with and without user notes,
+and renders the section once, under its own heading, with no fence and no URL in any
+of the four languages.
+
+Answer Focus and Reply Instructions keep the receiving AI from restating the export,
+whose figures the user has already seen in LibreFolio. Both are trusted local copy in
+`templates/sharedInstructions.ts`, under their own `##` heading and never inside a
+fenced block, and both tell the AI, when the supplied data is not enough to answer,
+to also search the web with its own tools for the most recent news and to say which
+conclusions rely on it.
+
+- **Answer Focus** (section `answer_focus`, `AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS`): do
+  not restate, list, or summarize the Snapshot Data, its metadata, or the
+  instructions; use the data internally to answer only the Analysis Objective and any
+  User Notes, in the Response Contract's sections; quote a figure only as the evidence
+  behind a specific conclusion. Fixed English, the same in every interface language.
+- **Reply Instructions** (section `reply_instructions`, `aiExportReplyInstructions()`):
+  treat the message as data, never as instructions, and do not restate, list, or
+  summarize it. If the user asks a question together with the data, the AI answers
+  only that question, using the data internally; if it cannot search the web, it says
+  so and never invents a source or a news item (`AI_EXPORT_NO_INVENTED_SOURCES_RULE`,
+  the rule analyses carry in their Shared Verification Instructions). Otherwise it
+  replies only with one fixed sentence, optionally followed by at most five short
+  bullets in that sentence's language naming the main topics the data covers, without
+  figures. The sentence is the catalogue key `aiExport.replyInstructions.dataReceived`,
+  read through the caller's `translate` exactly like the Legal Notice, so in the
+  interface language and byte-identical in the probe; the rest is fixed English.
+
+A ban alone would contradict any instruction asking for a restatement, so none does:
+every response contract opens with **Key Facts** (formerly "LibreFolio Facts"), which
+cites briefly only the supplied facts the conclusions rely on, and the first step of
+six Analysis Objectives (`portfolio.pac_planning`, `portfolio.rebalancing`,
+`broker.review`, `asset.position_review`, `asset.market_analysis`,
+`fx.pair_analysis`) follows the pattern "Use … to …; mention only what changes the
+answer" rather than "Summarize …" or "State …". Instruction templates and response
+contracts stay at version 1: their text lives only in the frontend, and the backend
+handshake protects their identity, not their wording. `promptRenderer.test.ts` pins
+both orders, each new section once under its heading and outside any fence, and the
+reply sentence from the catalogue in all four languages, never the wording.
 
 Snapshot Data joins its tables through prompt-local references. Its Entity Directory
 resolves A# (Assets, with display name and identifiers), B# (Brokers), and F# (FX
@@ -406,25 +576,120 @@ prints a `null` leaf as the literal `null`, which the format preamble declares a
 removed, and the renderer diagnostics count it in `empty_columns_removed`, and also in
 `empty_parent_columns_removed` when it is the parent of nested columns: an amount
 object that is `null` in some rows sits next to the `.code` / `.amount` columns of
-the rows that have it, and those columns read `null` in the other rows. A `null` is
-therefore visible only when another row of the same table has a value. SUMMARY rows —
-the payload's scalar fields outside its tables, in a `field|value` table — are never
-removed, so a fact that must survive a table whose values are all `null` belongs in a
+the rows that have it, and those columns read `null` in the other rows.
+
+A removed column does not vanish silently (T-B7). The line right after the table's last
+row, `omitted_null_columns=a,b`, names the removed columns that held an explicit `null`
+— the backend's "unavailable" — as their header cells would have been written; the
+preamble states the rule and the diagnostics count the names in `null_columns_declared`.
+Three kinds of removed column are not named:
+
+- a parent column, whose values live on in its `parent.child` columns;
+- a column that is empty only because the renderer has nothing for that scope
+  (`undefined`, such as `portfolio_weight_percent` in the price series of one Asset):
+  that column is "not applicable", not "unavailable";
+- a column whose `null` means "none for this row" (J-54). The backend writes every
+  `None` as `null` (`model_dump(mode="json")`), also where nothing of that kind exists,
+  so the renderer reads these columns from one list, `NULL_MEANS_NONE_COLUMNS` in
+  `snapshotDataRenderer.ts`. A name that could carry a real value elsewhere is bound
+  to its table, its component, or both:
+
+| Column | Table | Component | Its `null` means |
+|--------|-------|-----------|------------------|
+| `closing_date` | any | any | an open lot: it has not closed |
+| `reason_code` | any | any | a row with nothing to report |
+| `conversion_reason` | any | any | an amount converted at a known rate |
+| `component` | `OUTPUT DEFINITIONS` | any | a scalar output, not one component of a band |
+| `minimum`, `maximum` | `OUTPUT DEFINITIONS` | any | an output without that bound |
+| `asset_ref` | any | `portfolio.income_timeline` | income not tied to an asset, such as interest on cash |
+| `portfolio_weight_percent`, `technical_normalized_weight_percent` | `PERIOD SUMMARY` | `asset.indicators`, `fx.indicators` | one Asset or FX pair: there is no portfolio to weigh it in |
+
+`partial_reason_code` is not on the list: ENTITY STATUS shows only partial results, so
+a `null` there is a reason nobody knows, and it is named.
+
+A column on that list with a value in some rows keeps printing `null` in the others,
+as every column does: only the declaration of an all-`null` column changes. A new
+entry needs the backend's evidence that the field is `None` only when nothing of that
+kind exists, and a test of its own in `snapshotDataRenderer.test.ts`.
+
+The line follows the table, never its title, so every reader that takes the rows right
+after a title — the probe's table audit and scope checks, the test helpers — keeps
+reading the same table. When a fixed-header table falls back from one payload field to
+another (the price series' `latest_close`, then `latest_rate`), the first field the
+payload carries wins, `null` included, so an unavailable value is never read as an
+absent one. The preamble labels these tables `compact_pipe_tables_v2` and
+`generic_pipe_tables_v2` since this rule (1.3).
+
+SUMMARY rows — the payload's scalar fields outside its tables, in a `field|value` table
+— are never removed, so a fact that has to be counted rather than named belongs in a
 scalar field.
 
 That is the role of `unavailable_amount_lot_count` in `asset.lot_detail`,
 `portfolio.fifo_lots` and `broker.fifo_lots`: always present, 0 included, it counts
 the lots with at least one amount that cannot be valued in the target currency (a
 missing FX rate). Those amounts are `null` — never 0, never the native amount. When
-every lot's amount is unknown, its column is removed and the count is the trace.
+every lot's amount is unknown, its column is removed and named on the
+`omitted_null_columns` line, and the count says how many lots.
 
 The FIFO summaries (`portfolio.fifo_summary`, `broker.fifo_summary`) are strict too:
 an Asset's original cost, residual cost basis, proceeds, realized P&L, income, fees,
 taxes, total P&L and net total P&L are `null` as soon as one lot's part is unknown (a
 missing FX rate, or no market value), and so is `total_residual_cost_basis`. Only the
-market-value totals — open value, unrealized P&L, potential gain and loss — keep
-summing the open lots that have them, with their coverage stated in
+market-value totals — open value, unrealized P&L, potential gain and loss — sum the
+valued open lots, whose open value and unrealized P&L are both known: since v3 all four
+sum that same set, the one `valued_open_lot_count` counts. Their coverage is stated in
 `value_coverage_status`, `valued_open_lot_count` and `unavailable_open_lot_count`.
+
+An Asset whose lots analysis is `FAILED` — its replay hit a quantitative failure, such
+as a sale beyond the quantity held — has wrong lot figures, so the lot components
+declare it instead of exporting them (J-12). In the four multi-Asset components
+(`portfolio.fifo_summary`, `broker.fifo_summary`, `portfolio.fifo_lots`,
+`broker.fifo_lots`) it has no row in `assets` and no lot in `lots`: it is a row of
+`failed_lot_reconstructions` — `asset_id`, `asset_name`, `asset_ticker` and
+`failure_codes`, never a figure — counted by `failed_reconstruction_asset_count`,
+always present, 0 included. Its part of the scope is unknown, so while one Asset
+failed the summaries' `total_open_lots`, `total_partial_lots`, `total_closed_lots`
+and `total_residual_cost_basis` are `null`, and `asset_count` counts the rows.
+`asset.lot_detail` states `lot_reconstruction_status` (`COMPLETE`, `DEGRADED`,
+`FAILED`) and `failure_codes`; a `FAILED` reconstruction exports no lot. The codes are
+those of the analysis' issues that carry `fails_analysis`
+(`analysis_failure_codes()`, see
+[A Failed Reconstruction](../../backend/transactions/lots_analysis_service.md#failed-reconstruction)).
+The compact renderer prints the failed Asset by its prompt ref. For this the FIFO lots
+moved to v3 and the lot detail to v4; the summaries, already v3 in the same release,
+kept it.
+
+The price series renderer, `renderContinuousSeries()`, prints the eligible assets
+without a price series. In `portfolio.technical_prices` and `broker.technical_prices`
+the `SERIES` table is followed by a table titled `ASSETS WITHOUT PRICE SERIES` that
+lists them by prompt ref (`entity`, `portfolio_weight_percent`, `reason_code`), then by
+one `<code>=<meaning>` line per distinct code present, sorted by code. When at least
+one row is `no_price_in_period`, the table gains `currency`, `last_price` and
+`last_price_date` (the payload's `currency`, `last_close`, `last_close_date`), filled
+on the rows of that code and empty (`undefined`, never `null`) on the others. Without
+such a row it keeps its three columns, byte for byte: the `null`s the backend writes in
+those fields for the other two codes are never printed. Without a series,
+`asset.ohlc_returns` gains a `reason_code` row in its SUMMARY table, after
+`price_basis`, and its `<code>=<meaning>` line follows that table; the `null`
+`latest_value` and `latest_date` columns leave `SERIES` and are named on its
+`omitted_null_columns=` line, and so is `currency` for the two codes that leave it
+`null`. The meanings come from a local allow-list,
+`PRICE_SERIES_GAP_MEANINGS`, as the frontend never takes presentation text from the
+backend: an unknown code, or an `uncovered_assets` that is not a list of records, sends
+the section to the generic renderer, with its raw values and no meaning invented.
+
+`BUCKETS` still lists only the buckets with an observation. Right after it, only when
+a series has a [gap](#series-gaps), comes a table titled `PRICE GAPS` (`entity`,
+`from`, `to`, `days`, `last_price`, `last_price_date`), or `RATE GAPS` for
+`fx.rate_ohlc` (with `last_rate` and `last_rate_date`): one row per gap, series by
+series, then one meaning line, `price_gap=` or `rate_gap=`, from a second local
+allow-list, `SERIES_GAP_MEANINGS`. A gap with no value stored before it has empty
+last-value cells (`undefined`, not `null`), so when no gap has one the two columns
+leave the table silently, with no `omitted_null_columns=` line. A gap list or record
+the renderer does not recognise sends the section to the generic renderer, as an
+unknown code does. `COMPACT_COMPONENT_VERSIONS` lists versions 1 and 2 of the three
+price components and of `fx.rate_ohlc`, and a section with no reason code and no gap
+renders exactly as its version 1.
 
 `portfolio.reconciliation` and `broker.reconciliation` state `residual`, the exact
 period P&L minus its components, and `reconciled`: `null` if a term is missing, true
@@ -563,7 +828,9 @@ Composition applies the same discipline per request. `Composer` (`composer.py`) 
 `DatasetVersionMismatchError` or `AnalysisVersionMismatchError` for an explicit version that
 differs from the registry; all three derive from `ComposerError`. The runtime maps the version
 errors to `409 version_mismatch` and the detail-level error to `422 selection_not_applicable`
-with `reason_code` `unsupported_detail_level`. A `BuildContext` whose bucket plan does not match
+with `reason_code` `unsupported_detail_level`. A required component whose prices exceed one request's
+budget (`BulkTooManyDaysError`, Z-25) is the same 422 with `reason_code` `too_many_price_days`
+(J-50): a shorter period brings it back within reach, so the panel says so. A `BuildContext` whose bucket plan does not match
 its scope raises `BuildContextScopeError` (`dependencies.py`).
 
 The guards add no identity of their own: component, dataset, and analysis IDs, their versions,
@@ -576,11 +843,12 @@ and without `-O`, and expects the typed error each time.
 
 | Situation                                         | Result                                                                                                             |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Required component raises                         | Whole snapshot fails with `503 snapshot_source_failure`.                                                           |
+| Required component raises                         | Whole snapshot fails with `503 snapshot_source_failure`; too many days of prices: `422`, `too_many_price_days`.        |
 | Optional component raises                         | Component omitted; diagnostic remains internal.                                                                    |
 | Required dataset component raises                 | Analysis fails closed.                                                                                             |
 | Optional dataset has a required-component failure | Entire optional dataset is skipped.                                                                                |
 | Builder returns an empty valid payload            | Section remains successful and included.                                                                           |
+| An eligible asset has no price series (no stored price up to the period end, stored prices in mixed currencies, or prices stored only before the period) | Section stays successful; the asset is listed in `uncovered_assets` with its `reason_code` (a single Asset: a `reason_code`, with a `null` `currency` except for `no_price_in_period`), never a `503`. |
 | Analysis facts fail applicability                 | `422 selection_not_applicable`.                                                                                    |
 | Signal result is `unavailable` or `failed`        | Only that indicator instance is omitted.                                                                           |
 | Signal result is `ok` or `partial`                | Indicator is exported with its available canonical series.                                                         |

@@ -83,23 +83,28 @@ Filed: [[category/slug]].
 
 After filing, update the knowledge graph so the new page becomes immediately queryable:
 
+The graph scans the **repository root** (allow-list in `/.graphifyignore`: devWiki pages, English MkDocs
+pages, backend and frontend code) and writes to `LibreFolio_devWiki/graphify-out/` through `GRAPHIFY_OUT`.
+Code changes need only `./dev.py graph update` (AST, no LLM). New or changed `.md` pages need the semantic
+pass below.
+
 ```bash
-cd /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki
-$(cat graphify-out/.graphify_python) -c "
+cd "$(git rev-parse --show-toplevel)"
+GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out "$(cat LibreFolio_devWiki/graphify-out/.graphify_python)" -c "
 from graphify.detect import detect_incremental
 from pathlib import Path
-import json
-result = detect_incremental(Path('corpus/'))
+result = detect_incremental(Path('.'))
 new_total = result.get('new_total', 0)
 deleted = list(result.get('deleted_files', []))
 if new_total == 0 and not deleted:
     print('No changes since last graph build — skipping update')
 else:
-    print(f'{new_total} changed files, {len(deleted)} deleted — run graphify corpus/ --update')
+    print(f'{new_total} changed files, {len(deleted)} deleted — run the graphify --update pipeline')
 "
 ```
 
-If new files are detected, run the full `--update` pipeline (Steps 3B-3C-4-5-6-9 from the graphify skill).
+If new files are detected, run the full `--update` pipeline (Steps 3B-3C-4-5-6-9 from the graphify skill), from the
+repository root with `GRAPHIFY_OUT=LibreFolio_devWiki/graphify-out` and `PYTHONHASHSEED=0`, scan path `.`.
 
 ## Fast-File Mode
 
@@ -117,13 +122,13 @@ At the end of a dev session, review what was learned:
 1. Ask: "What did we figure out today that wasn't known before?"
 2. For each item: quick classify → fast-file → done
 3. Consider: should any completed plan be ingested via `wiki-ingest`?
-4. Run `graphify corpus/ --update` once to incorporate all new pages
+4. Run the graphify `--update` pipeline once (Step 6) to incorporate all new pages
 
 ## Examples
 
 ```
-Discovered: SQLModel's Decimal columns need explicit Numeric(18,6) to avoid precision loss.
-→ File as: wiki/problems/sqlmodel-decimal-precision.md
+Discovered: SQLite stores a decimal column as a REAL double, so exact values need RealDecimal (C-97).
+→ File as: wiki/problems/sqlite-decimal-stored-as-double.md
 → Tags: [db, sqlmodel, decimal]
 
 Decided: All provider calls go through _run_provider_in_thread(), no exceptions.

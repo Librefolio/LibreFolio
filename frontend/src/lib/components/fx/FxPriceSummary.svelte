@@ -10,8 +10,9 @@
     import {TrendingUp, TrendingDown} from 'lucide-svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import {_ as t} from '$lib/i18n';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     interface Props {
         /** Last exchange rate */
@@ -37,18 +38,18 @@
 {#if lastRate !== null}
     <div class="flex items-center gap-3 {layoutMode === 'oneRow' ? 'px-3' : filtersStacked ? 'justify-around w-full' : 'justify-center'}" style={filtersStacked && maxWidth ? `max-width: ${maxWidth}px` : ''}>
         <!-- Left half: rate -->
-        <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
-            {formatFixed(lastRate, 4)}
+        <span class="font-mono text-lg font-semibold text-lf-secondary">
+            {formatPrice(lastRate, {minDecimals: 4})}
         </span>
 
-        <!-- Right half: delta % -->
+        <!-- Right half: the backend's Δ over the range (X-R59) -->
         {#if deltaPercent !== null}
-            <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+            <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="fx-price-summary-range-delta">
                 {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
                 {formatPercent(deltaPercent)}
             </span>
         {/if}
     </div>
 {:else}
-    <div class="text-sm text-gray-400 dark:text-gray-500" data-fx-rate-state="missing" data-testid="fx-price-summary-missing">{$t('fx.rateNotAvailable')}</div>
+    <div class="text-sm text-lf-muted" data-fx-rate-state="missing" data-testid="fx-price-summary-missing">{$t('fx.rateNotAvailable')}</div>
 {/if}
