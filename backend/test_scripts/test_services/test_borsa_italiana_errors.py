@@ -17,9 +17,11 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from bs4 import BeautifulSoup
 from borsa_italiana_scraping import StrumentoNonRisolto
 from borsa_italiana_scraping.eccezioni import ErroreConnessione, RateLimitRaggiunto
 
@@ -502,6 +504,40 @@ async def test_metadata_scheda_bond_full(monkeypatch):
     assert result.classification_params.geographic_area is not None
     assert result.classification_params.sector_area is not None
     assert set(result.classification_params.sector_area.distribution) == {"Government Bonds"}
+
+
+# Trimmed copies of the real AT0000A1XML2 pages (Austria 2117, expiry «20/09/17» on the page):
+# the real library parses them, so these tests fail on a library that reads the date wrongly.
+_FIXTURES = Path(__file__).parent / "fixtures" / "borsa_italiana"
+_AT2117_URL = "https://www.borsaitaliana.it/borsa/obbligazioni/mot/euro-obbligazioni/scheda/AT0000A1XML2-MOTX.html"
+
+
+class _FixtureSession:
+    """Serves the saved scheda page in the requested language; any other request is a bug."""
+
+    def get_html_con_url(self, url, params=None):
+        lingua = params["lang"]
+        html = (_FIXTURES / f"scheda_AT0000A1XML2_{lingua}.html").read_text(encoding="utf-8")
+        return BeautifulSoup(html, "lxml"), f"{_AT2117_URL}?lang={lingua}"
+
+    def get_html(self, url, params=None):
+        raise AssertionError(f"unexpected request: {url}")
+
+    def chiudi(self):
+        pass
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lingua", ["it", "en"])
+async def test_metadata_bond_maturity_after_2068_both_languages(monkeypatch, lingua):
+    """The description carries the real expiry (2117), not the 2-digit-year misreading (2017), in both languages."""
+    monkeypatch.setattr(bi, "_get_session", lambda: _FixtureSession())
+    _price_api(monkeypatch, "EUR")
+
+    result = await _provider().fetch_asset_metadata("AT0000A1XML2", IdentifierType.ISIN, {"language": lingua})
+
+    assert result is not None
+    assert "Maturity: 2117-09-20" in result.classification_params.short_description
 
 
 @pytest.mark.asyncio
