@@ -19,6 +19,11 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Dopo Esc o una scelta in un elenco a due livelli (come il tipo di asset), il focus della tastiera torna sul campo.
 - Le conferme con molti elementi scrivono il loro numero nella tua lingua.
 - Obbligazioni di Borsa Italiana: la scadenza nella descrizione ora è giusta anche sulle pagine in inglese e per le scadenze dopo il 2068. Un asset già salvato con la data sbagliata si corregge chiedendo di nuovo i metadati al suo provider.
+- Impostazioni › Informazioni ora elenca anche i plugin di Rischio e Strumenti che non si caricano.
+- Mentre la Dashboard aspetta di ricaricarsi dopo un cambio del filtro broker, mostra che sta lavorando invece di tenere in silenzio i totali vecchi.
+- Nel grafico di confronto dei lotti, il tratteggio in legenda di «stimato al costo» ha lo stesso colore della sua linea.
+- I pulsanti dello scheduler che tolgono un orario hanno un nome tradotto per i lettori di schermo.
+- «Analizza Lotti» ora scorre fino in fondo al pannello dei lotti anche sulle macchine lente.
 
 ## [1.3.0] - 2026-11-10
 

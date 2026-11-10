@@ -19,6 +19,11 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Tras Escape o una elección en una lista de dos niveles (como el tipo de activo), el foco del teclado vuelve al campo.
 - Las confirmaciones con muchos elementos escriben su número en tu idioma.
 - Bonos de Borsa Italiana: el vencimiento en la descripción ahora es correcto en las páginas en inglés y para vencimientos posteriores a 2068. Un activo ya guardado con una fecha errónea se corrige pidiendo de nuevo sus metadatos a su proveedor.
+- Ajustes › Acerca de ahora también lista los plugins de Riesgo y Herramientas que no se cargan.
+- Mientras el Panel espera para recargarse tras un cambio del filtro de bróker, muestra que está trabajando en lugar de mantener en silencio los totales antiguos.
+- En el gráfico de comparación de lotes, el trazo discontinuo de la leyenda «estimado al coste» tiene el mismo color que su línea.
+- Los botones del programador que quitan un horario tienen un nombre traducido para los lectores de pantalla.
+- «Analizar Lotes» ahora se desplaza hasta el final hacia el panel de lotes también en máquinas lentas.
 
 ## [1.3.0] - 2026-11-10
 

@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After Escape or a choice in a two-level list (such as the asset type), the keyboard focus goes back to the field.
 - Confirmation dialogs with many items write their count in your language.
 - Borsa Italiana bonds: the maturity in the description is now right on English pages and for maturities after 2068. An asset already saved with a wrong date is fixed when you ask its provider for the metadata again.
+- Settings › About now also lists the Risk and Tools plugins that fail to load.
+- While the Dashboard waits to reload after a change of the broker filter, it shows that it is busy instead of silently keeping the old totals.
+- In the lot comparison chart, the dashed legend mark of «estimated at cost» has the same colour as its line.
+- The scheduler's buttons that remove a time have a translated name for screen readers.
+- «Analyze Lots» now scrolls all the way to the lots panel on slower machines.
 
 ## [1.3.0] - 2026-11-10
 
