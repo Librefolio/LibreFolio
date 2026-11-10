@@ -438,7 +438,7 @@ and the pairs missing for that cost) come from the portfolio report (`POST /port
 scoped to the broker: `summary.by_broker[].cash_balances`). The cost is the engine's, so it is
 computed by `compute_average_costs()` like every other figure of this page.
 
-`TransactionService.get_cash_balances()` stays, and sums the cash through the financial-math layer
+`TransactionService.get_balances_at_end_of()` stays, and sums the cash through the financial-math layer
 ([Balance Queries](service.md#balance-queries)).
 
 ---

@@ -25,7 +25,7 @@ The contract (the developer's decisions, 16/10; D5 and D6 the coordinator's, 16/
    row stays in it, so a linked pair is not broken by the refusal. Both codes are members of ``TXValidationCode``, so
    ``GET /transactions/types`` lists them in ``validation_codes``.
 3. The balances are summed in Python with exact ``Decimal`` (``financial_math``'s ``position_quantities`` and
-   ``native_balances``): two BUYs of 99999.1234567891 hold exactly 199998.2469135782 in ``get_asset_holdings`` and in
+   ``native_balances``): two BUYs of 99999.1234567891 hold exactly 199998.2469135782 in
    ``get_balances_at_end_of`` — today 199998.246914, and 199998.2469135780 with the new column under an SQL sum. The
    cash balances keep today's results.
 4. The asset list reads an asset as held where the exact sum of its quantities on a broker exceeds
@@ -1700,16 +1700,14 @@ class TestN78APromotedCostBasisWhereNoLegTakesOne:
 
 TEN_DECIMALS_BUY = "99999.1234567891"
 EXACT_HOLDING = Decimal("199998.2469135782")
-HOLDING_READS = ("get_asset_holdings", "get_asset_holdings-as-of", "get_balances_at_end_of")
+HOLDING_READS = ("get_balances_at_end_of-every-row", "get_balances_at_end_of")
 
 
 async def _read_quantities(service: TransactionService, broker_id: int, read: str) -> dict[int, Decimal]:
     """The quantity per asset of ``broker_id`` that ``read`` answers: over every row, or over the rows up to ``DAY``.
-    ``get_asset_holdings`` feeds the broker summary, ``get_balances_at_end_of`` the BRIM gap-fix."""
-    if read == "get_asset_holdings":
-        return await service.get_asset_holdings(broker_id)
-    if read == "get_asset_holdings-as-of":
-        return await service.get_asset_holdings(broker_id, as_of=DAY)
+    ``get_balances_at_end_of`` feeds the BRIM gap-fix; ``date.max`` is every row."""
+    if read == "get_balances_at_end_of-every-row":
+        return (await service.get_balances_at_end_of(broker_id, date.max))[1]
     if read == "get_balances_at_end_of":
         return (await service.get_balances_at_end_of(broker_id, DAY))[1]
     raise ValueError(f"unknown read {read!r}")
@@ -1764,15 +1762,13 @@ class TestBalancesAreSummedExactly:
         reads = {
             "get_balances_at_end_of(DAY)": (await service.get_balances_at_end_of(world.main_id, DAY))[1],
             "get_balances_at_end_of(DAY) without the BUY of 4": (await service.get_balances_at_end_of(world.main_id, DAY, exclude_tx_ids=[excluded_id]))[1],
-            "get_asset_holdings(as_of=DAY)": await service.get_asset_holdings(world.main_id, as_of=DAY),
-            "get_asset_holdings()": await service.get_asset_holdings(world.main_id),
+            "get_balances_at_end_of(date.max)": (await service.get_balances_at_end_of(world.main_id, date.max))[1],
         }
 
         expected = {
             "get_balances_at_end_of(DAY)": {world.asset_id: Decimal("5")},
             "get_balances_at_end_of(DAY) without the BUY of 4": {world.asset_id: Decimal("1")},
-            "get_asset_holdings(as_of=DAY)": {world.asset_id: Decimal("5")},
-            "get_asset_holdings()": {world.asset_id: Decimal("105")},
+            "get_balances_at_end_of(date.max)": {world.asset_id: Decimal("105")},
         }
         assert reads == expected, f"The quantities of broker {world.main_id} must keep today's date bounds and exclusions: expected {expected}, got {reads}"
 

@@ -670,16 +670,16 @@ BR-U-081…085) and `./dev.py test services user-profile` (`TestDeleteUser`, the
 
 ## ⚖️ Balance Queries
 
-The service exposes two public query methods (`TransactionBalancesMixin`,
+The service exposes one public query method (`TransactionBalancesMixin`,
 `balances.py`):
 
 ```python
-await svc.get_cash_balances(broker_id, as_of=None)   # Dict[currency, Decimal]
-await svc.get_asset_holdings(broker_id, as_of=None)  # Dict[asset_id, Decimal]
+cash, holdings = await svc.get_balances_at_end_of(broker_id, as_of, exclude_tx_ids=())
+# cash: Dict[currency, Decimal], holdings: Dict[asset_id, Decimal]
 ```
 
-Both count the broker's rows dated up to `as_of`, inclusive, and every row when
-`as_of` is `None`.
+It counts the broker's rows dated up to `as_of`, inclusive (`date.max` counts every
+row), leaving out the rows of `exclude_tx_ids`.
 
 - **Cash** comes from the layer, the one home of cash per broker and currency:
   `cash_movement_from_transaction(tx)` turns each row with an amount and a

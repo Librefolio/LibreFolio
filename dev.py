@@ -57,7 +57,6 @@ from scripts.cli_base import (
     get_data_dir,
     get_database_path,
     get_server_host,
-    get_server_port,
     get_server_port_for_db,
     get_test_database_path,
     get_test_server_port,

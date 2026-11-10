@@ -196,31 +196,3 @@ class TransactionBalancesMixin:
         if unreadable:
             raise UnreadableLedgerError(broker_id, unreadable)
         return await self._get_balances_before_date(broker_id, as_of, exclude_tx_ids, through=True)
-
-    # =========================================================================
-    # BALANCE QUERIES
-    # =========================================================================
-
-    async def get_cash_balances(self, broker_id: int, as_of: Optional[date_type] = None) -> Dict[str, Decimal]:
-        """A broker's cash on ``as_of`` (every transaction when None): currency → balance.
-
-        Computed by the layer (``financial_math.native_cash``), the one home of cash per broker and
-        currency; a currency whose movements cancel out keeps its line at zero.
-        """
-        stmt = select(Transaction).where(Transaction.broker_id == broker_id, Transaction.currency.isnot(None), Transaction.amount.isnot(None))
-        if as_of is not None:
-            stmt = stmt.where(Transaction.date <= as_of)
-        transactions = (await self.session.execute(stmt)).scalars().all()
-        movements = [movement for movement in (cash_movement_from_transaction(tx) for tx in transactions) if movement is not None]
-        return native_balances(movements, as_of).get(broker_id, {})
-
-    async def get_asset_holdings(self, broker_id: int, as_of: Optional[date_type] = None) -> Dict[int, Decimal]:
-        """A broker's holdings on ``as_of`` (every transaction when None): asset_id → quantity.
-
-        Summed by the layer, exactly (``position_quantities``, C-97); an asset whose rows all have quantity 0 has no line.
-        """
-        stmt = select(Transaction.broker_id, Transaction.asset_id, Transaction.quantity, Transaction.date).where(Transaction.broker_id == broker_id).where(Transaction.asset_id.isnot(None))
-        if as_of is not None:
-            stmt = stmt.where(Transaction.date <= as_of)
-        rows = (await self.session.execute(stmt)).all()
-        return dict(position_quantities(rows).get(broker_id, {}))
