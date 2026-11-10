@@ -87,6 +87,7 @@
     let expanded = $state(new Set<string>());
     let containerRef = $state<HTMLDivElement | null>(null);
     let inputRef = $state<HTMLInputElement | null>(null);
+    let triggerRef = $state<HTMLDivElement | null>(null);
     let dropdownRef = $state<HTMLDivElement | null>(null);
     let dropdownStyle = $state('');
     let activeIndex = $state(-1);
@@ -233,6 +234,16 @@
         activeIndex = -1;
     }
 
+    /**
+     * Closing from the search box destroys the element that holds the focus, and the browser drops it on `<body>`.
+     * The keyboard paths (Escape, Enter) hand it back to the field once the input is gone (K-23).
+     */
+    function closeAndRestoreFocus() {
+        const hadFocus = containerRef?.contains(document.activeElement) ?? false;
+        close();
+        if (hadFocus) defer(() => triggerRef?.focus());
+    }
+
     function toggle() {
         if (isOpen) close();
         else open();
@@ -249,13 +260,14 @@
         value = item.value;
         onchange?.(item.value);
         close();
+        defer(() => triggerRef?.focus());
     }
 
     function handleKeydown(event: KeyboardEvent) {
         switch (event.key) {
             case 'Escape':
                 event.preventDefault();
-                close();
+                closeAndRestoreFocus();
                 break;
             case 'ArrowDown':
                 event.preventDefault();
@@ -331,6 +343,7 @@
 
 <div bind:this={containerRef} class="relative text-lf-primary" data-testid={testId}>
     <div
+        bind:this={triggerRef}
         aria-expanded={isOpen}
         aria-haspopup={flat ? 'listbox' : 'tree'}
         aria-controls={treeId}
