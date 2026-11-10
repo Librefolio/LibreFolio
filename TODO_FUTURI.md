@@ -973,3 +973,32 @@ indice. Cambia i numeri di tutte le superfici: va fatto come lavoro a sé, con i
 - Nuovi tab di analisi in Dashboard e broker, da definire.
 - «Portafogli»: gruppi di broker, di asset o di entrambi. Si lega a #52, nel «Profilo dei dati dell'asset».
 - Pagine di dettaglio per analizzare trade e fee.
+
+# Residui della 1.3 (10/11/2026)
+
+Voci trovate aperte nella verifica di chiusura della 1.3 e rimandate a quando servono (decisione del developer, 10/11).
+Dettagli nel journal, `Release_2/Phase_2/DA-DECIDERE-residui-1.3.md`.
+
+- **Prova vera della connessione** (H-38, H-40): Docker Desktop, Tailscale Serve e IPv6 su una macchina vera. La guida c'è.
+- **PAC `worker_crashed` sotto carico** (J-19): la strumentazione è pronta (`tools/executor.py`), la causa non si è mai
+  vista. Se ricapita, si guarda il log.
+- **Variazione del giorno in euro per posizione**: nella tabella delle posizioni, accanto a quella in percentuale.
+- **Colori degli indicatori per tema** (S9): `SIGNAL_DEFAULT_PALETTE` è uguale nel tema chiaro e in quello scuro.
+- **Base media nel tempo** al posto di MF-A11, per i rendimenti sul capitale (MF, seguito 1).
+- **Lotti e report sulla quota dell'Owner** (MF, seguito 3): oggi l'analisi dei lotti non legge la quota.
+- **Selettore dell'icona del broker** (C-40).
+- **`SearchSelect` che sceglie la voce sbagliata dopo una ricerca**: sospeso finché non ricapita.
+- **Traduzioni dei plugin montati a runtime** (U-B1): facoltativo, oggi c'è il ripiego in inglese.
+- **Immagine d'avvio su iPhone** (K-6): `app.html` non ha `apple-touch-startup-image`; serve un'immagine per formato.
+- **Quadrato nero sull'icona Android** (K-7): prima una prova sul telefono.
+- **I filtri della lista asset persi al ritorno** (K-19): decisione del 06/10, dopo la lista del Rischio.
+- **Catene FX e provider** (O-19): `leg_rates` ha la chiave `(base, quote, data)` senza provider (`fx/sync.py:75`), quindi
+  due provider della stessa coppia nella stessa sync si sovrascrivono. Mai visto: prima un test di caratterizzazione.
+- **Valuta dei dividendi eToro** (C-6): presa dal ticker (`broker_etoro/plugin.py:256`); serve un export vero con `KER/EUR`.
+
+## 🧵 Python con thread davvero paralleli (C-60, 10/11/2026)
+
+Non interessa una versione di Python in sé, ma **la prima che abilita davvero, di default, l'esecuzione parallela dei
+thread**, cioè senza il global interpreter lock attivo. Finché il lock resta acceso di default, aggiornare il codice non
+porta niente: si resta sulla 3.13. Quando arriverà, si misura il guadagno sui lavori pesanti (sync, report, rischio)
+prima di migrare. La ricerca del 12/10 su Python 3.15 è nel journal, `phases/38_postReleaseBacklog/`.

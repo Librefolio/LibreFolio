@@ -88,7 +88,7 @@
       "transferAssetTitle": "Transferencia de Activo",
       "transferCashTitle": "Transferencia de fondos",
       "sameCurrencyError": "Las divisas deben ser diferentes",
-      "sameBrokerError": "Los brokers deben ser diferentes",
+      "sameBrokerError": "Los brókers deben ser diferentes",
       "loadingPartner": "Cargando transacción vinculada…",
       "swapSides": "Invertir lados",
       "eventPickerCreateNew": "Nuevo evento",
@@ -260,7 +260,7 @@
       "txNotFound": "Transacción {id} no encontrada",
       "linkUuidPairCount": "El grupo de enlace tiene {count} elementos (se esperan 2)",
       "pairTypeMismatch": "El par enlazado debe compartir el mismo tipo (encontrados {typeA} y {typeB})",
-      "pairSameBroker": "La transferencia requiere brokers distintos (ambos en {brokerName})",
+      "pairSameBroker": "La transferencia requiere brókers distintos (ambos en {brokerName})",
       "typeCannotSplit": "Este tipo de transacción no se puede separar",
       "splitIdsMismatch": "Las dos transacciones no son un par vinculado",
       "promoteRefNotFound": "Transacción referenciada para la promoción no encontrada",
@@ -274,7 +274,7 @@
       "pairQuantityMismatch": "Una transferencia debe sacar de un bróker la misma cantidad que ingresa en el otro (encontradas {qtyA} y {qtyB})",
       "pairAssetMismatch": "Los dos lados de una transferencia deben ser el mismo activo",
       "wacFxUnavailableSplit": "Las unidades que salen se valoran a su coste medio, que necesita el tipo de cambio {pairs}: sincroniza los tipos de cambio y vuelve a separar el par.",
-      "pairBrokerMismatch": "Los dos lados de un cambio de divisas deben estar en el mismo broker",
+      "pairBrokerMismatch": "Los dos lados de un cambio de divisas deben estar en el mismo bróker",
       "cashNonzero": "{type} requiere un importe distinto de cero",
       "decimalPlacesExceeded": "Como máximo {max} decimales",
       "significantDigitsExceeded": "Como máximo {max} cifras significativas",
@@ -307,7 +307,7 @@
       "stringTooLong": "Como máximo {max_length} caracteres"
     },
     "fields": {
-      "broker_id": "Broker",
+      "broker_id": "Bróker",
       "asset_id": "Activo",
       "type": "Tipo",
       "date": "Fecha",
@@ -323,7 +323,7 @@
       "amount": "Importe"
     },
     "fieldErrors": {
-      "brokerRequired": "Selecciona un broker",
+      "brokerRequired": "Selecciona un bróker",
       "assetRequired": "Selecciona un activo",
       "quantityInvalid": "La cantidad debe ser un número válido",
       "cashRequired": "El importe y la divisa son obligatorios"
@@ -336,7 +336,7 @@
       "searchAdd": "Buscar y agregar"
     },
     "access": {
-      "partnerNotAccessible": "La transacción vinculada está en un broker al cual el usuario no tiene acceso."
+      "partnerNotAccessible": "La transacción vinculada está en un bróker al cual el usuario no tiene acceso."
     },
     "toast": {
       "created": "creadas",

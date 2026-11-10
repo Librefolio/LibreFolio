@@ -23,8 +23,8 @@ description: "Use this skill (historian agent) when a new source needs to be pro
 The source to ingest. Can be:
 | Type | Typical Path |
 |------|-------------|
-| Completed plan | `../LibreFolio_developer_journal/RoadmapVX/plan-*.md` |
-| Archived phase | `../LibreFolio_developer_journal/RoadmapV4_UI/phases/` |
+| Completed plan | `../LibreFolio_developer_journal/Release_N/Phase_K/<theme>/plan-*.md` (older: `RoadmapVX/plan-*.md`) |
+| Archived phase | `../LibreFolio_developer_journal/Release_N/phases/` (older: `RoadmapV4_UI/phases/`) |
 | Knowledge base file | `../LibreFolio_developer_journal/knowledge_base/*.md` |
 | External article | `LibreFolio_devWiki/raw/` (already clipped) |
 | Inline text | Provided directly in conversation |

@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.3.0] - 2026-11-10
+
+**LibreFolio 1.3 «Keyholder»** is the release for whoever runs the instance: it gives the administrator what is needed to open LibreFolio to family and friends, and to keep it safe.
+
+- 👥 **Users and access**: a Users tab to manage accounts, invitation links, registration Open, By invitation or Closed, password-reset links, and one table with every account link still open.
+- ✉️ **Email, optional, through your own SMTP server**: verification at sign-up, *Forgot password* by email, invitations sent by email, and a notice when an account's address changes.
+- 💾 **Backup and restore of the whole instance**: from Settings or the command line, in clear or encrypted with a password (`.lfbk`); a restore is checked on a copy first. A bar in the Files page shows the space the instance takes.
+- 🔐 **Security**: a Security tab with the configuration checks, an instance key for the stored secrets, secrets read from files, a limit on failed sign-ins.
+- 🎨 **A new palette**, «Stone and Sage» in light and «Slate and Sage» in dark, and theme and line shape saved in your account.
+- 📊 **Every day**: the broker page works like the Dashboard, prices follow the market every minute, a Rolling Return view in the charts, unit price in the transactions, Fineco out of beta, Crédit Agricole on report sets.
 
 ### ✨ Added
 
