@@ -547,12 +547,12 @@ async def _add(session: AsyncSession, *rows) -> None:
 
 
 # ============================================================================
-# 4.4c GET_CASH_BALANCES — AS OF A DAY (W-B5: B15, D-J16)
+# 4.4c CASH AS OF A DAY (get_balances_at_end_of) (W-B5: B15, D-J16)
 # ============================================================================
 #
-# ``TransactionService.get_cash_balances(broker_id, as_of)`` is a picture as of one day: a
+# ``TransactionService.get_balances_at_end_of(broker_id, as_of)`` (cash first) is a picture as of one day: a
 # transaction dated after ``as_of`` counts in none of the balances, one dated on that day counts;
-# without ``as_of`` every row counts. A currency whose only movement comes after that day is not
+# ``date.max`` as ``as_of`` counts every row. A currency whose only movement comes after that day is not
 # listed. The rows straddle the server's today, so every case anchors on ``date.today()``, read
 # once at seeding. Rows are written straight into the session and never committed, as in 4.4b.
 
@@ -567,7 +567,7 @@ AS_OF_DAYS = (
 )
 AS_OF_USD_DAY = 1  # +250 USD: the broker's only USD movement
 
-# The cash get_cash_balances shows when it counts the rows up to the offset given, inclusive.
+# The cash get_balances_at_end_of shows when it counts the rows up to the offset given, inclusive.
 AS_OF_VIEWS = {
     -1: {"EUR": "4000"},  # 5000 − 1000
     0: {"EUR": "3000"},  # + 1000 − 2000
@@ -612,22 +612,22 @@ class TestGetCashBalancesAsOf:
             pytest.param(1, id="day-after-the-anchor"),
         ],
     )
-    async def test_get_cash_balances_as_of_counts_the_rows_up_to_that_day_inclusive(self, session, test_user, offset):
+    async def test_cash_as_of_counts_the_rows_up_to_that_day_inclusive(self, session, test_user, offset):
         """BR-U-091: the day passed as ``as_of`` decides — its rows count, later ones do not."""
         anchor = date.today()
         broker_id, _asset = await _seed_as_of(session, test_user, anchor)
 
-        balances = await TransactionService(session).get_cash_balances(broker_id, as_of=anchor + timedelta(days=offset))
+        balances, _holdings = await TransactionService(session).get_balances_at_end_of(broker_id, anchor + timedelta(days=offset))
 
         assert balances == _expected_as_of(through=offset)
 
     @pytest.mark.asyncio
-    async def test_get_cash_balances_without_as_of_counts_every_row(self, session, test_user):
-        """BR-U-093: no ``as_of`` → every row counts, the future-dated ones included."""
+    async def test_cash_at_the_last_possible_day_counts_every_row(self, session, test_user):
+        """BR-U-093: ``date.max`` as ``as_of`` → every row counts, the future-dated ones included."""
         anchor = date.today()
         broker_id, _asset = await _seed_as_of(session, test_user, anchor)
 
-        balances = await TransactionService(session).get_cash_balances(broker_id)
+        balances, _holdings = await TransactionService(session).get_balances_at_end_of(broker_id, date.max)
 
         assert balances == _expected_as_of(through=2)
 
@@ -1287,11 +1287,11 @@ class TestDeleteBulkCrossBrokerPair:
         pair = await _seed_cross_pair(session, test_user, kind)
         survivor_broker = pair.brokers[CrossPair.survivor_of(deleted)]
         service = TransactionService(session)
-        before = await service.get_cash_balances(survivor_broker)
+        before, _held = await service.get_balances_at_end_of(survivor_broker, date.max)
 
         await _delete_broker(session, test_user, pair.brokers[deleted])
 
-        after = await service.get_cash_balances(survivor_broker)
+        after, _held = await service.get_balances_at_end_of(survivor_broker, date.max)
         expected = _expected_survivor_summary(kind, deleted)
         assert {"before": before, "after": after} == {"before": expected, "after": expected}
 
