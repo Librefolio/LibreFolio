@@ -9,6 +9,15 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ## [1.3.0] - 2026-11-10
 
+**LibreFolio 1.3 «Keyholder»** è la versione per chi gestisce l'istanza: dà all'amministratore quello che serve per aprire LibreFolio a famiglia e amici, e per tenerlo al sicuro.
+
+- 👥 **Utenti e accessi**: una scheda Utenti per gestire gli account, link d'invito, registrazione Aperta, Su invito o Chiusa, link per reimpostare la password, e una sola tabella con tutti i link degli account ancora aperti.
+- ✉️ **Email, facoltative, con il tuo server SMTP**: verifica alla registrazione, *Password dimenticata* via email, inviti spediti per email e un avviso quando cambia l'indirizzo di un account.
+- 💾 **Backup e ripristino dell'intera istanza**: dalle Impostazioni o da riga di comando, in chiaro o cifrato con una password (`.lfbk`); un ripristino viene prima controllato su una copia. Una barra nella pagina File mostra lo spazio occupato dall'istanza.
+- 🔐 **Sicurezza**: una scheda Sicurezza con i controlli della configurazione, una chiave d'istanza per i segreti salvati, segreti letti da file, un limite agli accessi falliti.
+- 🎨 **Una nuova palette**, «Stone and Sage» in chiaro e «Slate and Sage» in scuro, e tema e forma delle linee salvati nel tuo account.
+- 📊 **Ogni giorno**: la pagina del broker funziona come la Dashboard, i prezzi seguono il mercato ogni minuto, la vista Rolling Return nei grafici, il prezzo unitario nelle transazioni, Fineco fuori dalla beta, Crédit Agricole sui set di export.
+
 ### ✨ Aggiunto
 
 #### 📥 Importazioni e modifica delle transazioni
