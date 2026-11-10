@@ -46,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 import backend.app.api.v1.auth as auth_module
 import backend.app.api.v1.system as system_module
+import backend.app.api.v1.system.diagnostics as diagnostics
 import backend.app.api.v1.system.health as health_module
 import backend.app.api.v1.system.info as info_module
 import backend.app.api.v1.system.ready as ready_module
@@ -67,7 +68,11 @@ from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import PluginDiagnosticsResponse, ReadinessChecks, ReadinessResponse, SystemInfoPublicResponse, SystemInfoResponse
+from backend.app.schemas.tools import ToolDiscoveryFailure
 from backend.app.services.platform import instance_links, readiness
+from backend.app.services.provider_registry import PluginDiscoveryFailure
+from backend.app.services.risk.registry import RiskAnalyticRegistry
+from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistrySnapshot
 from backend.app.utils.runtime.network import classify_ip, client_address
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id
@@ -352,7 +357,7 @@ PLUGIN_DIAGNOSTICS_URL = f"{API_BASE}/system/plugin-diagnostics"
 TIMEOUT = 30
 PASSWORD = "PluginDiagPass123!"
 #: The ``system`` label get_plugin_diagnostics gives each registry it reads.
-PLUGIN_SYSTEMS = {"asset", "fx", "brim", "signals"}
+PLUGIN_SYSTEMS = {"asset", "fx", "brim", "signals", "risk", "tools"}
 
 
 @pytest.fixture(scope="module")
@@ -472,6 +477,25 @@ class TestPluginDiagnosticsRequiresSession:
             assert set(failure) == {"system", "filename", "error"}, failure
             assert failure["system"] in PLUGIN_SYSTEMS, failure
         assert deleted.status_code == 200, f"could not delete this test's own account: {deleted.status_code} {deleted.text}"
+
+
+class TestPluginDiagnosticsCoverRiskAndTools:
+    """C-20: the Risk and Tool registries report the plugins that fail to load, like the other four."""
+
+    def test_failed_risk_and_tool_plugins_are_listed(self, monkeypatch):
+        for registry in (diagnostics.AssetProviderRegistry, diagnostics.FXProviderRegistry, diagnostics.BRIMProviderRegistry, diagnostics.SignalPluginRegistry):
+            monkeypatch.setattr(registry, "get_discovery_errors", classmethod(lambda cls: ()))
+        failure = PluginDiscoveryFailure(module_name="backend.app.services.risk_plugins.broken", error_type="ImportError", message="boom")
+        monkeypatch.setattr(RiskAnalyticRegistry, "get_discovery_errors", classmethod(lambda cls: (failure,)))
+        snapshot = ToolRegistrySnapshot({}, (ToolDiscoveryFailure(tool_code=None, filename="bad_tool/plugin.py", reason="import_failed"),))
+        monkeypatch.setattr(ToolPluginRegistry, "get_snapshot", classmethod(lambda cls: snapshot))
+
+        listed = diagnostics.get_plugin_diagnostics(None).root
+
+        by_system = {item.system: item for item in listed}
+        assert set(by_system) == {"risk", "tools"}, listed
+        assert by_system["risk"].filename == "broken.py" and "ImportError" in by_system["risk"].error
+        assert by_system["tools"].filename == "bad_tool/plugin.py" and "import_failed" in by_system["tools"].error
 
 
 # ============================================================================
