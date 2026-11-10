@@ -1497,7 +1497,7 @@ of the rows, the pairing key, the truth points.
 | Reading | `xlsx_rows`, `csv_rows`, `layout`, `find_layout` | first worksheet with data; header scan by normalised label |
 | Rule M | `RoleMerge`, `coverage`, `by_day`, `same_rows`, `contained_rows` | several files of one role, day by day (below) |
 | Pairing | `assign`, `best_assignment`, `pair_by_key`, `assignments` | one to one, never a guess |
-| Timeline | `merge_spans`, `Segment`, `build_timeline`, `zone` | segments, checkpoint on the eve, windows; used by Danske |
+| Timeline | `Segment`, `build_timeline`, `zone` | segments, checkpoint on the eve, windows; used by Danske |
 
 **`RoleMerge(files, day_of, owner=…, contradiction=…)`** — the two policies of rule M, both with the
 default Danske uses:
