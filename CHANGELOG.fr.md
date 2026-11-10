@@ -7,6 +7,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 « Keyholder »** est la version pour qui gère l'instance : elle donne à l'administrateur ce qu'il faut pour ouvrir LibreFolio à sa famille et à ses amis, et pour le garder en sécurité.

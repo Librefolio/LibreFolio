@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** is the release for whoever runs the instance: it gives the administrator what is needed to open LibreFolio to family and friends, and to keep it safe.
