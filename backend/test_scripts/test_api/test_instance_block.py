@@ -143,6 +143,7 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.auth.preview_own_account_deletion": ("GET", "/api/v1/auth/users/me/deletion-preview"),
     "backend.app.api.v1.backup.instance.start_instance_backup": ("POST", "/api/v1/backup/instance"),
     "backend.app.api.v1.backup.instance.get_instance_backup_options": ("GET", "/api/v1/backup/instance/options"),
+    "backend.app.api.v1.backup.instance.list_instance_backups": ("GET", "/api/v1/backup/instance/jobs"),
     "backend.app.api.v1.backup.instance.get_instance_backup_job": ("GET", "/api/v1/backup/instance/jobs/{job_id}"),
     "backend.app.api.v1.backup.instance.download_instance_backup": ("GET", "/api/v1/backup/instance/jobs/{job_id}/file"),
     "backend.app.api.v1.backup.instance.delete_instance_backup_job": ("DELETE", "/api/v1/backup/instance/jobs/{job_id}"),
@@ -919,6 +920,28 @@ async def test_a_regular_user_meets_the_admin_check_of_the_backup_not_the_block(
     assert answers == dict.fromkeys(answers, (403, ADMIN_REQUIRED_ANSWER)), f"each route of the full backup must refuse a regular user with the 403 of require_admin, never the 423 of the block: {answers}"
     assert fake.calls == [], f"the backup service must never be reached for a regular user: {fake.calls}"
     print_success("blocked: start, poll, download, delete each answer a regular user 403 Admin access required, never 423; the service untouched")
+
+
+@pytest.mark.asyncio
+async def test_the_kept_backups_are_listed_on_a_blocked_instance_for_an_administrator_only(app, monkeypatch, administrator, account):
+    """(a) FB-24: the backups the instance keeps can be read on a blocked instance, so the block page can offer them
+    for download (the download route is allowed already). The list is the administrator's: 200 with ``items`` for an
+    administrator, the 403 of ``require_admin`` for a regular user (never the 423), the 401 without a session. The
+    storage figures (``GET /backup/instance/storage``) stay refused: they are a statistic, not a way out."""
+    print_section("Instance block: the list of the kept backups")
+    monkeypatch.delenv(BILLING_VARIABLE, raising=False)
+    _block(monkeypatch)
+
+    admin_list = await _request(app, "GET", "/backup/instance/jobs", session=administrator.session)
+    user_list = await _request(app, "GET", "/backup/instance/jobs", session=account.session)
+    anonymous = await _request(app, "GET", "/backup/instance/jobs")
+    storage = await _request(app, "GET", "/backup/instance/storage", session=administrator.session)
+
+    assert admin_list.status_code == 200 and isinstance(admin_list.json()["items"], list), f"GET /backup/instance/jobs for an administrator on a blocked instance: 200 with items: {_status_and_body(admin_list)}"
+    assert _status_and_body(user_list) == (403, ADMIN_REQUIRED_ANSWER), f"a regular user meets the admin check, not the block: {_status_and_body(user_list)}"
+    assert anonymous.status_code == 401, f"without a session the list answers 401: {_status_and_body(anonymous)}"
+    assert (storage.status_code, storage.json()) == (423, BLOCKED_ANSWER), f"the storage figures stay refused by the block: {_status_and_body(storage)}"
+    print_success("blocked: the kept backups are listed for an administrator (200), refused 403 to a user, 401 anonymous; storage still 423")
 
 
 # The same full backup for the hosting panel (B8, ``api/v1/backup/panel.py``): its four routes are allowed on a blocked

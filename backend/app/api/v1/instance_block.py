@@ -72,10 +72,12 @@ ALLOWED_WHEN_BLOCKED = frozenset(
         # The deletion of one's own account, and what it would delete (A6a)
         auth.delete_own_account,
         auth.preview_own_account_deletion,
-        # The full backup, for an administrator (decision 12): start, poll, download, delete; and the rules of a secure
-        # backup's password (B4)
+        # The full backup, for an administrator (decision 12): start, poll, download, delete; the rules of a secure
+        # backup's password (B4); and the list of the backups the instance keeps (FB-24), so one already made can be found
+        # and downloaded. The storage figures (``get_instance_storage``) stay out: a statistic, no way out for the data
         backup_instance.start_instance_backup,
         backup_instance.get_instance_backup_options,
+        backup_instance.list_instance_backups,
         backup_instance.get_instance_backup_job,
         backup_instance.download_instance_backup,
         backup_instance.delete_instance_backup_job,
