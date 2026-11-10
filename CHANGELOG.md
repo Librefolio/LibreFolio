@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Uploading a `.json` file no longer loses its contents, and files with an unusual or very long extension are stored safely.
 - The FX, Files and Assets lists no longer blank out to a spinner after a refresh or an edit: they stay on screen while the new data arrives.
 - Switching tabs on an asset's page keeps the date range you chose.
+- The import wizard's «Corrections» step shows the ticker and quantity of a possible stock split instead of raw placeholders.
+- Pressing Escape inside the AI Export menu closes only the menu, not the panel under it.
+- After Escape or a choice in a two-level list (such as the asset type), the keyboard focus goes back to the field.
+- Confirmation dialogs with many items write their count in your language.
 
 ## [1.3.0] - 2026-11-10
 

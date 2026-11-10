@@ -14,6 +14,10 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Caricare un file `.json` non ne perde più il contenuto, e i file con un'estensione insolita o molto lunga vengono salvati in modo sicuro.
 - Le liste di Cambi, File e Asset non si svuotano più mostrando la rotellina dopo un aggiornamento o una modifica: restano a schermo mentre arrivano i dati nuovi.
 - Cambiare scheda nella pagina di un asset mantiene l'intervallo di date che hai scelto.
+- Nel passo «Correzioni» dell'import, un possibile frazionamento mostra il ticker e la quantità invece dei segnaposti grezzi.
+- Esc dentro il menu dell'AI Export chiude solo il menu, non il pannello sotto.
+- Dopo Esc o una scelta in un elenco a due livelli (come il tipo di asset), il focus della tastiera torna sul campo.
+- Le conferme con molti elementi scrivono il loro numero nella tua lingua.
 
 ## [1.3.0] - 2026-11-10
 

@@ -14,6 +14,10 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Téléverser un fichier `.json` ne perd plus son contenu, et les fichiers avec une extension inhabituelle ou très longue sont enregistrés en toute sécurité.
 - Les listes Devises, Fichiers et Actifs ne se vident plus pour afficher un indicateur de chargement après une actualisation ou une modification : elles restent à l'écran pendant l'arrivée des nouvelles données.
 - Changer d'onglet sur la page d'un actif conserve la période que vous avez choisie.
+- À l'étape « Corrections » de l'import, un possible fractionnement affiche le ticker et la quantité au lieu des espaces réservés bruts.
+- Échap dans le menu de l'AI Export ferme seulement le menu, pas le panneau en dessous.
+- Après Échap ou un choix dans une liste à deux niveaux (comme le type d'actif), le focus du clavier revient sur le champ.
+- Les confirmations avec de nombreux éléments indiquent leur nombre dans votre langue.
 
 ## [1.3.0] - 2026-11-10
 

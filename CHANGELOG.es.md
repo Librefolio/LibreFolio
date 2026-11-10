@@ -14,6 +14,10 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Subir un archivo `.json` ya no pierde su contenido, y los archivos con una extensión inusual o muy larga se guardan de forma segura.
 - Las listas de Divisas, Archivos y Activos ya no se vacían para mostrar un indicador de carga tras actualizar o editar: se quedan en pantalla mientras llegan los datos nuevos.
 - Cambiar de pestaña en la página de un activo mantiene el rango de fechas que elegiste.
+- En el paso «Correcciones» de la importación, un posible desdoblamiento muestra el ticker y la cantidad en lugar de los marcadores sin rellenar.
+- Escape dentro del menú de AI Export cierra solo el menú, no el panel de debajo.
+- Tras Escape o una elección en una lista de dos niveles (como el tipo de activo), el foco del teclado vuelve al campo.
+- Las confirmaciones con muchos elementos escriben su número en tu idioma.
 
 ## [1.3.0] - 2026-11-10
 
