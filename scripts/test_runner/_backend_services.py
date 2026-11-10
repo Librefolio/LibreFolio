@@ -1139,7 +1139,7 @@ def services_brim_parse_settings(verbose: bool = False, test_names: list = None)
 def services_brim_parse_failure_detail(verbose: bool = False, test_names: list = None) -> bool:
     """Test the 400 of a failed BRIM parse: an object the wizard translates, not an English sentence (W5-5, C-70b)."""
     print_section("Services: BRIM Parse Failure Detail")
-    print_info("Testing: backend/app/api/v1/brokers.py (parse_file), brim_parse_pool.parse_file_offloaded, brim_provider guard")
+    print_info("Testing: backend/app/api/v1/brokers/parse.py (parse_file), brim_parse_pool.parse_file_offloaded, brim_provider guard")
     print_info("Tests: BRIMParseError with/without a code, the guard's coded and silent refusals, unknown plugin stays a string, 404 unchanged")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_failure_detail.py", test_names)

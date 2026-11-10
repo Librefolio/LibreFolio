@@ -26,7 +26,7 @@ See checklist: 01_test_brim_plan.md - Categories 5, 6
 Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
 Report sets: what a set contains is tested at service level, in
 test_services/test_brim_report_sets.py (Category 8 below explains why).
-Reference: backend/app/api/v1/brokers.py
+Reference: backend/app/api/v1/brokers/
 """
 
 import contextlib

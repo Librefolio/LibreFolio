@@ -99,7 +99,7 @@ def utils_container_registry(verbose: bool = False, test_names: list = None) -> 
 def utils_served_content_types(verbose: bool = False, test_names: list = None) -> bool:
     """Test that uploaded content reaches the browser only as types that cannot run."""
     print_section("Utils: Served Content Types")
-    print_info("Testing: backend/app/api/v1/uploads.py (serve_file text preview), backend/app/api/v1/brokers.py (download_file)")
+    print_info("Testing: backend/app/api/v1/uploads.py (serve_file text preview), backend/app/api/v1/brokers/files.py (download_file)")
     print_info("Tests: text preview always text/plain with nosniff; broker reports inline only for safe types with download=false, attachment otherwise; nosniff on every report")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_served_content_types.py", test_names)
     return run_command(cmd, "Served content type tests", verbose=verbose)
