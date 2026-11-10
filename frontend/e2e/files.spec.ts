@@ -360,6 +360,29 @@ test.describe('Files Page', () => {
             await expect(page.getByTestId('files-table-static')).toBeVisible();
         });
 
+        test('Refresh keeps the table on screen: no spinner between the click and the new rows (N-1)', async ({page}) => {
+            ownedStaticFiles.push(await uploadStaticFile(page, `soft-reload-${uniqueSuffix()}.png`, TEST_PNG, 'image/png'));
+            await openFilesPage(page);
+            await page.getByTestId('files-tab-static').click();
+            await waitForSettled(page.getByTestId('files-page'));
+            await expect(page.getByTestId('files-table-static')).toBeVisible();
+
+            // Count every time the spinner enters the DOM from now on: a mutation record cannot be missed the way a poll can.
+            await page.evaluate(() => {
+                const w = window as unknown as {__spinnerSeen: number};
+                w.__spinnerSeen = 0;
+                new MutationObserver((records) => {
+                    for (const r of records) for (const n of r.addedNodes) if (n instanceof Element && (n.matches('[data-testid="files-loading"]') || n.querySelector('[data-testid="files-loading"]'))) w.__spinnerSeen++;
+                }).observe(document.body, {childList: true, subtree: true});
+            });
+
+            await page.getByTestId('files-refresh-button').click();
+            await waitForSettled(page.getByTestId('files-page'));
+
+            await expect(page.getByTestId('files-table-static')).toBeVisible();
+            expect(await page.evaluate(() => (window as unknown as {__spinnerSeen: number}).__spinnerSeen)).toBe(0);
+        });
+
         test('upload button is visible', async ({page}) => {
             await navigateTo(page, '/files');
             await page.getByTestId('files-tab-static').click();

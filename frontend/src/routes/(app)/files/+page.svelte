@@ -871,7 +871,7 @@
     <!-- Content -->
     <div class="content">
         {#if loading}
-            <div class="loading">{$t('common.loading')}</div>
+            <div class="loading" data-testid="files-loading">{$t('common.loading')}</div>
         {:else if activeTab === 'static'}
             <!-- Static Files -->
             {#if staticFiles.length === 0}
