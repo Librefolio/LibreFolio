@@ -69,6 +69,9 @@ vi.mock('$lib/api', () => ({zodiosApi: {get_instance_block_api_v1_system_block_g
 // spec sees where the card is mounted and whether it is, and the real card never reads the backup API from this file.
 vi.mock('$lib/features/backup/BackupDownloadCard.svelte', async () => ({default: (await import('$test/harness/BackupDownloadCardStub.svelte')).default}));
 
+// Nor is the list of the kept backups (`BackupList.test.ts` is): a stub that shows whether the page turns «Restore» off.
+vi.mock('$lib/features/backup/BackupList.svelte', async () => ({default: (await import('$test/harness/BackupListStub.svelte')).default}));
+
 const DELETION_DAY = '2026-11-14';
 /** Where the subscription is managed, as `GET /system/block` gives it to an administrator. */
 const BILLING_URL = 'https://billing.example.test/acme';
@@ -394,6 +397,31 @@ describe('InstanceBlockedPage — the backup card (decision 12)', () => {
         expect(text(screen.getByTestId('instance-blocked-description')), 'Barrier: the page sees no administrator').toBe(translate('instance.block.userDescription'));
         const {container} = backupCard();
         expect(screen.getByRole('alert').contains(container), 'outside the alert').toBe(false);
+    });
+
+    it('FB-24: the card is followed by the kept backups, with no «Restore»; none of them when no backup is available', async () => {
+        mocks.auth.set({user: {is_superuser: true}});
+        const {answer} = mountPage();
+
+        await answerWith(answer, BACKUP_AVAILABLE);
+
+        const {container} = backupCard();
+        const kept = within(container).getByTestId('instance-blocked-kept-backups');
+        expect(kept, 'in the same container as the card, outside the alert').toBeInTheDocument();
+        expect(screen.getByRole('alert').contains(kept)).toBe(false);
+        expect(within(kept).getByRole('heading', {level: 3})).toHaveTextContent(translate('instance.block.keptBackupsTitle'));
+        expect(within(kept).getByTestId('backup-list-stub'), 'the blocked instance refuses a restore').toHaveAttribute('data-allow-restore', 'false');
+    });
+
+    it('FB-24: no list of kept backups mounted when the server says no backup is available', async () => {
+        mocks.auth.set({user: {is_superuser: true}});
+        const {answer} = mountPage();
+
+        await answerWith(answer, {...BACKUP_AVAILABLE, backup_available: false});
+
+        expect(screen.getByTestId('instance-blocked-deletion-date'), 'Barrier: the page painted the answer').toBeInTheDocument();
+        expect(screen.queryByTestId('instance-blocked-kept-backups')).toBeNull();
+        expect(screen.queryByTestId('backup-list-stub')).toBeNull();
     });
 
     it.each<[string, {is_superuser?: boolean}]>([
