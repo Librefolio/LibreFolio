@@ -98,6 +98,7 @@ import pytest
 
 from backend.app.services.financial_math import fx_rates as fx_rates_module
 from backend.app.services.financial_math.native_cash import CashMovement, NativeCash
+from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.fx.conversion import UnitRateSteps
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -521,17 +522,14 @@ class TestTheViewIsTheDictOfToday:
 
 
 def _merged_windows() -> Any:
-    """``financial_math/fx_rates.py::merged_windows``, read when a test runs (absent before the cure)."""
-    merged = getattr(fx_rates_module, "merged_windows", None)
-    if merged is None:
-        pytest.fail("P3: financial_math/fx_rates.py has no merged_windows yet (red by absence, before the cure)")
-    return merged
+    """The one day-span merge (``series_steps.merged_spans``) as ``AskedDayRates`` calls it: a reversed window left out."""
+    return lambda windows: merged_spans(windows, skip_reversed=True)
 
 
 class TestTheContractPoints:
     """MF's answers to the ambiguities of the first hand-over, each pinned so that a mutant of it shows:
     (1) ``step_series()`` raises ``ValueError`` without ``fixed_destination``; (3) a pair with no steps is absent from it;
-    (4) ``merged_windows`` leaves out a window that ends before it starts, joins overlapping and touching ones;
+    (4) ``merged_spans(…, skip_reversed=True)`` (the windows' merge) leaves out a window that ends before it starts, joins overlapping and touching ones;
     (6) a day of another type is ``KeyError`` (``.get`` None); (7) with ``fixed_destination``, the pairs into another
     destination are ignored — steps and windows; (8) read-only: a ``Mapping``, never a ``MutableMapping``."""
 
@@ -562,11 +560,11 @@ class TestTheContractPoints:
             pytest.param([], (), id="no-window"),
         ],
     )
-    def test_merged_windows(self, windows, expected):
+    def test_merged_spans_skipping_reversed_windows(self, windows, expected):
         """(4) ``merged_windows``: ascending, overlapping or touching windows joined, a window ending before it starts
         left out."""
         merged = tuple(tuple(window) for window in _merged_windows()(iter(windows)))
-        assert merged == expected, f"merged_windows({windows}) is {merged}, expected {expected}"
+        assert merged == expected, f"merged_spans({windows}, skip_reversed=True) is {merged}, expected {expected}"
 
     def test_a_day_of_another_type_is_absent(self):
         """(6) A ``datetime`` day, a key of the wrong length, a string: ``KeyError``, so ``.get`` None — as a dict keyed

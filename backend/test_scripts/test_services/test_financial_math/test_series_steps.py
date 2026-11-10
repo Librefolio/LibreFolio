@@ -856,3 +856,74 @@ class TestStepSpan:
     def test_a_subclass_keeps_the_through_validator(self):
         with pytest.raises(ValidationError):
             _nav_point_cls()(date=d(5), through=d(4), nav=D("1"))
+
+
+# =============================================================================
+# merged_spans — the one place that joins day spans (data quality, asked FX windows, BRIM coverage)
+# =============================================================================
+
+
+def _days_of(spans) -> set[date]:
+    return {first + timedelta(days=offset) for first, last in spans for offset in range((last - first).days + 1)}
+
+
+def _runs_of(days: set[date]) -> list[tuple[date, date]]:
+    """The maximal runs of consecutive days, by walking the sorted days: an oracle that shares nothing with the merge."""
+    runs: list[tuple[date, date]] = []
+    for day in sorted(days):
+        if runs and day - runs[-1][1] == timedelta(days=1):
+            runs[-1] = (runs[-1][0], day)
+        else:
+            runs.append((day, day))
+    return runs
+
+
+class TestMergedSpans:
+    def _merge(self, spans, **kwargs):
+        return _series_steps().merged_spans(spans, **kwargs)
+
+    def test_touching_next_day_merges(self):
+        assert self._merge([(d(1), d(3)), (d(4), d(6))]) == [(d(1), d(6))]
+
+    def test_a_one_day_gap_does_not_merge(self):
+        assert self._merge([(d(1), d(3)), (d(5), d(6))]) == [(d(1), d(3)), (d(5), d(6))]
+
+    def test_overlap_merges(self):
+        assert self._merge([(d(1), d(5)), (d(3), d(8))]) == [(d(1), d(8))]
+
+    def test_a_span_inside_another_keeps_the_outer_end(self):
+        assert self._merge([(d(1), d(10)), (d(2), d(3))]) == [(d(1), d(10))]
+
+    def test_unsorted_input_and_one_day_spans(self):
+        spans = [(d(10), d(12)), (d(1), d(3)), (d(4), d(5)), (d(20), d(21)), (d(30), d(30)), (d(31), d(31))]
+        assert self._merge(spans) == [(d(1), d(5)), (d(10), d(12)), (d(20), d(21)), (d(30), d(31))]
+
+    def test_empty_and_generator(self):
+        assert self._merge([]) == []
+        assert self._merge(span for span in [(d(1), d(2))]) == [(d(1), d(2))]
+
+    def test_a_reversed_span_raises_by_default(self):
+        with pytest.raises(ValueError):
+            self._merge([(d(1), d(3)), (d(5), d(4))])
+
+    def test_a_reversed_span_is_left_out_with_skip_reversed(self):
+        assert self._merge([(d(5), d(4))], skip_reversed=True) == []
+        assert self._merge([(d(0), d(2)), (d(9), d(3)), (d(4), d(6))], skip_reversed=True) == [(d(0), d(2)), (d(4), d(6))]
+
+    def test_a_valid_input_gives_the_same_with_and_without_skip_reversed(self):
+        spans = [(d(7), d(9)), (d(1), d(2)), (d(3), d(3))]
+        assert self._merge(spans) == self._merge(spans, skip_reversed=True) == [(d(1), d(3)), (d(7), d(9))]
+
+    def test_it_is_the_maximal_runs_of_the_days_covered(self):
+        """Proof by oracle: the merge of any spans is exactly the maximal runs of consecutive days the spans cover —
+        sorted, disjoint, never two touching, the same days — checked on 400 seeded random inputs."""
+        rng = random.Random(14)
+        for _ in range(400):
+            spans = []
+            for _ in range(rng.randint(0, 8)):
+                first = rng.randint(0, 40)
+                spans.append((d(first), d(first + rng.randint(0, 6))))
+            merged = self._merge(spans)
+            assert merged == _runs_of(_days_of(spans)), spans
+            assert merged == self._merge(list(reversed(spans))), "the order of the input does not matter"
+            assert merged == self._merge(merged), "merging again changes nothing"

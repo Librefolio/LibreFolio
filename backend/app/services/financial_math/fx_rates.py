@@ -17,6 +17,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Protocol
 
+from backend.app.services.financial_math.series_steps import merged_spans
+
 
 def oriented_rate[R](rate: R, source: str, destination: str) -> R:
     """The rate from ``source`` to ``destination`` of a pair whose rate is kept in alphabetical order (J-1).
@@ -40,18 +42,6 @@ class UnitRateReader(Protocol):
     def at(self, day: date) -> Decimal | None: ...
 
 
-def merged_windows(windows: Iterable[tuple[date, date]]) -> tuple[tuple[date, date], ...]:
-    """Ascending windows of days (both ends included), overlapping or touching ones joined; a window that ends before it
-    starts holds no day and is left out."""
-    merged: list[tuple[date, date]] = []
-    for first, last in sorted(window for window in windows if window[0] <= window[1]):
-        if merged and first <= merged[-1][1] + timedelta(days=1):
-            merged[-1] = (merged[-1][0], max(merged[-1][1], last))
-        else:
-            merged.append((first, last))
-    return tuple(merged)
-
-
 class AskedDayRates(Mapping[tuple, Decimal]):
     """Unit rates on the days asked only (P3, «formule veloci»): a map built day by day, read from steps.
 
@@ -66,7 +56,7 @@ class AskedDayRates(Mapping[tuple, Decimal]):
 
     def __init__(self, steps: Mapping[tuple[str, str], UnitRateReader], windows: Mapping[tuple[str, str], Iterable[tuple[date, date]]], *, fixed_destination: str | None = None) -> None:
         self._steps = {pair: reader for pair, reader in steps.items() if fixed_destination is None or pair[1] == fixed_destination}
-        self._windows = {pair: merged_windows(asked) for pair, asked in windows.items() if fixed_destination is None or pair[1] == fixed_destination}
+        self._windows = {pair: tuple(merged_spans(asked, skip_reversed=True)) for pair, asked in windows.items() if fixed_destination is None or pair[1] == fixed_destination}
         self._starts = {pair: tuple(first for first, _last in asked) for pair, asked in self._windows.items()}
         self._fixed_destination = fixed_destination
 
