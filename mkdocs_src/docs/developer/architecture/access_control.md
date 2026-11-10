@@ -354,8 +354,8 @@ flowchart TD
 
 - `api/v1/user_limit.py`: the dependency `refuse_when_over_limit`, the **fourth** of the `/api/v1` router, after the
   block, the awaiting-restore mode and the interrupted restore (the first that stands answers). `ALLOWED_WHEN_OVER_LIMIT`
-  is `ALLOWED_WHEN_BLOCKED` less the five routes of the administrator's backup; `ALLOWED_WHEN_OVER_LIMIT_ADMIN` holds
-  those five and the two routes of the choice. The app's own restore is in neither list.
+  is `ALLOWED_WHEN_BLOCKED` less the six routes of the administrator's backup; `ALLOWED_WHEN_OVER_LIMIT_ADMIN` holds
+  those six and the two routes of the choice. The app's own restore is in neither list.
 - `GET /users/over-limit` lists the active accounts (who is `protected`, how many brokers each owns alone);
   `POST /users/over-limit/resolve {keep_user_ids}` deactivates the others in **one transaction** under SQLite's write
   lock, as `update_user_status(is_active=False)` does (sessions end, links retired), never `delete_user`. Refusals:
