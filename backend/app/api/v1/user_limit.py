@@ -10,7 +10,7 @@ A signed-in user meets ``423 Locked`` with the code ``user_limit_exceeded`` on e
 without a session gets the 401 of ``get_current_user``, as on an instance that is not over the limit.
 
 - ``ALLOWED_WHEN_OVER_LIMIT`` answers everyone: the list of ``ALLOWED_WHEN_BLOCKED`` (``instance_block.py``) but for the
-  five routes of the full backup of an administrator. Copied by reference, so a route added to the block's list for the
+  six routes of the full backup of an administrator. Copied by reference, so a route added to the block's list for the
   same reason is allowed here too; a test pins the difference.
 - ``ALLOWED_WHEN_OVER_LIMIT_ADMIN`` answers an administrator only: the choice of who keeps the access (``GET`` and ``POST``
   ``/users/over-limit``) and the full backup, so the data can be taken away before anybody is deactivated. The restore of
@@ -36,11 +36,12 @@ logger = get_logger(__name__)
 
 USER_LIMIT_EXCEEDED_CODE = "user_limit_exceeded"
 
-#: The full backup of an administrator: start, options, poll, download, delete. Kept for administrators alone.
+#: The full backup of an administrator: start, options, the list of the kept ones, poll, download, delete. Kept for administrators alone.
 _ADMIN_BACKUP = frozenset(
     {
         backup_instance.start_instance_backup,
         backup_instance.get_instance_backup_options,
+        backup_instance.list_instance_backups,
         backup_instance.get_instance_backup_job,
         backup_instance.download_instance_backup,
         backup_instance.delete_instance_backup_job,
