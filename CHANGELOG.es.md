@@ -7,7 +7,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ---
 
-## [Unreleased]
+## [1.3.0] - 2026-11-10
 
 ### ✨ Añadido
 
