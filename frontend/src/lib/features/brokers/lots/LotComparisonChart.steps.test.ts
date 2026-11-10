@@ -89,7 +89,7 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
-import {render, setupI18n, waitFor} from '$test/component';
+import {render, screen, setupI18n, waitFor} from '$test/component';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import LotComparisonChart from './LotComparisonChart.svelte';
 import {chooseLineShape} from '$test/lineShape';
@@ -246,5 +246,20 @@ describe('the line shape the user chose (Y2 FB-3)', () => {
         chooseLineShape('spline');
         const option = await mountChart();
         expect(linesOf(option).every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
+    });
+});
+
+describe('the legend dash of the value estimated at cost (DV6-1)', () => {
+    it('is drawn in the colour of the dashed line it explains', async () => {
+        const estimated = LOTS.map((lot) => ({...lot, value_source: 'ESTIMATED_AT_COST'}));
+        render(LotComparisonChart, {props: {selectedLots: estimated, valueHistory: VALUE, returnHistory: RETURN, range: RANGE, brokers: [], currency: 'EUR', xAxisRange: null} as never});
+        await waitFor(() => expect(lastOption()).toBeDefined(), {timeout: 5_000});
+
+        const swatch = await screen.findByTestId('lot-comparison-estimated-at-cost-swatch');
+        const lineColor = (residual(lastOption()!) as unknown as {lineStyle: {color: string}}).lineStyle.color;
+        expect(lineColor).toMatch(/^#[0-9a-f]{6}$/i);
+        // The line says its colour in hex, the swatch's style reads back as rgb(): the same three numbers.
+        const [r, g, b] = [1, 3, 5].map((at) => parseInt(lineColor.slice(at, at + 2), 16));
+        expect(swatch.style.borderColor.replace(/\s/g, '')).toBe(`rgb(${r},${g},${b})`);
     });
 });

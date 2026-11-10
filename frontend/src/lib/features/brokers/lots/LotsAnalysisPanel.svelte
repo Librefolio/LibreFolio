@@ -62,6 +62,7 @@
     import LotAnalysisFailedNotice from './LotAnalysisFailedNotice.svelte';
     import {partitionLotIssues} from './lotDataQualityHelpers';
     import {asArray, asObject, collectInvolvedLotIds, filterVisibleLots, lotIsOpenish, normalizeQuoteBaseQuantity} from './lotsAnalysisHelpers';
+    import {waitForStableRect} from './waitForStableRect';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -329,30 +330,6 @@
         } finally {
             if (version === selectionFetchVersion) selectionLoading = false;
         }
-    }
-
-    function waitForStableRect(el: HTMLElement, maxFrames = 180): Promise<void> {
-        return new Promise((resolve) => {
-            let lastRect: DOMRect | null = null;
-            let stableFrames = 0;
-            let frame = 0;
-
-            function check() {
-                frame++;
-                const rect = el.getBoundingClientRect();
-                const same = lastRect !== null && rect.top === lastRect.top && rect.left === lastRect.left && rect.width === lastRect.width && rect.height === lastRect.height;
-                stableFrames = same ? stableFrames + 1 : 0;
-                lastRect = rect;
-
-                if (stableFrames >= 2 || frame >= maxFrames) {
-                    resolve();
-                    return;
-                }
-                requestAnimationFrame(check);
-            }
-
-            requestAnimationFrame(check);
-        });
     }
 
     let scrollRequestVersion = 0;

@@ -65,13 +65,15 @@
         error: string;
     }
 
-    type PluginSystem = 'asset' | 'fx' | 'brim' | 'signals';
+    type PluginSystem = 'asset' | 'fx' | 'brim' | 'signals' | 'risk' | 'tools';
 
     const PLUGIN_SYSTEMS: Array<{system: PluginSystem; labelKey: string}> = [
         {system: 'asset', labelKey: 'settings.pluginSystemAsset'},
         {system: 'fx', labelKey: 'settings.pluginSystemFx'},
         {system: 'brim', labelKey: 'settings.pluginSystemBrim'},
         {system: 'signals', labelKey: 'settings.pluginSystemSignals'},
+        {system: 'risk', labelKey: 'settings.pluginSystemRisk'},
+        {system: 'tools', labelKey: 'settings.pluginSystemTools'},
     ];
 
     let systemInfo: SystemInfo | null = null;
