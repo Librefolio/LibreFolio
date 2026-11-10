@@ -1,4 +1,4 @@
-"""Plugin diagnostics (``GET /system/plugin-diagnostics``): the import failures of the plugin registries."""
+"""Plugin diagnostics (``GET /system/plugin-diagnostics``): the plugins that fail to load, in every plugin registry."""
 
 from typing import Annotated
 
@@ -10,7 +10,9 @@ from backend.app.schemas.system import PluginDiagnosticsResponse, PluginDiscover
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.tools.registry import ToolPluginRegistry
 
 diagnostics_router = APIRouter()
 
@@ -23,6 +25,21 @@ def _plugin_discovery_failures(system: str, registry) -> list[PluginDiscoveryFai
             error=f"{failure.error_type}: {failure.message}",
         )
         for failure in registry.get_discovery_errors()
+    ]
+
+
+def _tool_discovery_failures() -> list[PluginDiscoveryFailureInfo]:
+    """The Tool registry quarantines services for more reasons than a failed import; its snapshot lists them all.
+
+    The snapshot carries a closed reason and no exception text, so nothing internal reaches the client.
+    """
+    return [
+        PluginDiscoveryFailureInfo(
+            system="tools",
+            filename=failure.filename,
+            error=f"{failure.reason}: {failure.tool_code}" if failure.tool_code else failure.reason,
+        )
+        for failure in ToolPluginRegistry.get_snapshot().failures
     ]
 
 
@@ -40,5 +57,7 @@ def get_plugin_diagnostics(
             *_plugin_discovery_failures("fx", FXProviderRegistry),
             *_plugin_discovery_failures("brim", BRIMProviderRegistry),
             *_plugin_discovery_failures("signals", SignalPluginRegistry),
+            *_plugin_discovery_failures("risk", RiskAnalyticRegistry),
+            *_tool_discovery_failures(),
         ]
     )
