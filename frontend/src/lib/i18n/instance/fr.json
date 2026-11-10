@@ -67,7 +67,8 @@
       "userDescription": "L'hébergeur a bloqué cette instance, par exemple parce que son abonnement n'est pas payé. Demandez à votre administrateur une sauvegarde de vos données.",
       "deletionDate": "L'instance et ses données seront supprimées le {date}.",
       "manageSubscription": "Gérer l'abonnement",
-      "backupTitle": "Gardez une copie des données"
+      "backupTitle": "Gardez une copie des données",
+      "keptBackupsTitle": "Sauvegardes déjà conservées"
     },
     "awaitingRestore": {
       "title": "Restauration de vos données",
