@@ -316,11 +316,12 @@
     // Data Loading
     // =========================================================================
 
-    async function loadPairSources(propagateError = false) {
+    /** `soft` (N-1): a reload after the user's own write keeps the list on screen instead of a spinner. */
+    async function loadPairSources(propagateError = false, opts?: {soft?: boolean}) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current()) return;
-        loading = true;
+        if (!opts?.soft) loading = true;
         error = null;
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
@@ -354,13 +355,18 @@
             }
 
             // Initialize pair states
-            pairs = Array.from(pairMap.values()).map((config) => ({
-                config,
-                data: getFxStore(config.slug).getAllSorted(),
-                // Born already waiting for wave 2, so the card/row draws its own
-                // skeleton the instant it appears instead of a bare empty chart.
-                loading: true,
-            }));
+            const previous = opts?.soft ? new Map(pairs.map((p) => [p.config.slug, p])) : null;
+            pairs = Array.from(pairMap.values()).map((config) => {
+                const kept = previous?.get(config.slug);
+                return {
+                    config,
+                    data: kept?.data ?? getFxStore(config.slug).getAllSorted(),
+                    // Born already waiting for wave 2, so the card/row draws its own
+                    // skeleton the instant it appears instead of a bare empty chart.
+                    // A soft reload keeps a known pair's card as it is (N-1).
+                    loading: kept ? kept.loading : true,
+                };
+            });
         } catch (e: any) {
             if (!current()) return;
             console.error('Failed to load pair sources:', e);
@@ -1270,13 +1276,13 @@
     async function handlePairCreated() {
         if (!pageAlive) return;
         addModalOpen = false;
-        await pageBusy.track('fx-reload', () => loadPairSources());
+        await pageBusy.track('fx-reload', () => loadPairSources(false, {soft: true}));
     }
 
     async function handlePairCreationSynced(detail: FxPairSyncCompleteDetail) {
         if (!pageAlive || !isClientSessionCurrent(detail.sessionGeneration)) return;
         // Creation refresh has settled; the helper invalidated only the new pairs.
-        await loadPairSources(true);
+        await loadPairSources(true, {soft: true});
     }
 
     async function handleSynced() {

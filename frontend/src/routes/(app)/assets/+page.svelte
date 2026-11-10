@@ -591,8 +591,13 @@
     // Data Loading
     // =========================================================================
 
-    async function loadAssets() {
-        loading = true;
+    /**
+     * `soft`: a reload after the user's own write (create, edit, merge). The list stays on screen and the rows
+     * keep their last price until the second wave replaces it, so the page does not blank to a spinner (N-1).
+     */
+    async function loadAssets(opts?: {soft?: boolean}) {
+        const previousRows = opts?.soft ? new Map(assets.map((a) => [a.id, a])) : null;
+        if (!opts?.soft) loading = true;
         error = null;
         try {
             const response = await zodiosApi.list_assets_api_v1_assets_query_get({
@@ -600,7 +605,9 @@
             });
             const items = response as any[];
 
-            assets = items.map((item: any) => ({
+            assets = items.map((item: any) => {
+                const kept = previousRows?.get(item.id);
+                return {
                 id: item.id,
                 display_name: item.display_name,
                 currency: item.currency,
@@ -613,12 +620,14 @@
                 tx_count: item.tx_count ?? 0,
                 held_by_me: item.held_by_me ?? false,
                 held_by_others: item.held_by_others ?? false,
-                lastPrice: null,
-                chartData: [],
+                lastPrice: kept?.lastPrice ?? null,
+                chartData: kept?.chartData ?? [],
                 // Born already waiting for wave 2, so the row draws its own
                 // skeleton the instant it appears instead of a bare empty cell.
-                loadingPrices: true,
-            }));
+                // A soft reload keeps the row's last price on screen instead.
+                loadingPrices: kept ? false : true,
+                };
+            });
         } catch (e: any) {
             console.error('Failed to load assets:', e);
             error = e?.message || 'Failed to load assets';
@@ -1256,7 +1265,7 @@
         if (detail?.syncing) syncingAssetIds = new Set([...syncingAssetIds, assetId]);
         // A reload after the user's own write: it holds the page's Refresh button (Y11). The sync that follows has
         // the card's indicator, and the reload after it (`handleCreatedAssetSynced`) does not hold the button (P3).
-        await pageBusy.track('assets-reload', () => loadAssets());
+        await pageBusy.track('assets-reload', () => loadAssets({soft: true}));
     }
 
     /** The one sync of a new asset ended (AssetModal, O-20): its toast, then the price data again. */
@@ -2185,7 +2194,7 @@
     {:else if error}
         <div class="bg-lf-danger-soft border border-lf-danger-line rounded-xl p-6 text-center">
             <p class="text-lf-danger-on-soft">{error}</p>
-            <button class="mt-3 px-4 py-2 text-sm bg-lf-danger-solid text-lf-on-danger-solid rounded-lg hover:bg-lf-danger-hover transition-colors" onclick={loadAssets}>
+            <button class="mt-3 px-4 py-2 text-sm bg-lf-danger-solid text-lf-on-danger-solid rounded-lg hover:bg-lf-danger-hover transition-colors" onclick={() => loadAssets()}>
                 {$t('common.retry')}
             </button>
         </div>
@@ -2403,7 +2412,7 @@
     linkCreatedAsset
     oncreated={handleAssetCreated}
     onsynced={handleCreatedAssetSynced}
-    onupdated={() => void pageBusy.track('assets-reload', () => loadAssets())}
+    onupdated={() => void pageBusy.track('assets-reload', () => loadAssets({soft: true}))}
     onclose={() => {
         assetModalOpen = false;
         assetTourPreview = false;
@@ -2419,7 +2428,7 @@
     sourceAsset={mergingAsset ? {id: mergingAsset.id, display_name: mergingAsset.display_name} : null}
     onmerged={async () => {
         if (mergingAsset) invalidateAfterMutation(mergingAsset.id);
-        await pageBusy.track('assets-reload', () => loadAssets());
+        await pageBusy.track('assets-reload', () => loadAssets({soft: true}));
     }}
     onclose={() => {
         mergeModalOpen = false;
