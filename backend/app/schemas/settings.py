@@ -36,13 +36,13 @@ UI_PREFERENCES_MAX_BYTES = 2048
 
 
 class UIPreferences(BaseModel):
-    """The user's own interface preferences, kept as JSON in ``user_settings.ui_preferences``.
+    """The user's own interface preferences; a key left out follows the administrator's global default."""
 
-    Every key is optional, and an absent key follows the administrator's global default
-    (``UIPreferenceDefaults``). A response lists only the keys the user chose. In a ``PUT /settings/user`` it is a
-    partial write: only the keys it names change, and a key sent as ``null`` is removed, so it follows the global default
-    again. A new preference is one more field here, then ``./dev.py api sync``: no migration.
-    """
+    # Kept as JSON in user_settings.ui_preferences. Every key is optional; an absent key follows the global default
+    # (UIPreferenceDefaults). A response lists only the keys the user chose. In a PUT /settings/user it is a partial
+    # write: only the keys it names change, and a key sent as null is removed, so it follows the global default again.
+    # A new preference is one more field here, then ./dev.py api sync: no migration. The docstring stays on one line
+    # without backticks: it becomes the client's .describe() text (test_openapi_client_text.py).
 
     theme: Optional[ThemePreference] = Field(None, description="UI theme; auto lets the browser follow the system")
     chart_line_shape: Optional[ChartLineShape] = Field(None, description="Shape of the chart lines that have none of their own")
