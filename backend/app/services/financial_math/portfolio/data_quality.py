@@ -19,8 +19,8 @@ from backend.app.schemas.portfolio import (
     StaleFxPair,
 )
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates, ShareMismatch
-from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.utils.currency_units import minor_unit_factor
+from backend.app.utils.day_spans import merged_spans
 
 
 def normalize_fx_pair_slug(pair: str) -> str:

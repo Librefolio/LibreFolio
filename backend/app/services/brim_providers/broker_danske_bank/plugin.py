@@ -63,8 +63,8 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim import brim_report_set_core as core
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.provider_registry import register_provider
+from backend.app.utils.day_spans import merged_spans
 
 logger = structlog.get_logger(__name__)
 

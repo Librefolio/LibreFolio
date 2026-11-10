@@ -61,7 +61,7 @@ fails with that message (``_asked_day_rates_class``, ``_merged_windows``). GREEN
 After a cure that adds ``AskedDayRates`` but keeps ``NativeCash.__post_init__`` on ``_rate_series`` for every Mapping,
 every parity test is green and ``TestTheNativeCashCost`` stays red: that is the cost red.
 
-(Names as of the cure: the merge was then ``fx_rates.merged_windows``, since unified into ``series_steps.merged_spans``.)
+(Names as of the cure: the merge was then ``fx_rates.merged_windows``, since unified into ``utils.day_spans.merged_spans``.)
 
 Mutants, measured first on a scratch reference cure (green 187/187), then on MF's cure (2026-10-20, a scratch copy of
 HEAD 4f406d5ef + the cure: green 197/197); the counts are MF's cure's:
@@ -101,8 +101,8 @@ import pytest
 
 from backend.app.services.financial_math import fx_rates as fx_rates_module
 from backend.app.services.financial_math.native_cash import CashMovement, NativeCash
-from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.fx.conversion import UnitRateSteps
+from backend.app.utils.day_spans import merged_spans
 from backend.test_scripts.test_utils import print_section, print_success
 
 Pair = tuple[str, str]
@@ -525,7 +525,7 @@ class TestTheViewIsTheDictOfToday:
 
 
 def _merged_windows() -> Any:
-    """The one day-span merge (``series_steps.merged_spans``) as ``AskedDayRates`` calls it: a reversed window left out."""
+    """The one day-span merge (``utils.day_spans.merged_spans``) as ``AskedDayRates`` calls it: a reversed window left out."""
     return lambda windows: merged_spans(windows, skip_reversed=True)
 
 

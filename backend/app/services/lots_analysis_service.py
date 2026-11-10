@@ -55,10 +55,10 @@ from backend.app.services.financial_math.lots.scope_boundary import BoundaryDire
 from backend.app.services.financial_math.lots.summary import lot_summary_figures
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
-from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.financial_math.splits import load_split_links
 from backend.app.services.financial_math.valuation import normalize_quote_base_quantity
 from backend.app.utils.datetime_utils import latest_range_end
+from backend.app.utils.day_spans import merged_spans
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,

@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Protocol
 
-from backend.app.services.financial_math.series_steps import merged_spans
+from backend.app.utils.day_spans import merged_spans
 
 
 def oriented_rate[R](rate: R, source: str, destination: str) -> R:

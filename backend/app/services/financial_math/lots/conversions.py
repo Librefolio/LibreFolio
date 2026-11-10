@@ -22,8 +22,8 @@ from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import realized_gain
-from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.fx.conversion import unit_rate_steps
+from backend.app.utils.day_spans import merged_spans
 
 #: One unit of a currency: the amount every rate of the resolver converts.
 _ONE = Decimal("1")

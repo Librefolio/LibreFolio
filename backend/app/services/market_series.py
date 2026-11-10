@@ -29,8 +29,8 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.assets.market_calendar import is_market_closed_repeat
 from backend.app.services.financial_math.returns import float_price_return, observed_annualization
-from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.utils.day_spans import merged_spans
 
 
 def date_is_within_range(
