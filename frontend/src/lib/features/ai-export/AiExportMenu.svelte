@@ -254,7 +254,10 @@
             if (!(triggerEl && path.includes(triggerEl)) && !(panelEl && path.includes(panelEl)) && !portal) closeMenu();
         };
         const keyboard = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') closeMenu();
+            if (event.key !== 'Escape') return;
+            // This Escape is the menu's: it must not go on to close the layer under it (C-12).
+            event.stopPropagation();
+            closeMenu();
         };
         document.addEventListener('pointerdown', pointer, true);
         document.addEventListener('keydown', keyboard, true);
