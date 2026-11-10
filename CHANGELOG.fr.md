@@ -18,6 +18,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Échap dans le menu de l'AI Export ferme seulement le menu, pas le panneau en dessous.
 - Après Échap ou un choix dans une liste à deux niveaux (comme le type d'actif), le focus du clavier revient sur le champ.
 - Les confirmations avec de nombreux éléments indiquent leur nombre dans votre langue.
+- Obligations de Borsa Italiana : l'échéance dans la description est désormais correcte sur les pages en anglais et pour les échéances après 2068. Un actif déjà enregistré avec une date erronée se corrige en redemandant ses métadonnées à son fournisseur.
 
 ## [1.3.0] - 2026-11-10
 

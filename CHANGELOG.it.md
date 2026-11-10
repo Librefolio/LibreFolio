@@ -18,6 +18,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Esc dentro il menu dell'AI Export chiude solo il menu, non il pannello sotto.
 - Dopo Esc o una scelta in un elenco a due livelli (come il tipo di asset), il focus della tastiera torna sul campo.
 - Le conferme con molti elementi scrivono il loro numero nella tua lingua.
+- Obbligazioni di Borsa Italiana: la scadenza nella descrizione ora è giusta anche sulle pagine in inglese e per le scadenze dopo il 2068. Un asset già salvato con la data sbagliata si corregge chiedendo di nuovo i metadati al suo provider.
 
 ## [1.3.0] - 2026-11-10
 

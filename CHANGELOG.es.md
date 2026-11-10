@@ -18,6 +18,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Escape dentro del menú de AI Export cierra solo el menú, no el panel de debajo.
 - Tras Escape o una elección en una lista de dos niveles (como el tipo de activo), el foco del teclado vuelve al campo.
 - Las confirmaciones con muchos elementos escriben su número en tu idioma.
+- Bonos de Borsa Italiana: el vencimiento en la descripción ahora es correcto en las páginas en inglés y para vencimientos posteriores a 2068. Un activo ya guardado con una fecha errónea se corrige pidiendo de nuevo sus metadatos a su proveedor.
 
 ## [1.3.0] - 2026-11-10
 

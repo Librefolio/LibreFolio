@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pressing Escape inside the AI Export menu closes only the menu, not the panel under it.
 - After Escape or a choice in a two-level list (such as the asset type), the keyboard focus goes back to the field.
 - Confirmation dialogs with many items write their count in your language.
+- Borsa Italiana bonds: the maturity in the description is now right on English pages and for maturities after 2068. An asset already saved with a wrong date is fixed when you ask its provider for the metadata again.
 
 ## [1.3.0] - 2026-11-10
 
