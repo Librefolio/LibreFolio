@@ -205,17 +205,17 @@
           "intro": "Los tipos que necesita el cálculo, uno por cada par de divisas en juego. «Auto» usa el tipo guardado en LibreFolio, «Manual» un tipo propio.",
           "none": "No hace falta ninguna conversión: cada divisa en juego es la divisa de valoración.",
           "spread": "Spread de conversión *",
-          "spreadHint": "Un recargo de margen, en porcentaje del importe convertido, para cubrir posibles variaciones del tipo oficial o comisiones del Broker.",
+          "spreadHint": "Un recargo de margen, en porcentaje del importe convertido, para cubrir posibles variaciones del tipo oficial o comisiones del bróker.",
           "autoHelp": "«Auto» lee el último tipo que LibreFolio ya tiene, al abrir este paso y otra vez justo antes del cálculo: no se llama a ningún proveedor. «Manual» usa tu tipo tal como lo escribes y nunca lo vuelve a leer. Si convertir, y cuánto, lo decide el cálculo.",
           "pairMode": "Tipo {pair}",
           "purpose": {
             "valuation": "Valoración",
             "valuationHelp": "Expresa en {currency} la liquidez, los precios y las aportaciones en la otra divisa, para poder comparar pesos y totales. Se usa el tipo oficial, sin spread.",
             "conversion": "Conversión",
-            "conversionHelp": "Un Broker puede pagar un activo cotizado en una de estas divisas con liquidez en la otra: el cálculo puede convertir a este tipo, con el spread de conversión."
+            "conversionHelp": "Un bróker puede pagar un activo cotizado en una de estas divisas con liquidez en la otra: el cálculo puede convertir a este tipo, con el spread de conversión."
           },
           "reading": "Leyendo el tipo guardado en LibreFolio…",
-          "ownerless": "LibreFolio lee sus tipos guardados a través de un Broker del que eres propietario, y no tienes ninguno: cambia a «Manual» y escribe el tipo.",
+          "ownerless": "LibreFolio lee sus tipos guardados a través de un bróker del que eres propietario, y no tienes ninguno: cambia a «Manual» y escribe el tipo.",
           "readLater": "Se lee de LibreFolio justo antes del cálculo.",
           "rateHelp": "Tipo guardado en LibreFolio, del {date}{hasSource, select, yes { (fuente: {source})} other {}}. Se vuelve a leer justo antes del cálculo.",
           "manualHelp": "Tu tipo: el cálculo lo usa tal como lo escribes y nunca lo vuelve a leer. {hasCopy, select, yes {LibreFolio tiene {rate}, del {date}: «Auto» lo restablece.} other {En «Auto» el cálculo usa el tipo guardado en LibreFolio, cuando lo hay.}}",
@@ -666,9 +666,9 @@
             "autoConversionAmounts": "aprox. {debit} → {credit}",
             "autoConversionHelp": "No tienes que hacer nada: el bróker convierte cuando introduces las órdenes en {destination}. Toma aproximadamente este importe de tu efectivo en {source}; la cifra exacta depende de su tipo de cambio en ese momento, mientras que el plan usa el tipo de cambio y el spread del paso Cambio.",
             "sentence": {
-              "deposit": "Realiza la aportación «{source}» de {amount} en el Broker «{destination}»",
-              "transfer": "Transfiere {amount} desde «{source}» al Broker «{destination}»",
-              "cash": "Usa {amount} del efectivo disponible en el Broker «{source}»"
+              "deposit": "Realiza la aportación «{source}» de {amount} en el bróker «{destination}»",
+              "transfer": "Transfiere {amount} desde «{source}» al bróker «{destination}»",
+              "cash": "Usa {amount} del efectivo disponible en el bróker «{source}»"
             }
           },
           "platform": {
