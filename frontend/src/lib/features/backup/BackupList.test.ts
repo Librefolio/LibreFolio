@@ -538,4 +538,16 @@ describe('BackupList — restore a kept backup (C9-9)', () => {
         await fireEvent.click(screen.getByTestId('restore-kept-modal-stub-close'));
         await waitFor(() => expect(screen.queryByTestId('restore-kept-modal-stub')).toBeNull());
     });
+
+    it('FB-24: allowRestore=false (the block page of a blocked instance) leaves download and delete, never «Restore»', async () => {
+        api.list.mockResolvedValueOnce([entry(1), entry(2, {encrypted: true})]);
+        const BackupList = await loadList();
+        render(BackupList, {props: {allowRestore: false}});
+        await waitFor(() => expect(list()).toHaveAttribute('data-state', 'ready'));
+
+        const menu = within(await openRowMenu(jobId(1)));
+        expect(menu.getByTestId('context-menu-action-download'), 'Barrier: the menu is open').toBeInTheDocument();
+        expect(menu.getByTestId('context-menu-action-delete')).toBeInTheDocument();
+        expect(menu.queryByTestId('context-menu-action-restore')).toBeNull();
+    });
 });
