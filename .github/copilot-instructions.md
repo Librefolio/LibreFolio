@@ -144,21 +144,25 @@ When executing a plan, after completing **EVERY step**, immediately return to th
 
 ### Archive Structure
 
-Completed plan chains are moved into `../LibreFolio_developer_journal/RoadmapV4_UI/phases/`:
+Since Release 2 the journal is organised by release (`Release_N/`), and the active phase holds one folder per theme:
 
 ```
-phases/
-├── phase-{NN}-{name}.md          # Summary plan for the phase
-├── phase-{NN}-subplan/           # All sub-plans, bugfix rounds, checklists
-│   ├── README.md                 # Index of all sub-plans with status
-│   ├── Bugfix-Step{N}/           # Grouped by step
-│   │   ├── plan-phase{NN}...md
-│   │   └── checklist-...md
-│   └── ...
-└── 00-index.md                   # Master index of all phases
+Release_N/
+├── Phase_K/                      # ACTIVE release (Phase_1 = 1.3, Phase_2 = 1.4, …)
+│   ├── plan-phaseKK<Release>.prompt.md
+│   ├── 00_coordination/ondataN/  # coordinator papers, one folder per wave
+│   └── NN_<theme>/               # plan-phaseKK<Theme>.prompt.md + notes/
+├── Phase_0/BACKLOG_POST_x.y.md   # single backlog index, dated sign lines per item
+└── phases/                       # ARCHIVE, original folder names kept
+    ├── 00-index.md               # one row per archived folder
+    ├── NN_<stream>/              # archived Phase_0 streams
+    └── Phase_K/NN_<theme>/       # archived folders of a release phase
 ```
 
-Each `phase-{NN}-subplan/README.md` contains a table of all sub-plans with step, description, and status (✅/⏳).
+A folder is archived only after its open items are verified **on the code**, not on the plan's own ✅; whatever stays open
+goes to the next phase (`ATTIVITA_INIZIO_*.md`, `RESIDUO_CLOUD.md`) or to `TODO_FUTURI.md`, by the developer's decision.
+The move is a `git mv` inside the journal repository, followed by the link fixer of the `plan-archive` skill.
+`RoadmapV4_UI/phases/` and older roadmaps are history (`phase-{NN}-subplan/`, plans grouped by step): leave them as they are.
 
 ### Skills
 
