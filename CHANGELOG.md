@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- Uploading a `.json` file no longer loses its contents, and files with an unusual or very long extension are stored safely.
+- The FX, Files and Assets lists no longer blank out to a spinner after a refresh or an edit: they stay on screen while the new data arrives.
+- Switching tabs on an asset's page keeps the date range you chose.
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** is the release for whoever runs the instance: it gives the administrator what is needed to open LibreFolio to family and friends, and to keep it safe.

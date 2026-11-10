@@ -9,6 +9,12 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ## [Unreleased]
 
+### 🐛 Corretto
+
+- Caricare un file `.json` non ne perde più il contenuto, e i file con un'estensione insolita o molto lunga vengono salvati in modo sicuro.
+- Le liste di Cambi, File e Asset non si svuotano più mostrando la rotellina dopo un aggiornamento o una modifica: restano a schermo mentre arrivano i dati nuovi.
+- Cambiare scheda nella pagina di un asset mantiene l'intervallo di date che hai scelto.
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** è la versione per chi gestisce l'istanza: dà all'amministratore quello che serve per aprire LibreFolio a famiglia e amici, e per tenerlo al sicuro.

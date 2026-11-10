@@ -9,6 +9,12 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Corrigé
+
+- Téléverser un fichier `.json` ne perd plus son contenu, et les fichiers avec une extension inhabituelle ou très longue sont enregistrés en toute sécurité.
+- Les listes Devises, Fichiers et Actifs ne se vident plus pour afficher un indicateur de chargement après une actualisation ou une modification : elles restent à l'écran pendant l'arrivée des nouvelles données.
+- Changer d'onglet sur la page d'un actif conserve la période que vous avez choisie.
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 « Keyholder »** est la version pour qui gère l'instance : elle donne à l'administrateur ce qu'il faut pour ouvrir LibreFolio à sa famille et à ses amis, et pour le garder en sécurité.

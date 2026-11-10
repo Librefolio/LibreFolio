@@ -9,6 +9,12 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### 🐛 Corregido
+
+- Subir un archivo `.json` ya no pierde su contenido, y los archivos con una extensión inusual o muy larga se guardan de forma segura.
+- Las listas de Divisas, Archivos y Activos ya no se vacían para mostrar un indicador de carga tras actualizar o editar: se quedan en pantalla mientras llegan los datos nuevos.
+- Cambiar de pestaña en la página de un activo mantiene el rango de fechas que elegiste.
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** es la versión para quien gestiona la instancia: da al administrador lo necesario para abrir LibreFolio a su familia y amigos, y para mantenerlo seguro.
