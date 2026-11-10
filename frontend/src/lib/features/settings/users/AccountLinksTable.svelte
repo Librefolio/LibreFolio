@@ -44,9 +44,9 @@ Published state: `data-testid={testId}` on the root, with `data-count`; each row
     }
 
     function targetHtml(link: AccountLink): string {
-        const name = `<span class="truncate" data-testid="account-link-target">${escapeHtml(targetText(link))}</span>`;
-        const admin = link.grants_admin ? `<span class="inline-flex shrink-0 items-center rounded-full border border-lf-info-line bg-lf-info-soft px-2 py-0.5 text-xs text-lf-info-on-soft" data-testid="account-link-admin">${escapeHtml($_('settings.usersTab.badges.admin'))}</span>` : '';
-        return `<span class="flex min-w-0 items-center gap-1.5">${name}${admin}</span>`;
+        const nameHtml = `<span class="truncate" data-testid="account-link-target">${escapeHtml(targetText(link))}</span>`;
+        const adminBadge = link.grants_admin ? `<span class="inline-flex shrink-0 items-center rounded-full border border-lf-info-line bg-lf-info-soft px-2 py-0.5 text-xs text-lf-info-on-soft" data-testid="account-link-admin">${escapeHtml($_('settings.usersTab.badges.admin'))}</span>` : '';
+        return `<span class="flex min-w-0 items-center gap-1.5">${nameHtml}${adminBadge}</span>`;
     }
 
     const createdByText = (link: AccountLink) => link.created_by_username ?? '—';
