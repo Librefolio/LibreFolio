@@ -78,7 +78,7 @@
     import {buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
-    import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
+    import {buildTabUrlFromLocation, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {todayIso} from '$lib/utils/dateOnly';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
@@ -2418,7 +2418,7 @@
     function handleAssetDetailTabChange(tabId: string): void {
         if (!ASSET_DETAIL_TAB_IDS.includes(tabId as AssetDetailTabId)) return;
         activeTab = tabId as AssetDetailTabId;
-        void goto(buildTabUrl($page.url, tabId === 'overview' ? null : tabId), {replaceState: true, noScroll: true});
+        void goto(buildTabUrlFromLocation(window.location.href, tabId === 'overview' ? null : tabId), {replaceState: true, noScroll: true});
     }
 
     async function openSignalConfiguration(): Promise<void> {

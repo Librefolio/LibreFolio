@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
-import {buildTabUrl, getOptionalTabParam, getResolvedTabParam} from '../tabUrl';
+import {buildTabUrl, buildTabUrlFromLocation, getOptionalTabParam, getResolvedTabParam} from '../tabUrl';
 
 describe('tabUrl', () => {
     const validTabIds = ['panoramica', 'posizioni', 'transazioni'] as const;
@@ -50,6 +50,16 @@ describe('tabUrl', () => {
             const currentUrl = new URL('https://example.com/dashboard?tab=panoramica&asset=42');
 
             expect(buildTabUrl(currentUrl, undefined)).toBe('/dashboard?asset=42');
+        });
+    });
+
+    describe('buildTabUrlFromLocation', () => {
+        it('keeps the dates the address bar carries, which history.replaceState wrote behind SvelteKit (K-20)', () => {
+            expect(buildTabUrlFromLocation('https://example.com/assets/7?start=2024-01-01&end=2024-06-30', 'risk')).toBe('/assets/7?start=2024-01-01&end=2024-06-30&tab=risk');
+        });
+
+        it('drops the tab param for the default tab', () => {
+            expect(buildTabUrlFromLocation('https://example.com/assets/7?tab=risk&start=2024-01-01', null)).toBe('/assets/7?start=2024-01-01');
         });
     });
 });
