@@ -967,18 +967,21 @@ ends it and removes them ([What a Run Killed Outright Leaves](#backup-leftovers)
 - **Secret files read as root.** Started as root (`docker compose exec`), the commands that work on a data directory
   switch to its owner (`_drop_root_privileges()`; `decrypt` too since lot B-19, `_decrypt_as_owner()`), but read
   `--password-file` and `--instance-key-file` before the switch (`_password()`, `_instance_key_from_file()`), so that a
-  Docker secret only root can read works. Root then opens a path the server's user may have prepared, so before
-  `read_secret_file()` the command opens the file with `O_RDONLY|O_NONBLOCK`, following links, and `fstat` must find a
-  regular file: a FIFO, a folder or a device is refused at once, `<label>: <path> is not a regular file`, never waited
-  on nor read. As root, a path that goes through a link at any component from the data directory down, where that user
-  owns every folder, is refused too (`os.lstat` of each component; the data directory read as `_decrypt_as_owner()`
-  reads it, `--test-db` included, and a setting it cannot use skips this check), its target never read:
+  Docker secret only root can read works. Root then opens a path the server's user may have prepared, so the commands read the file through
+  `read_secret_file(path, label, regular_only=True, no_links_under=<data directory>)` (`_read_secret()`, lot H-47): one open,
+  `O_RDONLY|O_NONBLOCK`, and the check and the read go through that descriptor, so a file swapped after the check is never
+  read. `fstat` must find a regular file: a FIFO, a folder or a device is refused at once,
+  `<label>: <path> is not a regular file`, never waited on nor read. As root, a path that goes through a link at any
+  component from the data directory down, where that user owns every folder, is refused too: the path is walked one
+  component at a time, each opened with `O_NOFOLLOW` from the descriptor of the one before (`dir_fd`), so a link anywhere
+  below the root, a dangling one included, is caught and its target never opened (the data directory read as
+  `_decrypt_as_owner()` reads it, `--test-db` included, and a setting it cannot use skips this check; the data directory
+  itself may be a link). The refusal reads
   `<label>: <path> goes through a link inside the data directory: give the file itself, from outside it`. A link elsewhere is
   followed, as Kubernetes mounts its secrets (`/etc/secret/pw` → `..data/pw`), and Docker and Compose secrets are plain
   files. Not root, there is no privilege to borrow: no link check. Both refusals keep the codes of an unreadable file,
-  `password_unreadable` and `instance_key_unreadable` (lot B-38). Residual: the check and `read_secret_file()`'s own
-  open are two opens, so a file swapped between them is still read, until `read_secret_file()` takes a descriptor or
-  the flags (H's backlog, H-47).
+  `password_unreadable` and `instance_key_unreadable` (lots B-38 and H-47). Both options are off by default, so the
+  startup readers (`env_secret()`, the generated key) work as before.
 - **In the app.** The Backup tab empties its password fields as soon as a password is submitted
   (`BackupDownloadCard.svelte`, `RestoreCard.svelte`). The two fields of a new secure backup are
   `autocomplete="new-password"`, so that a password manager does not fill in the account's password;
