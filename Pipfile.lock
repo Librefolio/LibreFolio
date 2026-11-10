@@ -239,7 +239,7 @@
         },
         "borsa-italiana-scraping": {
             "git": "https://github.com/Librefolio/borsaItaliana-scraping.git",
-            "ref": "95d6a59d1b91c8b8dd360562cf4dbe00658fe0bc"
+            "ref": "caa8879659cc64af459e634f52ca2ca6f1d8d540"
         },
         "build": {
             "hashes": [
