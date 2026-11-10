@@ -115,7 +115,7 @@
                     {#if items.length > 1}
                         <button type="button" class="items-toggle" onclick={() => (showItems = !showItems)}>
                             <span class="items-label">
-                                {itemsLabel || `${items.length} items`}
+                                {itemsLabel || `${items.length} ${$t('table.items')}`}
                             </span>
                             {#if shouldShowItems}
                                 <ChevronUp size={16} />
