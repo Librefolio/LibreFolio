@@ -989,3 +989,16 @@ Dettagli nel journal, `Release_2/Phase_2/DA-DECIDERE-residui-1.3.md`.
 - **Selettore dell'icona del broker** (C-40).
 - **`SearchSelect` che sceglie la voce sbagliata dopo una ricerca**: sospeso finché non ricapita.
 - **Traduzioni dei plugin montati a runtime** (U-B1): facoltativo, oggi c'è il ripiego in inglese.
+- **Immagine d'avvio su iPhone** (K-6): `app.html` non ha `apple-touch-startup-image`; serve un'immagine per formato.
+- **Quadrato nero sull'icona Android** (K-7): prima una prova sul telefono.
+- **I filtri della lista asset persi al ritorno** (K-19): decisione del 06/10, dopo la lista del Rischio.
+- **Catene FX e provider** (O-19): `leg_rates` ha la chiave `(base, quote, data)` senza provider (`fx/sync.py:75`), quindi
+  due provider della stessa coppia nella stessa sync si sovrascrivono. Mai visto: prima un test di caratterizzazione.
+- **Valuta dei dividendi eToro** (C-6): presa dal ticker (`broker_etoro/plugin.py:256`); serve un export vero con `KER/EUR`.
+
+## 🧵 Python con thread davvero paralleli (C-60, 10/11/2026)
+
+Non interessa una versione di Python in sé, ma **la prima che abilita davvero, di default, l'esecuzione parallela dei
+thread**, cioè senza il global interpreter lock attivo. Finché il lock resta acceso di default, aggiornare il codice non
+porta niente: si resta sulla 3.13. Quando arriverà, si misura il guadagno sui lavori pesanti (sync, report, rischio)
+prima di migrare. La ricerca del 12/10 su Python 3.15 è nel journal, `phases/38_postReleaseBacklog/`.
