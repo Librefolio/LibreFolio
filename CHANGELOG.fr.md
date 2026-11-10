@@ -9,6 +9,15 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ## [1.3.0] - 2026-11-10
 
+**LibreFolio 1.3 « Keyholder »** est la version pour qui gère l'instance : elle donne à l'administrateur ce qu'il faut pour ouvrir LibreFolio à sa famille et à ses amis, et pour le garder en sécurité.
+
+- 👥 **Utilisateurs et accès** : un onglet Utilisateurs pour gérer les comptes, des liens d'invitation, l'inscription Ouverte, Sur invitation ou Fermée, des liens de réinitialisation du mot de passe, et un seul tableau avec tous les liens de compte encore ouverts.
+- ✉️ **E-mails, facultatifs, par votre propre serveur SMTP** : vérification à l'inscription, *Mot de passe oublié* par e-mail, invitations envoyées par e-mail et un avis quand l'adresse d'un compte change.
+- 💾 **Sauvegarde et restauration de toute l'instance** : depuis les Paramètres ou en ligne de commande, en clair ou chiffrée avec un mot de passe (`.lfbk`) ; une restauration est d'abord vérifiée sur une copie. Une barre dans la page Fichiers montre l'espace occupé par l'instance.
+- 🔐 **Sécurité** : un onglet Sécurité avec les contrôles de la configuration, une clé d'instance pour les secrets enregistrés, des secrets lus depuis des fichiers, une limite aux connexions échouées.
+- 🎨 **Une nouvelle palette**, « Stone and Sage » en clair et « Slate and Sage » en sombre, et le thème et la forme des courbes enregistrés dans votre compte.
+- 📊 **Au quotidien** : la page du courtier fonctionne comme le Tableau de bord, les prix suivent le marché chaque minute, une vue Rendement glissant dans les graphiques, le prix unitaire dans les transactions, Fineco sort de la bêta, Crédit Agricole sur les lots d'exports.
+
 ### ✨ Ajouté
 
 #### 📥 Imports et édition des transactions
