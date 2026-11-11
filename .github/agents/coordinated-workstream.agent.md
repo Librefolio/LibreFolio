@@ -174,6 +174,11 @@ same laptop.
 - **A timeout under load is not yet a verdict.** Use `test-triage` and re-run alone at
   normal load before calling a red product or flaky.
 - Keep scripts and logs in your session folder, not `/tmp`: a reboot wipes `/tmp`.
+- **Test temp files go to disk, not `/tmp`** (developer decision, 11/11/2026). `/tmp` is a 7.8 GB RAM disk and stays so.
+  Run every test command (`dev.py test`, pytest, Vitest, Playwright, `mkdocs gallery`) with
+  `TMPDIR=~/.cache/librefolio-test-tmp/<lane-name>` (create it first): pytest's basetemp, Playwright and Node write there.
+  Locks and the small lane data directory stay in `/tmp`. Delete your subfolder when your lane ends; the coordinator,
+  when space runs short, deletes the subfolders no process holds open, oldest first.
 
 ### Real data
 
