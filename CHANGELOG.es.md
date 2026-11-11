@@ -17,7 +17,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 - Scalable Capital: un impuesto devuelto (un impuesto negativo en una venta, o una fila Taxes positiva) ahora se importa como Interés «Tax refund» en lugar de Depósito: es dinero devuelto de la ganancia de la inversión, así que cuenta en tus rendimientos. Las transacciones importadas antes conservan su tipo.
 - La guía de administración abre ahora el capítulo de copias de seguridad con una guía rápida para hacerla desde la aplicación, con capturas: la línea de comandos ya no es lo primero que se ve.
-- Un tipo de cambio de más de una semana ahora se señala dondequiera que un valor dependa de él: el análisis de lotes muestra el mismo aviso «tipo no actualizado» que el Panel, y la información emergente del Yield on Cost indica el tipo antiguo que usó. Ninguna cifra cambia, solo el aviso.
+- Un tipo de cambio de más de una semana ahora se señala dondequiera que un valor dependa de él: el análisis de lotes muestra el mismo aviso «tipos de cambio sin actualizar» que el Panel, y la información emergente del Yield on Cost indica el tipo antiguo que usó. Ninguna cifra cambia, solo el aviso.
 
 ### 🐛 Corregido
 
