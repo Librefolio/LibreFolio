@@ -69,9 +69,10 @@ zero silently** — hence the dedicated coverage test.
   (`truncate_priceHistory`), and one no column can keep is skipped (`storable_value`, `storable_price`, W-B58).
   Never sum these columns in SQL: `SUM` adds the stored doubles — sum in Python with
   `financial_math` (`position_quantities`, `native_balances`)
-- **Timestamps**: UTC via `utcnow()` helper, stored without an offset: every `datetime` field declares
-  `sa_type=DateTime` (SQLModel >= 0.0.48 would map it to its `UTCDateTime`, which refuses naive values); a value read
-  back is naive UTC (`ensure_utc()`). See the developer docs, Database Schema «Timestamps»
+- **Timestamps**: UTC via `utcnow()` helper, stored without an offset; every `datetime` field declares
+  `sa_type=UtcDateTime` (`db/utc_datetime.py`): the text on disk is the plain column's, a value read back is **aware**
+  UTC, and a naive datetime is refused on write (`ValueError`). Never declare a field as the plain `DateTime` (a test
+  pins it). `ensure_utc()` is for values from outside the database. See the developer docs, Database Schema «Timestamps»
 - **Daily-point policy**: one record per day for prices and FX rates
 - **Foreign keys**: enforced with `PRAGMA foreign_keys=ON`
 - **Currency validation**: via `Currency.validate_code()` from schemas

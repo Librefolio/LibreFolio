@@ -136,7 +136,7 @@ class IdentifierType(StrEnum):
        - list_assets(): Add condition for new filter
        - create_assets_bulk(): Pass new field to Asset()
 
-    5. BRIM PROVIDER (backend/app/services/brim/brim_provider.py):
+    5. BRIM PROVIDER (backend/app/services/brim/candidates.py):
        - search_asset_candidates(): Add search priority if relevant
 
     6. TESTS:
