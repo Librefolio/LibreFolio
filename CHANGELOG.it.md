@@ -17,6 +17,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 - Scalable Capital: un'imposta restituita (un'imposta negativa su una vendita, o una riga Taxes positiva) ora si importa come Interesse «Tax refund» invece che come Deposito: sono soldi resi dal guadagno dell'investimento, quindi contano nei rendimenti. Le transazioni importate prima mantengono il loro tipo.
 - La guida admin ora apre il capitolo sul backup con una guida rapida per farlo dall'app, con le schermate: la riga di comando non è più la prima cosa che si vede.
+- Un tasso di cambio vecchio di più di una settimana ora viene segnalato ovunque un valore ne dipende: l'analisi dei lotti mostra lo stesso avviso «tasso non aggiornato» della Dashboard, e il tooltip del Yield on Cost indica il tasso vecchio che ha usato. Nessun numero cambia, solo l'avviso.
 
 ### 🐛 Corretto
 
