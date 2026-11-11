@@ -19,6 +19,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - La guida admin ora apre il capitolo sul backup con una guida rapida per farlo dall'app, con le schermate: la riga di comando non è più la prima cosa che si vede.
 - Un tasso di cambio vecchio di più di una settimana ora viene segnalato ovunque un valore ne dipende: l'analisi dei lotti mostra lo stesso avviso «tassi di cambio non aggiornati» della Dashboard, e il tooltip del Yield on Cost indica il tasso vecchio che ha usato. Nessun numero cambia, solo l'avviso.
 - Le coppie di valute si scrivono allo stesso modo ovunque, con simboli e bandiere: `$ 🇺🇸 USD / EUR 🇪🇺 €` per una coppia, `$ 🇺🇸 USD → EUR 🇪🇺 €` per una conversione, nel suo verso.
+- Analisi del rischio: quando un asset resta fuori perché manca un cambio, il messaggio ora nomina la coppia di valute e dice da quale data c'è un cambio salvato, oppure che non ce n'è nessuno.
 
 ### 🐛 Corretto
 

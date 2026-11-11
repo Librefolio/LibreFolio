@@ -19,6 +19,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - La guía de administración abre ahora el capítulo de copias de seguridad con una guía rápida para hacerla desde la aplicación, con capturas: la línea de comandos ya no es lo primero que se ve.
 - Un tipo de cambio de más de una semana ahora se señala dondequiera que un valor dependa de él: el análisis de lotes muestra el mismo aviso «tipos de cambio sin actualizar» que el Panel, y la información emergente del Yield on Cost indica el tipo antiguo que usó. Ninguna cifra cambia, solo el aviso.
 - Los pares de divisas se escriben igual en todas partes, con símbolos y banderas: `$ 🇺🇸 USD / EUR 🇪🇺 €` para un par, `$ 🇺🇸 USD → EUR 🇪🇺 €` para una conversión, en su sentido.
+- Análisis de riesgo: cuando un activo queda fuera porque falta un tipo de cambio, el mensaje ahora nombra el par de divisas y dice desde qué fecha hay un tipo guardado, o que no hay ninguno.
 
 ### 🐛 Corregido
 
