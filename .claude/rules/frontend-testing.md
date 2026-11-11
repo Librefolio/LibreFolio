@@ -36,6 +36,15 @@ frontend/e2e/
 
 ## Run Commands
 
+> **Scope of a run (developer decision, 11/11/2026).** A workstream runs only the suites of the files it touched and
+> their direct neighbours: the runner actions for those files, Vitest of those files, the E2E of the pages it changed,
+> `front check` after a move. Never `all-backend`, `all-frontend` or a whole category for a checkpoint: the coordinator
+> runs the full suites on the merged result, and only once enough changes have piled up across several subsystems
+> since the previous full run. A red found after a merge is fixed then: testing everything every time costs hours
+> and rarely finds a bug that the targeted suites missed. Only runs that start the shared backend or Playwright take
+> `flock /tmp/librefolio-heavy.lock`; docs builds (`mkdocs build`, `check-links`), pure pytest and Vitest do not.
+
+
 ```bash
 # By domain
 ./dev.py test front-utility all       # auth, settings, files
