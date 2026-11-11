@@ -21,7 +21,7 @@ from backend.app.schemas.brokers import (
     BRReadItem,
     BRUpdateItem,
 )
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 from backend.app.services.brokers.broker_service import BROKER_NAME_RECOVERY, BrokerService
 
 logger = get_logger(__name__)
@@ -253,7 +253,7 @@ async def delete_brokers(
         # deleted (files are on the filesystem, so the ORM cascade misses them). Done
         # post-commit and best-effort so a filesystem hiccup never fails the delete.
         deleted_broker_ids = [r.id for r in response.results if r.success]
-        files_removed = await asyncio.to_thread(brim_provider.delete_files_for_brokers, deleted_broker_ids)
+        files_removed = await asyncio.to_thread(storage.delete_files_for_brokers, deleted_broker_ids)
         logger.info(f"Deleted {response.total_deleted} brokers successfully", user_id=user_id, brim_files_removed=files_removed)
     else:
         await session.rollback()

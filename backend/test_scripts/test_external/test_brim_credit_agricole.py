@@ -67,7 +67,8 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim import brim_report_set_core as core
 from backend.app.services.brim import brim_report_sets
 from backend.app.services.brim.brim_gap_fix import compute_gap_fix
-from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
+from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers.broker_credit_agricole import _classify as classify_module
 from backend.app.services.brim_providers.broker_credit_agricole._report_set import (

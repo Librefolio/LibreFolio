@@ -16,7 +16,8 @@ from backend.app.schemas.brim import (
     BRIMDuplicateReport,
     BRIMPluginInfo,
 )
-from backend.app.services.brim.brim_provider import detect_tx_duplicates, search_asset_candidates
+from backend.app.services.brim.candidates import search_asset_candidates
+from backend.app.services.brim.duplicates import detect_tx_duplicates
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brokers.broker_service import BrokerService
 

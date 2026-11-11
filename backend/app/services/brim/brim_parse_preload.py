@@ -9,7 +9,7 @@ may escape.
 
 import structlog
 
-from backend.app.services.brim import brim_provider  # noqa: F401 - the preload is the import itself
+from backend.app.services.brim import parsing  # noqa: F401 - the preload is the import itself
 from backend.app.services.brim.registry import BRIMProviderRegistry
 
 logger = structlog.get_logger(__name__)

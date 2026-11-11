@@ -18,7 +18,7 @@ The contract pinned here:
 4. The preview writes nothing: no add, no flush, no commit; the caller's session holds no pending change afterwards, and
    the database is as it was.
 5. ``delete_account(session, user) -> AccountDeletionResult(deleted_broker_ids, files_removed)``: ``delete_user``, then,
-   after its commit, ``brim_provider.delete_files_for_brokers`` of the deleted brokers, off the event loop
+   after its commit, ``storage.delete_files_for_brokers`` of the deleted brokers, off the event loop
    (``asyncio.to_thread``), once, its count as ``files_removed``; not called when no broker was deleted. A failure of the
    deletion propagates out of ``delete_account``, deletes nothing and touches no file.
 6. ``account_protection(user) -> Optional[str]``, a plain function (A7 will give a reason for the paying administrator of
@@ -62,7 +62,7 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.db.models import Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.services.accounts import user_service
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.test_scripts.test_db.test_autoincrement_schema import _alembic_upgrade_head
 from backend.test_scripts.test_utils import print_section, print_success
@@ -233,7 +233,7 @@ class _InjectedFailure(RuntimeError):
 def private_reports_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """The BRIM report directory under tmp_path: whatever reaches brim_provider here never touches the lane's reports."""
     reports = tmp_path / "broker_reports"
-    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: reports)
+    monkeypatch.setattr(storage, "get_broker_reports_dir", lambda: reports)
     return reports
 
 
@@ -443,7 +443,7 @@ def _files_spy(db: Path, user_id: int, calls: list[_FilesCall]) -> Callable[[Any
 
 def _replace_report_cleanup(monkeypatch: pytest.MonkeyPatch, spy: Callable[[Any], int]) -> None:
     """The spy under both names a caller may reach: brim_provider's attribute, and the name user_service would hold after importing it."""
-    monkeypatch.setattr(brim_provider, "delete_files_for_brokers", spy)
+    monkeypatch.setattr(storage, "delete_files_for_brokers", spy)
     monkeypatch.setattr(user_service, "delete_files_for_brokers", spy, raising=False)
 
 

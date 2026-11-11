@@ -81,8 +81,9 @@ import pytest
 from structlog.testing import capture_logs
 
 from backend.app.schemas.brim import BRIMParseOutput
-from backend.app.services.brim import brim_parse_pool, brim_provider
-from backend.app.services.brim.brim_provider import BRIMParseError, delete_file, get_file_path, save_uploaded_file
+from backend.app.services.brim import brim_parse_pool, parsing
+from backend.app.services.brim.brim_provider import BRIMParseError
+from backend.app.services.brim.storage import delete_file, get_file_path, save_uploaded_file
 from backend.app.services.plugin_settings import runtime as settings_runtime
 from backend.test_scripts.test_services._brim_pool_probe import BRIM_MODULE, PLUGIN_MODULE, PRELOAD_MODULE
 
@@ -228,7 +229,7 @@ def test_upload_area_resolves(uploaded_sample):
 @pytest.mark.asyncio
 async def test_offloaded_parse_matches_inline_parse(uploaded_sample, reset_pool):
     """A parse through the pool returns what the inline one returns — contents included."""
-    inline = brim_provider.parse_file(uploaded_sample, "broker_schwab", 1)
+    inline = parsing.parse_file(uploaded_sample, "broker_schwab", 1)
     offloaded = await brim_parse_pool.parse_file_offloaded(uploaded_sample, "broker_schwab", 1)
 
     assert isinstance(offloaded, BRIMParseOutput)
@@ -238,7 +239,7 @@ async def test_offloaded_parse_matches_inline_parse(uploaded_sample, reset_pool)
 
 def test_parse_output_survives_pickling(uploaded_sample):
     """The return trip is a pickle: a field that does not round-trip is data silently lost."""
-    output = brim_provider.parse_file(uploaded_sample, "broker_schwab", 1)
+    output = parsing.parse_file(uploaded_sample, "broker_schwab", 1)
     restored = pickle.loads(pickle.dumps(output))
     assert restored.model_dump(mode="json") == output.model_dump(mode="json")
 
@@ -287,7 +288,7 @@ async def test_naming_the_user_changes_nothing_for_a_plugin_without_settings(poo
 
     monkeypatch.setattr(settings_runtime, "get_async_engine", no_database)
     monkeypatch.setattr(brim_parse_pool, "_pool_disabled", not pool)
-    inline = brim_provider.parse_file(uploaded_sample, "broker_schwab", 1)
+    inline = parsing.parse_file(uploaded_sample, "broker_schwab", 1)
 
     offloaded = await brim_parse_pool.parse_file_offloaded(uploaded_sample, "broker_schwab", 1, user_id=1)
 
@@ -575,7 +576,7 @@ async def test_a_parse_after_prewarm_goes_through_the_pool_and_matches_the_inlin
     prewarm = brim_parse_pool.prewarm
     assert await asyncio.to_thread(prewarm) is None
 
-    inline = brim_provider.parse_file(uploaded_sample, "broker_schwab", 1)
+    inline = parsing.parse_file(uploaded_sample, "broker_schwab", 1)
     offloaded = await brim_parse_pool.parse_file_offloaded(uploaded_sample, "broker_schwab", 1)
 
     assert isinstance(offloaded, BRIMParseOutput)

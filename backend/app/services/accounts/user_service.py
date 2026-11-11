@@ -21,7 +21,7 @@ from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess,
 from backend.app.db.session import begin_writes
 from backend.app.services.accounts import token_service, whats_new_service
 from backend.app.services.accounts.auth_service import hash_password
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
 
@@ -874,7 +874,7 @@ async def delete_account(session: AsyncSession, user: User) -> AccountDeletionRe
     files_removed = 0
     if deleted_ids:
         try:
-            files_removed = await asyncio.to_thread(brim_provider.delete_files_for_brokers, deleted_ids)
+            files_removed = await asyncio.to_thread(storage.delete_files_for_brokers, deleted_ids)
         except Exception:
             logger.exception("The report files of the deleted brokers could not be removed", broker_ids=deleted_ids)
     return AccountDeletionResult(deleted_broker_ids=deleted_ids, files_removed=files_removed)

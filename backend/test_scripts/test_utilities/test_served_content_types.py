@@ -179,7 +179,7 @@ def store_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             return SimpleNamespace(filename=filename, target_broker_id=None)
 
         monkeypatch.setattr(broker_files, "get_brim_file_with_access", file_with_access)
-        monkeypatch.setattr(broker_files.brim_provider, "get_file_path", lambda file_id: path if file_id == REPORT_ID else None)
+        monkeypatch.setattr(broker_files.storage, "get_file_path", lambda file_id: path if file_id == REPORT_ID else None)
         return REPORT_ID
 
     return store

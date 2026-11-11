@@ -41,9 +41,8 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import PluginUserSetting, User
-from backend.app.schemas.brim import BRIMFileInfo, BRIMParseOutput
-from backend.app.services.brim import brim_parse_pool, brim_provider
-from backend.app.services.brim.brim_provider import BRIMFileStatus
+from backend.app.schemas.brim import BRIMFileInfo, BRIMFileStatus, BRIMParseOutput
+from backend.app.services.brim import brim_parse_pool, storage
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.plugin_settings import resolver, runtime
 from backend.app.services.plugin_settings.contract import BoundSettings
@@ -114,7 +113,7 @@ def isolated_brim_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """BRIM storage redirected to a directory of this test (the metadata sidecars are read and written in this process only)."""
     reports = tmp_path / "broker_reports"
     reports.mkdir()
-    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: reports)
+    monkeypatch.setattr(storage, "get_broker_reports_dir", lambda: reports)
     return reports
 
 
@@ -131,9 +130,9 @@ def reset_pool() -> Iterator[None]:
 @pytest.fixture
 def uploaded_ambiguous(reset_pool: None) -> Iterator[str]:
     """A real upload (the lane's upload area, which the pool's worker resolves too) of a CSV with an ambiguous date; deleted after."""
-    info = brim_provider.save_uploaded_file(AMBIGUOUS_CSV.encode(), f"date-order-{uuid.uuid4().hex[:8]}.csv", user_id=1, broker_id=BROKER_ID)
+    info = storage.save_uploaded_file(AMBIGUOUS_CSV.encode(), f"date-order-{uuid.uuid4().hex[:8]}.csv", user_id=1, broker_id=BROKER_ID)
     yield info.file_id
-    brim_provider.delete_file(info.file_id)
+    storage.delete_file(info.file_id)
 
 
 @pytest_asyncio.fixture
@@ -261,17 +260,17 @@ async def test_without_bound_the_value_the_user_saved_is_resolved_and_reaches_th
 
 
 def _sidecar(file_id: str) -> dict[str, Any]:
-    meta_path = brim_provider._find_metadata_path(file_id)
+    meta_path = storage._find_metadata_path(file_id)
     assert meta_path is not None, "barrier: the file has a metadata sidecar"
     return json.loads(meta_path.read_text())
 
 
 def _upload(content: bytes = MINIMAL_CSV) -> str:
-    return brim_provider.save_uploaded_file(content=content, original_filename="settings.csv", user_id=1).file_id
+    return storage.save_uploaded_file(content=content, original_filename="settings.csv", user_id=1).file_id
 
 
 def _record(file_id: str, plugin_code: str = CODE, **extra: Any) -> bool:
-    return brim_provider.save_parse_result(file_id, {"transactions": [], "warnings": []}, plugin_code=plugin_code, **extra)
+    return storage.save_parse_result(file_id, {"transactions": [], "warnings": []}, plugin_code=plugin_code, **extra)
 
 
 def test_save_parse_result_stores_the_fingerprint_in_the_sidecar(isolated_brim_dir: Path):
@@ -297,7 +296,7 @@ def test_save_parse_result_without_a_fingerprint_removes_the_one_saved_before(is
     _record(file_id, settings_fingerprint=_bound("day_first").fingerprint)
     _record(file_id, settings_fingerprint=None)
     assert "parsed_settings_fingerprint" not in _sidecar(file_id)
-    assert brim_provider.get_file_info(file_id).parsed_settings_fingerprint is None
+    assert storage.get_file_info(file_id).parsed_settings_fingerprint is None
 
 
 def test_the_file_info_carries_the_fingerprint_and_the_api_never_shows_it(isolated_brim_dir: Path):
@@ -305,8 +304,8 @@ def test_the_file_info_carries_the_fingerprint_and_the_api_never_shows_it(isolat
     fingerprint = _bound("month_first").fingerprint
     _record(file_id, settings_fingerprint=fingerprint)
 
-    from_info = brim_provider.get_file_info(file_id)
-    from_listing = next(f for f in brim_provider.list_files() if f.file_id == file_id)
+    from_info = storage.get_file_info(file_id)
+    from_listing = next(f for f in storage.list_files() if f.file_id == file_id)
 
     assert from_info.parsed_settings_fingerprint == fingerprint
     assert from_listing.parsed_settings_fingerprint == fingerprint
@@ -321,7 +320,7 @@ def test_the_file_info_carries_the_fingerprint_and_the_api_never_shows_it(isolat
 def test_a_file_never_recorded_has_no_fingerprint(isolated_brim_dir: Path):
     file_id = _upload()
 
-    assert brim_provider.get_file_info(file_id).parsed_settings_fingerprint is None
+    assert storage.get_file_info(file_id).parsed_settings_fingerprint is None
 
 
 # =============================================================================
@@ -333,7 +332,7 @@ def _parsed_file(*, plugin_code: str = CODE, fingerprint: str | None = None, par
     """An uploaded file, moved to PARSED when ``parsed``, whose parse was recorded for ``plugin_code`` over ``fingerprint``."""
     file_id = _upload()
     if parsed:
-        brim_provider._move_file(file_id, BRIMFileStatus.PARSED)
+        storage._move_file(file_id, BRIMFileStatus.PARSED)
     if fingerprint is None:
         _record(file_id, plugin_code)
     else:
@@ -351,7 +350,7 @@ def _staleness_rule():
 
 async def _apply(file_ids: list[str], user_id: int | None) -> list[BRIMFileInfo]:
     """``apply_settings_staleness`` over fresh infos of the files (a module that does not exist yet fails the test here)."""
-    files = [brim_provider.get_file_info(file_id) for file_id in file_ids]
+    files = [storage.get_file_info(file_id) for file_id in file_ids]
     assert all(info is not None and info.parse_is_stale is False for info in files), "barrier: nothing is stale before the rule is applied"
     await _staleness_rule()(files, user_id)
     return files
@@ -440,7 +439,7 @@ async def test_a_file_that_is_not_parsed_is_left_alone(isolated_brim_dir: Path, 
     """Only a PARSED file has a parse to be stale: an uploaded one keeps its flag, whatever the user chose."""
     file_id = _parsed_file(fingerprint=_bound(None).fingerprint, parsed=False)
     await _choose(private_engine, users["alice"], "month_first")
-    info = brim_provider.get_file_info(file_id)
+    info = storage.get_file_info(file_id)
     assert info.status == BRIMFileStatus.UPLOADED and info.parsed_plugin_code == CODE, "barrier: not PARSED, yet it records a parse"
 
     assert await _stale(file_id, users["alice"]) is False
@@ -452,9 +451,9 @@ async def test_a_flag_already_true_stays_true(isolated_brim_dir: Path, users: di
     file_id = _parsed_file(fingerprint=_bound(None).fingerprint)
     plugin_class = type(BRIMProviderRegistry.get_provider_instance(CODE))
     monkeypatch.setattr(plugin_class, "plugin_version", "9.9.9-stale-test")
-    assert brim_provider.get_file_info(file_id).parse_is_stale is True, "barrier: stale by version"
+    assert storage.get_file_info(file_id).parse_is_stale is True, "barrier: stale by version"
 
-    files = [brim_provider.get_file_info(file_id)]
+    files = [storage.get_file_info(file_id)]
     await _staleness_rule()(files, users["alice"])
 
     assert files[0].parse_is_stale is True

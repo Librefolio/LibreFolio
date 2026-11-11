@@ -24,7 +24,7 @@ from backend.app.schemas.brim import (
 )
 from backend.app.schemas.uploads import FilePreviewResponse
 from backend.app.services.accounts.global_settings_service import get_max_upload_mb
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import parsing, storage
 from backend.app.services.brim.brim_file_settings import apply_settings_staleness
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brokers.broker_service import BrokerService
@@ -116,7 +116,7 @@ async def upload_file(
     # the sidecar are all blocking filesystem I/O: run them off the loop, or a handful of
     # simultaneous uploads freeze every other request in the application.
     file_info = await asyncio.to_thread(
-        brim_provider.save_uploaded_file,
+        storage.save_uploaded_file,
         content,
         filename,
         user_id=current_user.id,
@@ -170,7 +170,7 @@ async def list_files(
             accessible_broker_ids = user_broker_ids
 
     # Off the event loop: listing reads every sidecar and may detect old files' plugins again (item 8).
-    files = await asyncio.to_thread(brim_provider.list_files, status=status, broker_ids=accessible_broker_ids)
+    files = await asyncio.to_thread(storage.list_files, status=status, broker_ids=accessible_broker_ids)
     await apply_settings_staleness(files, current_user.id)
     if broker_ids:
         # A broker's list holds that broker's files only; list_files also keeps the ones with no broker (W-B32).
@@ -194,7 +194,7 @@ async def get_brim_file_preview(
     """Get structured preview data for a BRIM file."""
     file_info = await get_brim_file_with_access(file_id, current_user, session)
 
-    file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
+    file_path = await asyncio.to_thread(storage.get_file_path, file_id)
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
@@ -242,7 +242,7 @@ async def delete_file(
         denied_detail="EDITOR or OWNER access required to delete files",
     )
     # Off the event loop: the delete holds the broker's metadata lock, which a combine may be holding.
-    deleted = await asyncio.to_thread(brim_provider.delete_file, file_id)
+    deleted = await asyncio.to_thread(storage.delete_file, file_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -266,7 +266,7 @@ async def download_file(
     """
     file_info = await get_brim_file_with_access(file_id, current_user, session)
 
-    file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
+    file_path = await asyncio.to_thread(storage.get_file_path, file_id)
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
@@ -308,7 +308,7 @@ async def check_file_plugin(
     if plugin is None:
         raise HTTPException(status_code=404, detail=f"Plugin '{plugin_code}' not found")
     # Off the event loop: the plugin reads the file.
-    check = await asyncio.to_thread(brim_provider.check_file_with_plugin, file_id, plugin)
+    check = await asyncio.to_thread(parsing.check_file_with_plugin, file_id, plugin)
     if check is None:
         raise HTTPException(status_code=404, detail="File content not found")
     return check

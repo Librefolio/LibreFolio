@@ -88,7 +88,7 @@ the plugin combines them, and phase 2 parses the combined file. See
 ### ♻️ The lifecycle of `compatible_plugins` {: #compatible-plugins-lifecycle }
 
 A file's `compatible_plugins` is detected once per app version, not once for the file's whole life
-(`brim_provider.py`):
+(`storage.py`):
 
 1. **At upload**, `save_uploaded_file` asks every plugin
    (`BRIMProviderRegistry.get_compatible_plugins`) and stores the list in the file's sidecar with
@@ -134,7 +134,7 @@ never undone. Because a read may now open the file, the API calls `list_files` a
 ### 🔒 The broker metadata lock {: #broker-metadata-lock }
 
 Every write of a broker's sidecars holds that broker's lock, `broker_metadata_lock(broker_id)`
-(`_broker_metadata_lock` inside `brim_provider.py`). A plugin never takes it: the core does, around
+(`_broker_metadata_lock` inside `storage.py`). A plugin never takes it: the core does, around
 its own writes.
 
 - **Two layers.** In the process, a re-entrant `threading.RLock` per broker; across processes, an
@@ -367,7 +367,7 @@ abstract one: it returns `None` by default, so a plugin written without it stays
 when your `can_parse` refuses a file for a cause the user can fix in the file — a missing column,
 say.
 
-- **When the core asks.** In the guard of `parse_file` (`brim_provider.py`), after
+- **When the core asks.** In the guard of `parse_file` (`parsing.py`), after
   `can_parse` answered `False` for the file the parse runs your plugin on. The guard asks about
   the path it checked last: the relocated one, when a concurrent parse moved the file in the
   meantime. The default [`cannot_parse_detail`](#cannot-parse-detail) asks it too, when the
@@ -443,7 +443,7 @@ unchanged. Override it when the user should read your reason in their own langua
     ```
 
 **The endpoint.** `GET /api/v1/brokers/import/files/{file_id}/plugin-check?plugin_code=<code>`
-(`check_file_plugin` in `api/v1/brokers.py`) asks one plugin about one uploaded file and answers a
+(`check_file_plugin` in `api/v1/brokers/files.py`) asks one plugin about one uploaded file and answers a
 `BRIMPluginCheck`: `plugin_code`, `can_parse` and `refusal`.
 
 ```json
@@ -459,7 +459,7 @@ unchanged. Override it when the user should read your reason in their own langua
 ```
 
 - **Nothing is parsed**, and the file keeps its status. The work is `check_file_with_plugin`
-  (`brim_provider.py`), run off the event loop (`asyncio.to_thread`) because the plugin reads the
+  (`parsing.py`), run off the event loop (`asyncio.to_thread`) because the plugin reads the
   file.
 - **`refusal`** comes only with `can_parse: false`, and stays `null` when the plugin has nothing to
   add. A `can_parse` that raises counts as `false`, and a `cannot_parse_detail` that raises leaves
@@ -634,7 +634,7 @@ plugin or a new raise is caught without anybody remembering it, and names each o
 
 `POST /brokers/import/gap-fix` ([below](#report-sets)) refuses with **409**
 `{code: "ledger_unreadable", message, reason: "values" | "currency_codes", params}` when LibreFolio's side of the comparison
-cannot be computed (`BRIMLedgerUnreadable`, `_set_error_detail` in `api/v1/brokers.py`). The wizard shows it through
+cannot be computed (`BRIMLedgerUnreadable`, `_set_error_detail` in `api/v1/brokers/sets.py`). The wizard shows it through
 `resolveGapFixFailureMessage` (`parseFailure.ts`) as `importWizard.reportSet.gapFix.ledgerUnreadable.<reason>` with `params`
 (`values`: `count`; `currency_codes`: `codes` and `more`). `message` stays English, the fallback when the key or the `reason`
 is missing; every other set error still shows its `message`.

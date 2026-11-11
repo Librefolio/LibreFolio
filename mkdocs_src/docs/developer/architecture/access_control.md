@@ -119,7 +119,7 @@ The logic is centralized in `backend/app/services/brokers/access.py` (`BrokerAcc
 
 ### 🌐 API Endpoints
 
-Access management is exposed via the following endpoints (`backend/app/api/v1/brokers.py`):
+Access management is exposed via the following endpoints (`backend/app/api/v1/brokers/crud.py` and `backend/app/api/v1/brokers/access.py`):
 
 - `GET /api/v1/brokers/{broker_id}/access`: the users with access, with role and share (`list_accesses()`). Any
   authenticated user can read the list of any existing broker, email addresses included; 404 only when the broker

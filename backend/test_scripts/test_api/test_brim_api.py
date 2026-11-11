@@ -2391,7 +2391,7 @@ class _InFlight:
 
 
 def _lane_broker_lock_file(broker_id: int) -> Path:
-    """The lock file the backend of this test lane takes for every metadata write of the broker (``brim_provider._acquire_file_lock``)."""
+    """The lock file the backend of this test lane takes for every metadata write of the broker (``storage._acquire_file_lock``)."""
     return get_test_data_dir() / "broker_reports" / ".locks" / f"broker_{broker_id}.lock"
 
 
@@ -2932,7 +2932,7 @@ class TestPluginCheckEndpoint:
 # broker. The per-file routes (``/preview``, ``/download``, ``/plugin-check``: VIEWER+;
 # ``POST /files/{id}/parse`` and ``DELETE /files/{id}``: EDITOR+) all start with ``_get_brim_file_with_access``, which looks
 # at the broker only ``if file_info.target_broker_id and not current_user.is_superuser``: a file with NO broker skips every
-# check, for anyone signed in, its parse and its delete included (W-B3). And ``brim_provider.list_files`` keeps
+# check, for anyone signed in, its parse and its delete included (W-B3). And ``storage.list_files`` keeps
 # ``target_broker_id is None`` in every list it filters by broker, so such a file reaches every user's list, whatever
 # ``broker_ids`` they ask for. Files with no broker are those an old version left in the ROOT of a status folder of
 # ``broker_reports/`` ("backward compatibility"): before 2d2319450 (January 2026) a sidecar had neither
@@ -3115,7 +3115,7 @@ class _Planter:
 
     @contextlib.contextmanager
     def _lock(self, broker_id: Optional[int]) -> Iterator[None]:
-        """The backend's metadata lock of one broker (``broker_none`` for the files with no broker), taken as ``brim_provider._acquire_file_lock`` takes it."""
+        """The backend's metadata lock of one broker (``broker_none`` for the files with no broker), taken as ``storage._acquire_file_lock`` takes it."""
         if fcntl is None:  # not POSIX: the backend's lock is in-process only, there is nothing to share with it
             yield
             return

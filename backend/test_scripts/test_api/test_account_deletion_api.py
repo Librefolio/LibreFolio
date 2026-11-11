@@ -97,7 +97,7 @@ from backend.app.db.models import Broker, BrokerUserAccess, Transaction, Transac
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRDeleteItem
 from backend.app.services.accounts import user_service
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.test_scripts.test_api.test_broker_access_api import (
     API_BASE,
@@ -335,7 +335,7 @@ async def _assert_scenario_in_place(client_a: httpx.AsyncClient, client_b: httpx
     # The listing holds the files of the brokers the user has a role on: B does not list X's file (no role on X), lists Z's.
     for client, file_id, listed in ((client_a, s.x_file, True), (client_b, s.x_file, False), (client_b, s.z_file, True)):
         assert (file_id in await _listed_file_ids(client)) is listed, f"Precondition: file {file_id} listed={listed} expected"
-    assert await asyncio.to_thread(brim_provider.get_file_info, s.x_file) is not None, "Precondition: pytest must see the backend's broker_reports directory, where the cleanup fallback removes leftover files"
+    assert await asyncio.to_thread(storage.get_file_info, s.x_file) is not None, "Precondition: pytest must see the backend's broker_reports directory, where the cleanup fallback removes leftover files"
 
     resp = await client_b.get(f"{API_BASE}/brokers/{s.z}", timeout=TIMEOUT)
     assert resp.status_code == 200, f"Precondition: B, EDITOR of Z, must read Z: {resp.status_code}"
@@ -487,9 +487,9 @@ async def _remove_files(owned: _Owned) -> list[str]:
     """Files of brokers deleted through the API are already gone; this removes the ones a service-level cleanup left."""
     errors: list[str] = []
     for file_id in owned.file_ids:
-        if await asyncio.to_thread(brim_provider.get_file_info, file_id) is None:
+        if await asyncio.to_thread(storage.get_file_info, file_id) is None:
             continue
-        if not await asyncio.to_thread(brim_provider.delete_file, file_id):
+        if not await asyncio.to_thread(storage.delete_file, file_id):
             errors.append(f"BRIM file {file_id} could not be removed")
     return errors
 
@@ -639,7 +639,7 @@ async def _sole_owned_broker(engine: AsyncEngine, owner_id: int) -> tuple[int, i
 
 async def _private_report(instance: _PrivateInstance, broker_id: int, user_id: int) -> str:
     """A BRIM report of ``broker_id`` uploaded by ``user_id``, through the service the upload endpoint calls."""
-    info = await asyncio.to_thread(brim_provider.save_uploaded_file, REPORT_CSV, "accdel_sole_admin_report.csv", user_id, broker_id)
+    info = await asyncio.to_thread(storage.save_uploaded_file, REPORT_CSV, "accdel_sole_admin_report.csv", user_id, broker_id)
     assert any(instance.reports_dir.rglob(f"{info.file_id}.json")), f"Report {info.file_id} must be stored under the private {instance.reports_dir}, never in the lane's broker_reports"
     return info.file_id
 
@@ -650,7 +650,7 @@ async def _sole_admin_holdings(instance: _PrivateInstance, broker_id: int, depos
         broker = await session.scalar(select(Broker.id).where(Broker.id == broker_id))
         grants = (await session.execute(select(BrokerUserAccess.broker_id, BrokerUserAccess.user_id, BrokerUserAccess.role).where(BrokerUserAccess.broker_id == broker_id))).all()
         deposits = (await session.execute(select(Transaction.id, Transaction.broker_id).where(Transaction.id == deposit_id))).all()
-    report = await asyncio.to_thread(brim_provider.get_file_info, file_id)
+    report = await asyncio.to_thread(storage.get_file_info, file_id)
     return {
         "accounts": await _accounts(instance.engine),
         "broker": broker,
@@ -693,7 +693,7 @@ async def private_instance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> A
       ACCDEL-002 checks that its report really lands here.
     """
     reports_dir = tmp_path / "broker_reports"
-    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: reports_dir)
+    monkeypatch.setattr(storage, "get_broker_reports_dir", lambda: reports_dir)
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'instance.db'}", poolclass=NullPool)
     try:
         async with engine.begin() as connection:
@@ -1336,7 +1336,7 @@ def _spy_on_report_cleanup(monkeypatch: pytest.MonkeyPatch) -> list[list[int]]:
         calls.append([int(broker_id) for broker_id in broker_ids])
         return 0
 
-    monkeypatch.setattr(brim_provider, "delete_files_for_brokers", delete_files_for_brokers)
+    monkeypatch.setattr(storage, "delete_files_for_brokers", delete_files_for_brokers)
     monkeypatch.setattr(user_service, "delete_files_for_brokers", delete_files_for_brokers, raising=False)
     return calls
 

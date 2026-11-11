@@ -1,6 +1,6 @@
 """A BRIM parse is stale when a setting of its plugin changed since it was drawn (CP12, W5-8).
 
-``brim_provider._build_file_info_from_metadata`` already marks a parse stale when the plugin's version moved. A setting that
+``storage._build_file_info_from_metadata`` already marks a parse stale when the plugin's version moved. A setting that
 changes the output (the order of day and month of the generic CSV) must say the same, or the user reads yesterday's dates.
 That cannot be decided there: it is synchronous and knows no user, while the values a parse would receive depend on who looks
 (the instance's and that user's own). So the file routes call ``apply_settings_staleness`` on the infos they return.
@@ -13,8 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from backend.app.schemas.brim import BRIMFileInfo
-from backend.app.services.brim.brim_provider import BRIMFileStatus
+from backend.app.schemas.brim import BRIMFileInfo, BRIMFileStatus
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.plugin_settings.resolver import settings_changed_since
