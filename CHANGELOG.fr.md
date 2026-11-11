@@ -9,7 +9,11 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### 🐛 Corrigé
+### ✨ Ajouté
+
+- Trade Republic : importe le nouveau CSV « Export des transactions » (profil › Relevés de compte › Export des transactions), même lorsqu'il a été réenregistré par Excel : achats et ventes de fonds, d'actions et de crypto avec leurs frais et impôts, intérêts avec leur retenue, droit de timbre, remboursements d'impôt comptés comme intérêts, dividendes et virements. L'importateur n'est plus en bêta, et son guide montre comment télécharger le fichier.
+
+### 🐛 Corrections
 
 - Téléverser un fichier `.json` ne perd plus son contenu, et les fichiers avec une extension inhabituelle ou très longue sont enregistrés en toute sécurité.
 - Les listes Devises, Fichiers et Actifs ne se vident plus pour afficher un indicateur de chargement après une actualisation ou une modification : elles restent à l'écran pendant l'arrivée des nouvelles données.

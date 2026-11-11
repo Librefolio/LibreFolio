@@ -9,6 +9,10 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ## [Unreleased]
 
+### ✨ Aggiunto
+
+- Trade Republic: importa il nuovo CSV «Esportazione transazioni» (profilo › Estratti conto › Esportazione transazioni), anche quando è stato risalvato da Excel: acquisti e vendite di fondi, azioni e crypto con commissioni e imposte, interessi con la ritenuta, imposta di bollo, rimborsi d'imposta come interessi, dividendi e bonifici. L'importatore non è più in beta, e la sua guida mostra come scaricare il file.
+
 ### 🐛 Corretto
 
 - Caricare un file `.json` non ne perde più il contenuto, e i file con un'estensione insolita o molto lunga vengono salvati in modo sicuro.
