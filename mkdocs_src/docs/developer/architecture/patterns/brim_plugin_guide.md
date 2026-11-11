@@ -358,7 +358,7 @@ when the user saves it (`costBasisNegative`, J-60, see
 | `test_file_pattern` | `None` | Single filename substring used by the test suite to map a sample → this plugin |
 | `test_file_patterns` | derived from `test_file_pattern` | **List** of filename substrings when one plugin owns several export formats (e.g. `["revolut-invest", "revolut-crypto"]`) |
 | `report_roles` (and the rest of the report-set contract) | `[]` | Non-empty turns the plugin into a **report-set plugin**: see [Multi-report plugins](#report-sets) |
-| `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/brim/{path}` |
+| `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/brim/{path}`, with `path` = `<plugin folder>/<file>` (the file is in the plugin's own `static/` folder) |
 
 ### 🗣️ Saying why a file is refused {: #cannot-parse-reason }
 
@@ -713,11 +713,11 @@ A plugin is a folder named after its `provider_code` — here `brim_providers/br
 ```text
 backend/app/services/brim_providers/
 ├── _brim_io.py, _brim_output.py, _scalable.py   ← helpers shared by the plugins
-├── static/                                      ← icons, served under /api/v1/uploads/plugin/brim/…
 ├── sample_reports/                              ← every plugin's sample exports (see below)
 └── broker_mybroker/
     ├── __init__.py   ← its docstring and nothing else: """BRIM import plugin ``broker_mybroker``: …"""
     ├── plugin.py     ← the code above
+    ├── static/       ← optional: its icons, served as /api/v1/uploads/plugin/brim/broker_mybroker/<file>
     └── i18n/         ← en.json, it.json, fr.json, es.json: its name and description (see below)
 ```
 
