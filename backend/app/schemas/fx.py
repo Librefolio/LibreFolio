@@ -51,6 +51,7 @@ from backend.app.schemas.common import (
     BaseListResponse,
     Currency,
     DateRangeModel,
+    FxConversionIssue,
     MinStartDateRangeModel,
     SafeDecimal,
     StrictModel,
@@ -236,6 +237,7 @@ class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
 
     # Inherits: results, success_count, errors
     # Note: success_count should be populated by service layer
+    fx_issues: List[FxConversionIssue] = Field(default_factory=list, description="The conversions that failed for want of an exchange rate, one per pair, in the direction of the conversion (CP-11d); `errors` keeps the other operation errors")
     signal_results: List[FXSignalQueryResult] = Field(
         default_factory=list,
         description="Signal results grouped by original conversion request",

@@ -59,6 +59,7 @@ from backend.app.schemas.fx import FXConversionRequest
 from backend.app.schemas.signals.outputs import SignalCalendarReturnValuePoint
 from backend.app.schemas.signals.result import _validate_series_alignment
 from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalDomain
+from backend.app.services.fx.stretch_conversion import rate_not_found_error
 from backend.app.services.signals import aggregation as signal_aggregation
 from backend.app.services.signals.registry import SignalPluginRegistry
 
@@ -92,7 +93,7 @@ def _convert_bulk(monkeypatch: pytest.MonkeyPatch, first_rate: dict[tuple[str, s
                 results.append((Currency(code=to, amount=amount.amount), day, False))
             elif day < first_rate.get(pair, date.min):
                 results.append(None)
-                errors.append(f"Conversion {index}: No FX rate found for {amount.code}/{to} on or before {day.isoformat()}. Please sync FX rates first.")
+                errors.append(rate_not_found_error(index, amount.code, to, day))
             else:
                 results.append((Currency(code=to, amount=amount.amount * _rate(pair, day)), day, False))
         return results, errors
@@ -309,7 +310,7 @@ async def test_fxs05_a_conversion_with_nothing_to_fill_answers_nothing_and_a_dai
     assert not isinstance(response, HTTPException), response
     assert _dates_of(response, 0) == []
     assert (_sample_of(response, 0).resolution, _sample_of(response, 0).sample_bounds) == ("daily", None)
-    assert response.errors, "the missing rates are still said"
+    assert response.fx_issues, "the missing rates are still said"
 
 
 # =============================================================================
