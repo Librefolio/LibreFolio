@@ -16,11 +16,11 @@ from backend.app.schemas.common import Currency, DateSpan
 from backend.app.schemas.portfolio.history import MwrrLinePoint, PortfolioHistoryPoint
 from backend.app.schemas.portfolio.summary import UnrealizedBreakdownRow
 from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.financial_math import fx_rates
 from backend.app.services.financial_math.native_cash import NativeCash
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.portfolio.models import DailyStates
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
-from backend.app.utils.day_spans import merged_spans
 
 
 def _engine_missing_fx_pairs(engine_result: Any, period_from: date_type | None, period_to: date_type | None) -> list[WACMissingPairInfo]:
@@ -48,7 +48,7 @@ def _engine_missing_fx_pairs(engine_result: Any, period_from: date_type | None, 
                 continue
             for pair in state.missing_fx_pairs:
                 spans_by_pair[pair].append((state.date, state.date))
-    return [WACMissingPairInfo(pair=pair, dates=sorted(dates_by_pair.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans_by_pair.get(pair, ()))]) for pair in sorted(set(dates_by_pair) | set(spans_by_pair))]
+    return fx_rates.missing_pair_infos(dates_by_pair, spans_by_pair)
 
 
 @dataclass(frozen=True)

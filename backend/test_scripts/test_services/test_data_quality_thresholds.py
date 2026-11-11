@@ -61,7 +61,7 @@ CONSUMERS = {
     "backend/app/services/portfolio/summary.py": {"TRANSACTION_IMPLIED_GRACE_DAYS"},
     # ...and so do the asset list's held-now flags.
     "backend/app/services/assets/crud.py": {"QUANTITY_DUST_THRESHOLD"},
-    "backend/app/services/market_series.py": {"STALE_PRICE_THRESHOLD_DAYS"},
+    "backend/app/services/market_series.py": {"is_stale"},
     "backend/app/services/risk/eligibility.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/service.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
     # A risk result's data quality states the threshold in its stale warnings and the banner's FX issue.

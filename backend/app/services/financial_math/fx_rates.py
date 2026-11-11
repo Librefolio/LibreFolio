@@ -17,7 +17,25 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Protocol
 
+from backend.app.schemas.common import DateSpan
+from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.utils.day_spans import merged_spans
+
+
+def missing_pair_infos(dates_by_pair: Mapping[str, Iterable[date]], spans_by_pair: Mapping[str, Iterable[tuple[date, date]]]) -> list[WACMissingPairInfo]:
+    """The conversions asked and not made, one entry per ``FROM/TO`` pair, as the data-quality report lists them.
+
+    ``dates_by_pair`` are the days a movement asked for a rate and none was found; ``spans_by_pair`` the stretches of valuation days with no
+    rate, merged here (D-P4). Pairs sorted, dates sorted and unique.
+    """
+    return [
+        WACMissingPairInfo(
+            pair=pair,
+            dates=sorted(set(dates_by_pair.get(pair, ()))),
+            ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans_by_pair.get(pair, ()))],
+        )
+        for pair in sorted({*dates_by_pair, *spans_by_pair})
+    ]
 
 
 def oriented_rate[R](rate: R, source: str, destination: str) -> R:

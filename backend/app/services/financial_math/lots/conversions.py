@@ -11,17 +11,16 @@ from typing import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import PriceHistory, Transaction
-from backend.app.schemas.common import Currency, DateSpan
+from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio.lots import LotAnalysisType
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.change_days import reading_change_days
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
-from backend.app.services.financial_math.fx_rates import AskedDayRates
+from backend.app.services.financial_math.fx_rates import AskedDayRates, missing_pair_infos
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import realized_gain
 from backend.app.services.fx.conversion import unit_rate_steps
-from backend.app.utils.day_spans import merged_spans
 
 #: One unit of a currency: the amount every rate of the resolver converts.
 _ONE = Decimal("1")
@@ -154,8 +153,7 @@ class FxRateResolver:
 
     def missing_pairs(self) -> list[WACMissingPairInfo]:
         """Every conversion asked for and not made, one entry per pair, as the data-quality report lists them."""
-        pairs = sorted({*self._missing, *self._missing_spans})
-        return [WACMissingPairInfo(pair=pair, dates=sorted(self._missing.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(self._missing_spans.get(pair, ()))]) for pair in pairs]
+        return missing_pair_infos(self._missing, self._missing_spans)
 
 
 @dataclass(frozen=True, slots=True)
