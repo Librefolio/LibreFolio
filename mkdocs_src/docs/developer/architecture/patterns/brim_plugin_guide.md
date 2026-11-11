@@ -713,10 +713,11 @@ A plugin is a folder named after its `provider_code` — here `brim_providers/br
 ```text
 backend/app/services/brim_providers/
 ├── _brim_io.py, _brim_output.py, _scalable.py   ← helpers shared by the plugins
-├── sample_reports/                              ← every plugin's sample exports (see below)
+├── sample_reports/                              ← what belongs to no plugin: README and malformed/ fixtures
 └── broker_mybroker/
     ├── __init__.py   ← its docstring and nothing else: """BRIM import plugin ``broker_mybroker``: …"""
     ├── plugin.py     ← the code above
+    ├── sample_reports/ ← its sample exports (see below)
     ├── static/       ← optional: its icons, served as /api/v1/uploads/plugin/brim/broker_mybroker/<file>
     └── i18n/         ← en.json, it.json, fr.json, es.json: its name and description (see below)
 ```
@@ -1950,11 +1951,12 @@ The framework has its own suites: `./dev.py test services brim-report-sets`,
 
 The parametrized suite in `backend/test_scripts/test_external/test_brim_providers.py`
 auto-covers your plugin — **but only if a sample is present**. Copy one real (anonymized)
-export into `backend/app/services/brim_providers/sample_reports/`, with a filename that
+export into `backend/app/services/brim_providers/broker_mybroker/sample_reports/`, with a filename that
 contains your `test_file_pattern`/`test_file_patterns` substring:
 
 ```bash
-cp mybroker-export.csv backend/app/services/brim_providers/sample_reports/mybroker-export.csv
+mkdir -p backend/app/services/brim_providers/broker_mybroker/sample_reports
+cp mybroker-export.csv backend/app/services/brim_providers/broker_mybroker/sample_reports/mybroker-export.csv
 ```
 
 Then run just the BRIM suite:

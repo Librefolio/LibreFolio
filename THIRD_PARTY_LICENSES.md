@@ -64,6 +64,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## 🧾 BRIM sample reports
+
+Two sample broker exports used by the tests of the import plugins are the public samples of the
+[Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) project, which is licensed under the Apache License 2.0:
+`backend/app/services/brim_providers/broker_degiro/sample_reports/degiro-export.csv` (DEGIRO, Dutch account statement) and
+`backend/app/services/brim_providers/broker_traderepublic/sample_reports/traderepublic-export.csv` (Trade Republic, Dutch 8-column CSV
+written by the community tool pytr). They are redistributed here unchanged, as test data and not as code, and Apache-2.0 is compatible
+with LibreFolio being licensed under AGPL-3.0. The licence text is in the project's repository. Every other sample in
+`brim_providers/*/sample_reports/` is synthetic: invented values on the real column layout of the export it stands for.
+
 ## 📉 Risk Analysis stack
 
 These are the libraries powering the Risk Analysis subsystem (simulation, optimisation,

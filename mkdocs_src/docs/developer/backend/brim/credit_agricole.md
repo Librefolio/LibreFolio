@@ -529,7 +529,7 @@ imported with 1.x (developer decision, 25/10/2026).
 
 ## 🧪 Samples and tests
 
-- `backend/app/services/brim_providers/sample_reports/` holds the synthetic members of two sets, declared in
+- `backend/app/services/brim_providers/broker_credit_agricole/sample_reports/` holds the synthetic members of two sets, declared in
   `test_sample_sets`:
     - `credit_agricole-securities.csv` + `credit_agricole-account.xlsx`: a closed month with every kind of
       fact (a coupon with withholding, a purchase, a placement, a fund redemption, a maturity, a transfer

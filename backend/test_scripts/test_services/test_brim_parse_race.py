@@ -41,6 +41,7 @@ import pytest
 from backend.app.config import get_version
 from backend.app.schemas.brim import BRIMCombinedTable, BRIMDerivedRef, BRIMFileInfo, BRIMFileStatus, BRIMParseOutput
 from backend.app.services.brim import combined_files, parsing, registry, storage
+from backend.test_scripts.brim_samples import SampleDir
 
 
 class _MovingPlugin:
@@ -410,7 +411,7 @@ def test_the_generic_csv_names_the_required_columns_a_file_misses(store):
 # missing name, which ``test_the_detection_signature_is_the_app_version`` pins alone. Every wait is bounded: a
 # regression fails here, it never hangs the suite.
 
-SAMPLE_DIR = Path(__file__).resolve().parents[2] / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 DANSKE_CODE = "broker_danske_bank"
 DANSKE_CASH = "danske_bank-cash.csv"
 CURRENT_SIGNATURE = "plugins-signature-current"

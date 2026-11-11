@@ -39,18 +39,18 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import pytest
 
-from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput
 from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as brim_io
+from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
 
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 BROKER_ID = 1
 ROWS_NOT_RECOGNIZED = "rows_not_recognized"
 ROWS_UNREADABLE = "rows_unreadable"

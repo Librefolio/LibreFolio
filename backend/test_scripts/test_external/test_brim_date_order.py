@@ -45,9 +45,10 @@ from backend.app.services.brim_providers.broker_generic_csv.plugin import parse_
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.plugin_settings.fields import FAMILY_RULES, PluginSettingField, SettingOption, SettingScope, SettingType, validate_declaration
 from backend.app.services.plugin_settings.resolver import StoredValue, build_bound_settings
+from backend.test_scripts.brim_samples import SampleDir
 
 CODE = "broker_generic_csv"
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 BROKER_ID = 1
 
 #: The field of the contract, as the plugin must declare it (C pins the plugin's own declaration).

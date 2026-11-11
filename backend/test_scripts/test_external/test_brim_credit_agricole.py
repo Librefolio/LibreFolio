@@ -59,7 +59,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
 import backend.app.db.models  # noqa: F401 — registers the app tables on SQLModel.metadata (the end-to-end proofs of step 6)
-from backend.app.config import PROJECT_ROOT
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import BRIMCheckpoint, BRIMCombinedTable, BRIMCoverage, BRIMGapFixRequest, BRIMParseOutput, BRIMTruthCash, is_fake_asset_id
 from backend.app.schemas.common import Currency, DateRangeModel
@@ -100,6 +99,7 @@ from backend.app.services.brim_providers.broker_credit_agricole._rows import (
 from backend.app.services.brim_providers.broker_credit_agricole._rows import (
     Testata as Header,
 )
+from backend.test_scripts.brim_samples import SampleDir
 
 # =============================================================================
 # CONSTANTS
@@ -2221,7 +2221,7 @@ class TestPairingKeyRoundsHalfUp:
 # What is NOT here: the optional ``portfolio`` role (step 7).
 
 PLUGIN_CODE = "broker_credit_agricole"
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 BROKER_ID = 1
 REAL_ASSET_BASE = 101
 

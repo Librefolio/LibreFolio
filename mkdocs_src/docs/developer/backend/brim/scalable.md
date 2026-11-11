@@ -149,7 +149,7 @@ and `rows_unreadable`, appended after the ten; their texts are written once for 
 
 ## 🧪 Samples and tests
 
-- `backend/app/services/brim_providers/sample_reports/` holds `scalable-prime-export.csv`
+- `backend/app/services/brim_providers/broker_scalable/sample_reports/` and `broker_scalable_deposit/sample_reports/` hold `scalable-prime-export.csv`
   (Scalable's own CSV), `scalable-broker-export.csv` and `scalable-deposit-export.csv` (exporter
   1.0.1, one file per account, whose internal transfers mirror each other): invented values on the
   real layout, described in the folder's `README.md`.

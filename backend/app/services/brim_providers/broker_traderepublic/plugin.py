@@ -36,7 +36,7 @@ logger = structlog.get_logger(__name__)
 # THE DUTCH 8-COLUMN CSV
 # =============================================================================
 # Built on an export found online, not reliable: no real export of this layout has ever been checked (the developer, 11/11/2026).
-# The sample (sample_reports/traderepublic-export.csv) is the one of the Export-To-Ghostfolio project, byte for byte, and that file
+# The sample (broker_traderepublic/sample_reports/traderepublic-export.csv) is the one of the Export-To-Ghostfolio project, byte for byte, and that file
 # was written by the community tool pytr (`pytr export_transactions` in Dutch), not by Trade Republic, which had no CSV export then.
 # Today's pytr writes 10 columns (ISIN2, Aantal2), which this exact header does not accept.
 
