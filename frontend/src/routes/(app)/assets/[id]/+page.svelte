@@ -81,8 +81,8 @@
     import {buildTabUrlFromLocation, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {todayIso} from '$lib/utils/dateOnly';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
-    import type {SignalLabelInfo} from '$lib/features/signals/signalLabel';
-    import {buildOverlaySignalInfoMap} from '$lib/features/signals/signalLabel';
+    import type {SignalLabelInfo} from '$lib/components/charts/signalLabel';
+    import {buildOverlaySignalInfoMap} from '$lib/components/charts/signalLabel';
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/features/signals/comparisonSeries';
     import {buildFxPairComparisonQuery, fxPairComparisonViews} from '$lib/features/signals/crossTypeCalendar';
     import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, collectConfiguredComparisonFxSlugs, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/features/signals/loadComparisonData';
@@ -95,7 +95,7 @@
     import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
     import {percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
-    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/features/signals/calendarReturn';
     import {assetChartAnswerForCache, assetChartAnswerKey, calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/features/assets/detail/assetDetailPriceQuery';
     import {assetChartAnswers, clearAssetPageAnswers, comparisonSeriesAnswers} from '$lib/stores/signalResultCache';
     import {mergeChartPointsIncremental} from '$lib/features/assets/detail/assetDetailChartPoints';

@@ -23,7 +23,7 @@
  * `core-unit`) next to the other `src/lib/features/signals` tests; the jsdom environment is per file.
  */
 import {describe, expect, it} from 'vitest';
-import {signalLabelToHtml, type SignalLabelInfo} from '../signalLabel';
+import {signalLabelToHtml, type SignalLabelInfo} from './signalLabel';
 
 function parse(html: string): DocumentFragment {
     const template = document.createElement('template');

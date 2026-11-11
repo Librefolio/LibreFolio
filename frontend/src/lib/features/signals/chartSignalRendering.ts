@@ -135,7 +135,7 @@ export function renderBackendResults(configs: readonly SignalConfig[], results: 
     return rendered;
 }
 
-/** A target's rolling return, as far as the chart reads it (`CalendarReturnView` of `priceChartHelpers.ts`). */
+/** A target's rolling return, as far as the chart reads it (`CalendarReturnView` of `calendarReturn.ts`). */
 export interface CalendarReturnSeries {
     state: string;
     points: LineDataPoint[];

@@ -15,7 +15,7 @@
  * Red first: the module does not exist.
  */
 import {describe, expect, it} from 'vitest';
-import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE} from '$lib/components/charts/priceChartHelpers';
+import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE} from '$lib/features/signals/calendarReturn';
 import {buildAssetComparisonQuery, buildFxPairComparisonQuery, fxPairComparisonViews} from '../crossTypeCalendar';
 
 const signal = (windowDays: number) => ({instance_id: CALENDAR_RETURN_INSTANCE_ID, signal_code: CALENDAR_RETURN_SIGNAL_CODE, params: {window_days: windowDays}});

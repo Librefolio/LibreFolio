@@ -17,7 +17,7 @@
  * Red first: the module does not exist.
  */
 import {describe, expect, it} from 'vitest';
-import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView} from '$lib/features/signals/calendarReturn';
 import {fxCalendarRequest, type FxCalendarRequest} from '$lib/utils/reducedFxQuery';
 import {buildFxDetailCalendarQuery, fxDetailCalendarViews, type FxDetailCalendarEntry, type FxDetailCalendarInput} from '../fxDetailCalendar';
 

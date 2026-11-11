@@ -29,7 +29,7 @@
     import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition} from '$lib/features/signals';
     import {NO_SIGNAL_SOURCES, renderLocalSignal, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import {SineSignal} from '$lib/features/signals/SineSignal';
-    import {buildOverlaySignalInfoMap} from '$lib/features/signals/signalLabel';
+    import {buildOverlaySignalInfoMap} from '$lib/components/charts/signalLabel';
 
     /** The days of the global preview's synthetic curve. */
     const SYNTHETIC_DAYS = 365;

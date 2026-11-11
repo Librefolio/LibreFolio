@@ -8,7 +8,7 @@
  * @module charts/crossTypeCalendar
  */
 
-import {CALENDAR_RETURN_INSTANCE_ID, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+import {CALENDAR_RETURN_INSTANCE_ID, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
 import {fxCalendarRequest, type FxCalendarRequest, type FxCalendarSignalRequest} from '$lib/utils/reducedFxQuery';
 
 /** An `fx-pair` signal the page compares, the way the signal shows the pair. */

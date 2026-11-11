@@ -18,7 +18,7 @@
     import type {MeasurementResult} from '$lib/features/signals/MeasureSignal';
     import {MeasureSignal} from '$lib/features/signals/MeasureSignal';
     import {hslToHex} from '$lib/utils/colors';
-    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/features/signals/signalLabel';
+    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/components/charts/signalLabel';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';

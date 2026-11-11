@@ -4,7 +4,7 @@
  * preview shows what the choice does to the lines on top of a price too. Nothing here is a financial quantity: it is a drawing.
  */
 
-import type {RenderedSignal} from '$lib/features/signals';
+import type {RenderedSignal} from '$lib/components/charts/chartSignalContract';
 import {SIGNAL_DEFAULT_PALETTE} from '$lib/theme/chartPalettes';
 import type {LineDataPoint} from './LineChart.svelte';
 

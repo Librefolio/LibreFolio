@@ -16,7 +16,7 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {nextCardPrimaryView, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import type {CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+    import type {CalendarReturnViewState} from '$lib/features/signals/calendarReturn';
     import type {RenderedSignal} from '$lib/features/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
     import type {LivePriceDirection} from '$lib/services/livePriceService';

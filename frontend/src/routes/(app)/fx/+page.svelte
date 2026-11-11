@@ -28,7 +28,7 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {type ChartPrimaryView, type ChartSettings, effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
-    import {CALENDAR_RETURN_INSTANCE_ID, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
     import {calendarReturnRangeDays, calendarReturnWindowDays} from '$lib/components/charts/calendarReturnWindow';
     import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
     import {DEFAULT_COMPACT_PLOT_WIDTH_PX} from '$lib/components/charts/timeSeriesAggregation';
