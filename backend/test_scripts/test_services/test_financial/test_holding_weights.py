@@ -65,11 +65,12 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import PortfolioHolding, PortfolioSummary
 from backend.app.services.ai_export.components.broker_concentration_context import concentration_metrics
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
@@ -107,8 +108,8 @@ class _Scope:
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

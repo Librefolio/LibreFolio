@@ -102,7 +102,8 @@ from backend.app.schemas.portfolio import PortfolioReportQuery
 from backend.app.services.ai_export.components import technical_shared
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.assets import price_query
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import service as risk_service_module
 
@@ -277,8 +278,8 @@ def _section(response: httpx.Response, component_id: str) -> dict:
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

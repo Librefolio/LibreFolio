@@ -73,7 +73,7 @@ from backend.app.services.pac_allocator.evaluation.keys import fx_pair_key
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.source import wac as source_wac
 from backend.app.services.pac_allocator.source.keys import normalized_fx_pair
-from backend.app.services.portfolio import portfolio_service
+from backend.app.services.portfolio import wac as wac_module
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 APP_ROOT = REPO_ROOT / "backend" / "app"
@@ -477,7 +477,7 @@ async def _wac_evidence(monkeypatch, *, source_currency: str, stored_rate: Decim
     """Drive ``build_planner_wac_contexts`` on one holding: the WAC runtime and the saved-row reader replaced, the session
     a bare object that nothing reads. Returns the one evidence line."""
     base, quote, _inverted = normalized_fx_pair(source_currency, "EUR")
-    monkeypatch.setattr(portfolio_service, "compute_wac_iterative", AsyncMock(return_value=_wac_result(source_currency=source_currency, rate_used=rate_used)))
+    monkeypatch.setattr(wac_module, "compute_wac_iterative", AsyncMock(return_value=_wac_result(source_currency=source_currency, rate_used=rate_used)))
     monkeypatch.setattr(source_wac, "_load_wac_fx_rows", AsyncMock(return_value={(base, quote, ON): SimpleNamespace(rate=stored_rate, source="MANUAL_WAC_FX")}))
     rows = await source_wac.build_planner_wac_contexts(
         object(),

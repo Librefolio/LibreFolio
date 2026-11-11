@@ -53,7 +53,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.brokers.broker_service import BrokerService
-from backend.app.services.portfolio.portfolio_service import compute_wac_iterative
+from backend.app.services.portfolio.wac import compute_wac_iterative
 from backend.app.services.transactions import auto_cost, transaction_service
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow

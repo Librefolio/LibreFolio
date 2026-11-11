@@ -104,7 +104,8 @@ from backend.app.services.ai_export.datasets.spec import DatasetSpec
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.ai_export.runtime_service import AiExportSnapshotService
 from backend.app.services.assets import price_query
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import service as risk_service_module
 from backend.app.services.risk.service import RiskService
@@ -440,7 +441,7 @@ class _L2Watch:
     seen: set[str] = field(default_factory=set)
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> _L2Watch:
-        cache = portfolio_service_module._portfolio_l2_cache
+        cache = report_module._portfolio_l2_cache
         real_get, real_set = cache.get, cache.set
         real_get_report, real_db_resource, real_resolve = PortfolioService.get_report, BuildContext.db_resource, BuildContext.resolve
         watch = self
@@ -657,8 +658,8 @@ async def _run(watch: _L2Watch, label: str, consumer: _Consumer) -> None:
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 
@@ -709,7 +710,7 @@ class TestTheCachedReportIsShared:
         (stored,) = l2_watch.stored
         assert first is stored.report and second is stored.report, "both requests get the stored object"
         assert [call.from_l2 for call in l2_watch.calls] == [False, True], "the first request builds, the second is served from L2"
-        cached, hit = portfolio_service_module._portfolio_l2_cache.get(stored.key)
+        cached, hit = report_module._portfolio_l2_cache.get(stored.key)
         assert hit and cached is first, "the cache holds the very object both requests got"
         print_success("one object: built once, stored, served as is")
 

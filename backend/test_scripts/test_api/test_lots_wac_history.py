@@ -223,7 +223,7 @@ class TestPortfolioWAC:
 # what the linked ADJUSTMENT means to the cost pool, because a split is recognised
 # by a live join on the linked event's type:
 #
-# * portfolio_service.compute_wac_iterative treats an ADJUSTMENT as split-linked only
+# * wac.compute_wac_iterative treats an ADJUSTMENT as split-linked only
 #   while its AssetEvent.type == SPLIT, and adds that set to the WAC cache fingerprint,
 #   so a retype is picked up although the transaction itself is not touched;
 # * average_cost.cost_movement_from_transaction rescales the pool for a split-linked

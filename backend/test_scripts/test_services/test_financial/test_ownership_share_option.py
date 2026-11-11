@@ -87,7 +87,7 @@ from backend.app.schemas.portfolio import PortfolioReportQuery, PositionKey, Pos
 from backend.app.schemas.risk import PortfolioRiskScope, RiskAnalyticRequest, RiskCompositionPolicy, RiskMode, RiskQueryRequest, RiskScenarioDimension, RiskStressMethod
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.market_series import prepare_asset_series_set
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk.results import build_execution_context, portfolio_twrr_returns
 from backend.app.services.risk.scope import load_asset_classifications, load_scope_inputs
@@ -272,7 +272,7 @@ async def _series(book: _Book, user_id: int, query: PositionsSeriesQuery):
 
 def _clear_caches() -> None:
     portfolio_engine_module._portfolio_blob_cache.clear()
-    portfolio_service_module._portfolio_l2_cache.clear()
+    report_module._portfolio_l2_cache.clear()
 
 
 def _diff(old: Any, new: Any, path: str = "$") -> list[tuple[str, Any, Any]]:

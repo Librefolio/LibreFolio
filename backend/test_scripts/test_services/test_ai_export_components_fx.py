@@ -78,7 +78,9 @@ from backend.app.services.ai_export.components.types import BuildScope, DetailLe
 from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, ResourceLoadError, build_bucket_plan_for_scope
 from backend.app.services.fx.base import RateNotFoundError
 from backend.app.services.fx.conversion import convert_bulk
-from backend.app.services.portfolio.portfolio_service import PortfolioService, _portfolio_l2_cache, _wac_cache
+from backend.app.services.portfolio.portfolio_service import PortfolioService
+from backend.app.services.portfolio.report import _portfolio_l2_cache
+from backend.app.services.portfolio.wac import _wac_cache
 from backend.app.utils.datetime_utils import utcnow
 
 # =============================================================================

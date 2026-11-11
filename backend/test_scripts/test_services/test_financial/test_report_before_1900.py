@@ -72,7 +72,8 @@ from backend.app.schemas.portfolio import PortfolioReportQuery, PortfolioReportR
 from backend.app.services.financial_math.portfolio.models import StateSegment
 from backend.app.services.financial_math.returns import annualized_to_cumulative
 from backend.app.services.financial_math.series_steps import points_between, value_at
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
@@ -116,8 +117,8 @@ def _cycle(day: date, base: str, step: str, length: int) -> Decimal:
 
 
 def _clear_portfolio_caches() -> None:
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 
