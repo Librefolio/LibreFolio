@@ -35,7 +35,7 @@ and [TikTok](https://github.com/simple-icons/simple-icons/blob/develop/icons/tik
 Brand names and trademarks remain the property of their respective owners.
 
 The account badges of the Scalable Capital import plugins — `chart-line-fill` and
-`piggy-bank-fill`, drawn into `backend/app/services/brim_providers/static/scalable/*.png` and
+`piggy-bank-fill`, drawn into `backend/app/services/brim_providers/broker_scalable*/static/*.png` and
 `frontend/static/icons/brokers/scalable-*.png` from the sources in `scripts/assets/brokers/glyphs/` —
 come from [Phosphor Icons](https://github.com/phosphor-icons/core), the same icons the LibreFolio
 exporter shows, distributed under the MIT License:

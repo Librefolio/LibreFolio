@@ -162,12 +162,30 @@ preview_cache = PreviewCache()
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
-# Plugin static directories
+# Plugin static directories. fx and asset keep one shared ``static/`` per family; the BRIM family keeps the static files of
+# each plugin inside the plugin's own folder (``brim_providers/<plugin>/static/``), so its entry is the family root and the
+# first segment of the URL path names the plugin (``plugin_static_file``).
 PLUGIN_STATIC_DIRS = {
-    "brim": PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "static",
+    "brim": PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers",
     "fx": PROJECT_ROOT / "backend" / "app" / "services" / "fx_providers" / "static",
     "asset": PROJECT_ROOT / "backend" / "app" / "services" / "asset_source_providers" / "static",
 }
+
+
+def plugin_static_file(provider_type: str, path: str) -> Path | None:
+    """The file ``path`` names in the static files of ``provider_type``'s plugins, or ``None`` when it would leave them.
+
+    fx and asset: ``path`` is inside the family's one ``static/`` folder. brim: ``path`` is ``<plugin folder>/<file>``, and the file is
+    inside ``brim_providers/<plugin folder>/static/``. The result may not exist: the caller checks ``is_file()``.
+    """
+    base_dir = PLUGIN_STATIC_DIRS[provider_type]
+    if provider_type != "brim":
+        return confined_path(base_dir, path)
+    plugin_folder, _, relative = path.partition("/")
+    plugin_dir = confined_path(base_dir, plugin_folder)
+    if plugin_folder in ("", ".", "..") or plugin_dir is None or plugin_dir.parent != base_dir.resolve():
+        return None
+    return confined_path(plugin_dir / "static", relative)
 
 
 def _for_user(info: UploadFileInfo, user: User) -> UploadFileInfo:
@@ -550,15 +568,15 @@ async def serve_plugin_static(
     Requires authentication via session cookie.
 
     Plugin developers can place static files (icons, images, etc.)
-    in their plugin's static/ folder.
+    in a static/ folder: their plugin's own for BRIM, the family's for fx and asset.
 
     Structure:
-        brim_providers/static/{path}
+        brim_providers/{plugin}/static/{file}   (path: {plugin}/{file})
         fx_providers/static/{path}
         asset_source_providers/static/{path}
 
     Example URLs:
-        /api/v1/uploads/plugin/brim/directa/logo.png
+        /api/v1/uploads/plugin/brim/broker_scalable/broker.png
         /api/v1/uploads/plugin/fx/ecb/icon.svg
         /api/v1/uploads/plugin/asset/yfinance/logo.png
 
@@ -576,11 +594,8 @@ async def serve_plugin_static(
             detail=f"Invalid provider type. Must be one of: {list(PLUGIN_STATIC_DIRS.keys())}",
         )
 
-    # Build path and validate
-    base_dir = PLUGIN_STATIC_DIRS[provider_type]
-
     # Security: the requested path must stay inside the plugin's static folder
-    file_path = confined_path(base_dir, path)
+    file_path = plugin_static_file(provider_type, path)
     if file_path is None:
         raise HTTPException(status_code=403, detail="Access denied")
 

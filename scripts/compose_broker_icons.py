@@ -19,7 +19,7 @@ needs Pillow only. After changing an SVG, rerender its mask:
 ``rsvg-convert -w 512 -h 512 -b none <name>.svg -o <name>.png``.
 
 Outputs:
-- ``backend/app/services/brim_providers/static/<broker>/<account>.png``: the plugin's
+- ``backend/app/services/brim_providers/<plugin>/static/<account>.png``: the plugin's
   ``icon_url`` (``BRIMProvider.generate_static_url``), served by
   ``/api/v1/uploads/plugin/brim/``. A broker without an icon of its own shows the icon of its
   default import plugin, so choosing the plugin is enough;
@@ -50,7 +50,7 @@ from PIL import Image, ImageDraw
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LOGO_DIR = REPO_ROOT / "scripts" / "assets" / "brokers"
 GLYPH_DIR = LOGO_DIR / "glyphs"
-PLUGIN_STATIC_DIR = REPO_ROOT / "backend" / "app" / "services" / "brim_providers" / "static"
+PLUGINS_DIR = REPO_ROOT / "backend" / "app" / "services" / "brim_providers"
 DOCS_DIRS = (
     REPO_ROOT / "frontend" / "static" / "icons" / "brokers",
     REPO_ROOT / "mkdocs_src" / "docs" / "static" / "icons" / "brokers",
@@ -63,6 +63,9 @@ BADGE_RING = (255, 255, 255, 255)
 GLYPH_COLOUR = (255, 255, 255, 255)
 BROKER_BLUE = (58, 99, 168, 255)  # #3a63a8, the exporter's broker tile
 DEPOSIT_ORANGE = (232, 120, 30, 255)  # #e8781e, the exporter's overnight tile
+
+# the plugin folder that bundles each account's icon (its ``static/`` folder, served as ``/api/v1/uploads/plugin/brim/<plugin>/<account>.png``)
+PLUGIN_FOLDERS = {"scalable": {"broker": "broker_scalable", "deposit": "broker_scalable_deposit"}}
 
 # broker logo (scripts/assets/brokers/<broker>.png) → {account: (glyph, badge colour)}
 ACCOUNTS = {
@@ -102,7 +105,7 @@ def plan() -> dict[Path, Image.Image]:
             icons[docs_dir / f"{broker}.png"] = logo(broker)
         for account, (glyph, colour) in accounts.items():
             image = compose(broker, glyph, colour)
-            icons[PLUGIN_STATIC_DIR / broker / f"{account}.png"] = image
+            icons[PLUGINS_DIR / PLUGIN_FOLDERS[broker][account] / "static" / f"{account}.png"] = image
             for docs_dir in DOCS_DIRS:
                 icons[docs_dir / f"{broker}-{account}.png"] = image
     return icons

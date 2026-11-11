@@ -796,8 +796,8 @@ def _unreadable_problems(plugin: BRIMProvider, code: str, path: Path) -> List[st
 # =============================================================================
 
 IDENTITIES = [
-    pytest.param(BROKER_CODE, BROKER_NAME, "scalable/broker.png", "scalable-broker", ["scalable-prime", "scalable-broker"], id=BROKER_CODE),
-    pytest.param(DEPOSIT_CODE, DEPOSIT_NAME, "scalable/deposit.png", "scalable-deposit", ["scalable-deposit"], id=DEPOSIT_CODE),
+    pytest.param(BROKER_CODE, BROKER_NAME, "broker_scalable/broker.png", "scalable-broker", ["scalable-prime", "scalable-broker"], id=BROKER_CODE),
+    pytest.param(DEPOSIT_CODE, DEPOSIT_NAME, "broker_scalable_deposit/deposit.png", "scalable-deposit", ["scalable-deposit"], id=DEPOSIT_CODE),
 ]
 
 
