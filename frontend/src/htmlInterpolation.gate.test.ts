@@ -910,7 +910,7 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
     });
 
     it('reads every source file of the app, and no test, mock or generated client', () => {
-        expect(isScanned('src/lib/components/assets/AssetTable.svelte')).toBe(true);
+        expect(isScanned('src/lib/features/assets/AssetTable.svelte')).toBe(true);
         expect(isScanned('src/lib/utils/providerHelpers.ts')).toBe(true);
         expect(isScanned('src/lib/stores/app/notify.svelte.ts')).toBe(true);
         expect(isScanned('src/lib/utils/core/__tests__/escapeHtml.test.ts')).toBe(false);
@@ -923,9 +923,9 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
 
         // The walk reaches the files that build HTML by hand: a scan of the wrong directory, or a
         // parser that silently reads nothing, would report them clean too.
-        expect(files).toEqual(expect.arrayContaining(['src/lib/components/assets/AssetTable.svelte', 'src/lib/components/table/DataTable.svelte', 'src/lib/utils/providerHelpers.ts', 'src/lib/features/transactions/import/ImportWizardModal.svelte']));
+        expect(files).toEqual(expect.arrayContaining(['src/lib/features/assets/AssetTable.svelte', 'src/lib/components/table/DataTable.svelte', 'src/lib/utils/providerHelpers.ts', 'src/lib/features/transactions/import/ImportWizardModal.svelte']));
         const markupTemplatesIn = (file: string): number => templates.filter((t) => t.file === file && t.markup).length;
-        expect(markupTemplatesIn('src/lib/components/assets/AssetTable.svelte')).toBeGreaterThan(0);
+        expect(markupTemplatesIn('src/lib/features/assets/AssetTable.svelte')).toBeGreaterThan(0);
         expect(markupTemplatesIn('src/lib/utils/providerHelpers.ts')).toBeGreaterThan(0);
         // 321 markup templates in 46 files when this gate was written: a parser that silently reads
         // nothing, or a walk that reaches the wrong directory, finds none — or far fewer.

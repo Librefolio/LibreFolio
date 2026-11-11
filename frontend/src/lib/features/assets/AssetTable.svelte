@@ -10,7 +10,7 @@
     import {goto} from '$app/navigation';
     import {onMount} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {deltaPeriodLabel} from '$lib/utils/assetPriceDerived';
+    import {deltaPeriodLabel} from '$lib/features/assets/assetPriceDerived';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {Merge, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';

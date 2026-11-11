@@ -6,8 +6,8 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {ArrowLeft, ExternalLink} from 'lucide-svelte';
-    import AssetBrowseNav from '$lib/components/assets/AssetBrowseNav.svelte';
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import AssetBrowseNav from '$lib/features/assets/AssetBrowseNav.svelte';
+    import AssetIcon from '$lib/features/assets/AssetIcon.svelte';
     import LiveUpdatesStatus from '$lib/features/live-updates/LiveUpdatesStatus.svelte';
     import type {ActivePollingState} from '$lib/features/live-updates/activePolling';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';

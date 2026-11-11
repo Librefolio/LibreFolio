@@ -40,7 +40,7 @@
     import PerformanceChart from './PerformanceChart.svelte';
     import PositionsReturnChart from './PositionsReturnChart.svelte';
     import AllocationPanel from './AllocationPanel.svelte';
-    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
+    import AssetCalendarWindowControls from '$lib/features/assets/detail/AssetCalendarWindowControls.svelte';
     import {DEFAULT_CALENDAR_RETURN_WINDOW, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {assetColorRanks, assetIdOfLineId, PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionLine, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
     import {rollingLine, type PositionsRollingState} from './positionsRolling';

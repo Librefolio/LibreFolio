@@ -8,7 +8,7 @@
  * drifting apart. The request items themselves (create, patch, provider assignment)
  * are built here too, from a plain copy of the form (`AssetFormFields`).
  *
- * @module components/assets/assetPayload
+ * @module features/assets/assetPayload
  */
 import {identifierRowsToColumns, type IdentifierRow} from './assetIdentifiers';
 

@@ -5236,7 +5236,7 @@ describe('canonical overlay axis and reference helpers', () => {
         });
 
         it.each([
-            ['AssetCard', new URL('../assets/AssetCard.svelte', import.meta.url)],
+            ['AssetCard', new URL('../../features/assets/AssetCard.svelte', import.meta.url)],
             ['FxCard', new URL('../../features/fx/FxCard.svelte', import.meta.url)],
         ] as const)('%s selects the active primary profile and passes secondary profiles', (_name, path) => {
             const source = readFileSync(path, 'utf8');

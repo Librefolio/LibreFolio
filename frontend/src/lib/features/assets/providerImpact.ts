@@ -10,7 +10,7 @@
  * server judges the real call. A change the server will refuse (a SPLIT with adjustments without a purchase cost) is also
  * left to that call, which says the refusal inline (`currencyChangeErrors.ts`).
  *
- * @module components/assets/providerImpact
+ * @module features/assets/providerImpact
  */
 
 import {zodiosApi} from '$lib/api';

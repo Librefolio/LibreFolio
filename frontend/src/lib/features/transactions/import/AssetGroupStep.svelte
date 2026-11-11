@@ -33,7 +33,7 @@
     import ContextMenu, {type ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
-    import {clusterSignature, groupSignature, isPrimary, memberKey, movePartition, orderedIdentifiers, partitionOf, splitPartition, summariseLinks, type AssetGroup, type ExtractedAsset, type GroupPrimary, type IdentifierKind, type LinkSummary, type PrimaryMap} from '$lib/utils/assetGrouping';
+    import {clusterSignature, groupSignature, isPrimary, memberKey, movePartition, orderedIdentifiers, partitionOf, splitPartition, summariseLinks, type AssetGroup, type ExtractedAsset, type GroupPrimary, type IdentifierKind, type LinkSummary, type PrimaryMap} from '$lib/features/assets/assetGrouping';
     import {KIND_TONES} from '$lib/theme/toneClasses';
 
     interface Props {

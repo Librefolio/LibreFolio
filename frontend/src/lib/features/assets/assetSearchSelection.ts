@@ -5,7 +5,7 @@
  * metadata comparison, the reuse prompt): here only the decisions, so each branch is unit-testable without
  * mounting it.
  *
- * @module components/assets/assetSearchSelection
+ * @module features/assets/assetSearchSelection
  */
 import {ASSET_TYPES} from '$lib/utils/assetTypes';
 import {generateUUID} from '$lib/utils/core/uuid';

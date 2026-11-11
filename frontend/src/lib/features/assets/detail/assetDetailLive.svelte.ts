@@ -10,7 +10,7 @@
  * the instance while the page initialises: its constructor registers the polling effect, which the page's
  * destruction tears down.
  *
- * @module components/assets/detail/assetDetailLive
+ * @module features/assets/detail/assetDetailLive
  */
 
 import {zodiosApi} from '$lib/api';

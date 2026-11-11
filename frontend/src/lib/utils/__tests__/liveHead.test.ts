@@ -6,7 +6,7 @@
  * instead of adding one: the bucket count, and with it the step the cache answers, does not change.
  */
 import {describe, expect, it} from 'vitest';
-import type {DerivedChartPoint} from '$lib/utils/assetPriceDerived';
+import type {DerivedChartPoint} from '$lib/features/assets/assetPriceDerived';
 import {withLiveHead} from '../liveHead';
 
 const point = (date: string, value: number, staleDays = 0): DerivedChartPoint => ({date, value, staleDays});

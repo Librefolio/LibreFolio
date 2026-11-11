@@ -20,7 +20,7 @@ import TransactionBulkModal, {type WorkspaceIntent} from '../bulk/TransactionBul
 import AssetGroupStep from '$lib/features/transactions/import/AssetGroupStep.svelte';
 import {TRANSACTION_BULK_STEP_IDS, type ContextualOnboardingFlow, type GuidedOnboardingFlow} from '$lib/features/onboarding/onboardingGuideCatalog';
 import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
-import type {AssetGroup} from '$lib/utils/assetGrouping';
+import type {AssetGroup} from '$lib/features/assets/assetGrouping';
 import type {TransactionCreateItem} from '$lib/types';
 import {zodiosApi} from '$lib/api';
 import {ensureBrokersLoaded, getBrokerInfo, getEditableBrokers, refreshAllBrokers} from '$lib/stores/reference/brokerStore';

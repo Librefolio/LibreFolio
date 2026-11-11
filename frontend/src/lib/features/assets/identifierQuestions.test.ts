@@ -7,7 +7,7 @@
  */
 
 import {describe, expect, it} from 'vitest';
-import {demotedValues, mergeOther, needsPrimaryChoice, normIdentifier, otherContains, pendingIdentifier} from '../assetIdentifiers';
+import {demotedValues, mergeOther, needsPrimaryChoice, normIdentifier, otherContains, pendingIdentifier} from './identifierQuestions';
 
 describe('normIdentifier', () => {
     it('treats a blank column as absent, not as a value', () => {

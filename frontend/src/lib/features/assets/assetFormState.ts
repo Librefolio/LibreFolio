@@ -8,7 +8,7 @@
  * without mounting the modal. The `$derived` wrappers stay in the component and
  * just call these.
  *
- * @module components/assets/assetFormState
+ * @module features/assets/assetFormState
  */
 
 /**

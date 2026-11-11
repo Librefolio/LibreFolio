@@ -36,7 +36,7 @@
  *
  * Pure module, no Svelte and no I/O, so it is unit-testable in isolation.
  *
- * @module utils/assetSimilarity
+ * @module features/assets/assetSimilarity
  */
 
 // ============================================================================

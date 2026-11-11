@@ -38,7 +38,7 @@
     import {generateUUID} from '$lib/utils/core/uuid';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import DistributionDataImportModal from '$lib/components/assets/DistributionDataImportModal.svelte';
+    import DistributionDataImportModal from '$lib/features/assets/DistributionDataImportModal.svelte';
 
     // =========================================================================
     // Types

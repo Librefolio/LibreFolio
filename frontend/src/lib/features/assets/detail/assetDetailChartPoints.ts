@@ -1,7 +1,7 @@
 /**
  * Merging new price points into the asset detail chart's data.
  *
- * @module components/assets/detail/assetDetailChartPoints
+ * @module features/assets/detail/assetDetailChartPoints
  */
 
 /**

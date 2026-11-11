@@ -14,7 +14,7 @@
  * depends on exactly the same state: for example, on the chart data only while the main pair has
  * no converted date yet.
  *
- * @module components/assets/detail/assetDetailFxRequirements
+ * @module features/assets/detail/assetDetailFxRequirements
  */
 
 import {createPairSlug} from '$lib/features/fx/fxStoreRegistry';

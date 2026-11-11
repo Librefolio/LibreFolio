@@ -40,7 +40,7 @@ beforeEach(() => {
 // =============================================================================
 
 const LIST_PAGE = 'src/routes/(app)/assets/+page.svelte';
-const BROWSE_MODULE = 'src/lib/components/assets/assetBrowse.ts';
+const BROWSE_MODULE = 'src/lib/features/assets/assetBrowse.ts';
 const ALIGN = `align \`${BROWSE_MODULE}\` with \`assetScope\` in \`${LIST_PAGE}\`: the asset detail's prev/next default order groups assets with it`;
 
 /**

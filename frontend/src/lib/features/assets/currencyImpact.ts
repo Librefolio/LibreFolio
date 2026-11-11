@@ -10,7 +10,7 @@
  * Unlike the dry run of a provider change (`providerImpact.ts`: advice, never a gate) this one is a gate: the PATCH deletes
  * data without any other check, so when the dry run fails the promise rejects and the save does not go on blind.
  *
- * @module components/assets/currencyImpact
+ * @module features/assets/currencyImpact
  */
 
 import {zodiosApi} from '$lib/api';

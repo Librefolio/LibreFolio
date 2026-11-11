@@ -1,7 +1,7 @@
 /**
  * supportChannel — pure unit tests (FB-27: the support channel, shared by the asset search report and the checks' help).
  *
- * The channel was born in `components/assets/assetSearchReport.ts` (P20 «Can't find it? Let us know»); FB-27 moves it to
+ * The channel was born in `features/assets/assetSearchReport.ts` (P20 «Can't find it? Let us know»); FB-27 moves it to
  * `features/support/supportChannel.ts`, where the Security tab's «Contact support» and the restore-interrupted page use it
  * too. These are the cases that lived in `assetSearchReport.test.ts`, with the SAME assertions; the behaviour is unchanged.
  * Red until the move: the module does not exist.

@@ -23,7 +23,7 @@
     import ChartSignalsSection from './ChartSignalsSection.svelte';
     import {DEFAULT_AXIS_SCALE, DEFAULT_CHART_SETTINGS, DEFAULT_PERCENTAGE_AXIS_SCALE, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, type AxisScaleSettings, type ChartAxisSettings, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from './calendarReturnWindow';
-    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
+    import AssetCalendarWindowControls from '$lib/features/assets/detail/AssetCalendarWindowControls.svelte';
     import {collectConfigurableSecondaryAxes} from './chartCoreHelpers';
     import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from './axisLabelHelpers';
     import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition} from '$lib/charts/signals';

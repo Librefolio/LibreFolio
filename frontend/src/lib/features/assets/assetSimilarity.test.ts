@@ -9,7 +9,7 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {buildAssetGroups, compareAssetNames, compareAssets, normalizeAssetName, tokenizeAssetName, type SimilarityInput} from '../assetSimilarity';
+import {buildAssetGroups, compareAssetNames, compareAssets, normalizeAssetName, tokenizeAssetName, type SimilarityInput} from './assetSimilarity';
 
 describe('normalizeAssetName', () => {
     it('strips accents, case and punctuation', () => {
