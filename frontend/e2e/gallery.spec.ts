@@ -2342,6 +2342,35 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('backup create (admin) - all languages and themes', async ({page}, testInfo) => {
+            // The administrators' Backup tab as a backup is started from it: the card at rest, the two kinds to choose from, the
+            // Create backup button (the shot of the user manual's Backup chapter). Nothing is created: no job is stored or answered,
+            // and the button is never pressed. A fresh page has no followed job (sessionStorage is per page), so the card is idle;
+            // the list of kept backups under it is served from the fixture, so no archive of the lane is ever drawn (G-23's principle:
+            // the starting data is the same every time; a few pixels of difference is no problem).
+            const viewport = getViewport(testInfo);
+            await serveGalleryBackupList(page);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await navigateTo(page, '/settings?tab=backup');
+                await expect(page.getByTestId('settings-tab-backup')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                const card = page.getByTestId('backup-download-card');
+                await waitForSettled(card, 15_000);
+                await expect(card, 'the card is idle: no backup is followed').toHaveAttribute('data-state', 'idle');
+                await expect(card.getByTestId('backup-mode-clear'), 'the kinds to choose from').toBeVisible();
+                await expect(card.getByTestId('backup-mode-secure')).toBeVisible();
+                await expect(card.getByTestId('backup-create')).toBeEnabled();
+                await freezeAnimations(page);
+                // DESKTOP — the tall-screen rule (galleryTallShots.ts): the whole tab, as the backup-ready shot frames it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/backup-create`);
+                // MOBILE — the card itself, at the top of the screen.
+                if (viewport === 'mobile') await frameTarget(page, card, `mobile/${lang}/${theme}/settings/backup-create`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'backup-create');
+                await restoreTallScreen(page);
+            });
+        });
+
         test('restore rolled back (admin) - all languages and themes', async ({page}, testInfo) => {
             // A restore that was rolled back, played in the page (galleryRestore.ts): the overlay that says why, then the card's
             // last result. Nothing is uploaded, restored or restarted; the success is never photographed (P8).

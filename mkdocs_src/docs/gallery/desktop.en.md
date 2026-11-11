@@ -354,6 +354,22 @@ Administrators see what needs attention and how to act on it; the passed checks 
     <img class="gallery-img" data-category="settings" data-name="security" alt="Security Checks (Admin)">
 </div>
 
+### 💾 Backup: Make One (Admin)
+
+The Backup tab of an administrator: choose Clear or Secure, then Create backup.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="backup-create" alt="Backup: Make One (Admin)">
+</div>
+
+### ✅ Backup Ready (Admin)
+
+When the backup is made, the card offers its download.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="backup-ready" alt="Backup Ready (Admin)">
+</div>
+
 ### ↩️ Restore Rolled Back (Admin)
 
 If a restore fails, LibreFolio puts the data back as it was and says why.
