@@ -433,7 +433,7 @@ What each plugin sends there (`plugin_version` is the one that introduced it; ch
 | Revolut (Invest layout) | 1.3.0 | a `Stock split` with no readable positive `Quantity` (a reverse split), or with no ticker | — | `Transfer` |
 | Trading 212 | 1.2.0 | `stock distribution`, `currency conversion`; a `stock split close`/`open` that is a reverse split (fewer shares after), has equal shares, or has no partner | — | `transfer` |
 | eToro | 1.4.0 | — (no type goes to the shared notice) | — | — |
-| Trade Republic | 1.1.0 | an unknown type; a row whose `Kosten` or `Belasting` is not zero (the row is imported, the fee and tax are not) | an unreadable date or amount, a missing ISIN | — |
+| Trade Republic | 1.2.0 | Transaction export: a (`category`, `type`) it does not map, an `account_type` other than `DEFAULT`, a negative dividend, a positive fee, a sign a type does not allow. Dutch CSV: an unknown type; a row whose `Kosten` or `Belasting` is not zero (the row is imported, the fee and tax are not) | Transaction export: an unreadable date, number or currency, a trade or dividend without a symbol, a trade without shares. Dutch CSV: an unreadable date or amount, a missing ISIN | a repeated `transaction_id`; a row whose amount, fee and tax are all zero |
 | Swissquote | 1.2.0 | a forex leg without its partner, with costs, or in an order of more than two legs; an unknown transaction | an unreadable date, a missing or zero net amount, a missing currency, a missing ISIN and symbol, a quantity not positive on a trade | — |
 | Interactive Brokers | 1.1.0 | an unknown direction, a trade without an ISIN (a currency trade) | an unreadable date | — |
 

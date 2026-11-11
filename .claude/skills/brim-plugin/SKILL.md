@@ -141,7 +141,7 @@ without values (defaults, no secret), so nothing they use may depend on a settin
 5. Give the plugin its name and description in EN/IT/FR/ES, in its own `i18n/`:
    `./dev.py i18n add brimPlugins.broker_<name>.name --en … --it … --fr … --es …
    --into brim_providers/broker_<name>` (and `.description`). The gate
-   `utils gate-plugin-i18n-ownership` checks they live there.
+   `./dev.py test utils gate-plugin-i18n-ownership` checks they live there.
 
 ## 📚 Where to find the technical details
 
