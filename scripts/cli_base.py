@@ -346,8 +346,26 @@ def configure_test_runtime(
     ensure_test_lane_id()
     os.environ["LIBREFOLIO_TEST_MODE"] = "1"
     os.environ["PIPENV_DONT_LOAD_ENV"] = "1"
+    _default_lane_tmpdir(resolved_port)
 
     return resolved_port, resolved_data_dir
+
+
+def _default_lane_tmpdir(port: int) -> None:
+    """A lane's temporary files go to ``~/.cache/librefolio-test-tmp/<port>``, not to the shared ``/tmp``.
+
+    ``/tmp`` is often RAM: pytest's ``tmp_path`` archives and Playwright's scratch files filled it. An explicit
+    ``TMPDIR`` (a lane that already chose its own folder) is left alone; the port names the lane, as it does for
+    the data folder, so two lanes never share one.
+    """
+    if os.environ.get("TMPDIR"):
+        return
+    folder = Path.home() / ".cache" / "librefolio-test-tmp" / str(port)
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return  # unwritable home: keep the system default rather than stop the run
+    os.environ["TMPDIR"] = str(folder)
 
 
 def configure_server_runtime(
