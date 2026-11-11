@@ -9,6 +9,7 @@
  */
 
 import {CALENDAR_RETURN_INSTANCE_ID, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
+import {bulkRangeDays, BULK_SIGNAL_MARGIN_DAYS} from '$lib/api/bulkBatches';
 import {fxCalendarRequest, type FxCalendarRequest, type FxCalendarSignalRequest} from '$lib/utils/reducedFxQuery';
 
 /** An `fx-pair` signal the page compares, the way the signal shows the pair. */
@@ -84,4 +85,70 @@ export function buildAssetComparisonQuery(input: AssetComparisonInput): AssetCom
         include_events: false as const,
         signals: [fxCalendarRequest(input.windowDays)],
     }));
+}
+
+/** A card of a list that compares FX pairs in the rolling-return view (the asset list, FB-11 follow-up). */
+export interface ListFxPairCard extends FxPairComparisonInput {
+    cardKey: string;
+}
+
+/** A card's `fx-pair` signal that an entry answers. */
+export interface ListFxPairOwner {
+    cardKey: string;
+    configId: string;
+}
+
+export interface ListFxPairEntry {
+    request: FxCalendarRequest;
+    /** Every card and signal the request answers: cards that compare the same pair the same way over the same window share it. */
+    owners: ListFxPairOwner[];
+}
+
+/** One list of conversions for the compared pairs of all the cards of a list, identical requests asked once. */
+export function buildListFxPairComparisonQuery(cards: readonly ListFxPairCard[]): ListFxPairEntry[] {
+    const entries: ListFxPairEntry[] = [];
+    const byRequest = new Map<string, ListFxPairEntry>();
+    for (const card of cards) {
+        for (const {request, configId} of buildFxPairComparisonQuery(card)) {
+            const key = JSON.stringify(request);
+            const owner = {cardKey: card.cardKey, configId};
+            const shared = byRequest.get(key);
+            if (shared) {
+                shared.owners.push(owner);
+                continue;
+            }
+            const entry = {request, owners: [owner]};
+            byRequest.set(key, entry);
+            entries.push(entry);
+        }
+    }
+    return entries;
+}
+
+/** The days a request weighs for the batch caps, as the other conversions of the FX calendar. */
+export function estimateListFxPairDays(entry: ListFxPairEntry, today: string): number {
+    return bulkRangeDays(entry.request.date_range.start, entry.request.date_range.end, today) + BULK_SIGNAL_MARGIN_DAYS;
+}
+
+/**
+ * The rolling-return view of each compared pair, by card and then by signal id, from the answers of the batches
+ * (a `request_index` is local to the batch that carried it, so each answer comes with its own entries). A pair with no answer is absent.
+ */
+export function listFxPairComparisonViews(answers: ReadonlyArray<{entries: readonly ListFxPairEntry[]; answer: unknown}>): Map<string, Map<string, CalendarReturnView>> {
+    const byCard = new Map<string, Map<string, CalendarReturnView>>();
+    for (const {entries, answer} of answers) {
+        const groups = answer && typeof answer === 'object' ? (answer as {signal_results?: unknown}).signal_results : null;
+        for (const group of Array.isArray(groups) ? groups : []) {
+            if (!group || typeof group !== 'object') continue;
+            const {request_index: index, signals} = group as {request_index?: unknown; signals?: unknown};
+            const entry = typeof index === 'number' ? entries[index] : undefined;
+            if (!entry) continue;
+            const view = extractCalendarReturnView(signals, CALENDAR_RETURN_INSTANCE_ID);
+            for (const {cardKey, configId} of entry.owners) {
+                if (!byCard.has(cardKey)) byCard.set(cardKey, new Map());
+                byCard.get(cardKey)!.set(configId, view);
+            }
+        }
+    }
+    return byCard;
 }

@@ -16,7 +16,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE} from '$lib/features/signals/calendarReturn';
-import {buildAssetComparisonQuery, buildFxPairComparisonQuery, fxPairComparisonViews} from '../crossTypeCalendar';
+import {buildAssetComparisonQuery, buildFxPairComparisonQuery, buildListFxPairComparisonQuery, fxPairComparisonViews, listFxPairComparisonViews, estimateListFxPairDays} from '../crossTypeCalendar';
 
 const signal = (windowDays: number) => ({instance_id: CALENDAR_RETURN_INSTANCE_ID, signal_code: CALENDAR_RETURN_SIGNAL_CODE, params: {window_days: windowDays}});
 const target = (configId: string, pairSlug: string, inverted = false) => ({configId, pairSlug, inverted});
@@ -84,5 +84,67 @@ describe('buildAssetComparisonQuery: one item per distinct asset', () => {
 
     it('asks nothing for no asset', () => {
         expect(buildAssetComparisonQuery({...range, windowDays: 90, assetIds: []})).toEqual([]);
+    });
+});
+
+describe('buildListFxPairComparisonQuery: one request for the pairs of every card of a list (FB-11 follow-up)', () => {
+    const card = (cardKey: string, windowDays: number, pairTargets: ReturnType<typeof target>[], span = range) => ({cardKey, ...span, windowDays, pairTargets});
+
+    it('asks the pairs of all the cards in one list, each entry owned by its card and signal', () => {
+        const entries = buildListFxPairComparisonQuery([card('asset-1', 30, [target('a', 'EUR-USD')]), card('asset-2', 30, [target('b', 'EUR-GBP', true)])]);
+
+        expect(entries.map((e) => [e.request.from_amount.code, e.request.to, e.owners])).toEqual([
+            ['EUR', 'USD', [{cardKey: 'asset-1', configId: 'a'}]],
+            ['GBP', 'EUR', [{cardKey: 'asset-2', configId: 'b'}]],
+        ]);
+    });
+
+    it('shares one request between cards that compare the same pair the same way over the same window', () => {
+        const entries = buildListFxPairComparisonQuery([card('asset-1', 30, [target('a', 'EUR-USD')]), card('asset-2', 30, [target('b', 'EUR-USD')]), card('asset-3', 90, [target('c', 'EUR-USD')])]);
+
+        expect(entries).toHaveLength(2);
+        expect(entries[0].owners).toEqual([
+            {cardKey: 'asset-1', configId: 'a'},
+            {cardKey: 'asset-2', configId: 'b'},
+        ]);
+        expect(entries[1].owners).toEqual([{cardKey: 'asset-3', configId: 'c'}]);
+    });
+
+    it('asks nothing when no card compares a pair', () => {
+        expect(buildListFxPairComparisonQuery([card('asset-1', 30, [])])).toEqual([]);
+        expect(buildListFxPairComparisonQuery([])).toEqual([]);
+    });
+
+    it('estimates a request by its range, for the batches', () => {
+        const [entry] = buildListFxPairComparisonQuery([card('asset-1', 30, [target('a', 'EUR-USD')])]);
+        expect(estimateListFxPairDays(entry, '2026-07-01')).toBeGreaterThan(170);
+    });
+});
+
+describe('listFxPairComparisonViews: the views by card, then by signal id', () => {
+    const entries = buildListFxPairComparisonQuery([
+        {cardKey: 'asset-1', ...range, windowDays: 30, pairTargets: [target('a', 'EUR-USD')]},
+        {cardKey: 'asset-2', ...range, windowDays: 30, pairTargets: [target('b', 'EUR-USD'), target('c', 'EUR-GBP')]},
+    ]);
+
+    it('gives each owner of an answered entry its view, and leaves out an entry with no answer', () => {
+        const views = listFxPairComparisonViews([{entries, answer: {signal_results: [{request_index: 0, signals: []}]}}]);
+
+        expect([...views.keys()].sort()).toEqual(['asset-1', 'asset-2']);
+        expect([...views.get('asset-1')!.keys()]).toEqual(['a']);
+        expect([...views.get('asset-2')!.keys()]).toEqual(['b']);
+    });
+
+    it('reads each batch against its own entries: a request_index is local to its request', () => {
+        const views = listFxPairComparisonViews([
+            {entries: [entries[0]], answer: {signal_results: [{request_index: 0, signals: []}]}},
+            {entries: [entries[1]], answer: {signal_results: [{request_index: 0, signals: []}]}},
+        ]);
+
+        expect([...views.get('asset-2')!.keys()]).toEqual(['b', 'c']);
+    });
+
+    it('an answer that is no object gives no view', () => {
+        expect(listFxPairComparisonViews([{entries, answer: null}]).size).toBe(0);
     });
 });
