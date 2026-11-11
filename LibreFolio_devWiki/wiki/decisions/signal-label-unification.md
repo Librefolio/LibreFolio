@@ -28,7 +28,7 @@ As the number of overlay signal types grew (asset comparison, FX pair comparison
 
 ## Decision
 
-**Option 3**: create `frontend/src/lib/features/signals/signalLabel.ts` with `SignalLabelInfo` struct and two functions. Simultaneously enrich `RenderedSignal` with the metadata fields. Remove all hardcoded emojis from `getLabel()` in comparison signals.
+**Option 3**: create `frontend/src/lib/components/charts/signalLabel.ts` with `SignalLabelInfo` struct and two functions. Simultaneously enrich `RenderedSignal` with the metadata fields. Remove all hardcoded emojis from `getLabel()` in comparison signals.
 
 ```typescript
 // signalLabel.ts
@@ -67,7 +67,7 @@ export function buildOverlaySignalInfoMap(overlaySignals: ...): Map<string, Sign
 
 | Role | Path |
 |------|------|
-| Utility | `frontend/src/lib/features/signals/signalLabel.ts` |
+| Utility | `frontend/src/lib/components/charts/signalLabel.ts` |
 | Abstract signal base | `frontend/src/lib/features/signals/ChartSignal.ts` |
 | Asset comparison signal | `frontend/src/lib/features/signals/AssetComparisonSignal.ts` |
 | Measure panel | `frontend/src/lib/features/signals/components/MeasurePanel.svelte` |
