@@ -124,8 +124,8 @@ bridged inside a run, and no stroke crosses a declared gap.
 
 | Role | Path |
 |------|------|
-| The sentinel's origin | `frontend/src/lib/stores/fxStoreRegistry.ts` — `apiResultToFxDataPoint` |
-| The half-guard | `frontend/src/lib/utils/currency/fxConversionHelper.ts` |
+| The sentinel's origin | `frontend/src/lib/features/fx/fxStoreRegistry.ts` — `apiResultToFxDataPoint` |
+| The half-guard | `frontend/src/lib/features/fx/fxConversionHelper.ts` |
 | Chart gap | `frontend/src/lib/components/charts/LineChart.svelte`, `lineChartHelpers.ts` |
 | Backend signal runs (J-21) | `frontend/src/lib/charts/signals/backendRenderer.ts` — `renderScalarSeries`, `splitLineSignal`, `renderedSignalPointCount` |
 | Quote-day filter | `backend/app/services/signals/execution.py` — `quote_day_points` |

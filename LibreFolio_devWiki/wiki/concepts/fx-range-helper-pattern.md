@@ -50,5 +50,5 @@ export async function ensureFxRangeLoaded(slug, start, end): Promise<FxDataPoint
 
 | Role | Path |
 |------|------|
-| Helper function | `frontend/src/lib/stores/fxStoreRegistry.ts` |
+| Helper function | `frontend/src/lib/features/fx/fxStoreRegistry.ts` |
 | Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-05-subplan/plan-independent-FxRangeHelper.prompt.md` |

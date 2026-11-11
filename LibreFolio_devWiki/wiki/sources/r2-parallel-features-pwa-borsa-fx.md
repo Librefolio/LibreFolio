@@ -155,7 +155,7 @@ Fixed FX provider removal flow + added UX improvements to the FX detail page edi
 | Role | Path |
 |------|------|
 | Backend FX endpoint (`api/v1/fx.py` split by theme in `4180a59b6`; routes in `providers.py`) | `backend/app/api/v1/fx/providers.py` |
-| FX pair modal | `frontend/src/lib/components/fx/FxPairAddModal.svelte` |
+| FX pair modal | `frontend/src/lib/features/fx/FxPairAddModal.svelte` |
 | FX detail page | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` |
 | Asset detail page (tip) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
 

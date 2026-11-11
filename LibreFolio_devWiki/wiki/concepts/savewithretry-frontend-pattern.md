@@ -67,7 +67,7 @@ onError: (err) => {
 | `CashTransactionModal` | frontend/src/lib/components/brokers/CashTransactionModal.svelte — removed in `38c127baa` (2026-07-06, broker overview redesign) |
 | `AssetCurrencyChangeModal` | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
 | `PasswordChangeModal` | `frontend/src/lib/features/settings/PasswordChangeModal.svelte` |
-| `FxPairAddModal` | `frontend/src/lib/components/fx/FxPairAddModal.svelte` |
+| `FxPairAddModal` | `frontend/src/lib/features/fx/FxPairAddModal.svelte` |
 | `BrokerImportFilesModal` | `frontend/src/lib/features/brokers/BrokerImportFilesModal.svelte` |
 | `BrokerSharingModal` | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte` (modal chrome only; the save and its `trySave` now live in `BrokerSharingPanel.svelte`) |
 | `AssetModal` | `frontend/src/lib/components/assets/AssetModal.svelte` |

@@ -182,7 +182,7 @@ if (result.error_code === "HAS_TRANSACTIONS") {
 | Asset sync backend | `backend/app/services/assets/refresh.py` (bulk_refresh_prices) |
 | FX sync backend | `backend/app/services/fx/sync.py` (sync_pairs_bulk) |
 | SyncModalBase | `frontend/src/lib/components/ui/modals/SyncModalBase.svelte` |
-| FxSyncModal | `frontend/src/lib/components/fx/FxSyncModal.svelte` |
+| FxSyncModal | `frontend/src/lib/features/fx/FxSyncModal.svelte` |
 | AssetSyncModal | `frontend/src/lib/components/assets/AssetSyncModal.svelte` |
 | ConfirmModal | `frontend/src/lib/components/ui/modals/ConfirmModal.svelte` |
 | syncHelpers | `frontend/src/lib/utils/sync/syncHelpers.ts` |

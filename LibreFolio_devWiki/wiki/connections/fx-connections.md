@@ -78,5 +78,5 @@ graph TD
 | FX providers | `backend/app/services/fx_providers/` |
 | DB model (FxRate, FxConversionRoute) | `backend/app/db/models.py` |
 | FX pages | `frontend/src/routes/(app)/fx/` |
-| FX components | `frontend/src/lib/components/fx/` |
+| FX components | `frontend/src/lib/features/fx/` |
 | mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |

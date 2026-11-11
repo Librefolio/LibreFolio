@@ -94,5 +94,5 @@ No open problems. The FX domain is fully implemented and stable.
 | FX providers | `backend/app/services/fx_providers/` |
 | DB models (FxRate, FxConversionRoute) | `backend/app/db/models.py` |
 | FX pages | `frontend/src/routes/(app)/fx/` |
-| FX store registry | `frontend/src/lib/stores/fxStoreRegistry.ts` |
+| FX store registry | `frontend/src/lib/features/fx/fxStoreRegistry.ts` |
 | Currency graph store | `frontend/src/lib/stores/currencyGraphStore.ts` |
