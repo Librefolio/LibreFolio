@@ -21,6 +21,8 @@ What is pinned:
   a row dated (or with a ``value_date``) after today is left out whole with an info notice; a repeated
   ``transaction_id`` is dropped without a notice, and so is a row with nothing to book; each reason for
   ``rows_not_recognized`` and ``rows_unreadable``; ISIN vs ticker, CRYPTO always a ticker; a lone decimal comma read.
+- E. the wording: the plugin's three info notes are in the four UI catalogues (the developer, 11/11/2026), message and
+  evidence comment, so the user reads them in the UI language rather than the plugin's English fallback.
 
 Every input is a sample of ``sample_reports/`` or a file written in ``tmp_path``; every synthetic value is invented (the
 ISINs are public securities). The far-future day is in 2099, so no clock is patched. This module is pure: no server,
@@ -42,6 +44,7 @@ from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMNotice, BRIMParseOu
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.test_scripts.brim_samples import SampleDir
+from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS
@@ -664,3 +667,46 @@ class TestExtractedAssets:
         out = _parse(_write(tmp_path, [_row(name="Jane Example", counterparty_name="Jane Example")]))
         assert _keys(out) == Counter([BASE_KEY])
         assert out.extracted_assets == {}
+
+
+# The info notes the plugin gives, and the UI languages they must be worded in.
+INFO_NOTES = (TAX_REFUND, NOT_SETTLED, OTHER_ACCOUNT)
+UI_LANGUAGES = ("en", "it", "fr", "es")
+
+
+def _entry(catalogue: Dict[str, object], key: str) -> object:
+    """The entry at a dotted i18n key, or None when a part of the path is missing."""
+    node: object = catalogue
+    for part in key.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+class TestWhatTheWizardWords:
+    """E — an info note the user must read is in the four languages: ``importWizard.brimNotice.<code>`` for the message and
+    ``importWizard.brimEvidence.<code>`` for the comment under its evidence table, read from the catalogue sources without the
+    English fallback (``load_catalog(language, fallback=False)``)."""
+
+    def test_the_notes_listed_here_are_the_ones_the_plugin_gives(self, tmp_path: Path):
+        """Positive control: the three codes are given by the parser (a refund, a future row, a row of another account)."""
+        rows = [_row(), _sell(tax="5.00"), _sell(date=FAR_FUTURE, datetime=f"{FAR_FUTURE}T10:00:00Z"), _buy(account_type="JUNIOR")]
+        out = _parse(_write(tmp_path, rows))
+        assert sorted(_codes(out)) == sorted(INFO_NOTES)
+        assert all(notice.severity == "info" and not (notice.context or {}).get("report_issue") for notice in out.warnings)
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    def test_every_note_and_its_evidence_comment_have_a_wording(self, language: str):
+        catalogue = load_catalog(language, fallback=False)
+        keys = [f"importWizard.{family}.{code}" for code in INFO_NOTES for family in ("brimNotice", "brimEvidence")]
+
+        missing = [key for key in keys if not (isinstance(_entry(catalogue, key), str) and str(_entry(catalogue, key)).strip())]
+
+        assert not missing, f"{language}.json: {missing} missing or empty — the wizard would show the plugin's English"
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    def test_the_count_reaches_the_message(self, language: str):
+        """Each message names ``{count}``: the notice's ``context.count`` is its only value."""
+        catalogue = load_catalog(language, fallback=False)
+        assert all("{count" in str(_entry(catalogue, f"importWizard.brimNotice.{code}")) for code in INFO_NOTES)
