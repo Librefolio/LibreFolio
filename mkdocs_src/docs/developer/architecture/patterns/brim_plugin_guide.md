@@ -809,6 +809,7 @@ transaction breaks these rules, so flip source signs as needed:
 
 - `DIVIDEND`/`INTEREST` carry **no** quantity — set `quantity=0` and discard any token
   amount with a warning (see coinbase).
+- **A tax given back is `INTEREST`**, never a `DEPOSIT`: see [A tax refund is interest](#tax-refund-interest).
 - **Crypto — the fiat leg decides the type.** If a row settles in **fiat** (your account
   currency) use a cash type: buy crypto with fiat → `BUY`, sell for fiat → `SELL`, a reward
   paid out in fiat → `INTEREST`, a stock payout → `DIVIDEND`, plain cash in/out →
@@ -974,6 +975,26 @@ transaction breaks these rules, so flip source signs as needed:
     with the position pre-computed from succession legs, **and** the account cash-only
     `TITOLI SCADUTI O ESTRATTI` with the nominal recovered from the same-day coupon) and
     `broker_fineco/plugin.py` (`Rimborso` above par, nominal from the row).
+
+### 💸 A tax refund is interest {: #tax-refund-interest }
+
+A tax the broker **gives back** — a positive tax column, a tax row with the sign of a credit, a tax
+optimisation refund — is imported as an **`INTEREST`**, described `Tax refund` (the developer's rule,
+11/11/2026). It is money given back from the investment's gain, so it belongs in the P&L; a
+`DEPOSIT` would count it as new capital and hide it from the returns. `TAX` cannot carry it, since
+its cash is always negative.
+
+- **Asset:** the refund of a trade's tax goes on the trade's asset; a refund on a cash row has none.
+- **Verbatim:** the amount is the one the report gives, with its sign turned positive; nothing is
+  netted against an earlier tax.
+- **Say so:** one `severity="info"` notice per file that lists the rows (a `code`, `context.count`,
+  the rows as evidence), so the user sees why a tax line became interest.
+- **Only for what comes next:** transactions imported before the rule keep their type; a plugin
+  never migrates or rewrites rows already saved.
+
+Plugins that follow it: `_scalable.py` (`scalable_tax_refund`, version 1.2.0) and
+`broker_traderepublic/_transactions_export.py` (`traderepublic_tax_refund`). eToro's overnight-fee refund,
+money given back in the same spirit, is an `INTEREST` too (decision D1, 24/10/2026).
 
 ## 🔗 Linked pairs from a plugin {: #linked-pairs }
 

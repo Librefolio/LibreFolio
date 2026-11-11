@@ -41,6 +41,10 @@ converter.
 6. **Correct sign conventions.** Set signs per transaction type (BUY: qty > 0 / cash < 0;
    SELL: qty < 0 / cash > 0; DIVIDEND & INTEREST: qty = 0 / cash > 0; FEE & TAX: qty = 0 /
    cash < 0; ADJUSTMENT: qty ≠ 0 / no cash), but take magnitudes verbatim from the report.
+   **A tax given back is INTEREST**, never a DEPOSIT (the developer, 11/11/2026): money returned from the
+   investment's gain counts in the P&L, a deposit would be new capital. Describe it `Tax refund`, put it on the
+   trade's asset when it refunds a trade's tax, and list the rows in one `info` notice. Only for what is imported
+   from now on: never migrate rows already saved.
 7. **`cost_basis_override` is PER-UNIT.** If you freeze an inherited cost basis (WAC) on a
    `TRANSFER`/`ADJUSTMENT` seed (opening snapshot, TRANSFER_IN), store the cost **per single
    unit**, never the total — the engine multiplies it by `quantity`. If the source reports a
