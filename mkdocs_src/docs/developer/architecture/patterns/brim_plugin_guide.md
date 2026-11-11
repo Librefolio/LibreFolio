@@ -257,8 +257,8 @@ mandatory for every new plugin:
       the rows whose `Tila` is neither executed nor booked.
     - **Never silently** leave out a row that may carry an economic effect (a split, a fee, a
       tax, a currency conversion) unless the plugin knows that is safe: a row it cannot
-      import is unknown. A row the plugin reads but only in part (Trade Republic's fee and tax
-      columns, not imported) is unknown too: list it.
+      import is unknown. A row the plugin reads but only in part (the fee and tax columns of
+      Trade Republic's older Dutch CSV, not imported) is unknown too: list it.
     - **A stable plugin follows the rule**: it uses `RowSkips`, or its own codes with
       `context.report_issue`.
     - **A plugin in beta may not yet.** The plugins the lot W-B86 did not reach (the *pending* set of
