@@ -10,7 +10,7 @@ Reference: backend/app/services/brokers/broker_service.py
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -1081,7 +1081,7 @@ _CROSS_PAIR_CASES = [
     pytest.param(TransactionType.CASH_TRANSFER, "receiver", TransactionType.WITHDRAWAL, {}, id="cash-transfer-receiver-deleted"),
 ]
 # A stamp of the past for a row's updated_at: a conversion that stamps the row moves it forward, whatever the clock.
-_STAMPED_BEFORE = datetime(2019, 9, 4, 10, 0)
+_STAMPED_BEFORE = datetime(2019, 9, 4, 10, 0, tzinfo=UTC)
 
 # The surviving broker's cash per currency, the same before and after the deletion.
 _SURVIVOR_SUMMARIES = {
