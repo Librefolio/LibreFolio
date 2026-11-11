@@ -11,7 +11,11 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### ✨ Añadido
 
-- Trade Republic: importa el nuevo CSV «Exportación de transacciones» (perfil › Extractos › Exportación de transacciones), también cuando se ha vuelto a guardar con Excel: compras y ventas de fondos, acciones y cripto con sus comisiones e impuestos, intereses con su retención, impuesto de timbre, devoluciones de impuestos como intereses, dividendos y transferencias. El importador ya no está en beta, y su guía muestra cómo descargar el archivo.
+- Trade Republic: importa el nuevo CSV «Exportación de transacciones» (perfil › Extractos › Exportación de transacciones), también cuando se ha vuelto a guardar con Excel: compras y ventas de fondos, acciones y cripto con sus comisiones e impuestos, intereses con su retención, impuesto de timbre, devoluciones de impuestos como intereses, dividendos y transferencias. El importador ya no está en beta, y su guía muestra cómo descargar el archivo. Las filas de otra cuenta, como la de un hijo, quedan fuera con una nota: esa cuenta se exporta desde su propio acceso.
+
+### 🔄 Cambios
+
+- Scalable Capital: un impuesto devuelto (un impuesto negativo en una venta, o una fila Taxes positiva) ahora se importa como Interés «Tax refund» en lugar de Depósito: es dinero devuelto de la ganancia de la inversión, así que cuenta en tus rendimientos. Las transacciones importadas antes conservan su tipo.
 
 ### 🐛 Corregido
 

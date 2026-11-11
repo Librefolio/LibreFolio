@@ -11,7 +11,11 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### ✨ Aggiunto
 
-- Trade Republic: importa il nuovo CSV «Esportazione transazioni» (profilo › Estratti conto › Esportazione transazioni), anche quando è stato risalvato da Excel: acquisti e vendite di fondi, azioni e crypto con commissioni e imposte, interessi con la ritenuta, imposta di bollo, rimborsi d'imposta come interessi, dividendi e bonifici. L'importatore non è più in beta, e la sua guida mostra come scaricare il file.
+- Trade Republic: importa il nuovo CSV «Esportazione transazioni» (profilo › Estratti conto › Esportazione transazioni), anche quando è stato risalvato da Excel: acquisti e vendite di fondi, azioni e crypto con commissioni e imposte, interessi con la ritenuta, imposta di bollo, rimborsi d'imposta come interessi, dividendi e bonifici. L'importatore non è più in beta, e la sua guida mostra come scaricare il file. Le righe di un altro conto, come quello di un figlio, restano fuori con una nota: quel conto va esportato dal suo accesso.
+
+### 🔄 Modifiche
+
+- Scalable Capital: un'imposta restituita (un'imposta negativa su una vendita, o una riga Taxes positiva) ora si importa come Interesse «Tax refund» invece che come Deposito: sono soldi resi dal guadagno dell'investimento, quindi contano nei rendimenti. Le transazioni importate prima mantengono il loro tipo.
 
 ### 🐛 Corretto
 

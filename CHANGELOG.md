@@ -11,7 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
-- Trade Republic: imports the new «Transaction export» CSV (profile › Account statements › Transaction export), also when re-saved by Excel: buys and sells of funds, stocks and crypto with their fee and tax, interest with its withholding tax, stamp duty, tax refunds as interest, dividends and transfers. The importer is no longer in beta, and its guide shows how to download the file.
+- Trade Republic: imports the new «Transaction export» CSV (profile › Account statements › Transaction export), also when re-saved by Excel: buys and sells of funds, stocks and crypto with their fee and tax, interest with its withholding tax, stamp duty, tax refunds as interest, dividends and transfers. The importer is no longer in beta, and its guide shows how to download the file. Rows of another account, such as a child's account, are left out with a note: export that account from its own login.
+
+### 🔄 Changed
+
+- Scalable Capital: a tax given back (a negative tax on a sale, or a positive Taxes row) is now imported as Interest «Tax refund» instead of a Deposit: it is money returned from your investment's gain, so it counts in your returns. Transactions imported before keep their type.
 
 ### 🐛 Fixed
 
