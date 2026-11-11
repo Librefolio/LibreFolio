@@ -198,7 +198,7 @@ async function openImportWizard(page: Page) {
     await page.getByTestId('tx-bulk-modal-root').waitFor({state: 'visible', timeout: 6_000});
 
     const formClose = page.getByTestId('tx-form-close');
-    if (await formClose.isVisible({timeout: 1_500}).catch(() => false)) {
+    if (await appears(formClose, 3_000)) {
         await formClose.click();
     }
 
@@ -264,11 +264,10 @@ test.describe('Import Wizard — plugin contract', () => {
         // Evidence is a table plus the sentence explaining what does not add up. The
         // sentence is the part a plugin cannot leave out — see the backend contract test.
         const toggle = page.getByTestId('brim-evidence-toggle').first();
-        if (await toggle.isVisible({timeout: 2_000}).catch(() => false)) {
-            await toggle.click();
-            await expect(page.getByTestId('brim-evidence').first()).toBeVisible({timeout: 4_000});
-            await expect(page.getByTestId('brim-evidence-comment').first()).toBeVisible();
-        }
+        await expect(toggle, 'a warning that states a figure carries its evidence').toBeVisible({timeout: 5_000});
+        await toggle.click();
+        await expect(page.getByTestId('brim-evidence').first()).toBeVisible({timeout: 5_000});
+        await expect(page.getByTestId('brim-evidence-comment').first()).toBeVisible();
     });
 
     // -----------------------------------------------------------------------
@@ -369,12 +368,7 @@ test.describe('Import Wizard — plugin contract', () => {
         for (let i = 0; i < (await rows.count()); i++) {
             const row = rows.nth(i);
             await row.getByTestId('fix-step-row-toggle').click();
-            if (
-                await row
-                    .getByTestId('fix-step-split')
-                    .isVisible({timeout: 800})
-                    .catch(() => false)
-            ) {
+            if (await appears(row.getByTestId('fix-step-split'), 2_000)) {
                 splitRow = row;
                 break;
             }
@@ -415,12 +409,7 @@ test.describe('Import Wizard — plugin contract', () => {
         for (let i = 0; i < (await rows.count()); i++) {
             const row = rows.nth(i);
             await row.getByTestId('fix-step-row-toggle').click();
-            if (
-                await row
-                    .getByTestId('fix-step-split')
-                    .isVisible({timeout: 800})
-                    .catch(() => false)
-            ) {
+            if (await appears(row.getByTestId('fix-step-split'), 2_000)) {
                 splitRow = row;
                 break;
             }
@@ -510,7 +499,7 @@ test.describe('Import Wizard — plugin contract', () => {
         // Open the creation form for an unresolved instrument: the advisory rides on the
         // extracted asset, so it must be on screen exactly where the decision is made.
         const resolveSection = step4.getByTestId('import-wizard-resolve-section');
-        if (!(await resolveSection.isVisible({timeout: 3_000}).catch(() => false))) {
+        if (!(await appears(resolveSection, 3_000))) {
             await step4.getByTestId('import-wizard-resolve-toggle').click();
         }
         await expect(resolveSection, 'the section of the instruments to resolve is open').toBeVisible({timeout: 5_000});
@@ -573,14 +562,15 @@ test.describe('Import Wizard — plugin contract', () => {
         // The fix is offered where the problem is stated, and the verdict is recomputed
         // rather than assumed: the user must see the rows come back.
         const autofix = page.locator('[data-testid^="broker-opening-autofix"]').first();
-        if (await autofix.isVisible({timeout: 3_000}).catch(() => false)) {
+        {
+            await expect(autofix, 'the opening issue offers its fix').toBeVisible({timeout: 5_000});
             await autofix.click();
             // The auto-fix re-checks by itself once the PATCH lands, so its own busy
             // flag is the barrier: reading the toolbar before it clears catches the
             // re-check button mid-life and Playwright loses it to the re-render.
             await waitForSettled(step4);
             const recheck = page.getByTestId('import-wizard-recheck-openings');
-            if (await recheck.isVisible({timeout: 2_000}).catch(() => false)) {
+            if (await appears(recheck, 2_000)) {
                 await recheck.click();
                 await waitForSettled(step4);
             }

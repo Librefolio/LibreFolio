@@ -37,7 +37,7 @@ import {expect, test as base, type Locator, type Page} from '../fixtures/playwri
 import {schemas} from '../../src/lib/api/generated';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {eventSeq, waitForEvent, waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
-import {optionsClosed} from '../fixtures/probe';
+import {appears, optionsClosed} from '../fixtures/probe';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 
@@ -194,7 +194,8 @@ async function continueToReview(page: Page): Promise<Locator> {
     await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: UI_TIMEOUT});
     await page.getByTestId('import-wizard-continue').click();
     const confirm = page.getByTestId('import-wizard-warning-confirm');
-    if (await confirm.isVisible({timeout: 1_500}).catch(() => false)) await confirm.click();
+    // Optional by data: only a parse with warnings asks. `appears` waits on the dialog, it does not guess at an instant.
+    if (await appears(confirm, 3_000)) await confirm.click();
     const review = page.getByTestId('import-wizard-step4');
     await expect(review).toBeVisible({timeout: UI_TIMEOUT});
     await waitForSettled(review);
