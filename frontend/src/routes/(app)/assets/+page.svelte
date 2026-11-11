@@ -64,7 +64,7 @@
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/features/fx/fxStoreRegistry';
@@ -78,6 +78,8 @@
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import {TargetSampleLoader, type TargetSampleRequest} from '$lib/features/assets/targetSampleLoader';
     import {MIN_START, sendBulkBatches} from '$lib/api/bulkBatches';
+    import {buildFxPairComparisonQuery, buildListFxPairComparisonQuery, estimateListFxPairDays, fxPairComparisonViews, listFxPairComparisonViews} from '$lib/features/signals/crossTypeCalendar';
+    import {fxPairTargetsOf} from '$lib/features/assets/detail/assetDetailChartRequest';
     import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
@@ -271,6 +273,10 @@
         void getSettingsVersion();
         return getGlobalSettings('assets').primaryView;
     });
+    /** The rolling return of the FX pairs each card in the rolling-return view compares (FB-11), by card and `fx-pair` signal id. */
+    let calendarPairsByCard: Map<number, Map<string, CalendarReturnView>> = $state(new Map());
+    const calendarPairRequestOfCard = new Map<number, number>();
+    let calendarPairSeq = 0;
     /** The rolling return of each card in the rolling-return view, and its comparisons' (Y-40), by card. */
     let calendarByCard = $state(new Map<number, {own: CalendarReturnView; targets: Map<number, CalendarReturnView>}>());
 
@@ -826,15 +832,72 @@
         return {state: view.state, points: view.points, problemCode: view.problem?.code ?? null, problemMessage};
     }
 
-    /** A card's comparisons in the rolling-return view: their targets' returns (V-5 a), drawn as the detail draws them. */
+    /** A card's comparisons in the rolling-return view: their targets' returns (V-5 a), drawn as the detail draws them, the compared FX pairs' too (FB-11). */
     function cardCalendarOverlays(assetId: number): RenderedSignal[] {
+        const settings = getSettingsForPair(`asset-${assetId}`, 'assets');
         const views = calendarByCard.get(assetId)?.targets;
-        if (!views) return [];
         const target = (id: number) => {
             const asset = assets.find((item) => item.id === id);
             return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url, assetType: asset.asset_type} : null;
         };
-        return renderCalendarComparisons(getSettingsForPair(`asset-${assetId}`, 'assets').signals, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), assetId);
+        const assetLines = views ? renderCalendarComparisons(settings.signals, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), assetId) : [];
+        const pairViews = calendarPairsByCard.get(assetId);
+        return pairViews ? [...assetLines, ...renderCalendarPairComparisons(settings.signals, pairViews)] : assetLines;
+    }
+
+    /**
+     * FB-11 follow-up: the rolling return of the FX pairs the cards in that view compare, asked of `POST /fx/currencies/convert` in one
+     * request for the whole list (the batches the caps need), apart from the cards' own request. Never throws: a failure marks each
+     * compared pair of the cards `error`; an answer the page has moved past, or a session that ended, is dropped.
+     */
+    async function fetchCalendarPairs(only?: ReadonlySet<number>) {
+        void getSettingsVersion();
+        const sessionGeneration = getClientSessionGeneration();
+        const requestId = ++calendarPairSeq;
+        const rangeStart = isMaxPending ? MIN_START : dateStart;
+        const cards: Array<{cardKey: string; start: string; end: string; windowDays: number; pairTargets: ReturnType<typeof fxPairTargetsOf>}> = [];
+        const next = new Map(calendarPairsByCard);
+        for (const asset of assets) {
+            if (only && !only.has(asset.id)) continue;
+            const settings = getSettingsForPair(`asset-${asset.id}`, 'assets');
+            if (settings.primaryView !== 'calendar-return') {
+                next.delete(asset.id);
+                continue;
+            }
+            const pairTargets = fxPairTargetsOf(settings.signals);
+            if (pairTargets.length === 0) {
+                next.delete(asset.id);
+                continue;
+            }
+            calendarPairRequestOfCard.set(asset.id, requestId);
+            cards.push({cardKey: String(asset.id), start: rangeStart, end: dateEnd, windowDays: calendarReturnRequest(settings, dateStart, dateEnd).params.window_days, pairTargets});
+        }
+        calendarPairsByCard = next;
+        if (cards.length === 0) return;
+
+        const entries = buildListFxPairComparisonQuery(cards);
+        const settle = (byCard: Map<string, Map<string, CalendarReturnView>> | null) => {
+            if (sessionGeneration !== getClientSessionGeneration() || !isClientSessionCurrent(sessionGeneration)) return;
+            const settled = new Map(calendarPairsByCard);
+            for (const card of cards) {
+                const id = Number(card.cardKey);
+                if (calendarPairRequestOfCard.get(id) !== requestId) continue;
+                settled.set(id, byCard ? (byCard.get(card.cardKey) ?? new Map()) : new Map(card.pairTargets.map((pair) => [pair.configId, emptyCalendarReturnView('error')])));
+            }
+            calendarPairsByCard = settled;
+        };
+        try {
+            const outcome = await sendBulkBatches(
+                entries,
+                (entry) => estimateListFxPairDays(entry, todayIso()),
+                (batch) => zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(batch.map((entry) => entry.request)),
+            );
+            if (outcome.failed) console.error('Failed to fetch the compared FX pairs of the cards:', outcome.error);
+            settle(listFxPairComparisonViews(outcome.answers.map(({batch, answer}) => ({entries: batch.items, answer}))));
+        } catch (requestError) {
+            console.error('Failed to fetch the compared FX pairs of the cards:', requestError);
+            settle(null);
+        }
     }
 
     /**
@@ -845,6 +908,10 @@
      * to some cards: a settings change reloads its own card, a width that changes the step its own.
      */
     async function fetchPriceSeries(only?: ReadonlySet<number>, silent = false) {
+        await Promise.all([fetchOwnPriceSeries(only, silent), fetchCalendarPairs(only)]);
+    }
+
+    async function fetchOwnPriceSeries(only?: ReadonlySet<number>, silent = false) {
         if (assets.length === 0) return;
         void getSettingsVersion();
 
@@ -1564,7 +1631,18 @@
             const asset = assets.find((item) => item.id === id);
             return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url, assetType: asset.asset_type} : null;
         };
-        return {points: own.points, overlays: renderCalendarComparisons(configs, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), cardId)};
+        // FB-11: the compared FX pairs, asked as the cards ask them (one conversion each); a failure leaves them out of the preview.
+        const pairEntries = buildFxPairComparisonQuery({start: dateStart, end: dateEnd, windowDays, pairTargets: fxPairTargetsOf(configs)});
+        let pairLines: RenderedSignal[] = [];
+        if (pairEntries.length > 0) {
+            try {
+                const pairAnswer = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(pairEntries.map((entry) => entry.request));
+                pairLines = renderCalendarPairComparisons(configs, fxPairComparisonViews(pairAnswer, pairEntries));
+            } catch (pairError) {
+                console.error('Failed to fetch the compared FX pairs of the preview:', pairError);
+            }
+        }
+        return {points: own.points, overlays: [...renderCalendarComparisons(configs, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), cardId), ...pairLines]};
     }
 
     function handleCardSettings(asset: {id: number}) {

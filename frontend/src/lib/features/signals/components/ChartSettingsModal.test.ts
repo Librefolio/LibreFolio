@@ -526,25 +526,26 @@ describe('ChartSettingsModal — the signals list in the rolling-return view (Y5
         return {onsave};
     }
 
-    it('asset domain: the rolling return hides a technical indicator and a benchmark, and lists the comparison', async () => {
-        await open('asset', [SMA, BENCHMARK, COMPARISON], 'calendar-return');
+    it('asset domain: the rolling return hides a technical indicator and a benchmark, and lists both kinds of comparison (FB-11)', async () => {
+        await open('asset', [SMA, BENCHMARK, COMPARISON, PAIR], 'calendar-return');
 
         expect(card(COMPARISON.id), 'the comparison is what the rolling return draws: it is listed').not.toBeNull();
+        expect(card(PAIR.id), 'an FX pair is compared in an asset list too: it is listed').not.toBeNull();
         expect(card(SMA.id), 'the technical indicator is not drawn by the rolling return: it is not listed').toBeNull();
         expect(card(BENCHMARK.id), 'the benchmark is not drawn by the rolling return: it is not listed').toBeNull();
     });
 
-    it('fx domain: the rolling return hides a technical indicator and an asset comparison, and lists the FX pair', async () => {
+    it('fx domain: the rolling return hides a technical indicator, and lists the FX pair and the asset comparison (FB-11)', async () => {
         await open('fx', [SMA, COMPARISON, PAIR], 'calendar-return');
 
         expect(card(PAIR.id), 'the FX pair is what the FX rolling return draws: it is listed').not.toBeNull();
         expect(card(SMA.id), 'the technical indicator is not listed').toBeNull();
-        expect(card(COMPARISON.id), 'the asset comparison is not listed in FX').toBeNull();
+        expect(card(COMPARISON.id), 'an asset is compared in an FX list too: it is listed').not.toBeNull();
     });
 
     it.each([
-        {axisDomain: 'asset', signals: [SMA, BENCHMARK, COMPARISON], hidden: [SMA.id, BENCHMARK.id], shown: [COMPARISON.id], back: 'percentage'},
-        {axisDomain: 'fx', signals: [SMA, COMPARISON, PAIR], hidden: [SMA.id, COMPARISON.id], shown: [PAIR.id], back: 'absolute'},
+        {axisDomain: 'asset', signals: [SMA, BENCHMARK, COMPARISON, PAIR], hidden: [SMA.id, BENCHMARK.id], shown: [COMPARISON.id, PAIR.id], back: 'percentage'},
+        {axisDomain: 'fx', signals: [SMA, COMPARISON, PAIR], hidden: [SMA.id], shown: [COMPARISON.id, PAIR.id], back: 'absolute'},
     ] as const)('$axisDomain domain: switching the preview to $back lists every saved signal again, and back to the rolling return hides them again', async ({axisDomain, signals, hidden, shown, back}) => {
         await open(axisDomain, [...signals], 'calendar-return');
         for (const id of hidden) expect(card(id), `premise: ${id} is hidden in the rolling return`).toBeNull();
