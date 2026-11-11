@@ -755,7 +755,7 @@ flowchart LR
    (`MeasureSignal.ts`) and the what-if curves of the
    [synthetic benchmarks](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md)
    (`CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`), all in
-   `frontend/src/lib/charts/signals/`; and the lot measures shaped by the user's choices (D-MF6(b)):
+   `frontend/src/lib/features/signals/`; and the lot measures shaped by the user's choices (D-MF6(b)):
    the lots table footer over the selection, else the filtered rows (`unifiedLotsTableHelpers.ts`),
    the comparison chart's aggregate of the selected lots (`lotComparisonChartHelpers.ts`) and the
    WAC chart's percentage view (`lotWacPriceChartHelpers.ts`), all in

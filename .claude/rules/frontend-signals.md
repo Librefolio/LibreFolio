@@ -1,6 +1,6 @@
 ---
 paths:
-  - "frontend/src/lib/charts/signals/**"
+  - "frontend/src/lib/features/signals/**"
 ---
 
 # Chart Signal Architecture
