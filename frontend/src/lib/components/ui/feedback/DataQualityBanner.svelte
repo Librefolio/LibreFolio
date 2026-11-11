@@ -21,8 +21,8 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, ArrowLeftRight, Coins, ArrowUpRight, RefreshCw, Loader2} from 'lucide-svelte';
-    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, Coins, ArrowUpRight, RefreshCw, Loader2} from 'lucide-svelte';
+    import {formatPairSlugHtml, formatPairSlugPlain} from '$lib/utils/currency/currencyFormat';
     import {DATA_QUALITY_TONE, STATUS_TONES} from '$lib/theme/toneClasses';
 
     /** Matches backend DataQualityIssue DTO. Only fields that are actively populated. */
@@ -139,18 +139,6 @@
         return ArrowUpRight;
     }
 
-    function formatFxPair(slug: string): {baseFlag: string; baseCode: string; quoteFlag: string; quoteCode: string} {
-        const parts = slug.includes('/') ? slug.split('/') : slug.split('-');
-        const base = parts[0]?.toUpperCase() ?? '';
-        const quote = parts[1]?.toUpperCase() ?? '';
-        return {
-            baseFlag: getCurrencyInfo(base).flag_emoji ?? '',
-            baseCode: base,
-            quoteFlag: getCurrencyInfo(quote).flag_emoji ?? '',
-            quoteCode: quote,
-        };
-    }
-
     function getGroupedSeverity(): IssueSeverity {
         if (errorCount > 0) return 'error';
         if (warningCount > 0) return 'warning';
@@ -169,15 +157,14 @@
     }
 </script>
 
-{#snippet fxPairLabel(pair: string, arrowSize: number)}
-    {@const fx = formatFxPair(pair)}
-    <span class="inline-flex items-center gap-0.5"><span class="emoji-flag">{fx.baseFlag}</span>{fx.baseCode}<ArrowLeftRight size={arrowSize} /><span class="emoji-flag">{fx.quoteFlag}</span>{fx.quoteCode}</span>
+{#snippet fxPairLabel(pair: string)}
+    <span class="inline-flex items-center gap-0.5">{@html formatPairSlugHtml(pair)}</span>
 {/snippet}
 
 {#snippet fxPairList(pairs: string[])}
     <span class="inline-flex items-center gap-1 flex-wrap text-[11px]">
         {#each pairs.slice(0, 3) as pair}
-            {@render fxPairLabel(pair, 9)}
+            {@render fxPairLabel(pair)}
         {/each}
         {#if pairs.length > 3}
             <span>+{pairs.length - 3}</span>
@@ -256,11 +243,10 @@
                 <!-- One chip per pair, the action on that pair: adding or opening works on one pair at a time. -->
                 <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-fx-pairs-{issue.code}">
                     {#each pairs as pair (pair)}
-                        {@const fx = formatFxPair(pair)}
-                        {@const label = `${getCtaLabel(issue.cta_action)}: ${fx.baseCode}/${fx.quoteCode}`}
+                        {@const label = `${getCtaLabel(issue.cta_action)}: ${formatPairSlugPlain(pair)}`}
                         <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] min-w-0" onclick={() => onaction?.(action, pair, issue)} title={label} aria-label={label} data-testid="data-quality-fx-pair-{pair}">
                             <CtaIcon size={11} class="shrink-0" />
-                            {@render fxPairLabel(pair, 9)}
+                            {@render fxPairLabel(pair)}
                         </button>
                     {/each}
                 </div>
@@ -327,14 +313,7 @@
                 <!-- FX pairs with flags -->
                 {#if (issue.affected_fx_pairs?.length ?? 0) > 0}
                     {#each issue.affected_fx_pairs ?? [] as pair}
-                        {@const fx = formatFxPair(pair)}
-                        <span class="font-medium inline-flex items-center gap-1">
-                            <span class="emoji-flag">{fx.baseFlag}</span>
-                            {fx.baseCode}
-                            <ArrowLeftRight size={10} class="shrink-0" />
-                            <span class="emoji-flag">{fx.quoteFlag}</span>
-                            {fx.quoteCode}
-                        </span>
+                        <span class="font-medium inline-flex items-center gap-1">{@html formatPairSlugHtml(pair)}</span>
                     {/each}
                 {/if}
                 <!-- Asset context, in parens: smaller, never dimmed by an opacity (designer, round 3) -->
