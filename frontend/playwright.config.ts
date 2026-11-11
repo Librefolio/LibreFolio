@@ -89,9 +89,20 @@ if (!/^\s*\d+\s*$/.test(STARTUP_TIMEOUT_RAW)) {
 }
 const STARTUP_TIMEOUT_S = Number(STARTUP_TIMEOUT_RAW);
 
+// One folder of artifacts per runner category (C-68): Playwright empties `outputDir` at the start of every
+// invocation, so with one shared `test-results/` the screenshots and `error-context.md` of a red category were gone
+// as soon as the next category started. The runner names the category (`E2E_OUTPUT_CATEGORY`); a plain
+// `npm run test:e2e` keeps the flat `test-results/`. The parent stays `test-results/` (CI upload, gallery_snapshot.sh).
+const OUTPUT_CATEGORY = (process.env.E2E_OUTPUT_CATEGORY ?? '').trim();
+if (OUTPUT_CATEGORY && !/^[A-Za-z0-9._-]+$/.test(OUTPUT_CATEGORY)) {
+    throw new Error(`E2E_OUTPUT_CATEGORY must be a plain folder name, got ${JSON.stringify(OUTPUT_CATEGORY)}`);
+}
+const OUTPUT_DIR = OUTPUT_CATEGORY ? `test-results/${OUTPUT_CATEGORY}` : 'test-results';
+
 export default defineConfig({
     globalSetup: './e2e/global-setup.ts',
     testDir: './e2e',
+    outputDir: OUTPUT_DIR,
     // On by default, and earned: every non-gallery category was run under
     // E2E_FORCE_PARALLEL at four workers until it was green, and the reds that
     // surfaced were fixed rather than declared away — 216/216 transactions,
@@ -110,7 +121,7 @@ export default defineConfig({
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: E2E_WORKERS,
-    reporter: [['html', {outputFolder: 'playwright-report', open: 'never'}], ['list']],
+    reporter: [['html', {outputFolder: OUTPUT_CATEGORY ? `playwright-report/${OUTPUT_CATEGORY}` : 'playwright-report', open: 'never'}], ['list']],
 
     timeout: 30000, // Test timeout (30s for full test including setup)
     expect: {timeout: 3000}, // 3s for localhost assertions
