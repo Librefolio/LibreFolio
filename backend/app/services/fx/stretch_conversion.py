@@ -23,6 +23,7 @@ from decimal import Decimal
 
 from backend.app.schemas.common import Currency
 from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
+from backend.app.services.fx.conversion_issues import FxIssueText, day_issue
 
 _INDEX = re.compile(r"^Conversion \d+")
 
@@ -30,14 +31,14 @@ Conversions = list[tuple[Currency, str, date_type]]
 Results = list[tuple[Currency, date_type, bool] | None]
 
 
-def rate_not_found_error(index: int, source: str, destination: str, day: date_type) -> str:
+def rate_not_found_error(index: int, source: str, destination: str, day: date_type) -> FxIssueText:
     """The error ``convert_bulk`` writes for the ``index``-th conversion of a batch that has no rate on or before ``day``.
 
     Kept equal to ``convert_bulk``'s text (pinned by the parity tests, on a pair with no rate): a series with no rate does
     not ask ``convert_bulk`` a failure it already knows.
     """
     base, quote = (source, destination) if source < destination else (destination, source)
-    return f"Conversion {index}: No FX rate found for {base}/{quote} on or before {day}. Please sync rates using POST /api/v1/fx/currencies/sync"
+    return FxIssueText(f"Conversion {index}: No FX rate found for {base}/{quote} on or before {day}. Please sync rates using POST /api/v1/fx/currencies/sync", day_issue("rate_not_found", source, destination, day))
 
 
 async def convert_by_stretch(  # noqa: C901 — one pass over the items: identity, no rate, or the stretch it belongs to; then the answers

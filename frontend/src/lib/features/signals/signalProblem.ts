@@ -1,4 +1,5 @@
 import type {SignalInputField} from './ChartSignal';
+import type {FxIssueLike} from './fxIssue';
 import type {BackendSignalResult} from './backendTypes';
 import type {SignalInstanceResult, SignalInstanceStatus} from './resultMapper';
 import {finiteNumber} from '$lib/utils/core/finiteNumber';
@@ -49,6 +50,8 @@ export interface SignalProblem {
     resyncStart: string | null;
     resyncEnd: string | null;
     message: string | null;
+    /** For `fx_conversion_unavailable`: the missing rate, as the endpoint says it (`fx_issues`); the sentence is worded where it is shown. */
+    fxIssue?: FxIssueLike | null;
 }
 
 export type SignalProblemSeverity = 'notice' | 'warning' | 'error';

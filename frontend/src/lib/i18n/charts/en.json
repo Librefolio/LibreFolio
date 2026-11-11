@@ -155,7 +155,9 @@
     "lineShapeDesc": "How charts join their points. Applies to this chart only.",
     "lineShapeSegments": "Segments",
     "lineShapeSteps": "Steps",
-    "lineShapeSpline": "Smooth curve"
+    "lineShapeSpline": "Smooth curve",
+    "fxRateNotFound": "No exchange rate {pair} on or before {date}: sync the rates to compare these assets",
+    "fxRateNotFoundRange": "No exchange rate {pair} for {count} days, from {first} to {last}: sync the rates to compare these assets"
   },
   "measure": {
     "pending": "Start: {startDate} ({startValue}) — click chart for end point",

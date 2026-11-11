@@ -36,6 +36,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    FxConversionIssue,
     MinStartDateRangeModel,
 )
 from backend.app.schemas.prices import FACurrentPriceItem, FACurrentValue, FAPriceQueryItem, FAPriceQueryResult, FAPriceSampleBounds
@@ -51,6 +52,7 @@ from backend.app.services.assets.price_store import storable_current_value
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.fx.conversion_issues import day_issue, group_fx_issues, split_fx_issues
 from backend.app.services.market_series import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.sampling import sample_signal_result
@@ -717,7 +719,8 @@ class PriceQueryOperations:
             if index in sampled:
                 known, dates, _first_apart = sampled[index]
                 points, conversion_errors = await series_points(session, known, dates, req.target_currency)
-                results.append(FAPriceQueryResult(asset_id=aid, prices=points, errors=conversion_errors, resolution=sample_plans[index].resolution if index in sample_plans else "daily"))
+                plain_errors, fx_issues = split_fx_issues(conversion_errors)
+                results.append(FAPriceQueryResult(asset_id=aid, prices=points, errors=plain_errors, fx_issues=fx_issues, resolution=sample_plans[index].resolution if index in sample_plans else "daily"))
                 continue
             price_map = price_maps.get(aid, {})
             in_memory_seed = max(
@@ -728,7 +731,8 @@ class PriceQueryOperations:
             seed = in_memory_seed or seed_prices.get(aid)
             observed = await observe(session, aid, list(price_map.values()), seed, start, end, req.target_currency)
             events = [event for event in event_maps.get(aid, []) if start <= event.date <= end] if aid in event_requests else []
-            results.append(FAPriceQueryResult(asset_id=aid, prices=observed.points(), errors=list(observed.errors), events=events))
+            plain_errors, fx_issues = split_fx_issues(observed.errors)
+            results.append(FAPriceQueryResult(asset_id=aid, prices=observed.points(), errors=plain_errors, fx_issues=fx_issues, events=events))
 
         dependency_results: dict[
             tuple[int, int],
@@ -771,10 +775,12 @@ class PriceQueryOperations:
                 )
                 comparison_seed = in_memory_seed or seed_prices.get(comparison_asset_id)
                 observed_comparison = await observe(session, comparison_asset_id, list(comparison_price_map.values()), comparison_seed, start, end, target)
+                comparison_errors, comparison_issues = split_fx_issues(observed_comparison.errors)
                 dependency_results[(request_index, comparison_asset_id)] = FAPriceQueryResult(
                     asset_id=comparison_asset_id,
                     prices=observed_comparison.points(),
-                    errors=list(observed_comparison.errors),
+                    errors=comparison_errors,
+                    fx_issues=comparison_issues,
                 )
 
         # X-Q2: the prices above are already converted — a stored row under a rate row is converted once
@@ -862,13 +868,14 @@ class PriceQueryOperations:
                 continue
 
             conv_results, conv_errors = await convert_bulk(session, conversions, raise_on_error=False)
+            event_issues: list[FxConversionIssue] = []
 
             for idx, ei in enumerate(event_indices):
                 conv = conv_results[idx]
                 original_ep = result.events[ei]
                 if conv is None:
                     # FX miss — surface non-fatal warning, leave event untouched.
-                    result.errors.append(f"Missing FX rate {original_ep.value.code}->{target} for event on {original_ep.date.isoformat()}")
+                    event_issues.append(day_issue("event_rate_missing", original_ep.value.code, target, original_ep.date))
                     continue
                 new_cur, rate_date, _bfill = conv
                 days_back = fx_days_back(original_ep.date, rate_date)
@@ -882,10 +889,11 @@ class PriceQueryOperations:
                     original_value=original_ep.value,
                     fx_info=FxBackwardFillInfo(fx_rate_date=rate_date, fx_days_back=days_back),
                 )
-            # Include any extra convert_bulk errors (dedup against per-event ones)
-            for err in conv_errors:
-                if err not in result.errors:
-                    result.errors.append(err)
+            # Include any extra convert_bulk errors that are not a missing rate (dedup against the ones already there): a missing rate of
+            # an event is already its ``event_rate_missing`` issue, and must not read as a price that failed
+            extra_errors, _event_rate_failures = split_fx_issues(conv_errors)
+            result.errors.extend(err for err in extra_errors if err not in result.errors)
+            result.fx_issues = group_fx_issues([*result.fx_issues, *event_issues])
 
         # ── Signal computation and response slicing ────────────────────────
         for (

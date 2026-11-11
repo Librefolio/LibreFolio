@@ -55,6 +55,7 @@ from backend.app.services.assets import observed_prices, price_query
 from backend.app.services.assets.price_query import FULL_HISTORY_LOAD_START, RISK_WARMUP_DAY_MULTIPLIER, PriceQueryOperations
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.conversion import convert_bulk as head_convert_bulk
+from backend.app.services.fx.conversion_issues import day_issue, group_fx_issues
 from backend.app.services.market_series import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.service import SignalService
@@ -321,6 +322,17 @@ async def head_series(world: _World, asset: str, window: str, target: str | None
         return await head_convert(session, head_dense(window_rows, start, end, seed), target)
 
 
+def expected_fx_failures(points: Sequence[FAPricePoint], errors: Sequence[str], target: str | None) -> tuple[list[str], list]:
+    """What HEAD's conversion pass says, as the endpoint answers it since CP-11d: the errors that are not a missing rate, and the missing
+    rates as issues. HEAD kept ten texts at most: while it kept them all, their issues are the answer; past ten, the days with no rate are
+    read off its points (a point that stays in its own currency under a target, but for a close of 0, which is never converted)."""
+    plain = [error for error in errors if not hasattr(error, "issue") and not str(error).startswith("… and ")]
+    if not any(str(error).startswith("… and ") for error in errors):
+        return plain, group_fx_issues(error.issue for error in errors if hasattr(error, "issue"))
+    failed = [point for point in points if target and point.currency != target and point.close != 0]
+    return plain, group_fx_issues(day_issue("rate_not_found", point.currency, target, point.date) for point in failed)
+
+
 def _dump(points: Sequence[FAPricePoint]) -> list[dict]:
     return [point.model_dump(mode="json") for point in points]
 
@@ -350,7 +362,8 @@ async def test_oq01_the_public_series_and_its_conversion_errors_are_the_head_pip
     (result,) = await _query(world, world.item(asset, window, target))
 
     assert _dump(result.prices) == _dump(expected), f"{asset} → {target} over {window}: the series differs"
-    assert result.errors == expected_errors, f"{asset} → {target} over {window}: the errors differ"
+    expected_plain, expected_issues = expected_fx_failures(expected, expected_errors, target)
+    assert (result.errors, result.fx_issues) == (expected_plain, expected_issues), f"{asset} → {target} over {window}: the errors differ"
 
 
 @pytest.mark.asyncio
@@ -365,7 +378,8 @@ async def test_oq02_several_items_of_one_request_are_each_their_own_series(world
     answered = await _query(world, *items)
     for item, result, (asset, window, target) in zip(items, answered, [("usd", "mid", "EUR"), ("usd", "all", "EUR"), ("gbp", "mid", "EUR"), ("eur", "mid", "USD"), ("usd", "mid", None)], strict=True):
         expected, expected_errors = await head_series(world, asset, window, target)
-        assert (_dump(result.prices), result.errors) == (_dump(expected), expected_errors), f"{asset} → {target} over {window}"
+        expected_plain, expected_issues = expected_fx_failures(expected, expected_errors, target)
+        assert (_dump(result.prices), result.errors, result.fx_issues) == (_dump(expected), expected_plain, expected_issues), f"{asset} → {target} over {window}"
         assert result.asset_id == item.asset_id
 
 

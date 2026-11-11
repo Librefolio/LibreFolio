@@ -19,6 +19,7 @@ from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency, DateRangeModel, MinStartDateRangeModel
 from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.fx.base import RateNotFoundError
+from backend.app.services.fx.conversion_issues import FxIssueText, day_issue
 from backend.app.utils.sql_chunks import OR_TERMS_PER_QUERY
 
 logger = get_logger(__name__)
@@ -282,7 +283,7 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
                 if raise_on_error:
                     raise RateNotFoundError(f"Conversion failed at index {idx}: {error_msg}")
                 else:
-                    errors.append(f"Conversion {idx}: {error_msg}")
+                    errors.append(FxIssueText(f"Conversion {idx}: {error_msg}", day_issue("rate_not_found", meta["from"], meta["to"], meta["date"])))
                     results.append(None)
                     continue
 

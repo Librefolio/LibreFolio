@@ -600,8 +600,10 @@ test.describe('Asset Detail Page', () => {
             tx_count_own: 0,
         };
         const readyPeerConversionError = 'synthetic-price-conversion-failure';
+        /** The synthetic text of a failure as the issue the endpoint sends for it: USD into EUR, one day; an event text is an event issue. */
+        const fxIssueOfSyntheticError = (text: string) => ({code: text.startsWith('Missing FX rate') ? 'event_rate_missing' : 'rate_not_found', from_currency: 'USD', to_currency: 'EUR', first_date: '2026-08-01', last_date: '2026-08-01', count: 1});
+        const issueCodesOf = (item: {fx_issues?: Array<{code?: string}>} | undefined) => item?.fx_issues?.map((issue) => issue.code);
         const readyPeerEventOnlyConversionError = 'Missing FX rate USD->EUR for event on 2026-08-02';
-        const readyPeerGenericConversionError = 'Conversion 1: No FX rate available for USD->EUR';
         const partialPeer = {
             id: 920_062,
             display_name: 'Synthetic calendar peer Partial',
@@ -2359,7 +2361,9 @@ test.describe('Asset Detail Page', () => {
                         // while the newer 365-day request was still pending.
                         prices: request.include_price === false || isStaleForcedRefresh || isDeferredEmptyMainRefresh ? [] : racePricePoints,
                         events: responseEvents,
-                        errors: responseErrors,
+                        // The failed conversions are data (`fx_issues`, CP-11d): a text that says an event is an event issue, any other a price one
+                        errors: [],
+                        fx_issues: responseErrors.map(fxIssueOfSyntheticError),
                         signals: signalResults,
                     };
                 })
@@ -2938,8 +2942,8 @@ test.describe('Asset Detail Page', () => {
         expect(await conversionGapResponse.finished()).toBeNull();
         assertCalendarBulkRequest(conversionGapResponse.request().postDataJSON(), 30);
         expect(calendarRequestCount).toBe(conversionGapCalendarRequestCount + 1);
-        const conversionGapPayload = (await conversionGapResponse.json()) as {items?: Array<{asset_id?: number; errors?: unknown[]}>};
-        expect(conversionGapPayload.items?.find((item) => item.asset_id === readyPeer.id)?.errors).toEqual([readyPeerConversionError, readyPeerEventOnlyConversionError]);
+        const conversionGapPayload = (await conversionGapResponse.json()) as {items?: Array<{asset_id?: number; fx_issues?: Array<{code?: string}>}>};
+        expect(issueCodesOf(conversionGapPayload.items?.find((item) => item.asset_id === readyPeer.id))).toEqual(['rate_not_found', 'event_rate_missing']);
 
         const conversionGapIssue = readySignalCard.getByTestId('signal-issue');
         await expect(conversionGapIssue).toBeVisible();
@@ -2951,17 +2955,18 @@ test.describe('Asset Detail Page', () => {
         await expect(priceRouteIssues.filter({hasText: readyPeer.currency})).toHaveCount(1);
         await expect(priceRouteIssues.filter({hasText: readyPeerEventCurrency})).toHaveCount(0);
         await conversionGapIssue.click();
-        await expect(page.getByTestId('tooltip-content')).toHaveText(readyPeerConversionError);
+        // The sentence is worded from the issue: the pair in the direction of the conversion and the day
+        await expect(page.getByTestId('tooltip-content')).toHaveText(/USD.*→.*EUR.*2026-08-01/);
         await page.getByTestId('asset-detail-header').click();
         await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
 
         // An event-only FX miss is not evidence that the peer's price series
         // failed conversion. Even with a later generic conversion error, the
-        // first event-scoped error keeps the signal's backend diagnosis.
+        // event-scoped issue keeps the signal's backend diagnosis (an event's missing rate is never a price failure).
         exposeMissingComparisonEventRoutes = true;
         missingFxConversionSlugs.clear();
         missingFxConversionSlugs.add(readyPeerEventFxSlug);
-        calendarConversionGapErrors = [readyPeerEventOnlyConversionError, readyPeerGenericConversionError];
+        calendarConversionGapErrors = [readyPeerEventOnlyConversionError];
         const eventOnlyGapCalendarRequestCount = calendarRequestCount;
         const eventOnlyGapResponsePromise = waitForCalendarResponse(30);
         await refreshButton.click();
@@ -2970,8 +2975,8 @@ test.describe('Asset Detail Page', () => {
         expect(await eventOnlyGapResponse.finished()).toBeNull();
         assertCalendarBulkRequest(eventOnlyGapResponse.request().postDataJSON(), 30);
         expect(calendarRequestCount).toBe(eventOnlyGapCalendarRequestCount + 1);
-        const eventOnlyGapPayload = (await eventOnlyGapResponse.json()) as {items?: Array<{asset_id?: number; errors?: unknown[]}>};
-        expect(eventOnlyGapPayload.items?.find((item) => item.asset_id === readyPeer.id)?.errors).toEqual([readyPeerEventOnlyConversionError, readyPeerGenericConversionError]);
+        const eventOnlyGapPayload = (await eventOnlyGapResponse.json()) as {items?: Array<{asset_id?: number; fx_issues?: Array<{code?: string}>}>};
+        expect(issueCodesOf(eventOnlyGapPayload.items?.find((item) => item.asset_id === readyPeer.id))).toEqual(['event_rate_missing']);
 
         const eventOnlyGapIssue = readySignalCard.getByTestId('signal-issue');
         await expect(eventOnlyGapIssue).toBeVisible();
@@ -5442,13 +5447,13 @@ test.describe('Asset Detail Page', () => {
             const payload = (await response.json()) as {
                 items?: Array<{
                     asset_id?: number;
-                    errors?: unknown[];
+                    fx_issues?: Array<{code?: string}>;
                     signals?: Array<{instance_id?: string; signal_code?: string; status?: string; availability?: {reason_code?: string | null}}>;
                 }>;
             };
             const readyPeerItem = payload.items?.find((item) => item.asset_id === readyPeer.id);
             expect(readyPeerItem, `same-fingerprint Calendar response must contain owned peer ${readyPeer.id}`).toBeDefined();
-            expect(readyPeerItem?.errors).toEqual([readyPeerConversionError]);
+            expect(issueCodesOf(readyPeerItem)).toEqual(['rate_not_found']);
             expect(readyPeerItem?.signals?.find((signal) => signal.instance_id === calendarInstanceId && signal.signal_code === calendarSignalCode)).toMatchObject({
                 status: 'unavailable',
                 availability: {reason_code: 'missing_input_fields'},

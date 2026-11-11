@@ -298,11 +298,12 @@ async def test_missing_fx_appends_to_errors_not_hard_fail(test_server):
         assert ev["value"]["code"] == "JPY"
         assert Decimal(ev["value"]["amount"]) == Decimal("100.00")
         assert ev.get("original_value") is None
-        # errors[] should contain a non-fatal warning
-        assert len(item["errors"]) >= 1
-        err_txt = " ".join(item["errors"])
-        assert "JPY" in err_txt or "ZAR" in err_txt or "FX" in err_txt
-        print_success(f"  ✓ missing FX → event native + {len(item['errors'])} non-fatal warning(s)")
+        # CP-11d: the missing rate is data, in the direction of the conversion (JPY → ZAR, not alphabetical), and no text
+        assert item["errors"] == []
+        issues = {(issue["code"], issue["from_currency"], issue["to_currency"], issue["first_date"], issue["last_date"], issue["count"]) for issue in item["fx_issues"]}
+        assert ("event_rate_missing", "JPY", "ZAR", event_date.isoformat(), event_date.isoformat(), 1) in issues
+        assert {(code, source, destination) for code, source, destination, *_ in issues} <= {("event_rate_missing", "JPY", "ZAR"), ("rate_not_found", "JPY", "ZAR")}
+        print_success(f"  ✓ missing FX → event native + {len(item['fx_issues'])} fx issue(s)")
 
 
 # ============================================================

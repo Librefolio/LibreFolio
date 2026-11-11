@@ -25,6 +25,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    FxConversionIssue,
     StrictModel,
     iso_currency_code,
 )
@@ -243,7 +244,11 @@ class FAEventQueryResult(StrictModel):
     events: List[FAAssetEventPointOut] = Field(default_factory=list, description="Asset events with id and is_auto")
     errors: List[str] = Field(
         default_factory=list,
-        description="Non-fatal warnings (e.g. FX rate missing for target_currency conversion at some event dates)",
+        description="Non-fatal warnings that are not a missing exchange rate",
+    )
+    fx_issues: List[FxConversionIssue] = Field(
+        default_factory=list,
+        description="The events that could not be converted for want of an exchange rate, one entry per pair, in the direction of the conversion (CP-11d)",
     )
 
 
