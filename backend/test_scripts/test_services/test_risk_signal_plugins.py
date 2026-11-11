@@ -10,28 +10,13 @@ from pathlib import Path
 import pytest
 
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
-from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
 from backend.app.schemas.prices import AssetBackwardFillInfo
-from backend.app.schemas.risk import (
-    AssetReturnPoint,
-    AssetReturnSeries,
-    AssetValuationPoint,
-    AssetValuationSeries,
-    PreparedAssetSeries,
-    PreparedAssetSeriesSet,
-)
-from backend.app.schemas.signals import (
-    SignalAreaSeries,
-    SignalAvailabilityReason,
-    SignalCalendarReturnPointStatus,
-    SignalDomain,
-    SignalErrorCode,
-    SignalExecutionContext,
-    SignalPricePoint,
-    SignalRequest,
-    SignalStatus,
-    SignalWarningCode,
-)
+from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.outputs import SignalAreaSeries
+from backend.app.schemas.signals.result import SignalRequest
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalCalendarReturnPointStatus, SignalDomain, SignalErrorCode, SignalStatus, SignalWarningCode
 from backend.app.services import signal_plugins as signal_plugins_package
 from backend.app.services.risk.metrics import (
     annualized_sharpe,
@@ -814,22 +799,19 @@ def test_provenance_names_the_real_price_and_fx_observations():
     closes[10] = 109.0  # carried from 2026-01-10
     closes[15] = 114.0  # carried from 2026-01-15, no FX conversion involved
     backfill = {
-        CALENDAR_START
-        + timedelta(days=3): AssetBackwardFillInfo(
+        CALENDAR_START + timedelta(days=3): AssetBackwardFillInfo(
             actual_rate_date=CALENDAR_START + timedelta(days=1),
             days_back=2,
             fx_rate_date=CALENDAR_START,
             fx_days_back=3,
         ),
-        CALENDAR_START
-        + timedelta(days=10): AssetBackwardFillInfo(
+        CALENDAR_START + timedelta(days=10): AssetBackwardFillInfo(
             actual_rate_date=CALENDAR_START + timedelta(days=9),
             days_back=1,
             fx_rate_date=CALENDAR_START + timedelta(days=8),
             fx_days_back=2,
         ),
-        CALENDAR_START
-        + timedelta(days=15): BackwardFillInfo(
+        CALENDAR_START + timedelta(days=15): BackwardFillInfo(
             actual_rate_date=CALENDAR_START + timedelta(days=14),
             days_back=1,
         ),

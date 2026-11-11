@@ -244,7 +244,7 @@ The provider-event test had to date its event yesterday: [[problems/provider-eve
 | The post-migration fix `event_types` | `backend/app/db/post_migration/event_types.py` |
 | `row_count_changes()` | `backend/app/db/post_migration/base.py` |
 | `_expected_counts()`, the registration in `FIXES` | `backend/app/db/post_migration/__init__.py` |
-| Data editor: the one-request save | `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` |
+| Data editor: the one-request save | `frontend/src/lib/features/assets/AssetDataEditorSection.svelte` |
 | Data editor: row actions, read-only rows | `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` |
 | «+ New event» | `frontend/src/lib/features/transactions/events/EventCreateMiniModal.svelte` |
 | The events already there | `frontend/src/lib/features/transactions/events/EventExistsPanel.svelte` |

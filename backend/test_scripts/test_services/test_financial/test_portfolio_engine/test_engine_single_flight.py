@@ -122,7 +122,7 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.base import SQLModel  # every model, for create_all; importing backend.app.db brings the session module and its PRAGMA listener
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioReportQuery
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.portfolio_financial import PORTFOLIO_PERFORMANCE_COMPONENT, PORTFOLIO_POSITIONS_COMPONENT, PORTFOLIO_SUMMARY_COMPONENT
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
@@ -131,7 +131,7 @@ from backend.app.services.financial_math.portfolio.engine import PortfolioCalcul
 from backend.app.services.financial_math.portfolio.models import DailyStates, PortfolioCalculationResult, StateSegment
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.pac_allocator.source.distribution import build_planner_current_distribution
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -471,9 +471,9 @@ class _BlobStores:
 def no_cached_portfolio(request):
     """No engine blob and no report crosses into or out of a test: a cached one would answer without a build."""
     portfolio_engine_module._portfolio_blob_cache.clear()
-    portfolio_service_module._portfolio_l2_cache.clear()
+    report_module._portfolio_l2_cache.clear()
     request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
-    request.addfinalizer(portfolio_service_module._portfolio_l2_cache.clear)
+    request.addfinalizer(report_module._portfolio_l2_cache.clear)
 
 
 @pytest_asyncio.fixture
@@ -922,7 +922,7 @@ class TestTheSharedResultIsNotMutatedByItsConsumers:
                 target_currency=EUR,
                 issues=[],
             )
-        portfolio_service_module._portfolio_l2_cache.clear()  # the AI Export's report runs the engine again, not the L2 cache
+        report_module._portfolio_l2_cache.clear()  # the AI Export's report runs the engine again, not the L2 cache
         async with AsyncSession(book.engine, expire_on_commit=False) as session:
             scope = _portfolio_scope(book)
             context = BuildContext(build_component_registry(), request_id=scope.request_id, scope=scope, bucket_plan=build_bucket_plan_for_scope(scope), session=session)

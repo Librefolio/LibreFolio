@@ -14281,5 +14281,28 @@
         "index": 57
       }
     }
+  },
+  "developer/architecture/patterns/tool_plugins.en.md": {
+    "md5": "0de105851bdfc9085a616e9f82f8a81a",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-11T11:48:56.986718+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-11T11:48:56.986718+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-11-11T11:48:56.986718+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-11-11T11:48:56.986718+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
   }
 }

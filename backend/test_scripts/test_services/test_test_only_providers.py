@@ -7,7 +7,7 @@ answered), ``MOCKFX`` (``fx_providers/mockfx/plugin.py``: 1.2345 for every day a
 simulated failure). The flag only hides them from the lists a user reads: ``GET /assets/provider``
 (``api/v1/assets/providers.py``), ``GET /fx/providers`` (``api/v1/fx/providers.py``), a search that names no provider
 (``_default_search_codes``, ``services/assets/search.py``) and the plugin settings catalogue asked for every plugin. The
-registries (``services/provider_registry.py``: ``get_plugin``, ``get_plugin_instance`` / ``get_provider_instance``,
+registries (``services/platform/provider_registry.py``: ``get_plugin``, ``get_plugin_instance`` / ``get_provider_instance``,
 ``list_plugin_codes``, ``list_providers``) serve them whatever the mode, and so does everything built on them: a search
 that names ``mockprov``; ``POST /assets/provider``, whose ``FAProviderConfigBase.validate_provider_params_with_plugin``
 only checks that the code is registered; the probe; the refresh, the current price and the metadata, through
@@ -87,8 +87,8 @@ from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx_providers.mockfx.plugin import MockFXFailProvider, MockFXProvider
+from backend.app.services.platform.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry
 from backend.app.services.plugin_settings import runtime as settings_runtime
-from backend.app.services.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.tools.registry import ToolPluginRegistry
@@ -372,9 +372,9 @@ async def test_outside_test_mode_the_family_runtime_configures_no_test_double(mo
         configured = await double.configure(double.code)
     runtime = double.configure.__name__
     assert unknown is None and bound_for_the_unknown_code == [], f"barrier: outside test mode {runtime}({UNKNOWN_CODE!r}) gives {unknown!r}, the binding called as {bound_for_the_unknown_code}: an unknown code does not give None, the comparison would mean nothing"
-    assert (
-        configured is None and binding.calls == []
-    ), f"Red today (X-R44): outside test mode {runtime}({double.code!r}) hands out a {type(configured).__name__}, its plugin settings bound ({binding.calls}). {double.faces} The contract: None, as for the unknown code {UNKNOWN_CODE!r}, with no binding."
+    assert configured is None and binding.calls == [], (
+        f"Red today (X-R44): outside test mode {runtime}({double.code!r}) hands out a {type(configured).__name__}, its plugin settings bound ({binding.calls}). {double.faces} The contract: None, as for the unknown code {UNKNOWN_CODE!r}, with no binding."
+    )
 
 
 @pytest.mark.parametrize("route", ROUTES, ids=_route_id)
@@ -415,9 +415,9 @@ def test_outside_test_mode_a_class_flagged_test_only_does_not_exist_in_a_registr
     with _production(monkeypatch):
         outside = _doors(probe.registry, code)
     expected = _expected(probe.registry, None)
-    assert (
-        outside == expected
-    ), f"Red today (X-R44): outside test mode a registry of the base still serves {probe.flag_true.__name__}, flagged test_only = True ({_render(outside)}): the flag hides nothing in the base, and a test double of any family would reach a production instance as the provider doubles do. The contract: it does not exist there ({_render(expected)})."
+    assert outside == expected, (
+        f"Red today (X-R44): outside test mode a registry of the base still serves {probe.flag_true.__name__}, flagged test_only = True ({_render(outside)}): the flag hides nothing in the base, and a test double of any family would reach a production instance as the provider doubles do. The contract: it does not exist there ({_render(expected)})."
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

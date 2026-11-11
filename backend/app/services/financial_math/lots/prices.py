@@ -7,9 +7,7 @@ from datetime import date as date_type
 from decimal import Decimal
 from typing import Sequence
 
-from backend.app.schemas.portfolio import (
-    ReferencePriceSource,
-)
+from backend.app.schemas.portfolio.lots import ReferencePriceSource
 from backend.app.services.financial_math.fifo.models import FifoLot
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 

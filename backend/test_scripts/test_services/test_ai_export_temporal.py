@@ -17,10 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.schemas.signals import (
-    SignalAggregationProfile,
-    SignalTemporalClass,
-)
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalTemporalClass
 from backend.app.services.ai_export.temporal import (
     BandBucketStatistics,
     BandObservedPoint,

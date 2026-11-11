@@ -46,7 +46,7 @@ from backend.app.services.financial_math.portfolio.models import (
 )
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, ResolvedMark
 from backend.app.services.financial_math.valuation import compute_holding_value
-from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD, STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD, STALE_PRICE_THRESHOLD_DAYS, first_stale_day, is_stale
 
 logger = structlog.get_logger(__name__)
 
@@ -1109,7 +1109,7 @@ class DailyStateBuilder:
         for series in self.mark_series.values():
             observed = series.observation_dates
             for index, day in enumerate(observed):
-                first_stale = day + timedelta(days=STALE_PRICE_THRESHOLD_DAYS + 1)
+                first_stale = first_stale_day(day)
                 if index + 1 < len(observed) and observed[index + 1] <= first_stale:
                     continue
                 turns.add(first_stale)
@@ -1131,7 +1131,7 @@ class DailyStateBuilder:
         if not currency or currency == self.target_currency or not isinstance(self.fx_rate_map, AskedDayRates):
             return None
         rate_day = self.fx_rate_map.rate_day_at(currency, self.target_currency, day)
-        if rate_day is None or (day - rate_day).days <= STALE_PRICE_THRESHOLD_DAYS:
+        if rate_day is None or not is_stale(rate_day, day):
             return None
         return f"{currency}/{self.target_currency}", rate_day
 

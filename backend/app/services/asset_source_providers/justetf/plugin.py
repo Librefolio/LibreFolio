@@ -29,8 +29,8 @@ from backend.app.schemas.prices import (
 )
 from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider, raise_if_rate_limited
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
-from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
 from backend.app.utils.runtime.cache import get_ttl_cache
 

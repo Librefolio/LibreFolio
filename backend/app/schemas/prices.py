@@ -51,14 +51,9 @@ from backend.app.schemas.common import (
     SafeDecimal,
     StrictModel,
 )
-from backend.app.schemas.signals import (
-    SignalAnnotationRequest,
-    SignalBandValueSource,
-    SignalLineCrossoverRequest,
-    SignalOutputValueSource,
-    SignalRequest,
-    SignalResult,
-)
+from backend.app.schemas.signals.annotations import SignalAnnotationRequest, SignalLineCrossoverRequest
+from backend.app.schemas.signals.inputs import SignalBandValueSource, SignalOutputValueSource
+from backend.app.schemas.signals.result import SignalRequest, SignalResult
 from backend.app.services.assets.price_sampling import SampleResolution  # Z-29: a pure module of dates, no service
 
 #: A price query item's key, and a sample_like naming one (Z-29)
@@ -164,7 +159,7 @@ CLEAR = "clear"
 #: A manual write's open, high, low or volume (N92): a number, written; ``"clear"``, which empties the stored value; or
 #: ``null``. Read left to right, so ``"clear"`` is never taken for a number; any other text is refused. The ``enum``
 #: beside pydantic's ``const`` makes the generated client read ``'clear'`` as a literal (openapi-zod-client 1.18.3
-#: ignores ``const``), as in ``schemas/signals.py``.
+#: ignores ``const``), as in ``schemas/signals/``.
 PriceWriteValue = Annotated[Union[Annotated[Literal["clear"], Field(json_schema_extra={"enum": [CLEAR]})], SafeDecimal, None], Field(union_mode="left_to_right")]
 
 

@@ -16,13 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Broker, BrokerUserAccess, Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    YieldOnCostFxProvenance,
-    YieldOnCostProvenance,
-    YieldOnCostResult,
-    YieldOnCostStatus,
-    YieldOnCostUnavailableReason,
-)
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostFxProvenance, YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus, YieldOnCostUnavailableReason
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine

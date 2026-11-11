@@ -16,6 +16,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 ### 🔄 Modifié
 
 - Scalable Capital : un impôt restitué (un impôt négatif sur une vente, ou une ligne Taxes positive) est désormais importé comme Intérêt « Tax refund » au lieu d'un Dépôt : c'est de l'argent rendu sur le gain de l'investissement, il compte donc dans vos rendements. Les transactions importées avant gardent leur type.
+- Le guide admin ouvre désormais le chapitre sur la sauvegarde par un démarrage rapide pour la faire depuis l'application, avec des captures : la ligne de commande n'est plus la première chose que l'on voit.
 
 ### 🐛 Corrections
 

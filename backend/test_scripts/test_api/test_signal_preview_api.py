@@ -14,7 +14,7 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.schemas.signals import SignalPreviewResponse
+from backend.app.schemas.signals.preview import SignalPreviewResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
 settings = get_settings()

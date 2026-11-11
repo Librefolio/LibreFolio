@@ -36,30 +36,13 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PositionsContribution,
-)
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PositionsContribution
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.signals import (
-    SignalBandComponent,
-    SignalBandPoint,
-    SignalBandSeries,
-    SignalBandValueSource,
-    SignalCadence,
-    SignalDomain,
-    SignalExecutionContext,
-    SignalLineCrossoverRequest,
-    SignalOutputValueSource,
-    SignalPricePoint,
-    SignalPriceValueSource,
-    SignalReferenceLevel,
-    SignalStatus,
-    SignalTemporalClass,
-    SignalThresholdCrossingRequest,
-)
+from backend.app.schemas.signals.annotations import SignalLineCrossoverRequest, SignalThresholdCrossingRequest
+from backend.app.schemas.signals.inputs import SignalBandValueSource, SignalExecutionContext, SignalOutputValueSource, SignalPricePoint, SignalPriceValueSource
+from backend.app.schemas.signals.outputs import SignalBandPoint, SignalBandSeries, SignalReferenceLevel
+from backend.app.schemas.signals.vocabulary import SignalBandComponent, SignalCadence, SignalDomain, SignalStatus, SignalTemporalClass
 from backend.app.services.ai_export.components import asset_fx_technical, portfolio_broker_technical, technical_context, technical_shared
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.envelope import SectionEnvelope

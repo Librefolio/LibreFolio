@@ -49,50 +49,15 @@ setup_test_database()
 from backend.app.db.models import Asset, AssetType, FxConversionRoute, FxRate, PriceHistory
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
-from backend.app.schemas.portfolio import (
-    DataQualityExclusionReason,
-    DataQualityIssue,
-    DataQualityReport,
-    DataQualityStatus,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
-    PortfolioHolding,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    StalePriceAsset,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason, DataQualityIssue, DataQualityReport, DataQualityStatus, IssueCode, IssueDomain, IssueSeverity, StalePriceAsset
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.risk import (
-    AssetReturnPoint,
-    AssetReturnSeries,
-    AssetSetRiskScope,
-    AssetValuationPoint,
-    AssetValuationSeries,
-    PreparedAssetSeries,
-    PreparedAssetSeriesSet,
-    RiskAnalyticOutput,
-    RiskAnalyticRequest,
-    RiskAnalyticResult,
-    RiskAssetSetComparisonItem,
-    RiskAssetSetComparisonOutput,
-    RiskAssetSetDrawdownOutput,
-    RiskAssetSetKpiOutput,
-    RiskAssetSetReturnItem,
-    RiskAssetSetReturnOutput,
-    RiskAssetSetVarCvarOutput,
-    RiskDrawdownRecoveryStatus,
-    RiskErrorCode,
-    RiskFreeReference,
-    RiskMode,
-    RiskOutputKind,
-    RiskQueryRequest,
-    RiskResultStatus,
-    RiskReturnBasis,
-    RiskReturnItem,
-    RiskReturnOutput,
-    RiskScopeKind,
-)
+from backend.app.schemas.risk.outputs import RiskAnalyticOutput, RiskAssetSetComparisonItem, RiskAssetSetComparisonOutput, RiskAssetSetDrawdownOutput, RiskAssetSetKpiOutput, RiskAssetSetReturnItem, RiskAssetSetReturnOutput, RiskAssetSetVarCvarOutput, RiskReturnItem, RiskReturnOutput
+from backend.app.schemas.risk.results import RiskAnalyticResult
+from backend.app.schemas.risk.scope import AssetSetRiskScope, RiskAnalyticRequest, RiskQueryRequest
+from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet, RiskFreeReference
+from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskErrorCode, RiskMode, RiskOutputKind, RiskResultStatus, RiskReturnBasis, RiskScopeKind
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, normalize_fx_pair_slug
 from backend.app.services.market_series import prepare_asset_series_set

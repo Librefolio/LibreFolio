@@ -12,7 +12,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
-from backend.app.schemas.risk_scenarios import (
+from backend.app.schemas.risk.scenarios import (
     RISK_SCENARIO_OFFICIAL_LANGUAGES,
     RiskGeographyGroupDefinition,
     RiskScenarioCatalogEntry,

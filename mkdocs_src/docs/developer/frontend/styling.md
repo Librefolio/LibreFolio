@@ -8,41 +8,112 @@ LibreFolio uses **Tailwind CSS v4** for styling, providing a utility-first appro
 - **CSS-first configuration**: `src/app.css` imports Tailwind and declares the design tokens with
   the `@theme` directive. `tailwind.config.js` only holds an empty `extend` and is not loaded:
   Tailwind v4 reads a JavaScript config only through `@config`, which `app.css` does not use.
-- **CSS Variables**: Used for theming (Dark/Light mode) and brand colors.
+- **CSS Variables**: the colour roles `--lf-*` of `src/lib/theme/tokens.css` carry both themes (light and dark); see [Colour Roles](#colour-roles).
 - **Fonts**: system and locally installed fonts, plus one self-hosted face for flags — see
   [Fonts](#fonts).
 
-## 🎯 Design System
+## 🎯 Design System: Colour Roles {: #colour-roles }
 
-The design system is defined in `src/app.css` using the `@theme` directive.
+**A component never picks a colour: it picks a role.** A role says what the colour is for (the card,
+the muted text, the border of a field, an error); it has one value in the light theme and one in the
+dark theme, defined in one file, `src/lib/theme/tokens.css`.
 
-### 🎨 Brand Colors
+- A role is a CSS custom property named `--lf-<group>-<name>` (`--lf-surface-card`,
+  `--lf-text-muted`, `--lf-border-input`).
+- The two themes are **«Stone and Sage»** (light) and **«Slate and Sage»** (dark). The light values
+  sit on `:root, html.light, .light`, the dark ones on `html.dark, .dark`; roles derived from others
+  (`var()`, `color-mix(in oklab, …)`) are computed on `:root, .light, .dark`, so a subtree forced
+  into the other theme recomputes them with its own base values.
+- An `@theme inline` block at the end of `tokens.css` turns each role into Tailwind utilities
+  (`--color-lf-card` gives `bg-lf-card`, `border-lf-card`, `ring-lf-card`…). `inline` makes the
+  utility read `var(--lf-…)` directly, so a theme switch (or a live Designer Lab override) reaches
+  every element, subtrees included. Every utility takes an opacity: `bg-lf-card/90`.
+- `app.css` imports `tokens.css`, so the roles are part of the single Tailwind build.
 
-| Color Name    | Hex       | Usage                                        |
-|:--------------|:----------|:---------------------------------------------|
-| `libre-green` | `#1a4031` | Primary brand color, buttons, active states. |
-| `libre-beige` | `#f5f4ef` | Backgrounds, cards, warmth.                  |
-| `libre-sage`  | `#9caf9c` | Secondary accents, borders.                  |
-| `libre-dark`  | `#111111` | Text, dark mode backgrounds.                 |
-
-In dark mode `html.dark` redefines `--color-libre-green` (`#00d681`) and `--color-libre-banner`
-(`#00834f`). `@theme` also defines `libre-banner` (`#1a4031`, not used by components today), a
-`primary-50…900` (green) and a `surface-50…500` (beige) palette, and the `shadow-card` /
-`shadow-card-hover` shadows.
-
-### 💻 Usage
-
-You can use these colors directly in Tailwind classes:
-
-```html
-<div class="bg-libre-green text-white p-4 rounded-xl">
-  Primary Button
-</div>
-
-<div class="bg-libre-beige text-libre-dark">
-  Card Content
-</div>
+```mermaid
+flowchart LR
+    T["tokens.css<br/>--lf-* roles, light and dark values"] --> I["@theme inline<br/>--color-lf-*"]
+    I --> U["utilities<br/>bg-lf-card, text-lf-muted,<br/>border-lf-input…"]
+    U --> C["components"]
+    H["html.dark / .dark class"] -. "selects the dark values" .-> T
 ```
+
+### 🧩 Role families
+
+The full catalogue (every role, its value in both themes, when to use it) is **not** repeated in
+these docs: it lives in `.claude/skills/design-system/palette.md`, checked against `tokens.css`.
+The families:
+
+| Family | Examples | What for |
+|:--|:--|:--|
+| Surfaces | `bg-lf-app`, `bg-lf-page`, `bg-lf-card`, `bg-lf-panel`, `bg-lf-field`, `bg-lf-hover` | The shell, standalone pages, cards and modals, panels, the inside of a field |
+| Text | `text-lf-primary`, `text-lf-secondary`, `text-lf-muted`, `placeholder:text-lf-placeholder` | Body, labels, hints, placeholders |
+| Borders | `border-lf-subtle`, `border-lf-raised`, `border-lf-input` | Dividers, floating surfaces, fields |
+| Brand, action, focus | `bg-lf-brand`, `bg-lf-action`, `outline-lf-focus`, `text-lf-link`, `bg-lf-selected` | The green sidebar and primary button, keyboard focus, links, selection |
+| States | `text-lf-success`, `bg-lf-warning-soft`, `border-lf-danger-line`, `text-lf-info-on-soft` | Success, warning, danger, info: text, tint, edge, solid fill |
+| Gain and loss | `text-lf-gain`, `text-lf-loss` | The sign of a financial figure; never a state |
+| Categories | `bg-lf-cat-etf-soft`, `text-lf-cat-etf-on-soft`, `bg-lf-cat-etf` | Asset type badges and the same colours in the charts |
+| Tooltip, overlay, shadows | `bg-lf-inverse`, `bg-lf-overlay`, `shadow-lf-shadow` | The inverted tooltip, modal backdrops, raised surfaces |
+| Shell and special surfaces | `bg-lf-bar`, `bg-lf-switch-off`, `bg-lf-terminal`, `text-lf-ai` | Sidebar, switch, terminal, AI accent |
+
+### 📏 The rules
+
+1. **Roles only.** No palette class (`bg-white`, `text-gray-500`, `bg-libre-green`) and no
+   hand-written colour (hex, `rgb()`, `hsl()`) in markup, script or `<style>`. In a `<style>` block
+   use `var(--lf-…)` or `color-mix(in oklab, var(--lf-…) 70%, transparent)`.
+2. **Never `dark:` on a role.** The role already changes value with the theme.
+3. **Every `border` names its role** (`border border-lf-subtle`): Tailwind 4 draws an unnamed
+   border in `currentColor`.
+4. **A native field names its text and placeholder role** (`text-lf-primary`,
+   `placeholder:text-lf-placeholder`): the legacy dark rules of `app.css` skip any element carrying
+   a `-lf-` class.
+5. **Class names stay whole literals.** Never `'bg-lf-' + x`: Tailwind would not generate the class
+   and the gate could not see it.
+6. **One element, one colour language.** Never a role utility and a palette class on the same element.
+7. **One property, one ternary.** Two utilities on the same property come out sorted by name, not by
+   position, so the idle and the state colour go in the two branches of one ternary.
+
+The gates enforce them: `src/themeRoles.gate.test.ts` (a ratchet on legacy classes and colour
+literals, plus the grammar of the roles) and `src/themeTokens.gate.test.ts` (both themes, the
+utility table and the WCAG contrast pairs, 4.5:1 for text and 3:1 for the rest). For new or changed UI
+follow the skill `design-system` (`.claude/skills/design-system/SKILL.md`); to convert a component
+that still writes palette classes, the skill `theme-roles`.
+
+!!! tip "Tuning colours live"
+
+    The roles can be edited while looking at the real app in the [Designer Lab](designer-lab.md),
+    which exports the changes for the skill `designer-lab-apply`.
+
+### 🕰️ Legacy colours, being migrated
+
+Components not yet migrated still use the old system, and `app.css` keeps it alive until they move:
+
+- **`libre-*` colours** in `@theme` (`libre-green`, `libre-beige`, `libre-sage`, `libre-dark`,
+  `libre-banner`), with the `primary-50…900` and `surface-50…500` palettes.
+- **`--theme-*` variables** (`--theme-bg-*`, `--theme-text-*`, `--theme-border-*`, `--theme-accent*`,
+  `--theme-shadow*`), defined for `:root, html.light` and `html.dark`.
+- **The legacy dark remap**: unlayered `html.dark` rules that repaint common palette utilities
+  (`.bg-white`, `.text-gray-600`, `.border-gray-100`, un-migrated fields…) from the `--theme-*`
+  variables. Every element carrying a `-lf-` class is exempt.
+- **`dark:` variants** still written by un-migrated components; `app.css` binds them to the `dark`
+  class with `@custom-variant dark (&:where(.dark, .dark *))`.
+
+Nothing new may use them. The colour ratchet records what is left in
+`src/themeRoles.baseline.tsv` (one line per file with its legacy class and colour literal counts):
+a file can only lose entries, and a new file starts with none. Rules are removed from `app.css` when
+the last use of their class disappears.
+
+## 🌙 Switching Theme
+
+Dark mode is the `dark` class on the `<html>` element. An inline script in `src/app.html` sets
+`dark` or `light` before the first paint, from the stored preference (`librefolio-theme` in
+`localStorage`) or, when there is none, from `prefers-color-scheme`; `applyTheme()` in
+`src/lib/stores/app/themeStore.ts` changes it at run time. A subtree can force a theme with the
+`.light` or `.dark` class and the roles recompute inside it.
+
+Code that draws outside CSS (charts, canvas) never reads the class itself: it uses `isDarkTheme()`
+and `onThemeClassChange()` of `src/lib/theme/themeMode.ts` (gate `src/themeModeReads.gate.test.ts`),
+and reads roles through `chartRoles()` of `roleColors.ts`. See [Charts](components/charts.md).
 
 ## 🔤 Fonts {: #fonts }
 
@@ -93,43 +164,6 @@ before the first chart paints, since canvas text does not make the browser fetch
     `offline.html`, and that no source names an emoji font; `e2e/fx/fx-flag-font.spec.ts` reads
     from the browser (Chrome DevTools Protocol) which font actually draws a flag.
 
-## 🌙 Dark Mode
-
-Dark mode is the `dark` class on the `<html>` element. An inline script in `src/app.html` sets
-`dark` or `light` before the first paint, from the stored preference (`librefolio-theme` in
-`localStorage`) or, when there is none, from `prefers-color-scheme`. `app.css` binds Tailwind's
-`dark:` variant to that class:
-
-```css
-@custom-variant dark (&:where(.dark, .dark *));
-```
-
-Components write explicit `dark:` variants next to the light classes
-(`bg-white dark:bg-slate-800`): this is the main mechanism.
-
-### 🔧 Theme Variables
-
-`app.css` also defines semantic variables for both themes (`:root, html.light` and `html.dark`):
-`--theme-bg-*`, `--theme-text-*`, `--theme-border-*`, `--theme-accent*` and `--theme-shadow*`.
-
-```css
-:root,
-html.light {
-    --theme-bg-primary: #ffffff;
-    --theme-text-primary: #111827;
-}
-
-html.dark {
-    --theme-bg-primary: #0f172a;
-    --theme-text-primary: #f8fafc;
-}
-```
-
-Components do not read them directly. They feed a set of global `html.dark` overrides in `app.css`
-that remap common light utilities — `.bg-white`, `.bg-gray-50`, `.text-gray-800`,
-`.border-gray-200`, inputs, `.bg-libre-beige`, … — to the dark palette, a safety net for markup
-written without a `dark:` variant.
-
 ## 🛠️ Utility Classes {: #utility-classes }
 
 Global classes defined in `src/app.css`:
@@ -145,10 +179,21 @@ Global classes defined in `src/app.css`:
 
 ## 🧱 Component Styling
 
-The recurring patterns in the code base:
+A typical migrated component, all roles:
 
-- **Cards**: `bg-white dark:bg-slate-800 rounded-xl shadow-sm`, often with
-  `border border-gray-100 dark:border-slate-700`
-- **Inputs**: `rounded-lg` borders with `focus:ring-libre-green` / `focus:border-libre-green`
-- **Primary buttons**: `bg-libre-green text-white rounded-lg` (dark mode darkens `bg-libre-green`
-  to `#166534` for contrast)
+```html
+<div class="bg-lf-card border border-lf-subtle rounded-xl shadow-lf-shadow-card text-lf-primary">
+  <input class="bg-lf-field border border-lf-input hover:border-lf-input-hover text-lf-primary
+                placeholder:text-lf-placeholder focus:border-lf-focus focus:ring-lf-focus rounded-lg" />
+  <button class="bg-lf-action hover:bg-lf-action-hover text-lf-on-action rounded-lg">Save</button>
+</div>
+```
+
+- **Cards**: `bg-lf-card`, a named border, `rounded-xl`; a floating surface (modal, menu) uses
+  `border-lf-raised` and `shadow-lf-shadow`. Modals go through `ModalBase.svelte`.
+- **Inputs**: `rounded-lg`, `border-lf-input`, focus with `focus:border-lf-focus focus:ring-lf-focus`.
+- **Primary buttons**: `bg-lf-action` with `text-lf-on-action`.
+- **Signs, states, badges**: take the ready class strings of `src/lib/theme/toneClasses.ts`
+  (`SIGN_TEXT`, `STATUS_TONES`…) instead of composing them.
+- **Charts** take their colours from the same folder, `src/lib/theme/` (`chartTheme.ts`,
+  `chartCategories.ts`, `chartShades.ts`), never as a literal in a component.

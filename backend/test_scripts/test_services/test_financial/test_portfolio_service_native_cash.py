@@ -72,20 +72,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.native_cash as native_cash_module
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Broker, BrokerUserAccess, FxRate, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import (
-    BrokerBreakdown,
-    CostHistorySeries,
-    DepositHistorySeries,
-    IncomeHistorySeries,
-    OtherPeriodEffectCode,
-    PortfolioReportQuery,
-    PortfolioSummary,
-    PositionsContribution,
-)
+from backend.app.schemas.portfolio.history import CostHistorySeries, DepositHistorySeries, IncomeHistorySeries
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
+from backend.app.schemas.portfolio.summary import BrokerBreakdown, OtherPeriodEffectCode, PortfolioSummary, PositionsContribution
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
@@ -98,8 +92,8 @@ _HistorySeries = IncomeHistorySeries | CostHistorySeries | DepositHistorySeries
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

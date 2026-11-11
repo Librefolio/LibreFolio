@@ -40,7 +40,7 @@ from typing import Literal
 from pydantic import Field
 
 from backend.app.schemas.common import Currency, CurrencyCode, DateRangeModel, SafeDecimal, StrictModel
-from backend.app.schemas.portfolio import LotAnalysisStatus
+from backend.app.schemas.portfolio.lots import LotAnalysisStatus
 
 
 class AssetComponentModel(StrictModel):

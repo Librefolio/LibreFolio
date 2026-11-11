@@ -40,16 +40,9 @@ from sqlmodel import SQLModel
 
 from backend.app.db.models import Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    AllocationItem,
-    PortfolioHolding,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    YieldOnCostProvenance,
-    YieldOnCostResult,
-    YieldOnCostStatus,
-)
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AllocationItem, PortfolioHolding, PortfolioSummary
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.services.ai_export.components import broker_concentration_context, broker_cost_efficiency, broker_financial
 from backend.app.services.ai_export.components.broker_concentration_context import ConcentrationComparisonStatus
 from backend.app.services.ai_export.components.broker_cost_efficiency import BrokerCostEfficiencyAccessError, FeeStatus, TradeActivityRecord

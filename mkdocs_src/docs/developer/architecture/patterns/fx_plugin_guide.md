@@ -113,7 +113,7 @@ from datetime import date
 from decimal import Decimal
 from backend.app.services.fx.base import FXRateProvider
 from backend.app.services.fx.registry import FXProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 @register_provider(FXProviderRegistry)
 class MyCentralBankProvider(FXRateProvider):

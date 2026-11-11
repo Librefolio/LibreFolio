@@ -17,7 +17,7 @@ import {renderBackendSignalResult} from '$lib/charts/signals/backendRenderer';
 import type {SignalInstanceResult} from '$lib/charts/signals/resultMapper';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {displayFxRate} from '$lib/features/fx/fxStoreRegistry';
-import {extractDaysBack} from '$lib/utils/assetPriceDerived';
+import {extractDaysBack} from '$lib/features/assets/assetPriceDerived';
 
 type ViewMode = 'absolute' | 'percentage';
 

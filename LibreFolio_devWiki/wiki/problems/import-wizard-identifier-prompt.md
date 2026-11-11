@@ -61,4 +61,4 @@ Imported assets from BRIM files may not receive their ISIN/ticker identifiers, b
 | Role | Path |
 |------|------|
 | ImportWizardModal | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
-| AssetModal | `frontend/src/lib/components/assets/AssetModal.svelte` |
+| AssetModal | `frontend/src/lib/features/assets/AssetModal.svelte` |

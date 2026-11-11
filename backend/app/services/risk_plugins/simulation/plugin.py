@@ -4,22 +4,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.schemas.risk import (
-    RiskCompositionPolicy,
-    RiskErrorCode,
-    RiskMode,
-    RiskOutputKind,
-    RiskSamplingStrategy,
-    RiskScopeKind,
-    RiskSimulationBandPoint,
-    RiskSimulationCovarianceEstimator,
-    RiskSimulationDriftEstimator,
-    RiskSimulationOutput,
-    RiskSimulationProcess,
-    RiskSimulationRegime,
-)
+from backend.app.schemas.risk.outputs import RiskSimulationBandPoint, RiskSimulationOutput
+from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskMode, RiskOutputKind, RiskSamplingStrategy, RiskScopeKind, RiskSimulationCovarianceEstimator, RiskSimulationDriftEstimator, RiskSimulationProcess, RiskSimulationRegime
 from backend.app.services.financial_math.returns import calendar_days_to_observations
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
@@ -257,7 +245,7 @@ class SimulationAnalytic(RiskAnalytic):
         try:
             engine_result, _cache_hit, _worker_result = await run_simulation(
                 engine_request,
-                algorithm_version=(f"{self.analytic_code}@" f"{self.algorithm_version}"),
+                algorithm_version=(f"{self.analytic_code}@{self.algorithm_version}"),
             )
         except SimulationResourceLimitError as exc:
             # A budget refusal is about size, never about the parameters' validity: at the

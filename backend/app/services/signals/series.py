@@ -5,24 +5,10 @@ from __future__ import annotations
 from collections import Counter
 from typing import Optional
 
-from backend.app.schemas.signals import (
-    SignalAvailability,
-    SignalAvailabilityReason,
-    SignalBandSeries,
-    SignalCadence,
-    SignalDataPolicy,
-    SignalEventPoint,
-    SignalExecutionContext,
-    SignalInputCoverage,
-    SignalInputRequirements,
-    SignalPriceField,
-    SignalPricePoint,
-    SignalSeries,
-    SignalSourceCapability,
-    SignalWarmupMetadata,
-    SignalWarning,
-    SignalWarningCode,
-)
+from backend.app.schemas.signals.inputs import SignalEventPoint, SignalExecutionContext, SignalInputRequirements, SignalPricePoint, SignalSourceCapability, SignalWarmupMetadata
+from backend.app.schemas.signals.outputs import SignalBandSeries, SignalSeries
+from backend.app.schemas.signals.result import SignalAvailability, SignalInputCoverage, SignalWarning
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalCadence, SignalDataPolicy, SignalPriceField, SignalWarningCode
 from backend.app.services.market_series import (
     date_is_within_range,
     distance_slots,

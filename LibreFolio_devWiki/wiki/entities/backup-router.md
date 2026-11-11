@@ -107,7 +107,7 @@ async def backup_fx_rates(base: str, quote: str, format: Literal["csv", "json"] 
 `downloadFxRatesBackup(base, quote, format)`):
 
 ```ts
-// frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte
+// frontend/src/lib/features/assets/AssetCurrencyChangeModal.svelte
 await downloadAssetBackup(impact.assetId, kind, format);   // kind: 'prices' | 'events'
 // User downloads, then clicks Confirm → destructive PATCH executes Policy D wipe
 ```
@@ -132,5 +132,5 @@ await downloadAssetBackup(impact.assetId, kind, format);   // kind: 'prices' | '
 | Column schemas and CSV/JSON streaming | `backend/app/services/platform/series_export.py` |
 | FX rates serializer | `backend/app/api/v1/backup/exports.py` (`backup_fx_rates`) |
 | Tests | `backend/test_scripts/test_api/test_backup_export_extras.py`, `test_asset_prices_export.py` |
-| Frontend consumer | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte`, `frontend/src/lib/api/backupDownload.ts` |
+| Frontend consumer | `frontend/src/lib/features/assets/AssetCurrencyChangeModal.svelte`, `frontend/src/lib/api/backupDownload.ts` |
 

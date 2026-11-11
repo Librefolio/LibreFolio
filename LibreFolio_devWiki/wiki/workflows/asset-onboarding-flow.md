@@ -62,10 +62,10 @@ The provider fetches/computes price history. Results stored in `PriceHistory` wi
 |------|------|
 | Assets list page | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Asset detail page | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
-| AssetModal | `frontend/src/lib/components/assets/AssetModal.svelte` |
-| AssetSearchAutocomplete | `frontend/src/lib/components/assets/AssetSearchAutocomplete.svelte` |
-| ProviderAssignmentSection | `frontend/src/lib/components/assets/ProviderAssignmentSection.svelte` |
-| ScheduledInvestmentEditor | `frontend/src/lib/components/assets/ScheduledInvestmentEditor.svelte` |
+| AssetModal | `frontend/src/lib/features/assets/AssetModal.svelte` |
+| AssetSearchAutocomplete | `frontend/src/lib/features/assets/AssetSearchAutocomplete.svelte` |
+| ProviderAssignmentSection | `frontend/src/lib/features/assets/ProviderAssignmentSection.svelte` |
+| ScheduledInvestmentEditor | `frontend/src/lib/features/assets/ScheduledInvestmentEditor.svelte` |
 | PriceChartFull | `frontend/src/lib/components/charts/PriceChartFull.svelte` |
-| AssetDataEditorSection | `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` |
+| AssetDataEditorSection | `frontend/src/lib/features/assets/AssetDataEditorSection.svelte` |
 | Assets API | `backend/app/api/v1/assets/` |

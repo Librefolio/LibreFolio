@@ -197,7 +197,7 @@ reads its points as `FAPriceWritePoint` (`FAUpsert.prices`), whose `open`, `high
   (`_price_limit_issue()`);
 - its JSON schema carries `enum: ["clear"]` beside pydantic's `const`, so that the generated
   client reads `z.literal('clear')`: `openapi-zod-client` 1.18.3 ignores `const`, and
-  `schemas/signals.py` pins its literals the same way.
+  `schemas/signals/` pins its literals the same way.
 
 `FAPricePoint`, the model of a provider's history, of the query answers and of a sync's
 `changed_points`, checks no sign since N92: the refresh decides about a provider's day. Before
@@ -881,7 +881,7 @@ none for a day the backend would refuse (after `as_of`, or not a calendar day), 
 `assetRangeDelta()` for the cards' Δ. The browser no longer computes it: `computeDerivedPriceState()` returns no Δ. The
 page keeps the cards' Δ with a `PeriodChangesLedger` of its own, which marks each request with the whole range rather
 than its last day, so a failed request keeps only the values of the same range. The asset detail page sends it too, for
-its price summary: `fetchSeriesRangeDelta()` (`frontend/src/lib/components/assets/detail/assetDetailRangeChange.ts`)
+its price summary: `fetchSeriesRangeDelta()` (`frontend/src/lib/features/assets/detail/assetDetailRangeChange.ts`)
 asks one item, `as_of` the range's end and `range_start` from `rangeStartFor()`, with `target_currency` only when the
 chart is really converted (the display currency is not the asset's and the FX pair is configured: with the pair missing,
 the summary shows native prices). The page asks it on load, when the asset, the range or the display currency changes,
@@ -1026,7 +1026,7 @@ it. `live_range_changes()` (`services/assets/period_changes.py`) values it after
 A `range_start` after tomorrow (`latest_range_end()`) is refused by the parameter itself (`_range_start_in_bounds()`; there is no first day since D-P4)
 (the standard 422, `loc` `["query", "range_start"]`), before any provider call (R13-SEC9-4); one after the price's day
 gives an empty `range_change`. The asset detail page sends it with its live poll (`AssetDetailLive`,
-`frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts`): while the range ends today, each request asks
+`frontend/src/lib/features/assets/detail/assetDetailLive.svelte.ts`): while the range ends today, each request asks
 `range_start`, the range's first day as it is (`rangeStartFor()`), and `target_currency`, the display
 currency, only when the summary converts the live price (the display currency is not the asset's and the FX pair is
 configured). The answer's `range_change` becomes `rangeDelta`, the Δ the summary shows beside the live price: none
@@ -1042,7 +1042,7 @@ Any user may start one, so each user gets at most 30 probes a minute (a `Sliding
 `api/v1/assets/providers.py`, counted in each process; MF-SI2): past it the route answers 429
 `{"error_code": "PROBE_RATE_LIMITED", "retry_after", "message"}` with `Retry-After`, before the provider is called.
 The web app says it in the user's language, with the local time the wait ends, rounded up to the minute
-(`probeRateLimitMessage()` in `components/assets/resolveProviderError.ts`, X-R66): **Test Configuration** shows it as the
+(`probeRateLimitMessage()` in `features/assets/resolveProviderError.ts`, X-R66): **Test Configuration** shows it as the
 result row's detail and one-line summary, **Ask Provider** as its error toast; any other failure is shown as before.
 `LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read at each probe by
 `probe_limiter()`, as the sign-in limit reads its variable: a change applies at the next probe, without a restart.
@@ -1089,7 +1089,7 @@ exists, and keeps the backend's English message otherwise. Among the codes it kn
 
 Each text, date included, must fit the 60 characters of the result's one-line summary:
 `summarizeProbeError()` (`providerProbe.ts`) cuts a longer one. Both files are in
-`frontend/src/lib/components/assets/`.
+`frontend/src/lib/features/assets/`.
 
 The asset modal's **Ask Provider**, and the comparison that follows a search selection, run
 `metadata` alone and diff its `patch_data` against the form in the browser: nothing is written until

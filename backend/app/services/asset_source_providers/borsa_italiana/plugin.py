@@ -30,8 +30,8 @@ from backend.app.schemas.prices import (
 from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
-from backend.app.services.provider_registry import register_provider
 
 try:
     from borsa_italiana_scraping import (
@@ -161,7 +161,7 @@ def _unsupported_page_error(identifier: str, err: Exception) -> AssetSourceError
     handle yet. The message invites the user to report it so support can be added.
     """
     return AssetSourceError(
-        f"Borsa Italiana: cannot resolve a usable market page for '{identifier}' " "(market not supported yet). Please open an issue at " "https://github.com/Librefolio/LibreFolio/issues reporting this ISIN.",
+        f"Borsa Italiana: cannot resolve a usable market page for '{identifier}' (market not supported yet). Please open an issue at https://github.com/Librefolio/LibreFolio/issues reporting this ISIN.",
         "UNSUPPORTED_PAGE",
         {"identifier": identifier, "error": str(err)},
     )
@@ -345,7 +345,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
         """Raise AssetSourceError if the library is not installed."""
         if not BORSA_ITALIANA_AVAILABLE:
             raise AssetSourceError(
-                "borsa-italiana-scraping library not available — install with: " "pipenv install 'borsa-italiana-scraping @ git+https://github.com/Librefolio/borsaItaliana-scraping.git'",
+                "borsa-italiana-scraping library not available — install with: pipenv install 'borsa-italiana-scraping @ git+https://github.com/Librefolio/borsaItaliana-scraping.git'",
                 "NOT_AVAILABLE",
             )
 

@@ -17,9 +17,9 @@ Component and model for unified data quality warnings across the LibreFolio UI.
 
 | File | Role |
 |------|------|
-| 🐍 `backend/app/schemas/portfolio.py` | Defines `IssueCode`, `IssueSeverity`, `IssueDomain`, `DataQualityIssue`, and `DataQualityReport` schemas. |
+| 🐍 `backend/app/schemas/portfolio/data_quality.py` | Defines `IssueCode`, `IssueSeverity`, `IssueDomain`, `DataQualityIssue`, and `DataQualityReport` schemas. |
 | ⚙️ `backend/app/services/financial_math/portfolio/data_quality.py` | `build_data_quality_report()` — generates portfolio-wide issues from the engine's daily states; `DerivedViewsBuilder.build_data_quality_report()` (`derived_views.py`) passes its daily states to it. |
-| 📊 `backend/app/services/portfolio/portfolio_service.py` | `get_summary()` / `get_report()` — collect the missing FX pairs, the assets without cost basis and the assets with an invalid split ratio, then call `build_data_quality_report()`. |
+| 📊 `backend/app/services/portfolio/summary.py`, `report.py` | `get_summary()` / `get_report()` — collect the missing FX pairs, the assets without cost basis and the assets with an invalid split ratio, then call `build_data_quality_report()`. |
 | 🎨 `frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte` | Reusable UI component (supporting `grouped` and `flat` modes). |
 | 🌐 `frontend/src/lib/i18n/dataQuality/{en,it,fr,es}.json` | `dataQuality.*` translation namespace for localized warnings: the `dataQuality` subsystem, one of the sources of the generated catalogue (see [Internationalization](i18n.md)). |
 
@@ -260,7 +260,7 @@ In the response JSON, look for:
 
 ## 🛠️ How to Add a New IssueCode
 
-1. Add the code to `IssueCode` enum in `backend/app/schemas/portfolio.py`.
+1. Add the code to `IssueCode` enum in `backend/app/schemas/portfolio/data_quality.py`.
 2. Generate it in the backend engine (`build_data_quality_report`) **or** construct it client-side on the relevant page.
 3. Set `severity` (by the [rule above](#banner-severity-rule)), `cta_action`, `cta_target`, `affected_*` fields appropriately.
 4. Add `message_i18n_key` and its translations in all 4 language files under `dataQuality.*`.

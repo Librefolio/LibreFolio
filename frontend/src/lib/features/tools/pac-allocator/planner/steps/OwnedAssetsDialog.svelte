@@ -7,7 +7,7 @@
     import {onDestroy, onMount} from 'svelte';
     import {CheckCheck, Square} from 'lucide-svelte';
     import {t} from '$lib/i18n';
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import AssetIcon from '$lib/features/assets/AssetIcon.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';

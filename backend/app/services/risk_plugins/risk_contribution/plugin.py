@@ -4,16 +4,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from backend.app.schemas.risk import (
-    RiskContributionItem,
-    RiskContributionOutput,
-    RiskErrorCode,
-    RiskMode,
-    RiskOutputKind,
-    RiskScopeKind,
-)
+from backend.app.schemas.risk.outputs import RiskContributionItem, RiskContributionOutput
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.acquired import (
     diversification_ratio,
     effective_number_of_assets,

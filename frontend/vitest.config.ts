@@ -13,6 +13,9 @@ export default defineConfig({
     plugins: [svelte(), svelteTesting()],
     test: {
         include: ['src/**/*.test.ts'],
+        // The `@embedpdf/*` packages are direct dependencies (package.json), so Vitest externalizes them and Node would load
+        // their `.wasm?url` and `.ttf` imports as modules. Inlined, Vite resolves them as asset URLs, as the build does.
+        server: {deps: {inline: [/@embedpdf\//]}},
         // The translation catalogue (src/lib/i18n/<lang>.json) is generated from its sources and not tracked:
         // generate it once before any test imports or reads it.
         globalSetup: ['./scripts/i18n-catalog-build.mjs'],

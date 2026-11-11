@@ -173,7 +173,7 @@ or annualization formula of its own.
   (`risk/results.py`) leaves the factor `None`, the `comparison` analytic takes the context's factor.
 - `observations_per_year(n_observations, calendar_days)` is the formula itself, the one home that
   `observed_annualization()` computes with and that the risk contracts check a factor against: the validators of
-  `schemas/risk.py` import it (MF-D3), the one kind of import a schema may make from the layer — a pure function, never
+  `schemas/risk/` import it (MF-D3), the one kind of import a schema may make from the layer — a pure function, never
   a service (rule 8 of `.github/instructions/financial-math.instructions.md`).
 
 `fixed_period_dates()` and `fixed_period_changes()` (`returns.py`) hold the change of a price or rate over the fixed

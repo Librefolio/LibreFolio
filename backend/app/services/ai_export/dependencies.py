@@ -82,7 +82,7 @@ from typing import TypeVar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.logging_config import get_logger
-from backend.app.schemas.signals import SignalTemporalClass
+from backend.app.schemas.signals.vocabulary import SignalTemporalClass
 from backend.app.services.ai_export.components.envelope import SectionEnvelope, build_envelope
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
@@ -429,7 +429,7 @@ class BuildContext:
         )
         existing = self._indicator_sampling.get(signal_instance_id)
         if existing is not None and existing != diagnostic:
-            raise BuildContextScopeError("conflicting indicator sampling diagnostics for " f"{signal_instance_id!r}")
+            raise BuildContextScopeError(f"conflicting indicator sampling diagnostics for {signal_instance_id!r}")
         self._indicator_sampling[signal_instance_id] = diagnostic
 
     def register_event_selection(self) -> None:
@@ -599,7 +599,7 @@ class BuildContext:
             return
         expected_type, existing_mode = existing
         if expected_type is not key.expected_type or existing_mode != mode:
-            raise ResourceKeyConflictError(f"resource key {key.name!r} already registered as (type={expected_type.__name__!r}, mode={existing_mode!r}); " f"got conflicting (type={key.expected_type.__name__!r}, mode={mode!r})")
+            raise ResourceKeyConflictError(f"resource key {key.name!r} already registered as (type={expected_type.__name__!r}, mode={existing_mode!r}); got conflicting (type={key.expected_type.__name__!r}, mode={mode!r})")
 
     async def _resolve_resource(self, key: ResourceKey[T], *, mode: str, run_loader: Callable[[], Awaitable[object]]) -> T:
         if not isinstance(key, ResourceKey):

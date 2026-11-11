@@ -205,7 +205,7 @@ plan or a result. The incoherent cases are:
 - a scalar `signal` source naming a band series.
 
 The chart endpoints answer it with HTTP 422, the message as `detail`:
-`POST /api/v1/signals/preview` (`api/v1/signals.py`), the Asset price query
+`POST /api/v1/signals/preview` (`api/v1/signals/preview.py`), the Asset price query
 `POST /api/v1/assets/prices/query` (`api/v1/assets/prices.py`), and the FX endpoint
 `POST /api/v1/fx/currencies/convert` (`api/v1/fx/currencies.py`). An Asset or FX request
 then returns no prices either.
@@ -497,7 +497,7 @@ A plugin never sets the status itself. `compute()` returns a `SignalComputation`
 result is mathematically undefined. The service then assigns the status of a computed result —
 `partial` when the warm-up is incomplete, partial coverage was used, or the availability
 reason is `partial_undefined_metric`; `ok` otherwise — and builds a `SignalResult`. Its
-`validate_status_matrix` validator (`backend/app/schemas/signals.py`) rejects every
+`validate_status_matrix` validator (`backend/app/schemas/signals/`) rejects every
 combination outside this matrix:
 
 | Status | Required | Forbidden |
@@ -574,7 +574,7 @@ from backend.app.schemas.signals import (
     SignalViewTransform,
     SignalWarmupRequirement,
 )
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 

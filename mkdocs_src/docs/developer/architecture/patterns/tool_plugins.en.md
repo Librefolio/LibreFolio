@@ -51,7 +51,7 @@ Paths below are relative to the repository root.
 | `backend/app/api/v1/auth.py` | `get_current_user`, the authentication dependency used by all Tool routes. |
 | `backend/app/main.py` | API prefix mounting. |
 | `backend/app/services/platform/app_lifespan.py` | Off-event-loop catalogue initialization (the `tool-catalog` startup step), and executor shutdown in the lifespan's `finally` block (the `tool-executor` step of `FINALLY_STEPS`). |
-| `backend/app/services/provider_registry.py` | Shared discovery and `register_plugin`. |
+| `backend/app/services/platform/provider_registry.py` | Shared discovery and `register_plugin`. |
 | `frontend/scripts/generate-tools-client.mjs` | Strict codec generation and the generated code/version-to-codec map. |
 | `frontend/src/lib/api/tool-contract-map.generated.ts` | Generated service identities, schema fingerprints, UI versions, and codecs. |
 | `frontend/src/lib/features/tools/contracts.ts` | Runtime catalogue validation, compiled-contract compatibility, and typed execution preparation. |

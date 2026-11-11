@@ -35,7 +35,7 @@ mixed   The runtime twin of the colour gate G3: the elements whose class attribu
         runtime (a className prop, an imported constant); the gallery scans every shot of a snapshot with the gate's own
         patterns (frontend/e2e/fixtures/galleryMixed.ts, on when gallery_snapshot.sh sets LF_GALLERY_MIXED_DIR).
         ... mixed <work>/snapshots/A --collect          # merge the records into mixed_elements.json (the script does it)
-        ... mixed <work>/snapshots/A [--by dir|section] [--area lib/components/assets] [--on-screen] [--src frontend/src]
+        ... mixed <work>/snapshots/A [--by dir|section] [--area lib/features/assets] [--on-screen] [--src frontend/src]
         Prints the distinct mixed elements by area: by default the folder of the file that writes the element's test id,
         a hint and not a proof (the class may come from the caller).
 
@@ -752,7 +752,7 @@ def main() -> int:
     m.add_argument("--parts", help="with --collect: the folder of the records (default <snapshot>/mixed)")
     m.add_argument("--keep-parts", action="store_true", help="with --collect: keep the records once merged")
     m.add_argument("--by", choices=("dir", "section"), default="dir", help="group by the folder of the candidate file (default) or by the gallery's section")
-    m.add_argument("--area", help="only the areas whose name contains this text (lib/components/assets, settings…)")
+    m.add_argument("--area", help="only the areas whose name contains this text (lib/features/assets, settings…)")
     m.add_argument("--on-screen", action="store_true", help="only the elements on screen in at least one shot")
     m.add_argument("--src", help=f"the sources searched for test ids (default {TOOLKIT_SRC})")
     m.set_defaults(fn=cmd_mixed)

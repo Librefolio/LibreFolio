@@ -84,12 +84,12 @@ from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx_providers.mockfx.plugin import MockFXProvider
 from backend.app.services.platform.instance_key import InstanceKeyError
+from backend.app.services.platform.provider_registry import AbstractProviderRegistry
 from backend.app.services.plugin_settings import resolver, runtime, service
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.crypto import UnreadableSecretError, decrypt_secret, key_id_of, secret_aad, settings_subkey
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, env_name, env_variables
 from backend.app.services.plugin_settings.service import PluginSettingsKeyUnavailable, PluginSettingsRefused, read_catalogue, write_settings
-from backend.app.services.provider_registry import AbstractProviderRegistry
 from backend.test_scripts.test_services import _brim_settings_lab as brim_lab
 from backend.test_scripts.test_utils import print_section, print_success
 

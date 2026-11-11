@@ -1,4 +1,4 @@
-"""FX rate endpoints (``/fx/currencies``): provider sync, manual upsert and delete, signal catalog, bulk conversion."""
+"""FX rate endpoints (``/fx/currencies``): provider sync, manual upsert and delete, bulk conversion."""
 
 import re
 from datetime import date, timedelta
@@ -33,7 +33,8 @@ from backend.app.schemas.fx import (
     FXUpsertResult,
 )
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
-from backend.app.schemas.signals import SignalCadence, SignalCatalogResponse, SignalDomain, SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.vocabulary import SignalCadence, SignalDomain
 from backend.app.services.assets.price_sampling import SampleReferenceError, resolve_sample_references, sample_reference_detail
 from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx.conversion import convert_bulk, resolve_min_start_ranges, unit_rate_steps
@@ -43,7 +44,6 @@ from backend.app.services.fx.storage import FXRateNotStorableError, delete_rates
 from backend.app.services.fx.stretch_conversion import convert_by_stretch
 from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
-from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.sampling import sample_signal_result
 from backend.app.services.signals.service import SignalService
 from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail, latest_stored_date, range_span_floor
@@ -424,14 +424,6 @@ def _convert_errors_for_kind(
     return selected
 
 
-@router_currencies.get("/signals", response_model=SignalCatalogResponse)
-async def list_fx_signal_catalog(
-    _current_user: User = Depends(get_current_user),
-) -> SignalCatalogResponse:
-    """Return static signal definitions compatible with FX close rates."""
-    return SignalCatalogResponse(items=[definition for definition in SignalPluginRegistry.list_definitions() if SignalDomain.FX in definition.compatible_domains])
-
-
 @router_currencies.post("/convert", response_model=FXConvertResponse)
 async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: expand, convert, map results
     request: List[FXConversionRequest],
@@ -511,7 +503,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
                 domain=SignalDomain.FX,
                 requested_range=conversion.date_range,
                 cadence=SignalCadence.DAILY,
-                source_reference=(f"fx:{conversion.from_amount.code}/" f"{conversion.to_currency}"),
+                source_reference=(f"fx:{conversion.from_amount.code}/{conversion.to_currency}"),
             )
             try:
                 plan = signal_service.prepare_plan(
@@ -677,7 +669,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
     if daily_errors and not results and not signal_results:
         raise HTTPException(
             status_code=404,
-            detail=("All conversions failed: " f"{'; '.join(compressed_errors)}"),
+            detail=(f"All conversions failed: {'; '.join(compressed_errors)}"),
         )
 
     return FXConvertResponse(

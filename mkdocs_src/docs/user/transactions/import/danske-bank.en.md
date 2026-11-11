@@ -13,7 +13,7 @@ So you upload them **together**: LibreFolio reads them as one **report set**, ma
 
 ---
 
-## 📤 What to export
+## 📤 What to export {: #what-to-export }
 
 | Export (name in LibreFolio) | Where in eBanking | Format | How far back |
 |:--|:--|:--|:--|
@@ -22,6 +22,7 @@ So you upload them **together**: LibreFolio reads them as one **report set**, ma
 
 - Securities transactions: the **whole year** the bank allows.
 - Cash statement: the same period, from the day before it, and ideally **a few days past** its end — trades are paid a few business days after they are made.
+- The cash statement must be the **CSV** of the account's movements, with the columns `Pvm`, `Saaja/Maksaja`, `Määrä`, `Saldo` and `Tila` (and `Tarkastus`), separated by `;`. Keep the `Saldo` column: LibreFolio compares it with its own cash.
 - Import the files **as downloaded**, without re-saving them in Excel.
 
 ---
@@ -88,11 +89,12 @@ The securities export only goes back one year, so import **at least once a year*
 | A purchase (positive `Määrä`) and its `Osto …` payment | **Buy** |
 | A sale (negative `Määrä`) and its `Myynti …` payment | **Sell** |
 | `Tuotto` and its credit | **Dividend** |
-| `Nosto osakesäästötililtä` | **Withdrawal** |
-| `Vero osakesäästötililtä` | **Tax** |
+| A label starting with `Nosto` (e.g. `Nosto osakesäästötililtä`) | **Withdrawal** |
+| A label starting with `Vero` (e.g. `Vero osakesäästötililtä`) | **Tax** |
 | `Palvelumaksu…` (service fees) | **Fee** |
-| `Korko…` (interest) | **Interest** |
+| `Korko` or `Hyvityskorko` (interest; the label must be exactly that word) | **Interest** |
 | Any other credit (only your own money can be paid in) | **Deposit** — a notice lists them |
+| Any other debit, or a known label with the opposite sign (say a `Nosto` that adds money) | **Not imported** — left out as *unknown type*, with a notice |
 | `Jakautuminen, vanha` / `uusi` (a demerger) | **Adjustments** without cash — see [Demergers](#demergers) |
 
 - Each trade is recorded on the **day you made it** (`Kauppapäivä`, the trade date): a purchase made on the 27th is a purchase of the 27th, even though the bank moves the money a few business days later. Dividends and demergers take their day in the securities export too; deposits, withdrawals, taxes, fees and interest keep their date in the cash statement. Amounts are in **euro**, as the bank wrote them.
@@ -101,6 +103,10 @@ The securities export only goes back one year, so import **at least once a year*
     - **Reservations** (`Varaus` in the cash statement) are holds that the bank replaces with the booked movement, and that movement is the one imported. They are counted in the set's detail as *reserved, not booked*, but not listed in the notices: there is nothing to check.
     - **A status LibreFolio does not know**: a row whose `Tila` is anything but executed (`Toteutettu`) or booked (`Toteutunut`) — an order not executed, for instance — is left out with a **warning** and a link to **open an issue on GitHub**. Please open one, naming the `Tila` you see, so that the importer learns to handle it. Meanwhile, if one of those rows is a real movement, add it by hand.
 - Check the matched trades a notice flags because their names differ.
+- **Warnings about the files themselves**, shown in the importer's notices:
+    - *Several accounts*: one securities export contains more than one custody account (`mixed_accounts_in_file`). Check that you exported a single account.
+    - *Overlap mismatch*: two exports of the same kind disagree on a day they both cover (`overlap_mismatch`). LibreFolio uses the newer export for those days.
+    - *Balance chain broken*: the running `Saldo` of the cash statement does not add up from some day on (`balance_chain_broken`). The balances are then only compared with your cash, never used to propose corrections.
 
 ### 💶 Fees are included in the trade amounts
 
@@ -144,9 +150,9 @@ If your cash statement starts **after** the first day of your securities export,
 
 To have every trade imported on its own day, export the cash statement from the day before the securities export, as [What to export](#what-to-export) says.
 
-### ✅ End-of-period check
+### ✅ End-of-period check {: #end-of-period-check }
 
-The last card compares your cash with the statement's balance at the end of the last securities period — counting, like the other points, the imported trades made but not yet paid that day: **Matches** or **Does not match**. It is **never corrected**: your next import brings the trades of the last days, missing from your cash until then. If it does not match, add by hand the movement the import left out (see the set's detail in **Parse**).
+The last card compares your cash with the statement's balance on the **earlier** of two days: the end of the last securities period and the last day the cash statement covers. It uses the balance at the end of that day — counting, like the other points, the imported trades made but not yet paid that day: **Matches** or **Does not match**. It is **never corrected**: your next import brings the trades of the last days, missing from your cash until then. If it does not match, add by hand the movement the import left out (see the set's detail in **Parse**).
 
 ---
 

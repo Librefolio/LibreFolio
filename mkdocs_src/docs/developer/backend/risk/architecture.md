@@ -37,8 +37,8 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | Source | Responsibility |
 |---|---|
 | `backend/app/api/v1/risk.py` | The four routes; maps scope errors to 403 and 404. |
-| `backend/app/schemas/risk.py` | Request, scope, result, metadata and output contracts, and every enum (`RiskMode`, `RiskResultStatus`, `RiskErrorCode`, `RiskOutputKind`, …). |
-| `backend/app/schemas/risk_scenarios.py` | Typed scenario catalogue contracts. |
+| `backend/app/schemas/risk/` | Request, scope, result, metadata and output contracts, and every enum (`RiskMode`, `RiskResultStatus`, `RiskErrorCode`, `RiskOutputKind`, …). |
+| `backend/app/schemas/risk/scenarios.py` | Typed scenario catalogue contracts. |
 | `backend/app/services/risk/service.py` | `RiskService`: `execute()` orchestrates a query through the five modules below (pre-flight, gates, per-analytic isolation, the `failed` envelope); `asset_eligibility()` gives the eligibility verdicts; `catalog()` lists the analytics. |
 | `backend/app/services/risk/plan.py` | `AnalyticPlan` — a requested analytic with its plugin and validated parameters — and the predicates on the kind of calculation it asks for (`is_historical_replay_plan()`, `is_hypothetical_plan()`, `is_geography_hypothetical_plan()`, `reads_the_twrr_alone()`). |
 | `backend/app/services/risk/scope.py` | The scope: access, holdings and weights (`load_scope_inputs()` into `ScopeInputs`), the asset lookups, the bulk price load (`prepare_asset_series()`), the exclusions (`scope_exclusions()`); `RiskScopeAccessError` and `RiskScopeNotFoundError`, which the API maps to 403 and 404. |
@@ -55,7 +55,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/scenario_catalog/` | Built-in YAML scenarios and the loader that runs at startup. |
 | `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |
 | `backend/app/services/risk/registry.py` | `RiskAnalyticRegistry`. |
-| `backend/app/services/provider_registry.py` | The `register_plugin` decorator and the folder discovery shared by every plugin registry. |
+| `backend/app/services/platform/provider_registry.py` | The `register_plugin` decorator and the folder discovery shared by every plugin registry. |
 | `backend/app/services/market_series.py` | Joint calendar, target-currency conversion, carried points. `prepare_asset_series_set()` reads one point per calendar day; `prepare_asset_series_set_from_readings()` gives the same `PreparedAssetSeriesSet` from readings that hold only an asset's observations (`first_point_date`, `observation_dates`, `point_on(day)`), building points on the few days the preparation uses: the baseline day, the days some asset quotes, the first day of each asset's rate, and the stored rows with the day before each (J5-2, R1). The simple returns (`float_price_return()`) and the observed annualization factor (`observed_annualization()`) come from `financial_math/returns.py` ([Financial Math Layer](../financial_math.md#package-map)). |
 | `backend/app/services/assets/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
 | `backend/app/services/platform/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
@@ -797,7 +797,7 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.risk import RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs
 from backend.app.services.risk.registry import RiskAnalyticRegistry

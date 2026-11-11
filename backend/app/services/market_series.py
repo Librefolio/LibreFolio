@@ -13,23 +13,12 @@ from decimal import Decimal
 from typing import Protocol
 
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
-from backend.app.schemas.portfolio import (
-    DataQualityExcludedAsset,
-    DataQualityExclusionReason,
-    DataQualityReport,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.risk import (
-    AssetReturnPoint,
-    AssetReturnSeries,
-    AssetValuationPoint,
-    AssetValuationSeries,
-    PreparedAssetSeries,
-    PreparedAssetSeriesSet,
-)
+from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet
 from backend.app.services.assets.market_calendar import is_market_closed_repeat
 from backend.app.services.financial_math.returns import float_price_return, observed_annualization
-from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.platform.data_quality_thresholds import is_stale
 from backend.app.utils.day_spans import merged_spans
 
 
@@ -518,10 +507,10 @@ def _prepare_from_inputs(  # noqa: C901 — sequential pipeline stages with earl
         for index, point in enumerate(valuation_points):
             if index == 0:
                 continue
-            if point.is_price_carried_forward and (point.valuation_date - point.effective_price_date).days > STALE_PRICE_THRESHOLD_DAYS:
+            if point.is_price_carried_forward and is_stale(point.effective_price_date, point.valuation_date):
                 carried_price_points += 1
                 carried_price_asset_ids.add(item.asset_id)
-            if point.is_fx_carried_forward and point.fx_rate_date is not None and (point.valuation_date - point.fx_rate_date).days > STALE_PRICE_THRESHOLD_DAYS:
+            if point.is_fx_carried_forward and point.fx_rate_date is not None and is_stale(point.fx_rate_date, point.valuation_date):
                 carried_fx_points += 1
                 carried_fx_pairs.add(f"{point.native_currency}/{point.target_currency}")
             if not point.is_price_carried_forward:

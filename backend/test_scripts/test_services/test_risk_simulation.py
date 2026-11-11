@@ -10,17 +10,8 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas.risk import (
-    RiskCompositionPolicy,
-    RiskErrorCode,
-    RiskSamplingStrategy,
-    RiskSimulationBandPoint,
-    RiskSimulationCovarianceEstimator,
-    RiskSimulationDriftEstimator,
-    RiskSimulationOutput,
-    RiskSimulationProcess,
-    RiskSimulationRegime,
-)
+from backend.app.schemas.risk.outputs import RiskSimulationBandPoint, RiskSimulationOutput
+from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskSamplingStrategy, RiskSimulationCovarianceEstimator, RiskSimulationDriftEstimator, RiskSimulationProcess, RiskSimulationRegime
 from backend.app.services.risk.base import RiskUnavailableError
 from backend.app.services.risk.quant import engine as simulation_engine_module
 from backend.app.services.risk.quant import models as simulation_models

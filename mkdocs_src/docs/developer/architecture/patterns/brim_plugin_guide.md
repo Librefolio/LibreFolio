@@ -660,7 +660,7 @@ Defined on `BRIMProvider` — call these instead of re-implementing:
 from pathlib import Path
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim.brim_provider import BRIMProvider
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.schemas.brim import BRIMExtractedAssetInfo, BRIMParseOutput
 from backend.app.schemas.transactions.transactions import TXCreateItem
 
@@ -784,7 +784,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 ```
@@ -1572,7 +1572,8 @@ ambiguous unless the partners are interchangeable.
     Danske's choices follow from its data, not from the pattern. Do not carry them over without checking
     them against your bank's:
 
-    - the **axis**: Danske places every row on the **value date**; Crédit Agricole's zones, intervals and
+    - the **axis**: Danske pairs rows and places them in zones on the **value date**, yet records each
+      transaction on its trade date (`Kauppapäivä`, since 1.1.0); Crédit Agricole's zones, intervals and
       balances are on the **operation date**, and the value date only pairs rows;
     - the **zones** tied to *segments* of the custody history, the settlement lag of 5 business days and the
       `deferred` outcome: Crédit Agricole has none (its zones come from the balances of the account);
@@ -1766,8 +1767,9 @@ Danske places every row on the **value-date** axis:
 
 The axis places the rows; it does not date them. The parse records each transaction on its
 operation date, under the rule *The operation date, and only settled rows*
-([Import philosophy](#import-philosophy-currency-rules)): the custody trade date, or the `Pvm` of
-a cash-only row, its only date. Pairing, zones, `not_yet_settled` and `deferred` read the value
+([Import philosophy](#import-philosophy-currency-rules)): the custody trade date (`Kauppapäivä`,
+since 1.1.0; before it the pairs took the cash `Pvm`), or the `Pvm` of a cash-only row, its only
+date. Pairing, zones, `not_yet_settled` and `deferred` read the value
 date, because the bank moves the cash on that day.
 
 Every row gets exactly one outcome, with a reason when it is excluded: no row leaves the set's

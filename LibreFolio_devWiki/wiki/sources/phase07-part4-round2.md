@@ -54,7 +54,7 @@ Final round of Phase 7 Part 4. Introduces `createEntityStore<T>()` factory patte
 | TX type icon cell | `frontend/src/lib/features/transactions/cells/TxTypeIconCell.svelte` |
 | DataTable | `frontend/src/lib/components/table/DataTable.svelte` |
 | DataTable filter | `frontend/src/lib/components/table/DataTableColumnFilter.svelte` |
-| Asset modal | `frontend/src/lib/components/assets/AssetModal.svelte` |
+| Asset modal | `frontend/src/lib/features/assets/AssetModal.svelte` |
 | Broker modal | `frontend/src/lib/features/brokers/BrokerModal.svelte` |
 | Assets page | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Brokers page | `frontend/src/routes/(app)/brokers/+page.svelte` |

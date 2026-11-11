@@ -112,8 +112,8 @@ class SchedulerLogCurrentPriceEntry(BaseModel):
 
 Without the extra, the discriminator is emitted without an enum constraint and the generated
 TypeScript client fails to compile (real incident, 03/09 — the scheduler log union). This
-pattern is used across `schemas/signals.py`, `schemas/ai_export_runtime.py`, `schemas/risk.py`,
-`schemas/risk_scenarios.py`, `schemas/settings.py`, `schemas/portfolio.py`, and `schemas/tools.py`.
+pattern is used across `schemas/signals/`, `schemas/ai_export_runtime.py`, `schemas/risk/`,
+`schemas/risk/scenarios.py`, `schemas/settings.py`, `schemas/portfolio/`, and `schemas/tools.py`.
 
 ### 4. Descriptions must survive the client generator
 

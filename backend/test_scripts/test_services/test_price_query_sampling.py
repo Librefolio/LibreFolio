@@ -168,7 +168,9 @@ from backend.app.db.models import Asset, AssetType, FxRate, PriceHistory
 from backend.app.schemas import prices as price_schemas
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryItem, FAPriceQueryResult
-from backend.app.schemas.signals import SignalAggregationProfile, SignalBandSeries, SignalBarSeries, SignalCalendarReturnValuePoint, SignalResult, _validate_series_alignment
+from backend.app.schemas.signals.outputs import SignalBandSeries, SignalBarSeries, SignalCalendarReturnValuePoint
+from backend.app.schemas.signals.result import SignalResult, _validate_series_alignment
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile
 from backend.app.services.assets import price_query
 from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.signals import aggregation as signal_aggregation
@@ -2662,7 +2664,7 @@ async def test_pqs_sg11_the_series_of_a_signal_with_different_warm_ups_are_on_th
     (reduced,) = sampled.signals
     by_key = {series.key: series for series in reduced.series}
     dates = {key: [point.date for point in series.points] for key, series in by_key.items()}
-    assert dates["adx"] == dates["plus_di"] == dates["minus_di"], f"the series are on different dates: {({key: days[:3] for key, days in dates.items()})}"
+    assert dates["adx"] == dates["plus_di"] == dates["minus_di"], f"the series are on different dates: { ({key: days[:3] for key, days in dates.items()}) }"
     assert [(point.date, point.value) for point in by_key["adx"].points[:1]] == [(expected.dates[0], None)], "the ADX has no point without a value on the first week"
     assert [point.date for point in by_key["adx"].points if point.value is None] == [expected.dates[0]], "the ADX has points without a value besides the first week's"
     _assert_signals_reduced(sampled, daily, "weekly", expected.dates)

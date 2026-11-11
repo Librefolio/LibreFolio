@@ -13,32 +13,11 @@ from pydantic import ValidationError
 
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo
-from backend.app.schemas.signals import (
-    SignalAvailabilityReason,
-    SignalBandComponent,
-    SignalBandPoint,
-    SignalBandValueSource,
-    SignalCadence,
-    SignalComputation,
-    SignalDataPolicy,
-    SignalDomain,
-    SignalErrorCode,
-    SignalExecutionContext,
-    SignalInputRequirements,
-    SignalLineCrossoverRequest,
-    SignalLineSeries,
-    SignalOutputValueSource,
-    SignalPriceField,
-    SignalPricePoint,
-    SignalPriceValueSource,
-    SignalRequest,
-    SignalSourceCapability,
-    SignalStatus,
-    SignalThresholdCrossingRequest,
-    SignalValuePoint,
-    SignalVolumeKind,
-    SignalWarningCode,
-)
+from backend.app.schemas.signals.annotations import SignalLineCrossoverRequest, SignalThresholdCrossingRequest
+from backend.app.schemas.signals.inputs import SignalBandValueSource, SignalExecutionContext, SignalInputRequirements, SignalOutputValueSource, SignalPricePoint, SignalPriceValueSource, SignalSourceCapability
+from backend.app.schemas.signals.outputs import SignalBandPoint, SignalLineSeries, SignalValuePoint
+from backend.app.schemas.signals.result import SignalComputation, SignalRequest
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalBandComponent, SignalCadence, SignalDataPolicy, SignalDomain, SignalErrorCode, SignalPriceField, SignalStatus, SignalVolumeKind, SignalWarningCode
 from backend.app.services.signals import annotations as signal_annotations_module
 from backend.app.services.signals import execution as signal_execution_module
 from backend.app.services.signals import planning as signal_planning_module

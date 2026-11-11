@@ -41,20 +41,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess, Transaction
 from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal, StrictModel
-from backend.app.schemas.portfolio import (
-    AllocationItem,
-    AssetPeriodContribution,
-    LotAnalysisType,
-    LotsAnalysisResponse,
-    LotSummarySchema,
-    OtherPeriodEffect,
-    OtherPeriodEffectCode,
-    PortfolioHistoryPoint,
-    PortfolioHolding,
-    PortfolioReportQuery,
-    PortfolioReportResponse,
-    UnallocatedContribution,
-)
+from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse, LotSummarySchema
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AllocationItem, AssetPeriodContribution, OtherPeriodEffect, OtherPeriodEffectCode, PortfolioHolding, UnallocatedContribution
 from backend.app.services.ai_export.components.resources import LotsResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, ResourceKey
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan

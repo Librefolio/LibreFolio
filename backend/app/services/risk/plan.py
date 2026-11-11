@@ -6,11 +6,8 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from backend.app.schemas.risk import (
-    RiskAnalyticRequest,
-    RiskReturnBasis,
-    RiskStressMethod,
-)
+from backend.app.schemas.risk.scope import RiskAnalyticRequest
+from backend.app.schemas.risk.vocabulary import RiskReturnBasis, RiskStressMethod
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskExecutionContext,

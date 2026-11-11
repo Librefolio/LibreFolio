@@ -3,7 +3,7 @@
 Today ``build()`` appends one ``DailyPortfolioState`` per calendar day from ``date_from`` to ``date_to``: a quiet day is
 ``replace(previous_state, …)`` with its ten containers copied. A scope with one DEPOSIT on 1900-01-02 and a handful of
 2025 movements makes ~46 000 states, of which ~10 are computed; every reader (``period``, ``DerivedViewsBuilder``, the
-data-quality report, ``portfolio_service._engine_missing_fx_pairs``) then walks the whole list.
+data-quality report, ``engine_facts._engine_missing_fx_pairs``) then walks the whole list.
 
 The cure (contract in ``test_daily_states_segments.py``): ``PortfolioCalculationResult.daily_states`` is a
 ``DailyStates`` holding one ``StateSegment`` per day the engine computes from ``date_from`` on (a movement, a market quote,
@@ -69,7 +69,7 @@ from backend.app.services.financial_math.returns import (
     period_mwrr_series,
     rebase_to_period,
 )
-from backend.app.services.portfolio.portfolio_service import _engine_missing_fx_pairs
+from backend.app.services.portfolio.engine_facts import _engine_missing_fx_pairs
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 

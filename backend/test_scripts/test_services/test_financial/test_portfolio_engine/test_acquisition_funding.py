@@ -72,16 +72,17 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency as CurrencySchema
-from backend.app.schemas.portfolio import AcquisitionFundingSeries, PortfolioReportQuery
+from backend.app.schemas.portfolio.history import AcquisitionFundingSeries
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import AcquisitionFundingContribution, ClassifiedTransaction, PortfolioCalculationResult
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.financial_math.series_steps import value_at
+from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
@@ -1056,7 +1057,7 @@ class TestPortfolioL2CacheIncludesBatch2Flags:
         # A FEE so the cost_history section has something to report on this scope too.
         session.add(Transaction(broker_id=broker.id, type=TransactionType.FEE, date=day1, amount=Decimal("-7"), currency="EUR"))
         await session.flush()
-        portfolio_service_module._portfolio_l2_cache.clear()
+        report_module._portfolio_l2_cache.clear()
         portfolio_engine_module._portfolio_blob_cache.clear()
 
         service = PortfolioService(session)
@@ -1096,7 +1097,7 @@ class TestPortfolioL2CacheIncludesBatch2Flags:
         standalone method on the same scope."""
         day1 = date(2035, 9, 1)
         broker = await _seed_acquisition_portfolio(session, test_user, name_prefix="AcqReport", day1=day1)
-        portfolio_service_module._portfolio_l2_cache.clear()
+        report_module._portfolio_l2_cache.clear()
         portfolio_engine_module._portfolio_blob_cache.clear()
 
         service = PortfolioService(session)

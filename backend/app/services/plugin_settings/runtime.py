@@ -32,7 +32,7 @@ from backend.app.services.plugin_settings.fields import SettingScope
 from backend.app.services.plugin_settings.resolver import StoredValue, build_bound_settings
 
 if TYPE_CHECKING:
-    from backend.app.services.provider_registry import AbstractProviderRegistry
+    from backend.app.services.platform.provider_registry import AbstractProviderRegistry
 
 logger = get_logger(__name__)
 

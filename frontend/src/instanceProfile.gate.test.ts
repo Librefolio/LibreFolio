@@ -90,7 +90,7 @@ const DONATIONS = 'src/lib/features/support/donations.svelte.ts';
 const UPDATE_CHECK = 'src/lib/features/update-check/updateCheck.ts';
 const FORGOT_PASSWORD = 'src/lib/features/auth/ForgotPasswordCard.svelte';
 /** The files of the six comparisons this gate was written red against: they call the helpers since, and the walk must still reach them. */
-const CALLERS = ['src/lib/components/assets/AssetSearchAutocomplete.svelte', 'src/lib/components/layout/ChangelogModal.svelte', FORGOT_PASSWORD, DONATIONS, UPDATE_CHECK];
+const CALLERS = ['src/lib/features/assets/AssetSearchAutocomplete.svelte', 'src/lib/components/layout/ChangelogModal.svelte', FORGOT_PASSWORD, DONATIONS, UPDATE_CHECK];
 
 const collapse = (s: string): string => s.trim().replace(/\s+/g, ' ');
 const clip = (s: string, max = 160): string => (s.length > max ? `${s.slice(0, max - 1)}…` : s);

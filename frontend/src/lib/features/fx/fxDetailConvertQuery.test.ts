@@ -1,7 +1,7 @@
 /**
  * Contract tests for the reading of the FX convert answer on the FX detail page (X-R16, FX part):
  * `parseFxConvertWithSignalIsolation`, the twin of the asset page's `parseAssetPriceQueryWithSignalIsolation`
- * (`components/assets/detail/assetDetailPriceQuery.ts`).
+ * (`features/assets/detail/assetDetailPriceQuery.ts`).
  *
  * Why it is needed. With a backend signal configured, `loadChartData` in `routes/(app)/fx/[pair]/+page.svelte` asks for
  * the rates and the signal results in one `POST /api/v1/fx/currencies/convert`, through the Zodios client, which

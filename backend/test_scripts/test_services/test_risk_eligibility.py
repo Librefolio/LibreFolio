@@ -32,16 +32,18 @@ setup_test_database()
 from backend.app.db.models import Asset, AssetType, FxRate, PriceHistory  # noqa: E402
 from backend.app.db.session import get_async_engine  # noqa: E402
 from backend.app.schemas.common import DateRangeModel  # noqa: E402
-from backend.app.schemas.portfolio import DataQualityStatus  # noqa: E402
-from backend.app.schemas.risk import (  # noqa: E402
-    RiskEligibilityLevel,
-    RiskEligibilityReason,
+from backend.app.schemas.portfolio.data_quality import DataQualityStatus  # noqa: E402
+from backend.app.schemas.risk.scope import (  # noqa: E402
     RiskEligibilityRequest,
     RiskEligibilityResponse,
+    RiskQueryRequest,
+)
+from backend.app.schemas.risk.vocabulary import (  # noqa: E402
+    RiskEligibilityLevel,
+    RiskEligibilityReason,
     RiskErrorCode,
     RiskHistoricalReplayExclusionReason,
     RiskHistoricalReplayExclusionTreatment,
-    RiskQueryRequest,
     RiskResultStatus,
 )
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS  # noqa: E402

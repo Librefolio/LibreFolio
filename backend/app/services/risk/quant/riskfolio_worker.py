@@ -11,10 +11,7 @@ import numpy as np
 import pandas as pd
 import riskfolio as rp
 
-from backend.app.schemas.risk import (
-    RiskCovarianceEstimator,
-    RiskOptimizationStrategy,
-)
+from backend.app.schemas.risk.vocabulary import RiskCovarianceEstimator, RiskOptimizationStrategy
 from backend.app.services.risk.quant.optimization_models import (
     OptimizationEngineRequest,
     OptimizationEngineResult,

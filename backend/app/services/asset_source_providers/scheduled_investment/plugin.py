@@ -66,7 +66,7 @@ from backend.app.schemas.provider import FAProviderKind
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.financial_math.interest import calculate_day_count_fraction, calculate_simple_interest, compound_growth
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 # ============================================================================

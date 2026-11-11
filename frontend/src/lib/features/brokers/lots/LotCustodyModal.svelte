@@ -2,7 +2,7 @@
     import {_} from '$lib/i18n';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {schemas} from '$lib/api';
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import AssetIcon from '$lib/features/assets/AssetIcon.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';

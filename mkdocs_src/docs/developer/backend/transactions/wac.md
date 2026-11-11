@@ -459,7 +459,7 @@ movement id is listed in `oversold_movement_ids`.
 
 ## 🧾 The WAC Facade {: #wac-facade }
 
-`compute_wac_iterative()` in `backend/app/services/portfolio/portfolio_service.py` serves
+`compute_wac_iterative()` in `backend/app/services/portfolio/wac.py` serves
 the callers that need one position's WAC with its qualifying rows. Its contract did
 not change with the single implementation.
 

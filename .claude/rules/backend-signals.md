@@ -12,7 +12,7 @@ paths:
 - **Plugins**: one folder per indicator, `services/signal_plugins/<code>/` (`__init__.py` with the docstring only,
   `plugin.py` with the code, `i18n/` with its `signals.<ns>.*` texts), extending `SignalPlugin` (`services/signals/base.py`,
   outside the plugin folder) and registered with `@register_plugin(SignalPluginRegistry)` (`services/signals/registry.py`; the decorator is in
-  `services/provider_registry.py`).
+  `services/platform/provider_registry.py`).
   Import and patch from `….signal_plugins.<code>.plugin`. Keys several indicators share (`signals.reference.*`,
   `signals.tooltips.riskWindow`) stay in the `charts` subsystem of the catalogue.
 - **Runtime**: the `services/signals/` package — `service.py` (`SignalService`, the façade), `planning.py` (the batch

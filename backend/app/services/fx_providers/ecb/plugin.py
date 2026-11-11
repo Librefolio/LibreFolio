@@ -15,7 +15,7 @@ import httpx
 from backend.app.logging_config import get_logger
 from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateLimitedError, FXRateProvider, FXServiceError, raise_if_fx_rate_limited
 from backend.app.services.fx.registry import FXProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = get_logger(__name__)
 
@@ -256,7 +256,7 @@ class ECBProvider(FXRateProvider):
                     response.raise_for_status()
 
                     if not response.text:
-                        logger.debug(f"No FX rates available for {currency} ({request_start} to {end_date}). " f"This is normal for weekends/holidays when ECB doesn't publish rates.")
+                        logger.debug(f"No FX rates available for {currency} ({request_start} to {end_date}). This is normal for weekends/holidays when ECB doesn't publish rates.")
                         return currency, []
 
                     # Parse JSON response from ECB API

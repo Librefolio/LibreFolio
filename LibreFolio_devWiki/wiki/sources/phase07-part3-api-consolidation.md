@@ -158,5 +158,5 @@ Frontend tooltip: `💰 {value} (flag ISO3) 💱` / `orig. {originalValue} (orig
 | Assets API | `backend/app/api/v1/assets/` |
 | Schemas (prices, assets) | `backend/app/schemas/prices.py`, `backend/app/schemas/assets/` |
 | Price chart (event tooltip) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
-| Asset currency change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
+| Asset currency change modal | `frontend/src/lib/features/assets/AssetCurrencyChangeModal.svelte` |
 | mkdocs (transactions) | `mkdocs_src/docs/developer/architecture/database/brokers_transactions.md` |

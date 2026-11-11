@@ -18,7 +18,7 @@ import httpx
 from backend.app.logging_config import get_logger
 from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError, raise_if_fx_rate_limited, raise_longest_refusal
 from backend.app.services.fx.registry import FXProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = get_logger(__name__)
 

@@ -11,34 +11,12 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.signals import (
-    SignalAggregationProfile,
-    SignalAvailabilityReason,
-    SignalAxisRole,
-    SignalAxisSpec,
-    SignalCalendarReturnPointStatus,
-    SignalCalendarReturnProvenance,
-    SignalCalendarReturnValuePoint,
-    SignalCategory,
-    SignalComputation,
-    SignalDataPolicy,
-    SignalDomain,
-    SignalEventPoint,
-    SignalExecutionContext,
-    SignalInputRequirements,
-    SignalLineSeries,
-    SignalOutputSpec,
-    SignalPriceField,
-    SignalPricePoint,
-    SignalReferenceLevel,
-    SignalSeriesKind,
-    SignalUnit,
-    SignalWarmupRequirement,
-    SignalWarning,
-    SignalWarningCode,
-)
+from backend.app.schemas.signals.inputs import SignalEventPoint, SignalExecutionContext, SignalInputRequirements, SignalPricePoint, SignalWarmupRequirement
+from backend.app.schemas.signals.outputs import SignalAxisSpec, SignalCalendarReturnProvenance, SignalCalendarReturnValuePoint, SignalLineSeries, SignalOutputSpec, SignalReferenceLevel
+from backend.app.schemas.signals.result import SignalComputation, SignalWarning
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalAvailabilityReason, SignalAxisRole, SignalCalendarReturnPointStatus, SignalCategory, SignalDataPolicy, SignalDomain, SignalPriceField, SignalSeriesKind, SignalUnit, SignalWarningCode
 from backend.app.services.financial_math.returns import price_return
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.signals.base import SignalPlugin, SignalUnavailableError
 from backend.app.services.signals.registry import SignalPluginRegistry
 

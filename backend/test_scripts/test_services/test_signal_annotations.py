@@ -8,29 +8,10 @@ from decimal import Decimal
 import pytest
 
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
-from backend.app.schemas.signals import (
-    SignalAnnotationDirection,
-    SignalAnnotationSampling,
-    SignalAxisRole,
-    SignalAxisSpec,
-    SignalBandComponent,
-    SignalBandPoint,
-    SignalBandSeries,
-    SignalBandValueSource,
-    SignalDomain,
-    SignalExecutionContext,
-    SignalLineCrossoverRequest,
-    SignalLineSeries,
-    SignalOutputValueSource,
-    SignalPriceField,
-    SignalPricePoint,
-    SignalPriceValueSource,
-    SignalThresholdCrossingRequest,
-    SignalThresholdDirection,
-    SignalUnit,
-    SignalValuePoint,
-    SignalWarningCode,
-)
+from backend.app.schemas.signals.annotations import SignalLineCrossoverRequest, SignalThresholdCrossingRequest
+from backend.app.schemas.signals.inputs import SignalBandValueSource, SignalExecutionContext, SignalOutputValueSource, SignalPricePoint, SignalPriceValueSource
+from backend.app.schemas.signals.outputs import SignalAxisSpec, SignalBandPoint, SignalBandSeries, SignalLineSeries, SignalValuePoint
+from backend.app.schemas.signals.vocabulary import SignalAnnotationDirection, SignalAnnotationSampling, SignalAxisRole, SignalBandComponent, SignalDomain, SignalPriceField, SignalThresholdDirection, SignalUnit, SignalWarningCode
 from backend.app.services.signals.annotations import SignalAnnotationService
 
 START = date(2026, 1, 1)

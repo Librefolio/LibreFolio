@@ -139,6 +139,6 @@ Its missing half, learned here: **the enclosing budget has to be raised too**. I
 | Triage protocol | `.github/skills/devpy-tools/test-triage/SKILL.md` |
 | Isolation classes | `scripts/test_runner/_inventory.py` |
 | Anti-bounce key sampling | `frontend/src/lib/features/transactions/useValidateScheduler.svelte.ts` |
-| Debounced query, provider list | `frontend/src/lib/components/assets/AssetSearchAutocomplete.svelte` |
+| Debounced query, provider list | `frontend/src/lib/features/assets/AssetSearchAutocomplete.svelte` |
 | WAC preview consumer | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | Shared date helpers for specs | `frontend/e2e/fixtures/dates.ts` |

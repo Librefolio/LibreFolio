@@ -21,7 +21,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from backend.app.schemas.portfolio import LotsAnalysisResponse
+from backend.app.schemas.portfolio.lots import LotsAnalysisResponse
 from backend.app.schemas.prices import FAPriceQueryResult
 from backend.app.services.ai_export.components.envelope import (
     ComponentPayloadValidationError,

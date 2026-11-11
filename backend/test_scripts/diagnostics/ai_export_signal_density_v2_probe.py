@@ -38,7 +38,7 @@ from backend.app.schemas.ai_export_runtime import (  # noqa: E402
     AiExportPortfolioSnapshotRequest,
     AiExportSnapshotRequest,
 )
-from backend.app.schemas.signals import SignalTemporalClass  # noqa: E402
+from backend.app.schemas.signals.vocabulary import SignalTemporalClass  # noqa: E402
 from backend.app.services.ai_export.components import (  # noqa: E402
     portfolio_broker_technical,
     technical_shared,
@@ -295,7 +295,7 @@ def _temporal_plan_measurement(
         "theoretical_expected_count": expected_count,
         "runtime_count": len(plan.buckets),
         "difference": len(plan.buckets) - expected_count,
-        "orientation": ("boundaries are newest-first; offsets are half-open calendar-day " "ranges measured backward from snapshot_as_of"),
+        "orientation": ("boundaries are newest-first; offsets are half-open calendar-day ranges measured backward from snapshot_as_of"),
         "boundaries": boundaries,
         "first_non_daily_bucket": first_non_daily,
         "consecutive_newest_daily_bucket_count": newest_daily_count,
@@ -341,7 +341,7 @@ def _temporal_policy_matrix(snapshot_as_of: date) -> dict[str, Any]:
                         "m": expected_m,
                         "k": expected_k,
                         "counts_90_180_365": list(expected_counts),
-                        "source": ("backend/test_scripts/test_services/" "test_ai_export_temporal.py::INDICATOR_POLICY_CASES"),
+                        "source": ("backend/test_scripts/test_services/test_ai_export_temporal.py::INDICATOR_POLICY_CASES"),
                     },
                     "parameter_assertions": parameter_assertions,
                     "durations": durations,
@@ -779,7 +779,7 @@ def _event_measurements(
                 "detected_sha256": _sha256_json(sorted(detected_ids)),
                 "exported_count": len(selected_ids),
                 "exported_sha256": _sha256_json(sorted(selected_ids)),
-                "definition": ("SHA-256 over sorted event identities containing date, " "dedup key and payload without semantic_description"),
+                "definition": ("SHA-256 over sorted event identities containing date, dedup key and payload without semantic_description"),
             },
             "validation": {
                 "capture_complete": capture_complete,
@@ -846,7 +846,7 @@ def _baseline_comparison(probe: Mapping[str, Any], baseline_probe: Mapping[str, 
             "event_selection_summaries_chars": probe["events"]["selection_summaries_serialized_chars"],
             "note": "Observed V2 overhead values overlap their owning indicator/event/top-level sections and are not added to the exact residual.",
         },
-        "measurement_note": ("All before/after values are actual canonical serialized measurements; " "no linear estimates."),
+        "measurement_note": ("All before/after values are actual canonical serialized measurements; no linear estimates."),
     }
 
 
@@ -1105,7 +1105,7 @@ def _detail_independence(
         )
     required_evaluated = [item for item in comparisons if item["evaluated"] and not item["optional"]]
     return {
-        "definition": ("Detected and exported event identity sets must remain identical " "across detail levels for the same selection and period."),
+        "definition": ("Detected and exported event identity sets must remain identical across detail levels for the same selection and period."),
         "comparisons": comparisons,
         "required_evaluated_group_count": len(required_evaluated),
         "required_mismatch_count": sum(item["valid"] is False for item in required_evaluated),
@@ -1225,7 +1225,7 @@ async def _run_matrix(
             "python_version": platform.python_version(),
             "platform": platform.platform(),
             "test_mode": True,
-            "runtime_service": ("backend.app.services.ai_export.runtime_service." "AiExportSnapshotService"),
+            "runtime_service": ("backend.app.services.ai_export.runtime_service.AiExportSnapshotService"),
             "canonical_serializer": ("backend.app.services.ai_export.telemetry.canonical_json"),
             "catalog_schema_version": catalog.schema_version,
             "catalog_version": catalog.catalog_version,
@@ -1263,13 +1263,13 @@ async def _run_matrix(
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=("Run deterministic AI Export Signal Density V2 diagnostics against " "the real LibreFolio test SQLite DB."))
+    parser = argparse.ArgumentParser(description=("Run deterministic AI Export Signal Density V2 diagnostics against the real LibreFolio test SQLite DB."))
     parser.add_argument("--output", required=True, help="Output JSON path.")
     parser.add_argument(
         "--baseline",
         type=Path,
         default=DEFAULT_BASELINE,
-        help=("P0 technical-density baseline JSON " f"(default: {_repo_path(DEFAULT_BASELINE)})."),
+        help=(f"P0 technical-density baseline JSON (default: {_repo_path(DEFAULT_BASELINE)})."),
     )
     parser.add_argument(
         "--snapshot-as-of",
@@ -1299,7 +1299,7 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="SELECTION[:DETAIL[:PERIOD]]",
-        help=("Run matching probe subset; repeatable. Example: " "--only asset.market_technical:compact:3M."),
+        help=("Run matching probe subset; repeatable. Example: --only asset.market_technical:compact:3M."),
     )
     parser.add_argument(
         "--no-fx",

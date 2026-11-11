@@ -30,29 +30,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 import backend.app.services.financial_math.portfolio.models as portfolio_models_module
-import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRAccessBulkItem
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    DataQualityStatus,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
-    PortfolioReportQuery,
-    StalePriceAsset,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityStatus, IssueCode, IssueDomain, IssueSeverity, StalePriceAsset
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.platform.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS
-from backend.app.services.portfolio.portfolio_service import (
-    PortfolioService,
-    _portfolio_l2_cache,
-)
+from backend.app.services.portfolio import data_access as data_access_module
+from backend.app.services.portfolio import engine_facts
+from backend.app.services.portfolio import history as history_module
+from backend.app.services.portfolio import positions as positions_module
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import summary as summary_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
+from backend.app.services.portfolio.report import _portfolio_l2_cache
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
@@ -3325,11 +3323,8 @@ class TestPortfolioServiceGetReport:
             def today(cls):
                 return cls.current
 
-        monkeypatch.setattr(
-            portfolio_service_module,
-            "date_type",
-            MutableToday,
-        )
+        for service_module in (data_access_module, engine_facts, history_module, positions_module, report_module, summary_module, wac_module):
+            monkeypatch.setattr(service_module, "date_type", MutableToday)
         monkeypatch.setattr(
             portfolio_engine_module,
             "date_type",

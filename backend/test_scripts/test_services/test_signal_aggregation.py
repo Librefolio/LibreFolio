@@ -131,29 +131,23 @@ from types import MappingProxyType, ModuleType
 
 import pytest
 
-from backend.app.schemas.signals import (
-    SignalAggregationProfile,
+from backend.app.schemas.signals.outputs import (
     SignalAreaSeries,
-    SignalAxisRole,
     SignalAxisSpec,
     SignalBandPoint,
     SignalBandSeries,
     SignalBarSeries,
-    SignalCalendarReturnPointStatus,
     SignalCalendarReturnProvenance,
     SignalCalendarReturnValuePoint,
-    SignalColorRole,
-    SignalLinePattern,
     SignalLineSeries,
     SignalOutputStyle,
     SignalReferenceLevel,
     SignalRegionLineStyle,
-    SignalUnit,
     SignalValuePoint,
     SignalValueRegion,
-    SignalViewTransform,
-    _validate_series_alignment,
 )
+from backend.app.schemas.signals.result import _validate_series_alignment
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalAxisRole, SignalCalendarReturnPointStatus, SignalColorRole, SignalLinePattern, SignalUnit, SignalViewTransform
 from backend.app.services.ai_export.temporal.aggregators import (
     ScalarBucketStatistics,
     aggregate_band_statistics,

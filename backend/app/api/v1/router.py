@@ -64,5 +64,7 @@ router.include_router(panel.panel_router, prefix="/panel", tags=[HOSTING_PANEL_T
 router.include_router(portfolio_api.portfolio_router)
 router.include_router(risk.router)
 router.include_router(signals.signals_router)
+router.include_router(signals.asset_catalog_router)
+router.include_router(signals.fx_catalog_router)
 router.include_router(tools.router)
 router.include_router(utilities_router)

@@ -4,18 +4,12 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.risk import (
-    RiskAssetSetComparisonItem,
-    RiskAssetSetComparisonOutput,
-    RiskErrorCode,
-    RiskFreeReference,
-    RiskMode,
-    RiskOutputKind,
-    RiskScopeKind,
-    RiskWarning,
-)
+from backend.app.schemas.risk.outputs import RiskAssetSetComparisonItem, RiskAssetSetComparisonOutput
+from backend.app.schemas.risk.results import RiskWarning
+from backend.app.schemas.risk.series import RiskFreeReference
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_returns,
     prepared_scope_series,

@@ -21,7 +21,7 @@
 
 import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
 import {fillCounts, stepForMaxPoints} from '$lib/components/charts/timeSeriesAggregation';
-import type {DerivedPriceState} from '$lib/utils/assetPriceDerived';
+import type {DerivedPriceState} from '$lib/features/assets/assetPriceDerived';
 
 import {withLiveHead} from '$lib/utils/liveHead';
 

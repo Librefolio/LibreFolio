@@ -7,14 +7,9 @@ from typing import Iterable
 import numpy as np
 
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.signals import (
-    SignalBandSeries,
-    SignalDomain,
-    SignalExecutionContext,
-    SignalPricePoint,
-    SignalSourceCapability,
-    SignalVolumeKind,
-)
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint, SignalSourceCapability
+from backend.app.schemas.signals.outputs import SignalBandSeries
+from backend.app.schemas.signals.vocabulary import SignalDomain, SignalVolumeKind
 from scripts.spikes.signals.run_signal_backend_spike import (
     generate_datasets,
     load_manifest,

@@ -11,22 +11,9 @@ import pytest
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.signals import (
-    SignalAggregationProfile,
-    SignalAvailabilityReason,
-    SignalCadence,
-    SignalDataPolicy,
-    SignalDomain,
-    SignalErrorCode,
-    SignalExecutionContext,
-    SignalPriceField,
-    SignalRequest,
-    SignalSeriesKind,
-    SignalSourceCapability,
-    SignalStatus,
-    SignalVolumeKind,
-    SignalWarningCode,
-)
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalSourceCapability
+from backend.app.schemas.signals.result import SignalRequest
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalAvailabilityReason, SignalCadence, SignalDataPolicy, SignalDomain, SignalErrorCode, SignalPriceField, SignalSeriesKind, SignalStatus, SignalVolumeKind, SignalWarningCode
 from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService

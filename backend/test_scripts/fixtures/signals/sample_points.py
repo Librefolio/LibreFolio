@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 
-from backend.app.schemas.signals import SignalEventPoint, SignalPricePoint
+from backend.app.schemas.signals.inputs import SignalEventPoint, SignalPricePoint
 
 _CLOSE_VALUES = ("100", "102", "101", "105", "104", "108")
 

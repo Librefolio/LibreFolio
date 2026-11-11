@@ -10,40 +10,15 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
-from backend.app.schemas.portfolio import (
-    DataQualityExcludedAsset,
-    DataQualityExclusionReason,
-    DataQualityReport,
-    DataQualityStatus,
-    MissingPriceAsset,
-    PortfolioHistoryPoint,
-    PortfolioHolding,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    StalePriceAsset,
-)
-from backend.app.schemas.risk import (
-    AssetReturnPoint,
-    AssetReturnSeries,
-    AssetValuationPoint,
-    AssetValuationSeries,
-    PreparedAssetSeries,
-    PreparedAssetSeriesSet,
-    RiskAnalyticRequest,
-    RiskAnalyticResult,
-    RiskError,
-    RiskErrorCode,
-    RiskExcludedAsset,
-    RiskFreeReference,
-    RiskKpiOutput,
-    RiskMode,
-    RiskOutputKind,
-    RiskQueryRequest,
-    RiskResultStatus,
-    RiskReturnBasis,
-    RiskScopeKind,
-    RiskWarning,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport, DataQualityStatus, MissingPriceAsset, StalePriceAsset
+from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
+from backend.app.schemas.risk.outputs import RiskKpiOutput
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskExcludedAsset, RiskWarning
+from backend.app.schemas.risk.scope import RiskAnalyticRequest, RiskQueryRequest
+from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet, RiskFreeReference
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskResultStatus, RiskReturnBasis, RiskScopeKind
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio.portfolio_service import PortfolioService

@@ -1252,6 +1252,7 @@ nav:
           - "📧 Email (SMTP)": developer/backend/email.md
           - "🧮 Financial Math Layer": developer/backend/financial_math.md
           - "📉 Risk Engine": developer/backend/risk/architecture.md
+          - "🧮 PAC Allocator Engine": developer/backend/pac_allocator.md
       - 🎨 Frontend Development:
           - Overview: developer/frontend/index.md
           - "🧠 Core Architecture & State":

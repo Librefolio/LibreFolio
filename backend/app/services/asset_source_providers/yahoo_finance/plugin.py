@@ -55,7 +55,7 @@ from backend.app.schemas.prices import (
 from backend.app.schemas.provider import FAQuoteBaseSuggestion, FAVolumeKind
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
 from backend.app.utils.currency_units import minor_unit_factor
 
@@ -133,7 +133,7 @@ def _yf_with_retry(fn, *, label: str = "yfinance"):
             if not _is_transient(e) or attempt == _YF_MAX_RETRIES:
                 raise
             delay = _YF_BASE_DELAY * (2 ** (attempt - 1))
-            logger.warning(f"{label} transient error (attempt {attempt}/{_YF_MAX_RETRIES}): {e}, " f"retrying in {delay:.1f}s")
+            logger.warning(f"{label} transient error (attempt {attempt}/{_YF_MAX_RETRIES}): {e}, retrying in {delay:.1f}s")
             _time_mod.sleep(delay)
     raise last_exc  # pragma: no cover – safety net
 
