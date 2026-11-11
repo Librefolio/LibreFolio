@@ -412,6 +412,19 @@ describe('reasonText', () => {
         expect(calls).toEqual([['risk.eligibility.reasons.no_price_history', undefined]]);
     });
 
+    it('names the missing conversion in its direction, with the date of the first stored rate when there is one', () => {
+        const since = verdict(5, {level: 'ineligible', reasons: ['missing_fx'], missing_fx: {from_currency: 'USD', to_currency: 'EUR', first_rate_date: '2024-02-01'}});
+        const withDate = recordingT();
+        expect(reasonText('missing_fx', since, VERDICTS, 'EUR', withDate.t, formatDay)).toBe(marker('risk.eligibility.reasons.missing_fx_since'));
+        expect(withDate.calls).toEqual([['risk.eligibility.reasons.missing_fx_since', {values: {pair: 'USD → EUR', date: formatDay('2024-02-01')}}]]);
+
+        // No rate stored at all: no date to quote.
+        const none = verdict(5, {level: 'ineligible', reasons: ['missing_fx'], missing_fx: {from_currency: 'EUR', to_currency: 'USD', first_rate_date: null}});
+        const withoutDate = recordingT();
+        expect(reasonText('missing_fx', none, VERDICTS, 'USD', withoutDate.t, formatDay)).toBe(marker('risk.eligibility.reasons.missing_fx_none'));
+        expect(withoutDate.calls).toEqual([['risk.eligibility.reasons.missing_fx_none', {values: {pair: 'EUR → USD'}}]]);
+    });
+
     it('quotes a dash for a date the engine does not have, without asking the formatter', () => {
         for (const missing of [null, undefined]) {
             const format = vi.fn(formatDay);

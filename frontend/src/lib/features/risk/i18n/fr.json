@@ -640,7 +640,9 @@
         "missing_fx": "Aucun taux de change vers {currency} au début ou à la fin de la période",
         "starts_late": "Première cotation le {date}, après le début de la période",
         "stale_at_end": "Dernier prix le {date}, plus de {days} jours avant la fin",
-        "no_price_history": "Aucun prix n'a jamais été enregistré pour cet actif"
+        "no_price_history": "Aucun prix n'a jamais été enregistré pour cet actif",
+        "missing_fx_since": "Aucun taux {pair} au début ou à la fin de la période : le premier taux enregistré date du {date}",
+        "missing_fx_none": "Aucun taux {pair} au début ou à la fin de la période : aucun taux n'est enregistré pour cette paire"
       },
       "levels": {
         "ineligible": "Non analysable sur la période",
