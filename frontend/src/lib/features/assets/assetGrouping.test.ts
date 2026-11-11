@@ -26,7 +26,7 @@ import {
     representativeOf,
     splitPartition,
     type ExtractedAsset,
-} from '../assetGrouping';
+} from './assetGrouping';
 
 let nextId = -900000;
 function asset(partial: Partial<ExtractedAsset> & {fileId: string}): ExtractedAsset {

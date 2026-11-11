@@ -8,7 +8,7 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
-    import {deltaPeriodLabel} from '$lib/utils/assetPriceDerived';
+    import {deltaPeriodLabel} from '$lib/features/assets/assetPriceDerived';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {ArrowLeftRight, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';

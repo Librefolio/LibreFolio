@@ -901,7 +901,7 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             await openEditAssetModal(page);
             await expect(
                 page.getByTestId('asset-benchmark-toggle'),
-                'the edit form must reopen with the stored flag. AssetModal.loadAssetData() already reads `data.is_benchmark`, so an "off" here means the CALLER never put the field into editData — neither buildEditData() in routes/(app)/assets/[id]/+page.svelte nor loadAssetEditData() in lib/components/assets/assetEditData.ts copies it. That is not cosmetic: saveEdit() sends `is_benchmark: isBenchmark` on every PATCH, so editing anything at all about a benchmark asset silently un-benchmarks it.',
+                'the edit form must reopen with the stored flag. AssetModal.loadAssetData() already reads `data.is_benchmark`, so an "off" here means the CALLER never put the field into editData — neither buildEditData() in routes/(app)/assets/[id]/+page.svelte nor loadAssetEditData() in lib/features/assets/assetEditData.ts copies it. That is not cosmetic: saveEdit() sends `is_benchmark: isBenchmark` on every PATCH, so editing anything at all about a benchmark asset silently un-benchmarks it.',
             ).toHaveAttribute('aria-checked', 'true');
         } finally {
             // The id is only known once half one has read it back, so a failure

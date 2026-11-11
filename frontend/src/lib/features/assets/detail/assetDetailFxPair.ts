@@ -7,7 +7,7 @@
  * - for one specific pair (`slug`, `BASE-QUOTE`), such as a comparison peer's: both sides come
  *   from the slug.
  *
- * @module components/assets/detail/assetDetailFxPair
+ * @module features/assets/detail/assetDetailFxPair
  */
 
 /** The sides the «add FX pair» modal starts with. */

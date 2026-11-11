@@ -9,8 +9,8 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import * as derived from '../assetPriceDerived';
-import {computeDerivedPriceState, deltaPeriodLabel, extractDaysBack} from '../assetPriceDerived';
+import * as derived from './assetPriceDerived';
+import {computeDerivedPriceState, deltaPeriodLabel, extractDaysBack} from './assetPriceDerived';
 
 describe('computeDerivedPriceState', () => {
     // The Δ over the range — from the first to the last point of the range on screen, the Assets cards’ — is the backend’s

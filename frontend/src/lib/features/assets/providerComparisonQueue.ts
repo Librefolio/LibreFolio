@@ -15,7 +15,7 @@
  * Extracted out of the component so the decision is testable without mounting the modal: the
  * component only reports what is open and whether its provider context is still current.
  *
- * @module components/assets/providerComparisonQueue
+ * @module features/assets/providerComparisonQueue
  */
 import type {DiffItem} from './ProviderComparisonModal.svelte';
 

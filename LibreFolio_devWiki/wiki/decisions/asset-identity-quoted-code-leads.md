@@ -95,12 +95,12 @@ section «🔁 Import flow & asset identity (post-beta)», line «Instrument uni
 
 | Role | Path |
 |------|------|
-| Similarity engine | `frontend/src/lib/utils/assetSimilarity.ts` |
-| Grouping and overrides | `frontend/src/lib/utils/assetGrouping.ts` |
-| Identifier ordering | `frontend/src/lib/utils/assetIdentifiers.ts` |
+| Similarity engine | `frontend/src/lib/features/assets/assetSimilarity.ts` |
+| Grouping and overrides | `frontend/src/lib/features/assets/assetGrouping.ts` |
+| Identifier ordering | `frontend/src/lib/features/assets/identifierQuestions.ts` |
 | Unify step | `frontend/src/lib/features/transactions/import/AssetGroupStep.svelte` |
-| Primary chooser | `frontend/src/lib/components/assets/IdentifierPrimaryChooser.svelte` |
-| Merge dialog | `frontend/src/lib/components/assets/AssetMergeModal.svelte` |
+| Primary chooser | `frontend/src/lib/features/assets/IdentifierPrimaryChooser.svelte` |
+| Merge dialog | `frontend/src/lib/features/assets/AssetMergeModal.svelte` |
 | Picker (D4) | `frontend/src/lib/components/ui/select/AssetSelect.svelte` |
 | Duplicate notice in the wizard | `frontend/src/lib/features/transactions/import/importResolutionHelpers.ts` |
 | Candidate search | `backend/app/services/brim/brim_provider.py` |

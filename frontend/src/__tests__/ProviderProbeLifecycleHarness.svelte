@@ -5,8 +5,8 @@
 -->
 <script lang="ts">
     import {onDestroy, type ComponentProps} from 'svelte';
-    import ProviderAssignmentSection from '$lib/components/assets/ProviderAssignmentSection.svelte';
-    import {createProviderProbeState} from '$lib/components/assets/providerProbeState.svelte';
+    import ProviderAssignmentSection from '$lib/features/assets/ProviderAssignmentSection.svelte';
+    import {createProviderProbeState} from '$lib/features/assets/providerProbeState.svelte';
 
     type Props = Pick<ComponentProps<typeof ProviderAssignmentSection>, 'providerCode' | 'identifier' | 'identifierType' | 'providerParams' | 'providerUrl' | 'noProvider' | 'onchange'> & {shared?: boolean};
 

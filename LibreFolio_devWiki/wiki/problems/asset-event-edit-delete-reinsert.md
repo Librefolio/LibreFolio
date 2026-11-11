@@ -83,8 +83,8 @@ since landed — `delete_ids` is in `backend/app/schemas/assets/events.py`.)*
 | `_upsert_asset_events` (in-place edit, duplicate merge) | `backend/app/services/assets/event_store.py` |
 | Events API, 400 codes | `backend/app/api/v1/assets/events.py` |
 | Repair of the stored types (I-09, 1.3) | `backend/app/db/post_migration/event_types.py` |
-| Event editor section (`dbEventId`, `importMatchKeys`) | `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` |
+| Event editor section (`dbEventId`, `importMatchKeys`) | `frontend/src/lib/features/assets/AssetDataEditorSection.svelte` |
 | Shared data editor (match keys) | `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` |
-| Events CSV import (`value` alias) | `frontend/src/lib/components/assets/EventDataImportModal.svelte` |
+| Events CSV import (`value` alias) | `frontend/src/lib/features/assets/EventDataImportModal.svelte` |
 | API tests | `backend/test_scripts/test_api/test_assets_events.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md` |

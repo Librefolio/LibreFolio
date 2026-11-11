@@ -85,7 +85,7 @@ languages, desktop and mobile.
 | Its three callers (the «Asset list» scenarios) | `frontend/e2e/gallery.spec.ts` |
 | The shots' locales (`GALLERY_LOCALES`) | `frontend/e2e/fixtures/galleryLocale.ts` |
 | The fixture prices | `frontend/e2e/fixtures/galleryOfflineData.ts` |
-| The card that writes the price | `frontend/src/lib/components/assets/AssetCard.svelte` |
+| The card that writes the price | `frontend/src/lib/features/assets/AssetCard.svelte` |
 | The localized `toFixed` (`formatFixed`) | `frontend/src/lib/utils/core/formatFixed.ts` |
 | The precedent (`frenchQuota`) | `frontend/e2e/brokers/brokers-detail.spec.ts` |
 | The digits-only alternative | `frontend/e2e/transactions/tx-import-degiro.spec.ts` |

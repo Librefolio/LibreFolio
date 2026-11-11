@@ -10,7 +10,7 @@
  * unchanged; row ids are opaque, so tests assert on `type`/`value` and on id
  * uniqueness, never on a specific id value.
  *
- * @module components/assets/assetIdentifiers
+ * @module features/assets/assetIdentifiers
  */
 import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
 import {generateUUID} from '$lib/utils/core/uuid';

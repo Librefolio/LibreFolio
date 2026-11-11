@@ -1,5 +1,5 @@
 <script lang="ts">
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import AssetIcon from '$lib/features/assets/AssetIcon.svelte';
     import MarqueeName from './MarqueeName.svelte';
 
     interface Props {

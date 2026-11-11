@@ -11,7 +11,7 @@
  * - for the client cache of signal answers (N64): which answer a request asks for, and what of
  *   an answer is kept.
  *
- * @module components/assets/detail/assetDetailPriceQuery
+ * @module features/assets/detail/assetDetailPriceQuery
  */
 
 import {schemas} from '$lib/api';

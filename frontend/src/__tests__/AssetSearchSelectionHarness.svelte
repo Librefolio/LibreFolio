@@ -1,6 +1,6 @@
 <script lang="ts">
     import type {ComponentProps} from 'svelte';
-    import type AssetSearchAutocomplete from '$lib/components/assets/AssetSearchAutocomplete.svelte';
+    import type AssetSearchAutocomplete from '$lib/features/assets/AssetSearchAutocomplete.svelte';
 
     type Props = ComponentProps<typeof AssetSearchAutocomplete>;
     type SearchResult = Parameters<NonNullable<Props['onselect']>>[0];

@@ -69,9 +69,9 @@ const REPO_DIR = path.resolve(FRONTEND_DIR, '..');
 const MODELS_PY = path.join(REPO_DIR, 'backend', 'app', 'db', 'models.py');
 const ASSET_TYPES_TS = path.join(FRONTEND_DIR, 'src', 'lib', 'utils', 'assetTypes.ts');
 const GENERATED_TS = path.join(FRONTEND_DIR, 'src', 'lib', 'api', 'generated.ts');
-const ASSET_TABLE_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'components', 'assets', 'AssetTable.svelte');
-const ASSET_CARD_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'components', 'assets', 'AssetCard.svelte');
-const PROVIDER_COMPARISON_MODAL_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'components', 'assets', 'ProviderComparisonModal.svelte');
+const ASSET_TABLE_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'features', 'assets', 'AssetTable.svelte');
+const ASSET_CARD_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'features', 'assets', 'AssetCard.svelte');
+const PROVIDER_COMPARISON_MODAL_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'features', 'assets', 'ProviderComparisonModal.svelte');
 const ASSETS_PAGE_SVELTE = path.join(FRONTEND_DIR, 'src', 'routes', '(app)', 'assets', '+page.svelte');
 const ASSET_TYPE_SELECT_SVELTE = path.join(FRONTEND_DIR, 'src', 'lib', 'components', 'ui', 'select', 'AssetTypeSelect.svelte');
 const ICON_DIR = path.join(FRONTEND_DIR, 'static', 'icons', 'asset-types');
@@ -313,7 +313,7 @@ describe('asset type tables', () => {
 
         expectNoGaps(
             ASSET_TYPES.filter((type) => !offered.includes(type)),
-            "the enumOptions list of the type column in src/lib/components/assets/AssetTable.svelte does not include these asset types. That list is the column's set of selectable type values: a type missing from it can never be chosen, and the omission is reported nowhere. (The column currently also carries filterable: false, which suppresses the symptom without fixing the list.)",
+            "the enumOptions list of the type column in src/lib/features/assets/AssetTable.svelte does not include these asset types. That list is the column's set of selectable type values: a type missing from it can never be chosen, and the omission is reported nowhere. (The column currently also carries filterable: false, which suppresses the symptom without fixing the list.)",
         );
     });
 

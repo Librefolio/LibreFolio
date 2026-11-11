@@ -38,7 +38,7 @@
  *
  * Pure module, no Svelte and no I/O.
  *
- * @module utils/assetGrouping
+ * @module features/assets/assetGrouping
  */
 
 import {buildAssetGroups, type SimilarityGroup, type SimilarityLink} from './assetSimilarity';

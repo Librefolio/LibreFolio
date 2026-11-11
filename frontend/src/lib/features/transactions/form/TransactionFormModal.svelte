@@ -57,7 +57,7 @@
     import AssetEventPicker from '../events/AssetEventPicker.svelte';
     import EventCreateMiniModal from '../events/EventCreateMiniModal.svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
-    import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import AssetModal from '$lib/features/assets/AssetModal.svelte';
 
     import {zodiosApi} from '$lib/api';
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';

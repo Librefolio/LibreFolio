@@ -50,7 +50,7 @@ names the family of the stored subtype (`ETF` against `ETF_STOCK` — Borsa Ital
 counts as agreement, not as a difference (`isFamilyOnlyProposal`); a refinement (`ETF` → `ETF_STOCK`) is still
 offered. When the identifier chooser and the metadata comparison would ask the same question, the comparison waits
 while the chooser is open, drops the row the chooser answered, and does not open at all if nothing is left
-(`decideComparison`, `components/assets/providerComparisonQueue.ts`).
+(`decideComparison`, `features/assets/providerComparisonQueue.ts`).
 
 ## Gates
 

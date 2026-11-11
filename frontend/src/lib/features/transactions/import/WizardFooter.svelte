@@ -9,7 +9,7 @@
     import {AlertTriangle, CheckCircle} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
-    import type {AssetGroup} from '$lib/utils/assetGrouping';
+    import type {AssetGroup} from '$lib/features/assets/assetGrouping';
     import type {FileSelection, PendingFileEntry, StepId} from './wizardTypes';
     import type {ParseUnit, SelectedFileLike} from '$lib/features/transactions/import/importReportSets';
 

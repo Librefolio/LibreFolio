@@ -13,7 +13,7 @@
     import {CheckCheck, Plus, Square} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import AssetIcon from '$lib/features/assets/AssetIcon.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {exposureCategoryLabel} from '../categoryLabels.svelte';

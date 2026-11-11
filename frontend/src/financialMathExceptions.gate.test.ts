@@ -151,8 +151,8 @@ const DECLARED_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.map((ent
 const ANNUALIZING_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.filter((entry) => entry.annualizes).map((entry) => entry.file));
 
 /** Real files whose 365 is no exponent — a divisor, a remainder, day-count labels — read by the live control of (D). */
-const CELL_DATE_RANGE = 'src/lib/components/assets/CellDateRange.svelte';
-const SCHEDULED_INVESTMENT = 'src/lib/components/assets/ScheduledInvestmentEditor.svelte';
+const CELL_DATE_RANGE = 'src/lib/features/assets/CellDateRange.svelte';
+const SCHEDULED_INVESTMENT = 'src/lib/features/assets/ScheduledInvestmentEditor.svelte';
 
 /** The shortest description (A) accepts after the tag: a word or two is a placeholder, not a declaration. */
 const MIN_DESCRIPTION = 20;

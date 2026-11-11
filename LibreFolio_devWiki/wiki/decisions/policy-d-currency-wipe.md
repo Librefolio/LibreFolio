@@ -132,7 +132,7 @@ raising HTTP 500 instead of 404. Fixed in G-batch6 — see
 | Wipe service | `backend/app/services/assets/currency_change.py::wipe_market_data_for_currency_change` |
 | PATCH handler | `backend/app/api/v1/assets/crud.py` (currency-change branch) |
 | Backup router (per-series exports) | `backend/app/api/v1/backup/exports.py` |
-| Currency-change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
+| Currency-change modal | `frontend/src/lib/features/assets/AssetCurrencyChangeModal.svelte` |
 | Test (wipe) | `backend/test_scripts/test_api/test_market_data_wipe.py` |
 | Test (backup endpoints) | `backend/test_scripts/test_api/test_backup_export_extras.py` |
 | Test (PATCH 409 + flow) | `backend/test_scripts/test_api/test_asset_currency_change.py` |

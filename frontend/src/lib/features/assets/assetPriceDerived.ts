@@ -19,7 +19,7 @@
  *
  * No Svelte/DOM/Zodios dependency — safe to import from a Worker script.
  *
- * @module utils/assetPriceDerived
+ * @module features/assets/assetPriceDerived
  */
 
 import type {TimeSeriesPoint} from '$lib/stores/core/TimeSeriesStore';

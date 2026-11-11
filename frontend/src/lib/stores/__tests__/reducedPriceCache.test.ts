@@ -11,7 +11,7 @@
 import {afterEach, describe, expect, it} from 'vitest';
 
 import {notifyPricesCaughtUp} from '$lib/stores/portfolio/portfolioMutation';
-import type {DerivedPriceState} from '$lib/utils/assetPriceDerived';
+import type {DerivedPriceState} from '$lib/features/assets/assetPriceDerived';
 
 import {reducedPrices} from '../reducedPriceCache';
 

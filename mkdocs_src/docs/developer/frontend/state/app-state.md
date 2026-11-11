@@ -682,7 +682,7 @@ icon. Trimmed from the Dashboard's:
 | Files | `files-refresh-button` | `routes/(app)/files/+page.svelte:783` |
 | FX list | `fx-refresh-all-button` | `routes/(app)/fx/+page.svelte:1178` |
 | FX detail | `fx-detail-refresh-btn` | `routes/(app)/fx/[pair]/+page.svelte:1371` |
-| Asset detail | `asset-detail-refresh-btn` | `lib/components/assets/detail/AssetDetailToolbarActions.svelte:92`, with `busy={pageBusy.busy}` from `routes/(app)/assets/[id]/+page.svelte:2315` |
+| Asset detail | `asset-detail-refresh-btn` | `lib/features/assets/detail/AssetDetailToolbarActions.svelte:92`, with `busy={pageBusy.busy}` from `routes/(app)/assets/[id]/+page.svelte:2315` |
 | Assets list | `assets-refresh-button` | `routes/(app)/assets/+page.svelte:1715` |
 | Assets list, Correlation tab | `risk-reload-button` («Reload All») | `routes/(app)/assets/+page.svelte:1665`, in place of the list's button on that tab |
 | Tools hub | `tools-hub-refresh` | `lib/features/tools/ToolsHub.svelte:162` |

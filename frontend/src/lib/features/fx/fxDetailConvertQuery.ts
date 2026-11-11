@@ -2,7 +2,7 @@
  * What the FX detail page reads from the bulk conversion (`POST /fx/currencies/convert`).
  *
  * X-R16: the answer is parsed with **signal isolation**, as the asset detail page reads its price query
- * (`components/assets/detail/assetDetailPriceQuery.ts`). The generated client validates the whole answer, signal results
+ * (`features/assets/detail/assetDetailPriceQuery.ts`). The generated client validates the whole answer, signal results
  * included, so a single invalid signal result threw the rates of the answer away too: the chart lost them, and «All»
  * never resolved its start.
  *

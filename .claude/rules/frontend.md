@@ -203,7 +203,7 @@ test fails without it.
 | `SectorPieChart` | 190 | Sector pie chart |
 | `PriceChartCompact` | 58 | Mini-chart for cards |
 
-## Asset Components (`lib/components/assets/`)
+## Asset Components (`lib/features/assets/`)
 
 15 files, ~6300 lines. Key components:
 
@@ -237,7 +237,7 @@ test fails without it.
 | Base UI components | `frontend/src/lib/components/ui/` |
 | Chart components | `frontend/src/lib/components/charts/` |
 | Signal Library | `frontend/src/lib/charts/signals/` |
-| Asset components | `frontend/src/lib/components/assets/` |
+| Asset components | `frontend/src/lib/features/assets/` |
 | Stores | `frontend/src/lib/stores/` |
 | API Client (Zodios) | `frontend/src/lib/api/` |
 | Translations (sources) | `frontend/src/lib/i18n/base/`, `frontend/src/lib/i18n/<subsystem>/`, plugins' `i18n/` |

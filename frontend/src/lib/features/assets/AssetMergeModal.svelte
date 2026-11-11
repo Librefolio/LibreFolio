@@ -34,7 +34,7 @@
     import {zodiosApi} from '$lib/api';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
-    import IdentifierPrimaryChooser, {type IdentifierChoice} from '$lib/components/assets/IdentifierPrimaryChooser.svelte';
+    import IdentifierPrimaryChooser, {type IdentifierChoice} from '$lib/features/assets/IdentifierPrimaryChooser.svelte';
     import {getAssetInfo, getAllAssets, ensureAssetsLoaded, refreshAllAssets, invalidateAfterMutation, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 

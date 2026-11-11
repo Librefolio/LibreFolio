@@ -70,7 +70,7 @@ const REVIEWED_SINKS: readonly ReviewedSink[] = [
     {file: 'src/lib/features/files/FilePreviewModal.svelte', expr: 'renderedMarkdown', why: 'DOMPurify-sanitised marked output; the KaTeX pass that follows renders the text content of $$…$$ paragraphs, and KaTeX escapes its input (trust off).'},
     {file: 'src/lib/components/charts/SignalOptionContent.svelte', expr: 'renderedSubtitle', why: 'renderInlineMathText(subtitle): the server signal-catalog subtitle is escaped by escapeHtml before KaTeX renders its $…$ spans.'},
     {
-        file: 'src/lib/components/assets/PriceDataImportModal.svelte',
+        file: 'src/lib/features/assets/PriceDataImportModal.svelte',
         expr: `$t('import.csv.separatorHint', {values: {sep: '<code class="bg-lf-neutral/50 px-1 rounded">;</code>'}})`,
         why: 'A static i18n message with a static <code> value: nothing in it comes from a user, a file or a provider.',
     },

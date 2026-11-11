@@ -227,7 +227,7 @@ The conditional steps each have their own component, all under
 ### 🧬 `AssetGroupStep.svelte` — unify assets
 
 Answers one question: *how many distinct instruments do these files actually describe?* The
-engine (`lib/utils/assetGrouping.ts` + `assetSimilarity.ts`) proposes a partition, the user
+engine (`lib/features/assets/assetGrouping.ts` + `assetSimilarity.ts`) proposes a partition, the user
 adjusts it. See **[Asset Identity](asset-identity.md)** for the matching rules.
 
 The visual grammar is three states, and it is the whole interface:

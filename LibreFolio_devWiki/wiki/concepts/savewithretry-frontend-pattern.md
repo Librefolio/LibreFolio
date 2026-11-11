@@ -65,12 +65,12 @@ onError: (err) => {
 |-------|------|
 | `BrokerModal` | `frontend/src/lib/features/brokers/BrokerModal.svelte` |
 | `CashTransactionModal` | frontend/src/lib/components/brokers/CashTransactionModal.svelte — removed in `38c127baa` (2026-07-06, broker overview redesign) |
-| `AssetCurrencyChangeModal` | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
+| `AssetCurrencyChangeModal` | `frontend/src/lib/features/assets/AssetCurrencyChangeModal.svelte` |
 | `PasswordChangeModal` | `frontend/src/lib/features/settings/PasswordChangeModal.svelte` |
 | `FxPairAddModal` | `frontend/src/lib/features/fx/FxPairAddModal.svelte` |
 | `BrokerImportFilesModal` | `frontend/src/lib/features/brokers/BrokerImportFilesModal.svelte` |
 | `BrokerSharingModal` | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte` (modal chrome only; the save and its `trySave` now live in `BrokerSharingPanel.svelte`) |
-| `AssetModal` | `frontend/src/lib/components/assets/AssetModal.svelte` |
+| `AssetModal` | `frontend/src/lib/features/assets/AssetModal.svelte` |
 
 ## `AssetModal` special case
 
@@ -101,5 +101,5 @@ This modal has 3 call sites, each wrapped differently:
 | Role | Path |
 |------|------|
 | Helper | `frontend/src/lib/utils/trySave.ts` (renamed from saveWithRetry.ts on 2026-05-21; the helper is now `trySave`) |
-| AssetModal (complex case) | `frontend/src/lib/components/assets/AssetModal.svelte` |
+| AssetModal (complex case) | `frontend/src/lib/features/assets/AssetModal.svelte` |
 | BrokerImportFilesModal (3 call sites) | `frontend/src/lib/features/brokers/BrokerImportFilesModal.svelte` |

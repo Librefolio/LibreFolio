@@ -8,7 +8,7 @@
  */
 
 import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
-import type {DerivedChartPoint} from '$lib/utils/assetPriceDerived';
+import type {DerivedChartPoint} from '$lib/features/assets/assetPriceDerived';
 
 /**
  * `points` with their last one brought up to a quote of `asOfDate` at `value`, or null when there is nothing to change.

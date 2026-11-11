@@ -17,7 +17,7 @@
  * The quote base (Z-32 d) is never filled, the field being never empty: the provider's suggestion, else the default of
  * the type the provider proposes (or the form's), is a row when it differs from the field.
  *
- * @module components/assets/assetMetadataComparison
+ * @module features/assets/assetMetadataComparison
  */
 import {IDENTIFIER_TYPES, isFamilyOnlyProposal} from '$lib/utils/assetTypes';
 import {normalizeDistribution, sameDistribution, type Distribution} from './assetPayload';

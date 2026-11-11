@@ -14,7 +14,7 @@
 import type {TransactionCreateItem} from '$lib/types';
 import type {BrimDuplicateMatch} from '$lib/types/files';
 import type {ImportTodo} from '$lib/features/transactions/txPayloadHelpers';
-import type {AssetGroup, ExtractedAsset, SimilarityLink} from '$lib/utils/assetGrouping';
+import type {AssetGroup, ExtractedAsset, SimilarityLink} from '$lib/features/assets/assetGrouping';
 
 /** A per-row duplicate verdict. `pending_*` come from the bulk editor's unsaved rows. */
 export type DuplicateStatus = 'unique' | 'possible' | 'likely' | 'pending_duplicate' | 'pending_possible_duplicate';

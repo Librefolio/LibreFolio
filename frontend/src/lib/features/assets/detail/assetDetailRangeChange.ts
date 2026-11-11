@@ -6,7 +6,7 @@
  * else the stored series' last close, whose change is asked here (`POST /assets/prices/period-changes`, one item). The
  * browser computes neither.
  *
- * @module components/assets/detail/assetDetailRangeChange
+ * @module features/assets/detail/assetDetailRangeChange
  */
 import {zodiosApi} from '$lib/api';
 import {assetRangeDelta, rangeStartFor, type RangeDelta} from '$lib/utils/rangeChange';

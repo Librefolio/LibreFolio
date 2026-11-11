@@ -104,8 +104,8 @@ function callArguments(code: string, name: string): string[] {
 // The form: what keeps the FX page from the rolling return
 // ---------------------------------------------------------------------------
 
-const TOGGLE = {name: 'AssetChartModeToggle', from: '$lib/components/assets/detail/AssetChartModeToggle.svelte'} as const;
-const WINDOW_CONTROLS = {name: 'AssetCalendarWindowControls', from: '$lib/components/assets/detail/AssetCalendarWindowControls.svelte'} as const;
+const TOGGLE = {name: 'AssetChartModeToggle', from: '$lib/features/assets/detail/AssetChartModeToggle.svelte'} as const;
+const WINDOW_CONTROLS = {name: 'AssetCalendarWindowControls', from: '$lib/features/assets/detail/AssetCalendarWindowControls.svelte'} as const;
 
 /** What keeps the FX page from drawing the two controls of the rolling return under the ids of the FX page. */
 function controlsProblems(source: string): string[] {
@@ -169,8 +169,8 @@ describe('X5-F1 wiring, read from the FX detail page’s source', () => {
 
     describe('the form reads what it claims (controls)', () => {
         const WIRED = [
-            "import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';",
-            "import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';",
+            "import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/features/assets/detail/AssetChartModeToggle.svelte';",
+            "import AssetCalendarWindowControls from '$lib/features/assets/detail/AssetCalendarWindowControls.svelte';",
             "import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/charts/fxDetailCalendar';",
             "import {renderCalendarPairComparisons, renderLocalSignals} from '$lib/charts/chartSignalRendering';",
             "import {setPairSettings} from '$lib/stores/chartSettingsStore.svelte';",

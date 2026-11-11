@@ -28,11 +28,11 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {isFakeAssetId} from '$lib/features/transactions/import/isFakeAssetId';
     import {getIndexColor, getStringColor} from '$lib/utils/colors';
-    import AssetModal from '$lib/components/assets/AssetModal.svelte';
-    import {loadAssetEditData, type AssetEditData} from '$lib/components/assets/assetEditData';
-    import IdentifierPrimaryChooser from '$lib/components/assets/IdentifierPrimaryChooser.svelte';
-    import {pendingIdentifier, needsPrimaryChoice, mergeOther, demotedValues} from '$lib/utils/assetIdentifiers';
-    import {clusterSignature, electPrimary, groupExtractedAssets, groupSignature, memberKey, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/utils/assetGrouping';
+    import AssetModal from '$lib/features/assets/AssetModal.svelte';
+    import {loadAssetEditData, type AssetEditData} from '$lib/features/assets/assetEditData';
+    import IdentifierPrimaryChooser from '$lib/features/assets/IdentifierPrimaryChooser.svelte';
+    import {pendingIdentifier, needsPrimaryChoice, mergeOther, demotedValues} from '$lib/features/assets/identifierQuestions';
+    import {clusterSignature, electPrimary, groupExtractedAssets, groupSignature, memberKey, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/features/assets/assetGrouping';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded, TX_TYPES} from '$lib/features/transactions/transactionTypeStore';
 
@@ -71,7 +71,7 @@
     import AssetGroupStep from '$lib/features/transactions/import/AssetGroupStep.svelte';
     import ReportSetCard from '$lib/features/transactions/import/ReportSetCard.svelte';
     import GapFixStep from '$lib/features/transactions/import/GapFixStep.svelte';
-    import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
+    import AssetMergeModal from '$lib/features/assets/AssetMergeModal.svelte';
     import TransactionCompareModal from '$lib/features/transactions/import/TransactionCompareModal.svelte';
     import type {CompareColumn, CompareField, CompareCell} from '$lib/features/transactions/import/TransactionCompareModal.svelte';
     import type {TXReadItem} from '$lib/features/transactions/types';

@@ -3,7 +3,7 @@
     import {Briefcase, ExternalLink, LoaderCircle, Pencil, Plus, Trash2} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import AssetIcon from '$lib/features/assets/AssetIcon.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
