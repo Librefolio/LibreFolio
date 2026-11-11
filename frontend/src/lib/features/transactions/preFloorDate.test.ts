@@ -13,10 +13,10 @@ import {describe, expect, it} from 'vitest';
 import {isBeforeDateFloor, isPreFloorDateTodo, PRE_FLOOR_DATE_LIMIT, PRE_FLOOR_DATE_REASON, preFloorDates, preFloorEntries, withPreFloorDateTodo} from './preFloorDate';
 import {resolveBrimTodoMessage} from './resolveBrimNotice';
 import type {ImportTodo} from './txPayloadHelpers';
-import enImport from '$lib/i18n/importWizard/en.json';
-import itImport from '$lib/i18n/importWizard/it.json';
-import frImport from '$lib/i18n/importWizard/fr.json';
-import esImport from '$lib/i18n/importWizard/es.json';
+import enImport from '$lib/features/transactions/import/i18n/en.json';
+import itImport from '$lib/features/transactions/import/i18n/it.json';
+import frImport from '$lib/features/transactions/import/i18n/fr.json';
+import esImport from '$lib/features/transactions/import/i18n/es.json';
 
 describe('constants', () => {
     it('the limit is the day the warning starts from (the old floor), and the reason code is the one the catalogue words', () => {

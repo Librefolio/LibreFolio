@@ -44,10 +44,10 @@ import en from '$lib/i18n/en.json';
 import es from '$lib/i18n/es.json';
 import fr from '$lib/i18n/fr.json';
 import it_ from '$lib/i18n/it.json';
-import assetsEn from '$lib/i18n/assets/en.json';
-import assetsEs from '$lib/i18n/assets/es.json';
-import assetsFr from '$lib/i18n/assets/fr.json';
-import assetsIt from '$lib/i18n/assets/it.json';
+import assetsEn from '$lib/features/assets/i18n/en.json';
+import assetsEs from '$lib/features/assets/i18n/es.json';
+import assetsFr from '$lib/features/assets/i18n/fr.json';
+import assetsIt from '$lib/features/assets/i18n/it.json';
 
 const DICT: Record<string, string> = {
     'providerErrors.NO_DATA': 'generic no-data',
@@ -472,7 +472,7 @@ describe('probeRateLimitMessage — the probe refused for too many probes (X-R66
 });
 
 describe('probeRateLimitMessage — the shipped texts fit the one-line summary (X-R66)', () => {
-    /** The four sources of the `assets` subsystem, which owns `providerErrors` (`src/lib/i18n/assets/prefixes.txt`). */
+    /** The four sources of the `assets` subsystem, which owns `providerErrors` (`src/lib/features/assets/i18n/prefixes.txt`). */
     const SOURCES: Record<string, unknown> = {en: assetsEn, it: assetsIt, fr: assetsFr, es: assetsEs};
     /**
      * The locales the interface writes each language in (`resolveUiLocale`): the language's own default — and, for
@@ -491,7 +491,7 @@ describe('probeRateLimitMessage — the shipped texts fit the one-line summary (
     /** The text of `key` in `lang`'s source — or a red naming what is missing. */
     function text(lang: string, key: string): string {
         const providerErrors = (SOURCES[lang] as {providerErrors?: Record<string, unknown>}).providerErrors ?? {};
-        expect(providerErrors[key], `red until X-R66: providerErrors.${key} missing from src/lib/i18n/assets/${lang}.json`).toBeTypeOf('string');
+        expect(providerErrors[key], `red until X-R66: providerErrors.${key} missing from src/lib/features/assets/i18n/${lang}.json`).toBeTypeOf('string');
         return providerErrors[key] as string;
     }
 

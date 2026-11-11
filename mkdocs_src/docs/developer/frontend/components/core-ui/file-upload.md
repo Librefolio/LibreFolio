@@ -249,7 +249,7 @@ image picked there becomes common, with a notice (D36-1):
 
 The page's other file events (`file.uploaded`, `file.upload.failed`, `file.deleted`,
 `file.deleted.bulk`, `file.delete.failed`) carry no toast. The texts are the `uploads.scope.*` keys
-of `frontend/src/lib/i18n/files/<lang>.json`.
+of `frontend/src/lib/features/files/i18n/<lang>.json`.
 
 ## 📂 Files
 

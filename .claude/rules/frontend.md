@@ -224,8 +224,9 @@ test fails without it.
 - **Languages**: EN, IT, FR, ES (read the live key count from `./dev.py i18n audit`)
 - **Generated catalogue**: `lib/i18n/{en,it,fr,es}.json`, built by `scripts/i18n_catalog.py`, ignored by git and
   read-only — never edit it (a hand edit stops the build). The npm pre-hooks, Vitest and `./dev.py front build` write it
-- **Sources** (edit these, or better use the CLI): `lib/i18n/base/` (the generic vocabulary), one folder per subsystem
-  `lib/i18n/<subsystem>/` with its `prefixes.txt`, and each plugin's `backend/app/services/<family>/<plugin>/i18n/`
+- **Sources** (edit these, or better use the CLI): `lib/i18n/base/` (the generic vocabulary), one folder per global subsystem
+  (`app`, `charts`, `dataQuality`) `lib/i18n/<subsystem>/`, each feature's own `lib/features/<feature>/i18n/` (at any depth, e.g.
+  `features/transactions/import/i18n`, named after the folder that holds `i18n/`), all with their `prefixes.txt`, and each plugin's `backend/app/services/<family>/<plugin>/i18n/`
 - **CLI**: `./dev.py i18n where|add|update|remove|search|tree|audit|check|build|move|split|absorb` — `add` writes to the
   source that owns the key (see skill `devpy-i18n`)
 
@@ -240,5 +241,5 @@ test fails without it.
 | Asset components | `frontend/src/lib/features/assets/` |
 | Stores | `frontend/src/lib/stores/` |
 | API Client (Zodios) | `frontend/src/lib/api/` |
-| Translations (sources) | `frontend/src/lib/i18n/base/`, `frontend/src/lib/i18n/<subsystem>/`, plugins' `i18n/` |
+| Translations (sources) | `frontend/src/lib/i18n/base/`, `frontend/src/lib/i18n/<subsystem>/`, `frontend/src/lib/features/<feature>/i18n/`, plugins' `i18n/` |
 | E2E Tests | `frontend/e2e/` |

@@ -52,9 +52,13 @@ Every command that writes edits the **sources** and regenerates the catalogue by
 - **Sources**:
   - `frontend/src/lib/i18n/base/<lang>.json` — the generic vocabulary (`common`, `datePicker`, `csvImport`,
     `dataEditor`, `sectors`, `table`, …): it owns every key nobody else claims;
-  - `frontend/src/lib/i18n/<subsystem>/<lang>.json` — one folder per subsystem (`pacAllocator`, `risk`,
-    `importWizard`, `assets`, `brokers`, `transactions`, `onboarding`, `settings`, `aiExport`, `charts`, `dashboard`,
-    `tools`, `fx`, `files`, `app`, `auth`, `dataQuality`), whose `prefixes.txt` declares the key prefixes it owns;
+  - `frontend/src/lib/i18n/<subsystem>/<lang>.json` — the global subsystems (`app`, `charts`, `dataQuality`), whose
+    `prefixes.txt` declares the key prefixes each owns;
+  - `frontend/src/lib/features/<feature>/i18n/<lang>.json` — a feature's own texts next to its code, at any depth
+    (`ai-export`, `assets`, `auth`, `backup`, `brokers`, `dashboard`, `email`, `files`, `fx`, `instance`, `live-updates`,
+    `onboarding`, `plugin-settings`, `risk`, `settings`, `tools`, `transactions`, `import` for
+    `features/transactions/import/i18n`, `pac-allocator` for `features/tools/pac-allocator/i18n`), each with its
+    `prefixes.txt`; the source name for `--into` is the folder that holds `i18n/`;
   - `backend/app/services/<family>/<plugin>/i18n/<lang>.json` — a plugin's own texts, with absolute keys
     (`{"brimPlugins": {"broker_x": {"name": …}}}`): BRIM names and descriptions, signal and risk-analytic texts,
     an asset provider's `providerParams`, a tool's name and description.

@@ -5,7 +5,7 @@
  * Why. The check (`backend/app/services/platform/instance_key_check.py`, `check_instance_key`) answers `ok`, or `error` when the
  * instance key is not the one the data were saved with, and the Security tab renders its i18n key
  * `instance.checks.instanceKey.<state>`. The catalogue build fills a missing it, fr or es entry from English, so a forgotten
- * translation would never show in the app nor in a catalogue test: this file reads the SOURCES, `lib/i18n/instance/<lang>.json`,
+ * translation would never show in the app nor in a catalogue test: this file reads the SOURCES, `lib/features/instance/i18n/<lang>.json`,
  * directly.
  *
  * Contract. `ok` (it exists today, as the key file check's «usable» text, and stays) and `mismatch` exist, non-empty strings, in each
@@ -29,9 +29,9 @@ const TRANSLATIONS: readonly Lang[] = ['it', 'fr', 'es'];
 const OK = 'instance.checks.instanceKey.ok';
 const MISMATCH = 'instance.checks.instanceKey.mismatch';
 
-/** `lib/i18n/instance/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
+/** `lib/features/instance/i18n/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
 function instanceSource(lang: Lang): unknown {
-    return JSON.parse(readFileSync(new URL(`./instance/${lang}.json`, import.meta.url), 'utf8'));
+    return JSON.parse(readFileSync(new URL(`../features/instance/i18n/${lang}.json`, import.meta.url), 'utf8'));
 }
 
 /** The value at a dotted key of a nested source; `undefined` when any step is missing or not an object. */

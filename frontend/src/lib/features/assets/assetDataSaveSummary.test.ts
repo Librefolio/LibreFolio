@@ -37,7 +37,7 @@
  *
  * Expected, O-8. Red before O-8 in every case but the two guards on `events.deleteSuccess` (one per language): the
  * function threw «not implemented», and none of the five `assets.dataEditor.*` keys was in the catalogue. Green once
- * the function and the keys (four languages, `src/lib/i18n/assets/<lang>.json`) were in. The guards are green before
+ * the function and the keys (four languages, `src/lib/features/assets/i18n/<lang>.json`) were in. The guards are green before
  * and after: they pin that the reused key still writes the `n` the summary passes it.
  *
  * Expected, X-R46. Red before X-R46, for two reasons. The function ignores `pricesRefused`: red, every case with a

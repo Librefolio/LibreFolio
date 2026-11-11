@@ -228,7 +228,7 @@ function mountPolling(fetchInterrupted: () => Promise<boolean | undefined>, poll
 }
 
 /** The sources of the `instance` subsystem, by language: what the catalogue build reads (no fallback applied). */
-const INSTANCE_SOURCE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../i18n/instance');
+const INSTANCE_SOURCE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../i18n');
 const SOURCE_LANGUAGES = ['en', 'it', 'fr', 'es'] as const;
 
 /** Each language of the subsystem source that has no non-empty string for `key`. */

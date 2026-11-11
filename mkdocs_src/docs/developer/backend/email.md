@@ -59,7 +59,7 @@ Email is optional (feature F04 of the release 1.3 plan). Four rules shape the wh
 | `services/email/verification.py` | Email verification at sign-up (developer decision 44): the wait, the emailed link, its confirmation, «send the link again», and the place a waiting account holds ([Email Verification](#verification)) |
 | `backend/app/api/v1/email.py` and `backend/app/schemas/email.py` | `GET /email/status`, `POST /email/test` and `POST /email/links` for administrators, `POST /email/password-reset`, `POST /email/verification/confirm` and `POST /email/verification/resend` for anyone, and their models ([The API](#api)); `EmailInstanceConfig`, the `email` field of `GET /system/instance` |
 | `backend/app/utils/runtime/rate_window.py` | `SlidingWindowLimiter` and `RateDecision`, the [sliding-window limiter](#rate-window) |
-| `frontend/src/lib/features/email/` and `frontend/src/lib/i18n/email/` | The Email tab of the settings, its seam over the API client, the check of the links' base from the browser, and its texts ([The Email Tab](#email-tab)); the frontend of email verification ([In the Frontend](#verification-frontend)); «Send by email» and the «forgot password» form ([Links by Email in the Interface](#link-actions)) |
+| `frontend/src/lib/features/email/` and `frontend/src/lib/features/email/i18n/` | The Email tab of the settings, its seam over the API client, the check of the links' base from the browser, and its texts ([The Email Tab](#email-tab)); the frontend of email verification ([In the Frontend](#verification-frontend)); «Send by email» and the «forgot password» form ([Links by Email in the Interface](#link-actions)) |
 | `frontend/src/routes/verify-email/+page.svelte` | The page of a verification link ([In the Frontend](#verification-frontend)) |
 
 `services/email/__init__.py` holds only the package docstring.
@@ -1231,7 +1231,7 @@ verification turn on ([In the Frontend](#verification-frontend)).
 
 ## 🖥️ The Email Tab {: #email-tab }
 
-The tab is in `frontend/src/lib/features/email/`, its texts in `frontend/src/lib/i18n/email/`. The same folder holds
+The tab is in `frontend/src/lib/features/email/`, its texts in `frontend/src/lib/features/email/i18n/`. The same folder holds
 the frontend of email verification ([In the Frontend](#verification-frontend)), «Send by email» and the «forgot
 password» form ([Links by Email in the Interface](#link-actions)).
 

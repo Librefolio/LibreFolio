@@ -3,7 +3,7 @@
  * transactions.form — the sign hints and the «Total / Unit price» keys of the transaction form, in the four languages (FB-16; Vitest, node).
  *
  * Why. The catalogue build fills a missing it, fr or es entry from English, so a forgotten translation would never show in the app nor in a
- * catalogue test: this file reads the SOURCES, `lib/i18n/transactions/<lang>.json`, directly, never the generated catalogue (the equivalent of
+ * catalogue test: this file reads the SOURCES, `lib/features/transactions/i18n/<lang>.json`, directly, never the generated catalogue (the equivalent of
  * `scripts.i18n_catalog.load_catalog(lang, fallback=False)` the backend tests use).
  *
  * Contract (developer decision of 28/10/2026).
@@ -31,9 +31,9 @@ const SIGN_HINTS = ['hintSignPositive', 'hintSignNegative', 'hintSignZero', 'hin
 /** What a hint must not say: it describes what happens after the save, not what to enter. */
 const AFTERWARDS = /negat|invert|invers|auto-/i;
 
-/** `lib/i18n/transactions/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
+/** `lib/features/transactions/i18n/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
 function transactionsSource(lang: Lang): unknown {
-    return JSON.parse(readFileSync(new URL(`./transactions/${lang}.json`, import.meta.url), 'utf8'));
+    return JSON.parse(readFileSync(new URL(`../features/transactions/i18n/${lang}.json`, import.meta.url), 'utf8'));
 }
 
 /** The value at a dotted key of a nested source; `undefined` when any step is missing or not an object. */

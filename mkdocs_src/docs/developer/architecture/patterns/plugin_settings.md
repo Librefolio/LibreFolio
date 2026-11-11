@@ -926,7 +926,7 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
       (`assets.search.notConfigured`), with **Configure**; a save starts the search again. When a
       result's `display_name` contains 👑, a legend closes the list (`assets.search.crownLegend`).
 - **Texts.** The interface's own are in the `pluginSettings` subsystem of the catalogue
-  (`frontend/src/lib/i18n/pluginSettings/`), the two search texts in `assets.search`, and the probe's
+  (`frontend/src/lib/features/plugin-settings/i18n/`), the two search texts in `assets.search`, and the probe's
   `providerErrors.NOT_CONFIGURED` and `providerErrors.PROVIDER_ERROR` in the `assets` subsystem. A
   field's texts come from its declaration: `fieldLabel()`, `fieldDescription()` and `optionLabel()`
   translate the declared key, and fall back to the English text ([Labels and Translations](#translations)).

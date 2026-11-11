@@ -2543,7 +2543,7 @@ BUNDLED_SOURCES = {
     "lib/utils/format.ts": "a module",
     "lib/components/App.svelte": "a component",
     "lib/data/currencies.json": "a JSON module",  # not under lib/i18n/base/, where a JSON would make a catalogue due and answer True for that reason
-    "lib/i18n/assets/prefixes.txt": "a subsystem's key prefixes, read by the catalogue generator",
+    "lib/features/assets/i18n/prefixes.txt": "a subsystem's key prefixes, read by the catalogue generator",
     "latest.ts": "'test' in the name, not '.test.'",
     "contest.svelte": "'test' in the name, not '.test.'",
     "lib/utils/x.testing.ts": "'.test' in the name, not '.test.'",
@@ -3254,7 +3254,7 @@ class TestFrontendInputsListing:
 
         assert fingerprint(tmp_path) == present, "H-54: the generated catalogues are not in the listing: cmd_fe_build takes the fingerprint before it writes them"
 
-    @pytest.mark.parametrize("relative", ["lib/i18n/assets/en.json", "lib/i18n/base/de.json"], ids=["a-subsystem-source", "a-new-language"])
+    @pytest.mark.parametrize("relative", ["lib/features/assets/i18n/en.json", "lib/i18n/base/de.json"], ids=["a-subsystem-source", "a-new-language"])
     def test_a_catalogue_source_beside_the_generated_ones_changes_the_fingerprint(self, frontend_catalogue, tmp_path, relative):
         # Red before the cure. The near-miss of the subtraction: a source of the catalogue, named like a generated one,
         # is an input of the build like any other. What stays out is the files `generated_catalogs` names, never a name

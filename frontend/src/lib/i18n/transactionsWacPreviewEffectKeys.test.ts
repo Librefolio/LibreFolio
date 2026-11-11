@@ -3,7 +3,7 @@
  * transactions.wacPreview.effect — the label of a `split_rescale` row, in the four languages (W6-1; Vitest, node).
  *
  * Why. The catalogue build fills a missing it, fr or es entry from English, so a forgotten translation would never show in the app nor in a
- * catalogue test: this file reads the SOURCES, `lib/i18n/transactions/<lang>.json`, directly, never the generated catalogue (same reader as
+ * catalogue test: this file reads the SOURCES, `lib/features/transactions/i18n/<lang>.json`, directly, never the generated catalogue (same reader as
  * `transactionsEntryModeKeys.test.ts`).
  *
  * Contract. The backend preview sends `effect` in {add, add_zero_cost, reduce, split_rescale}; the effect column of the qualifying table
@@ -26,9 +26,9 @@ type Lang = (typeof LANGUAGES)[number];
 const TRANSLATIONS: readonly Lang[] = ['it', 'fr', 'es'];
 const PREFIX = 'transactions.wacPreview.effect.';
 
-/** `lib/i18n/transactions/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
+/** `lib/features/transactions/i18n/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
 function transactionsSource(lang: Lang): unknown {
-    return JSON.parse(readFileSync(new URL(`./transactions/${lang}.json`, import.meta.url), 'utf8'));
+    return JSON.parse(readFileSync(new URL(`../features/transactions/i18n/${lang}.json`, import.meta.url), 'utf8'));
 }
 
 /** The value at a dotted key of a nested source; `undefined` when any step is missing or not an object. */
