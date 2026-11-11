@@ -12,13 +12,13 @@
  * next read of a range, or of a date through lookupFxRate, asks the server again, while the points stay readable
  * (Z-14).
  *
- * @module stores/fxStoreRegistry
+ * @module features/fx/fxStoreRegistry
  */
 
-import type {TimeSeriesPoint} from './core/TimeSeriesStore';
-import {TimeSeriesStore} from './core/TimeSeriesStore';
-import {registerPortfolioMutationListener} from './portfolio/portfolioMutation';
-import {firstDateOf, rememberFirstDate} from './firstSeriesDates';
+import type {TimeSeriesPoint} from '../../stores/core/TimeSeriesStore';
+import {TimeSeriesStore} from '../../stores/core/TimeSeriesStore';
+import {registerPortfolioMutationListener} from '../../stores/portfolio/portfolioMutation';
+import {firstDateOf, rememberFirstDate} from '../../stores/firstSeriesDates';
 import type {ChainStep} from '$lib/utils/currency/currencyGraph';
 import {zodiosApi} from '$lib/api';
 import {BULK_SIGNAL_MARGIN_DAYS, MIN_START, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';

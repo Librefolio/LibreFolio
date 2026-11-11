@@ -83,8 +83,8 @@
     import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {getStringColor} from '$lib/utils/colors';
     import {getUserStorage} from '$lib/utils/storage';
-    import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
-    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
+    import {lookupFxRate, type FxDataPoint} from '$lib/features/fx/fxStoreRegistry';
+    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/features/fx/fxConversionHelper';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import TransactionFormModal from '../form/TransactionFormModal.svelte';
     import TransactionPickerModal from './TransactionPickerModal.svelte';

@@ -49,8 +49,8 @@ import {fxPointToLineDataPoint} from '$lib/charts/chartSignalRendering';
 import type {RenderedSignal} from '$lib/charts/signals';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {DEFAULT_CHART_SETTINGS, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
-import {clearCardInversions, setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
-import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+import {clearCardInversions, setCardInverted} from '$lib/features/fx/fxCardInversionStore';
+import type {FxDataPoint} from '$lib/features/fx/fxStoreRegistry';
 import FxCard from './FxCard.svelte';
 
 type View = 'absolute' | 'percentage' | 'calendar-return';

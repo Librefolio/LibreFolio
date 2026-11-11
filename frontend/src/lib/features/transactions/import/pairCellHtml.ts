@@ -5,7 +5,7 @@
  * the import wizard and in the editor; the implied-rate chip mirrors its promote suggestion.
  * Callers pass already-escaped HTML for the values.
  */
-import {computeFxConversionInfo} from '$lib/utils/currency/fxConversionHelper';
+import {computeFxConversionInfo} from '$lib/features/fx/fxConversionHelper';
 import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 

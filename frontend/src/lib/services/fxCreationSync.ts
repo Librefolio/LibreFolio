@@ -3,7 +3,7 @@ import {zodiosApi} from '$lib/api';
 import {_} from '$lib/i18n';
 import {isClientSessionCurrent} from '$lib/stores/app/clientSession';
 import {notify} from '$lib/stores/app/notify.svelte';
-import {getFxStore} from '$lib/stores/fxStoreRegistry';
+import {getFxStore} from '$lib/features/fx/fxStoreRegistry';
 import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {todayIso} from '$lib/utils/dateOnly';

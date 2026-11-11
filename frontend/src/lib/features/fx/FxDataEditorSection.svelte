@@ -16,7 +16,7 @@
     import DataEditor from '$lib/components/ui/data-editor/DataEditor.svelte';
     import type {ColumnDef, DataRow} from '$lib/components/ui/data-editor/DataEditorTypes';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import type {FxDataPoint} from '$lib/features/fx/fxStoreRegistry';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {rejectedMessage, saveErrorText, type Rejection} from '$lib/api/writeRefusal';

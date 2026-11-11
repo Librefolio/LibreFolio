@@ -50,7 +50,7 @@ vi.mock('$lib/stores/reference/fxRoutesStore', async (importOriginal) => ({
     getConfiguredPairSlugs: vi.fn(() => new Set<string>()),
     getConfiguredCurrencySet: vi.fn(() => new Set<string>()),
 }));
-vi.mock('$lib/stores/fxStoreRegistry', () => ({
+vi.mock('$lib/features/fx/fxStoreRegistry', () => ({
     getRegisteredPairs: vi.fn(() => []),
     createPairSlug: (base: string, quote: string) => [base, quote].sort().join('-'),
     getFxStore: vi.fn(() => ({invalidateAll: vi.fn()})),

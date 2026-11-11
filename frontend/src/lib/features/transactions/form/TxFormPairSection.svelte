@@ -21,11 +21,11 @@
     import WacPreviewSection from '../wac/WacPreviewSection.svelte';
     import {getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {getTransactionTypeIconUrl, type PairFormLayout, type TransactionTypeCode} from '$lib/features/transactions/transactionTypeStore';
-    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
+    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/features/fx/fxConversionHelper';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {exceedsSignificantDigits, REAL_SIGNIFICANT_DIGITS} from '$lib/utils/core/parseDecimalInput';
-    import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import type {FxDataPoint} from '$lib/features/fx/fxStoreRegistry';
     import type {TXReadItem} from '../types';
     import type {DualDraftTo, FormDraft, TxFormWacResult} from './txFormTypes';
 

@@ -27,7 +27,7 @@ vi.mock('$lib/api', () => ({
     },
 }));
 const fxRange = vi.hoisted(() => ({ensureFxRangeLoaded: vi.fn(async () => []), ensureFxRangeFromFirstDay: vi.fn(async () => undefined)}));
-vi.mock('$lib/stores/fxStoreRegistry', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/stores/fxStoreRegistry')>()), ensureFxRangeLoaded: fxRange.ensureFxRangeLoaded, ensureFxRangeFromFirstDay: fxRange.ensureFxRangeFromFirstDay}));
+vi.mock('$lib/features/fx/fxStoreRegistry', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/features/fx/fxStoreRegistry')>()), ensureFxRangeLoaded: fxRange.ensureFxRangeLoaded, ensureFxRangeFromFirstDay: fxRange.ensureFxRangeFromFirstDay}));
 
 import {zodiosApi} from '$lib/api';
 import type {SignalConfig} from '$lib/charts/signals';

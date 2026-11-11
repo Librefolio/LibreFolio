@@ -159,7 +159,7 @@ be longer than the field.
 | Component | Syncs | Used by |
 |---|---|---|
 | `AssetSyncModal` (`components/assets/`) | Asset prices | Assets list |
-| `FxSyncModal` (`components/fx/`) | FX rates | FX list, transaction form, PAC planner |
+| `FxSyncModal` (`features/fx/`) | FX rates | FX list, transaction form, PAC planner |
 | `PageSyncModal` (`ui/modals/`) | Asset prices **and** the FX pairs they need, in parallel | Asset detail, FX detail, risk panels |
 
 `PageSyncModal` reports `onsynced({accepted})`: `accepted` is true when at least one item of the

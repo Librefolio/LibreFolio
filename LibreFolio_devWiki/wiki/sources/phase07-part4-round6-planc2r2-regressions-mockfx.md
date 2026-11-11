@@ -94,7 +94,7 @@ i18n keys + balance walk tests (8/8 pass) + FormModal context-aware validate + D
 | Balance walk tests | `backend/test_scripts/test_api/test_tx_balance_walk.py` |
 | FormModal (contextual validate) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | BulkModal (getBulkContext) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
-| FxPairAddModal (RotateCw fix) | `frontend/src/lib/components/fx/FxPairAddModal.svelte` |
+| FxPairAddModal (RotateCw fix) | `frontend/src/lib/features/fx/FxPairAddModal.svelte` |
 | Dockerfile + entrypoint.sh | `Dockerfile`, `entrypoint.sh` |
 | Test runner frontend asset | `scripts/test_runner/_frontend_asset.py` |
 | Test runner frontend tx | `scripts/test_runner/_frontend_transaction.py` |

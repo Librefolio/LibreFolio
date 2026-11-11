@@ -67,7 +67,7 @@
     import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
     import {reducedPrices, type ReducedEntry} from '$lib/stores/reducedPriceCache';
     import type {DerivedBase} from '$lib/utils/assetPriceDerived';

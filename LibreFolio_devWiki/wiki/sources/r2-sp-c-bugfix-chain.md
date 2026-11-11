@@ -184,7 +184,7 @@ Components that display computed data should be **controlled** (props-in, callba
 | FormModal (WAC preview, dual-form) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | WacPreviewSection (controlled) | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
 | PromoteMergeModal | `frontend/src/lib/features/transactions/bulk/PromoteMergeModal.svelte` |
-| FX store registry (lookupFxRate) | `frontend/src/lib/stores/fxStoreRegistry.ts` |
+| FX store registry (lookupFxRate) | `frontend/src/lib/features/fx/fxStoreRegistry.ts` |
 | TX types (PendingOp, DraftFields) | `frontend/src/lib/features/transactions/types.ts` |
 | TX schemas (WACPreviewItem, etc.) | `backend/app/schemas/transactions/transactions.py` |
 | TX service (compute_wac_iterative) | `backend/app/services/transactions/transaction_service.py` |

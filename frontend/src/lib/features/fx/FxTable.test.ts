@@ -49,7 +49,7 @@ vi.mock('$lib/stores/currencyGraphStore', () => ({fxProvidersVersion: writable(0
 
 import {render, setupI18n, waitFor} from '$test/component';
 import {uiLocale} from '$lib/stores/app/uiLocale';
-import {clearCardInversions, setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
+import {clearCardInversions, setCardInverted} from '$lib/features/fx/fxCardInversionStore';
 import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
 import type {RangeDelta} from '$lib/utils/rangeChange';
 import FxTable, {type FxRow} from './FxTable.svelte';

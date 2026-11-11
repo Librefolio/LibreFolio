@@ -80,7 +80,7 @@ export const LITERAL_EXCEPTIONS = [
     {file: 'lib/utils/colors.ts', value: /^hsla?\(.*\$\{/, reason: 'hsl() and hsla() generators with a computed hue (R)'},
     {file: 'lib/components/charts/ChartSettingsModal.svelte', value: '#000000', reason: 'the colour of a demo signal, never drawn (R)'},
     {file: 'lib/components/assets/AssetDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
-    {file: 'lib/components/fx/FxDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
+    {file: 'lib/features/fx/FxDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
     {file: 'lib/features/support/supportLinks.ts', value: /^#/, reason: 'the brand colours of Reddit, Facebook, Instagram and TikTok on their share buttons: not ours to theme'},
 ];
 

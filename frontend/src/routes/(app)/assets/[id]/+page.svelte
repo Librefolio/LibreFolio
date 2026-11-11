@@ -41,7 +41,7 @@
     import AssetDetailMetadataPanel from '$lib/components/assets/detail/AssetDetailMetadataPanel.svelte';
     import AssetDetailToolbarActions from '$lib/components/assets/detail/AssetDetailToolbarActions.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
@@ -71,7 +71,7 @@
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
-    import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {ensureFxRangeLoaded, getFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';

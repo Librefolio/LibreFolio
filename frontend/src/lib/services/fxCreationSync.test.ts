@@ -21,7 +21,7 @@ vi.mock('$lib/i18n', async (importOriginal) => {
 });
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
 vi.mock('$lib/stores/app/toastStore.svelte', () => ({toasts: {show: vi.fn(), error: vi.fn()}}));
-vi.mock('$lib/stores/fxStoreRegistry', () => ({getFxStore: vi.fn()}));
+vi.mock('$lib/features/fx/fxStoreRegistry', () => ({getFxStore: vi.fn()}));
 vi.mock('$lib/stores/reference/fxRoutesStore', () => ({invalidateFxRoutes: vi.fn()}));
 vi.mock('$lib/stores/currencyGraphStore', () => ({getCachedFxProviders: () => []}));
 vi.mock('$lib/stores/reference/currencyStore', () => ({
@@ -37,7 +37,7 @@ import {zodiosApi} from '$lib/api';
 import {_} from '$lib/i18n';
 import {notify} from '$lib/stores/app/notify.svelte';
 import {getClientSessionGeneration, transitionClientSession} from '$lib/stores/app/clientSession';
-import {getFxStore} from '$lib/stores/fxStoreRegistry';
+import {getFxStore} from '$lib/features/fx/fxStoreRegistry';
 import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
 import {buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
 

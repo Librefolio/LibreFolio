@@ -9,7 +9,7 @@
 <script lang="ts">
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
     import type {PortfolioBannerActions} from './portfolioBannerActions.svelte';
 
     interface Props {

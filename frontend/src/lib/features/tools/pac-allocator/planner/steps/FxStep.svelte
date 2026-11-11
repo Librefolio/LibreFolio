@@ -7,11 +7,11 @@
     import {onDestroy, onMount} from 'svelte';
     import {Download, ExternalLink, LoaderCircle, Plus} from 'lucide-svelte';
     import {t} from '$lib/i18n';
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
-    import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
+    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
+    import FxSyncModal from '$lib/features/fx/FxSyncModal.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
     import type {FxPairCreatedDetail} from '$lib/services/fxCreationSync';
-    import {createPairSlug} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug} from '$lib/features/fx/fxStoreRegistry';
     import {fxRoutesVersion} from '$lib/stores/reference/fxRoutesStore';
     import {addDays} from '$lib/utils/dateOnly';
     import {setRateManual} from '../copies';

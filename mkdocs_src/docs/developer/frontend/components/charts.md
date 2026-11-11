@@ -266,7 +266,7 @@ malformed result does not discard the response. The page then reads the signal r
 their own (X-R16): a malformed one fails the signals only, with the panel's notice «Technical signals could
 not be updated», while the prices still reach the chart, the price cache and the **All** start. The FX
 detail page reads `POST /api/v1/fx/currencies/convert` the same way, through
-`parseFxConvertWithSignalIsolation()` (`lib/components/fx/fxDetailConvertQuery.ts`), so its rates survive a
+`parseFxConvertWithSignalIsolation()` (`lib/features/fx/fxDetailConvertQuery.ts`), so its rates survive a
 malformed signal result too.
 
 The same plugin is also in the signal catalog (see

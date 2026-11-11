@@ -5,7 +5,7 @@
  * @module utils/fxConversionHelper
  */
 
-import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+import type {FxDataPoint} from '$lib/features/fx/fxStoreRegistry';
 import {formatPrice} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 

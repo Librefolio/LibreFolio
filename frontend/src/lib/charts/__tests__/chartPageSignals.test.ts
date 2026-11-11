@@ -54,7 +54,7 @@ import {fxPointToLineDataPoint, renderLocalSignals, type FxRatePoint} from '$lib
 import {getLocalSignalDefinitions, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalStyle} from '$lib/charts/signals';
 import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-import {displayFxRate} from '$lib/stores/fxStoreRegistry';
+import {displayFxRate} from '$lib/features/fx/fxStoreRegistry';
 import {comparisonAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint, type DetailPageAsset, type DetailPageSignalSourcesInput} from '../chartPageSignals';
 import {COMPARISON_ASSET_RUNTIME_PARAM_KEYS} from '../loadComparisonData';
 

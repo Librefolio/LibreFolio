@@ -10,10 +10,10 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {ArrowLeftRight, CalendarSync, ChartLine, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
-    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxRate, type FxDataPoint} from '$lib/features/fx/fxStoreRegistry';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {isCardInverted, setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
+    import {isCardInverted, setCardInverted} from '$lib/features/fx/fxCardInversionStore';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {nextCardPrimaryView, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
