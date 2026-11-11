@@ -199,7 +199,7 @@
       "scalable_several_overnight_accounts": "Il file contiene {count} conti deposito: tutte le loro righe vanno in questo broker, il cui saldo è la loro somma.",
       "scalable_internal_transfers": "{count, plural, one {# trasferimento} other {# trasferimenti}} tra il conto broker e il conto deposito: importa il file dell’altro conto nel suo broker, poi unisci ogni coppia in un «Giroconto» nell’editor bulk.",
       "scalable_dividends_net": "{count, plural, one {# dividendo è stato importato come accreditato} other {# dividendi sono stati importati come accreditati}}, al netto della ritenuta: il file non riporta l’imposta.",
-      "scalable_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come deposito} other {# rimborsi d’imposta sono stati importati come depositi}}: in LibreFolio un’imposta toglie sempre denaro.",
+      "scalable_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come interesse} other {# rimborsi d’imposta sono stati importati come interessi}} («Tax refund»): sono soldi restituiti dal guadagno dell’investimento, quindi contano nel P&L.",
       "scalable_cash_by_sign": "{count, plural, one {# riga di liquidità ha un tipo che LibreFolio non conosce, o un segno inatteso: è stata registrata come deposito o prelievo} other {# righe di liquidità hanno un tipo che LibreFolio non conosce, o un segno inatteso: sono state registrate come depositi o prelievi}}, secondo il segno dell’importo.",
       "fineco_not_yet_settled": "{count, plural, one {# riga non è ancora regolata (la data valuta è dopo oggi) e non è stata importata: arriverà con il prossimo export.} other {# righe non sono ancora regolate (la data valuta è dopo oggi) e non sono state importate: arriveranno con il prossimo export.}}",
       "fineco_incomplete_rows": "Questo import potrebbe essere sbagliato: {count, plural, one {# riga non ha} other {# righe non hanno}} un numero necessario (quantità o controvalore). Controlla le righe qui sotto; se il file è giusto, è probabilmente un errore dell'importazione, e puoi aiutarci a correggerlo:",
@@ -208,7 +208,8 @@
       "possible_split": "Possibile split di {ticker}: {added_quantity} azioni nuove a costo zero. Collega un evento SPLIT o creane uno.",
       "date_before_1900": "La data {date} è anteriore al 1° gennaio 1900: controlla l'anno.",
       "date_unreadable": "Riga {row}: {value} non è una data valida nel formato {order, select, day_first {gg/mm/aaaa} month_first {mm/gg/aaaa} day_first_short {gg/mm/aa} month_first_short {mm/gg/aa} year_first_short {aa/mm/gg} year_first {aaaa-mm-gg} other {gg/mm/aaaa}}. Correggi la data nel file, oppure cambia il formato in Impostazioni › Plugin › Importazione dai broker › CSV generico › «Formato delle date» e poi premi «Rianalizza tutti».",
-      "date_unreadable_more": "{n, plural, one {# altra riga ha} other {# altre righe hanno}} una data non valida in questo formato: vale la stessa correzione."
+      "date_unreadable_more": "{n, plural, one {# altra riga ha} other {# altre righe hanno}} una data non valida in questo formato: vale la stessa correzione.",
+      "traderepublic_other_account": "{count, plural, one {# riga appartiene} other {# righe appartengono}} a un altro conto, per esempio il conto JUNIOR di un figlio, e {count, plural, one {è stata ignorata} other {sono state ignorate}}: esporta quel conto dal suo accesso e importalo in un broker a parte."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",
@@ -563,7 +564,8 @@
       "fineco_not_yet_settled": "La data valuta di queste righe è dopo oggi: non sono ancora regolate.",
       "fineco_incomplete_rows": "L'ultima colonna nomina il campo senza numero; la riga è importata così com'è.",
       "rows_not_recognized": "L'ultima colonna dice che cos'è ogni riga, o che cosa non è stato importato.",
-      "rows_unreadable": "L'ultima colonna dice che cosa non si è potuto leggere in ogni riga."
+      "rows_unreadable": "L'ultima colonna dice che cosa non si è potuto leggere in ogni riga.",
+      "traderepublic_other_account": "Su queste righe la colonna account_type non è DEFAULT."
     },
     "notesCount": "{n, plural, one {# nota} other {# note}}",
     "noNotices": "Nessun avviso né nota",

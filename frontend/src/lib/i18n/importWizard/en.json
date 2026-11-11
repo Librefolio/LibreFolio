@@ -199,7 +199,7 @@
       "scalable_several_overnight_accounts": "The file holds {count} overnight accounts: all their rows go into this broker, whose balance is their sum.",
       "scalable_internal_transfers": "{count, plural, one {# transfer} other {# transfers}} between the broker account and the overnight account: import the other account's file into its own broker, then merge each pair into a Cash Transfer in the bulk editor.",
       "scalable_dividends_net": "{count, plural, one {# dividend was imported as credited} other {# dividends were imported as credited}}, net of the tax withheld: the file does not give the tax.",
-      "scalable_tax_refund": "{count, plural, one {# tax refund was imported as a deposit} other {# tax refunds were imported as deposits}}: in LibreFolio a tax always takes money out.",
+      "scalable_tax_refund": "{count, plural, one {# tax refund was imported as interest} other {# tax refunds were imported as interest}} («Tax refund»): money given back from the investment's gain, so it counts in the P&L.",
       "scalable_cash_by_sign": "{count, plural, one {# cash row has a type LibreFolio does not know, or an unexpected sign: it was recorded as a deposit or a withdrawal} other {# cash rows have a type LibreFolio does not know, or an unexpected sign: they were recorded as deposits or withdrawals}}, by the sign of the amount.",
       "fineco_not_yet_settled": "{count, plural, one {# row is not settled yet (its value date is after today) and was not imported: it arrives with the next export.} other {# rows are not settled yet (their value date is after today) and were not imported: they arrive with the next export.}}",
       "fineco_incomplete_rows": "This import may be wrong: {count, plural, one {# row lacks} other {# rows lack}} a required number (quantity or amount). Check the rows below; if the file is right, it is likely an importer bug, and you can help us fix it:",
@@ -208,7 +208,8 @@
       "possible_split": "Possible stock split of {ticker}: {added_quantity} new shares at no cost. Link a SPLIT event, or create one.",
       "date_before_1900": "The date {date} is before 1 January 1900: check the year.",
       "date_unreadable": "Row {row}: {value} is not a valid date in the format {order, select, day_first {dd/mm/yyyy} month_first {mm/dd/yyyy} day_first_short {dd/mm/yy} month_first_short {mm/dd/yy} year_first_short {yy/mm/dd} year_first {yyyy-mm-dd} other {dd/mm/yyyy}}. Fix the date in the file, or change the format in Settings › Plugins › Broker imports › Generic CSV › “Date format”, then press “Re-parse all”.",
-      "date_unreadable_more": "{n, plural, one {# more row has} other {# more rows have}} a date that is not valid in this format: the same fix applies."
+      "date_unreadable_more": "{n, plural, one {# more row has} other {# more rows have}} a date that is not valid in this format: the same fix applies.",
+      "traderepublic_other_account": "{count, plural, one {# row belongs} other {# rows belong}} to another account, such as a child's JUNIOR account, and {count, plural, one {was} other {were}} ignored: export that account from its own login and import it into a separate broker."
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
@@ -563,7 +564,8 @@
       "fineco_not_yet_settled": "The value date of these rows is after today: they have not settled yet.",
       "fineco_incomplete_rows": "The last column names the field without a number; the row is imported as it is.",
       "rows_not_recognized": "The last column says what each row is, or what of it was not imported.",
-      "rows_unreadable": "The last column says what could not be read on each row."
+      "rows_unreadable": "The last column says what could not be read on each row.",
+      "traderepublic_other_account": "The account_type column is not DEFAULT on these rows."
     },
     "notesCount": "{n, plural, one {# note} other {# notes}}",
     "noNotices": "No warnings or notes",

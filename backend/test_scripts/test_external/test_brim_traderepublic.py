@@ -90,6 +90,7 @@ REQUIRED_COLUMNS = ("datetime", "date", "category", "type", "symbol", "shares", 
 # The notices.
 TAX_REFUND = "traderepublic_tax_refund"
 NOT_SETTLED = "traderepublic_not_yet_settled"
+OTHER_ACCOUNT = "traderepublic_other_account"
 ROWS_NOT_RECOGNIZED = "rows_not_recognized"
 ROWS_UNREADABLE = "rows_unreadable"
 
@@ -538,6 +539,24 @@ class TestNotYetSettled:
         assert _codes(out) == []
 
 
+class TestOtherAccount:
+    def test_a_junior_row_is_ignored_with_an_info_note_and_no_issue_link(self, tmp_path: Path):
+        """D3 (the developer, 11/11/2026): a row of another account (a child's JUNIOR) is ignored, its fee and tax too; one info note says to
+        export that account from its own login into a broker of its own, without ``report_issue``: the rule is known, the row is not unknown."""
+        out = _parse(_write_case(tmp_path, _buy(account_type="JUNIOR", fee="-1.00")))
+        assert _keys(out) == Counter([BASE_KEY])
+        notice = _notice(out, OTHER_ACCOUNT)
+        assert (notice.severity, notice.context) == ("info", {"count": 1})
+        assert notice.evidence[0].row_numbers == [3]
+        assert _codes(out) == [OTHER_ACCOUNT]
+
+    def test_an_empty_account_type_is_the_main_account(self, tmp_path: Path):
+        """D3: control — no ``account_type`` reads as ``DEFAULT``: the row is imported."""
+        out = _parse(_write_case(tmp_path, _buy(account_type="")))
+        assert _keys(out) == Counter([BASE_KEY, ("BUY", "2025-04-01", "2", "-400", "EUR", APPLE)])
+        assert _codes(out) == []
+
+
 class TestSilentRows:
     def test_repeated_transaction_id_dropped_without_a_notice(self, tmp_path: Path):
         """D: the same booking twice is imported once, silently."""
@@ -560,7 +579,6 @@ NOT_RECOGNIZED_CASES = [
     pytest.param(_buy(fee="1.00"), "positive fee", id="positive-fee"),
     pytest.param(_row(type="SAVEBACK"), "unknown type: 'CASH/SAVEBACK'", id="unknown-cash-type"),
     pytest.param(_row(category="CORPORATE_ACTION", type="SPLIT", symbol=APPLE, amount="0"), "unknown type: 'CORPORATE_ACTION/SPLIT'", id="unknown-category"),
-    pytest.param(_buy(account_type="JUNIOR"), "account_type JUNIOR", id="junior-account"),
     pytest.param(_sell(shares="20.0000000000"), "SELL with unexpected signs", id="sell-positive-shares"),
     pytest.param(_buy(amount="400.00"), "BUY with unexpected signs", id="buy-positive-amount"),
     pytest.param(_row(type="FEE", amount="5.00"), "FEE with an unexpected sign", id="positive-fee-row"),
