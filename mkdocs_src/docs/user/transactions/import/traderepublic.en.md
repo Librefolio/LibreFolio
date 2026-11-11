@@ -57,8 +57,10 @@ them into its own transaction, with the value written in the file:
 - **Rows dated after today** are not settled yet: they are left out, listed in a blue note, and come with the next
   export.
 - **Rows LibreFolio does not import yet** — corporate actions (splits, mergers), bond maturities, Saveback, gifts, a
-  reversed dividend, a positive fee, an account other than your main one (a *JUNIOR* account) — are listed in an amber
-  warning during the import, with a link to open an issue on GitHub. Add them by hand if you need them.
+  reversed dividend, a positive fee — are listed in an amber warning during the import, with a link to open an issue on
+  GitHub. Add them by hand if you need them.
+- **Rows of another account**, such as a child's *JUNIOR* account, are ignored and listed in a blue note: export that
+  account from its own login, and import it into a broker of its own.
 
 ## 🗂️ The older Dutch CSV
 
