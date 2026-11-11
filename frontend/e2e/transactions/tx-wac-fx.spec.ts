@@ -20,6 +20,7 @@ import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled, validateRuns, waitForValidateRun} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
+import {appears} from '../fixtures/probe';
 
 // 60 s: login and the 20 s transactions-page gate share this budget before the validate runs and the FX sync modal; 25 s left those no time under load.
 test.setTimeout(60_000);
@@ -62,11 +63,10 @@ async function selectAsset(page: Page, assetName: string) {
     await assetWrap.locator('button, [role="combobox"]').first().click();
     // Type to filter
     const input = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
-    if (await input.isVisible({timeout: 1_000}).catch(() => false)) {
-        await input.fill(assetName);
-        // The list is debounced; the named entry arriving *is* the settle.
-        await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: assetName}).first()).toBeVisible({timeout: 5_000});
-    }
+    await expect(input, 'the asset picker opens with its search input').toBeVisible({timeout: 3_000});
+    await input.fill(assetName);
+    // The list is debounced; the named entry arriving *is* the settle.
+    await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: assetName}).first()).toBeVisible({timeout: 5_000});
     // Click first matching option
     const option = page.locator(`[data-testid^="search-select-option-"]`).first();
     await expect(option).toBeVisible({timeout: 3_000});
@@ -142,20 +142,17 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
     test('W1 — Issue banner sync FX link has correct structure', async ({page}) => {
         await setupMissingFxScenario(page);
 
-        // Check if issues section appeared (missing FX scenario may or may not trigger)
+        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
+        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
         const issuesSection = page.getByTestId('tx-form-issues');
-        const hasIssues = await issuesSection.isVisible({timeout: 5_000}).catch(() => false);
-
-        if (hasIssues) {
-            // The sync link should be present within issues
+        if (await appears(issuesSection, 5_000)) {
             const syncLink = page.getByTestId('tx-form-sync-fx-link');
-            if (await syncLink.isVisible({timeout: 2_000}).catch(() => false)) {
-                // Should have RefreshCw icon (svg inside)
-                const svg = syncLink.locator('svg');
-                await expect(svg).toBeVisible();
-            }
+            await expect(syncLink).toBeVisible({timeout: 3_000});
+            // Should have RefreshCw icon (svg inside)
+            await expect(syncLink.locator('svg')).toBeVisible();
+        } else {
+            await expect(page.getByTestId('tx-form-sync-fx-link')).toBeHidden();
         }
-        // Test passes — verifies structural correctness when scenario triggers
     });
 
     // === W2 — WacPreviewSection missing pairs display ===
@@ -163,38 +160,32 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         await setupMissingFxScenario(page);
 
         const missingPairs = page.getByTestId('tx-form-cost-basis-missing-pairs');
-        const hasMissingPairs = await missingPairs.isVisible({timeout: 5_000}).catch(() => false);
-
-        if (hasMissingPairs) {
+        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
+        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
+        if (await appears(missingPairs, 5_000)) {
             // Should contain date strings (YYYY-MM-DD format)
             const text = await missingPairs.textContent();
             expect(text).toMatch(/\d{4}-\d{2}-\d{2}/);
 
             // Sync button in the missing pairs section
-            const syncBtn = page.getByTestId('tx-form-cost-basis-sync-fx-btn');
-            await expect(syncBtn).toBeVisible();
+            await expect(page.getByTestId('tx-form-cost-basis-sync-fx-btn')).toBeVisible();
+        } else {
+            await expect(page.getByTestId('tx-form-cost-basis-sync-fx-btn')).toBeHidden();
         }
-        // If no missing pairs: FX data is available, which is also valid
     });
 
     // === W3 — FxSyncModal opens above FormModal ===
     test('W3 — FxSyncModal opens above FormModal via sync button', async ({page}) => {
         await setupMissingFxScenario(page);
 
-        // Try via issues banner first
-        const syncLink = page.getByTestId('tx-form-sync-fx-link');
+        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
+        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
         const syncBtn = page.getByTestId('tx-form-cost-basis-sync-fx-btn');
-        const hasSyncLink = await syncLink.isVisible({timeout: 5_000}).catch(() => false);
-        const hasSyncBtn = await syncBtn.isVisible({timeout: 2_000}).catch(() => false);
-
-        if (hasSyncLink) {
-            await syncLink.click();
-        } else if (hasSyncBtn) {
-            await syncBtn.click();
-        } else {
-            // No sync trigger available — FX data is complete, test passes
+        if (!(await appears(syncBtn, 5_000))) {
+            await expect(syncBtn).toBeHidden(); // FX complete: nothing to sync
             return;
         }
+        await syncBtn.click();
 
         // FxSyncModal should be visible
         const syncModal = page.locator('[data-testid="fx-sync-modal"]');
@@ -209,13 +200,12 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         await setupMissingFxScenario(page);
 
         const syncBtn = page.getByTestId('tx-form-cost-basis-sync-fx-btn');
-        const hasSyncBtn = await syncBtn.isVisible({timeout: 5_000}).catch(() => false);
-
-        if (!hasSyncBtn) {
-            // No missing pairs → FX data complete → test passes
+        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
+        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
+        if (!(await appears(syncBtn, 5_000))) {
+            await expect(syncBtn).toBeHidden(); // FX complete: nothing to sync
             return;
         }
-
         await syncBtn.click();
 
         const syncModal = page.locator('[data-testid="fx-sync-modal"]');
@@ -226,46 +216,43 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
     test('W4 — After sync completes, modal stays open with results', async ({page}) => {
         await setupMissingFxScenario(page);
 
-        const syncLink = page.getByTestId('tx-form-sync-fx-link');
+        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
+        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
         const syncBtn = page.getByTestId('tx-form-cost-basis-sync-fx-btn');
-        const hasSyncLink = await syncLink.isVisible({timeout: 5_000}).catch(() => false);
-        const hasSyncBtn = !hasSyncLink && (await syncBtn.isVisible({timeout: 2_000}).catch(() => false));
-
-        if (!hasSyncLink && !hasSyncBtn) return; // FX complete
-
-        if (hasSyncLink) await syncLink.click();
-        else await syncBtn.click();
+        if (!(await appears(syncBtn, 5_000))) {
+            await expect(syncBtn).toBeHidden(); // FX complete: nothing to sync
+            return;
+        }
+        await syncBtn.click();
 
         const syncModal = page.locator('[data-testid="fx-sync-modal"]');
         await expect(syncModal).toBeVisible({timeout: 5_000});
 
         // Click the sync/start button inside the modal
         const startBtn = syncModal.getByTestId('sync-modal-start');
-        if (await startBtn.isVisible({timeout: 3_000}).catch(() => false)) {
-            await startBtn.click();
-            // Deliberate: this proves the modal does *not* close on its own. A
-            // retrying assertion would confirm it instantly and never open the
-            // window in which an auto-close could happen.
-            await page.waitForTimeout(3_000);
+        await expect(startBtn).toBeVisible({timeout: 5_000});
+        await startBtn.click();
+        // Deliberate: this proves the modal does *not* close on its own. A
+        // retrying assertion would confirm it instantly and never open the
+        // window in which an auto-close could happen.
+        await page.waitForTimeout(3_000);
 
-            // Modal should still be visible (not auto-closed)
-            await expect(syncModal).toBeVisible();
-        }
+        // Modal should still be visible (not auto-closed)
+        await expect(syncModal).toBeVisible();
     });
 
     // === W5 — Closing modal keeps FormModal open ===
     test('W5 — Closing FxSyncModal keeps FormModal visible', async ({page}) => {
         await setupMissingFxScenario(page);
 
-        const syncLink = page.getByTestId('tx-form-sync-fx-link');
+        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
+        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
         const syncBtn = page.getByTestId('tx-form-cost-basis-sync-fx-btn');
-        const hasSyncLink = await syncLink.isVisible({timeout: 5_000}).catch(() => false);
-        const hasSyncBtn = !hasSyncLink && (await syncBtn.isVisible({timeout: 2_000}).catch(() => false));
-
-        if (!hasSyncLink && !hasSyncBtn) return; // FX complete
-
-        if (hasSyncLink) await syncLink.click();
-        else await syncBtn.click();
+        if (!(await appears(syncBtn, 5_000))) {
+            await expect(syncBtn).toBeHidden(); // FX complete: nothing to sync
+            return;
+        }
+        await syncBtn.click();
 
         const syncModal = page.locator('[data-testid="fx-sync-modal"]');
         await expect(syncModal).toBeVisible({timeout: 5_000});
@@ -298,19 +285,19 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
 
         // Expand qualifying table
         const showBtn = page.getByTestId('tx-form-cost-basis-show-qualifying');
-        if (await showBtn.isVisible({timeout: 5_000}).catch(() => false)) {
-            await showBtn.click();
-            const table = page.getByTestId('tx-form-cost-basis-qualifying-table');
-            await expect(table).toBeVisible({timeout: 3_000});
+        // Apple (USD) bought in EUR on Directa: the validated auto WAC always carries its qualifying list.
+        await expect(showBtn).toBeVisible({timeout: 5_000});
+        await showBtn.click();
+        const table = page.getByTestId('tx-form-cost-basis-qualifying-table');
+        await expect(table).toBeVisible({timeout: 3_000});
 
-            // Table should contain currency-formatted amounts ($ 🇺🇸 USD pattern)
-            const tableText = await table.textContent();
-            expect(tableText).toMatch(/\$\s*🇺🇸\s*USD/);
-            // Table should have multiple rows (qualifying TXs)
-            const rows = table.locator('tbody tr');
-            const rowCount = await rows.count();
-            expect(rowCount).toBeGreaterThan(0);
-        }
+        // Table should contain currency-formatted amounts ($ 🇺🇸 USD pattern)
+        const tableText = await table.textContent();
+        expect(tableText).toMatch(/\$\s*🇺🇸\s*USD/);
+        // Table should have multiple rows (qualifying TXs)
+        const rows = table.locator('tbody tr');
+        const rowCount = await rows.count();
+        expect(rowCount).toBeGreaterThan(0);
     });
 
     // === W7 — Tooltip FX format ===
@@ -331,25 +318,27 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
 
         // Expand qualifying table
         const showBtn = page.getByTestId('tx-form-cost-basis-show-qualifying');
-        if (await showBtn.isVisible({timeout: 5_000}).catch(() => false)) {
-            await showBtn.click();
-            const table = page.getByTestId('tx-form-cost-basis-qualifying-table');
-            await expect(table).toBeVisible({timeout: 3_000});
+        // Apple (USD) bought in EUR on Directa: the validated auto WAC always carries its qualifying list.
+        await expect(showBtn).toBeVisible({timeout: 5_000});
+        await showBtn.click();
+        const table = page.getByTestId('tx-form-cost-basis-qualifying-table');
+        await expect(table).toBeVisible({timeout: 3_000});
 
-            // Hover on a cell that has tooltip (the converted amount cells)
-            const tooltipTrigger = table.locator('[title], [data-tooltip]').first();
-            if (await tooltipTrigger.isVisible({timeout: 2_000}).catch(() => false)) {
-                await tooltipTrigger.hover();
-
-                // Tooltip should contain "FX:" prefix and "=" sign
-                const tooltip = page.locator('[role="tooltip"], .tooltip, [data-testid*="tooltip"]').first();
-                if (await tooltip.isVisible({timeout: 2_000}).catch(() => false)) {
-                    const tipText = await tooltip.textContent();
-                    expect(tipText).toContain('FX:');
-                    expect(tipText).toContain('=');
-                }
-            }
+        // Hover on a cell that has tooltip (the converted amount cells)
+        const tooltipTrigger = table.locator('[title], [data-tooltip]').first();
+        // Optional by design: only a converted amount carries a tooltip; this data may hold none in the list.
+        if (!(await appears(tooltipTrigger, 3_000))) {
+            await expect(tooltipTrigger).toBeHidden();
+            return;
         }
+        await tooltipTrigger.hover();
+
+        // Tooltip should contain "FX:" prefix and "=" sign
+        const tooltip = page.locator('[role="tooltip"], .tooltip, [data-testid*="tooltip"]').first();
+        await expect(tooltip).toBeVisible({timeout: 3_000});
+        const tipText = await tooltip.textContent();
+        expect(tipText).toContain('FX:');
+        expect(tipText).toContain('=');
     });
 
     // === W8 — Stale FX indicator ===
@@ -370,15 +359,15 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
 
         // If stale FX is detected, the banner should appear
         const staleBanner = page.getByTestId('tx-form-cost-basis-fx-stale-banner');
-        // This is conditional — only shown when FX data is actually stale
-        // We just verify the testid structure is correct if it appears
-        const isStale = await staleBanner.isVisible({timeout: 3_000}).catch(() => false);
-        if (isStale) {
+        // Optional by design: shown only when the FX data of the shared test DB is actually stale (it depends on
+        // when it was last synced). Not stale → the banner must be absent, not just unseen.
+        if (await appears(staleBanner, 3_000)) {
             const bannerText = await staleBanner.textContent();
             expect(bannerText).toBeTruthy();
             // Should contain warning text
             expect(bannerText!.length).toBeGreaterThan(10);
+        } else {
+            await expect(staleBanner).toBeHidden();
         }
-        // Test passes regardless — stale depends on actual sync state of test DB
     });
 });

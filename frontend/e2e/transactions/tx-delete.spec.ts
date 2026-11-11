@@ -428,7 +428,11 @@ test.describe('Single-row delete via bulk workspace (T4)', () => {
 
         await row!.hover();
         const kebabBtn = row!.getByTestId(/^row-actions-/);
-        if (!(await appears(kebabBtn))) return; // no actions at all — delete is a fortiori hidden
+        if (!(await appears(kebabBtn))) {
+            // No kebab at all: no action, so a fortiori no delete.
+            await expect(kebabBtn).toHaveCount(0);
+            return;
+        }
         await kebabBtn.click();
         const menu = page.locator('[data-testid="context-menu"]');
         await expect(menu).toBeVisible({timeout: 3_000});
@@ -442,7 +446,11 @@ test.describe('Single-row delete via bulk workspace (T4)', () => {
 
         await row!.hover();
         const kebabBtn = row!.getByTestId(/^row-actions-/);
-        if (!(await appears(kebabBtn))) return; // no actions at all — delete is a fortiori hidden
+        if (!(await appears(kebabBtn))) {
+            // No kebab at all: no action, so a fortiori no delete.
+            await expect(kebabBtn).toHaveCount(0);
+            return;
+        }
         await kebabBtn.click();
         const menu = page.locator('[data-testid="context-menu"]');
         await expect(menu).toBeVisible({timeout: 3_000});
@@ -791,10 +799,11 @@ test.describe('PickerModal disabled rows', () => {
         // C2-fix may auto-open FormModal when guardViewerOnly reduces to 1 row.
         // If so, close it first so it stops intercepting pointer events.
         const formModal = page.getByTestId('tx-form-modal');
-        if (await formModal.isVisible({timeout: 1_000}).catch(() => false)) {
+        // Optional by design: only the reduction to one row opens it. Either way it must be closed afterwards.
+        if (await appears(formModal, 1_000)) {
             await formModal.getByTestId('tx-form-cancel').click();
-            await expect(formModal).not.toBeVisible({timeout: 3_000});
         }
+        await expect(formModal).toBeHidden({timeout: 3_000});
 
         // Open picker
         const searchAddBtn = bulkModal.getByTestId('tx-bulk-picker');

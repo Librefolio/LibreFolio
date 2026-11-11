@@ -62,10 +62,9 @@ async function fillCash(page: Page, testid: string, amount: string, currencyCode
         // The dropdown search input appears (inlineSearch mode). Scope it to the
         // currency wrapper: the amount field is also an input[type="text"], so an
         // unscoped .first() would type the currency code into the amount.
-        const searchInput = page.locator('input[placeholder]').filter({hasText: ''}).last();
         const dropdownInput = cashWrap.locator('.currency-wrap input[type="text"]').first();
-        const inputToUse = (await appears(dropdownInput, 1_000)) ? dropdownInput : searchInput;
-        await inputToUse.fill(currencyCode);
+        await expect(dropdownInput, 'the currency dropdown opens with its search input').toBeVisible({timeout: 3_000});
+        await dropdownInput.fill(currencyCode);
         const currOption = page.locator('[data-testid^="search-select-option-"]').filter({hasText: currencyCode}).first();
         await expect(currOption).toBeVisible({timeout: 3_000});
         await currOption.click();
@@ -224,14 +223,12 @@ test.describe('FX Implied Rate & Spread', () => {
 
         // Pick broker
         const brokerWrap = page.getByTestId('tx-form-broker-wrap');
-        if (await brokerWrap.isVisible({timeout: 2_000}).catch(() => false)) {
-            await brokerWrap.locator('button, [role="combobox"]').first().click();
-            const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
-            if (await appears(brokerOption)) {
-                await brokerOption.click();
-            }
-            await optionsClosed(page);
-        }
+        await expect(brokerWrap).toBeVisible({timeout: 3_000});
+        await brokerWrap.locator('button, [role="combobox"]').first().click();
+        const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
+        await expect(brokerOption).toBeVisible({timeout: 3_000});
+        await brokerOption.click();
+        await optionsClosed(page);
 
         // Fill "From" cash (EUR, 1000)
         await fillCash(page, 'tx-form-cash-from', '1000');
