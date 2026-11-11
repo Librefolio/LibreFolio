@@ -5052,9 +5052,9 @@ test.describe('Asset Detail Page', () => {
         assertPriceComparisonRequest(twoSlugInitialComparison.request().postDataJSON(), comparisonPeerIds, ninetyDayRange, asset.currency);
         await expect(pageRoot).toHaveAttribute('data-busy', 'false');
         const twoSlugInitialPayload = (await twoSlugInitialComparison.json()) as {
-            items?: Array<{asset_id?: number; prices?: Array<{currency?: string}>; errors?: unknown[]}>;
+            items?: Array<{asset_id?: number; prices?: Array<{currency?: string}>; fx_issues?: Array<{code?: string}>}>;
         };
-        for (const [peerId, currency, slug] of [
+        for (const [peerId, currency] of [
             [readyPeer.id, readyPeer.currency, readyPeerFxSlug],
             [errorPeer.id, errorPeer.currency, errorPeerFxSlug],
         ] as const) {
@@ -5062,7 +5062,7 @@ test.describe('Asset Detail Page', () => {
             expect(item, `comparison response must contain peer ${peerId}`).toBeDefined();
             expect(item?.prices).toHaveLength(pricePoints.length);
             expect(new Set(item?.prices?.map((point) => point.currency))).toEqual(new Set([currency]));
-            expect(item?.errors).toEqual([`synthetic-price-conversion-failure-${slug}`]);
+            expect(issueCodesOf(item)).toEqual(['rate_not_found']);
         }
         await expect(readyFxSyncAction).toBeVisible();
         await expect(errorFxSyncAction).toBeVisible();
@@ -5693,11 +5693,11 @@ test.describe('Asset Detail Page', () => {
             assertMainDateRange(presentPeerResponse.request().postDataJSON(), ninetyDayRange);
             expect(calendarRequestCount).toBe(presentPeerCalendarRequestsBefore + 1);
             const presentPeerPayload = (await presentPeerResponse.json()) as {
-                items?: Array<{asset_id?: number; errors?: unknown[]; signals?: Array<{instance_id?: string; signal_code?: string; status?: string}>}>;
+                items?: Array<{asset_id?: number; fx_issues?: Array<{code?: string}>; signals?: Array<{instance_id?: string; signal_code?: string; status?: string}>}>;
             };
             const presentPeerItem = presentPeerPayload.items?.find((item) => item.asset_id === readyPeer.id);
             expect(presentPeerItem, `authoritative Calendar response must contain owned peer ${readyPeer.id}`).toBeDefined();
-            expect(presentPeerItem?.errors).toEqual([]);
+            expect(issueCodesOf(presentPeerItem)).toEqual([]);
             expect(presentPeerItem?.signals?.find((signal) => signal.instance_id === calendarInstanceId && signal.signal_code === calendarSignalCode)).toMatchObject({status: 'ok'});
 
             await expect(chart).toHaveAttribute('data-calendar-comparison-ready', String(readyPeer.id));
