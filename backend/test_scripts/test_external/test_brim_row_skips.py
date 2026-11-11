@@ -435,9 +435,8 @@ SKIP_CASES: Tuple[SkipCase, ...] = (
     SkipCase("traderepublic-invalid-date", "broker_traderepublic", "traderepublic-export.csv", _with(_TR_ROW, c0="03/02/xx"), ROWS_UNREADABLE, kind="unreadable"),
     SkipCase("traderepublic-invalid-amount", "broker_traderepublic", "traderepublic-export.csv", _with(_TR_ROW, c2="abc"), ROWS_UNREADABLE, kind="unreadable"),
     SkipCase("traderepublic-missing-isin", "broker_traderepublic", "traderepublic-export.csv", _with(_TR_ROW, c4=""), ROWS_UNREADABLE, kind="unreadable"),
-    # --- Trade Republic, Transaction export (lane 73): a (category, type) it does not map, another account, a reversed dividend and a positive fee are unknown; date, amount and symbol are unreadable
+    # --- Trade Republic, Transaction export (lane 73): a (category, type) it does not map, a reversed dividend and a positive fee are unknown; date, amount and symbol are unreadable
     SkipCase("traderepublic-transactions-unknown-type", "broker_traderepublic", _TRX, {**_TRX_ROW, "category": "CORPORATE_ACTION", "type": "SPLIT", "amount": ""}, ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="corporate_action/split"),
-    SkipCase("traderepublic-transactions-junior-account", "broker_traderepublic", _TRX, {**_TRX_ROW, "account_type": "JUNIOR"}, ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="junior"),
     SkipCase("traderepublic-transactions-dividend-reversal", "broker_traderepublic", _TRX, {**_TRX_ROW, "category": "CASH", "type": "DIVIDEND", "shares": "", "price": "", "amount": "-3.00"}, ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="dividend"),
     SkipCase("traderepublic-transactions-positive-fee", "broker_traderepublic", _TRX, {**_TRX_ROW, "fee": "1.00"}, ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="positive fee"),
     SkipCase("traderepublic-transactions-invalid-date", "broker_traderepublic", _TRX, {**_TRX_ROW, "date": "03/02/xx"}, ROWS_UNREADABLE, kind="unreadable", delimiter=","),

@@ -25,8 +25,12 @@ settled yet: left out whole, with an info note (D4).
 
 **What is not imported.** Any (category, type) the table below does not hold: corporate actions, maturities, crypto transfers,
 private markets, Saveback, gifts, the German tax types… They may move a position, and no real export shows their columns yet:
-``RowSkips.unknown``, never «deposit or withdrawal by the sign». A row of an account other than ``DEFAULT`` (a ``JUNIOR`` depot) is
-unknown too, provisionally (D3, suspended by the developer). A repeated ``transaction_id`` is the same booking: dropped quietly.
+``RowSkips.unknown``, never «deposit or withdrawal by the sign». A repeated ``transaction_id`` is the same booking: dropped quietly.
+
+**Another account in the file (decision D3, 11/11/2026).** A row whose ``account_type`` is not ``DEFAULT`` belongs to another account
+(a child's ``JUNIOR`` depot, known only from a third-party importer, openfolio PR #55). It is ignored: that account is exported from the
+child's own login, where its rows are ordinary, and imported into a broker of its own. One info note says so, without the link to
+open an issue: the rule is known, the row is not unknown.
 """
 
 from __future__ import annotations
@@ -98,6 +102,9 @@ NOT_SETTLED_COMMENT = "The date (or value_date) of these rows is after the serve
 TAX_REFUND_CODE = "traderepublic_tax_refund"
 TAX_REFUND_MESSAGE = "{n} tax refunds were imported as interest («Tax refund»): money given back from the investment's gain, so it counts in the P&L."
 TAX_REFUND_COMMENT = "A positive tax is money given back."
+OTHER_ACCOUNT_CODE = "traderepublic_other_account"
+OTHER_ACCOUNT_MESSAGE = "{n} rows belong to another account (for example a child's JUNIOR account) and were ignored: export that account from its own login and import it into a broker of its own."
+OTHER_ACCOUNT_COMMENT = "account_type is not DEFAULT on these rows."
 
 
 def _find_layout(first_line: str, preferred: str) -> Optional[Tuple[str, bool]]:
@@ -175,6 +182,7 @@ class TransactionsExportParser:
         self.header: List[str] = []
         self.not_settled: List[_Row] = []
         self.tax_refunds: List[_Row] = []
+        self.other_account: List[_Row] = []
         self.quiet: Dict[str, int] = {}
 
     # --- entry -------------------------------------------------------------------------------------------------------------------------------
@@ -214,7 +222,7 @@ class TransactionsExportParser:
         category, raw_type = get.get("category", "").upper(), get.get("type", "").upper()
         account = get.get("account_type", "").upper()
         if account and account != DEFAULT_ACCOUNT:
-            self.skips.unknown(row.line, row.cells, f"account_type {account}: only the {DEFAULT_ACCOUNT} account is imported for now")
+            self.other_account.append(row)
             return
         if category == "TRADING" and raw_type in TRADE_TYPES:
             kind, tx_type = TRADE, TRADE_TYPES[raw_type]
@@ -331,6 +339,7 @@ class TransactionsExportParser:
         for rows, code, message, comment in (
             (self.not_settled, NOT_SETTLED_CODE, NOT_SETTLED_MESSAGE, NOT_SETTLED_COMMENT),
             (self.tax_refunds, TAX_REFUND_CODE, TAX_REFUND_MESSAGE, TAX_REFUND_COMMENT),
+            (self.other_account, OTHER_ACCOUNT_CODE, OTHER_ACCOUNT_MESSAGE, OTHER_ACCOUNT_COMMENT),
         ):
             if rows:
                 notes.append(BRIMNotice(severity="info", code=code, message=message.format(n=len(rows)), evidence=[self._evidence(rows, comment)], context={"count": len(rows)}))
