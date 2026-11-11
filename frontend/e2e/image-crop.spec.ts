@@ -15,13 +15,14 @@ import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from './fixtures/brimSamples';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Test image files from the project's static assets
 const TEST_IMAGE = path.resolve(__dirname, '../static/icons/transactions/buy.png');
-const TEST_CSV = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+const TEST_CSV = samplePath('generic_simple.csv');
 
 // Helper: Upload an image via FileUploader and wait for the ImageEditModal
 async function uploadImageAndWaitForModal(page: import('@playwright/test').Page, filePath: string) {

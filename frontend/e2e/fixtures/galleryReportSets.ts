@@ -57,6 +57,7 @@ import {randomUUID} from 'crypto';
 import {mkdirSync, readFileSync, writeFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from './brimSamples';
 
 const API = '/api/v1';
 const BROKERS_PATH = `${API}/brokers`;
@@ -66,18 +67,17 @@ const PREVIEW_PATH = `${API}/brokers/import/sets/preview`;
 const COMBINE_PATH = `${API}/brokers/import/sets/combine`;
 /** Every parse the wizard asks for: a single file's, or a set's combined file's. */
 const PARSE_PATH = /^\/api\/v1\/brokers\/import\/files\/[^/]+\/parse$/;
-const SAMPLES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../backend/app/services/brim_providers/sample_reports');
 
 export const DANSKE = 'broker_danske_bank';
 export const GENERIC = 'broker_generic_csv';
 
 /** The repository's synthetic Danske Bank exports: the main set, and the set with a gap. */
 export const DANSKE_SAMPLES = {
-    custody: path.join(SAMPLES, 'danske_bank-custody.xlsx'),
-    cash: path.join(SAMPLES, 'danske_bank-cash.csv'),
-    gapCustody1: path.join(SAMPLES, 'danske_bank-gap-custody-1.xlsx'),
-    gapCustody2: path.join(SAMPLES, 'danske_bank-gap-custody-2.xlsx'),
-    gapCash: path.join(SAMPLES, 'danske_bank-gap-cash.csv'),
+    custody: samplePath('danske_bank-custody.xlsx'),
+    cash: samplePath('danske_bank-cash.csv'),
+    gapCustody1: samplePath('danske_bank-gap-custody-1.xlsx'),
+    gapCustody2: samplePath('danske_bank-gap-custody-2.xlsx'),
+    gapCash: samplePath('danske_bank-gap-cash.csv'),
 } as const;
 
 /**

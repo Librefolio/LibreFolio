@@ -42,6 +42,7 @@ import {uniqueSuffix} from '../fixtures/unique';
 import {TEST_USER} from '../fixtures/test-users';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from '../fixtures/brimSamples';
 
 test.setTimeout(30_000);
 
@@ -284,7 +285,7 @@ const API = '/api/v1';
 const BRIM_UPLOAD_PATH = `${API}/brokers/import/upload`;
 const SPEC_DIR = path.dirname(fileURLToPath(import.meta.url));
 /** The repository's synthetic Generic CSV samples — never a real broker export. */
-const SAMPLE_REPORTS = ['generic_simple.csv', 'generic_with_assets.csv'].map((name) => path.resolve(SPEC_DIR, '../../../backend/app/services/brim_providers/sample_reports', name));
+const SAMPLE_REPORTS = ['generic_simple.csv', 'generic_with_assets.csv'].map((name) => samplePath(name));
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type UploadedInfo = {file_id: string; filename: string; target_broker_id: number | null; batch_id?: string | null};

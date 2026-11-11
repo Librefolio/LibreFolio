@@ -71,6 +71,7 @@ import {uniqueSuffix} from '../fixtures/unique';
 import {readFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from '../fixtures/brimSamples';
 
 const API = '/api/v1';
 const BROKERS_PATH = `${API}/brokers`;
@@ -81,7 +82,6 @@ const TRANSACTIONS_PATH = `${API}/transactions`;
 const VALIDATE_PATH = `${API}/transactions/validate`;
 const COMMIT_PATH = `${API}/transactions/commit`;
 const PROMOTE_SUGGEST_PATH = `${API}/transactions/promote-suggest`;
-const SAMPLE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../backend/app/services/brim_providers/sample_reports');
 const UI_TIMEOUT = 10_000;
 /** An upload, a parse, a step change, a save: each waits on the server. */
 const STEP_TIMEOUT = 30_000;
@@ -148,7 +148,7 @@ const amountOf = (cash: Cash | null | undefined): number => Number(cash?.amount 
 /** A copy of an account's sample under a unique name: the name identifies the upload. */
 function sampleFile(account: Account): SampleFile {
     const {sample} = ACCOUNTS[account];
-    return {name: `${path.basename(sample, '.csv')}-${uniqueSuffix()}.csv`, mimeType: 'text/csv', buffer: readFileSync(path.join(SAMPLE_DIR, sample))};
+    return {name: `${path.basename(sample, '.csv')}-${uniqueSuffix()}.csv`, mimeType: 'text/csv', buffer: readFileSync(samplePath(sample))};
 }
 
 /** The rows of a parse without an instrument: the only ones these tests import, so nothing needs resolving. */

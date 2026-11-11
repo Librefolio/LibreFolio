@@ -11,6 +11,7 @@ import {fileURLToPath} from 'url';
 import {appears} from '../fixtures/probe';
 import {lotIsOpenish, type LotOpenish} from '../../src/lib/features/brokers/lots/lotsAnalysisHelpers';
 import {resolveUiLocale} from '../../src/lib/stores/app/uiLocaleRule';
+import {samplePath} from '../fixtures/brimSamples';
 
 /**
  * Ensure at least one broker exists for the test user.
@@ -1435,7 +1436,7 @@ const __dirname = path.dirname(__filename);
 const API = '/api/v1';
 const BRIM_UPLOAD_PATH = `${API}/brokers/import/upload`;
 /** The repository's synthetic Generic CSV sample — never a real broker export. */
-const SAMPLE_BRIM_REPORT = path.resolve(__dirname, '../../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+const SAMPLE_BRIM_REPORT = samplePath('generic_simple.csv');
 const SAMPLE_BRIM_REPORT_NAME = path.basename(SAMPLE_BRIM_REPORT);
 
 type BrimFileInfo = {file_id: string; filename: string; target_broker_id: number | null};
@@ -1547,7 +1548,7 @@ test.describe('Broker detail — import history upload', () => {
     // the server builds report sets per batch, so an id shared by two uploads would
     // merge two sets, and no id at all leaves every file a set of its own. Read back
     // from this page's own upload responses, never from a shared list.
-    const SECOND_BRIM_REPORT = path.resolve(__dirname, '../../../backend/app/services/brim_providers/sample_reports/generic_with_assets.csv');
+    const SECOND_BRIM_REPORT = samplePath('generic_with_assets.csv');
     const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     type UploadedInfo = BrimFileInfo & {batch_id?: string | null};
 
