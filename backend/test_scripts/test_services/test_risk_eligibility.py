@@ -485,8 +485,9 @@ async def test_price_window_facts_read_each_assets_own_quotes(window_assets):
         first_quote_in_window=LOADER_START,
         first_quote_ever=LOADER_START - days(10),
         last_quote_ever=LOADER_END + days(5),
+        currency="EUR",
     )
-    assert facts_by_asset[ids["empty"]] == PriceWindowFacts(first_quote=None, last_quote=None, last_quote_before_start=None, quotes_in_window=0, fx_available=True)
+    assert facts_by_asset[ids["empty"]] == PriceWindowFacts(first_quote=None, last_quote=None, last_quote_before_start=None, quotes_in_window=0, fx_available=True, currency="EUR")
     # Quoted only after the window: nothing in or before it, but a history all the same.
     assert facts_by_asset[ids["after_only"]] == PriceWindowFacts(
         first_quote=None,
@@ -497,6 +498,7 @@ async def test_price_window_facts_read_each_assets_own_quotes(window_assets):
         first_quote_in_window=None,
         first_quote_ever=LOADER_END + days(10),
         last_quote_ever=LOADER_END + days(20),
+        currency="EUR",
     )
 
 
@@ -529,15 +531,20 @@ async def test_price_window_facts_need_a_rate_at_both_ends_of_the_window(window_
         assert before_any_rate[ids["no_rate"]].quotes_in_window == len(every_day(LOADER_START, LOADER_END))
         assert before_any_rate[ids["probed"]].fx_available is False
         assert before_any_rate[ids["full"]].fx_available is True
+        # CP-11 (risk message): the pair and when a rate exists; no rate stored at all, so no date
+        assert (before_any_rate[ids["probed"]].currency, before_any_rate[ids["probed"]].fx_first_rate_date) == (PROBED_CURRENCY, None)
 
         # A rate from inside the window converts the end but not the start.
         await store_rate(LOADER_START + days(5))
-        assert (await read())[ids["probed"]].fx_available is False
+        starts_late = (await read())[ids["probed"]]
+        assert starts_late.fx_available is False
+        assert starts_late.fx_first_rate_date == LOADER_START + days(5)
 
         # A rate from before the window converts both ends.
         await store_rate(LOADER_START - days(3))
         after_both = await read()
         assert after_both[ids["probed"]].fx_available is True
+        assert after_both[ids["probed"]].fx_first_rate_date is None  # converts: nothing to say
         assert after_both[ids["no_rate"]].fx_available is False
     finally:
         # Whoever writes, cleans up: only the rates this test stored.
@@ -1137,7 +1144,7 @@ async def test_weekend_repeats_are_carries_not_quotes_in_the_window_facts(seven_
         fx_available=True,
         first_quote_in_window=date(2025, 4, 7),
         first_quote_ever=date(2025, 4, 5),
-        last_quote_ever=date(2025, 5, 4),
+        last_quote_ever=date(2025, 5, 4),        currency="EUR",
     )
     # The seven-day ETF is quoted on weekdays only. Without a holiday table, Good Friday and Easter
     # Monday are flat weekdays, so quotes. The first row, a Saturday, has no row before it: a quote.
@@ -1149,7 +1156,7 @@ async def test_weekend_repeats_are_carries_not_quotes_in_the_window_facts(seven_
         fx_available=True,
         first_quote_in_window=date(2025, 4, 7),
         first_quote_ever=date(2025, 4, 5),
-        last_quote_ever=date(2025, 5, 2),
+        last_quote_ever=date(2025, 5, 2),        currency="EUR",
     )
 
 

@@ -13,8 +13,8 @@ from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason
 from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskQueryResponse
-from backend.app.schemas.risk.scope import RiskAssetEligibility, RiskEligibilityRequest, RiskEligibilityResponse, RiskQueryRequest
-from backend.app.schemas.risk.vocabulary import RiskEligibilityLevel, RiskErrorCode, RiskResultStatus, RiskScopeKind
+from backend.app.schemas.risk.scope import RiskAssetEligibility, RiskEligibilityRequest, RiskEligibilityResponse, RiskMissingFx, RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskEligibilityLevel, RiskEligibilityReason, RiskErrorCode, RiskResultStatus, RiskScopeKind
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk.base import RiskUnavailableError
@@ -301,6 +301,7 @@ class RiskService:
                     first_quote=fact.first_quote,
                     last_quote=fact.last_quote,
                     quotes_in_period=fact.quotes_in_window,
+                    missing_fx=RiskMissingFx(from_currency=fact.currency, to_currency=request.target_currency, first_rate_date=fact.fx_first_rate_date) if RiskEligibilityReason.MISSING_FX in reasons and fact.currency else None,
                 )
             )
         # A common period is proposed only when the chosen period is what troubles a quoted asset —
