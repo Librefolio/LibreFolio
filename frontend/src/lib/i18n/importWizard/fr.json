@@ -199,7 +199,7 @@
       "scalable_several_overnight_accounts": "Le fichier contient {count} comptes rémunérés : toutes leurs lignes vont dans ce courtier, dont le solde est leur somme.",
       "scalable_internal_transfers": "{count, plural, one {# transfert} other {# transferts}} entre le compte-titres et le compte rémunéré : importez le fichier de l’autre compte dans son propre courtier, puis fusionnez chaque paire en un « Virement » dans l’éditeur groupé.",
       "scalable_dividends_net": "{count, plural, one {# dividende a été importé tel que crédité} other {# dividendes ont été importés tels que crédités}}, après la retenue à la source : le fichier n’indique pas l’impôt.",
-      "scalable_tax_refund": "{count, plural, one {# remboursement d’impôt a été importé comme dépôt} other {# remboursements d’impôt ont été importés comme dépôts}} : dans LibreFolio, une taxe retire toujours de l’argent.",
+      "scalable_tax_refund": "{count, plural, one {# remboursement d’impôt a été importé comme intérêt} other {# remboursements d’impôt ont été importés comme intérêts}} (« Tax refund ») : c’est de l’argent rendu sur le gain de l’investissement, il compte donc dans le P&L.",
       "scalable_cash_by_sign": "{count, plural, one {# ligne d’espèces a un type que LibreFolio ne connaît pas, ou un signe inattendu : elle a été enregistrée comme dépôt ou retrait} other {# lignes d’espèces ont un type que LibreFolio ne connaît pas, ou un signe inattendu : elles ont été enregistrées comme dépôts ou retraits}}, selon le signe du montant.",
       "fineco_not_yet_settled": "{count, plural, one {# ligne n’est pas encore réglée (sa date de valeur est après aujourd’hui) et n’a pas été importée : elle arrivera avec le prochain export.} other {# lignes ne sont pas encore réglées (leur date de valeur est après aujourd’hui) et n’ont pas été importées : elles arriveront avec le prochain export.}}",
       "fineco_incomplete_rows": "Cet import pourrait être faux : {count, plural, one {# ligne n’a pas} other {# lignes n’ont pas}} un nombre nécessaire (quantité ou montant). Vérifiez les lignes ci-dessous ; si le fichier est correct, c’est probablement une erreur de l’import, et vous pouvez nous aider à la corriger :",
@@ -208,7 +208,8 @@
       "possible_split": "Split possible de {ticker} : {added_quantity} actions nouvelles à coût nul. Liez un événement SPLIT ou créez-en un.",
       "date_before_1900": "La date {date} est antérieure au 1er janvier 1900 : vérifiez l'année.",
       "date_unreadable": "Ligne {row} : {value} n’est pas une date valide au format {order, select, day_first {jj/mm/aaaa} month_first {mm/jj/aaaa} day_first_short {jj/mm/aa} month_first_short {mm/jj/aa} year_first_short {aa/mm/jj} year_first {aaaa-mm-jj} other {jj/mm/aaaa}}. Corrigez la date dans le fichier, ou changez le format dans Paramètres › Plugins › Imports des courtiers › CSV générique › « Format des dates », puis cliquez sur « Réanalyser tout ».",
-      "date_unreadable_more": "{n, plural, one {# autre ligne a} other {# autres lignes ont}} une date non valide dans ce format : la même correction s’applique."
+      "date_unreadable_more": "{n, plural, one {# autre ligne a} other {# autres lignes ont}} une date non valide dans ce format : la même correction s’applique.",
+      "traderepublic_other_account": "{count, plural, one {# ligne appartient} other {# lignes appartiennent}} à un autre compte, par exemple le compte JUNIOR d’un enfant, et {count, plural, one {a été ignorée} other {ont été ignorées}} : exportez ce compte depuis son propre accès et importez-le dans un courtier à part."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -563,7 +564,8 @@
       "fineco_not_yet_settled": "La date de valeur de ces lignes est après aujourd’hui : elles ne sont pas encore réglées.",
       "fineco_incomplete_rows": "La dernière colonne nomme le champ sans nombre ; la ligne est importée telle quelle.",
       "rows_not_recognized": "La dernière colonne indique ce qu’est chaque ligne, ou ce qui n’a pas été importé.",
-      "rows_unreadable": "La dernière colonne indique ce qui n’a pas pu être lu dans chaque ligne."
+      "rows_unreadable": "La dernière colonne indique ce qui n’a pas pu être lu dans chaque ligne.",
+      "traderepublic_other_account": "Sur ces lignes, la colonne account_type n’est pas DEFAULT."
     },
     "notesCount": "{n, plural, one {# note} many {# notes} other {# notes}}",
     "noNotices": "Ni avertissement ni note",
