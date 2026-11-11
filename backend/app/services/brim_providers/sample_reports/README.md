@@ -78,6 +78,19 @@ have the same dates and amounts on both sides.
 | `scalable-broker-export.csv`  | `broker_scalable`         | Exporter, broker account, 23 columns: the same families, plus internal transfers, an open partial order, a reversal, a venue fee | Same mapping, ids in the descriptions; notices for the open order, the reversal, the unknown cash type, the net dividend, the trade without details, the transfers |
 | `scalable-deposit-export.csv` | `broker_scalable_deposit` | Exporter, overnight account, 19 columns: interest with and without details, bank transfers, internal transfers                  | Gross interest with a TAX leg, net interest with a notice, deposits and withdrawals; each plugin refuses the other account's file                                     |
 
+### Trade Republic Plugin (`broker_traderepublic`)
+
+The two `traderepublic-transactions*` files are synthetic, with invented values, built on the structure of a real
+«Transaction export» (23 columns, Trade Republic's own CSV since April 2026). No row of the user's file is in them: ids,
+amounts, the counterparty and its IBAN are invented; the ISINs are public securities. `traderepublic-export.csv` is the older
+Dutch 8-column CSV, the sample of the Export-To-Ghostfolio project, written by the community tool pytr.
+
+| File                                   | Description                                                                                                            | Expected Result                                                                                                     |
+|----------------------------------------|------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
+| `traderepublic-transactions.csv`       | Transaction export as written (`,`, every cell quoted): interest with withholding, stamp duty, a tax refund, buys and a sell of a fund, a stock and a crypto with fee and tax, an evening trade (`datetime` on the day before `date`), an instant transfer in | 15 transactions: each `amount`, `fee` and `tax` column its own leg, dated by `date`; the refund as INTEREST with an info note |
+| `traderepublic-transactions-excel.csv` | The same rows as Excel saves them back: each line one quoted cell, inner quotes doubled, CRLF                         | The same 15 transactions                                                                                            |
+| `traderepublic-export.csv`             | Dutch 8-column CSV (`;`), with three later English rows                                                                | 9 transactions; the two rows with a fee listed (fee and tax not imported)                                           |
+
 
 ## File Format
 
