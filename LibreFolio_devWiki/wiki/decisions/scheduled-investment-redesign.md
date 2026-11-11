@@ -62,4 +62,4 @@ Phase 6 Step 3 Round 12 identified a critical circular dependency in the origina
 | Phase 6 Round 12 plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md` |
 | Maturation engine plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12Finale-MaturationEngine.prompt.md` |
 | DB models | `backend/app/db/models.py` |
-| ScheduledInvestment editor | `frontend/src/lib/components/assets/ScheduledInvestmentEditor.svelte` |
+| ScheduledInvestment editor | `frontend/src/lib/features/assets/ScheduledInvestmentEditor.svelte` |

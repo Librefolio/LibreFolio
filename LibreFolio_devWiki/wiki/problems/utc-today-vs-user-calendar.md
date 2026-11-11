@@ -137,7 +137,7 @@ Line numbers re-read on 2026-11-07 (lint).
 | Asset list live gate (2026-10-16) | `frontend/src/routes/(app)/assets/+page.svelte` — `isHeadToday` (L238) |
 | Asset detail live gate (2026-10-16) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` — `isHeadToday` (L347) |
 | Product calendar helpers | `frontend/src/lib/utils/dateOnly.ts` — `localIso` (L76), `todayIso` (L81) |
-| Conversion date, UTC on purpose | `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts` — `#applyLiveSummary` (L168) |
+| Conversion date, UTC on purpose | `frontend/src/lib/features/assets/detail/assetDetailLive.svelte.ts` — `#applyLiveSummary` (L168) |
 | Two-face guard | `frontend/e2e/assets/asset-live-pause.spec.ts` — Z-3 cases (i)–(l) (L661–L699) |
 
 > **Path note (2026-09-01)**: the substance of this page held up; the addresses did

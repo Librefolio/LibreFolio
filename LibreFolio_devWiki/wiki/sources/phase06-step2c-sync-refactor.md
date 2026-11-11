@@ -183,7 +183,7 @@ if (result.error_code === "HAS_TRANSACTIONS") {
 | FX sync backend | `backend/app/services/fx/sync.py` (sync_pairs_bulk) |
 | SyncModalBase | `frontend/src/lib/components/ui/modals/SyncModalBase.svelte` |
 | FxSyncModal | `frontend/src/lib/features/fx/FxSyncModal.svelte` |
-| AssetSyncModal | `frontend/src/lib/components/assets/AssetSyncModal.svelte` |
+| AssetSyncModal | `frontend/src/lib/features/assets/AssetSyncModal.svelte` |
 | ConfirmModal | `frontend/src/lib/components/ui/modals/ConfirmModal.svelte` |
 | syncHelpers | `frontend/src/lib/utils/sync/syncHelpers.ts` |
 | providerHelpers | `frontend/src/lib/utils/providerHelpers.ts` |

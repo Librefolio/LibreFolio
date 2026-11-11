@@ -92,5 +92,5 @@ All asset providers use the **Provider Registry Pattern** ([[F-059]]): decorated
 | Asset service / abstract base | `backend/app/services/assets/` |
 | DB model (Asset, PriceHistory, AssetEvent) | `backend/app/db/models.py` |
 | Asset pages | `frontend/src/routes/(app)/assets/` |
-| Asset components | `frontend/src/lib/components/assets/` |
+| Asset components | `frontend/src/lib/features/assets/` |
 | mkdocs | `mkdocs_src/docs/developer/backend/assets/architecture.md` |
