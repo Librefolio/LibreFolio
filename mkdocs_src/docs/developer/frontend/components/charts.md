@@ -906,15 +906,20 @@ detail page. It uses **segment morph** animation:
   arcs of at least 18° (`minShowLabelAngle`); the outer ring captions each member outside with its
   share, the generic member as `dashboard.allocationGeneric` ("Generic ETF"), and its tooltip adds
   a `↳ <family> <share>%` line.
-- Shades (`shadeForDepth`, `allocationHierarchy.ts`): the generic member keeps the family colour,
-  each subtype is shaded by its rank among the subtypes. With one or two subtypes the lightness
-  walks away from the nearer extreme; from three on, the shades spread on both sides of the base
-  within lightness 10–90, every other one at half saturation.
+- Colours and shades: the family's colour is `categoryColor('type', family, …)` of
+  `lib/theme/chartCategories.ts`, one fixed colour per key (asset types read the roles `--lf-cat-*`
+  of `tokens.css`). The generic member keeps it; each subtype is the shade `familyShade` of
+  `lib/theme/chartShades.ts` gives for its rank among the subtypes (`allocationRings.ts` counts the
+  rank, `AllocationPieChart.svelte` passes the function in). Ranks 1-3 mix toward the near pole, 4-6
+  toward the far one (the poles come from `shadePoles(isDark, card)`, the card read as a role), and
+  the cycle restarts after the sixth. The mix is done in OKLab (`mixOklab`). The chart rebuilds on
+  a theme change (`onThemeClassChange`) and on a Designer Lab colour edit (`onChartColorsChange`),
+  both from `lib/theme/themeMode.ts`.
 
 `AllocationPanel` persists its view and tab per user (`dashboard-allocation-view`,
 `dashboard-allocation-tab`), shared with Broker detail; a restored History requests its data on
 mount, as the click does. Its History view, `AllocationHistoryChart`, groups types by the same
-families but draws one area per family, without shades; the tooltip lists each family's members,
+families but draws one area per family, without shades (it passes `shade: (base) => base`); the tooltip lists each family's members,
 the generic one as `dashboard.allocationGeneric`.
 
 ## Numeric Values (TweenedValue)
