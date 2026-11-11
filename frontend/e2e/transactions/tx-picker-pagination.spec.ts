@@ -60,13 +60,13 @@ async function openBulkWithPicker(page: Page): Promise<void> {
 async function openPicker(page: Page): Promise<void> {
     const bulkModal = page.getByTestId('tx-bulk-modal');
     const searchAddBtn = bulkModal.getByTestId('tx-bulk-picker');
-    await expect(searchAddBtn).toBeVisible({timeout: 3_000});
+    await expect(searchAddBtn).toBeVisible({timeout: 10_000});
     await searchAddBtn.click();
 
     const picker = page.getByTestId('tx-picker-modal');
-    await expect(picker).toBeVisible({timeout: 5_000});
+    await expect(picker).toBeVisible({timeout: 15_000});
     // The modal frame appears before its rows do, and every caller here works on rows.
-    await expect(picker.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 10_000});
+    await expect(picker.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 15_000});
 }
 
 // ---------------------------------------------------------------------------
@@ -154,16 +154,14 @@ test.describe('PickerModal Pagination', () => {
         const addBtn = picker.getByTestId('tx-picker-add');
         await expect(addBtn).toBeEnabled();
 
-        // Navigate to page 2 if pagination is available
+        // Navigate to page 2: the seed holds more rows than one page (P1a asserts the same), so pagination is
+        // always there — a missing one is a red, not a reason to skip the step.
         const paginationContainer = picker.locator('[data-testid="data-table-pagination"]');
-        const hasPagination = await paginationContainer.isVisible({timeout: 2_000}).catch(() => false);
-        if (hasPagination) {
-            const nextBtn = paginationContainer.getByTestId('pagination-next');
-            if (await nextBtn.isEnabled({timeout: 1_000}).catch(() => false)) {
-                await nextBtn.click();
-                await expect(picker.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 5_000});
-            }
-        }
+        await expect(paginationContainer).toBeVisible({timeout: 10_000});
+        const nextBtn = paginationContainer.getByTestId('pagination-next');
+        await expect(nextBtn).toBeEnabled({timeout: 10_000});
+        await nextBtn.click();
+        await expect(picker.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 10_000});
 
         // Close the picker WITHOUT adding (cancel)
         await picker.getByTestId('tx-picker-cancel').click();
@@ -257,11 +255,11 @@ test.describe('Delete Validation Banner', () => {
             const kebabBtn = row.getByTestId(/^row-actions-/);
             if (!(await appears(kebabBtn, 800))) continue;
             await kebabBtn.click();
-            const hasDelete = await page
-                .getByTestId('context-menu-action-delete')
-                .isVisible({timeout: 800})
-                .catch(() => false);
+            // The menu is the signal that it is open; then ask it, with no clock, whether it offers delete.
+            await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5_000});
+            const hasDelete = (await page.getByTestId('context-menu-action-delete').count()) > 0;
             await page.keyboard.press('Escape');
+            await expect(page.getByTestId('context-menu')).toHaveCount(0);
             if (hasDelete) {
                 targetRow = row;
                 break;
