@@ -209,7 +209,9 @@
       "date_before_1900": "La data {date} è anteriore al 1° gennaio 1900: controlla l'anno.",
       "date_unreadable": "Riga {row}: {value} non è una data valida nel formato {order, select, day_first {gg/mm/aaaa} month_first {mm/gg/aaaa} day_first_short {gg/mm/aa} month_first_short {mm/gg/aa} year_first_short {aa/mm/gg} year_first {aaaa-mm-gg} other {gg/mm/aaaa}}. Correggi la data nel file, oppure cambia il formato in Impostazioni › Plugin › Importazione dai broker › CSV generico › «Formato delle date» e poi premi «Rianalizza tutti».",
       "date_unreadable_more": "{n, plural, one {# altra riga ha} other {# altre righe hanno}} una data non valida in questo formato: vale la stessa correzione.",
-      "traderepublic_other_account": "{count, plural, one {# riga appartiene} other {# righe appartengono}} a un altro conto, per esempio il conto JUNIOR di un figlio, e {count, plural, one {è stata ignorata} other {sono state ignorate}}: esporta quel conto dal suo accesso e importalo in un broker a parte."
+      "traderepublic_other_account": "{count, plural, one {# riga appartiene} other {# righe appartengono}} a un altro conto, per esempio il conto JUNIOR di un figlio, e {count, plural, one {è stata ignorata} other {sono state ignorate}}: esporta quel conto dal suo accesso e importalo in un broker a parte.",
+      "traderepublic_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come interesse} other {# rimborsi d’imposta sono stati importati come interessi}} («Tax refund»): sono soldi restituiti dal guadagno dell’investimento, quindi contano nel P&L.",
+      "traderepublic_not_yet_settled": "{count, plural, one {# riga ha una data successiva a oggi: non è ancora regolata ed è stata lasciata fuori} other {# righe hanno una data successiva a oggi: non sono ancora regolate e sono state lasciate fuori}}. Arriveranno con il prossimo export."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",
@@ -565,7 +567,9 @@
       "fineco_incomplete_rows": "L'ultima colonna nomina il campo senza numero; la riga è importata così com'è.",
       "rows_not_recognized": "L'ultima colonna dice che cos'è ogni riga, o che cosa non è stato importato.",
       "rows_unreadable": "L'ultima colonna dice che cosa non si è potuto leggere in ogni riga.",
-      "traderepublic_other_account": "Su queste righe la colonna account_type non è DEFAULT."
+      "traderepublic_other_account": "Su queste righe la colonna account_type non è DEFAULT.",
+      "traderepublic_tax_refund": "Un’imposta positiva è denaro restituito.",
+      "traderepublic_not_yet_settled": "La data (o la value_date) di queste righe è successiva a oggi."
     },
     "notesCount": "{n, plural, one {# nota} other {# note}}",
     "noNotices": "Nessun avviso né nota",
