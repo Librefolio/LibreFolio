@@ -36,6 +36,7 @@ from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
 from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
 from backend.app.schemas.signals.vocabulary import SignalCadence, SignalDomain
 from backend.app.services.assets.price_sampling import SampleReferenceError, resolve_sample_references, sample_reference_detail
+from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx.conversion import convert_bulk, resolve_min_start_ranges, unit_rate_steps
 from backend.app.services.fx.period_changes import get_fx_period_changes_bulk
@@ -584,7 +585,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
         if backward_fill_applied:
             backward_fill_info = BackwardFillInfo(
                 actual_rate_date=actual_rate_date,
-                days_back=(on_date - actual_rate_date).days,
+                days_back=fx_days_back(on_date, actual_rate_date),
             )
 
         if metadata["kind"] == "signal":
