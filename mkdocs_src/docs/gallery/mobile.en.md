@@ -60,6 +60,14 @@ The connection security indicator at the bottom of the sidebar, open on Connecti
     <img class="gallery-img" data-category="security" data-name="connection-indicator" alt="🚦 Connection Indicator">
 </div>
 
+### 🚦 Connection Indicator with Security Warnings
+
+The same line for an administrator whose instance has security findings: a red dot on the shield and, in the details, the link with the count of errors and warnings.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="security" data-name="connection-indicator-attention" alt="🚦 Connection Indicator with Security Warnings">
+</div>
+
 ---
 
 ## 🧭 Onboarding
