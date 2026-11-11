@@ -58,6 +58,8 @@
     import LotComparisonChart from './LotComparisonChart.svelte';
     import type {LotIncomeEvent} from './LotComparisonChart.svelte';
     import {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import {type StaleFxPairLike, staleFxIssue} from '$lib/features/dashboard/staleFxIssue';
+    import {todayIso} from '$lib/utils/dateOnly';
     import LotDataQualityBanner from './LotDataQualityBanner.svelte';
     import LotAnalysisFailedNotice from './LotAnalysisFailedNotice.svelte';
     import {partitionLotIssues} from './lotDataQualityHelpers';
@@ -220,7 +222,10 @@
             amount: event.amount,
             lot_ids: event.lot_ids ?? [],
         }));
-        dataQualityIssues = asArray<DataQualityIssue>(asObject<{issues?: unknown}>(response.data_quality)?.issues);
+        // The report's own issues, plus one row for the rates it read from an old stored row (`stale_fx_pairs`): a notice, the values stay.
+        const quality = asObject<{issues?: unknown; stale_fx_pairs?: StaleFxPairLike[]}>(response.data_quality);
+        const staleFx = staleFxIssue(quality?.stale_fx_pairs, todayIso());
+        dataQualityIssues = [...asArray<DataQualityIssue>(quality?.issues), ...(staleFx ? [staleFx] : [])];
 
         const metadata = response.calculation_metadata;
         const computedFrom = asObject<string>(metadata?.computed_date_from);

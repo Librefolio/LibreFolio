@@ -25,6 +25,7 @@ from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.financial_math.lots.scope_boundary import TransferPartner, read_arrivals_at_scope_boundary
 from backend.app.services.financial_math.splits import SplitLink, is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.platform.data_quality_thresholds import is_stale
 from backend.app.utils.datetime_utils import day_before, shift_date
 
 logger = structlog.get_logger(__name__)
@@ -521,6 +522,7 @@ def _append_fx_provenance(
             from_currency=spec.from_currency,
             to_currency=target_currency,
             days_back=fx_days_back(spec.requested_date, rate_date),
+            stale=is_stale(rate_date, spec.requested_date),
         )
     )
 
