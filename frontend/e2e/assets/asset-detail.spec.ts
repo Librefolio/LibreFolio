@@ -9625,7 +9625,7 @@ test.describe('Asset detail — the price summary shows the backend’s Δ over 
 // The page asks for its prices, its events and its backend signal results in one `POST /assets/prices/query`, and
 // reads the answer with signal isolation (`parseAssetPriceQueryWithSignalIsolation`): an item whose signal results hold
 // an invalid one keeps its prices, and its raw `signals`. `loadChartData` then hands those raw results to
-// `parseBackendSignalResults` (`lib/charts/chartPageSignals.ts`), which throws on the first result the signal result
+// `parseBackendSignalResults` (`lib/features/signals/chartPageSignals.ts`), which throws on the first result the signal result
 // schema rejects — whenever the main item's `signals` holds one, with or without a signal configured. The throw lands
 // in the catch and skips the two statements after the parse:
 //   · the price-cache write (`store.merge` / `store.markFetched`): the next read of the same range asks for the prices

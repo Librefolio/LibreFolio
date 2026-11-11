@@ -3,7 +3,7 @@
 
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {resolveVisualSignalStyle, type SignalConfig, type SignalDefinition, type SignalStyle, type SignalVisualComponent, type SignalVisualPartition} from '$lib/charts/signals';
+    import {resolveVisualSignalStyle, type SignalConfig, type SignalDefinition, type SignalStyle, type SignalVisualComponent, type SignalVisualPartition} from '$lib/features/signals';
     import {humanizeKey} from '$lib/utils/text';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import {SIGNAL_COLORS} from '$lib/theme/chartTheme';

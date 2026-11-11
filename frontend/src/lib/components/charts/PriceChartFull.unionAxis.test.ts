@@ -82,7 +82,7 @@ vi.mock('echarts', () => echartsModule);
 
 import type {ComponentProps} from 'svelte';
 import {cleanup, render, setupI18n, waitFor} from '$test/component';
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/features/signals';
 import type {LineDataPoint} from './LineChart.svelte';
 
 const GENERATED_TS = join(process.cwd(), 'src', 'lib', 'api', 'generated.ts');

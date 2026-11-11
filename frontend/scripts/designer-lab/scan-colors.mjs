@@ -190,7 +190,7 @@ export function listSourceFiles(root = FRONTEND_DIR) {
 /** @typedef {'css-literal' | 'chart-color' | 'script' | 'markup' | 'static'} Layer */
 /** @typedef {{start: number, end: number, prelude: string, parent: CssBlock | null}} CssBlock */
 
-const CHART_PATH_RE = /\/(components\/charts|charts|features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$/i;
+const CHART_PATH_RE = /\/(components\/charts|charts|features\/(brokers\/lots|dashboard|risk|signals|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$/i;
 
 /**
  * The chart categories with a fixed colour written in a file (contract C1–C2 with DV): the file that holds them, its

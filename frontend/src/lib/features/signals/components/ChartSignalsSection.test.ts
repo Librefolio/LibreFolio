@@ -39,8 +39,8 @@ vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => ({
 }));
 
 import ChartSignalsSection, {type SignalDataSummary} from './ChartSignalsSection.svelte';
-import ChartAestheticsSection from './ChartAestheticsSection.svelte';
-import type {SignalConfig, SignalDefinition, SignalProblem} from '$lib/charts/signals';
+import ChartAestheticsSection from '../../../components/charts/ChartAestheticsSection.svelte';
+import type {SignalConfig, SignalDefinition, SignalProblem} from '$lib/features/signals';
 import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
 
 /** A configured signal whose summary says "no data" (pointCount 0 → severity error). */

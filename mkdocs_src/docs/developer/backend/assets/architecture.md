@@ -727,7 +727,7 @@ names, read from the plugin class in `SignalPluginRegistry` as AI Export reads i
 (`_sample_signal_result()`). A series no output spec describes stays daily and is logged as a
 warning; none does today. The function is pure and reproduces the browser:
 `downsampleRenderedSignal()` (`frontend/src/lib/components/charts/timeSeriesAggregation.ts`), after
-`backendRenderer.ts` (`frontend/src/lib/charts/signals/`) has split a line or an area into runs at
+`backendRenderer.ts` (`frontend/src/lib/features/signals/`) has split a line or an area into runs at
 the points sent without a value.
 
 - **Daily** gives the series itself.

@@ -18,7 +18,7 @@ vi.mock('$lib/stores/app/settings', async () => {
 });
 
 import {transitionClientSession} from '$lib/stores/app/clientSession';
-import type {SignalConfig} from '$lib/charts/signals';
+import type {SignalConfig} from '$lib/features/signals';
 
 import * as chartSettingsStoreModule from './chartSettingsStore.svelte';
 import {DEFAULT_CHART_SETTINGS, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings, type ChartSettings} from './chartSettingsStore.svelte';

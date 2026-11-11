@@ -20,7 +20,7 @@
  * the tooltip and the table cell render it: what reaches the DOM is the contract.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action
- * `core-unit`) next to the other `src/lib/charts` tests; the jsdom environment is per file.
+ * `core-unit`) next to the other `src/lib/features/signals` tests; the jsdom environment is per file.
  */
 import {describe, expect, it} from 'vitest';
 import {signalLabelToHtml, type SignalLabelInfo} from '../signalLabel';

@@ -76,7 +76,7 @@ K-21, K-22 (AssetModal: reuse prompt over the provider comparison, a wasted cata
 | Generic tree select | `frontend/src/lib/components/ui/select/TreeSelect.svelte` |
 | Tree select logic | `frontend/src/lib/components/ui/select/treeSelect.ts` |
 | Form wrapper | `frontend/src/lib/components/ui/select/AssetTypeSelect.svelte` |
-| Signals adapter | `frontend/src/lib/components/charts/SignalTreeSelect.svelte` |
+| Signals adapter | `frontend/src/lib/features/signals/components/SignalTreeSelect.svelte` |
 | Tiered ranking | `frontend/src/lib/components/ui/select/optionFilter.ts` |
 | Composite icons script | `scripts/compose_asset_type_icons.py` |
 | Composite icons | `frontend/static/icons/asset-types/crowdfunding-real-estate.png` |

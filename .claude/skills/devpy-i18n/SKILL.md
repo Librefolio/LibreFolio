@@ -133,7 +133,7 @@ whether its text happens to match another key elsewhere:
 `aiExport.additionalData.reason.*` (backend f-string, `ai_export/analyses/catalog.py:77`).
 
 `chartSettings.signals.*` is **not** a dynamic prefix any more: its keys are literals in
-`lib/charts/signals/registry.ts` (`displayNameKey`), plus the `Full` suffix appended at
+`lib/features/signals/registry.ts` (`displayNameKey`), plus the `Full` suffix appended at
 `ChartSignalsSection.svelte:142` (`` `${definition.displayNameKey}Full` ``). Merge one only by updating
 the registry. The `*Abbr` keys had no reader and were removed in the Release 2 audit.
 

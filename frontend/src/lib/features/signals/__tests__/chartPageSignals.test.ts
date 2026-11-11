@@ -9,7 +9,7 @@
  * - the comparison peers are the distinct valid asset ids of the asset-comparison configs.
  *
  * Lot Y-42 moves the two detail pages from their own «signalFromConfig → inject → renderMulti» loop to the one
- * renderer, `lib/charts/chartSignalRendering.ts`, which the lists and the settings preview already use (Y-39a). The
+ * renderer, `lib/features/signals/chartSignalRendering.ts`, which the lists and the settings preview already use (Y-39a). The
  * pages hand it their data through `detailPageSignalSources(…)`, and three more parts pin that move:
  * - the `detailPageSignalSources` contract, as pure units: the FX pairs come from the store's points, straight
  *   (`fxPointToLineDataPoint(point, false)`), asked lazily and per slug; a comparison's target is the series a load wrote
@@ -50,9 +50,9 @@ import {readFileSync} from 'node:fs';
 import {get} from 'svelte/store';
 import {setupI18n} from '$test/component';
 import {_} from '$lib/i18n';
-import {fxPointToLineDataPoint, renderLocalSignals, type FxRatePoint} from '$lib/charts/chartSignalRendering';
-import {getLocalSignalDefinitions, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalStyle} from '$lib/charts/signals';
-import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
+import {fxPointToLineDataPoint, renderLocalSignals, type FxRatePoint} from '$lib/features/signals/chartSignalRendering';
+import {getLocalSignalDefinitions, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalStyle} from '$lib/features/signals';
+import {backendSignalSchemas} from '$lib/features/signals/backendTypes';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {displayFxRate} from '$lib/features/fx/fxStoreRegistry';
 import {comparisonAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint, type DetailPageAsset, type DetailPageSignalSourcesInput} from '../chartPageSignals';
@@ -653,12 +653,12 @@ describe('through the module, the detail pages draw their saved signals as their
  * and by the gate `signalRendering.gate.test.ts` (no page calls `signalFromConfig(`); what a page shows by its E2E.
  */
 const DETAIL_PAGES = [
-    ['asset detail', new URL('../../../routes/(app)/assets/[id]/+page.svelte', import.meta.url)],
-    ['FX detail', new URL('../../../routes/(app)/fx/[pair]/+page.svelte', import.meta.url)],
+    ['asset detail', new URL('../../../../routes/(app)/assets/[id]/+page.svelte', import.meta.url)],
+    ['FX detail', new URL('../../../../routes/(app)/fx/[pair]/+page.svelte', import.meta.url)],
 ] as const;
 
 /** Where the pages get the one renderer, as an import names it. */
-const MODULE_IMPORT = /import\s+(type\s+)?([^;'"]*?)\s*\bfrom\s*['"]\$lib\/charts\/chartSignalRendering['"]/g;
+const MODULE_IMPORT = /import\s+(type\s+)?([^;'"]*?)\s*\bfrom\s*['"]\$lib\/features\/signals\/chartSignalRendering['"]/g;
 
 /** A source with its comments blanked, the way the gate blanks them: a name in a comment is no code. `//` after `:` stays (`https://`). */
 function withoutComments(source: string): string {
@@ -694,7 +694,7 @@ function adoptionProblems(source: string): string[] {
     const imported = valueImportsOf(code);
     const problems: string[] = [];
     for (const name of ['renderLocalSignals', 'renderBackendResults']) {
-        if (!imported.includes(name)) problems.push(`${name} is not imported as a value from $lib/charts/chartSignalRendering`);
+        if (!imported.includes(name)) problems.push(`${name} is not imported as a value from $lib/features/signals/chartSignalRendering`);
         else if (!callsFunction(code, name)) problems.push(`${name} is imported but never called`);
     }
     if (!callsFunction(code, 'detailPageSignalSources')) problems.push('detailPageSignalSources( is never called: the page does not hand the module its data sources');
@@ -706,14 +706,14 @@ function converterProblems(source: string): string[] {
     const code = withoutComments(source);
     const problems: string[] = [];
     if (/\bfunction\s+fxPointToLineDataPoint\s*\(|\b(?:const|let|var)\s+fxPointToLineDataPoint\b/.test(code)) problems.push('declares its own fxPointToLineDataPoint');
-    if (!valueImportsOf(code).includes('fxPointToLineDataPoint')) problems.push('does not import fxPointToLineDataPoint from $lib/charts/chartSignalRendering');
+    if (!valueImportsOf(code).includes('fxPointToLineDataPoint')) problems.push('does not import fxPointToLineDataPoint from $lib/features/signals/chartSignalRendering');
     return problems;
 }
 
 /** The finding list as the failure message gives it: the rule, how many, then each one. */
 const listed = (page: string, what: string, problems: readonly string[]): string => ['', `The ${page} page ${what} (Y-42). ${problems.length} finding(s):`, '', ...problems, ''].join('\n  ');
 
-describe('the detail pages draw their saved signals through lib/charts/chartSignalRendering.ts (Y-42 adoption)', () => {
+describe('the detail pages draw their saved signals through lib/features/signals/chartSignalRendering.ts (Y-42 adoption)', () => {
     it.each(DETAIL_PAGES)('the %s page imports renderLocalSignals and renderBackendResults as values, calls them, and calls detailPageSignalSources(', (page, path) => {
         const problems = adoptionProblems(readFileSync(path, 'utf8'));
 
@@ -729,8 +729,8 @@ describe('the detail pages draw their saved signals through lib/charts/chartSign
 
     describe('the forms read what they claim (controls)', () => {
         const ADOPTED = [
-            "import {renderLocalSignals, renderBackendResults, type SignalDataSources} from '$lib/charts/chartSignalRendering';",
-            "import {detailPageSignalSources} from '$lib/charts/chartPageSignals';",
+            "import {renderLocalSignals, renderBackendResults, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';",
+            "import {detailPageSignalSources} from '$lib/features/signals/chartPageSignals';",
             'const sources = detailPageSignalSources({configs, assets, fxPairPoints});',
             'const local = renderLocalSignals(signals, definitions, lineData, viewMode, sources);',
             'const backend = renderBackendResults(signals, results, definitions, lineData, viewMode, translate);',
@@ -757,13 +757,13 @@ describe('the detail pages draw their saved signals through lib/charts/chartSign
         });
 
         it('see a converter of its own in either form, and an import of the module’s in a clause of several names', () => {
-            const imported = "import {fxPointToLineDataPoint, renderLocalSignals} from '$lib/charts/chartSignalRendering';";
+            const imported = "import {fxPointToLineDataPoint, renderLocalSignals} from '$lib/features/signals/chartSignalRendering';";
 
             expect(converterProblems(imported)).toEqual([]);
             expect(converterProblems(`${imported}\nfunction fxPointToLineDataPoint(point, inverted) {}`)).toEqual(['declares its own fxPointToLineDataPoint']);
             expect(converterProblems(`${imported}\nconst fxPointToLineDataPoint = (point) => point;`)).toEqual(['declares its own fxPointToLineDataPoint']);
             expect(converterProblems(`${imported}\n// function fxPointToLineDataPoint(point) {}`)).toEqual([]);
-            expect(converterProblems("import {renderLocalSignals} from '$lib/charts/chartSignalRendering';\nfunction fxPointToLineDataPoint(point) {}")).toHaveLength(2);
+            expect(converterProblems("import {renderLocalSignals} from '$lib/features/signals/chartSignalRendering';\nfunction fxPointToLineDataPoint(point) {}")).toHaveLength(2);
         });
     });
 });
@@ -953,7 +953,7 @@ describe('N64 wiring, read from the two detail pages’ sources', () => {
 /**
  * A saved `fx-pair` signal draws from the FX store, which a detail page filled only in its Sync and Refresh handlers: on a
  * clean load, or on a pair just chosen, the store was empty and the signal card said «no data» (Y-41). The pages now load
- * the pairs of their signals (`ensureSignalFxPairs(`, `lib/charts/comparisonSeries.ts`) when they open, when the period
+ * the pairs of their signals (`ensureSignalFxPairs(`, `lib/features/signals/comparisonSeries.ts`) when they open, when the period
  * changes and when the signals change, through a page function `loadSignalFxPairs(`. Read from the sources like the
  * wiring above: what the line shows is pinned by the pages' E2E (`Y-41`).
  */
@@ -985,7 +985,7 @@ function importsValue(code: string, name: string, from: string): boolean {
 function signalFxPairProblems(source: string, triggers: readonly string[]): string[] {
     const code = withoutComments(source);
     const problems: string[] = [];
-    if (!importsValue(code, 'ensureSignalFxPairs', '$lib/charts/comparisonSeries')) problems.push('ensureSignalFxPairs is not imported as a value from $lib/charts/comparisonSeries');
+    if (!importsValue(code, 'ensureSignalFxPairs', '$lib/features/signals/comparisonSeries')) problems.push('ensureSignalFxPairs is not imported as a value from $lib/features/signals/comparisonSeries');
     const loader = functionBody(code, 'loadSignalFxPairs');
     if (loader === null) problems.push('function loadSignalFxPairs( is not declared');
     else if (!callsFunction(loader, 'ensureSignalFxPairs')) problems.push('loadSignalFxPairs( never calls ensureSignalFxPairs(');
@@ -1007,18 +1007,18 @@ describe('Y-41 wiring, read from the two detail pages’ sources', () => {
     });
 
     describe('the form reads what it claims (controls)', () => {
-        const WIRED = ["import {ensureSignalFxPairs} from '$lib/charts/comparisonSeries';", 'async function loadSignalFxPairs() {', '    await ensureSignalFxPairs(signals, undefined, range);', '}', 'async function reloadPage() {', '    await loadSignalFxPairs();', '}'].join('\n');
+        const WIRED = ["import {ensureSignalFxPairs} from '$lib/features/signals/comparisonSeries';", 'async function loadSignalFxPairs() {', '    await ensureSignalFxPairs(signals, undefined, range);', '}', 'async function reloadPage() {', '    await loadSignalFxPairs();', '}'].join('\n');
 
         it('passes a page that imports the helper, wraps it in loadSignalFxPairs and calls that from the trigger', () => {
             expect(signalFxPairProblems(WIRED, ['reloadPage'])).toEqual([]);
         });
 
         it('fails an import of the type only, a call only in a comment, a trigger that does not call it, and a trigger that is nowhere', () => {
-            expect(signalFxPairProblems(WIRED.replace('import {', 'import type {'), ['reloadPage'])).toEqual(['ensureSignalFxPairs is not imported as a value from $lib/charts/comparisonSeries']);
+            expect(signalFxPairProblems(WIRED.replace('import {', 'import type {'), ['reloadPage'])).toEqual(['ensureSignalFxPairs is not imported as a value from $lib/features/signals/comparisonSeries']);
             expect(signalFxPairProblems(WIRED.replace('await ensureSignalFxPairs(signals, undefined, range);', '// await ensureSignalFxPairs(signals, undefined, range);'), ['reloadPage'])).toEqual(['loadSignalFxPairs( never calls ensureSignalFxPairs(']);
             expect(signalFxPairProblems(WIRED.replace('    await loadSignalFxPairs();', '    await somethingElse();'), ['reloadPage'])).toEqual(['reloadPage( never calls loadSignalFxPairs(']);
             expect(signalFxPairProblems(WIRED, ['reloadPage', 'handleSignalsChange'])).toEqual(['function handleSignalsChange( is not declared']);
-            expect(signalFxPairProblems('', [])).toEqual(['ensureSignalFxPairs is not imported as a value from $lib/charts/comparisonSeries', 'function loadSignalFxPairs( is not declared']);
+            expect(signalFxPairProblems('', [])).toEqual(['ensureSignalFxPairs is not imported as a value from $lib/features/signals/comparisonSeries', 'function loadSignalFxPairs( is not declared']);
         });
 
         it('reads a function body with nested braces up to its own closing brace', () => {

@@ -14,7 +14,7 @@
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
 
-const ROUTES = '../../../routes/(app)/';
+const ROUTES = '../../../../routes/(app)/';
 
 interface FeedPage {
     name: string;

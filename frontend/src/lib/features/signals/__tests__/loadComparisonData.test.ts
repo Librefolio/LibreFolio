@@ -5,7 +5,7 @@
  * the deliberate mutation of only the signal configs that are still current.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import type {SignalConfig} from '$lib/charts/signals';
+import type {SignalConfig} from '$lib/features/signals';
 import {getAssetPriceStore, removeAssetPriceStore, type AssetPricePoint} from '$lib/stores/assetPriceStoreRegistry';
 import {canonicalCacheKey} from '$lib/stores/signalResultCache';
 import {

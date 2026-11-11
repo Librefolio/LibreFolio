@@ -45,8 +45,8 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
 
 import type {ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, within} from '$test/component';
-import {fxPointToLineDataPoint} from '$lib/charts/chartSignalRendering';
-import type {RenderedSignal} from '$lib/charts/signals';
+import {fxPointToLineDataPoint} from '$lib/features/signals/chartSignalRendering';
+import type {RenderedSignal} from '$lib/features/signals';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {DEFAULT_CHART_SETTINGS, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
 import {clearCardInversions, setCardInverted} from '$lib/features/fx/fxCardInversionStore';

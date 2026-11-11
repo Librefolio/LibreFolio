@@ -18,7 +18,7 @@ vi.hoisted(() => {
 });
 
 import {waitLocale} from 'svelte-i18n';
-import type {SignalConfig, SignalInputField, SignalProblem} from '$lib/charts/signals';
+import type {SignalConfig, SignalInputField, SignalProblem} from '$lib/features/signals';
 import {currentLanguage} from '$lib/stores/app/language';
 import {formatSignalProblem, getParamNumber, getParamString, problemCount} from './chartSignalsHelpers';
 

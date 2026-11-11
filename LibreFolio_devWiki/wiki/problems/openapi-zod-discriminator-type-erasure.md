@@ -40,4 +40,4 @@ list, `requiredLiteralDiscriminators`, keeps discriminators required.
 | Codegen post-processor | `frontend/scripts/fix-openapi-discriminators.mjs` |
 | Generator command | `frontend/package.json` |
 | Generated client | `frontend/src/lib/api/generated.ts` |
-| Runtime contract tests | `frontend/src/lib/charts/signals/__tests__/backendTypes.test.ts` |
+| Runtime contract tests | `frontend/src/lib/features/signals/__tests__/backendTypes.test.ts` |

@@ -261,7 +261,7 @@ import {get} from 'svelte/store';
 import {waitLocale} from 'svelte-i18n';
 import {cleanup, render, setupI18n, waitFor} from '$test/component';
 import {_} from '$lib/i18n';
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/features/signals';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {setRoleReader} from '$lib/theme/roleColors';

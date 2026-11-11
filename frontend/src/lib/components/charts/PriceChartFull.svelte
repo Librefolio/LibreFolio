@@ -21,12 +21,12 @@
     import type {LineDataPoint} from './LineChart.svelte';
     import CandlestickChart from './CandlestickChart.svelte';
     import ResolutionBadge from './ResolutionBadge.svelte';
-    import type {RenderedSignal} from '$lib/charts/signals';
+    import type {RenderedSignal} from '$lib/features/signals';
     import {buildMainSeries, COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {buildFittedTooltipRow, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
-    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
+    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/features/signals/signalLabel';
     import {truncateName} from '$lib/utils/text';
     import {clearTimer} from '$lib/utils/core/clearTimer';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';

@@ -2,7 +2,7 @@
     import {Info} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
-    import type {SignalParamDescriptor} from '$lib/charts/signals';
+    import type {SignalParamDescriptor} from '$lib/features/signals';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import SignalAssetParamControl from './SignalAssetParamControl.svelte';

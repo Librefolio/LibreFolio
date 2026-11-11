@@ -18,8 +18,8 @@
  */
 
 import {createPairSlug} from '$lib/features/fx/fxStoreRegistry';
-import {getComparisonEventFxDependency} from '$lib/charts/loadComparisonData';
-import type {SignalConfig, SignalProblem} from '$lib/charts/signals';
+import {getComparisonEventFxDependency} from '$lib/features/signals/loadComparisonData';
+import type {SignalConfig, SignalProblem} from '$lib/features/signals';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 
 /** A pair the page needs: its slug and label, the asset it serves, and its status. */

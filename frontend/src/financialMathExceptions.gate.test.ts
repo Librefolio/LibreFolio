@@ -106,10 +106,10 @@ const SRC = join(FRONTEND, 'src');
 /** The declaration's tag. */
 const TAG = '@financial-math-exception';
 
-const MEASURE = 'src/lib/charts/signals/MeasureSignal.ts';
-const COMPOUND = 'src/lib/charts/signals/CompoundSignal.ts';
-const LINEAR = 'src/lib/charts/signals/LinearSignal.ts';
-const SINE = 'src/lib/charts/signals/SineSignal.ts';
+const MEASURE = 'src/lib/features/signals/MeasureSignal.ts';
+const COMPOUND = 'src/lib/features/signals/CompoundSignal.ts';
+const LINEAR = 'src/lib/features/signals/LinearSignal.ts';
+const SINE = 'src/lib/features/signals/SineSignal.ts';
 const LOTS_TABLE = 'src/lib/features/brokers/lots/unifiedLotsTableHelpers.ts';
 const LOT_COMPARISON = 'src/lib/features/brokers/lots/lotComparisonChartHelpers.ts';
 const LOT_WAC = 'src/lib/features/brokers/lots/lotWacPriceChartHelpers.ts';
@@ -681,7 +681,7 @@ describe('Financial math exceptions: the browser computes only the interactive m
                 ' * @financial-math-exception R18, the measuring tool: Δ, Δ% and annualized between',
                 ' *   the two points the user picks, computed in the browser.',
                 ' *',
-                ' * @module charts/signals/MeasureSignal',
+                ' * @module features/signals/MeasureSignal',
                 ' */',
                 '',
                 "import {ChartSignal} from './ChartSignal';",
@@ -705,7 +705,7 @@ describe('Financial math exceptions: the browser computes only the interactive m
             expect(declarationProblem('src/lib/a.ts', midLine)).toMatch(/line 2 \(in the leading block, but not as a tag opening its line\), line 3 \(in the leading block/);
 
             // A tag with no description, or a placeholder: not a declaration.
-            const bare = ['/**', ' * @financial-math-exception', ' * @module charts/signals/MeasureSignal', ' */'].join('\n');
+            const bare = ['/**', ' * @financial-math-exception', ' * @module features/signals/MeasureSignal', ' */'].join('\n');
             expect(readDeclaration(bare)).toMatchObject({tagLine: 2, description: ''});
             expect(declarationProblem('src/lib/a.ts', bare)).toMatch(/^src\/lib\/a\.ts:2 {2}@financial-math-exception is followed by «»/);
             expect(declarationProblem('src/lib/a.ts', '/** @financial-math-exception R18 */')).toMatch(/followed by «R18»/);
@@ -739,10 +739,10 @@ describe('Financial math exceptions: the browser computes only the interactive m
             ];
             const skipped = [
                 'src/financialMathExceptions.gate.test.ts',
-                'src/lib/charts/signals/MeasureSignal.spec.ts',
+                'src/lib/features/signals/MeasureSignal.spec.ts',
                 'src/__tests__/component.ts',
                 'src/__mocks__/$app/environment.ts',
-                'src/lib/charts/signals/__tests__/fixtures.ts',
+                'src/lib/features/signals/__tests__/fixtures.ts',
                 'src/lib/api/generated.ts',
                 'src/lib/api/generated-tools.ts',
                 'src/lib/api/tool-contract-map.generated.ts',

@@ -6,8 +6,8 @@
  * ## The contract
  *
  * A card and its settings preview drew the same saved signals through two copies of one loop, and the copies drifted
- * (`lib/charts/__tests__/chartSignalRendering.test.ts` tells how). Since Y-39a the modal takes an optional prop,
- * `signalSources` — the `SignalDataSources` of `lib/charts/chartSignalRendering.ts`, the very sources the page's cards
+ * (`lib/features/signals/__tests__/chartSignalRendering.test.ts` tells how). Since Y-39a the modal takes an optional prop,
+ * `signalSources` — the `SignalDataSources` of `lib/features/signals/chartSignalRendering.ts`, the very sources the page's cards
  * draw with — and draws each local signal of its preview with
  * `renderLocalSignal(config, <the preview's base data>, <the preview's view mode>, signalSources)`: in pair mode (a
  * card's settings) on `pairData`, in global mode on its synthetic curve. The props `pairsDataMap` and `assetsDataMap`
@@ -78,8 +78,8 @@ vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => ({
 
 import {tick, type ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, within} from '$test/component';
-import type {SignalDataSources} from '$lib/charts/chartSignalRendering';
-import type {RenderedSignal, SignalConfig, SignalStyle} from '$lib/charts/signals';
+import type {SignalDataSources} from '$lib/features/signals/chartSignalRendering';
+import type {RenderedSignal, SignalConfig, SignalStyle} from '$lib/features/signals';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {DEFAULT_CHART_SETTINGS, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
 import ChartSettingsModal from './ChartSettingsModal.svelte';

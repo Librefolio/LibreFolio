@@ -83,12 +83,12 @@ vi.mock('$lib/stores/app/themeStore', () => ({
 }));
 
 const registeredSignals = vi.fn<() => unknown[]>(() => []);
-vi.mock('$lib/charts/signals/registry', () => ({getRegisteredSignalTypes: () => registeredSignals()}));
+vi.mock('$lib/features/signals/registry', () => ({getRegisteredSignalTypes: () => registeredSignals()}));
 
 // The catalogue mapper is a strict translator with its own rules and its own
 // tests; what AboutTab owns is what it does with the *result*. Mocking it to a
 // pass-through keeps this file honest about which contract it is checking.
-vi.mock('$lib/charts/signals/catalogMapper', () => ({mapBackendSignalDefinition: (raw: unknown) => raw}));
+vi.mock('$lib/features/signals/catalogMapper', () => ({mapBackendSignalDefinition: (raw: unknown) => raw}));
 
 import AboutTab from './AboutTab.svelte';
 import {zodiosApi} from '$lib/api';

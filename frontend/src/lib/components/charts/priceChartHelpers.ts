@@ -14,18 +14,18 @@
  */
 
 import type {LineDataPoint} from './LineChart.svelte';
-import type {RenderedSignal} from '$lib/charts/signals/ChartSignal';
+import type {RenderedSignal} from '$lib/features/signals/ChartSignal';
 import type {ViewMode} from './ChartToolbar.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
-import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
-import {getBackendSignalProblem, type SignalProblem} from '$lib/charts/signals/signalProblem';
+import {backendSignalSchemas} from '$lib/features/signals/backendTypes';
+import {getBackendSignalProblem, type SignalProblem} from '$lib/features/signals/signalProblem';
 import {truncateName} from '$lib/utils/text';
 import {aggregateLineSeries, bucketEventMarkers, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
 import {formatPrice} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {CHART_GAIN_LOSS, PRICE_SERIES} from '$lib/theme/chartTheme';
-import {changePct} from '$lib/charts/signals/MeasureSignal';
+import {changePct} from '$lib/features/signals/MeasureSignal';
 
 /** A resolved logical date span the chart is currently showing. */
 export interface LogicalVisibleRange {

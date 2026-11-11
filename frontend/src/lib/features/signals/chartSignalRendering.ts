@@ -12,9 +12,9 @@
  * @module charts/chartSignalRendering
  */
 
-import {signalFromConfig, type RenderedSignal, type SignalConfig, type SignalDefinition} from '$lib/charts/signals';
-import {renderBackendSignalResult} from '$lib/charts/signals/backendRenderer';
-import type {SignalInstanceResult} from '$lib/charts/signals/resultMapper';
+import {signalFromConfig, type RenderedSignal, type SignalConfig, type SignalDefinition} from '$lib/features/signals';
+import {renderBackendSignalResult} from '$lib/features/signals/backendRenderer';
+import type {SignalInstanceResult} from '$lib/features/signals/resultMapper';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {displayFxRate} from '$lib/features/fx/fxStoreRegistry';
 import {extractDaysBack} from '$lib/features/assets/assetPriceDerived';

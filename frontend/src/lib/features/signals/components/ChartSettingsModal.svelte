@@ -17,19 +17,19 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {ConfirmModal} from '$lib/components/table';
-    import type {LineDataPoint} from './LineChart.svelte';
-    import PriceChartFull from './PriceChartFull.svelte';
-    import ChartAestheticsSection from './ChartAestheticsSection.svelte';
+    import type {LineDataPoint} from '../../../components/charts/LineChart.svelte';
+    import PriceChartFull from '../../../components/charts/PriceChartFull.svelte';
+    import ChartAestheticsSection from '../../../components/charts/ChartAestheticsSection.svelte';
     import ChartSignalsSection from './ChartSignalsSection.svelte';
     import {DEFAULT_AXIS_SCALE, DEFAULT_CHART_SETTINGS, DEFAULT_PERCENTAGE_AXIS_SCALE, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, type AxisScaleSettings, type ChartAxisSettings, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from './calendarReturnWindow';
+    import {calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '../../../components/charts/calendarReturnWindow';
     import AssetCalendarWindowControls from '$lib/features/assets/detail/AssetCalendarWindowControls.svelte';
-    import {collectConfigurableSecondaryAxes} from './chartCoreHelpers';
-    import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from './axisLabelHelpers';
-    import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition} from '$lib/charts/signals';
-    import {NO_SIGNAL_SOURCES, renderLocalSignal, type SignalDataSources} from '$lib/charts/chartSignalRendering';
-    import {SineSignal} from '$lib/charts/signals/SineSignal';
-    import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
+    import {collectConfigurableSecondaryAxes} from '../../../components/charts/chartCoreHelpers';
+    import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '../../../components/charts/axisLabelHelpers';
+    import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition} from '$lib/features/signals';
+    import {NO_SIGNAL_SOURCES, renderLocalSignal, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
+    import {SineSignal} from '$lib/features/signals/SineSignal';
+    import {buildOverlaySignalInfoMap} from '$lib/features/signals/signalLabel';
 
     /** The days of the global preview's synthetic curve. */
     const SYNTHETIC_DAYS = 365;

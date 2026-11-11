@@ -255,7 +255,7 @@ so the UI coverage thresholds in [Status and Data Policy](#status-and-data-polic
 keep their meaning. A quote-day plugin's output is dated on sessions; the chart aligns
 it by date and bridges the days without a point. A point the plugin returns **without a
 value** is different: a warm-up, an undefined window, a missing reference price. The
-chart renderer (`frontend/src/lib/charts/signals/backendRenderer.ts`) breaks a line or
+chart renderer (`frontend/src/lib/features/signals/backendRenderer.ts`) breaks a line or
 area output there, drawing each stretch between two such points as its own series, so no
 segment crosses a day on which nothing was measured. Bars simply skip those points.
 
@@ -471,7 +471,7 @@ partial and never jumps across the gap.
 Coverage metadata includes both the total missing-point ratio and
 `max_consecutive_missing_points`. The UI keeps the backend `partial` status visible, and the
 chart card turns each result into one icon: `getSignalProblemSeverity()`
-(`lib/charts/signals/signalProblem.ts`) grades a problem, and `getSignalIssue()`
+(`lib/features/signals/signalProblem.ts`) grades a problem, and `getSignalIssue()`
 (`ChartSignalsSection.svelte`) adds the card's own checks.
 
 | Icon | When |

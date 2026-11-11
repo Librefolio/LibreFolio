@@ -12,7 +12,7 @@ import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePr
 // writes the old helper's string character for character — `$lib/theme/colorAlpha.test.ts` pins that against
 // the old code — so these expectations are the strings they always were.
 import {toRgba} from '$lib/theme/colorAlpha';
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/features/signals';
 
 const BASE_COLOR = '#1a4031';
 const GREEN = '#16a34a';

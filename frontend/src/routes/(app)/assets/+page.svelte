@@ -43,7 +43,7 @@
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
-    import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
+    import ChartSettingsModal from '$lib/features/signals/components/ChartSettingsModal.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
@@ -52,7 +52,7 @@
     import {effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
     import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
     import {calendarReturnRangeDays, calendarReturnWindowDays} from '$lib/components/charts/calendarReturnWindow';
-    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
+    import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
@@ -63,8 +63,8 @@
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/features/fx/fxStoreRegistry';
@@ -81,7 +81,7 @@
     import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
-    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {signalCatalogStore} from '$lib/features/signals/signalCatalogStore.svelte';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/features/assets/assetLifecycle';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';

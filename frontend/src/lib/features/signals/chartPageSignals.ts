@@ -12,10 +12,10 @@
  * @module charts/chartPageSignals
  */
 
-import {fxPointToLineDataPoint, type FxRatePoint, type SignalDataSources} from '$lib/charts/chartSignalRendering';
-import {backendSignalSchemas, type BackendSignalResult} from '$lib/charts/signals/backendTypes';
-import type {SignalConfig} from '$lib/charts/signals/ChartSignal';
-import {COMPARISON_ASSET_RUNTIME_PARAM_KEYS} from '$lib/charts/loadComparisonData';
+import {fxPointToLineDataPoint, type FxRatePoint, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
+import {backendSignalSchemas, type BackendSignalResult} from '$lib/features/signals/backendTypes';
+import type {SignalConfig} from '$lib/features/signals/ChartSignal';
+import {COMPARISON_ASSET_RUNTIME_PARAM_KEYS} from '$lib/features/signals/loadComparisonData';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
 const comparisonRuntimeParamKeys = new Set<string>(COMPARISON_ASSET_RUNTIME_PARAM_KEYS);

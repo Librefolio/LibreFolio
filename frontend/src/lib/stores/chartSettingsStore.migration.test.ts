@@ -17,8 +17,8 @@ vi.mock('$lib/stores/app/settings', async () => {
     return {userSettings: {subscribe, updateUiPreference: async () => true}, isFallbackUserSettings: () => false};
 });
 
-import type {SignalConfig, SignalStyle} from '$lib/charts/signals';
-import {signalCodeToType} from '$lib/charts/signals/catalogMapper';
+import type {SignalConfig, SignalStyle} from '$lib/features/signals';
+import {signalCodeToType} from '$lib/features/signals/catalogMapper';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 
 import * as chartSettingsStore from './chartSettingsStore.svelte';
