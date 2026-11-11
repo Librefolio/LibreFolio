@@ -309,3 +309,95 @@ class TestMergedSpans:
             assert merged == _runs_of(_days_of(spans)), spans
             assert merged == self._merge(list(reversed(spans))), "the order of the input does not matter"
             assert merged == self._merge(merged), "merging again changes nothing"
+
+
+# =============================================================================
+# UtcDateTime — the timestamp column (db/utc_datetime.py, D-UTC)
+# =============================================================================
+
+
+class TestUtcDateTimeColumn:
+    """Aware UTC in Python, the plain column's text in SQLite, a naive value refused: on a private in-memory SQLite."""
+
+    @staticmethod
+    def _table():
+        from sqlalchemy import Column, Integer, MetaData, Table  # noqa: PLC0415
+
+        from backend.app.db.utc_datetime import UtcDateTime  # noqa: PLC0415
+
+        return Table("stamps", MetaData(), Column("id", Integer, primary_key=True), Column("at", UtcDateTime, nullable=True))
+
+    def _engine(self):
+        self.stamps = self._table()
+        from sqlalchemy import create_engine  # noqa: PLC0415
+
+        engine = create_engine("sqlite://")
+        self.stamps.metadata.create_all(engine)
+        return engine
+
+    def test_the_stored_text_is_the_plain_columns_utc_clock_without_an_offset(self):
+        """No migration: a row written by the plain ``DateTime`` column and one written here are the same text."""
+        from sqlalchemy import Column, DateTime, Integer, MetaData, Table, insert, text  # noqa: PLC0415
+
+        engine = self._engine()
+        moment = datetime(2026, 11, 10, 8, 30, 15, 123456, tzinfo=UTC)
+        plain = Table("plain", MetaData(), Column("id", Integer, primary_key=True), Column("at", DateTime))
+        plain.metadata.create_all(engine)
+        with engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at=moment))
+            connection.execute(insert(plain).values(id=1, at=moment.replace(tzinfo=None)))
+            ours = connection.execute(text("SELECT at FROM stamps")).scalar_one()
+            theirs = connection.execute(text("SELECT at FROM plain")).scalar_one()
+        assert ours == theirs == "2026-11-10 08:30:15.123456"
+
+    def test_it_reads_back_aware_utc_and_an_old_row_too(self):
+        from sqlalchemy import insert, select, text  # noqa: PLC0415
+
+        engine = self._engine()
+        with engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)))
+            connection.execute(text("INSERT INTO stamps (id, at) VALUES (2, '2025-06-07 08:09:10.000000')"))
+            connection.execute(insert(self.stamps).values(id=3, at=None))
+            rows = dict(connection.execute(select(self.stamps.c.id, self.stamps.c.at)).all())
+        assert rows[1] == datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC) and rows[1].tzinfo is not None
+        assert rows[2] == datetime(2025, 6, 7, 8, 9, 10, tzinfo=UTC), "a row written before D-UTC reads back as the same UTC moment, aware"
+        assert rows[3] is None
+
+    def test_another_zone_is_stored_as_the_utc_clock(self):
+        from sqlalchemy import insert, select, text  # noqa: PLC0415
+
+        engine = self._engine()
+        rome = timezone(timedelta(hours=1))
+        with engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at=datetime(2026, 11, 10, 9, 0, tzinfo=rome)))
+            stored = connection.execute(text("SELECT at FROM stamps")).scalar_one()
+            read = connection.execute(select(self.stamps.c.at)).scalar_one()
+        assert stored.startswith("2026-11-10 08:00:00")
+        assert read == datetime(2026, 11, 10, 8, 0, tzinfo=UTC)
+
+    def test_a_naive_datetime_is_refused_on_write(self):
+        from sqlalchemy import insert  # noqa: PLC0415
+        from sqlalchemy.exc import StatementError  # noqa: PLC0415
+
+        engine = self._engine()
+        with pytest.raises(StatementError, match="refuses a naive datetime"), engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at=datetime(2026, 1, 1)))
+
+    def test_a_value_that_is_not_a_datetime_is_refused(self):
+        from sqlalchemy import insert  # noqa: PLC0415
+        from sqlalchemy.exc import StatementError  # noqa: PLC0415
+
+        engine = self._engine()
+        with pytest.raises(StatementError, match="stores a datetime"), engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at="2026-01-01 00:00:00"))
+
+    def test_every_timestamp_field_of_the_models_is_a_utc_datetime(self):
+        """The guard: a new ``datetime`` field cannot go back to the plain column, which reads naive."""
+        from sqlalchemy import DateTime  # noqa: PLC0415
+        from sqlmodel import SQLModel  # noqa: PLC0415
+
+        from backend.app.db import models  # noqa: F401, PLC0415
+        from backend.app.db.utc_datetime import UtcDateTime  # noqa: PLC0415
+
+        plain = [f"{table.name}.{column.name}" for table in SQLModel.metadata.tables.values() for column in table.columns if isinstance(column.type, DateTime) and not isinstance(column.type, UtcDateTime)]
+        assert plain == [], f"these columns read naive datetimes: declare sa_type=UtcDateTime: {plain}"
