@@ -28,6 +28,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {createSignalConfig, getRegisteredSignalTypes, getSignalProblemSeverity, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalParamDescriptor, type SignalProblem, type SignalProblemSeverity, type SignalStyle} from '$lib/features/signals';
     import {clearComparisonAssetRuntimeParams} from '$lib/features/signals/loadComparisonData';
+    import {fxIssueSentence, isFxIssue} from '$lib/features/signals/fxIssue';
     import {humanizeKey} from '$lib/utils/text';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {INPUT_FIELD_ORDER, formatSignalProblem, getParamNumber, getParamString} from './chartSignalsHelpers';
@@ -176,6 +177,15 @@
     }
 
     // Adapts the i18n store to the injected translator the pure formatter expects.
+    /** The card's sentence for a failed conversion: the missing rate the load found (`_conversionError`, an `fx_issues` entry), worded here. */
+    function conversionErrorMessage(value: unknown): string {
+        if (isFxIssue(value)) {
+            const sentence = fxIssueSentence(value);
+            return translateProblem(sentence.key, sentence.values);
+        }
+        return $t('chartSettings.conversionFailed');
+    }
+
     function translateProblem(key: string, values?: Record<string, string | number>): string {
         return values ? $t(key, {values}) : $t(key);
     }
@@ -201,7 +211,7 @@
         }
         if (signal.signalType === 'asset-comparison' && signal.params._conversionFailed && !summary?.comparisonStatusAuthoritative) {
             return {
-                message: signal.params._conversionError ? String(signal.params._conversionError) : $t('chartSettings.conversionFailed'),
+                message: conversionErrorMessage(signal.params._conversionError),
                 severity: 'error',
             };
         }

@@ -39,6 +39,11 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - La commande de sauvegarde lit `--password-file` et `--instance-key-file` en une seule ouverture : un fichier échangé après la vérification ne peut plus être lu à sa place.
 
 - Sur une instance bloquée par son hébergeur, l'administrateur voit aussi les «Sauvegardes déjà conservées» et peut les télécharger, pas seulement en faire une nouvelle.
+
+### ⚠️ Changements incompatibles
+
+- Les endpoints de requête des prix, de requête des événements et de conversion ne signalent plus les taux de change manquants comme texte dans `errors` : ils arrivent dans une nouvelle liste `fx_issues` de `{code, from_currency, to_currency, first_date, last_date, count}`, dans le sens de la conversion.
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 « Keyholder »** est la version pour qui gère l'instance : elle donne à l'administrateur ce qu'il faut pour ouvrir LibreFolio à sa famille et à ses amis, et pour le garder en sécurité.

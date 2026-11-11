@@ -49,6 +49,11 @@ const ASSETS: ComparisonAssetMeta[] = [
     {id: 8, display_name: 'Bare', icon_url: null, asset_type: null},
 ];
 
+/** A missing exchange rate as the price query says it (`fx_issues`, CP-11d): one day, in the direction of the conversion. */
+function rateIssue(from: string, to: string, code = 'rate_not_found') {
+    return {code, from_currency: from, to_currency: to, first_date: '2024-02-03', last_date: '2024-02-03', count: 1};
+}
+
 function itemById(result: ComparisonAssetsLoadResult, assetId: number): ComparisonAssetLoadItem {
     const item = result.items.find((candidate) => candidate.assetId === assetId);
     expect(item, `missing load item for asset ${assetId}`).toBeDefined();
@@ -336,7 +341,7 @@ describe('loadComparisonAssetsData', () => {
                     asset_id: 7,
                     prices: [pricePoint({currency: 'EUR', close: 9})],
                     events: [],
-                    errors: [17, 'no route EUR-USD', 'second reason'],
+                    fx_issues: [17, rateIssue('EUR', 'USD'), rateIssue('GBP', 'USD')],
                 },
             ],
         };
@@ -353,7 +358,7 @@ describe('loadComparisonAssetsData', () => {
             _assetCurrency: 'EUR',
             _targetCurrency: 'USD',
             _conversionFailed: true,
-            _conversionError: 'no route EUR-USD',
+            _conversionError: rateIssue('EUR', 'USD'),
         });
         expect(response).toEqual(responseBefore);
     });
@@ -370,7 +375,7 @@ describe('loadComparisonAssetsData', () => {
                     asset_id: 7,
                     prices: [pricePoint({currency: 'USD', close: 11})],
                     events: [failedEvent],
-                    errors: ['no route GBP-USD'],
+                    fx_issues: [rateIssue('GBP', 'USD', 'event_rate_missing')],
                 },
             ],
         });
@@ -410,7 +415,7 @@ describe('loadComparisonAssetsData', () => {
                     asset_id: 7,
                     prices: [pricePoint({currency: 'USD', close: 11})],
                     events: [failedEvent],
-                    errors: ['Missing FX rate GBP->USD for event on 2024-02-03', 'Conversion 1: No FX rate available for GBP->USD'],
+                    fx_issues: [rateIssue('GBP', 'USD', 'event_rate_missing'), rateIssue('GBP', 'USD')],
                 },
             ],
         });
@@ -430,7 +435,6 @@ describe('loadComparisonAssetsData', () => {
     });
 
     it('keeps a true price-conversion failure on the price route when its error is ordered first', async () => {
-        const priceError = 'Conversion 0: No FX rate available for EUR->USD';
         queryPrices.mockResolvedValue({
             items: [
                 {
@@ -443,7 +447,7 @@ describe('loadComparisonAssetsData', () => {
                             value: {amount: 3, code: 'GBP'},
                         },
                     ],
-                    errors: [priceError, 'Missing FX rate GBP->USD for event on 2024-02-03'],
+                    fx_issues: [rateIssue('EUR', 'USD'), rateIssue('GBP', 'USD', 'event_rate_missing')],
                 },
             ],
         });
@@ -452,7 +456,7 @@ describe('loadComparisonAssetsData', () => {
         const item = itemById(result, 7);
 
         expect(item.runtimeParams._conversionFailed).toBe(true);
-        expect(item.runtimeParams._conversionError).toBe(priceError);
+        expect(item.runtimeParams._conversionError).toEqual(rateIssue('EUR', 'USD'));
     });
 
     it('keeps price conversion failure flags when price and event FX errors are mixed', async () => {
@@ -476,7 +480,7 @@ describe('loadComparisonAssetsData', () => {
                         pricePoint({date: '2024-02-02', currency: 'EUR', close: 9}),
                     ],
                     events: [failedEvent],
-                    errors: ['no route EUR-USD', 'no route GBP-USD'],
+                    fx_issues: [rateIssue('EUR', 'USD'), rateIssue('GBP', 'USD', 'event_rate_missing')],
                 },
             ],
         });
@@ -499,7 +503,7 @@ describe('loadComparisonAssetsData', () => {
             _assetCurrency: 'EUR',
             _targetCurrency: 'USD',
             _conversionFailed: true,
-            _conversionError: 'no route EUR-USD',
+            _conversionError: rateIssue('EUR', 'USD'),
         });
         expect(item.events).toEqual([failedEvent]);
     });

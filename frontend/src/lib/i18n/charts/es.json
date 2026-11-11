@@ -155,7 +155,9 @@
     "lineShapeDesc": "Cómo los gráficos unen sus puntos. Solo vale para este gráfico.",
     "lineShapeSegments": "Segmentos",
     "lineShapeSteps": "Escalones",
-    "lineShapeSpline": "Curva suave"
+    "lineShapeSpline": "Curva suave",
+    "fxRateNotFound": "Sin tipo de cambio {pair} hasta el {date}: sincroniza los tipos para comparar estos activos",
+    "fxRateNotFoundRange": "Sin tipo de cambio {pair} durante {count} días, del {first} al {last}: sincroniza los tipos para comparar estos activos"
   },
   "measure": {
     "pending": "Inicio: {startDate} ({startValue}) — haga clic en el gráfico para el punto final",

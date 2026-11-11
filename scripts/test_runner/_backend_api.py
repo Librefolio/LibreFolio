@@ -1275,7 +1275,7 @@ Tests for REST API endpoints (server auto-started):
         name="FX API",
         desc="Conversion, providers, pair sources; X-R65 422 date_out_of_range on manual rates; X-R75: POST /fx/providers/routes?replace=true keeps exactly the posted routes of each pair named (the MANUAL item alone leaves the pair manual), a refused replace (400, 422) changes nothing, without replace the upsert as before",
     )
-    add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="_compress_convert_errors utility")
+    add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="split_fx_issues, group_fx_issues, issue detail text")
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")

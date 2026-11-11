@@ -719,6 +719,14 @@ raggiungibile», mai «irraggiungibile». I 110 siti ora loggano: conviene parti
 
 # PAC e strumenti
 
+## 💾 Scenari salvati degli Strumenti (idea del developer, 11/11/2026)
+
+Salvare la configurazione di un piano (PAC, Ribilanciatore) e riprenderla: un bottone alla fine, la scelta all'inizio,
+anche più di uno scenario. Il calcolo resta senza stato: lo scenario è un documento dell'utente che la pagina rimanda per
+intero. Tre strade (file esportato, memoria del browser, tabella sul server) e i punti aperti (dati copiati che
+invecchiano, versione del contratto) in `LibreFolio_developer_journal/Release_2/Phase_2/67_rebalancer/idea-scenari-salvati-REB.md`.
+Non è nel giro della 1.4.
+
 ## 💸 PAC/Rebalancer — Profili Commissionali Avanzati per Broker e Mercato
 
 **Data aggiunta**: 15 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: Media

@@ -237,10 +237,10 @@
     let previewViewMode: 'absolute' | 'percentage' = $derived(previewView === 'absolute' ? 'absolute' : 'percentage');
     let previewIsCalendar = $derived(previewView === 'calendar-return');
     /**
-     * The signals the rolling-return view draws: the comparisons of its domain, as the detail pages' panels offer there
-     * (Y5-F2). The other saved signals stay saved, only hidden from the list while that view is on.
+     * The signals the rolling-return view draws: the comparisons, of both types (an asset list compares FX pairs too, an FX list assets, as
+     * the detail pages' panels do: FB-11). The other saved signals stay saved, only hidden from the list while that view is on.
      */
-    let signalTypesShown = $derived(previewIsCalendar ? (axisDomain === 'fx' ? ['fx-pair'] : ['asset-comparison']) : undefined);
+    let signalTypesShown = $derived(previewIsCalendar ? ['asset-comparison', 'fx-pair'] : undefined);
 
     function generateSyntheticData(DAYS: number = SYNTHETIC_DAYS): LineDataPoint[] {
         const baseDates: LineDataPoint[] = [];

@@ -39,6 +39,11 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - El comando de copia de seguridad lee `--password-file` y `--instance-key-file` con una sola apertura: un archivo cambiado después de la comprobación ya no puede leerse en su lugar.
 
 - En una instancia bloqueada por su proveedor de alojamiento, el administrador también ve las «Copias de seguridad ya guardadas» y puede descargarlas, no solo hacer una nueva.
+
+### ⚠️ Cambios incompatibles
+
+- Los endpoints de consulta de precios, de consulta de eventos y de conversión ya no informan los tipos de cambio que faltan como texto en `errors`: llegan en una nueva lista `fx_issues` de `{code, from_currency, to_currency, first_date, last_date, count}`, en el sentido de la conversión.
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** es la versión para quien gestiona la instancia: da al administrador lo necesario para abrir LibreFolio a su familia y amigos, y para mantenerlo seguro.

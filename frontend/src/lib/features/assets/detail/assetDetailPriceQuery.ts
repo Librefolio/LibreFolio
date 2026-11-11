@@ -14,6 +14,7 @@
  * @module features/assets/detail/assetDetailPriceQuery
  */
 
+import {priceRateIssueOf, type FxIssueLike} from '$lib/features/signals/fxIssue';
 import {schemas} from '$lib/api';
 import {backendSignalSchemas} from '$lib/features/signals/backendTypes';
 import type {SignalConfig} from '$lib/features/signals/ChartSignal';
@@ -82,13 +83,11 @@ export function parseAssetPriceQueryWithSignalIsolation(data: unknown): {items: 
 }
 
 /**
- * The FX conversion error of a price query item: its first error, if that one is about a
- * conversion and not about an event.
+ * The FX conversion failure of a price query item: its first price that could not be converted for want of a rate
+ * (`fx_issues`, CP-11d), the pair in the direction of the conversion. An event that could not be converted is not one.
  */
-export function priceConversionErrorFromItem(item: Record<string, unknown> | undefined): string | undefined {
-    const errors = item && Array.isArray(item.errors) ? item.errors.filter((error): error is string => typeof error === 'string') : [];
-    const firstError = errors[0];
-    return firstError && !/\bfor event on\b/i.test(firstError) && /\b(?:fx|conversion|currenc)/i.test(firstError) ? firstError : undefined;
+export function priceConversionIssueFromItem(item: Record<string, unknown> | undefined): FxIssueLike | undefined {
+    return priceRateIssueOf(item);
 }
 
 /**
@@ -161,13 +160,14 @@ export function calendarComparisonProblemsFromResponse(responseItems: unknown[],
         }
 
         let problem = getSignalProblem(instance);
-        const priceConversionError = priceConversionErrorFromItem(item);
+        const priceConversionIssue = priceConversionIssueFromItem(item);
         const targetAsset = context.assets.find((asset) => asset.id === assetId);
-        if (problem?.code === 'missing_input_fields' && priceConversionError && targetAsset?.currency && context.displayCurrency && targetAsset.currency !== context.displayCurrency) {
+        if (problem?.code === 'missing_input_fields' && priceConversionIssue && targetAsset?.currency && context.displayCurrency && targetAsset.currency !== context.displayCurrency) {
             problem = {
                 ...problem,
                 code: 'fx_conversion_unavailable',
-                message: priceConversionError,
+                message: null,
+                fxIssue: priceConversionIssue,
             };
         }
         if (problem) problems.set(assetId, problem);
@@ -188,7 +188,7 @@ export function calendarComparisonFxFailuresFromResponse(responseItems: unknown[
             if (previousFailures.has(assetId)) failedAssetIds.add(assetId);
             continue;
         }
-        if (priceConversionErrorFromItem(item)) failedAssetIds.add(assetId);
+        if (priceConversionIssueFromItem(item)) failedAssetIds.add(assetId);
     }
     return failedAssetIds;
 }

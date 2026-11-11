@@ -475,7 +475,8 @@ async def test_missing_rate_leaves_the_event_native_and_warns(asset_with_events,
     stranded = next(ev for ev in result.events if ev.date == BASE_DATE + timedelta(days=2))
     assert stranded.value.code == "USD"
     assert stranded.original_value is None
-    assert any("Missing FX rate USD->EUR" in err for err in result.errors)
+    # CP-11d: the event that could not be converted is data, in the direction of the conversion; no text for it
+    assert [(issue.code, issue.from_currency, issue.to_currency, issue.first_date, issue.count) for issue in result.fx_issues] == [("event_rate_missing", "USD", "EUR", stranded.date, 1)]
     # The converter's own error is surfaced too, exactly once.
     assert result.errors.count("rate provider unavailable") == 1
 

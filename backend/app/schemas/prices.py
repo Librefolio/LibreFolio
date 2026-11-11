@@ -47,6 +47,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    FxConversionIssue,
     MinStartDateRangeModel,
     SafeDecimal,
     StrictModel,
@@ -426,7 +427,8 @@ class FAPriceQueryResult(StrictModel):
         default_factory=list,
         description="Asset events (if requested). Includes DB id + is_auto flag so the frontend editor can reference them by id.",
     )
-    errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. FX pair missing)")
+    errors: List[str] = Field(default_factory=list, description="Non-fatal warnings that are not a missing exchange rate")
+    fx_issues: List[FxConversionIssue] = Field(default_factory=list, description="The conversions that failed for want of an exchange rate, one per pair, in the direction of the conversion (CP-11d)")
     signals: List[SignalResult] = Field(
         default_factory=list,
         description=(

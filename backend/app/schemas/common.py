@@ -552,6 +552,26 @@ class BackwardFillInfo(BaseModel):
         return parse_ISO_date(v)
 
 
+class FxConversionIssue(BaseModel):
+    """A conversion that could not be made for want of an exchange rate, said as data (CP-11d).
+
+    ``from_currency`` → ``to_currency`` is the direction of the conversion, never the alphabetical order the pair is stored in.
+    One entry covers every day of a pair that failed the same way: ``count`` distinct days from ``first_date`` to ``last_date``.
+
+    - ``rate_not_found``: no rate stored on or before the day, so the value stays in its own currency;
+    - ``event_rate_missing``: an event of that day could not be converted, so it carries no converted value.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: Literal["rate_not_found", "event_rate_missing"] = Field(..., description="What failed")
+    from_currency: str = Field(..., description="The currency the conversion starts from")
+    to_currency: str = Field(..., description="The currency it should arrive in")
+    first_date: date_type = Field(..., description="The first day that failed")
+    last_date: date_type = Field(..., description="The last day that failed")
+    count: int = Field(..., ge=1, description="How many distinct days failed")
+
+
 class FxBackwardFillInfo(BaseModel):
     """
     FX-specific backward-fill staleness, decoupled from price backward-fill.
