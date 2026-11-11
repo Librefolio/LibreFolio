@@ -64,7 +64,7 @@ import type {SignalInstanceResult} from '$lib/charts/signals/resultMapper';
 import * as module from '$lib/charts/chartSignalRendering';
 import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignal, renderLocalSignals, type ComparisonTarget, type FxRatePoint, type SignalDataSources} from '$lib/charts/chartSignalRendering';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-import {displayFxRate} from '$lib/stores/fxStoreRegistry';
+import {displayFxRate} from '$lib/features/fx/fxStoreRegistry';
 import {extractDaysBack} from '$lib/utils/assetPriceDerived';
 
 type ViewMode = Parameters<typeof renderLocalSignal>[2];

@@ -8,7 +8,7 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
     ensureCurrenciesLoaded: vi.fn(),
     getCurrencyInfo: (code: string) => ({code, flag_emoji: '🏳️'}),
 }));
-vi.mock('$lib/stores/fx/fxCardInversionStore', () => ({
+vi.mock('$lib/features/fx/fxCardInversionStore', () => ({
     isCardInverted: vi.fn(() => false),
     setCardInverted: vi.fn(),
 }));

@@ -19,7 +19,7 @@ import type {ComparisonTarget} from '$lib/charts/chartSignalRendering';
 import type {SignalConfig} from '$lib/charts/signals';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {apiPricesToAssetPricePoints, getAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
-import {ensureFxRangeFromFirstDay, ensureFxRangeLoaded} from '$lib/stores/fxStoreRegistry';
+import {ensureFxRangeFromFirstDay, ensureFxRangeLoaded} from '$lib/features/fx/fxStoreRegistry';
 import {todayIso} from '$lib/utils/dateOnly';
 
 /** An asset a comparison draws, with the currency its series is cached in. */

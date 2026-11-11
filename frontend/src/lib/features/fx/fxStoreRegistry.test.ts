@@ -49,7 +49,7 @@ vi.mock('$lib/api/bulkBatches', async (importOriginal) => {
 import {zodiosApi} from '$lib/api';
 import {notifyPortfolioMutation, notifyPricesCaughtUp, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
 import {firstDateOf, forgetAllFirstDates, forgetFirstDate} from '$lib/stores/firstSeriesDates';
-import * as registry from '../fxStoreRegistry';
+import * as registry from './fxStoreRegistry';
 import {
     apiResultToFxDataPoint,
     apiResultsToCanonicalFxDataPoints,
@@ -67,8 +67,8 @@ import {
     lookupFxRateSync,
     parsePairSlug,
     removeFxStore,
-} from '../fxStoreRegistry';
-import type {FxRatesAndSignalsBulkRequest, FxRatesAndSignalsBulkResult} from '../fxStoreRegistry';
+} from './fxStoreRegistry';
+import type {FxRatesAndSignalsBulkRequest, FxRatesAndSignalsBulkResult} from './fxStoreRegistry';
 
 const mockConvert = vi.mocked(zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post);
 

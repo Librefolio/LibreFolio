@@ -16,7 +16,7 @@ import {signalFromConfig, type RenderedSignal, type SignalConfig, type SignalDef
 import {renderBackendSignalResult} from '$lib/charts/signals/backendRenderer';
 import type {SignalInstanceResult} from '$lib/charts/signals/resultMapper';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-import {displayFxRate} from '$lib/stores/fxStoreRegistry';
+import {displayFxRate} from '$lib/features/fx/fxStoreRegistry';
 import {extractDaysBack} from '$lib/utils/assetPriceDerived';
 
 type ViewMode = 'absolute' | 'percentage';

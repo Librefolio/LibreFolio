@@ -19,7 +19,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {parseFxConvertWithSignalIsolation, type FxConvertAnswer} from '$lib/components/fx/fxDetailConvertQuery';
+    import {parseFxConvertWithSignalIsolation, type FxConvertAnswer} from '$lib/features/fx/fxDetailConvertQuery';
     import {canonicalCacheKey, comparisonSeriesAnswers, fxSignalAnswers} from '$lib/stores/signalResultCache';
     import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
@@ -34,9 +34,9 @@
     import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
     import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
-    import FxDataEditorSection from '$lib/components/fx/FxDataEditorSection.svelte';
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
-    import FxPriceSummary from '$lib/components/fx/FxPriceSummary.svelte';
+    import FxDataEditorSection from '$lib/features/fx/FxDataEditorSection.svelte';
+    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
+    import FxPriceSummary from '$lib/features/fx/FxPriceSummary.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -60,11 +60,11 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
-    import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {fetchFxPeriodChanges} from '$lib/utils/periodChanges';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
-    import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
+    import {setCardInverted} from '$lib/features/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';

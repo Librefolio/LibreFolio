@@ -13,7 +13,7 @@
     import type {RiskBenchmarkState} from '$lib/features/risk/riskBenchmarkStore.svelte';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import KpiCard from '$lib/features/dashboard/KpiCard.svelte';
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';

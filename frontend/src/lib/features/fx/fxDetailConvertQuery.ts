@@ -6,7 +6,7 @@
  * included, so a single invalid signal result threw the rates of the answer away too: the chart lost them, and «All»
  * never resolved its start.
  *
- * @module components/fx/fxDetailConvertQuery
+ * @module features/fx/fxDetailConvertQuery
  */
 
 import type {z} from 'zod';

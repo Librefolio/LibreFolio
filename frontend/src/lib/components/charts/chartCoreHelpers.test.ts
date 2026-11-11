@@ -285,7 +285,7 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(settingsAxisContext).toContain('const pair = pairs.find((item) => item.config.slug === settingsTargetSlug);');
             expect(settingsAxisContext).toContain("if (!pair) return settingsTargetSlug.replace('-', '/');");
             expect(settingsAxisContext).toMatch(/return\s+isCardInverted\(settingsTargetSlug\)\s*\?\s*`\$\{pair\.config\.quote\}\/\$\{pair\.config\.base\}`\s*:\s*`\$\{pair\.config\.base\}\/\$\{pair\.config\.quote\}`;/);
-            expect(source).toMatch(/import\s+\{\s*isCardInverted\s*\}\s+from\s+['"]\$lib\/stores\/fx\/fxCardInversionStore['"]/);
+            expect(source).toMatch(/import\s+\{\s*isCardInverted\s*\}\s+from\s+['"]\$lib\/features\/fx\/fxCardInversionStore['"]/);
         });
 
         /**
@@ -5237,7 +5237,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
         it.each([
             ['AssetCard', new URL('../assets/AssetCard.svelte', import.meta.url)],
-            ['FxCard', new URL('../fx/FxCard.svelte', import.meta.url)],
+            ['FxCard', new URL('../../features/fx/FxCard.svelte', import.meta.url)],
         ] as const)('%s selects the active primary profile and passes secondary profiles', (_name, path) => {
             const source = readFileSync(path, 'utf8');
             const compactChart = source.match(/<PriceChartCompact\b[\s\S]*?\/>/)?.[0];

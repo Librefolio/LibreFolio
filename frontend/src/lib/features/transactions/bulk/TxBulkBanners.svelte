@@ -19,10 +19,10 @@
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
-    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
+    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/features/fx/fxConversionHelper';
     import {promotePairOrder} from './promoteHelpers';
     import {formatFixed} from '$lib/utils/core/formatFixed';
-    import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import type {FxDataPoint} from '$lib/features/fx/fxStoreRegistry';
     import type {ValidationIssue} from '../types';
     import type {PendingOp, SuggestEntry} from './txBulkTypes';
     import type DataTable from '$lib/components/table/DataTable.svelte';

@@ -31,7 +31,7 @@
     import {ConfirmModal} from '$lib/components/table';
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
     import type {ChainStep} from '$lib/utils/currency/currencyGraph';
-    import {getRegisteredPairs} from '$lib/stores/fxStoreRegistry';
+    import {getRegisteredPairs} from '$lib/features/fx/fxStoreRegistry';
     import {ensureFxRoutesLoaded, getConfiguredPairSlugs, fxRoutesVersion} from '$lib/stores/reference/fxRoutesStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';

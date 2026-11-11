@@ -48,7 +48,7 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
 
 import {fireEvent, render, setupI18n, within} from '$test/component';
 import {uiLocale} from '$lib/stores/app/uiLocale';
-import {clearCardInversions} from '$lib/stores/fx/fxCardInversionStore';
+import {clearCardInversions} from '$lib/features/fx/fxCardInversionStore';
 import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
 import FxCard from './FxCard.svelte';
 

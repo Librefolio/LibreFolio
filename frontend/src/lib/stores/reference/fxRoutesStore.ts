@@ -20,7 +20,7 @@
  */
 import {zodiosApi} from '$lib/api';
 import {writable} from 'svelte/store';
-import {createPairSlug} from '$lib/stores/fxStoreRegistry';
+import {createPairSlug} from '$lib/features/fx/fxStoreRegistry';
 
 // ============================================================================
 // INTERNAL STATE
