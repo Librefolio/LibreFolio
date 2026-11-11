@@ -2533,7 +2533,7 @@ NOT_BUNDLED_SOURCES = {
     "lib/utils/x.spec.ts": "a Vitest file",
     "routes/x/page.test.ts": "a Vitest file",
     "__tests__/component.ts": "a Vitest harness",
-    "lib/charts/__tests__/fixtures/series.json": "a Vitest fixture",
+    "lib/features/signals/__tests__/fixtures/series.json": "a Vitest fixture",
     "__mocks__/$app/navigation.ts": "a Vitest module mock",
 }
 
@@ -3173,7 +3173,7 @@ UNLISTED_SAMPLES = [
     "frontend/src/.DS_Store",
     "frontend/static/fonts/noto-color-emoji/.cache_manifest.json",
     "frontend/src/x.test.ts",
-    "frontend/src/lib/charts/__tests__/fixtures/series.json",
+    "frontend/src/lib/features/signals/__tests__/fixtures/series.json",
     "frontend/src/__mocks__/$app/navigation.ts",
     "frontend/src/lib/api/generated.ts",
 ]
