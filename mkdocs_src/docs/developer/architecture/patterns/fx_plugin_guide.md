@@ -64,7 +64,7 @@ graph TD
     style S4 fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
 ```
 
-**Phase 1** happens when a user adds a new currency pair — the system queries providers to discover which currencies they support. That query is `GET /fx/providers`, which reaches `get_supported_currencies()` only through `backend/app/services/fx/catalog.py`: each provider's list is cached for 24 hours (named cache `fx_provider_currencies`, see [Cache Registry](../settings_cache.md)); if the call raises or takes longer than 5 seconds, the endpoint answers with the last list that provider returned in this process (empty before its first success) and tries again 5 minutes later. A provider may therefore fetch its list over the network, but must not rely on being called on every request.
+**Phase 1** happens whenever the frontend asks for the provider catalogue — once per page session, on the first view that uses the currency graph (for example when a user adds a currency pair), and on each opening of the About tab. The system queries providers to discover which currencies they support. That query is `GET /fx/providers`, which reaches `get_supported_currencies()` only through `backend/app/services/fx/catalog.py`: each provider's list is cached for 24 hours (named cache `fx_provider_currencies`, see [Cache Registry](../settings_cache.md)); if the call raises or takes longer than 5 seconds, the endpoint answers with the last list that provider returned in this process (empty before its first success) and tries again 5 minutes later. A provider may therefore fetch its list over the network, but must not rely on being called on every request.
 
 **Phase 2** happens during sync — the system requests actual rate data for specific date ranges.
 

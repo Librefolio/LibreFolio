@@ -41,7 +41,6 @@
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
-        backendSignalSchemas,
         buildBackendSignalRequestPlan,
         getSignalProblem,
         getLocalSignalDefinitions,
@@ -72,8 +71,8 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
-    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, earliestComparisonDate, type ComparisonAssetsLoadResult, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
-    import {detailPageSignalSources} from '$lib/charts/chartPageSignals';
+    import {applyComparisonAssetsData, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {comparisonAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
     import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {buildAssetComparisonQuery} from '$lib/charts/crossTypeCalendar';
     import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/charts/fxDetailCalendar';
@@ -596,11 +595,6 @@
         }
     }
 
-    function parseBackendSignalResults(value: unknown): BackendSignalResult[] {
-        if (!Array.isArray(value)) return [];
-        return value.map((item) => backendSignalSchemas.result.parse(item));
-    }
-
     type FxConvertBulkBody = Parameters<typeof zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post>[0];
 
     /** X-R16: the conversion read with signal isolation, as on the asset page, so an invalid signal result keeps the rates. */
@@ -623,35 +617,6 @@
                 .requests.map((request) => `${request.signal_code}:${JSON.stringify(request.params ?? {})}`)
                 .sort(),
         );
-    }
-
-    const comparisonRuntimeParamKeys = new Set<string>(COMPARISON_ASSET_RUNTIME_PARAM_KEYS);
-
-    function signalDataContextFingerprint(configs: SignalConfig[]): string {
-        return JSON.stringify(
-            configs
-                .map((config) => ({
-                    id: config.id,
-                    signalType: config.signalType,
-                    params: Object.fromEntries(
-                        Object.entries(config.params)
-                            .filter(([key]) => !comparisonRuntimeParamKeys.has(key))
-                            .sort(([left], [right]) => left.localeCompare(right)),
-                    ),
-                }))
-                .sort((left, right) => left.id.localeCompare(right.id)),
-        );
-    }
-
-    function comparisonAssetIds(configs: SignalConfig[]): number[] {
-        return [
-            ...new Set(
-                configs
-                    .filter((config) => config.signalType === 'asset-comparison')
-                    .map((config) => Number(config.params.assetId))
-                    .filter((assetId) => Number.isSafeInteger(assetId) && assetId > 0),
-            ),
-        ].sort((left, right) => left - right);
     }
 
     function comparisonLoadFingerprint(configs: SignalConfig[]): string {
