@@ -197,7 +197,7 @@ reads its points as `FAPriceWritePoint` (`FAUpsert.prices`), whose `open`, `high
   (`_price_limit_issue()`);
 - its JSON schema carries `enum: ["clear"]` beside pydantic's `const`, so that the generated
   client reads `z.literal('clear')`: `openapi-zod-client` 1.18.3 ignores `const`, and
-  `schemas/signals.py` pins its literals the same way.
+  `schemas/signals/` pins its literals the same way.
 
 `FAPricePoint`, the model of a provider's history, of the query answers and of a sync's
 `changed_points`, checks no sign since N92: the refresh decides about a provider's day. Before

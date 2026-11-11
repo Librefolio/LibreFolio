@@ -1777,7 +1777,7 @@ both by default; a finite value too large for its column is another matter: see
   or `1E+400` fails it, named by route, model and field. Two barriers keep it from passing empty: a minimum number of
   routes walked, and at least one float found.
 - **Today: six request floats.** Five are signal parameters of the annotation requests that
-  `POST /assets/prices/query` and `POST /fx/currencies/convert` accept (`backend/app/schemas/signals.py`):
+  `POST /assets/prices/query` and `POST /fx/currencies/convert` accept (`backend/app/schemas/signals/`):
   `epsilon` and `relative_epsilon`, declared in `SignalAnnotationRequestBase`, of both `SignalLineCrossoverRequest`
   and `SignalThresholdCrossingRequest`, and `threshold` of the second, all `FiniteFloat` already. The sixth is the
   plain value of a plugin setting (`PluginSettingWriteItem.value`, `PATCH /settings/plugins/bulk`):
@@ -1791,8 +1791,8 @@ both by default; a finite value too large for its column is another matter: see
   message. A new free-form position fails it until it is added there with its probe. Today there are five:
   `FAProviderAssignmentItem.provider_params` and `FAProviderProbeRequest.provider_params` (`POST /assets/provider` and
   `/assets/provider/probe`; their base is `FAProviderConfigBase`, in `backend/app/schemas/provider.py`),
-  `RiskAnalyticRequest.parameters` (`POST /risk/query`, `backend/app/schemas/risk.py`), `SignalRequest.params`
-  (`POST /assets/prices/query`, `/fx/currencies/convert` and `/signals/preview`; `backend/app/schemas/signals.py`) and
+  `RiskAnalyticRequest.parameters` (`POST /risk/query`, `backend/app/schemas/risk/`), `SignalRequest.params`
+  (`POST /assets/prices/query`, `/fx/currencies/convert` and `/signals/preview`; `backend/app/schemas/signals/`) and
   `ToolComputeItem.parameters` (`POST /tools/compute`, `backend/app/schemas/tools.py`). The provider parameters hold
   `Any`, the other three `JsonValue`. The two provider requests and `RiskAnalyticRequest` now run `ensure_json_safe`
   (`backend/app/utils/json_utils.py`) in a `field_validator(mode="before")`, as `SignalRequest.params` already did:
