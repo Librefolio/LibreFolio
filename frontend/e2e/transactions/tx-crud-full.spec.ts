@@ -75,10 +75,9 @@ async function saveFormModal(page: Page) {
 /** Open the BulkModal by clicking the bulk-edit button. */
 async function openBulkModal(page: Page) {
     const bulkBtn = page.getByTestId('tx-bulk-button');
-    if (await bulkBtn.isVisible({timeout: 3_000}).catch(() => false)) {
-        await bulkBtn.click();
-        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
-    }
+    await expect(bulkBtn).toBeVisible({timeout: 5_000});
+    await bulkBtn.click();
+    await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 }
 
 // ---------------------------------------------------------------------------
@@ -115,9 +114,8 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
             .locator('[data-testid^="search-select-option-"]')
             .filter({hasText: /cash transfer/i})
             .first();
-        if (await appears(ctOption)) {
-            await ctOption.click();
-        }
+        await expect(ctOption).toBeVisible({timeout: 3_000});
+        await ctOption.click();
 
         // The FormModal should show dual-form layout for paired type
         const formModal = page.getByTestId('tx-form-modal');
@@ -137,29 +135,25 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
             .locator('[data-testid^="search-select-option-"]')
             .filter({hasText: /withdrawal/i})
             .first();
-        if (await appears(wOption)) {
-            await wOption.click();
-        }
+        await expect(wOption).toBeVisible({timeout: 3_000});
+        await wOption.click();
         await optionsClosed(page);
 
         // Pick first broker
         const brokerWrap = page.getByTestId('tx-form-broker-wrap');
         await brokerWrap.locator('button, [role="combobox"]').first().click();
         const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
-        if (await appears(brokerOption)) {
-            await brokerOption.click();
-        }
+        await expect(brokerOption).toBeVisible({timeout: 3_000});
+        await brokerOption.click();
         await optionsClosed(page);
 
         // Set cash amount
         const cashWrap = page.getByTestId('tx-form-cash-wrap');
-        if (await appears(cashWrap)) {
-            const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
-            if (await appears(cashInput, 1_000)) {
-                await cashInput.fill('500');
-                await expect(cashInput).toHaveValue('500');
-            }
-        }
+        await expect(cashWrap).toBeVisible({timeout: 3_000});
+        const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
+        await expect(cashInput).toBeVisible({timeout: 3_000});
+        await cashInput.fill('500');
+        await expect(cashInput).toHaveValue('500');
 
         await saveFormModal(page);
 
@@ -241,12 +235,14 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
         // Check BulkModal is visible
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
-        // If there are promote suggestions, verify the banner has the header
+        // Optional by design: promote suggestions exist only when the shared data holds a pairable couple.
+        // Absent → the banner must really be absent.
         const suggestBanner = page.getByTestId('promote-suggest-banner');
-        const bannerVisible = await suggestBanner.isVisible({timeout: 2_000}).catch(() => false);
-        if (bannerVisible) {
+        if (await appears(suggestBanner, 2_000)) {
             // The banner should contain the "detected" header text
             await expect(suggestBanner).toContainText(/detected|rilevate|détectées|detectadas/i);
+        } else {
+            await expect(suggestBanner).toBeHidden();
         }
     });
 
@@ -267,8 +263,7 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
         // BulkModal should be visible and not show errors
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
         const errorBanner = page.getByTestId('tx-bulk-validate-error');
-        const hasErrors = await errorBanner.isVisible({timeout: 1_000}).catch(() => false);
         // No validation errors expected for a simple DEPOSIT
-        expect(hasErrors).toBe(false);
+        await expect(errorBanner).toBeHidden();
     });
 });
