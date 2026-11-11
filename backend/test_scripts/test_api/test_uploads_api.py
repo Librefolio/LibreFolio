@@ -152,7 +152,7 @@ async def bundled_icon_problem(client: httpx.AsyncClient, code: str, icon_url: s
     """GET a BRIM plugin's bundled icon on the test server; what is wrong with the answer (status, image type of the file, its bytes), or None.
 
     ``icon_url`` must start with ``BRIM_STATIC_PREFIX``: the request goes to the test server, never to a third party."""
-    asset_path = uploads_api.PLUGIN_STATIC_DIRS["brim"] / icon_url.removeprefix(BRIM_STATIC_PREFIX)
+    asset_path = uploads_api.plugin_static_file("brim", icon_url.removeprefix(BRIM_STATIC_PREFIX))
     expected_type = mimetypes.guess_type(asset_path.name)[0] or ""
     response = await client.get(f"{SERVER_BASE}{icon_url}", timeout=TIMEOUT)
     if response.status_code != 200:
@@ -1056,9 +1056,15 @@ class TestPluginStatic:
 
         candidate = None
         for provider_type, base_dir in uploads_api.PLUGIN_STATIC_DIRS.items():
-            for asset_path in sorted(base_dir.rglob("*")):
-                if asset_path.is_file():
-                    candidate = (provider_type, asset_path, asset_path.relative_to(base_dir).as_posix())
+            # brim: the static folders are the plugins' own (``<plugin>/static/``); fx and asset: the family's one folder
+            static_dirs = sorted(base_dir.glob("*/static")) if provider_type == "brim" else [base_dir]
+            for static_dir in static_dirs:
+                for asset_path in sorted(static_dir.rglob("*")):
+                    if asset_path.is_file():
+                        rel_path = asset_path.relative_to(base_dir).as_posix().replace("/static/", "/", 1) if provider_type == "brim" else asset_path.relative_to(base_dir).as_posix()
+                        candidate = (provider_type, asset_path, rel_path)
+                        break
+                if candidate:
                     break
             if candidate:
                 break
@@ -1114,6 +1120,32 @@ class TestPluginStatic:
             assert response.status_code == 404
 
             print_success("✓ Got 404 for non-existent asset")
+
+
+class TestPluginStaticFile:
+    """``plugin_static_file``: where a plugin-static URL path lands. Pure: no server."""
+
+    def test_a_brim_path_is_a_plugin_folder_and_a_file_of_its_own_static_folder(self):
+        """BRIM static files live in the plugin's own folder: ``<plugin>/<file>`` is ``brim_providers/<plugin>/static/<file>``."""
+        found = uploads_api.plugin_static_file("brim", "broker_scalable/broker.png")
+        assert found is not None and found.is_file()
+        assert found == (uploads_api.PLUGIN_STATIC_DIRS["brim"] / "broker_scalable" / "static" / "broker.png").resolve()
+
+    @pytest.mark.parametrize("path", ["../uploads.py", "broker_scalable/../broker_scalable_deposit/static/deposit.png", "..", "", "/etc/passwd", "broker_scalable/../../../../etc/passwd"])
+    def test_a_brim_path_cannot_leave_the_static_folder_of_a_plugin(self, path):
+        """Nothing outside ``<plugin>/static/`` is reachable: a path that leaves it, or names no plugin, resolves to None."""
+        assert uploads_api.plugin_static_file("brim", path) is None
+
+    @pytest.mark.parametrize("path", ["scalable/broker.png", "broker_scalable/static/../plugin.py", "sample_reports/degiro-export.csv", "no_such_plugin/logo.png", "broker_scalable"])
+    def test_a_path_that_names_no_static_file_is_not_a_file(self, path):
+        """The old shared folder (``scalable/broker.png``) is gone, sample reports are not static files, a plugin alone is no file: 404, never a file."""
+        found = uploads_api.plugin_static_file("brim", path)
+        assert found is None or not found.is_file()
+
+    def test_fx_and_asset_keep_one_static_folder_per_family(self):
+        """fx and asset are unchanged: the path is inside the family's ``static/``."""
+        assert uploads_api.plugin_static_file("asset", "cssscraper.png") == (uploads_api.PLUGIN_STATIC_DIRS["asset"] / "cssscraper.png").resolve()
+        assert uploads_api.plugin_static_file("asset", "../plugin_x") is None
 
 
 # ============================================================================
