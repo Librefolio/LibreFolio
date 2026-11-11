@@ -100,7 +100,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import AssetPeriodContribution, PortfolioHolding
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PortfolioHolding
 from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio import wac as wac_module

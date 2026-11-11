@@ -16,23 +16,9 @@ from backend.app.db.models import (
     Transaction,
 )
 from backend.app.schemas.common import DateSpan
-from backend.app.schemas.portfolio import (
-    AcquisitionFundingSeries,
-    AllocationHistoryDimensions,
-    AllocationHistoryPoint,
-    BrokerPnlHistory,
-    CostHistorySeries,
-    DepositHistorySeries,
-    IncomeHistorySeries,
-    MwrrLinePoint,
-    PnlCandleSeries,
-    PortfolioHistoryPoint,
-    PortfolioReportMetadata,
-    PortfolioReportQuery,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    PositionsContribution,
-)
+from backend.app.schemas.portfolio.history import AcquisitionFundingSeries, BrokerPnlHistory, CostHistorySeries, DepositHistorySeries, IncomeHistorySeries, MwrrLinePoint, PnlCandleSeries, PortfolioHistoryPoint
+from backend.app.schemas.portfolio.report import AllocationHistoryDimensions, PortfolioReportMetadata, PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AllocationHistoryPoint, PortfolioSummary, PositionsContribution
 from backend.app.services.financial_math.yield_on_cost import (
     compute_yield_on_cost_dependency_identity,
 )

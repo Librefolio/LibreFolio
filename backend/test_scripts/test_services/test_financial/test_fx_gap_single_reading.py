@@ -126,7 +126,7 @@ from backend.app.db.base import SQLModel  # every model, for create_all; importi
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.precision import usable_fx_rate_bounds
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.services.financial_math.native_cash import MissingCashConversion, NativeCash
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, PortfolioCalculationResult

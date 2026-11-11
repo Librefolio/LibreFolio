@@ -46,7 +46,8 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioReportQuery, PositionKey, PositionsSeriesQuery
+from backend.app.schemas.portfolio.positions_series import PositionKey, PositionsSeriesQuery
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService

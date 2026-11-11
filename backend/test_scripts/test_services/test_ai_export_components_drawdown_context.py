@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.app.services.ai_export.components.drawdown_context as drawdown_module
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
 from backend.app.schemas.risk import (
     RiskAnalyticResult,
     RiskDrawdownOutput,

@@ -8,10 +8,7 @@ import pytest
 
 from backend.app.db.models import PriceHistory
 from backend.app.schemas.common import DateRangeModel, DateSpan
-from backend.app.schemas.portfolio import (
-    DataQualityExclusionReason,
-    DataQualityStatus,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason, DataQualityStatus
 from backend.app.schemas.prices import (
     AssetBackwardFillInfo,
     FAPricePoint,

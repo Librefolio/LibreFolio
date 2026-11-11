@@ -12,9 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import PriceHistory, Transaction
 from backend.app.schemas.common import Currency, DateSpan
-from backend.app.schemas.portfolio import (
-    LotAnalysisType,
-)
+from backend.app.schemas.portfolio.lots import LotAnalysisType
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.change_days import reading_change_days
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure

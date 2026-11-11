@@ -21,13 +21,7 @@ from pydantic import ValidationError
 
 from backend.app.db.models import AssetType, TransactionType, UserRole
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
-from backend.app.schemas.portfolio import (
-    PlannerSourceSection,
-    PortfolioPlannerCurrentDistribution,
-    PortfolioPlannerCurrentWeight,
-    PortfolioPlannerSourceRequest,
-    PortfolioPlannerSourceResponse,
-)
+from backend.app.schemas.portfolio.planner_source import PlannerSourceSection, PortfolioPlannerCurrentDistribution, PortfolioPlannerCurrentWeight, PortfolioPlannerSourceRequest, PortfolioPlannerSourceResponse
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.financial_math import average_cost
 from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, _fold_average_costs

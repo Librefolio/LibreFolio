@@ -9,10 +9,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import FxRate
-from backend.app.schemas.portfolio import (
-    PortfolioPlannerSourceFxQuote,
-    PortfolioPlannerSourceIssue,
-)
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceFxQuote, PortfolioPlannerSourceIssue
 from backend.app.services.pac_allocator.source.keys import FX_PROVENANCE_ID, date_param, field_issue, fx_key, normalized_fx_pair, text_param, usable_rate
 
 

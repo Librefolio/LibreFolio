@@ -185,7 +185,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.config import get_data_dir
 from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioReportQuery
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.services.financial_math.ledger_totals import compute_control_totals
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 

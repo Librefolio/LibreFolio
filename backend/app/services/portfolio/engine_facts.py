@@ -13,11 +13,8 @@ from backend.app.db.models import (
     TransactionType,
 )
 from backend.app.schemas.common import Currency, DateSpan
-from backend.app.schemas.portfolio import (
-    MwrrLinePoint,
-    PortfolioHistoryPoint,
-    UnrealizedBreakdownRow,
-)
+from backend.app.schemas.portfolio.history import MwrrLinePoint, PortfolioHistoryPoint
+from backend.app.schemas.portfolio.summary import UnrealizedBreakdownRow
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.native_cash import NativeCash
 from backend.app.services.financial_math.portfolio import period as period_math

@@ -57,12 +57,8 @@ from sqlalchemy import select
 
 from backend.app.db.models import Asset, FxRate
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import (
-    PortfolioHolding,
-    PortfolioReportQuery,
-    PortfolioReportResponse,
-    PortfolioSummary,
-)
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.fx_payloads import (
     FxConversionProvenancePayload,

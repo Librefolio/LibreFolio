@@ -11,13 +11,7 @@ from decimal import Decimal
 from typing import Callable, Sequence
 
 from backend.app.db.models import Transaction
-from backend.app.schemas.portfolio import (
-    LotPriceHistoryPoint,
-    LotReturnHistoryPoint,
-    LotValueHistoryPoint,
-    MarketPriceHistoryPoint,
-    PerformanceHistoryPoint,
-)
+from backend.app.schemas.portfolio.lots import LotPriceHistoryPoint, LotReturnHistoryPoint, LotValueHistoryPoint, MarketPriceHistoryPoint, PerformanceHistoryPoint
 from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots.conversions import ConvertedClosure, FxRateResolver, convert_closure
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics

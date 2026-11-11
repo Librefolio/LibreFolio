@@ -9,10 +9,7 @@ from decimal import Decimal
 import pycountry
 
 from backend.app.db.models import Asset
-from backend.app.schemas.portfolio import (
-    PortfolioPlannerSourceClassification,
-    PortfolioPlannerSourceIssue,
-)
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceClassification, PortfolioPlannerSourceIssue
 from backend.app.services.pac_allocator.source.keys import MARKET_PROVENANCE_ID, asset_key, classification_key, field_issue, text_param
 from backend.app.utils.asset.sector import FinancialSector
 

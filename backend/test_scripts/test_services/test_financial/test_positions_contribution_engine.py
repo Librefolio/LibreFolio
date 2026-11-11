@@ -190,7 +190,8 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import AssetPeriodContribution, PortfolioReportQuery, PortfolioSummary, PositionsContribution
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PortfolioSummary, PositionsContribution
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.portfolio import report as report_module

@@ -38,10 +38,8 @@ from types import MappingProxyType
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    PortfolioReportResponse,
-)
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution
 from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
 from backend.app.schemas.signals import (
     SignalAnnotationRequest,

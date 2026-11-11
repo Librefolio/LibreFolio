@@ -96,7 +96,7 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportPortfolioSnapshotRequest,
 )
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.risk import RiskQueryRequest, RiskResultStatus
 from backend.app.services.ai_export.components.types import Domain
 from backend.app.services.ai_export.datasets.catalog import PUBLIC_DATASETS

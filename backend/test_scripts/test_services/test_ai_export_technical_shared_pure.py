@@ -26,7 +26,7 @@ from typing import Any, get_args
 
 import pytest
 
-from backend.app.schemas.portfolio import AssetPeriodContribution
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.signals import SignalError, SignalResult, SignalStatus
 from backend.app.services.ai_export.components import technical_payloads

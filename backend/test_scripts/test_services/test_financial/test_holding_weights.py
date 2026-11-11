@@ -67,7 +67,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import PortfolioHolding, PortfolioSummary
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
 from backend.app.services.ai_export.components.broker_concentration_context import concentration_metrics
 from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio import wac as wac_module

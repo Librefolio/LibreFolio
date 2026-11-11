@@ -22,7 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, IssueCode, LotTimelineEventSchema
+from backend.app.schemas.portfolio.data_quality import IssueCode
+from backend.app.schemas.portfolio.lots import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, LotTimelineEventSchema
 from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
 from backend.app.services.portfolio.portfolio_service import PortfolioService

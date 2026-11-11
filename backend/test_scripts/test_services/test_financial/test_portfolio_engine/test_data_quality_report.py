@@ -29,14 +29,7 @@ import pytest
 
 import backend.app.services.financial_math.portfolio.models as portfolio_models
 from backend.app.schemas.common import DateSpan, shown_currency_text, suggested_iso_currency
-from backend.app.schemas.portfolio import (
-    DataQualityStatus,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
-    MissingPriceAsset,
-    StalePriceAsset,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityStatus, IssueCode, IssueDomain, IssueSeverity, MissingPriceAsset, StalePriceAsset
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder

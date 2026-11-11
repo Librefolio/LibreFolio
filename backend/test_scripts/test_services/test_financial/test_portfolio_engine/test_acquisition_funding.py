@@ -75,7 +75,8 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency as CurrencySchema
-from backend.app.schemas.portfolio import AcquisitionFundingSeries, PortfolioReportQuery
+from backend.app.schemas.portfolio.history import AcquisitionFundingSeries
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import AcquisitionFundingContribution, ClassifiedTransaction, PortfolioCalculationResult

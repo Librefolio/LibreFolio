@@ -125,7 +125,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
 from backend.app.services.financial_math.lots import histories
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.portfolio import lots_analysis_service

@@ -33,26 +33,11 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    AllocationItem,
-    AssetPeriodContribution,
-    LotAnalysisType,
-    LotCustodySummarySchema,
-    LotsAnalysisMetadata,
-    LotsAnalysisResponse,
-    LotSummarySchema,
-    OtherPeriodEffect,
-    OtherPeriodEffectCode,
-    PortfolioHistoryPoint,
-    PortfolioHolding,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    PositionsContribution,
-    YieldOnCostProvenance,
-    YieldOnCostResult,
-    YieldOnCostStatus,
-)
+from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotCustodySummarySchema, LotsAnalysisMetadata, LotsAnalysisResponse, LotSummarySchema
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AllocationItem, AssetPeriodContribution, OtherPeriodEffect, OtherPeriodEffectCode, PortfolioHolding, PortfolioSummary, PositionsContribution
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.services.ai_export.components import asset_resources, broker_financial, fx_core, portfolio_financial
 from backend.app.services.ai_export.components.envelope import ComponentPayloadValidationError, SectionEnvelope
 from backend.app.services.ai_export.components.payloads import portfolio_broker as shared_payloads

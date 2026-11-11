@@ -6,10 +6,7 @@ from datetime import date as date_type
 from decimal import Decimal
 from typing import Sequence
 
-from backend.app.schemas.portfolio import (
-    BrokerWACHistoryPoint,
-    CumulativeWACHistoryPoint,
-)
+from backend.app.schemas.portfolio.lots import BrokerWACHistoryPoint, CumulativeWACHistoryPoint
 from backend.app.services.financial_math.average_cost import AverageCost
 
 # Key of the average-cost line that pools every broker in scope (the cumulative WAC line).

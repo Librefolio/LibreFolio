@@ -78,7 +78,8 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse, PortfolioHolding, PortfolioSummary
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math import average_cost
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService

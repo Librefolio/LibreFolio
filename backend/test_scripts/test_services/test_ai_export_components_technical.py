@@ -36,12 +36,8 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PositionsContribution,
-)
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PositionsContribution
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.signals import (
     SignalBandComponent,

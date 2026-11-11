@@ -10,18 +10,10 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
-from backend.app.schemas.portfolio import (
-    DataQualityExcludedAsset,
-    DataQualityExclusionReason,
-    DataQualityReport,
-    DataQualityStatus,
-    MissingPriceAsset,
-    PortfolioHistoryPoint,
-    PortfolioHolding,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    StalePriceAsset,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport, DataQualityStatus, MissingPriceAsset, StalePriceAsset
+from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
 from backend.app.schemas.risk import (
     AssetReturnPoint,
     AssetReturnSeries,

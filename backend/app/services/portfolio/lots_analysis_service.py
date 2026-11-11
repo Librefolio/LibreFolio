@@ -12,21 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import DateSpan
-from backend.app.schemas.portfolio import (
-    DataQualityIssue,
-    DataQualityReport,
-    GanttSegmentSchema,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
-    LotAnalysisStatus,
-    LotAnalysisType,
-    LotsAnalysisMetadata,
-    LotsAnalysisResponse,
-    LotSummarySchema,
-    LotTimelineEventKind,
-    LotTimelineEventSchema,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityIssue, DataQualityReport, IssueCode, IssueDomain, IssueSeverity
+from backend.app.schemas.portfolio.lots import GanttSegmentSchema, LotAnalysisStatus, LotAnalysisType, LotsAnalysisMetadata, LotsAnalysisResponse, LotSummarySchema, LotTimelineEventKind, LotTimelineEventSchema
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.accounts.settings_service import get_effective_base_currency
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction

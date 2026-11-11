@@ -13,17 +13,8 @@ from backend.app.db.models import (
     Transaction,
 )
 from backend.app.schemas.common import DateSpan
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    OtherPeriodEffect,
-    OtherPeriodEffectCode,
-    PositionsContribution,
-    PositionSeries,
-    PositionSeriesPoint,
-    PositionsSeriesQuery,
-    PositionsSeriesResponse,
-    UnallocatedContribution,
-)
+from backend.app.schemas.portfolio.positions_series import PositionSeries, PositionSeriesPoint, PositionsSeriesQuery, PositionsSeriesResponse
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, OtherPeriodEffect, OtherPeriodEffectCode, PositionsContribution, UnallocatedContribution
 from backend.app.services.financial_math.holding_window import closed_position_window, exits_in, oldest_open_lot_date, quantity_moves
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.portfolio import period as period_math

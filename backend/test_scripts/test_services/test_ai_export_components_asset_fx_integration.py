@@ -52,7 +52,7 @@ setup_test_database()
 import backend.app.services.ai_export.components.technical_shared as technical_shared_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import LotAnalysisType
+from backend.app.schemas.portfolio.lots import LotAnalysisType
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
 from backend.app.services.ai_export.components.asset_fx_registry import (
     ASSET_FX_COMPONENTS,

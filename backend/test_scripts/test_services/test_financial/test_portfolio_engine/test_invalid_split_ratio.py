@@ -41,7 +41,7 @@ import pytest
 
 import backend.app.services.financial_math.portfolio.data_quality as data_quality
 import backend.app.services.financial_math.portfolio.models as portfolio_models
-from backend.app.schemas.portfolio import DataQualityReport, IssueDomain, IssueSeverity
+from backend.app.schemas.portfolio.data_quality import DataQualityReport, IssueDomain, IssueSeverity
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import FifoInputTransaction
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
@@ -143,7 +143,7 @@ def _invalid_split_issues(report) -> list:
 class TestInvalidSplitRatioIssue:
     def test_the_code_exists(self):
         """Red today: ``IssueCode.INVALID_SPLIT_RATIO`` == "INVALID_SPLIT_RATIO" (the frontend keys on the string)."""
-        from backend.app.schemas.portfolio import IssueCode  # noqa: PLC0415 — read when the test runs, so the module collects without it
+        from backend.app.schemas.portfolio.data_quality import IssueCode  # noqa: PLC0415 — read when the test runs, so the module collects without it
 
         assert getattr(IssueCode, INVALID_SPLIT_RATIO, None) == INVALID_SPLIT_RATIO, "schemas.portfolio.IssueCode has no INVALID_SPLIT_RATIO (MF-D4)"
 

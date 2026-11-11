@@ -76,7 +76,7 @@ from typing import Any
 import pytest
 
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import UnrealizedBreakdownRow
+from backend.app.schemas.portfolio.summary import UnrealizedBreakdownRow
 from backend.app.services.financial_math import average_cost, native_cash
 from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, CostStep, compute_average_costs
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST

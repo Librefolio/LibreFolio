@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess, PriceHistory, UserRole
-from backend.app.schemas.portfolio import (
+from backend.app.schemas.portfolio.planner_source import (
     PlannerSourceSection,
     PortfolioPlannerCurrentDistribution,
     PortfolioPlannerSourceFxQuote,
