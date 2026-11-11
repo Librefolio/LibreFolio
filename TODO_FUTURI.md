@@ -266,6 +266,12 @@ tenuti dal frontend, che si perderebbero a una ricarica o con un sync notturno.
 Prima di farlo va verificato che serva davvero (developer, 19/10: «prima facciamolo funzionare, magari scopriamo che
 non serve e i primi 3 sono sufficienti»). Si lega al task notturno: potrebbero diventare la stessa cosa.
 
+## 📸 Guide d'import — schermate dei portali dei broker (C-43, parcheggiata l'11/11/2026)
+
+Le pagine d'import di DEGIRO, Schwab, Revolut, Trading 212, eToro, Finpension, Freetrade e Coinbase hanno un segnaposto
+invisibile al posto della schermata del portale. Si fanno quando un utente manda il materiale, come per Crédit Agricole,
+Fineco e Trade Republic. Danske Bank ha le schermate di LibreFolio ma non quelle del portale: in attesa dell'utente.
+
 ## 📥 BRIM — riconoscere all'import una posizione chiusa (Directa, CSV generico)
 
 **Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA — da approfondire se ne vale la pena · **Priorità**: Bassa
