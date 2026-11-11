@@ -665,7 +665,7 @@ describe('AccountDeletionDialog — when the deletion is refused', () => {
     // red until A-16 — the key is in no catalogue yet, and the dialog shows LAST_ADMIN's sentence
     it.each(UI_LANGUAGES)('ADEL-28 (self, %s): refused with the 400 LAST_ADMIN, the error and its toast say settings.usersTab.errors.LAST_ADMIN_DELETION in the UI language — not the server’s sentence, not LAST_ADMIN’s —, and the dialog stays open', async (language) => {
         const expected = sentenceOf(language, LAST_ADMIN_DELETION_KEY);
-        expect.soft(expected, `${LAST_ADMIN_DELETION_KEY} is missing from the ${language} catalogue: A-16 adds it to the settings i18n source (src/lib/i18n/settings/${language}.json)`).toEqual(expect.stringMatching(/\S/));
+        expect.soft(expected, `${LAST_ADMIN_DELETION_KEY} is missing from the ${language} catalogue: A-16 adds it to the settings i18n source (src/lib/features/settings/i18n/${language}.json)`).toEqual(expect.stringMatching(/\S/));
         await readTheCatalogues(language);
         deleteOwn().mockRejectedValue(httpError(400, {detail: LAST_ADMIN_REFUSAL}));
         const ui = mountDialog(SELF);

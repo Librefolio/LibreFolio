@@ -288,7 +288,7 @@ const OLD_FLOOR = '1900-01-01';
 /** The issue the batch's date stage writes on a create dated past the ceiling: `params` is `{max}` alone; its English `error` differs from the catalogue's text. */
 const DATE_ISSUE: ResolvableIssue = {operation: 'create', code: 'dateOutOfRange', params: {max: DATE_CEILING}, field: 'date', error: `date 2026-10-25 is after ${DATE_CEILING}`};
 
-/** `transactions.fields.date` as the catalogue reads it (`src/lib/i18n/transactions/<lang>.json`), checked by a control in each test. */
+/** `transactions.fields.date` as the catalogue reads it (`src/lib/features/transactions/i18n/<lang>.json`), checked by a control in each test. */
 const DATE_LABEL: Record<Speech, string> = {en: 'Date', it: 'Data', fr: 'Date', es: 'Fecha'};
 
 describe('R13-SEC7-3 — the resolver puts the field label in front of dateOutOfRange (catalogue faked)', () => {

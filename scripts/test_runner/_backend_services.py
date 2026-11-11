@@ -1149,7 +1149,7 @@ def services_brim_parse_failure_detail(verbose: bool = False, test_names: list =
 def services_brim_parse_error_codes(verbose: bool = False, test_names: list = None) -> bool:
     """Test that every BRIMParseError of a BRIM plugin carries a code the wizard translates (W5-6, E-21)."""
     print_section("Services: BRIM Parse Error Codes")
-    print_info("Testing: backend/app/services/brim_providers/** (static ast scan), frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json")
+    print_info("Testing: backend/app/services/brim_providers/** (static ast scan), frontend/src/lib/features/transactions/import/i18n/{en,it,fr,es}.json")
     print_info("Tests: every raise coded, not swallowed by a broad except, text in the four catalogues, placeholders agree, generic CSV and DEGIRO codes")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_error_codes.py", test_names)

@@ -3,8 +3,11 @@
 The catalogue the app loads, ``frontend/src/lib/i18n/<lang>.json``, is **generated**: never edit it. Its sources are
 
 - ``frontend/src/lib/i18n/base/<lang>.json`` — the generic vocabulary; it owns every key nobody else claims;
-- ``frontend/src/lib/i18n/<subsystem>/<lang>.json`` — one folder per subsystem; its ``prefixes.txt`` declares the
-  key prefixes it owns, one per line (``#`` starts a comment);
+- ``frontend/src/lib/i18n/<subsystem>/<lang>.json`` — one folder per global subsystem (``app``, ``charts``,
+  ``dataQuality``); its ``prefixes.txt`` declares the key prefixes it owns, one per line (``#`` starts a comment);
+- ``frontend/src/lib/features/**/i18n/<lang>.json`` — a feature's own keys, next to its code, with its own
+  ``prefixes.txt``; the source is named after the folder that holds ``i18n/`` (``features/ai-export/i18n`` is
+  ``ai-export``), and a name is unique among all subsystem sources;
 - ``backend/app/services/<family>/<plugin>/i18n/<lang>.json`` — a plugin's own keys, in the ``*_providers`` and
   ``*_plugins`` families. A plugin owns exactly the keys its files hold.
 
@@ -34,6 +37,7 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 ROOT = Path(__file__).resolve().parents[1]
 I18N_RELATIVE = Path("frontend") / "src" / "lib" / "i18n"
 SERVICES_RELATIVE = Path("backend") / "app" / "services"
+FEATURES_RELATIVE = Path("frontend") / "src" / "lib" / "features"
 BASE_NAME = "base"
 PREFIXES_FILE = "prefixes.txt"
 STAMP_NAME = ".generated"
@@ -175,6 +179,14 @@ def read_prefixes(path: Path) -> Tuple[str, ...]:
     return tuple(prefixes)
 
 
+def feature_i18n_dirs(root: Path = ROOT) -> List[Path]:
+    """The ``i18n`` folders inside ``lib/features``, at any depth (``features/transactions/import/i18n`` is one)."""
+    features = root / FEATURES_RELATIVE
+    if not features.is_dir():
+        return []
+    return sorted(path for path in features.rglob(PLUGIN_I18N_DIR) if path.is_dir() and not any(part.startswith(".") for part in path.relative_to(features).parts))
+
+
 def plugin_i18n_dirs(root: Path = ROOT) -> List[Path]:
     services = root / SERVICES_RELATIVE
     found = set()
@@ -189,13 +201,25 @@ def plugin_name(i18n_folder: Path, root: Path = ROOT) -> str:
     return i18n_folder.parent.relative_to(root / SERVICES_RELATIVE).as_posix()
 
 
+def _subsystem_name(folder: Path) -> str:
+    """A subsystem's name: its folder under ``lib/i18n``, or the folder that holds ``i18n/`` in a feature."""
+    return folder.parent.name if folder.name == PLUGIN_I18N_DIR else folder.name
+
+
 def discover(root: Path = ROOT) -> List[Source]:
-    """Every source, not yet read: ``base``, then the subsystems by name, then the plugins by path."""
+    """Every source, not yet read: ``base``, then the subsystems (``lib/i18n/<x>/`` and the features' ``i18n/``) by name, then the plugins by path."""
     folder = i18n_dir(root)
     sources = [Source("base", BASE_NAME, folder / BASE_NAME)]
-    for sub in sorted(p for p in folder.iterdir() if p.is_dir() and p.name != BASE_NAME and not p.name.startswith((".", "_"))):
+    folders = [p for p in folder.iterdir() if p.is_dir() and p.name != BASE_NAME and not p.name.startswith((".", "_"))]
+    folders += [p for p in feature_i18n_dirs(root) if any(p.glob("*.json")) or (p / PREFIXES_FILE).is_file()]
+    seen: Dict[str, Path] = {}
+    for sub in sorted(folders, key=lambda p: (_subsystem_name(p), p.as_posix())):
+        name = _subsystem_name(sub)
+        if name in seen:
+            raise CatalogError([f"subsystem '{name}' is in two folders: {display_path(seen[name], root)} and {display_path(sub, root)}"])
+        seen[name] = sub
         prefix_file = sub / PREFIXES_FILE
-        sources.append(Source("subsystem", sub.name, sub, read_prefixes(prefix_file) if prefix_file.is_file() else ()))
+        sources.append(Source("subsystem", name, sub, read_prefixes(prefix_file) if prefix_file.is_file() else ()))
     for i18n_folder in plugin_i18n_dirs(root):
         sources.append(Source("plugin", plugin_name(i18n_folder, root), i18n_folder))
     return sources
@@ -629,7 +653,7 @@ def catalogs_at(rev: str, root: Path = ROOT) -> Dict[str, Flat]:
     if legacy:
         return legacy
     listing = subprocess.run(
-        ["git", "-C", str(root), "ls-tree", "-r", "--name-only", rev, "--", I18N_RELATIVE.as_posix(), SERVICES_RELATIVE.as_posix()],
+        ["git", "-C", str(root), "ls-tree", "-r", "--name-only", rev, "--", I18N_RELATIVE.as_posix(), SERVICES_RELATIVE.as_posix(), FEATURES_RELATIVE.as_posix()],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -640,7 +664,8 @@ def catalogs_at(rev: str, root: Path = ROOT) -> Dict[str, Flat]:
         parts = Path(path).parts
         in_i18n = path.startswith(I18N_RELATIVE.as_posix() + "/") and len(parts) == len(I18N_RELATIVE.parts) + 2 and (path.endswith(".json") or path.endswith("/" + PREFIXES_FILE))
         in_plugin = path.startswith(SERVICES_RELATIVE.as_posix() + "/") and f"/{PLUGIN_I18N_DIR}/" in path and path.endswith(".json")
-        if in_i18n or in_plugin:
+        in_feature = path.startswith(FEATURES_RELATIVE.as_posix() + "/") and f"/{PLUGIN_I18N_DIR}/" in path and len(parts) > len(FEATURES_RELATIVE.parts) + 2 and parts[-2] == PLUGIN_I18N_DIR and (path.endswith(".json") or path.endswith("/" + PREFIXES_FILE))
+        if in_i18n or in_plugin or in_feature:
             wanted.append(path)
     with tempfile.TemporaryDirectory() as tmp:
         tmp_root = Path(tmp)
@@ -649,7 +674,7 @@ def catalogs_at(rev: str, root: Path = ROOT) -> Dict[str, Flat]:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(_git_show(root, rev, path) or "", encoding="utf-8")
         for path in wanted:  # a plugin source needs its plugin.py to be one
-            if f"/{PLUGIN_I18N_DIR}/" in path:
+            if f"/{PLUGIN_I18N_DIR}/" in path and path.startswith(SERVICES_RELATIVE.as_posix() + "/"):
                 (tmp_root / path).parent.parent.joinpath("plugin.py").touch()
         langs, sources = load(tmp_root)
         merged = merge(langs, sources, root=tmp_root, fill=False)

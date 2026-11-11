@@ -119,7 +119,7 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     unusable one once, as an error with the check's summary, id and detail, and goes on. The hosting panel's backup
     token stays B's own check, ``backup.panel_token``: this one does not read it. The check changes nothing. In
     ``CONFIG_CHECKS`` it runs right after ``check_log_level`` and right before ``check_test_mode``, which stays the
-    platform's last. Its three messages are in the four catalogues of ``frontend/src/lib/i18n/instance``: ``unusable``
+    platform's last. Its three messages are in the four catalogues of ``frontend/src/lib/features/instance/i18n``: ``unusable``
     naming exactly ``{variables}``, ``off`` and ``ok`` nothing; the control is ``secretsSetTwice.found``, which names
     exactly ``{variables}`` in each. ``_configure`` leaves both tokens unset, whatever the environment holds, so the
     check is ok (off) in every other case of this file. The guide of the check, ``admin/hosting_panel_api/#panel-api``,
@@ -1994,7 +1994,7 @@ def _flattened(catalogue: object, prefix: str = "") -> dict[str, object]:
 
 @pytest.mark.parametrize("language", CATALOGUE_LANGUAGES)
 def test_the_hosting_panel_messages_are_in_the_four_catalogues(language):
-    """(k) H-61: the three keys of the check are messages of ``frontend/src/lib/i18n/instance/<language>.json``:
+    """(k) H-61: the three keys of the check are messages of ``frontend/src/lib/features/instance/i18n/<language>.json``:
     ``unusable`` names exactly ``{variables}``, which its detail fills, ``off`` and ``ok`` nothing, as they come without
     a detail; the Security tab renders each with the detail as it comes. Control: the reader finds
     ``secretsSetTwice.found`` there, naming exactly ``{variables}``."""

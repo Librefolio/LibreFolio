@@ -26,10 +26,10 @@
 
 import {describe, expect, it, vi} from 'vitest';
 import {extractErrorMessage} from '$lib/utils/trySave';
-import en from '$lib/i18n/importWizard/en.json';
-import it_ from '$lib/i18n/importWizard/it.json';
-import fr from '$lib/i18n/importWizard/fr.json';
-import es from '$lib/i18n/importWizard/es.json';
+import en from '$lib/features/transactions/import/i18n/en.json';
+import it_ from '$lib/features/transactions/import/i18n/it.json';
+import fr from '$lib/features/transactions/import/i18n/fr.json';
+import es from '$lib/features/transactions/import/i18n/es.json';
 import {resolveGapFixFailureMessage, resolveParseFailureMessage} from './parseFailure';
 
 /** Fake `$t`: a known key interpolates `{token}`s from its values; an unknown key comes back as itself, as svelte-i18n answers a missing key. */

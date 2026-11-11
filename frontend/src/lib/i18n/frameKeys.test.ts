@@ -6,7 +6,7 @@
  * written in the markup. The cure moves them to the catalogue under `nav.checkingAuthentication`, `nav.closeSidebar`,
  * `nav.expandSidebar` and `nav.collapseSidebar`. The catalogue build fills a missing it, fr or es entry from English, so a
  * forgotten translation would never show in the app nor in a test of the built catalogue: this file reads the SOURCES,
- * `lib/i18n/<folder>/<lang>.json` (the base and the subsystem folders), directly, and finds each key in exactly one folder.
+ * `lib/i18n/<folder>/<lang>.json` (the base and the global subsystems) and `<lang>.json` of each feature's `i18n` folder, directly, and finds each key in exactly one folder.
  *
  * Contract. Each of the four keys is a non-empty string in the sources of en, it, fr and es; it, fr and es are not a copy of the
  * English text; none holds an ICU placeholder (the texts take no parameter).
@@ -38,11 +38,23 @@ const KEYS = ['nav.checkingAuthentication', 'nav.closeSidebar', 'nav.expandSideb
 const I18N_DIR = fileURLToPath(new URL('.', import.meta.url));
 const LAYOUT = fileURLToPath(new URL('../../routes/(app)/+layout.svelte', import.meta.url));
 
-/** The source folders: every subfolder of `lib/i18n` that holds an `en.json`. */
+const FEATURES_DIR = fileURLToPath(new URL('../features/', import.meta.url));
+
+/** The `i18n` folders inside `lib/features`, at any depth (a feature keeps its own sources next to its code). */
+function featureSourceDirs(dir: string): string[] {
+    return readdirSync(dir, {withFileTypes: true}).flatMap((entry) => {
+        if (!entry.isDirectory()) return [];
+        const path = join(dir, entry.name);
+        return entry.name === 'i18n' ? [path] : featureSourceDirs(path);
+    });
+}
+
+/** The source folders: every subfolder of `lib/i18n` that holds an `en.json`, and every `i18n` folder of a feature. */
 function sourceFolders(): string[] {
-    return readdirSync(I18N_DIR, {withFileTypes: true})
+    const global = readdirSync(I18N_DIR, {withFileTypes: true})
         .filter((entry) => entry.isDirectory() && existsSync(join(I18N_DIR, entry.name, 'en.json')))
-        .map((entry) => entry.name);
+        .map((entry) => join(I18N_DIR, entry.name));
+    return [...global, ...featureSourceDirs(FEATURES_DIR).filter((dir) => existsSync(join(dir, 'en.json')))];
 }
 
 /** The value at a dotted key of a nested source; `undefined` when any step is missing or not an object. */
@@ -58,7 +70,7 @@ function valueAt(source: unknown, key: string): unknown {
 /** Every string found for `key` in the sources of `lang`, one per folder that holds it. */
 function found(lang: Lang, key: string): string[] {
     return sourceFolders().flatMap((folder) => {
-        const file = join(I18N_DIR, folder, `${lang}.json`);
+        const file = join(folder, `${lang}.json`);
         if (!existsSync(file)) return [];
         const value = valueAt(JSON.parse(readFileSync(file, 'utf8')), key);
         return typeof value === 'string' ? [value] : [];

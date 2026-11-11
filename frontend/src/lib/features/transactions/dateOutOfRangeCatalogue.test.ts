@@ -5,7 +5,7 @@
  * `min`: the floor of 1900-01-01 is gone (the frontend asks one confirmation before a date before 1900 instead). So
  * the text uses `{max}` and never `{min}` — an unfilled `{min}` would reach the user as a broken sentence.
  *
- * Reads the four catalogue SOURCES (`src/lib/i18n/transactions/<lang>.json`, tracked; the merged `src/lib/i18n/<lang>.json`
+ * Reads the four catalogue SOURCES (`src/lib/features/transactions/i18n/<lang>.json`, tracked; the merged `src/lib/i18n/<lang>.json`
  * is generated and ignored by git) and checks the placeholders only, never the sentence.
  */
 import {readFileSync} from 'node:fs';
@@ -26,7 +26,7 @@ function placeholdersOf(message: string): string[] {
 
 /** A source, as the tests run from `frontend/` (the Vitest root). */
 function source(lang: string): unknown {
-    return JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/i18n/transactions', `${lang}.json`), 'utf-8'));
+    return JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/features/transactions/i18n', `${lang}.json`), 'utf-8'));
 }
 
 describe('transactions.errors.dateOutOfRange — ceiling-only in the four sources (D-P4 lot L3)', () => {
