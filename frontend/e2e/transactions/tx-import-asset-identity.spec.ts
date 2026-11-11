@@ -241,7 +241,7 @@ async function goToAssetStep(page: Page, target: {brokerName: string; fileNames:
     await page.getByTestId('import-wizard-continue').click();
 
     const confirm = page.getByTestId('import-wizard-warning-confirm');
-    if (await confirm.isVisible({timeout: 2_500}).catch(() => false)) {
+    if (await appears(confirm, 3_000)) {
         await confirm.click();
     }
     await page.getByTestId('asset-group-step').waitFor({state: 'visible', timeout: 10_000});

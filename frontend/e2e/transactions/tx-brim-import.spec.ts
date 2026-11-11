@@ -65,7 +65,7 @@ async function openBulkModalAndImport(page: Page) {
     // The BulkModal may auto-open a FormModal for the selected paired transaction.
     // Close it before clicking Import.
     const formClose = page.getByTestId('tx-form-close');
-    if (await formClose.isVisible({timeout: 1_500}).catch(() => false)) {
+    if (await appears(formClose, 3_000)) {
         await formClose.click();
         await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 3_000});
     }
@@ -197,16 +197,11 @@ test.describe('BRIM Import Wizard', () => {
 
         // Check if there are unresolved assets → search input visible
         const searchInputs = step4.locator('input[placeholder*="Search"]');
-        const resolveSection = step4.locator('text=Resolve Assets');
+        const resolveSection = step4.getByTestId('import-wizard-resolve-section');
 
-        if (await resolveSection.isVisible({timeout: 2_000}).catch(() => false)) {
+        if (await appears(resolveSection, 5_000)) {
             // There's at least one asset to resolve
-            if (
-                await searchInputs
-                    .first()
-                    .isVisible({timeout: 1_000})
-                    .catch(() => false)
-            ) {
+            if (await appears(searchInputs.first(), 3_000)) {
                 // Type something in the search field
                 await searchInputs.first().fill('AAPL');
                 // The old assertion was `expect(count).toBeGreaterThanOrEqual(0)`,
@@ -229,11 +224,11 @@ test.describe('BRIM Import Wizard', () => {
         const importBtn = page.getByTestId('import-wizard-import');
 
         // If resolve section is visible and has unresolved entries
-        const resolveSection = step4.locator('text=Resolve Assets');
-        if (await resolveSection.isVisible({timeout: 2_000}).catch(() => false)) {
+        const resolveSection = step4.getByTestId('import-wizard-resolve-section');
+        if (await appears(resolveSection, 5_000)) {
             // Check for the unresolved-count badge (ReviewStep renders it only while an asset is unresolved)
             const unresolvedBadge = step4.getByTestId('import-wizard-unresolved-count');
-            if (await unresolvedBadge.isVisible({timeout: 1_000}).catch(() => false)) {
+            if (await appears(unresolvedBadge, 3_000)) {
                 // Import should be disabled
                 await expect(importBtn).toBeDisabled();
             }
