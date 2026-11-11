@@ -19,6 +19,7 @@
         from_currency: string;
         to_currency: string;
         days_back: number;
+        stale?: boolean;
     }
 
     interface Provenance {
@@ -91,7 +92,10 @@
 
     function fxLines(provenance: Provenance): string[] {
         const unique = new Map(provenance.fx.filter((entry) => entry.from_currency !== entry.to_currency).map((entry) => [`${entry.from_currency}/${entry.to_currency}/${entry.rate_date}`, entry]));
-        const lines = [...unique.values()].map((entry) => `${label('dashboard.yieldOnCostFxPair', 'Conversion')}: ${formatCurrencyCode(entry.from_currency)} → ${formatCurrencyCode(entry.to_currency)} · ${label('dashboard.yieldOnCostFxRateDate', 'rate from')} ${formatDate(entry.rate_date)}`);
+        const lines = [...unique.values()].map(
+            (entry) =>
+                `${label('dashboard.yieldOnCostFxPair', 'Conversion')}: ${formatCurrencyCode(entry.from_currency)} → ${formatCurrencyCode(entry.to_currency)} · ${label('dashboard.yieldOnCostFxRateDate', 'rate from')} ${formatDate(entry.rate_date)}${entry.stale ? ` · ⚠ ${labelWithValues('dashboard.yieldOnCostFxStale', 'old rate: {days} days before', {days: String(entry.days_back)})}` : ''}`,
+        );
         return lines.length > 3 ? [...lines.slice(0, 3), `… (+${lines.length - 3})`] : lines;
     }
 
