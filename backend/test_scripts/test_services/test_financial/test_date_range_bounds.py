@@ -55,7 +55,7 @@ import backend.app.services.risk.service as risk_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioReportQuery
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.schemas.risk import RiskQueryRequest
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis

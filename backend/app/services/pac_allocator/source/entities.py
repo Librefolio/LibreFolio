@@ -6,14 +6,7 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess, PriceHistory
-from backend.app.schemas.portfolio import (
-    PortfolioPlannerSourceAsset,
-    PortfolioPlannerSourceBroker,
-    PortfolioPlannerSourceCashBalance,
-    PortfolioPlannerSourceHolding,
-    PortfolioPlannerSourceIssue,
-    PortfolioPlannerSourcePrice,
-)
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceAsset, PortfolioPlannerSourceBroker, PortfolioPlannerSourceCashBalance, PortfolioPlannerSourceHolding, PortfolioPlannerSourceIssue, PortfolioPlannerSourcePrice
 from backend.app.services.pac_allocator.source.keys import BROKER_PROVENANCE_ID, MARKET_PROVENANCE_ID, PORTFOLIO_PROVENANCE_ID, asset_key, broker_key, cash_key, field_issue, holding_key, price_key, validated_currency
 
 

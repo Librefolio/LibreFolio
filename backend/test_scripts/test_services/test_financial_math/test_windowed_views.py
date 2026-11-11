@@ -93,7 +93,7 @@ import pytest
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
-from backend.app.schemas.portfolio import BrokerPnlHistory, PnlCandleSeries
+from backend.app.schemas.portfolio.history import BrokerPnlHistory, PnlCandleSeries
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder

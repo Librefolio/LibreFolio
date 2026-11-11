@@ -99,7 +99,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import IssueCode, MwrrLinePoint, PortfolioHistoryPoint, PortfolioSummary
+from backend.app.schemas.portfolio.data_quality import IssueCode
+from backend.app.schemas.portfolio.history import MwrrLinePoint, PortfolioHistoryPoint
+from backend.app.schemas.portfolio.summary import PortfolioSummary
 from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio import wac as wac_module

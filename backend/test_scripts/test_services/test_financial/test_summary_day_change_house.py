@@ -76,7 +76,7 @@ from sqlalchemy.pool import NullPool
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
-from backend.app.schemas.portfolio import PortfolioHolding
+from backend.app.schemas.portfolio.summary import PortfolioHolding
 from backend.app.services.financial_math import returns
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.portfolio import report as report_module

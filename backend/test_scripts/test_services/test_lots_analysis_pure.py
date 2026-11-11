@@ -29,13 +29,14 @@ from types import SimpleNamespace
 
 import pytest
 
-import backend.app.schemas.portfolio as portfolio_module
+import backend.app.schemas.portfolio.lots as portfolio_module
 import backend.app.services.financial_math.lots.conversions as conversions_module
 import backend.app.services.financial_math.lots.histories as histories_module
 import backend.app.services.financial_math.lots.prices as prices_module
 from backend.app.db.models import PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, IssueCode, LotAnalysisType, LotsAnalysisResponse, LotTimelineEventKind
+from backend.app.schemas.portfolio.data_quality import IssueCode
+from backend.app.schemas.portfolio.lots import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType, LotsAnalysisResponse, LotTimelineEventKind
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.average_cost import (
     AverageCost,

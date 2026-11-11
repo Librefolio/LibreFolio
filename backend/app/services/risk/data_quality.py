@@ -10,14 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset
-from backend.app.schemas.portfolio import (
-    DataQualityExclusionReason,
-    DataQualityIssue,
-    DataQualityReport,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason, DataQualityIssue, DataQualityReport, IssueCode, IssueDomain, IssueSeverity
 from backend.app.schemas.risk import (
     RiskAnalyticResult,
     RiskReturnBasis,

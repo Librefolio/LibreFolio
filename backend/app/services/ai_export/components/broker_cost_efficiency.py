@@ -50,7 +50,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, Transaction, TransactionType
 from backend.app.schemas.common import Currency, CurrencyCode, PeriodBoundedModel, SafeDecimal, StrictModel
-from backend.app.schemas.portfolio import PortfolioReportResponse, PortfolioSummary
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioSummary
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import counts_ownership_share, load_portfolio_report
 from backend.app.services.ai_export.components.resources import BROKER_REPORT_RESOURCE

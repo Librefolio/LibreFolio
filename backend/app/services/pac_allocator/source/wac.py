@@ -10,11 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, FxRate
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    PortfolioPlannerSourceIssue,
-    PortfolioPlannerSourceWacFxEvidence,
-    PortfolioPlannerWacContext,
-)
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceIssue, PortfolioPlannerSourceWacFxEvidence, PortfolioPlannerWacContext
 from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.pac_allocator.source.keys import WAC_PROVENANCE_ID, asset_key, broker_key, field_issue, holding_key, normalized_fx_pair, usable_rate, validated_currency, wac_key
 from backend.app.utils.sql_chunks import chunks

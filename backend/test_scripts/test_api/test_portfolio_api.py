@@ -19,11 +19,7 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.config import get_settings
 from backend.app.db.models import Asset, Transaction, TransactionType, UserSettings
 from backend.app.db.session import get_async_engine, get_session_generator
-from backend.app.schemas.portfolio import (
-    PortfolioPlannerSourceProvenance,
-    PortfolioPlannerSourceResponse,
-    PortfolioPlannerSourceSnapshot,
-)
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceProvenance, PortfolioPlannerSourceResponse, PortfolioPlannerSourceSnapshot
 from backend.app.services.accounts import user_service
 from backend.app.services.pac_allocator.source.portfolio_allocation_source import (
     PortfolioPlannerSourceAccessError,

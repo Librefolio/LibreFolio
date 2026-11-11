@@ -35,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, BrokerUserAccess
 from backend.app.schemas.common import Currency, CurrencyCode, PeriodBoundedModel, SafeDecimal, StrictModel
-from backend.app.schemas.portfolio import PortfolioHistoryPoint
+from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     ContributionRow,
@@ -110,7 +110,6 @@ async def _load_broker_asset_metadata(context: BuildContext, asset_ids: Sequence
 
 
 class BrokerSummaryPayload(StrictModel):
-
     broker_id: int
     as_of: Date
     period_start: Date
@@ -171,7 +170,6 @@ async def _build_broker_summary(context: BuildContext, dependencies: Mapping[str
 
 
 class BrokerPositionsPayload(StrictModel):
-
     broker_id: int
     as_of: Date
     target_currency: CurrencyCode
@@ -194,7 +192,6 @@ async def _build_broker_positions(context: BuildContext, dependencies: Mapping[s
 
 
 class BrokerAllocationConcentrationPayload(StrictModel):
-
     broker_id: int
     as_of: Date
     target_currency: CurrencyCode
@@ -245,7 +242,6 @@ async def _build_broker_allocation_concentration(context: BuildContext, dependen
 
 
 class ProvenanceNote(StrictModel):
-
     subject: str
     text: str
 
@@ -272,7 +268,6 @@ _OWNERSHIP_EXPLANATIONS = {
 
 
 class BrokerProvenancePayload(PeriodBoundedModel):
-
     domain: str
     broker_id: int
     target_currency: CurrencyCode
@@ -335,7 +330,6 @@ async def _build_broker_provenance(context: BuildContext, dependencies: Mapping[
 
 
 class BrokerPerformancePayload(PeriodBoundedModel):
-
     broker_id: int
     target_currency: CurrencyCode
     twrr_percent: SafeDecimal | None = None
@@ -402,7 +396,6 @@ async def _build_broker_performance(context: BuildContext, dependencies: Mapping
 
 
 class BrokerFlowsIncomeCostsPayload(PeriodBoundedModel):
-
     broker_id: int
     target_currency: CurrencyCode
     total_deposited: Currency | None = None
@@ -449,7 +442,6 @@ async def _build_broker_flows_income_costs(context: BuildContext, dependencies: 
 
 
 class BrokerReconciliationPayload(PeriodBoundedModel):
-
     broker_id: int
     target_currency: CurrencyCode
     period_pnl: Currency | None = None
@@ -581,7 +573,6 @@ async def _build_broker_fifo_summary(context: BuildContext, dependencies: Mappin
 
 
 class BrokerFifoLotsPayload(PeriodBoundedModel):
-
     broker_id: int
     target_currency: CurrencyCode
     cost_allocation_semantics: str

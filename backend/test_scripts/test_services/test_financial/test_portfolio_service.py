@@ -33,15 +33,9 @@ import backend.app.services.financial_math.portfolio.models as portfolio_models_
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRAccessBulkItem
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    DataQualityStatus,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
-    PortfolioReportQuery,
-    StalePriceAsset,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityStatus, IssueCode, IssueDomain, IssueSeverity, StalePriceAsset
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder

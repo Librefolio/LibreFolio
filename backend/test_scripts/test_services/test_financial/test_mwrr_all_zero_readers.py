@@ -62,7 +62,10 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import IssueCode, MwrrLinePoint, PortfolioHistoryPoint, PortfolioReportQuery, PortfolioReportResponse, PortfolioSummary
+from backend.app.schemas.portfolio.data_quality import IssueCode
+from backend.app.schemas.portfolio.history import MwrrLinePoint, PortfolioHistoryPoint
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioSummary
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope

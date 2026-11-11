@@ -52,23 +52,12 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    DataQualityReport,
-    LotAnalysisType,
-    LotsAnalysisMetadata,
-    LotsAnalysisResponse,
-    LotSummarySchema,
-    PortfolioHistoryPoint,
-    PortfolioHolding,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    PositionsContribution,
-    YieldOnCostProvenance,
-    YieldOnCostResult,
-    YieldOnCostStatus,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
+from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisMetadata, LotsAnalysisResponse, LotSummarySchema
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PortfolioHolding, PortfolioSummary, PositionsContribution
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.risk import RiskAnalyticResult, RiskDrawdownOutput, RiskDrawdownRecoveryStatus, RiskQueryRequest, RiskQueryResponse, RiskResultStatus, RiskReturnBasis
 from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalExecutionContext, SignalPricePoint

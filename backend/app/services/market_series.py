@@ -13,11 +13,7 @@ from decimal import Decimal
 from typing import Protocol
 
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
-from backend.app.schemas.portfolio import (
-    DataQualityExcludedAsset,
-    DataQualityExclusionReason,
-    DataQualityReport,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.risk import (
     AssetReturnPoint,

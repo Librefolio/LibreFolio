@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.portfolio import DataQualityExclusionReason
+from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason
 from backend.app.schemas.risk import (
     RiskAnalyticResult,
     RiskAssetEligibility,

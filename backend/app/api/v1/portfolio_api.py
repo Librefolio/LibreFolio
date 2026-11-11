@@ -17,16 +17,10 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.portfolio import (
-    LotsAnalysisQuery,
-    LotsAnalysisResponse,
-    PortfolioPlannerSourceRequest,
-    PortfolioPlannerSourceResponse,
-    PortfolioReportQuery,
-    PortfolioReportResponse,
-    PositionsSeriesQuery,
-    PositionsSeriesResponse,
-)
+from backend.app.schemas.portfolio.lots import LotsAnalysisQuery, LotsAnalysisResponse
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceRequest, PortfolioPlannerSourceResponse
+from backend.app.schemas.portfolio.positions_series import PositionsSeriesQuery, PositionsSeriesResponse
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.services.pac_allocator.source.portfolio_allocation_source import (
     PortfolioPlannerSourceAccessError,
     PortfolioPlannerSourceAssetNotFoundError,

@@ -164,7 +164,7 @@ from backend.app.db.models import Asset, AssetType, FxRate
 from backend.app.schemas.brim import BRIMMatchConfidence
 from backend.app.schemas.common import Currency
 from backend.app.schemas.pac_allocator.base import PlannerIssueCode
-from backend.app.schemas.portfolio import PortfolioPlannerSourceIssueCode
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceIssueCode
 from backend.app.services.brim import candidates
 from backend.app.services.fx import period_changes as fx_period_changes
 from backend.app.services.fx.conversion import convert_bulk

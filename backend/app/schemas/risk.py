@@ -10,7 +10,7 @@ from typing import Annotated, Dict, List, Literal, Optional, Union
 from pydantic import Field, FiniteFloat, JsonValue, PositiveInt, field_validator, model_validator
 
 from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal, StrictModel
-from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
 from backend.app.schemas.risk_scenarios import (
     RiskScenarioDimension,
     RiskScenarioMissingHistoryPolicy,
@@ -768,12 +768,10 @@ class RiskCatalogDefinition(StrictModel):
 
 
 class RiskCatalogResponse(StrictModel):
-
     items: List[RiskCatalogDefinition] = Field(default_factory=list)
 
 
 class RiskKpiOutput(StrictModel):
-
     kind: Literal[RiskOutputKind.KPI] = Field(default=RiskOutputKind.KPI, json_schema_extra={"enum": ["kpi"]})
     volatility: FiniteFloat = Field(..., ge=0)
     max_drawdown: FiniteFloat = Field(..., le=0)
@@ -808,7 +806,6 @@ class RiskKpiOutput(StrictModel):
 
 
 class RiskMatrixCell(StrictModel):
-
     row_asset_id: PositiveInt
     column_asset_id: PositiveInt
     value: Optional[FiniteFloat] = Field(None, ge=-1, le=1)
@@ -818,14 +815,12 @@ class RiskMatrixCell(StrictModel):
 
 
 class RiskCorrelationOutput(StrictModel):
-
     kind: Literal[RiskOutputKind.MATRIX] = Field(default=RiskOutputKind.MATRIX, json_schema_extra={"enum": ["matrix"]})
     asset_ids: List[PositiveInt] = Field(..., min_length=1)
     cells: List[RiskMatrixCell] = Field(default_factory=list)
 
 
 class RiskContributionItem(StrictModel):
-
     asset_id: PositiveInt
     weight: FiniteFloat
     marginal_contribution: FiniteFloat
@@ -834,7 +829,6 @@ class RiskContributionItem(StrictModel):
 
 
 class RiskContributionOutput(StrictModel):
-
     kind: Literal[RiskOutputKind.CONTRIBUTION] = Field(default=RiskOutputKind.CONTRIBUTION, json_schema_extra={"enum": ["contribution"]})
     portfolio_volatility: FiniteFloat = Field(..., ge=0)
     cash_weight: FiniteFloat = Field(0, ge=0)
@@ -939,7 +933,6 @@ class RiskStressConfiguredBucketImpact(StrictModel):
 
 
 class RiskStressImpact(StrictModel):
-
     asset_id: PositiveInt
     return_source_asset_id: Optional[PositiveInt] = None
     weight: Optional[FiniteFloat] = None
@@ -975,7 +968,6 @@ class RiskStressImpact(StrictModel):
 
 
 class RiskStressOutput(StrictModel):
-
     kind: Literal[RiskOutputKind.STRESS] = Field(default=RiskOutputKind.STRESS, json_schema_extra={"enum": ["stress"]})
     method: RiskStressMethod
     dimension: Optional[RiskScenarioDimension] = None
@@ -1006,7 +998,6 @@ class RiskStressOutput(StrictModel):
 
 
 class RiskComparisonPoint(StrictModel):
-
     date: date
     primary_cumulative_return: FiniteFloat
     comparison_cumulative_return: FiniteFloat
@@ -1023,7 +1014,6 @@ class RiskComparisonHoldingItem(StrictModel):
 
 
 class RiskComparisonOutput(StrictModel):
-
     kind: Literal[RiskOutputKind.COMPARISON] = Field(default=RiskOutputKind.COMPARISON, json_schema_extra={"enum": ["comparison"]})
     comparison_asset_id: PositiveInt
     active_return: FiniteFloat
@@ -1689,7 +1679,6 @@ RiskAnalyticOutput = Annotated[
 
 
 class RiskWarning(StrictModel):
-
     code: str = Field(..., min_length=1, max_length=120)
     message: str = Field(..., min_length=1)
     details: Dict[str, JsonValue] = Field(default_factory=dict)
@@ -1702,7 +1691,6 @@ class RiskWarning(StrictModel):
 
 
 class RiskError(StrictModel):
-
     code: RiskErrorCode
     message: str = Field(..., min_length=1)
     details: Dict[str, JsonValue] = Field(default_factory=dict)
@@ -1736,7 +1724,6 @@ class RiskAnalyticResult(StrictModel):
 
 
 class RiskQueryResponse(StrictModel):
-
     items: List[RiskAnalyticResult] = Field(default_factory=list)
 
 

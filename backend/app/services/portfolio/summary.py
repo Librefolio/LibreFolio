@@ -17,16 +17,8 @@ from backend.app.db.models import (
     TransactionType,
 )
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    AllocationItem,
-    AssetAllocationItem,
-    BrokerBreakdown,
-    HoldingGroupGainLoss,
-    MissingPriceAsset,
-    PortfolioHolding,
-    PortfolioSummary,
-    StalePriceAsset,
-)
+from backend.app.schemas.portfolio.data_quality import MissingPriceAsset, StalePriceAsset
+from backend.app.schemas.portfolio.summary import AllocationItem, AssetAllocationItem, BrokerBreakdown, HoldingGroupGainLoss, PortfolioHolding, PortfolioSummary
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.holding_window import oldest_open_lot_date, quantity_moves
 from backend.app.services.financial_math.portfolio import period as period_math

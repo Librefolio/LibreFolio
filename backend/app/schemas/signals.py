@@ -15,7 +15,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 from pydantic import AfterValidator, ConfigDict, Field, FiniteFloat, JsonValue, field_validator, model_validator
 
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, StrictModel
-from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
 from backend.app.schemas.risk import PreparedAssetSeries, RiskResultMetadata
 from backend.app.utils.json_utils import ensure_json_safe
 

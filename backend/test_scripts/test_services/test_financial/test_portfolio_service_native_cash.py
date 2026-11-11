@@ -75,16 +75,9 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.models import Broker, BrokerUserAccess, FxRate, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import (
-    BrokerBreakdown,
-    CostHistorySeries,
-    DepositHistorySeries,
-    IncomeHistorySeries,
-    OtherPeriodEffectCode,
-    PortfolioReportQuery,
-    PortfolioSummary,
-    PositionsContribution,
-)
+from backend.app.schemas.portfolio.history import CostHistorySeries, DepositHistorySeries, IncomeHistorySeries
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
+from backend.app.schemas.portfolio.summary import BrokerBreakdown, OtherPeriodEffectCode, PortfolioSummary, PositionsContribution
 from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService

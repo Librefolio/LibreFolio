@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import BackwardFillInfo
-from backend.app.schemas.portfolio import DataQualityReport, DataQualityStatus
+from backend.app.schemas.portfolio.data_quality import DataQualityReport, DataQualityStatus
 from backend.app.schemas.risk import (
     PreparedAssetSeriesSet,
     RiskFreeReference,

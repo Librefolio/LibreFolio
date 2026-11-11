@@ -12,12 +12,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from backend.app.schemas import risk as risk_schemas
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.portfolio import (
-    DataQualityExcludedAsset,
-    DataQualityExclusionReason,
-    DataQualityReport,
-    DataQualityStatus,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport, DataQualityStatus
 from backend.app.schemas.risk import (
     AssetReturnPoint,
     AssetReturnSeries,

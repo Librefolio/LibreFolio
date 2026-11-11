@@ -13,11 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.portfolio import (
-    DataQualityReport,
-    DataQualityStatus,
-    PortfolioReportResponse,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityReport, DataQualityStatus
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
 from backend.app.schemas.risk import (
     AssetRiskScope,
     PreparedAssetSeriesSet,

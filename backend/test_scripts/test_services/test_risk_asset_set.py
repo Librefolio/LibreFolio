@@ -49,19 +49,9 @@ setup_test_database()
 from backend.app.db.models import Asset, AssetType, FxConversionRoute, FxRate, PriceHistory
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
-from backend.app.schemas.portfolio import (
-    DataQualityExclusionReason,
-    DataQualityIssue,
-    DataQualityReport,
-    DataQualityStatus,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
-    PortfolioHolding,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    StalePriceAsset,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason, DataQualityIssue, DataQualityReport, DataQualityStatus, IssueCode, IssueDomain, IssueSeverity, StalePriceAsset
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.risk import (
     AssetReturnPoint,

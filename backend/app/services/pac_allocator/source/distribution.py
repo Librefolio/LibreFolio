@@ -9,12 +9,7 @@ from fractions import Fraction
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.schemas.portfolio import (
-    PLANNER_CURRENT_WEIGHT_QUANTUM,
-    PortfolioPlannerCurrentDistribution,
-    PortfolioPlannerCurrentWeight,
-    PortfolioPlannerSourceIssue,
-)
+from backend.app.schemas.portfolio.planner_source import PLANNER_CURRENT_WEIGHT_QUANTUM, PortfolioPlannerCurrentDistribution, PortfolioPlannerCurrentWeight, PortfolioPlannerSourceIssue
 from backend.app.services.pac_allocator.source.keys import ENGINE_PROVENANCE_ID, asset_key, current_weight_key, field_issue, normalized_fx_pair, text_param
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 

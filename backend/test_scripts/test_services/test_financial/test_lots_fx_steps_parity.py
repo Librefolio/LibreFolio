@@ -90,10 +90,7 @@ from backend.app.db.models import FxConversionRoute, FxRate, PriceHistory, Trans
 from backend.app.db.precision import usable_fx_rate_bounds
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    LotAnalysisType,
-    LotsAnalysisResponse,
-)
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots import conversions as conversions_module

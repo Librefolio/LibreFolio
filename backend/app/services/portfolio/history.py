@@ -14,7 +14,7 @@ from backend.app.db.models import (
     TransactionType,
 )
 from backend.app.schemas.common import Currency, DateSpan
-from backend.app.schemas.portfolio import (
+from backend.app.schemas.portfolio.history import (
     AcquisitionFundingPoint,
     AcquisitionFundingSeries,
     BrokerPnlHistory,

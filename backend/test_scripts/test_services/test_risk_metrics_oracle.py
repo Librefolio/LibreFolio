@@ -36,7 +36,7 @@ from scipy.stats import kurtosis as scipy_excess_kurtosis
 
 import backend.app.services.signals.risk_adapters as risk_adapters_module
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
 from backend.app.schemas.risk import RiskKpiOutput, RiskMode, RiskReturnBasis, RiskScopeKind
 from backend.app.schemas.signals import SignalWarningCode
 from backend.app.services.financial_math.returns import calendar_days_to_observations, positive_annualization_factor

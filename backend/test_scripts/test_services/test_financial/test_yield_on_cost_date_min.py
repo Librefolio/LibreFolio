@@ -24,7 +24,7 @@ import pytest
 import backend.app.services.financial_math.yield_on_cost as yoc_module
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import YieldOnCostStatus, YieldOnCostUnavailableReason
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostStatus, YieldOnCostUnavailableReason
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.yield_on_cost import YieldOnCostPositionInput
 
