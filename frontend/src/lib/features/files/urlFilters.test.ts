@@ -18,7 +18,7 @@
  * page per URL shape and reading state that is never rendered.
  */
 import {describe, expect, it, vi} from 'vitest';
-import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '../urlFilters';
+import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from './urlFilters';
 import type {FilterValue} from '$lib/components/table/types';
 
 const COLUMNS: UrlFilterConfig[] = [

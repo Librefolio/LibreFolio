@@ -1,5 +1,5 @@
 import {describe, it, expect, vi} from 'vitest';
-import {mapWithConcurrency, requestConcurrency, HTTP1_PER_HOST_LIMIT, DEFAULT_CONCURRENCY} from '../core/requestConcurrency';
+import {mapWithConcurrency, requestConcurrency, HTTP1_PER_HOST_LIMIT, DEFAULT_CONCURRENCY} from './requestConcurrency';
 
 /**
  * The import wizard uploads and parses several files per run. Both loops used to be

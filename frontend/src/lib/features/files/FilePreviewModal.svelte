@@ -5,7 +5,7 @@
     import type {FilePreviewResponse} from '$lib/types';
     import {formatBytes} from '$lib/utils/files/upload';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
-    import {NO_PDF_REPORTS, pdfPreviewState, type PdfPreviewReports, type PdfPreviewState} from '$lib/utils/files/pdfPreviewState';
+    import {NO_PDF_REPORTS, pdfPreviewState, type PdfPreviewReports, type PdfPreviewState} from '$lib/features/files/pdfPreviewState';
     import {buildDarkSpreadsheetTheme, spreadsheetLightBorders, spreadsheetTargetRowBg} from '$lib/theme/drawnColors';
     import {chartRoles} from '$lib/theme/roleColors';
     import type {DocumentManagerCapability, TilingCapability} from '@embedpdf/snippet';
@@ -205,7 +205,7 @@
 
         void (async () => {
             try {
-                const [{default: EmbedPDF, DocumentManagerPlugin, TilingPlugin}, {pdfViewerAssets, pdfViewerOfflineOptions}] = await Promise.all([import('@embedpdf/snippet'), import('$lib/utils/files/pdfViewerAssets')]);
+                const [{default: EmbedPDF, DocumentManagerPlugin, TilingPlugin}, {pdfViewerAssets, pdfViewerOfflineOptions}] = await Promise.all([import('@embedpdf/snippet'), import('$lib/features/files/pdfViewerAssets')]);
                 // Our engine and fallback fonts, never the viewer's CDN defaults: without our engine this throws, and
                 // the catch below shows the browser's own viewer (pdfViewerAssets.ts, lot H-55)
                 const assets = await pdfViewerAssets(document.baseURI);

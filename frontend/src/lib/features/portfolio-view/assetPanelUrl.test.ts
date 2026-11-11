@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
-import {buildAssetPanelUrl, getAssetPanelAssetId} from '../assetPanelUrl';
+import {buildAssetPanelUrl, getAssetPanelAssetId} from './assetPanelUrl';
 
 describe('assetPanelUrl', () => {
     describe('getAssetPanelAssetId', () => {

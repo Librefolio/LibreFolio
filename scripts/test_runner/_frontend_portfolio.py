@@ -254,7 +254,7 @@ def front_portfolio_store_unit(verbose: bool = False, ui: bool = False, headed: 
             "src/lib/features/brokers/lots/lotsAnalysisStore.test.ts",
             "src/lib/features/dashboard/dashboardViewStore.test.ts",
             "src/lib/stores/app/pageBusy.test.ts",
-            "src/lib/stores/portfolio/lazyReportRetry.svelte.test.ts",
+            "src/lib/features/portfolio-view/lazyReportRetry.svelte.test.ts",
         ],
         cwd="frontend",
         capture_output=not verbose,

@@ -4,7 +4,7 @@
  * A live quote (`/assets/prices/current`) carries the day it belongs to. The series a card draws already holds that day or ends before
  * it: the last point is brought up to the quote, on the spot, without asking the series again.
  *
- * @module utils/liveHead
+ * @module features/assets/liveHead
  */
 
 import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';

@@ -13,7 +13,7 @@ import {afterEach, describe, expect, it} from 'vitest';
 import {notifyPricesCaughtUp} from '$lib/stores/portfolio/portfolioMutation';
 import type {DerivedPriceState} from '$lib/features/assets/assetPriceDerived';
 
-import {reducedPrices} from '../reducedPriceCache';
+import {reducedPrices} from './reducedPriceCache';
 
 const RANGE = ['2025-01-01', '2026-06-30'] as const;
 

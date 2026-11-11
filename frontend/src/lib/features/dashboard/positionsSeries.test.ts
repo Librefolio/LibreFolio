@@ -15,7 +15,7 @@
 
 import {describe, expect, it} from 'vitest';
 import {MAX_CHART_POSITIONS, PORTFOLIO_LINE_ID, assetColorRanks, assetIdOfLineId, lineDashes, lineOnDay, lineValue, portfolioLine, positionLine, positionLineId, positionLines, rankAssetsByWeight, selectionKeys, type HistoryPointLike, type PositionSeries, type PositionSeriesPoint, type PositionsSeriesResponse} from './positionsSeries';
-import {makePositionKey} from '$lib/utils/core/positionKey';
+import {makePositionKey} from '$lib/features/dashboard/positionKey';
 
 // =============================================================================
 // Fixtures

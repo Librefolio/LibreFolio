@@ -52,7 +52,7 @@
     import {matchesColumnFilter} from '$lib/components/table/dataTableLogic';
     import FileGrid from '$lib/features/files/FileGrid.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
-    import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
+    import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/features/files/urlFilters';
     import {fetchFilePreview} from '$lib/utils/files/filePreview';
     import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
     import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile, UploadScope} from '$lib/types';

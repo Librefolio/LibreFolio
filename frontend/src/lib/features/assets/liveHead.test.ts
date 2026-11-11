@@ -7,7 +7,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import type {DerivedChartPoint} from '$lib/features/assets/assetPriceDerived';
-import {withLiveHead} from '../liveHead';
+import {withLiveHead} from './liveHead';
 
 const point = (date: string, value: number, staleDays = 0): DerivedChartPoint => ({date, value, staleDays});
 const SERIES = [point('2026-10-14', 100), point('2026-10-15', 101), point('2026-10-16', 102)];
