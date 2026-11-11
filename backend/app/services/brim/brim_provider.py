@@ -266,19 +266,19 @@ class BRIMProvider(PluginSettingsMixin, ABC):
         bundled with your plugin.
 
         Structure:
-            brim_providers/static/{relative_path}
+            brim_providers/{plugin folder}/static/{file}   (relative_path: "{plugin folder}/{file}")
 
         Args:
-            relative_path: Path relative to static folder (e.g., "directa/logo.png")
+            relative_path: The plugin's folder and the file in its ``static/`` folder (e.g., "broker_directa/logo.png")
 
         Returns:
-            Full URL path (e.g., "/api/v1/uploads/plugin/brim/directa/logo.png")
+            Full URL path (e.g., "/api/v1/uploads/plugin/brim/broker_directa/logo.png")
 
         Example:
             class DirectaCSVProvider(BRIMProvider):
                 @property
                 def icon_url(self) -> str:
-                    return self.generate_static_url("directa/logo.png")
+                    return self.generate_static_url("broker_directa/logo.png")
         """
         return f"/api/v1/uploads/plugin/brim/{relative_path}"
 
