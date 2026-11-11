@@ -1,4 +1,4 @@
-"""Domain-agnostic signal endpoints (preview computation).
+"""Domain-agnostic signal endpoint: preview computation (``POST /signals/preview``).
 
 The chart-settings modal previews overlay signals on a demo curve. Local
 signals (benchmarks, FX-pair, asset-comparison) are computed in the browser,
@@ -22,10 +22,10 @@ from backend.app.schemas.signals.vocabulary import SignalCadence
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.service import SignalService
 
-signals_router = APIRouter(prefix="/signals", tags=["Signals"])
+preview_router = APIRouter()
 
 
-@signals_router.post("/preview", response_model=SignalPreviewResponse)
+@preview_router.post("/preview", response_model=SignalPreviewResponse)
 async def compute_signal_preview(
     request: SignalPreviewRequest,
     _current_user: User = Depends(get_current_user),
