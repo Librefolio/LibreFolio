@@ -46,7 +46,7 @@ rows — clears `portfolio_layer2` and `portfolio_blob` (see
 
 ### 🗂️ Caches registered today
 
-Caches register lazily at import time, so the list below is the full registry as of 2026-10-15
+Most caches register at import time, but some (`yfinance_currency`) only when their plugin instance is created, so the list below is the full registry as of 2026-10-15
 (grep `get_ttl_cache(` under `backend/app` to re-derive it):
 
 | Cache | maxsize | TTL | Owner |
