@@ -16,7 +16,7 @@
 import {describe, expect, it} from 'vitest';
 import {readFileSync} from 'node:fs';
 
-const FX_PAGE = new URL('../../../routes/(app)/fx/[pair]/+page.svelte', import.meta.url);
+const FX_PAGE = new URL('../../../../routes/(app)/fx/[pair]/+page.svelte', import.meta.url);
 
 // ---------------------------------------------------------------------------
 // Helpers (own copies of the ones in chartPageSignals.test.ts)
@@ -125,10 +125,10 @@ function requestProblems(source: string): string[] {
     const code = withoutComments(source);
     const problems: string[] = [];
     for (const name of ['buildFxDetailCalendarQuery', 'fxDetailCalendarViews']) {
-        if (!importsNamedValue(code, name, '$lib/charts/fxDetailCalendar')) problems.push(`${name} is not imported as a value from $lib/charts/fxDetailCalendar`);
+        if (!importsNamedValue(code, name, '$lib/features/signals/fxDetailCalendar')) problems.push(`${name} is not imported as a value from $lib/features/signals/fxDetailCalendar`);
         if (!callsFunction(code, name)) problems.push(`${name}( is never called`);
     }
-    if (!importsNamedValue(code, 'renderCalendarPairComparisons', '$lib/charts/chartSignalRendering')) problems.push('renderCalendarPairComparisons is not imported as a value from $lib/charts/chartSignalRendering');
+    if (!importsNamedValue(code, 'renderCalendarPairComparisons', '$lib/features/signals/chartSignalRendering')) problems.push('renderCalendarPairComparisons is not imported as a value from $lib/features/signals/chartSignalRendering');
     if (!callsFunction(code, 'renderCalendarPairComparisons')) problems.push('renderCalendarPairComparisons( is never called');
     return problems;
 }
@@ -171,8 +171,8 @@ describe('X5-F1 wiring, read from the FX detail page’s source', () => {
         const WIRED = [
             "import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/features/assets/detail/AssetChartModeToggle.svelte';",
             "import AssetCalendarWindowControls from '$lib/features/assets/detail/AssetCalendarWindowControls.svelte';",
-            "import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/charts/fxDetailCalendar';",
-            "import {renderCalendarPairComparisons, renderLocalSignals} from '$lib/charts/chartSignalRendering';",
+            "import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/features/signals/fxDetailCalendar';",
+            "import {renderCalendarPairComparisons, renderLocalSignals} from '$lib/features/signals/chartSignalRendering';",
             "import {setPairSettings} from '$lib/stores/chartSettingsStore.svelte';",
             'const entries = buildFxDetailCalendarQuery(input);',
             'const views = fxDetailCalendarViews(answer, entries);',
@@ -206,7 +206,7 @@ describe('X5-F1 wiring, read from the FX detail page’s source', () => {
 
         it('fail a call only in a comment, an import of the type only, and a page that asks nothing', () => {
             expect(requestProblems(WIRED.replace('const entries = buildFxDetailCalendarQuery(input);', '// const entries = buildFxDetailCalendarQuery(input);'))).toEqual(['buildFxDetailCalendarQuery( is never called']);
-            expect(requestProblems(WIRED.replace('import {buildFxDetailCalendarQuery, fxDetailCalendarViews}', 'import {type buildFxDetailCalendarQuery, fxDetailCalendarViews}'))).toEqual(['buildFxDetailCalendarQuery is not imported as a value from $lib/charts/fxDetailCalendar']);
+            expect(requestProblems(WIRED.replace('import {buildFxDetailCalendarQuery, fxDetailCalendarViews}', 'import {type buildFxDetailCalendarQuery, fxDetailCalendarViews}'))).toEqual(['buildFxDetailCalendarQuery is not imported as a value from $lib/features/signals/fxDetailCalendar']);
             expect(requestProblems(WIRED.replace('renderCalendarPairComparisons(signals, views.targets)', 'other.renderCalendarPairComparisons(signals, views.targets)'))).toEqual(['renderCalendarPairComparisons( is never called']);
             expect(requestProblems('')).toHaveLength(6);
         });

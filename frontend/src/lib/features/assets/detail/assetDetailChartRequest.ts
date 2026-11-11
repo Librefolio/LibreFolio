@@ -14,8 +14,8 @@
  * @module features/assets/detail/assetDetailChartRequest
  */
 
-import {comparisonAssetIds} from '$lib/charts/chartPageSignals';
-import type {SignalConfig} from '$lib/charts/signals/ChartSignal';
+import {comparisonAssetIds} from '$lib/features/signals/chartPageSignals';
+import type {SignalConfig} from '$lib/features/signals/ChartSignal';
 import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE} from '$lib/components/charts/priceChartHelpers';
 
 /** The currency of the series and the one the server must convert to, from the display and the native currency. */

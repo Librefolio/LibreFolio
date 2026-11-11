@@ -17,7 +17,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {nextCardPrimaryView, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
-    import type {RenderedSignal} from '$lib/charts/signals';
+    import type {RenderedSignal} from '$lib/features/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';

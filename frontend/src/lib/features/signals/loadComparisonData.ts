@@ -10,7 +10,7 @@
  */
 
 import {zodiosApi} from '$lib/api';
-import type {SignalConfig} from '$lib/charts/signals';
+import type {SignalConfig} from '$lib/features/signals';
 import {getAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {canonicalCacheKey} from '$lib/stores/signalResultCache';

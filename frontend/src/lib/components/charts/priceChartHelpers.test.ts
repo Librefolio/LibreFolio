@@ -22,8 +22,8 @@ vi.hoisted(() => {
 });
 
 import {waitLocale} from 'svelte-i18n';
-import type {RenderedSignal} from '$lib/charts/signals';
-import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
+import type {RenderedSignal} from '$lib/features/signals';
+import {backendSignalSchemas} from '$lib/features/signals/backendTypes';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';

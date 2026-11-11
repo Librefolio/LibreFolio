@@ -17,8 +17,8 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {nextCardPrimaryView, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
-    import {fxPointToLineDataPoint} from '$lib/charts/chartSignalRendering';
-    import type {RenderedSignal} from '$lib/charts/signals';
+    import {fxPointToLineDataPoint} from '$lib/features/signals/chartSignalRendering';
+    import type {RenderedSignal} from '$lib/features/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
     import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';

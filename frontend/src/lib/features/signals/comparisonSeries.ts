@@ -15,8 +15,8 @@
 
 import {zodiosApi} from '$lib/api';
 import {bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
-import type {ComparisonTarget} from '$lib/charts/chartSignalRendering';
-import type {SignalConfig} from '$lib/charts/signals';
+import type {ComparisonTarget} from '$lib/features/signals/chartSignalRendering';
+import type {SignalConfig} from '$lib/features/signals';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {apiPricesToAssetPricePoints, getAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
 import {ensureFxRangeFromFirstDay, ensureFxRangeLoaded} from '$lib/features/fx/fxStoreRegistry';

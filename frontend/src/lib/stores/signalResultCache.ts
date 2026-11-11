@@ -19,8 +19,8 @@
  * @module stores/signalResultCache
  */
 
-import type {ComparisonAssetsLoadResult} from '$lib/charts/loadComparisonData';
-import type {BackendSignalResult} from '$lib/charts/signals/backendTypes';
+import type {ComparisonAssetsLoadResult} from '$lib/features/signals/loadComparisonData';
+import type {BackendSignalResult} from '$lib/features/signals/backendTypes';
 import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 /** The answer of the asset detail page's price query, without the prices (the price store holds them). */

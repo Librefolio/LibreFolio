@@ -5,7 +5,7 @@
  * interface. The UI reads `paramDescriptors` from each subclass to dynamically
  * render controls in the ChartSettingsModal.
  *
- * @module charts/signals/ChartSignal
+ * @module features/signals/ChartSignal
  */
 
 import {fromStore} from 'svelte/store';

@@ -30,7 +30,7 @@ const fxRange = vi.hoisted(() => ({ensureFxRangeLoaded: vi.fn(async () => []), e
 vi.mock('$lib/features/fx/fxStoreRegistry', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/features/fx/fxStoreRegistry')>()), ensureFxRangeLoaded: fxRange.ensureFxRangeLoaded, ensureFxRangeFromFirstDay: fxRange.ensureFxRangeFromFirstDay}));
 
 import {zodiosApi} from '$lib/api';
-import type {SignalConfig} from '$lib/charts/signals';
+import type {SignalConfig} from '$lib/features/signals';
 import {apiPricesToAssetPricePoints, getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
 
 import {comparisonTargetFromStore, ensureComparisonSeries, ensureSignalFxPairs, fxPairSlugsOf} from '../comparisonSeries';

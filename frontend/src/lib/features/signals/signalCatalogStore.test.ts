@@ -1,7 +1,7 @@
 import {describe, expect, it, vi} from 'vitest';
 
 import {SignalCatalogStore, type SignalCatalogLoader} from './signalCatalogStore.svelte';
-import type {BackendSignalCatalogDefinition, BackendSignalCatalogResponse} from '$lib/charts/signals';
+import type {BackendSignalCatalogDefinition, BackendSignalCatalogResponse} from '$lib/features/signals';
 
 function makeCatalogItem(index: number, domain: 'asset' | 'fx'): BackendSignalCatalogDefinition {
     return {

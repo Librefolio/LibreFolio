@@ -12,7 +12,7 @@
  *   - the card hands an FX pair the pair's straight rates and lets the signal's own `_inverted` turn them, the FX-list
  *     preview hands it rates already turned by each pair's own card (decision: as the card);
  *   - the converter «FX store point → chart point» is written three times.
- * Y-39a moves the loop into `lib/charts/chartSignalRendering.ts`: a pure module — no Svelte state, no store read inside,
+ * Y-39a moves the loop into `lib/features/signals/chartSignalRendering.ts`: a pure module — no Svelte state, no store read inside,
  * the caller passes its data sources — that the cards and the preview call with the same sources, keeping the best of
  * the copies. The parity comes by construction.
  *
@@ -57,12 +57,12 @@ import {get} from 'svelte/store';
 
 import {setupI18n} from '$test/component';
 import {_} from '$lib/i18n';
-import {getRegisteredSignalTypes, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalStyle} from '$lib/charts/signals';
-import {renderBackendSignalResult} from '$lib/charts/signals/backendRenderer';
-import {backendSignalSchemas, type BackendSignalResult} from '$lib/charts/signals/backendTypes';
-import type {SignalInstanceResult} from '$lib/charts/signals/resultMapper';
-import * as module from '$lib/charts/chartSignalRendering';
-import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignal, renderLocalSignals, type ComparisonTarget, type FxRatePoint, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+import {getRegisteredSignalTypes, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalStyle} from '$lib/features/signals';
+import {renderBackendSignalResult} from '$lib/features/signals/backendRenderer';
+import {backendSignalSchemas, type BackendSignalResult} from '$lib/features/signals/backendTypes';
+import type {SignalInstanceResult} from '$lib/features/signals/resultMapper';
+import * as module from '$lib/features/signals/chartSignalRendering';
+import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignal, renderLocalSignals, type ComparisonTarget, type FxRatePoint, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {displayFxRate} from '$lib/features/fx/fxStoreRegistry';
 import {extractDaysBack} from '$lib/features/assets/assetPriceDerived';

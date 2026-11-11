@@ -26,8 +26,8 @@
     import SignalVisualLegend from './SignalVisualLegend.svelte';
     import SignalTreeSelect, {type SignalTreeGroup} from './SignalTreeSelect.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {createSignalConfig, getRegisteredSignalTypes, getSignalProblemSeverity, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalParamDescriptor, type SignalProblem, type SignalProblemSeverity, type SignalStyle} from '$lib/charts/signals';
-    import {clearComparisonAssetRuntimeParams} from '$lib/charts/loadComparisonData';
+    import {createSignalConfig, getRegisteredSignalTypes, getSignalProblemSeverity, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalParamDescriptor, type SignalProblem, type SignalProblemSeverity, type SignalStyle} from '$lib/features/signals';
+    import {clearComparisonAssetRuntimeParams} from '$lib/features/signals/loadComparisonData';
     import {humanizeKey} from '$lib/utils/text';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {INPUT_FIELD_ORDER, formatSignalProblem, getParamNumber, getParamString} from './chartSignalsHelpers';

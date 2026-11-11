@@ -9,7 +9,7 @@
  * points the user pins on the chart, recomputed as the pins move. It measures the series drawn on screen,
  * not a figure of the portfolio, so it stays in the browser (developer docs, financial_math.md, rule 6).
  *
- * @module charts/signals/MeasureSignal
+ * @module features/signals/MeasureSignal
  */
 
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';

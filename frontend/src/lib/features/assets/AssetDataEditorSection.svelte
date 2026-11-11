@@ -19,7 +19,7 @@
     import DataEditor from '$lib/components/ui/data-editor/DataEditor.svelte';
     import type {ColumnDef, DataRow} from '$lib/components/ui/data-editor/DataEditorTypes';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import type {RenderedSignal} from '$lib/charts/signals';
+    import type {RenderedSignal} from '$lib/features/signals';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {assetDataSaveSummary, type AssetDataSaveCounts} from './assetDataSaveSummary';
     import PriceDataImportModal from './PriceDataImportModal.svelte';

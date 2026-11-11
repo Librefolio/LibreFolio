@@ -14,11 +14,11 @@
     import {_ as t} from '$lib/i18n';
     import {ChevronDown, Trash2} from 'lucide-svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import type {RenderedSignal} from '$lib/charts/signals';
-    import type {MeasurementResult} from '$lib/charts/signals/MeasureSignal';
-    import {MeasureSignal} from '$lib/charts/signals/MeasureSignal';
+    import type {RenderedSignal} from '$lib/features/signals';
+    import type {MeasurementResult} from '$lib/features/signals/MeasureSignal';
+    import {MeasureSignal} from '$lib/features/signals/MeasureSignal';
     import {hslToHex} from '$lib/utils/colors';
-    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
+    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/features/signals/signalLabel';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
@@ -232,7 +232,7 @@
         emitRendered();
     }
 
-    function updateMeasureStyle(id: string, key: keyof import('$lib/charts/signals').SignalStyle, value: any) {
+    function updateMeasureStyle(id: string, key: keyof import('$lib/features/signals').SignalStyle, value: any) {
         const m = measures.find((m) => m.id === id);
         if (!m) return;
         (m.style as any)[key] = value;

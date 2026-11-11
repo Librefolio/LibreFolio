@@ -5,8 +5,8 @@
  * synthetic benchmarks (LinearSignal, CompoundSignal).
  *
  * Usage:
- *   import { createSignal, signalFromConfig, getRegisteredSignalTypes } from '$lib/charts/signals';
- *   import type { SignalConfig, RenderedSignal } from '$lib/charts/signals';
+ *   import { createSignal, signalFromConfig, getRegisteredSignalTypes } from '$lib/features/signals';
+ *   import type { SignalConfig, RenderedSignal } from '$lib/features/signals';
  */
 
 // Base class & types

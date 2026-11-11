@@ -25,11 +25,11 @@
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {_ as t} from '$lib/i18n';
-    import type {RenderedSignal} from '$lib/charts/signals';
+    import type {RenderedSignal} from '$lib/features/signals';
     import type {LineDataPoint} from './LineChart.svelte';
     import {COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
     import {toRgba} from '$lib/theme/colorAlpha';
-    import {signalLabelToHtml} from '$lib/charts/signalLabel';
+    import {signalLabelToHtml} from '$lib/features/signals/signalLabel';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';

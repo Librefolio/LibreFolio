@@ -46,8 +46,8 @@ import {cleanup, fireEvent, render, setupI18n, waitFor, within} from '$test/comp
 import {_} from '$lib/i18n';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import MeasurePanel from './MeasurePanel.svelte';
-import type {LineDataPoint} from './LineChart.svelte';
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {LineDataPoint} from '../../../components/charts/LineChart.svelte';
+import type {RenderedSignal} from '$lib/features/signals';
 
 /**
  * `isNarrow` reads `window.matchMedia('(max-width: 639px)')` inside an $effect.

@@ -1,7 +1,7 @@
 import {zodiosApi} from '$lib/api';
-import {mergeSignalDefinitions} from '$lib/charts/signals/catalogMapper';
-import {getLocalSignalDefinitions} from '$lib/charts/signals/registry';
-import type {BackendSignalCatalogResponse, SignalDefinition, SignalDomain} from '$lib/charts/signals';
+import {mergeSignalDefinitions} from '$lib/features/signals/catalogMapper';
+import {getLocalSignalDefinitions} from '$lib/features/signals/registry';
+import type {BackendSignalCatalogResponse, SignalDefinition, SignalDomain} from '$lib/features/signals';
 
 export type SignalCatalogLoader = (domain: SignalDomain) => Promise<BackendSignalCatalogResponse>;
 

@@ -502,7 +502,7 @@ describe('MeasureSignal — legend label', () => {
  * frontend's own.
  */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-/** `__tests__` → `signals` → `charts` → `lib` → `src` → `frontend` → the repository */
+/** `__tests__` → `signals` → `features` → `lib` → `src` → `frontend` → the repository */
 const REPO_DIR = path.resolve(HERE, '..', '..', '..', '..', '..', '..');
 const RETURNS_PY = path.join(REPO_DIR, 'backend', 'app', 'services', 'financial_math', 'returns.py');
 

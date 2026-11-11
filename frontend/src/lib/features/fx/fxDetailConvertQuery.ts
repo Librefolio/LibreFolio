@@ -11,7 +11,7 @@
 
 import type {z} from 'zod';
 import {schemas} from '$lib/api';
-import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
+import {backendSignalSchemas} from '$lib/features/signals/backendTypes';
 
 type FxConvertResponse = z.infer<typeof schemas.FXConvertResponse>;
 type FxSignalGroup = NonNullable<FxConvertResponse['signal_results']>[number];

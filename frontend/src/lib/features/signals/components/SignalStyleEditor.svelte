@@ -12,7 +12,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import type {MarkerType, SignalStyle} from '$lib/charts/signals';
+    import type {MarkerType, SignalStyle} from '$lib/features/signals';
 
     // =========================================================================
     // Props

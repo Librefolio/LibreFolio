@@ -15,7 +15,7 @@
  * @module charts/chartSignalsHelpers
  */
 
-import type {SignalConfig, SignalInputField, SignalProblem} from '$lib/charts/signals';
+import type {SignalConfig, SignalInputField, SignalProblem} from '$lib/features/signals';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 

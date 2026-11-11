@@ -8,7 +8,7 @@
  * All date arithmetic uses UTC ISO-day logic to avoid timezone drift.
  */
 
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/features/signals';
 import {daysBetween, utcMs} from '$lib/utils/dateOnly';
 
 import type {LineDataPoint} from './LineChart.svelte';
