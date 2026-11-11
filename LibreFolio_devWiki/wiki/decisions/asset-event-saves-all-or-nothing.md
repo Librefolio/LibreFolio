@@ -251,7 +251,7 @@ The provider-event test had to date its event yesterday: [[problems/provider-eve
 | Refusals as sentences, `existingAmountText()` | `frontend/src/lib/features/transactions/events/eventSaveError.ts` |
 | Event picker, re-read on a write | `frontend/src/lib/features/transactions/events/AssetEventPicker.svelte` |
 | The write bus | `frontend/src/lib/stores/portfolio/portfolioMutation.ts` |
-| The new i18n keys (EN) | `frontend/src/lib/i18n/assets/en.json` |
+| The new i18n keys (EN) | `frontend/src/lib/features/assets/i18n/en.json` |
 | Store tests | `backend/test_scripts/test_services/test_asset_event_store.py` |
 | API tests | `backend/test_scripts/test_api/test_assets_events.py` |
 | Fix tests | `backend/test_scripts/test_db/test_post_migration_event_types.py` |

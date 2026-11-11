@@ -14,7 +14,7 @@ paths:
   (`services/risk/base.py`) and registered with `@register_plugin(RiskAnalyticRegistry)` (`services/risk/registry.py`; the decorator is in
   `services/platform/provider_registry.py`).
   Import and patch from `….risk_plugins.<code>.plugin`. The `risk.warnings.*` vocabulary stays in the `risk` subsystem of
-  the catalogue (`frontend/src/lib/i18n/risk/`), shared by every analytic.
+  the catalogue (`frontend/src/lib/features/risk/i18n/`), shared by every analytic.
 - **Runtime**: `risk/service.py` (`RiskService`) orchestrates a request. `risk/scope.py` resolves the scope and prepares
   the series, `risk/replay.py` prepares a historical replay, `risk/results.py` applies the observation gate and builds
   the results, and `risk/data_quality.py` builds their data quality; `risk/plan.py` holds the plan and its predicates.

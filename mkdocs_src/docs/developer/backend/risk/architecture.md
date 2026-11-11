@@ -667,7 +667,7 @@ simulation.
 The backend sends machine-readable codes plus an English fallback; the frontend owns the wording
 in its translation catalogue, generated from its sources (see
 [Internationalization](../../frontend/i18n.md)). The `risk` subsystem
-(`frontend/src/lib/i18n/risk/<lang>.json`, declared prefix `risk`) holds the panels' wording, the
+(`frontend/src/lib/features/risk/i18n/<lang>.json`, declared prefix `risk`) holds the panels' wording, the
 `risk.errors.*` sentences and the `risk.warnings.*` vocabulary every analytic shares; each
 analytic's fragment (`backend/app/services/risk_plugins/<analytic_code>/i18n/<lang>.json`) holds
 its own `risk.analytics.<name>.*` keys.
