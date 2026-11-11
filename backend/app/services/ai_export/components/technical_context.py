@@ -13,7 +13,9 @@ from pydantic import Field
 
 from backend.app.schemas.common import StrictModel
 from backend.app.schemas.prices import FAPriceQueryResult
-from backend.app.schemas.signals import SignalBandSeries, SignalResult, SignalScalarSeriesBase, SignalStatus
+from backend.app.schemas.signals.outputs import SignalBandSeries, SignalScalarSeriesBase
+from backend.app.schemas.signals.result import SignalResult
+from backend.app.schemas.signals.vocabulary import SignalStatus
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.resources import FxRateSeriesResource
 from backend.app.services.ai_export.components.spec import ComponentSpec
@@ -68,7 +70,6 @@ _SINGLE_ENTITY_HISTORY_BUCKET_COUNTS = {
 
 
 class SignalCoverageAggregate(StrictModel):
-
     instance_id: str
     signal_code: str
     ok_count: int = Field(..., ge=0)
@@ -78,12 +79,11 @@ class SignalCoverageAggregate(StrictModel):
     omission_reasons: dict[str, int] = Field(default_factory=dict)
     partial_reasons: dict[str, int] = Field(
         default_factory=dict,
-        description=("Reason-code counts for INCLUDED PARTIAL results only (e.g. 'incomplete_warmup'), kept " "separate from omission_reasons (which counts omitted/unavailable/failed signals). A PARTIAL " "result is a usable-but-incomplete signal, never equivalent to a complete OK result."),
+        description=("Reason-code counts for INCLUDED PARTIAL results only (e.g. 'incomplete_warmup'), kept separate from omission_reasons (which counts omitted/unavailable/failed signals). A PARTIAL result is a usable-but-incomplete signal, never equivalent to a complete OK result."),
     )
 
 
 class TechnicalEntityCoverage(StrictModel):
-
     entity_id: str
     observation_count: int = Field(..., ge=0)
     available_start: date | None = None
@@ -105,7 +105,6 @@ class TechnicalEntityCoverage(StrictModel):
 
 
 class TechnicalExcludedEntity(StrictModel):
-
     entity_id: str
     reason_code: str
 
@@ -202,7 +201,6 @@ class TechnicalSingleEntityCoveragePayload(StrictModel):
 
 
 class TechnicalMarketContextRow(StrictModel):
-
     entity_id: str
     portfolio_weight_ratio: float | None = None
     value_unit: str
@@ -238,7 +236,6 @@ class TechnicalMarketContextRow(StrictModel):
 
 
 class TechnicalContextHistoryRow(StrictModel):
-
     entity_id: str
     bucket_start: date
     bucket_end: date
@@ -250,7 +247,6 @@ class TechnicalContextHistoryRow(StrictModel):
 
 
 class TechnicalContextEvent(StrictModel):
-
     entity_id: str
     date: date
     key: str
@@ -262,7 +258,6 @@ class TechnicalContextEvent(StrictModel):
 
 
 class TechnicalMarketContextPayload(StrictModel):
-
     policy_code: str
     entities: tuple[TechnicalMarketContextRow, ...]
     history: tuple[TechnicalContextHistoryRow, ...] = ()
@@ -271,7 +266,6 @@ class TechnicalMarketContextPayload(StrictModel):
 
 
 class TechnicalContextEventsPayload(StrictModel):
-
     policy_code: str
     detected_event_count: int = Field(..., ge=0)
     exported_event_count: int = Field(..., ge=0)
@@ -279,7 +273,6 @@ class TechnicalContextEventsPayload(StrictModel):
 
 
 class TechnicalEventDigestRow(StrictModel):
-
     signal_code: str
     signal_category: str
     key: str
@@ -290,7 +283,6 @@ class TechnicalEventDigestRow(StrictModel):
 
 
 class TechnicalEventDigestPayload(StrictModel):
-
     policy_code: str
     detected_event_count: int = Field(..., ge=0)
     included_event_count: int = Field(..., ge=0)

@@ -12,26 +12,11 @@ import pytest
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
 from backend.app.schemas.portfolio.data_quality import DataQualityReport
 from backend.app.schemas.prices import AssetBackwardFillInfo
-from backend.app.schemas.risk import (
-    AssetReturnPoint,
-    AssetReturnSeries,
-    AssetValuationPoint,
-    AssetValuationSeries,
-    PreparedAssetSeries,
-    PreparedAssetSeriesSet,
-)
-from backend.app.schemas.signals import (
-    SignalAreaSeries,
-    SignalAvailabilityReason,
-    SignalCalendarReturnPointStatus,
-    SignalDomain,
-    SignalErrorCode,
-    SignalExecutionContext,
-    SignalPricePoint,
-    SignalRequest,
-    SignalStatus,
-    SignalWarningCode,
-)
+from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.outputs import SignalAreaSeries
+from backend.app.schemas.signals.result import SignalRequest
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalCalendarReturnPointStatus, SignalDomain, SignalErrorCode, SignalStatus, SignalWarningCode
 from backend.app.services import signal_plugins as signal_plugins_package
 from backend.app.services.risk.metrics import (
     annualized_sharpe,

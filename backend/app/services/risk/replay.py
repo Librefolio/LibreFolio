@@ -10,10 +10,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.risk import (
-    RiskErrorCode,
-    RiskHistoricalReplayExclusionReason,
-)
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskHistoricalReplayExclusionReason
 from backend.app.services.risk.base import (
     RiskExecutionContext,
     RiskHistoricalReplayContext,

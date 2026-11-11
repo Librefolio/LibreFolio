@@ -13,30 +13,13 @@ from pydantic import ValidationError
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import BackwardFillInfo
 from backend.app.schemas.portfolio.data_quality import DataQualityReport, DataQualityStatus
-from backend.app.schemas.risk import (
-    PreparedAssetSeriesSet,
-    RiskFreeReference,
-    RiskResultMetadata,
-    RiskReturnBasis,
-)
-from backend.app.schemas.signals import (
-    SignalAvailability,
-    SignalAvailabilityReason,
-    SignalCadence,
-    SignalError,
-    SignalErrorCode,
-    SignalEventPoint,
-    SignalExecutionContext,
-    SignalInputData,
-    SignalPricePoint,
-    SignalResult,
-    SignalSeries,
-    SignalSourceCapability,
-    SignalStatus,
-    SignalWarmupMetadata,
-    SignalWarning,
-    SignalWarningCode,
-)
+from backend.app.schemas.risk.results import RiskResultMetadata
+from backend.app.schemas.risk.series import PreparedAssetSeriesSet, RiskFreeReference
+from backend.app.schemas.risk.vocabulary import RiskReturnBasis
+from backend.app.schemas.signals.inputs import SignalEventPoint, SignalExecutionContext, SignalInputData, SignalPricePoint, SignalSourceCapability, SignalWarmupMetadata
+from backend.app.schemas.signals.outputs import SignalSeries
+from backend.app.schemas.signals.result import SignalAvailability, SignalError, SignalResult, SignalWarning
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalCadence, SignalErrorCode, SignalStatus, SignalWarningCode
 from backend.app.services.market_series import date_is_within_range
 from backend.app.services.signals.annotations import SignalAnnotationService, attach_annotations
 from backend.app.services.signals.base import SignalUnavailableError

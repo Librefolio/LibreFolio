@@ -85,7 +85,9 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Fx
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel
 from backend.app.schemas.portfolio.positions_series import PositionKey, PositionsSeriesQuery
 from backend.app.schemas.portfolio.report import PortfolioReportQuery
-from backend.app.schemas.risk import PortfolioRiskScope, RiskAnalyticRequest, RiskCompositionPolicy, RiskMode, RiskQueryRequest, RiskScenarioDimension, RiskStressMethod
+from backend.app.schemas.risk.scenarios import RiskScenarioDimension
+from backend.app.schemas.risk.scope import PortfolioRiskScope, RiskAnalyticRequest, RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskMode, RiskStressMethod
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.market_series import prepare_asset_series_set
 from backend.app.services.portfolio import report as report_module

@@ -33,7 +33,9 @@ from backend.app.schemas.fx import (
     FXUpsertResult,
 )
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
-from backend.app.schemas.signals import SignalCadence, SignalCatalogResponse, SignalDomain, SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.result import SignalCatalogResponse
+from backend.app.schemas.signals.vocabulary import SignalCadence, SignalDomain
 from backend.app.services.assets.price_sampling import SampleReferenceError, resolve_sample_references, sample_reference_detail
 from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx.conversion import convert_bulk, resolve_min_start_ranges, unit_rate_steps
@@ -511,7 +513,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
                 domain=SignalDomain.FX,
                 requested_range=conversion.date_range,
                 cadence=SignalCadence.DAILY,
-                source_reference=(f"fx:{conversion.from_amount.code}/" f"{conversion.to_currency}"),
+                source_reference=(f"fx:{conversion.from_amount.code}/{conversion.to_currency}"),
             )
             try:
                 plan = signal_service.prepare_plan(
@@ -677,7 +679,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
     if daily_errors and not results and not signal_results:
         raise HTTPException(
             status_code=404,
-            detail=("All conversions failed: " f"{'; '.join(compressed_errors)}"),
+            detail=(f"All conversions failed: {'; '.join(compressed_errors)}"),
         )
 
     return FXConvertResponse(

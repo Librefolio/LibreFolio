@@ -9,13 +9,8 @@ import pandas as pd
 import pytest
 import talib
 
-from backend.app.schemas.signals import (
-    SignalAvailabilityReason,
-    SignalDomain,
-    SignalRequest,
-    SignalSeriesKind,
-    SignalStatus,
-)
+from backend.app.schemas.signals.result import SignalRequest
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalDomain, SignalSeriesKind, SignalStatus
 from backend.app.services.signal_plugins.adx import plugin as adx_module
 from backend.app.services.signal_plugins.adx.plugin import (
     AdxSignalParams,

@@ -15,14 +15,7 @@ from typing import Protocol
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
 from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.risk import (
-    AssetReturnPoint,
-    AssetReturnSeries,
-    AssetValuationPoint,
-    AssetValuationSeries,
-    PreparedAssetSeries,
-    PreparedAssetSeriesSet,
-)
+from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet
 from backend.app.services.assets.market_calendar import is_market_closed_repeat
 from backend.app.services.financial_math.returns import float_price_return, observed_annualization
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS

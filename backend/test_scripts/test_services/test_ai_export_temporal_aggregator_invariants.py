@@ -23,7 +23,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.app.schemas.signals import SignalAggregationProfile
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile
 from backend.app.services.ai_export.temporal import aggregators
 from backend.app.services.ai_export.temporal.aggregators import (
     _SCALAR_AGGREGATION_PROFILES,

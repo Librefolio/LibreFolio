@@ -7,15 +7,9 @@ import asyncio
 from collections.abc import Sequence
 from typing import Any, Optional
 
-from backend.app.schemas.signals import (
-    SignalAnnotationRequest,
-    SignalEventPoint,
-    SignalExecutionContext,
-    SignalPricePoint,
-    SignalRequest,
-    SignalResult,
-    SignalSourceCapability,
-)
+from backend.app.schemas.signals.annotations import SignalAnnotationRequest
+from backend.app.schemas.signals.inputs import SignalEventPoint, SignalExecutionContext, SignalPricePoint, SignalSourceCapability
+from backend.app.schemas.signals.result import SignalRequest, SignalResult
 from backend.app.services.signals.annotations import SignalAnnotationService
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle, execute_signal_plan
 from backend.app.services.signals.planning import SignalExecutionPlan, prepare_signal_plan

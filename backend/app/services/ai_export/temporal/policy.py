@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
-from backend.app.schemas.signals import SignalTemporalClass
+from backend.app.schemas.signals.vocabulary import SignalTemporalClass
 
 from .._int_validation import is_int_not_bool, require_positive_int
 

@@ -10,7 +10,7 @@ import pytest
 
 from backend.app.db.models import AssetType
 from backend.app.main import app
-from backend.app.schemas.risk_scenarios import RiskScenarioCatalogEntry, RiskScenarioCatalogResponse, RiskScenarioDimension, RiskScenarioKind, RiskScenarioSource
+from backend.app.schemas.risk.scenarios import RiskScenarioCatalogEntry, RiskScenarioCatalogResponse, RiskScenarioDimension, RiskScenarioKind, RiskScenarioSource
 from backend.app.services.platform import app_lifespan
 from backend.app.services.risk.scenario_catalog import (
     BUILT_IN_SCENARIO_CATALOG_DIR,

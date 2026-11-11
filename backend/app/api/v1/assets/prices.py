@@ -26,10 +26,8 @@ from backend.app.schemas.prices import (
     FAUpsertResult,
 )
 from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem, FAStoredPriceCountItem, FAStoredPriceCountResponse
-from backend.app.schemas.signals import (
-    SignalCatalogResponse,
-    SignalDomain,
-)
+from backend.app.schemas.signals.result import SignalCatalogResponse
+from backend.app.schemas.signals.vocabulary import SignalDomain
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.period_changes import get_period_changes_bulk, live_range_changes
 from backend.app.services.assets.price_sampling import SampleReferenceError, sample_reference_detail

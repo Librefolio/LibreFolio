@@ -1,7 +1,7 @@
 """The per-bucket selection rule of the signals' ``aggregation_profile`` (Z-29r): which observation stands for a bucket.
 
 A plugin declares, for each of its outputs, how a chart or a summary reduces its points to one per bucket (the profile,
-``schemas/signals.py`` ``SignalAggregationProfile``). This module is the backend's one home of that rule: AI Export's
+``schemas/signals/`` ``SignalAggregationProfile``). This module is the backend's one home of that rule: AI Export's
 temporal aggregators go through it, and so does the reduction of a sampled price query item's signals for a compact chart
 (``sample_signal_series``, Z-29s; ``align_signal_series``, O1). The chart keeps the same rule in the browser (``timeSeriesAggregation.ts``:
 ``selectSignalRepresentative``, ``bandRepresentative``, ``downsampleRenderedSignal``), tied to this one by the shared
@@ -19,7 +19,8 @@ from operator import attrgetter, itemgetter
 from types import MappingProxyType
 from typing import Any, Literal
 
-from backend.app.schemas.signals import SignalAggregationProfile, SignalBandPoint, SignalBandSeries, SignalBarSeries, SignalValuePoint
+from backend.app.schemas.signals.outputs import SignalBandPoint, SignalBandSeries, SignalBarSeries, SignalValuePoint
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile
 from backend.app.services.assets.price_sampling import SampleResolution, bucket_of
 
 Selector = Literal["first", "last", "min", "max"]

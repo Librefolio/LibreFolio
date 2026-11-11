@@ -56,7 +56,7 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Pr
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio.report import PortfolioReportQuery
-from backend.app.schemas.risk import RiskQueryRequest
+from backend.app.schemas.risk.scope import RiskQueryRequest
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
 from backend.app.services.portfolio.portfolio_service import PortfolioService

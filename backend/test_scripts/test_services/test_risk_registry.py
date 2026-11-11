@@ -5,12 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.risk import (
-    RiskKpiOutput,
-    RiskMode,
-    RiskOutputKind,
-    RiskScopeKind,
-)
+from backend.app.schemas.risk.outputs import RiskKpiOutput
+from backend.app.schemas.risk.vocabulary import RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.provider_registry import DuplicatePluginCodeError, register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,

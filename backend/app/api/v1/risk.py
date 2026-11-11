@@ -6,14 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
-from backend.app.schemas.risk import (
-    RiskCatalogResponse,
-    RiskEligibilityRequest,
-    RiskEligibilityResponse,
-    RiskQueryRequest,
-    RiskQueryResponse,
-)
-from backend.app.schemas.risk_scenarios import RiskScenarioCatalogResponse
+from backend.app.schemas.risk.results import RiskQueryResponse
+from backend.app.schemas.risk.scenarios import RiskScenarioCatalogResponse
+from backend.app.schemas.risk.scope import RiskCatalogResponse, RiskEligibilityRequest, RiskEligibilityResponse, RiskQueryRequest
 from backend.app.services.risk.scenario_catalog import (
     get_loaded_risk_scenario_catalog,
 )

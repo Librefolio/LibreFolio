@@ -56,7 +56,9 @@ setup_test_database()
 from backend.app.api.v1.fx import currencies as fx_currencies_api
 from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import FXConversionRequest
-from backend.app.schemas.signals import SignalAggregationProfile, SignalCalendarReturnValuePoint, SignalDomain, _validate_series_alignment
+from backend.app.schemas.signals.outputs import SignalCalendarReturnValuePoint
+from backend.app.schemas.signals.result import _validate_series_alignment
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalDomain
 from backend.app.services.signals import aggregation as signal_aggregation
 from backend.app.services.signals.registry import SignalPluginRegistry
 

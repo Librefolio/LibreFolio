@@ -135,8 +135,8 @@ from starlette.requests import Request
 import backend.app.main as app_main
 from backend.app.config import API_V1_PREFIX
 from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderProbeRequest
-from backend.app.schemas.risk import RiskAnalyticRequest
-from backend.app.schemas.signals import SignalRequest
+from backend.app.schemas.risk.scope import RiskAnalyticRequest
+from backend.app.schemas.signals.result import SignalRequest
 from backend.app.schemas.tools import ToolComputeItem
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import print_section, print_success
@@ -167,7 +167,7 @@ FREE_FORM_TYPES = (Any, object, JsonValue)
 MIN_API_ROUTES = 150
 MIN_API_ROUTES_WITH_BODY = 60
 
-SIGNALS = "backend.app.schemas.signals"
+SIGNALS = "backend.app.schemas.signals.annotations"
 #: (c): the float fields of the signal annotation requests, FiniteFloat each, and the routes whose bodies carry them.
 SIGNAL_LEAVES = (
     f"{SIGNALS}.SignalLineCrossoverRequest.epsilon",
@@ -767,8 +767,8 @@ def probe_tool_compute_item(value: JsonValue) -> BaseModel:
 KNOWN_FREE_FORM: dict[str, Callable[[JsonValue], BaseModel]] = {
     "backend.app.schemas.provider.FAProviderAssignmentItem.provider_params{*}": probe_provider_assignment,
     "backend.app.schemas.provider.FAProviderProbeRequest.provider_params{*}": probe_provider_probe,
-    "backend.app.schemas.risk.RiskAnalyticRequest.parameters{*}": probe_risk_analytic,
-    "backend.app.schemas.signals.SignalRequest.params{*}": probe_signal_request,
+    "backend.app.schemas.risk.scope.RiskAnalyticRequest.parameters{*}": probe_risk_analytic,
+    "backend.app.schemas.signals.result.SignalRequest.params{*}": probe_signal_request,
     "backend.app.schemas.tools.ToolComputeItem.parameters": probe_tool_compute_item,
 }
 #: (g): where a probe puts a number that is not finite, by name: the number, and the mapping around it, which the probe

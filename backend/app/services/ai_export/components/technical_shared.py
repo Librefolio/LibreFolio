@@ -41,29 +41,11 @@ from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeMode
 from backend.app.schemas.portfolio.report import PortfolioReportResponse
 from backend.app.schemas.portfolio.summary import AssetPeriodContribution
 from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
-from backend.app.schemas.signals import (
-    SignalAnnotationRequest,
-    SignalAreaSeries,
-    SignalBandComponent,
-    SignalBandSeries,
-    SignalBandValueSource,
-    SignalBarSeries,
-    SignalCadence,
-    SignalDomain,
-    SignalExecutionContext,
-    SignalLineCrossoverRequest,
-    SignalLineSeries,
-    SignalOutputValueSource,
-    SignalPriceField,
-    SignalPricePoint,
-    SignalPriceValueSource,
-    SignalReferenceLevel,
-    SignalRequest,
-    SignalResult,
-    SignalSourceCapability,
-    SignalStatus,
-    SignalThresholdCrossingRequest,
-)
+from backend.app.schemas.signals.annotations import SignalAnnotationRequest, SignalLineCrossoverRequest, SignalThresholdCrossingRequest
+from backend.app.schemas.signals.inputs import SignalBandValueSource, SignalExecutionContext, SignalOutputValueSource, SignalPricePoint, SignalPriceValueSource, SignalSourceCapability
+from backend.app.schemas.signals.outputs import SignalAreaSeries, SignalBandSeries, SignalBarSeries, SignalLineSeries, SignalReferenceLevel
+from backend.app.schemas.signals.result import SignalRequest, SignalResult
+from backend.app.schemas.signals.vocabulary import SignalBandComponent, SignalCadence, SignalDomain, SignalPriceField, SignalStatus
 from backend.app.services.ai_export.components.payloads.portfolio_broker import load_portfolio_report
 from backend.app.services.ai_export.components.resources import (
     ASSET_PRICE_RESULTS_RESOURCE,

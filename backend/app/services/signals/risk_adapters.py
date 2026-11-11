@@ -9,19 +9,10 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from backend.app.schemas.signals import (
-    SignalAreaSeries,
-    SignalAvailabilityReason,
-    SignalComputation,
-    SignalExecutionContext,
-    SignalLineSeries,
-    SignalOutputSpec,
-    SignalPricePoint,
-    SignalSeriesKind,
-    SignalValuePoint,
-    SignalWarning,
-    SignalWarningCode,
-)
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.outputs import SignalAreaSeries, SignalLineSeries, SignalOutputSpec, SignalValuePoint
+from backend.app.schemas.signals.result import SignalComputation, SignalWarning
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalSeriesKind, SignalWarningCode
 from backend.app.services.financial_math.returns import positive_annualization_factor
 from backend.app.services.risk.metrics import ZERO_TOLERANCE, daily_risk_free_rate
 from backend.app.services.signals.base import SignalUnavailableError

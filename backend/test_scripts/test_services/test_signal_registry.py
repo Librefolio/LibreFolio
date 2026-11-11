@@ -14,25 +14,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from backend.app.config import DEFAULT_TEST_DATA_DIR
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.signals import (
-    SignalAggregationProfile,
-    SignalAiExportTemporalRule,
-    SignalAxisRole,
-    SignalAxisSpec,
-    SignalCategory,
-    SignalComputation,
-    SignalDomain,
-    SignalExecutionContext,
-    SignalInputRequirements,
-    SignalLineSeries,
-    SignalOutputSpec,
-    SignalPriceField,
-    SignalSeriesKind,
-    SignalTemporalClass,
-    SignalUnit,
-    SignalValuePoint,
-    SignalWarmupRequirement,
-)
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalInputRequirements, SignalWarmupRequirement
+from backend.app.schemas.signals.outputs import SignalAxisSpec, SignalLineSeries, SignalOutputSpec, SignalValuePoint
+from backend.app.schemas.signals.result import SignalAiExportTemporalRule, SignalComputation
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalAxisRole, SignalCategory, SignalDomain, SignalPriceField, SignalSeriesKind, SignalTemporalClass, SignalUnit
 from backend.app.services import provider_registry as registry_module
 from backend.app.services.provider_registry import DuplicatePluginCodeError, PluginDiscoveryError, register_plugin
 from backend.app.services.signals.base import SignalPlugin

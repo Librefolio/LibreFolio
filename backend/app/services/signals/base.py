@@ -11,24 +11,10 @@ from typing import Any, ClassVar, Optional
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 
-from backend.app.schemas.signals import (
-    SignalAiDescription,
-    SignalAiEventDescription,
-    SignalAiExportTemporalRule,
-    SignalAiOutputDescription,
-    SignalAvailabilityReason,
-    SignalCatalogDefinition,
-    SignalCategory,
-    SignalComputation,
-    SignalDomain,
-    SignalEventPoint,
-    SignalExecutionContext,
-    SignalInputRequirements,
-    SignalOutputSpec,
-    SignalPricePoint,
-    SignalTemporalClass,
-    SignalWarmupRequirement,
-)
+from backend.app.schemas.signals.inputs import SignalEventPoint, SignalExecutionContext, SignalInputRequirements, SignalPricePoint, SignalWarmupRequirement
+from backend.app.schemas.signals.outputs import SignalOutputSpec
+from backend.app.schemas.signals.result import SignalAiDescription, SignalAiEventDescription, SignalAiExportTemporalRule, SignalAiOutputDescription, SignalCatalogDefinition, SignalComputation
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalCategory, SignalDomain, SignalTemporalClass
 
 _SIGNAL_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _SEMANTIC_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
@@ -133,7 +119,7 @@ class SignalPlugin(ABC):
         normalized_params = cls.validate_params(params).model_dump(mode="json", by_alias=True)
         matches = [rule for rule in cls.ai_export_temporal_rules if all(key in normalized_params and _json_exact_match(normalized_params[key], value) for key, value in rule.parameter_match.items())]
         if len(matches) != 1:
-            raise ValueError(f"{cls.signal_code} AI Export temporal resolution requires exactly one matching rule; " f"found {len(matches)} for normalized params {normalized_params}")
+            raise ValueError(f"{cls.signal_code} AI Export temporal resolution requires exactly one matching rule; found {len(matches)} for normalized params {normalized_params}")
         return matches[0].temporal_class
 
     @classmethod
@@ -346,7 +332,7 @@ class SignalPlugin(ABC):
                     raise ValueError("ai_export_temporal_rules must not contain duplicate rules")
                 shared_keys = set(left_rule.parameter_match) & set(right_rule.parameter_match)
                 if all(_json_exact_match(left_rule.parameter_match[key], right_rule.parameter_match[key]) for key in shared_keys):
-                    raise ValueError("ai_export_temporal_rules contains ambiguous rules " f"at indexes {left_index} and {right_index}")
+                    raise ValueError(f"ai_export_temporal_rules contains ambiguous rules at indexes {left_index} and {right_index}")
         comparison_asset_param = cls.input_requirements.comparison_asset_param
         if comparison_asset_param is not None and comparison_asset_param not in cls.params_model.model_fields:
             raise ValueError("comparison_asset_param must reference a declared plugin parameter")

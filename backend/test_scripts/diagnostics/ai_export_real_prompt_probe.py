@@ -34,7 +34,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.schemas.signals import SignalTemporalClass  # noqa: E402
+from backend.app.schemas.signals.vocabulary import SignalTemporalClass  # noqa: E402
 from backend.app.services.accounts.auth_service import hash_password, verify_password  # noqa: E402
 from backend.app.services.ai_export.temporal.policy import (  # noqa: E402
     BucketDetailLevel,
@@ -3689,7 +3689,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--user",
         action="append",
         choices=DEFAULT_USERS,
-        help=("User alias to probe; repeatable. Default: marco for representative, " "alfy + marco for exhaustive"),
+        help=("User alias to probe; repeatable. Default: marco for representative, alfy + marco for exhaustive"),
     )
     parser.add_argument("--mode", choices=("data", "analysis"))
     parser.add_argument("--domain", choices=("portfolio", "broker", "asset", "fx"))
@@ -4320,15 +4320,9 @@ def run_probe(args: argparse.Namespace) -> int:  # noqa: C901 — sequential pro
         failures_payload["secret_scan"] = final_secret_scan
         write_core_artifacts()
     print(f"Run: {run_dir}")
-    print(f"Prompts measured: {sum(1 for entry in entries if entry.get('status') == 'ok')}/{len(entries)}; " f"retained: {sum(1 for entry in entries if entry.get('retained') is True)}")
+    print(f"Prompts measured: {sum(1 for entry in entries if entry.get('status') == 'ok')}/{len(entries)}; retained: {sum(1 for entry in entries if entry.get('retained') is True)}")
     print(f"Failures: {sum(1 for entry in entries if entry.get('status') == 'failed')}; skipped: {sum(1 for entry in entries if entry.get('status') == 'skipped')}")
-    print(
-        "Probe source unchanged: "
-        f"{sqlite_primary_unchanged(source_snapshot_hash_before, source_snapshot_hash_after)}; "
-        "production source unchanged: "
-        f"{sqlite_primary_unchanged(production_source_hash_before, production_source_hash_after)}; "
-        f"secret scan: {'passed' if not final_findings else 'failed'}"
-    )
+    print(f"Probe source unchanged: {sqlite_primary_unchanged(source_snapshot_hash_before, source_snapshot_hash_after)}; production source unchanged: {sqlite_primary_unchanged(production_source_hash_before, production_source_hash_after)}; secret scan: {'passed' if not final_findings else 'failed'}")
     regression_failure = args.fail_on_regression and any(item.get("regression") for item in comparisons)
     matrix_failure = public_catalog_v1_run and len(entries) != PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT
     return 2 if final_findings or not sqlite_primary_unchanged(source_snapshot_hash_before, source_snapshot_hash_after) or regression_failure or matrix_failure else 0

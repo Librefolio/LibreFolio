@@ -102,7 +102,7 @@ from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, 
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.fx import FXBulkUpsertResponse, FXConversionRequest, FXConvertResponse, FXUpsertItem
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint, FAPriceQueryItem, FAPriceQueryResult, FAUpsert
-from backend.app.schemas.signals import SignalRequest
+from backend.app.schemas.signals.result import SignalRequest
 from backend.app.services.assets import core, price_query, refresh
 from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.fx.conversion import UnitRateSteps

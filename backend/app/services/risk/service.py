@@ -12,19 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason
-from backend.app.schemas.risk import (
-    RiskAnalyticResult,
-    RiskAssetEligibility,
-    RiskEligibilityLevel,
-    RiskEligibilityRequest,
-    RiskEligibilityResponse,
-    RiskError,
-    RiskErrorCode,
-    RiskQueryRequest,
-    RiskQueryResponse,
-    RiskResultStatus,
-    RiskScopeKind,
-)
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskQueryResponse
+from backend.app.schemas.risk.scope import RiskAssetEligibility, RiskEligibilityRequest, RiskEligibilityResponse, RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskEligibilityLevel, RiskErrorCode, RiskResultStatus, RiskScopeKind
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk.base import RiskUnavailableError
