@@ -105,7 +105,7 @@ async def list_providers(
                     base_currencies=base_currencies,
                     target_currencies=sorted(supported.currencies),
                     currencies_unavailable=supported.unavailable,
-                    description=getattr(instance, "description", f'{provider_dict["name"]} FX rate provider'),
+                    description=getattr(instance, "description", f"{provider_dict['name']} FX rate provider"),
                     description_i18n=getattr(instance, "description_i18n", {}),
                     warning_i18n=getattr(instance, "warning_i18n", {}),
                     icon_url=instance.icon,

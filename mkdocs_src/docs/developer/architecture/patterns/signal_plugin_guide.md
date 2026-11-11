@@ -205,7 +205,7 @@ plan or a result. The incoherent cases are:
 - a scalar `signal` source naming a band series.
 
 The chart endpoints answer it with HTTP 422, the message as `detail`:
-`POST /api/v1/signals/preview` (`api/v1/signals.py`), the Asset price query
+`POST /api/v1/signals/preview` (`api/v1/signals/preview.py`), the Asset price query
 `POST /api/v1/assets/prices/query` (`api/v1/assets/prices.py`), and the FX endpoint
 `POST /api/v1/fx/currencies/convert` (`api/v1/fx/currencies.py`). An Asset or FX request
 then returns no prices either.
