@@ -77,7 +77,7 @@ caller sets.
 |------|------|
 | Shared chart | `frontend/src/lib/components/charts/LineChart.svelte` |
 | Series builders | `frontend/src/lib/components/charts/lineChartHelpers.ts` |
-| The only opt-in | `frontend/src/lib/charts/signals/FxPairSignal.ts` |
+| The only opt-in | `frontend/src/lib/features/signals/FxPairSignal.ts` |
 | Legacy barrier test | `frontend/src/lib/components/charts/__tests__/lineChartHelpers.test.ts` |
 
 ## See also
