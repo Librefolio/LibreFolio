@@ -178,7 +178,7 @@ CANARY_TOKEN = f"{CANARY}-" + "c" * 39
 
 #: The project root: the working directory of the fresh interpreters, and where the catalogues are.
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-CATALOGUES = PROJECT_ROOT / "frontend" / "src" / "lib" / "i18n" / "backup"
+CATALOGUES = PROJECT_ROOT / "frontend" / "src" / "lib" / "features" / "backup" / "i18n"
 LANGUAGES = ("en", "it", "fr", "es")
 #: A placeholder of an ICU message: ``{name}``, or the name of ``{name, plural, ...}``; never the ``{#`` of a plural branch.
 PLACEHOLDER = re.compile(r"\{\s*([A-Za-z_]\w*)\s*[,}]")

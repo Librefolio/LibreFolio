@@ -36,7 +36,7 @@ from backend.app.services.brim.registry import BRIMProviderRegistry
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROVIDERS_DIR = REPO_ROOT / "backend" / "app" / "services" / "brim_providers"
-I18N_DIR = REPO_ROOT / "frontend" / "src" / "lib" / "i18n" / "importWizard"
+I18N_DIR = REPO_ROOT / "frontend" / "src" / "lib" / "features" / "transactions" / "import" / "i18n"
 LANGUAGES = ("en", "it", "fr", "es")
 REFUSAL_PREFIX = ("importWizard", "parseRefusal")
 #: The wizard adds ``plugin_name`` to the ICU values whenever the reason names a plugin, whatever the plugin's context holds.

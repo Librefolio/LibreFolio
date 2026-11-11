@@ -1967,7 +1967,7 @@ def test_check_hosting_panel_changes_nothing(configuration, wake, status):
 
 #: (k) The instance's catalogues, one per language, from which ``dev.py i18n`` builds the web app's: where the messages of
 #: ``instance.checks.*`` live.
-INSTANCE_CATALOGUES = REPOSITORY_ROOT / "frontend" / "src" / "lib" / "i18n" / "instance"
+INSTANCE_CATALOGUES = REPOSITORY_ROOT / "frontend" / "src" / "lib" / "features" / "instance" / "i18n"
 CATALOGUE_LANGUAGES = ("en", "it", "fr", "es")
 #: (k) A placeholder of an ICU message: ``{name}``, or the name of ``{name, plural, ...}``; never the ``{#`` of a plural
 #: branch.
