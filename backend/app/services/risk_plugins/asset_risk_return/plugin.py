@@ -9,7 +9,7 @@ from backend.app.schemas.risk.results import RiskWarning
 from backend.app.schemas.risk.series import RiskFreeReference
 from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_returns,
     require_annualization_factor,

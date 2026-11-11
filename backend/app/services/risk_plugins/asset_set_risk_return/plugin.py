@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.app.schemas.risk.outputs import RiskAssetSetReturnItem, RiskAssetSetReturnOutput
 from backend.app.schemas.risk.vocabulary import RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_scope_series,
     require_annualization_factor,

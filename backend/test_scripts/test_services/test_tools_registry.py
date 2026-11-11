@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_fie
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from backend.app.schemas.tools import ToolDiscoveryFailure, ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
-from backend.app.services.provider_registry import AbstractPluginRegistry, register_plugin
+from backend.app.services.platform.provider_registry import AbstractPluginRegistry, register_plugin
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
 from backend.app.services.tools.catalog import effective_catalog_entries, effective_operation, get_tool_catalog
 from backend.app.services.tools.registry import ToolPluginRegistry, build_tool_definition
@@ -266,7 +266,7 @@ class _DiscoveryFixture:
     registry_symbol: str
 
     def _imports(self) -> str:
-        return f"from {__name__} import {self.registry_symbol} as Registry\n" f"from {__name__} import _PrivatePlugin, _private_service, " "_register_through_helper\n" "from backend.app.services.provider_registry import register_plugin\n"
+        return f"from {__name__} import {self.registry_symbol} as Registry\nfrom {__name__} import _PrivatePlugin, _private_service, _register_through_helper\nfrom backend.app.services.platform.provider_registry import register_plugin\n"
 
     def write_module(self, stem: str, body: str) -> str:
         (self.directory / f"{stem}.py").write_text(self._imports() + dedent(body), encoding="utf-8")
@@ -963,7 +963,7 @@ def test_lookups_match_codes_exactly(lookup, discovery_factory, plugin_factory):
 def test_registration_is_rolled_back_when_its_import_caller_fails(through_helper, spoof_module, discovery_factory):
     discovery = discovery_factory()
     registration = "_register_through_helper(Registry, Broken)" if through_helper else "register_plugin(Registry)(Broken)"
-    body = "class Broken(_PrivatePlugin):\n" '    services = (_private_service("private_broken"),)\n' + ('    __module__ = "backend.app.services.tools.base"\n' if spoof_module else "") + registration + '\nraise RuntimeError("PRIVATE_IMPORT_INPUT_SENTINEL")\n'
+    body = 'class Broken(_PrivatePlugin):\n    services = (_private_service("private_broken"),)\n' + ('    __module__ = "backend.app.services.tools.base"\n' if spoof_module else "") + registration + '\nraise RuntimeError("PRIVATE_IMPORT_INPUT_SENTINEL")\n'
     failed_module = discovery.write_module("a_broken", body)
     discovery.write_module(
         "z_healthy",

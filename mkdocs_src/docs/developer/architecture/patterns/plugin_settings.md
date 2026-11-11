@@ -272,7 +272,7 @@ A plugin lists its fields in `settings_fields`, a class attribute holding a tupl
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 
 @register_provider(AssetProviderRegistry)
@@ -806,7 +806,7 @@ hand-entered FX rates, is not: it stays hidden from the FX list by its code.
   fields.
 
 The rule lives in the registry base, `AbstractPluginRegistry._withheld()` in
-`backend/app/services/provider_registry.py`, which reads `is_test_mode()` at each lookup. A class that
+`backend/app/services/platform/provider_registry.py`, which reads `is_test_mode()` at each lookup. A class that
 does not set the flag (every real provider, every plugin of the other families) is never affected.
 `./dev.py test services test-only-providers` covers the registries, the family runtimes and the
 validation of an assignment and of a probe, in both modes.

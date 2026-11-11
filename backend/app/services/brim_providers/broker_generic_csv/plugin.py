@@ -41,8 +41,8 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
-from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -453,7 +453,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import transactions from a generic CSV file. " "Auto-detects columns based on header names. " "Supports various date and number formats."
+        return "Import transactions from a generic CSV file. Auto-detects columns based on header names. Supports various date and number formats."
 
     @property
     def icon_url(self) -> str:
@@ -766,11 +766,11 @@ class GenericCSVBrokerProvider(BRIMProvider):
         # For generic CSV, we can't auto-generate paired transfers
         # Just warn and skip TRANSFER types
         if tx_type == TransactionType.TRANSFER:
-            raise ValueError("TRANSFER type requires paired transactions with link_uuid. " "Please use manual entry or broker-specific plugin.")
+            raise ValueError("TRANSFER type requires paired transactions with link_uuid. Please use manual entry or broker-specific plugin.")
 
         # Handle FX_CONVERSION type - needs link_uuid
         if tx_type == TransactionType.FX_CONVERSION:
-            raise ValueError("FX_CONVERSION type requires paired transactions with link_uuid. " "Please use manual entry or broker-specific plugin.")
+            raise ValueError("FX_CONVERSION type requires paired transactions with link_uuid. Please use manual entry or broker-specific plugin.")
 
         # Build transaction - parent handles validation issues:
         # - Asset-required types now always have a fake_id assigned

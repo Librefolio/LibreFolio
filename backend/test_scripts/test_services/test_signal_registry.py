@@ -18,8 +18,8 @@ from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalInp
 from backend.app.schemas.signals.outputs import SignalAxisSpec, SignalLineSeries, SignalOutputSpec, SignalValuePoint
 from backend.app.schemas.signals.result import SignalAiExportTemporalRule, SignalComputation
 from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalAxisRole, SignalCategory, SignalDomain, SignalPriceField, SignalSeriesKind, SignalTemporalClass, SignalUnit
-from backend.app.services import provider_registry as registry_module
-from backend.app.services.provider_registry import DuplicatePluginCodeError, PluginDiscoveryError, register_plugin
+from backend.app.services.platform import provider_registry as registry_module
+from backend.app.services.platform.provider_registry import DuplicatePluginCodeError, PluginDiscoveryError, register_plugin
 from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 

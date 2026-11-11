@@ -15,8 +15,8 @@ from pydantic import TypeAdapter, ValidationError
 
 from backend.app.logging_config import get_logger
 from backend.app.schemas.tools import ToolDescriptor, ToolDiscoveryFailure, ToolDiscoveryReason
+from backend.app.services.platform.provider_registry import PLUGIN_MODULE_NAME, AbstractPluginRegistry
 from backend.app.services.plugin_settings.fields import SettingsDeclarationError, claim_env_variables, validate_declaration
-from backend.app.services.provider_registry import PLUGIN_MODULE_NAME, AbstractPluginRegistry
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
 from backend.app.services.tools.schema import declared_operations, generate_tool_schema, require_roundtrip_output, schema_fingerprint
 from backend.app.services.tools.wire import encode_json

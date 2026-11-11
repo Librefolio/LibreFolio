@@ -57,7 +57,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -181,7 +181,7 @@ class SchwabBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import transactions from Charles Schwab CSV export. " "Supports stocks, ETFs, dividends, and interest."
+        return "Import transactions from Charles Schwab CSV export. Supports stocks, ETFs, dividends, and interest."
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -288,7 +288,7 @@ class SchwabBrokerProvider(BRIMProvider):
                             if tx_type == TransactionType.DIVIDEND:
                                 # Dividend from a cash fund (e.g. money-market) with no ticker
                                 # → treat as INTEREST (cash yield, no asset needed)
-                                warnings.append(f"Row {row_num}: DIVIDEND '{description}' has no ticker" f" — reclassified as INTEREST")
+                                warnings.append(f"Row {row_num}: DIVIDEND '{description}' has no ticker — reclassified as INTEREST")
                                 tx_type = TransactionType.INTEREST
                             else:
                                 warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")

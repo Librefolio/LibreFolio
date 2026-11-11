@@ -33,7 +33,7 @@ except ImportError:
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider, raise_if_rate_limited
 from backend.app.services.assets.registry import AssetProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = get_logger(__name__)
 

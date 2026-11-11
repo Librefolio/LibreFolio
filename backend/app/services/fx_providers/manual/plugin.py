@@ -18,7 +18,7 @@ from decimal import Decimal
 from backend.app.logging_config import get_logger
 from backend.app.services.fx.base import FXProviderStartDate, FXRateProvider
 from backend.app.services.fx.registry import FXProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = get_logger(__name__)
 
@@ -96,5 +96,5 @@ class ManualProvider(FXRateProvider):
         Returns empty dict — the user must insert rates manually
         via the rate upsert endpoint or CSV import.
         """
-        logger.debug(f"MANUAL provider: skipping sync for currencies={currencies}, " f"date_range={date_range} (manual-only pair)")
+        logger.debug(f"MANUAL provider: skipping sync for currencies={currencies}, date_range={date_range} (manual-only pair)")
         return {}

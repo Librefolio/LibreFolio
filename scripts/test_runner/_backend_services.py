@@ -294,7 +294,7 @@ def services_ai_export_performance_steps(verbose: bool = False, test_names: list
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """Test registry dei provider (asset & fx)."""
     print_section("Services: Provider Registry")
-    print_info("Testing: backend/app/services/provider_registry.py")
+    print_info("Testing: backend/app/services/platform/provider_registry.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry.py", test_names)
     return run_command(cmd, "Provider registry tests", verbose=verbose)
 
@@ -1522,7 +1522,7 @@ def services_current_price_storable(verbose: bool = False, test_names: list = No
 def services_test_only_providers(verbose: bool = False, test_names: list = None) -> bool:
     """Run X-R44: outside test mode a test-only provider (mockprov, MOCKFX) is not served by its registry."""
     print_section("Services: Test-Only Providers")
-    print_info("Testing: backend/app/services/provider_registry.py (get_plugin, list_plugin_codes, list_providers), assets/core.configured_provider, fx/runtime, schemas/provider.py")
+    print_info("Testing: backend/app/services/platform/provider_registry.py (get_plugin, list_plugin_codes, list_providers), assets/core.configured_provider, fx/runtime, schemas/provider.py")
     print_info("Tests: outside test mode mockprov/MOCKFX found by no lookup or list and refused as an unknown provider; in test mode, and for real providers or families without the flag, nothing changes")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_test_only_providers.py", test_names)
     return run_command(cmd, "Test-only provider tests", verbose=verbose)
@@ -2292,7 +2292,7 @@ def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
 def services_provider_registry_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider registry helper branches not covered by contract tests."""
     print_section("Services: Provider Registry Helpers")
-    print_info("Testing: backend/app/services/provider_registry.py")
+    print_info("Testing: backend/app/services/platform/provider_registry.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry_misc.py", test_names)
     return run_command(cmd, "Provider registry helper tests", verbose=verbose)
 

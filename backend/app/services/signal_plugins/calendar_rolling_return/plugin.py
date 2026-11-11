@@ -16,7 +16,7 @@ from backend.app.schemas.signals.outputs import SignalAxisSpec, SignalCalendarRe
 from backend.app.schemas.signals.result import SignalComputation, SignalWarning
 from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalAvailabilityReason, SignalAxisRole, SignalCalendarReturnPointStatus, SignalCategory, SignalDataPolicy, SignalDomain, SignalPriceField, SignalSeriesKind, SignalUnit, SignalWarningCode
 from backend.app.services.financial_math.returns import price_return
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.signals.base import SignalPlugin, SignalUnavailableError
 from backend.app.services.signals.registry import SignalPluginRegistry
 

@@ -20,7 +20,7 @@ from backend.app.schemas.risk.scenarios import (
 )
 from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskHistoricalReplayExclusionReason, RiskHistoricalReplayExclusionTreatment, RiskMode, RiskOutputKind, RiskReturnBasis, RiskScopeKind, RiskStressApplicationRule, RiskStressMethod
 from backend.app.services.platform.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE, STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,

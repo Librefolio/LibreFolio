@@ -12,7 +12,7 @@ from backend.app.schemas.signals.inputs import SignalEventPoint, SignalExecution
 from backend.app.schemas.signals.outputs import SignalAxisSpec, SignalBarSeries, SignalLineSeries, SignalOutputSpec, SignalOutputStyle, SignalReferenceLevel, SignalValuePoint
 from backend.app.schemas.signals.result import SignalAiExportTemporalRule, SignalComputation
 from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalAxisRole, SignalCategory, SignalColorRole, SignalDomain, SignalLinePattern, SignalPriceField, SignalSeriesKind, SignalTemporalClass, SignalUnit
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 

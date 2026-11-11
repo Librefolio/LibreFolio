@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from backend.app.logging_config import get_logger
-from backend.app.services.provider_registry import AbstractProviderRegistry
+from backend.app.services.platform.provider_registry import AbstractProviderRegistry
 
 logger = get_logger(__name__)
 

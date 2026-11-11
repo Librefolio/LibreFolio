@@ -21,9 +21,9 @@ from uuid import uuid4
 import pytest
 
 from backend.app.config import DEFAULT_TEST_DATA_DIR
-from backend.app.services import provider_registry as registry_module
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry, PluginDiscoveryFailure, register_provider
+from backend.app.services.platform import provider_registry as registry_module
+from backend.app.services.platform.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry, PluginDiscoveryFailure, register_provider
 
 
 @dataclass
@@ -235,7 +235,7 @@ _LATE_CALLER_GRACE_SECONDS = 2.0
 _PLUGIN_HEADER = """\
 import threading
 
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 import {harness} as harness
 
@@ -558,7 +558,7 @@ def test_catalogue_iteration_survives_a_registration_on_another_thread(plugin_la
 # Prepended to every plugin.py and single-file plugin of the lab: the real plugins' registration path, plus the harness
 # through which the module reaches its throw-away registry.
 _LAB_HEADER = """\
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 
 import {harness} as harness
 

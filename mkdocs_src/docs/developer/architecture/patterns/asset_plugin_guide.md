@@ -403,7 +403,7 @@ from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint
 
 @register_provider(AssetProviderRegistry)

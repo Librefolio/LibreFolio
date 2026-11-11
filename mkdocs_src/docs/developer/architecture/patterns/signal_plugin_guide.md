@@ -574,7 +574,7 @@ from backend.app.schemas.signals import (
     SignalViewTransform,
     SignalWarmupRequirement,
 )
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 

@@ -70,7 +70,7 @@ from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import PluginDiagnosticsResponse, ReadinessChecks, ReadinessResponse, SystemInfoPublicResponse, SystemInfoResponse
 from backend.app.schemas.tools import ToolDiscoveryFailure
 from backend.app.services.platform import instance_links, readiness
-from backend.app.services.provider_registry import PluginDiscoveryFailure
+from backend.app.services.platform.provider_registry import PluginDiscoveryFailure
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistrySnapshot
 from backend.app.utils.runtime.network import classify_ip, client_address
@@ -135,7 +135,7 @@ class TestParsePipfile:
 
     def test_quoted_name_with_trailing_space(self, tmp_path, monkeypatch):
         pipfile = tmp_path / "Pipfile"
-        pipfile.write_text("[packages]\n" 'fastapi = "*"\n' '"borsa-italiana-scraping " = {git = "https://example.com/repo.git"}\n' "[dev-packages]\n" 'pytest = "*"\n')
+        pipfile.write_text('[packages]\nfastapi = "*"\n"borsa-italiana-scraping " = {git = "https://example.com/repo.git"}\n[dev-packages]\npytest = "*"\n')
         monkeypatch.setattr(info_module, "PROJECT_ROOT", tmp_path)
 
         packages = parse_pipfile()
@@ -951,9 +951,9 @@ class TestInstanceConfigLive:
         body = response.json()
         assert set(body) == INSTANCE_KEYS and body["profile"] == "selfhosted", f"the public configuration must be exactly the declared fields, the profile the lane's default: {response.text}"
         accounts = body["accounts"]
-        assert (
-            set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
-        ), f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here) — and the password rules: {response.text}"
+        assert set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool), (
+            f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here) — and the password rules: {response.text}"
+        )
         assert _password_rule_pairs(accounts["password_rules"]) == PASSWORD_RULES, f"accounts.password_rules must be the backend's rules, the same on every instance (decision 37): expected {PASSWORD_RULES} as (code, value), got {accounts['password_rules']}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link (the lane's configuration, not pinned here): {response.text}"
         assert body["support_url"] is None, f"support_url must be null on a lane that sets no {SUPPORT_URL_VARIABLE}, and the asset search then offers a new GitHub issue on a self-hosted instance, no report link on a managed one: {response.text}"
@@ -996,9 +996,9 @@ class TestInstanceConfigInProcess:
         body = response.json()
         assert set(body) == INSTANCE_KEYS and body["profile"] == profile, f"LIBREFOLIO_PROFILE={configured!r} must be answered as profile {profile!r}, beside accounts, email, support_url, legal and client_log_level and nothing else: {response.text}"
         accounts = body["accounts"]
-        assert (
-            set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
-        ), f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (read from the lane's shared database: not pinned here) — and the password rules: {response.text}"
+        assert set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool), (
+            f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (read from the lane's shared database: not pinned here) — and the password rules: {response.text}"
+        )
         assert _password_rule_pairs(accounts["password_rules"]) == PASSWORD_RULES, f"accounts.password_rules must be the backend's rules, the same on every instance (decision 37): expected {PASSWORD_RULES} as (code, value), got {accounts['password_rules']}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link: {response.text}"
 
