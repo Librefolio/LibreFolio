@@ -8568,7 +8568,7 @@ test.describe('All-range event markers on a price-cache hit', () => {
     // Path A, from the list: the first answer of a detail that misses the daily
     // cache. With the range on "All", the list bulk-queries ['2000-01-01',
     // today] for its cards. Since Z-29b it keeps that series in its own reduced
-    // cache (`stores/reducedPriceCache.ts`), beside the shared daily price store
+    // cache (`features/assets/reducedPriceCache.ts`), beside the shared daily price store
     // and without touching it. The detail opened from that list therefore finds
     // no daily prices: it asks prices AND events in one request (`include_price:
     // true`) and resolves "All" from that answer. A regression here would be the

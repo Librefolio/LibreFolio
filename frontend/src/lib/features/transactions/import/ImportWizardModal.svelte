@@ -56,7 +56,7 @@
     import {isFallbackPlugin} from '$lib/utils/brim/pluginKind';
     import {fetchFilePreview} from '$lib/utils/files/filePreview';
     import {generateUUID} from '$lib/utils/core/uuid';
-    import {mapWithConcurrency} from '$lib/utils/core/requestConcurrency';
+    import {mapWithConcurrency} from '$lib/features/transactions/import/requestConcurrency';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';

@@ -19,7 +19,7 @@
 import type {z} from 'zod';
 import type {schemas} from '$lib/api/generated';
 import {safeDecimal, safeString} from '$lib/types';
-import {makePositionKey} from '$lib/utils/core/positionKey';
+import {makePositionKey} from '$lib/features/dashboard/positionKey';
 import {indexHoldingDay} from '$lib/utils/stepSeries';
 
 /** The two views drawn from the positions' own series: the position's result in money, or its return in «base 100». */

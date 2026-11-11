@@ -344,7 +344,7 @@ presets (`compact`, `stacked`), and it applies a `DateFilter`, `{type: 'date', f
 (`types.ts`). Either end may stay blank: `matchesColumnFilter` (`dataTableLogic.ts`) drops a row only
 before `from` or after `to`, as does `TransactionsTable`'s own pre-filter, so a date in «From» alone
 keeps the rows from that day on, and one in «To» alone the rows up to that day. In the URL the filter
-reads `from,to`, either side empty (`lib/utils/urlFilters.ts`); the Transactions page keeps its own
+reads `from,to`, either side empty (`lib/features/files/urlFilters.ts`); the Transactions page keeps its own
 `date_start` and `date_end` (`lib/features/transactions/filterState.ts`).
 
 The picker cannot make a filter of one day

@@ -6,7 +6,7 @@
  * null broker collapses — is what must not drift.
  */
 import {describe, expect, it} from 'vitest';
-import {makePositionKey} from '../positionKey';
+import {makePositionKey} from './positionKey';
 
 describe('makePositionKey', () => {
     it('joins asset and broker id', () => {

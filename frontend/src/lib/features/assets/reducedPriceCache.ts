@@ -16,16 +16,16 @@
  * After a price catch-up on the server (`{kind: 'prices'}` on the portfolio bus) every entry is marked stale: still
  * readable, to be read again. An asset's sync or refresh drops what it touched (`invalidateAsset`).
  *
- * @module stores/reducedPriceCache
+ * @module features/assets/reducedPriceCache
  */
 
 import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
 import {fillCounts, stepForMaxPoints} from '$lib/components/charts/timeSeriesAggregation';
 import type {DerivedPriceState} from '$lib/features/assets/assetPriceDerived';
 
-import {withLiveHead} from '$lib/utils/liveHead';
+import {withLiveHead} from '$lib/features/assets/liveHead';
 
-import {registerPortfolioMutationListener} from './portfolio/portfolioMutation';
+import {registerPortfolioMutationListener} from '../../stores/portfolio/portfolioMutation';
 
 /** A series as the page reads it from an answer. */
 export interface ReducedSeries {

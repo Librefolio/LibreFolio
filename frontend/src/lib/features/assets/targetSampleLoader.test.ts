@@ -8,7 +8,7 @@
  */
 import {describe, expect, it, vi} from 'vitest';
 
-import {TargetSampleLoader, targetSampleKey} from '../targetSampleLoader';
+import {TargetSampleLoader, targetSampleKey} from './targetSampleLoader';
 
 const KEY = {cardId: 7, targetId: 9, start: '2025-01-01', end: '2026-06-30', maxPoints: 377};
 

@@ -10,7 +10,7 @@
  *
  * Pure: the read itself is the caller's.
  *
- * @module utils/targetSampleLoader
+ * @module features/assets/targetSampleLoader
  */
 
 /** What one read is for. */

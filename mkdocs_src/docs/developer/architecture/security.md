@@ -3602,7 +3602,7 @@ the integrity failure).
 
 The PDF preview asks nothing of a third party, and `connect-src` stays `'self'` (H-55 wave 4, decision (c) of the
 developer). The viewer's engine is always the instance's own copy: when it does not answer, `pdfViewerAssets()`
-(`frontend/src/lib/utils/files/pdfViewerAssets.ts`) throws, and the preview shows the browser's own PDF viewer
+(`frontend/src/lib/features/files/pdfViewerAssets.ts`) throws, and the preview shows the browser's own PDF viewer
 (`file-preview-pdf-fallback`) instead of falling back to a CDN. The Chinese, Japanese and Korean fallback fonts
 (`@embedpdf/fonts-jp`, `-kr`, `-sc`, `-tc`) are tens of megabytes each, too heavy for the image, so the viewer asks the
 instance for one only when a PDF needs it, and the **server** gets it.

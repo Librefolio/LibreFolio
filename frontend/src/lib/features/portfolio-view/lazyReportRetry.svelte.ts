@@ -14,7 +14,7 @@
  * The loader records the outcome (`failed` or `succeeded`) before it lets its loading flag go, so the effect woken by
  * that flag already sees the failure.
  *
- * @module stores/portfolio/lazyReportRetry
+ * @module features/portfolio-view/lazyReportRetry
  */
 
 /** The waits before the automatic retries after a failure; after the last one, none. */

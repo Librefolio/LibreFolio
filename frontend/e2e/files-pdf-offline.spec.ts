@@ -5,7 +5,7 @@
  * The preview draws PDFs with EmbedPDF, which runs PDFium compiled to WebAssembly. Out of the box that viewer fetches its
  * engine, the fonts a PDF does not embed, a stamp library and its interface font from jsDelivr and Google Fonts: offline
  * it never drew a page. Since release 2's batch 7 the app serves the engine and the fallback fonts itself
- * (`src/lib/utils/files/pdfViewerAssets.ts`; devWiki `decisions/pdf-preview-viewer-only-local-assets`), and the CDN is
+ * (`src/lib/features/files/pdfViewerAssets.ts`; devWiki `decisions/pdf-preview-viewer-only-local-assets`), and the CDN is
  * asked only when the app's own engine does not answer. `pdfViewerAssets.test.ts` proves that configuration; this spec
  * proves the promise in a browser: with no internet, a user previews a PDF.
  *

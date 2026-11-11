@@ -69,14 +69,14 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
-    import {reducedPrices, type ReducedEntry} from '$lib/stores/reducedPriceCache';
+    import {reducedPrices, type ReducedEntry} from '$lib/features/assets/reducedPriceCache';
     import type {DerivedBase} from '$lib/features/assets/assetPriceDerived';
     import {buildReducedQuery, cardsOfAnotherStep, comparisonTargetFrom, comparisonTargetIds, estimateEntryDays, signalBaseData, type CardQueryInput} from '$lib/utils/reducedPriceQuery';
     import {DEFAULT_COMPACT_PLOT_WIDTH_PX, compactMaxPoints, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {assetRangeDelta, rangeStartFor, type RangeDelta} from '$lib/utils/rangeChange';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
-    import {TargetSampleLoader, type TargetSampleRequest} from '$lib/utils/targetSampleLoader';
+    import {TargetSampleLoader, type TargetSampleRequest} from '$lib/features/assets/targetSampleLoader';
     import {MIN_START, sendBulkBatches} from '$lib/api/bulkBatches';
     import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
@@ -840,7 +840,7 @@
     /**
      * The prices and backend signals of the cards (Z-29b). Each card asks for the series its plot takes, one point a day, a
      * week or a month (`max_points` from its measured width; `utils/reducedPriceQuery.ts`), and each comparison target for
-     * the same buckets (`sample_like`). Only what the reduced cache (`stores/reducedPriceCache.ts`) does not hold, or holds
+     * the same buckets (`sample_like`). Only what the reduced cache (`features/assets/reducedPriceCache.ts`) does not hold, or holds
      * for another step or stale, is asked; the answers go to the cache and the cards draw them as they are. `only` limits it
      * to some cards: a settings change reloads its own card, a width that changes the step its own.
      */
