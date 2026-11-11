@@ -92,7 +92,7 @@ import sqlite3
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Optional, Union
@@ -163,7 +163,7 @@ PASSWORD = "Username-Rules-2026!"
 #: What the accounts written as rows hold for a hash: nobody signs in with them here.
 MARKER_HASH = "$argon2id$username-rules-marker"
 #: When an address was verified, and a session version of its own: a refused change must keep both.
-VERIFIED_AT = datetime(2026, 10, 2, 8, 0, 0)
+VERIFIED_AT = datetime(2026, 10, 2, 8, 0, 0, tzinfo=UTC)
 SESSION_VERSION = 3
 #: Removed before every test: each changes what registration, F02 or an email decide.
 INHERITED_PREFIXES = ("LIBREFOLIO_ADMIN_", "LIBREFOLIO_SMTP_")

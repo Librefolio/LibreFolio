@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import closing
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -45,7 +45,7 @@ def data_dir(tmp_path) -> Path:
     try:
         User.__table__.create(engine)
         UserSettings.__table__.create(engine)
-        when = datetime(2026, 1, 1)
+        when = datetime(2026, 1, 1, tzinfo=UTC)
         accounts = [
             (1, "ada_admin", "Right-Pass-123!", f"/api/v1/uploads/file/{AVATAR_ID}", True, True),
             (2, "zoe_admin", "Other-Pass-456!", "https://example.org/zoe.png", True, True),

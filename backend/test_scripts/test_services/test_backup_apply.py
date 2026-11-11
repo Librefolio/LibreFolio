@@ -3562,10 +3562,9 @@ async def test_the_commit_revokes_every_live_link_of_the_restored_database_at_th
     before_hashes = {token_service.hash_token(link.token) for link in before_links}
     assert before_hashes.isdisjoint(row[0] for row in cases.rows_of(database, "SELECT token_hash FROM account_tokens")), "no link of the database before enters the restored one"
 
-    restored_naive = restore_utc.replace(tzinfo=None)
     read = await read_links(database, restored_links, restore_utc + timedelta(minutes=1))
-    wanted = {link.plan.name: ("revoked", restored_naive) if link.live else ("consumed", None) if link.plan.became == "consumed" else ("revoked", (restore_utc - link.plan.issued_before + ACTED_AFTER).replace(tzinfo=None)) for link in restored_links}
-    assert read == wanted, f"A's reader: every formerly live link revoked at the restore time (naive UTC), the others as they were: {read}"
+    wanted = {link.plan.name: ("revoked", restore_utc) if link.live else ("consumed", None) if link.plan.became == "consumed" else ("revoked", restore_utc - link.plan.issued_before + ACTED_AFTER) for link in restored_links}
+    assert read == wanted, f"A's reader: every formerly live link revoked at the restore time (aware UTC), the others as they were: {read}"
     assert await still_open(database, restored_links, restore_utc + timedelta(minutes=1)) == [], "no link of the backup opens anything after the restore"
 
     counted = [event for event in events if event.get("event") != LOG_CANARY and any(value == LIVE_RESTORED and not isinstance(value, bool) for key, value in event.items() if key not in ("event", "log_level"))]

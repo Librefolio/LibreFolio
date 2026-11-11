@@ -149,7 +149,7 @@ import asyncio
 import random
 import threading
 from collections.abc import AsyncIterator
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional, get_args
 
@@ -177,7 +177,7 @@ CHUNK = 500  # OR_TERMS_PER_QUERY: the contract's number, written here and not r
 IMPORT_SIZED = 1_500  # OR terms of one import-sized read: past SQLite's limit, past two chunk boundaries
 SQLITE_MAX_DEPTH = 1_000  # SQLite's SQLITE_MAX_EXPR_DEPTH: an OR chain of this many terms is refused
 DAY0 = date(2004, 1, 5)  # the first day of every FX series; any day would do
-FETCHED_AT = datetime(2025, 1, 1)
+FETCHED_AT = datetime(2025, 1, 1, tzinfo=UTC)
 
 Triple = tuple[Optional[str], Optional[str], Optional[str]]
 
@@ -739,7 +739,7 @@ async def _seed_sized_assets(session: AsyncSession) -> None:
     random.Random(23).shuffle(rows)
     specials = sorted(SIZED_SPECIAL_ASSETS, key=lambda special: special[0], reverse=True)
     rows += [{"display_name": name, "identifier_isin": isin, "identifier_ticker": ticker, "identifier_other": other} for name, isin, ticker, other in specials]
-    now = datetime(2026, 1, 1)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
     await session.execute(insert(Asset), [{**row, "currency": "EUR", "asset_type": AssetType.FUND, "created_at": now, "updated_at": now} for row in rows])
     await session.commit()
 
@@ -822,7 +822,7 @@ async def test_guard_bulk_exact_hits_keep_the_universe_order(session):
     Green before and after: the index's lists keep the universe's order.
     """
     print_section("MF-SEC9g guard: exact ISIN and ticker hits in display-name order")
-    now = datetime(2026, 1, 1)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
     rows = [
         ("Zulu twin isin", "TW0000000009", None, None),
         ("Kilo twin isin", "TW0000000009", None, None),
