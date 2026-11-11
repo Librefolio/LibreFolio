@@ -4,3 +4,6 @@
 *.ttf binary
 *.otf binary
 
+
+# BRIM samples that reproduce a file re-saved by Excel keep their CRLF line ends (a test checks them)
+*-excel.csv -text
