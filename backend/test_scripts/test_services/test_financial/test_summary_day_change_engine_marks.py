@@ -70,7 +70,8 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Fx
 from backend.app.schemas.portfolio import PortfolioHolding
 from backend.app.services.financial_math.returns import change_ratio
 from backend.app.services.financial_math.valuation import compute_holding_value
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 D = Decimal
@@ -174,8 +175,8 @@ async def _holding(book: _Book, valuation: date) -> PortfolioHolding:
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

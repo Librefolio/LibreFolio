@@ -77,7 +77,7 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Fx
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery, PositionKey, PositionsSeriesQuery
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -316,7 +316,7 @@ class _OldEngineRun:
 
 def _clear_caches() -> None:
     portfolio_engine_module._portfolio_blob_cache.clear()
-    portfolio_service_module._portfolio_l2_cache.clear()
+    report_module._portfolio_l2_cache.clear()
 
 
 def _diff(old: Any, new: Any, path: str = "$") -> list[tuple[str, Any, Any]]:

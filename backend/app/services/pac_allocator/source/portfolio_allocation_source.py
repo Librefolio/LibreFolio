@@ -95,7 +95,7 @@ def _build_planner_provenance(
                 provenance_id=WAC_PROVENANCE_ID,
                 kind="domain_copy",
                 domain="wac",
-                source_ref="portfolio_service.compute_wac_iterative",
+                source_ref="wac.compute_wac_iterative",
                 source_label=None,
                 captured_at=captured_at,
             )

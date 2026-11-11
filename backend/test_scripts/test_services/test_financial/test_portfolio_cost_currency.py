@@ -82,7 +82,8 @@ from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse,
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math import average_cost
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio.portfolio_service import PortfolioService, compute_wac_iterative
+from backend.app.services.portfolio.portfolio_service import PortfolioService
+from backend.app.services.portfolio.wac import compute_wac_iterative
 from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_utils import print_section, print_success
 

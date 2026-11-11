@@ -82,7 +82,8 @@ from backend.app.services.financial_math.portfolio.derived_views import DerivedV
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.returns import annualized_to_cumulative, calculate_simple_roi_series, calculate_twrr_series, period_mwrr_series, rebase_to_period
 from backend.app.services.financial_math.weights import slice_percents
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
@@ -185,8 +186,8 @@ class _Scenario:
 
 
 def _clear_portfolio_caches() -> None:
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

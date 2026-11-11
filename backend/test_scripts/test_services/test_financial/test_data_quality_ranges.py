@@ -74,7 +74,8 @@ from backend.app.schemas.portfolio import DataQualityReport, IssueCode, Portfoli
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
@@ -128,8 +129,8 @@ def _spans(items) -> list[tuple[date, date]]:
 
 
 def _clear_portfolio_caches() -> None:
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

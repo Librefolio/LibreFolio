@@ -285,7 +285,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse, cost_basis_allowed
-from backend.app.services.portfolio.portfolio_service import compute_wac_iterative
+from backend.app.services.portfolio.wac import compute_wac_iterative
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 from scripts.i18n_catalog import flatten, load_catalog

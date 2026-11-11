@@ -70,7 +70,7 @@ from backend.app.db.base import SQLModel  # every model, for create_all; importi
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
-from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -267,7 +267,7 @@ async def _report(book: _Book, labels: str = "AB"):
 
 def _clear_caches() -> None:
     portfolio_engine_module._portfolio_blob_cache.clear()
-    portfolio_service_module._portfolio_l2_cache.clear()
+    report_module._portfolio_l2_cache.clear()
 
 
 @pytest.fixture(autouse=True)

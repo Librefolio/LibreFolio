@@ -21,7 +21,9 @@ import pytest
 #: Where a range enters: every module that reads ``latest_range_end``, imported by name.
 RANGE_BOUND_CONSUMERS = (
     "backend.app.services.financial_math.portfolio.engine",
-    "backend.app.services.portfolio.portfolio_service",
+    "backend.app.services.portfolio.positions",
+    "backend.app.services.portfolio.report",
+    "backend.app.services.portfolio.summary",
     "backend.app.services.portfolio.lots_analysis_service",
     "backend.app.services.risk.scope",
     "backend.app.services.ai_export.runtime_service",
