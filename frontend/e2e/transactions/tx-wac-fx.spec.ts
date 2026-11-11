@@ -12,14 +12,19 @@
  * - W8: Stale indicator ⚠️ in cell + tooltip
  *
  * Prerequisites: backend test mode (port 6041), mock data populated.
- * Mock data contract: populate_mock_data.py creates:
- *   - "Test KRW Stock" (KRW) with BUY in EUR → no EUR/KRW pair → triggers missing pairs
- *   - Apple (USD) with BUY in EUR on Directa → cross-FX scenario with EUR/USD pair
+ * Data contract:
+ *   - W1–W5 own their data: a disposable account with two brokers and one Apple (USD) position bought in EUR and then
+ *     in OMR. The WAC target is the currency of the last acquisition (OMR) and OMR has no pair anywhere, so EUR→OMR is
+ *     missing *by construction* — nothing in `populate_mock_data.py` can change that.
+ *   - W6–W8 read the seeded Apple (USD) BUY in EUR on Directa → cross-FX scenario with the EUR/USD pair
  */
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type APIRequestContext, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled, validateRuns, waitForValidateRun} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
+import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount, openOwnedAccount, seededAssetId, type OwnedAccount} from '../fixtures/owned-pair';
+import {createOwnedBroker} from '../fixtures/onboarding-accounts';
+import {daysAgoIso} from '../fixtures/dates';
 import {appears} from '../fixtures/probe';
 
 // 60 s: login and the 20 s transactions-page gate share this budget before the validate runs and the FX sync modal; 25 s left those no time under load.
@@ -85,13 +90,36 @@ async function pickBrokerInPanel(page: Page, panelTestid: string, brokerName: st
     await optionListClosed(page);
 }
 
-/** Set up a TRANSFER form with a cross-FX scenario (KRW asset, EUR broker) */
-async function setupMissingFxScenario(page: Page) {
+/**
+ * A disposable account with two brokers and an Apple position on the first, bought in EUR and then in OMR.
+ * The cost currency of the last acquisition is the WAC target, so the earlier EUR purchase needs EUR→OMR — a pair
+ * no seed, route or chain provides. Returns the brokers' names for the form's pickers.
+ */
+async function openMissingPairAccount(page: Page, request: APIRequestContext, owned: OwnedAccount): Promise<{from: string; to: string}> {
+    await openOwnedAccount(page, request, owned, 'wacfx');
+    const from = await createOwnedBroker(page, 'wacfx-from', owned.brokerIds);
+    const to = await createOwnedBroker(page, 'wacfx-to', owned.brokerIds);
+    const apple = await seededAssetId(page, 'AAPL');
+    await commitCreates(
+        page,
+        [
+            {broker_id: from.id, type: 'DEPOSIT', date: daysAgoIso(12), cash: {code: 'EUR', amount: '1000'}},
+            {broker_id: from.id, type: 'DEPOSIT', date: daysAgoIso(12), cash: {code: 'OMR', amount: '1000'}},
+            {broker_id: from.id, asset_id: apple, type: 'BUY', date: daysAgoIso(9), quantity: '10', cash: {code: 'EUR', amount: '-500'}},
+            {broker_id: from.id, asset_id: apple, type: 'BUY', date: daysAgoIso(6), quantity: '10', cash: {code: 'OMR', amount: '-500'}},
+        ],
+        'fund the account: Apple bought in EUR, then in OMR',
+    );
+    return {from: from.name, to: to.name};
+}
+
+/** Set up a TRANSFER form for the owned Apple position: its WAC needs EUR→OMR, which does not exist. */
+async function setupMissingFxScenario(page: Page, brokers: {from: string; to: string}) {
     await openNewTransactionForm(page);
     await selectType(page, 'TRANSFER');
-    await pickBrokerInPanel(page, 'tx-form-dual-from', 'Directa SIM');
-    await pickBrokerInPanel(page, 'tx-form-dual-to', 'Interactive Brokers');
-    await selectAsset(page, 'KRW');
+    await pickBrokerInPanel(page, 'tx-form-dual-from', brokers.from);
+    await pickBrokerInPanel(page, 'tx-form-dual-to', brokers.to);
+    await selectAsset(page, 'Apple');
     const root = page.getByTestId('tx-form-modal-root');
     const qtyInput = page.getByTestId('tx-form-quantity');
     await expect(qtyInput).toBeVisible({timeout: 2_000});
@@ -132,59 +160,52 @@ async function setupCrossFxScenario(page: Page) {
 // Tests
 // ---------------------------------------------------------------------------
 
-test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
-    test.beforeEach(async ({page}) => {
-        await login(page, TEST_USER);
+test.describe('WAC FX — Sync Modal, missing pair (owned data)', () => {
+    let owned: OwnedAccount;
+    let account: {from: string; to: string};
+    const brokers = () => account;
+
+    test.beforeEach(async ({page, request}) => {
+        owned = emptyOwnedAccount();
+        account = await openMissingPairAccount(page, request, owned);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async ({page, request}) => {
+        await cleanupOwnedAccount(page, request, owned);
     });
 
     // === W1 — Banner sync button structure ===
     test('W1 — Issue banner sync FX link has correct structure', async ({page}) => {
-        await setupMissingFxScenario(page);
+        await setupMissingFxScenario(page, brokers());
 
-        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
-        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
-        const issuesSection = page.getByTestId('tx-form-issues');
-        if (await appears(issuesSection, 5_000)) {
-            const syncLink = page.getByTestId('tx-form-sync-fx-link');
-            await expect(syncLink).toBeVisible({timeout: 3_000});
-            // Should have RefreshCw icon (svg inside)
-            await expect(syncLink.locator('svg')).toBeVisible();
-        } else {
-            await expect(page.getByTestId('tx-form-sync-fx-link')).toBeHidden();
-        }
+        // The data is the test's own: the missing pair is always raised.
+        await expect(page.getByTestId('tx-form-issues')).toBeVisible({timeout: 5_000});
+        const syncLink = page.getByTestId('tx-form-sync-fx-link');
+        await expect(syncLink).toBeVisible({timeout: 3_000});
+        // Should have RefreshCw icon (svg inside)
+        await expect(syncLink.locator('svg')).toBeVisible();
     });
 
     // === W2 — WacPreviewSection missing pairs display ===
     test('W2 — Missing pairs section shows dates and sync button when triggered', async ({page}) => {
-        await setupMissingFxScenario(page);
+        await setupMissingFxScenario(page, brokers());
 
         const missingPairs = page.getByTestId('tx-form-cost-basis-missing-pairs');
-        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
-        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
-        if (await appears(missingPairs, 5_000)) {
-            // Should contain date strings (YYYY-MM-DD format)
-            const text = await missingPairs.textContent();
-            expect(text).toMatch(/\d{4}-\d{2}-\d{2}/);
+        await expect(missingPairs).toBeVisible({timeout: 5_000});
+        // Should contain date strings (YYYY-MM-DD format)
+        await expect(missingPairs).toContainText(/\d{4}-\d{2}-\d{2}/);
 
-            // Sync button in the missing pairs section
-            await expect(page.getByTestId('tx-form-cost-basis-sync-fx-btn')).toBeVisible();
-        } else {
-            await expect(page.getByTestId('tx-form-cost-basis-sync-fx-btn')).toBeHidden();
-        }
+        // Sync button in the missing pairs section
+        await expect(page.getByTestId('tx-form-cost-basis-sync-fx-btn')).toBeVisible();
     });
 
     // === W3 — FxSyncModal opens above FormModal ===
     test('W3 — FxSyncModal opens above FormModal via sync button', async ({page}) => {
-        await setupMissingFxScenario(page);
+        await setupMissingFxScenario(page, brokers());
 
-        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
-        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
         const syncBtn = page.getByTestId('tx-form-cost-basis-sync-fx-btn');
-        if (!(await appears(syncBtn, 5_000))) {
-            await expect(syncBtn).toBeHidden(); // FX complete: nothing to sync
-            return;
-        }
+        await expect(syncBtn).toBeVisible({timeout: 5_000});
         await syncBtn.click();
 
         // FxSyncModal should be visible
@@ -197,15 +218,10 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
 
     // === W3b — FxSyncModal opens via WacPreviewSection button too ===
     test('W3b — FxSyncModal opens via WacPreviewSection sync button', async ({page}) => {
-        await setupMissingFxScenario(page);
+        await setupMissingFxScenario(page, brokers());
 
         const syncBtn = page.getByTestId('tx-form-cost-basis-sync-fx-btn');
-        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
-        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
-        if (!(await appears(syncBtn, 5_000))) {
-            await expect(syncBtn).toBeHidden(); // FX complete: nothing to sync
-            return;
-        }
+        await expect(syncBtn).toBeVisible({timeout: 5_000});
         await syncBtn.click();
 
         const syncModal = page.locator('[data-testid="fx-sync-modal"]');
@@ -214,15 +230,10 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
 
     // === W4 — Sync modal stays open after sync ===
     test('W4 — After sync completes, modal stays open with results', async ({page}) => {
-        await setupMissingFxScenario(page);
+        await setupMissingFxScenario(page, brokers());
 
-        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
-        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
         const syncBtn = page.getByTestId('tx-form-cost-basis-sync-fx-btn');
-        if (!(await appears(syncBtn, 5_000))) {
-            await expect(syncBtn).toBeHidden(); // FX complete: nothing to sync
-            return;
-        }
+        await expect(syncBtn).toBeVisible({timeout: 5_000});
         await syncBtn.click();
 
         const syncModal = page.locator('[data-testid="fx-sync-modal"]');
@@ -243,15 +254,10 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
 
     // === W5 — Closing modal keeps FormModal open ===
     test('W5 — Closing FxSyncModal keeps FormModal visible', async ({page}) => {
-        await setupMissingFxScenario(page);
+        await setupMissingFxScenario(page, brokers());
 
-        // Optional by design, and measured so: the header's "mock data contract" no longer holds (a chain via CHF resolves
-        // EUR/KRW), so the KRW scenario raises a missing pair only on some data. Triggered → check it; not → it is absent.
         const syncBtn = page.getByTestId('tx-form-cost-basis-sync-fx-btn');
-        if (!(await appears(syncBtn, 5_000))) {
-            await expect(syncBtn).toBeHidden(); // FX complete: nothing to sync
-            return;
-        }
+        await expect(syncBtn).toBeVisible({timeout: 5_000});
         await syncBtn.click();
 
         const syncModal = page.locator('[data-testid="fx-sync-modal"]');
@@ -263,6 +269,13 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
 
         // FormModal should still be visible
         await expect(page.getByTestId('tx-form-modal')).toBeVisible();
+    });
+});
+
+test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        await goToTransactions(page);
     });
 
     // === W6 — Qualifying table renders with currency info ===
