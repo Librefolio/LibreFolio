@@ -15,7 +15,7 @@
  */
 
 import {browser} from '$app/environment';
-import type {SignalConfig} from '$lib/features/signals';
+import type {SignalConfig} from '$lib/components/charts/chartSignalContract';
 import {DEFAULT_CALENDAR_RETURN_WINDOW, largestCalendarReturnPresetFor, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
 import {DEFAULT_LINE_SHAPE, isLineShape, type LineShape} from '$lib/components/charts/lineShape';
 import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';

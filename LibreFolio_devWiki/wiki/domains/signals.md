@@ -102,5 +102,5 @@ graph LR
 | Measure Tool | `frontend/src/lib/features/signals/MeasureSignal.ts` |
 | Signals section UI | `frontend/src/lib/features/signals/components/ChartSignalsSection.svelte` |
 | Chart settings modal | `frontend/src/lib/features/signals/components/ChartSettingsModal.svelte` |
-| Signal label utility | `frontend/src/lib/features/signals/signalLabel.ts` |
+| Signal label utility | `frontend/src/lib/components/charts/signalLabel.ts` |
 | Phase 0 execution plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` |

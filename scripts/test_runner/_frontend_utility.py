@@ -64,7 +64,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/layout/headerScroll.test.ts",
             "src/lib/utils/security/connectionSecurity.test.ts",
             "src/lib/features/signals/__tests__/loadComparisonData.test.ts",
-            "src/lib/features/signals/__tests__/signalLabel.test.ts",
+            "src/lib/components/charts/signalLabel.test.ts",
             "src/lib/features/signals/__tests__/chartPageSignals.test.ts",
             "src/lib/features/signals/__tests__/chartSignalRendering.test.ts",
             "src/lib/features/signals/__tests__/comparisonSeries.test.ts",

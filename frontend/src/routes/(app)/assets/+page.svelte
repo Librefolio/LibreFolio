@@ -50,7 +50,7 @@
     import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import type {ChartPrimaryView, ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
-    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
     import {calendarReturnRangeDays, calendarReturnWindowDays} from '$lib/components/charts/calendarReturnWindow';
     import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
     import {CurrencySearchSelect} from '$lib/components/ui/select';

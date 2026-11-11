@@ -9648,7 +9648,7 @@ test.describe('X-R16 asset detail: an invalid signal result keeps the prices and
     // A ceiling, never a delay: a sign-in, a page load and the round trips each test waits for by name.
     test.describe.configure({timeout: 60_000});
 
-    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `priceChartHelpers.ts`). */
+    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `calendarReturn.ts`). */
     const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
     /** A result the signal result schema rejects: a status outside ok, partial, unavailable and failed (as in `chartPageSignals.test.ts`). */
     const INVALID_SIGNAL_RESULT = {instance_id: 'x-r16-sma', signal_code: 'SMA', status: 'not-a-status'};
@@ -9838,7 +9838,7 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
     test.describe.configure({timeout: 60_000});
 
     const PRICE_QUERY_PATH = '/api/v1/assets/prices/query';
-    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `priceChartHelpers.ts`). */
+    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `calendarReturn.ts`). */
     const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
     /** The backend indicator the period test configures: SMA, in the trend family of the signals picker. */
     const INDICATOR = {group: 'trend', option: 'sma', signalCode: 'SMA'} as const;

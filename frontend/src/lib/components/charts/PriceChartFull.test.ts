@@ -362,7 +362,8 @@ import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
 import CandlestickChart from './CandlestickChart.svelte';
 import type {LineDataPoint} from './LineChart.svelte';
 import PriceChartFull, {type EventMarker} from './PriceChartFull.svelte';
-import {synthesizeDailyOHLC, type CalendarReturnPointContext} from './priceChartHelpers';
+import {synthesizeDailyOHLC} from './priceChartHelpers';
+import {type CalendarReturnPointContext} from '$lib/features/signals/calendarReturn';
 import {aggregateOHLCV, type ChartResolution} from './timeSeriesAggregation';
 
 type UiLanguage = 'en' | 'it' | 'fr';

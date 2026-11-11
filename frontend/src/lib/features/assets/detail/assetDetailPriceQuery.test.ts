@@ -27,7 +27,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import type {SignalConfig} from '$lib/features/signals';
-import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, type CalendarReturnView, type CalendarReturnViewState} from '$lib/features/signals/calendarReturn';
 import * as priceQuery from './assetDetailPriceQuery';
 import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable, priceConversionErrorFromItem, type CalendarComparisonContext} from './assetDetailPriceQuery';
 

@@ -15,6 +15,10 @@
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {ChartSignal, type SignalParamDescriptor, type SignalStyle} from './ChartSignal';
 import {SIGNAL_COLORS} from '$lib/theme/chartTheme';
+import {changePct} from '$lib/components/charts/priceChartHelpers';
+
+/** The charts' one Δ% rule lives with the chart helpers (`priceChartHelpers.ts`); the ruler reads it, and this re-export keeps it reachable from here. */
+export {changePct};
 
 /**
  * The shortest span the ruler annualises, in days: the floor of the backend home (`_MIN_ANNUALIZATION_DAYS` in
@@ -34,14 +38,6 @@ export interface MeasurementResult {
     days: number;
     /** null under MIN_ANNUALIZATION_DAYS, without a Δ%, for a line that changes sign, or when not finite */
     annualizedPct: number | null;
-}
-
-/**
- * The change in %, or null when the start is zero: the move is then unknown, not 0 % (night decision N65). The one Δ%
- * rule of the charts: the ruler and the main tooltip's delta (`priceChartHelpers.ts::buildDeltaHtml`, J-44) read it.
- */
-export function changePct(startValue: number, endValue: number): number | null {
-    return startValue !== 0 ? ((endValue - startValue) / startValue) * 100 : null;
 }
 
 /**

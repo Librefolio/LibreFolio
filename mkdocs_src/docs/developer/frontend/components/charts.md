@@ -853,7 +853,7 @@ ECharts sets what a tooltip formatter returns as `innerHTML`. Every value a form
 the data or from currency metadata (names, captions, currency codes, flags, event types) goes
 through the shared `escapeHtml` (`lib/utils/core/escapeHtml.ts`) where it is interpolated; a flag
 is such a value, read from `getCurrencyInfo(code).flag_emoji`. A series label with its icon goes
-through `signalLabelToHtml` (`lib/features/signals/signalLabel.ts`), which escapes it.
+through `signalLabelToHtml` (`lib/components/charts/signalLabel.ts`), which escapes it.
 
 The frontend sources hold one HTML escaper: write no local copy. `escapeHtml` escapes `&`, `<`,
 `>`, `"` and `'`, so its output is also safe inside an attribute, whichever quote the call site

@@ -11,7 +11,7 @@
  * @module charts/fxDetailCalendar
  */
 
-import {CALENDAR_RETURN_INSTANCE_ID, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+import {CALENDAR_RETURN_INSTANCE_ID, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
 import {fxCalendarRequest, type FxCalendarRequest} from '$lib/utils/reducedFxQuery';
 
 export interface FxDetailCalendarInput {

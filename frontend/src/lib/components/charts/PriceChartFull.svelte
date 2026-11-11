@@ -21,42 +21,20 @@
     import type {LineDataPoint} from './LineChart.svelte';
     import CandlestickChart from './CandlestickChart.svelte';
     import ResolutionBadge from './ResolutionBadge.svelte';
-    import type {RenderedSignal} from '$lib/features/signals';
+    import type {RenderedSignal} from '$lib/components/charts/chartSignalContract';
     import {buildMainSeries, COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {buildFittedTooltipRow, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
-    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/features/signals/signalLabel';
+    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/components/charts/signalLabel';
     import {truncateName} from '$lib/utils/text';
     import {clearTimer} from '$lib/utils/core/clearTimer';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
     import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom} from './responsiveXAxis';
-    import {
-        buildDeltaHtml,
-        buildEventScatterGroups,
-        buildStaleTooltipHtml,
-        type StaleLabel,
-        bucketSpanUpTo,
-        computeGhostSeries,
-        computeZoomWindow,
-        extendToOverlayDays,
-        countBuckets,
-        formatMonthLabel,
-        formatTruncatedGhostLabel,
-        getBucketInfo,
-        getVisibleDailyPoints,
-        resolveActivePointIndex,
-        resolveZoomBounds,
-        splitGhostLabel,
-        synthesizeDailyOHLC,
-        toAbsoluteValue,
-        toDisplaySeries,
-        type BucketInfo,
-        type CalendarReturnPointContext,
-        type LogicalVisibleRange,
-    } from './priceChartHelpers';
+    import {buildDeltaHtml, buildEventScatterGroups, buildStaleTooltipHtml, type StaleLabel, bucketSpanUpTo, computeGhostSeries, computeZoomWindow, extendToOverlayDays, countBuckets, formatMonthLabel, formatTruncatedGhostLabel, getBucketInfo, getVisibleDailyPoints, resolveActivePointIndex, resolveZoomBounds, splitGhostLabel, synthesizeDailyOHLC, toAbsoluteValue, toDisplaySeries, type BucketInfo, type LogicalVisibleRange} from './priceChartHelpers';
+import {type CalendarReturnPointContext} from '$lib/components/charts/chartSignalContract';
     import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';

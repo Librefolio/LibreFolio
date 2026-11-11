@@ -16,7 +16,7 @@
  */
 
 import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays} from '$lib/api/bulkBatches';
-import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE} from '$lib/components/charts/priceChartHelpers';
+import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE} from '$lib/features/signals/calendarReturn';
 import {compactMaxPoints} from '$lib/components/charts/timeSeriesAggregation';
 
 /** The rolling return a card asks, under the detail's instance id. */

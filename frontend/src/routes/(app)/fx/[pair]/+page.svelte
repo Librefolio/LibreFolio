@@ -68,8 +68,8 @@
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
-    import type {SignalLabelInfo} from '$lib/features/signals/signalLabel';
-    import {buildOverlaySignalInfoMap} from '$lib/features/signals/signalLabel';
+    import type {SignalLabelInfo} from '$lib/components/charts/signalLabel';
+    import {buildOverlaySignalInfoMap} from '$lib/components/charts/signalLabel';
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/features/signals/comparisonSeries';
     import {applyComparisonAssetsData, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/features/signals/loadComparisonData';
     import {comparisonAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/features/signals/chartPageSignals';
@@ -80,7 +80,7 @@
     import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/features/assets/detail/AssetChartModeToggle.svelte';
     import AssetCalendarWindowControls from '$lib/features/assets/detail/AssetCalendarWindowControls.svelte';
     import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
-    import {emptyCalendarReturnView, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {emptyCalendarReturnView, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
     import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';

@@ -6,7 +6,7 @@
  * and dataZoom config.
  */
 
-import type {RenderedSignal} from '$lib/features/signals';
+import type {RenderedSignal} from '$lib/components/charts/chartSignalContract';
 import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
 import type {ECharts} from 'echarts';
 import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS} from './lineChartHelpers';

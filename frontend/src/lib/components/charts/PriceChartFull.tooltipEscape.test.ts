@@ -164,14 +164,14 @@ type Formatter = (params: unknown) => string;
 
 let PriceChartFull: PriceChartComponent;
 let helpers: typeof import('./priceChartHelpers');
-let signalLabel: typeof import('$lib/features/signals/signalLabel');
+let signalLabel: typeof import('$lib/components/charts/signalLabel');
 
 beforeAll(async () => {
     expect(existsSync(GENERATED_TS), 'src/lib/api/generated.ts is absent, so assetTypes.ts — and the chart that imports it — cannot be loaded. Run `./dev.py api sync`.').toBe(true);
     await setupI18n('en');
     PriceChartFull = (await import('./PriceChartFull.svelte')).default;
     helpers = await import('./priceChartHelpers');
-    signalLabel = await import('$lib/features/signals/signalLabel');
+    signalLabel = await import('$lib/components/charts/signalLabel');
     // The dynamic imports compile the component tree inside this hook: a budget of its own under a loaded machine (the whole suite runs
     // while other lanes work: 60 s was not a ceiling there).
 }, 180_000);

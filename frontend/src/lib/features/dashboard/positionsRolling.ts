@@ -18,7 +18,7 @@
 import {writable, type Readable} from 'svelte/store';
 import {zodiosApi} from '$lib/api';
 import {calendarReturnRangeDays, calendarReturnWindowDays, DEFAULT_CALENDAR_RETURN_WINDOW, largestCalendarReturnPresetFor, type CalendarReturnPresetKey} from '$lib/components/charts/calendarReturnWindow';
-import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
 import type {PositionLine} from './positionsSeries';
 
 /** The period the rolling return is asked for: the page's own. */
