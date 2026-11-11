@@ -4,6 +4,10 @@ This page of the command guide covers `dev.py backup`: creating, checking and re
 
 The rest of the guide starts on [Command-Line Tools](cli_tools.md).
 
+!!! tip "🖱️ Prefer buttons to commands?"
+
+    A backup, and its restore, can be made from the app: **Settings › Administration › Backup**. See the [quick start](backup_restore.md#quick-start). The command line is for what the app does not do, such as backups that run on a schedule.
+
 ---
 
 ## 💾 Back Up the Instance {: #backup }
