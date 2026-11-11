@@ -79,7 +79,7 @@ class Served:
     base: Path  # the case's tmp folder, parent of everything below
     build: Path  # FRONTEND_BUILD_DIR
     site: Path  # SITE_DIR
-    static: Path  # PLUGIN_STATIC_DIRS[PLUGIN_TYPE]; ``static-other`` sits next to it
+    static: Path  # PLUGIN_STATIC_DIRS[PLUGIN_TYPE], the folder of the plugins (``demo/static/icon.png``); ``static-other`` sits next to it
     outside: Path  # a file outside every served folder
 
 
@@ -100,8 +100,8 @@ def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Served:
     (site / "guide" / "index.html").write_bytes(GUIDE_INDEX_HTML)
 
     static = base / "static"
-    (static / "demo").mkdir(parents=True)
-    (static / "demo" / "icon.png").write_bytes(ICON)
+    (static / "demo" / "static").mkdir(parents=True)  # brim: <plugin folder>/static/<file>
+    (static / "demo" / "static" / "icon.png").write_bytes(ICON)
     (base / "static-other").mkdir()
     (base / "static-other" / "note.txt").write_bytes(SIBLING_TEXT)
 
@@ -320,7 +320,7 @@ async def test_plugin_icon_route_refuses_a_path_the_os_rejects(served: Served) -
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("relative", ["demo/icon.png", "demo/../demo/icon.png"], ids=["direct", "parent-segments-staying-inside"])
+@pytest.mark.parametrize("relative", ["demo/icon.png", "demo/sub/../icon.png"], ids=["direct", "parent-segments-staying-inside"])
 async def test_plugin_icon_route_serves_an_icon_of_the_plugin(served: Served, relative: str) -> None:
     reply = await raw_get(plugin_icon_app(), PLUGIN_ROUTE + relative)
 
