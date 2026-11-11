@@ -359,14 +359,14 @@ describe('ExposureTable — Yield on Cost', () => {
         await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(3));
 
         const available = within(rowEl(11, 1)).getByTestId('yield-on-cost-value');
-        await waitFor(() => expect(available.getAttribute('aria-label')).toContain('🇨🇦 CAD → 🇪🇺 EUR'));
+        await waitFor(() => expect(available.getAttribute('aria-label')).toContain('$ 🇨🇦 CAD → EUR 🇪🇺 €'));
         const availableLines = await tooltipLines(available);
         expect(availableLines).toHaveLength(4);
         expect(availableLines[0]).toMatch(/10\.00%$/);
         expect(availableLines[1]).toMatch(/10 € 🇪🇺 EUR$/);
         expect(availableLines[2]).toContain('Sep 12, 2025');
         expect(availableLines[2]).toContain('Sep 11, 2026');
-        expect(availableLines[3]).toContain('🇨🇦 CAD → 🇪🇺 EUR');
+        expect(availableLines[3]).toContain('$ 🇨🇦 CAD → EUR 🇪🇺 €');
         expect(availableLines[3]).toContain('Jun 18, 2026');
         expect(availableLines.join('\n')).not.toContain('Jun 20, 2026');
 
@@ -377,11 +377,11 @@ describe('ExposureTable — Yield on Cost', () => {
         expect(noIncomeLines[2]).toContain('Sep 11, 2026');
 
         const unavailable = within(rowEl(33, 1)).getByTestId('yield-on-cost-info');
-        await waitFor(() => expect(unavailable.getAttribute('aria-label')).toContain('🇯🇵 JPY → 🇪🇺 EUR'));
+        await waitFor(() => expect(unavailable.getAttribute('aria-label')).toContain('¥ 🇯🇵 JPY / EUR 🇪🇺 €'));
         const unavailableLines = await tooltipLines(unavailable);
         expect(unavailableLines).toHaveLength(2);
-        expect(unavailableLines[1]).toBe('The 🇯🇵 JPY → 🇪🇺 EUR exchange rate required for the calculation is missing on Jun 20, 2026.');
-        expect(unavailableLines[1]).toContain('🇯🇵 JPY → 🇪🇺 EUR');
+        expect(unavailableLines[1]).toBe('The ¥ 🇯🇵 JPY / EUR 🇪🇺 € exchange rate required for the calculation is missing on Jun 20, 2026.');
+        expect(unavailableLines[1]).toContain('¥ 🇯🇵 JPY / EUR 🇪🇺 €');
         expect(unavailableLines[1]).toContain('Jun 20, 2026');
     });
 
@@ -488,16 +488,16 @@ describe('ExposureTable — Yield on Cost', () => {
         await waitFor(() => expect(rowEl(11, 1)).toBeInTheDocument());
 
         const available = within(rowEl(11, 1)).getByTestId('yield-on-cost-value');
-        await waitFor(() => expect(available.getAttribute('aria-label')).toContain('🇨🇦 CAD → 🇪🇺 EUR'));
+        await waitFor(() => expect(available.getAttribute('aria-label')).toContain('$ 🇨🇦 CAD → EUR 🇪🇺 €'));
         const lines = await tooltipLines(available);
         const conversionLines = lines.filter((line) => line.includes(' → '));
 
         expect(conversionLines).toHaveLength(3);
         expect(new Set(conversionLines).size).toBe(3);
-        expect(conversionLines.filter((line) => line.includes('🇨🇦 CAD → 🇪🇺 EUR') && line.includes('Jun 18, 2026'))).toHaveLength(1);
-        expect(conversionLines.some((line) => line.includes('🇯🇵 JPY → 🇪🇺 EUR') && line.includes('Jun 18, 2026'))).toBe(true);
-        expect(conversionLines.some((line) => line.includes('🇨🇦 CAD → 🇪🇺 EUR') && line.includes('Jun 19, 2026'))).toBe(true);
-        expect(conversionLines.some((line) => line.includes('🇪🇺 EUR → 🇪🇺 EUR'))).toBe(false);
+        expect(conversionLines.filter((line) => line.includes('$ 🇨🇦 CAD → EUR 🇪🇺 €') && line.includes('Jun 18, 2026'))).toHaveLength(1);
+        expect(conversionLines.some((line) => line.includes('¥ 🇯🇵 JPY → EUR 🇪🇺 €') && line.includes('Jun 18, 2026'))).toBe(true);
+        expect(conversionLines.some((line) => line.includes('$ 🇨🇦 CAD → EUR 🇪🇺 €') && line.includes('Jun 19, 2026'))).toBe(true);
+        expect(conversionLines.some((line) => line.includes('EUR 🇪🇺 € / EUR 🇪🇺 €'))).toBe(false);
         expect(lines.filter((line) => line.startsWith('…'))).toEqual(['… (+2)']);
     });
 

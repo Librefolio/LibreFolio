@@ -172,6 +172,7 @@
     },
     "allocationNoShares": "No percentages to show: the slices add up to zero or less (for example, an overdraft that cancels your holdings). The amounts are listed below.",
     "allocationHistoryNoShares": "No percentages to show: on these days the slices add up to zero or less.",
-    "pnlDeltaDayTooltip": "Today's change of the total P&L, and that change as a percentage of yesterday's portfolio value."
+    "pnlDeltaDayTooltip": "Today's change of the total P&L, and that change as a percentage of yesterday's portfolio value.",
+    "yieldOnCostFxStale": "old rate: {days} days before"
   }
 }

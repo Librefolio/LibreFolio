@@ -517,7 +517,7 @@ input format*, below), a refusal is shown in the UI language: a file the plugin 
 language it recognised.
 
 **Where the translations live.** Every code is a key of `importWizard.parseRefusal`, in the import
-wizard's sources (`frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json`), whether it is shared or
+wizard's sources (`frontend/src/lib/features/transactions/import/i18n/{en,it,fr,es}.json`), whether it is shared or
 a plugin's own: a plugin's fragment holds only its `brimPlugins.<code>` keys
 ([The Ownership Gate](registry_pattern.md#plugin-i18n-gate)). Add one with the i18n tool, which finds
 the source from the prefix:
@@ -618,7 +618,7 @@ except Exception as e:
 **Plugin-specific codes** are prefixed with the plugin's name, so they never collide: `danske_*` (Danske Bank: the cash,
 custody and combined layouts), `degiro_*` (`degiro_csv_only`, `degiro_not_account_statement`), `intesa_layout_unknown` and
 `scalable_*` (the [Scalable refusals](#cannot-parse-detail), plus `scalable_not_export`). The catalogue
-`frontend/src/lib/i18n/importWizard/en.json`, under `parseRefusal`, is the list that is always current.
+`frontend/src/lib/features/transactions/import/i18n/en.json`, under `parseRefusal`, is the list that is always current.
 
 **The tests that guard it.** `./dev.py test services brim-parse-error-codes`
 (`backend/test_scripts/test_services/test_brim_parse_error_codes.py`) reads every plugin file statically (`ast`), so a new
@@ -1189,7 +1189,7 @@ return BRIMParseOutput(transactions=transactions, warnings=[*warnings, *skips.no
   *Reason*, the rows, their line numbers). A row shorter than the header is padded; a longer one gets
   numbered headers.
 - **The wizard words them once for every plugin**: `importWizard.brimNotice.<code>` and
-  `importWizard.brimEvidence.<code>`, in the four catalogues (`frontend/src/lib/i18n/importWizard/`), with
+  `importWizard.brimEvidence.<code>`, in the four catalogues (`frontend/src/lib/features/transactions/import/i18n/`), with
   `{count}` as an ICU variable. The message in `RowSkips` is the English fallback.
 - A known row that is safe to drop is **not** collected: count it and write one log line at the end
   (`logger.info(…, count=…)`), as Revolut and Trading 212 do for `Transfer`, and Scalable for a cancelled order.

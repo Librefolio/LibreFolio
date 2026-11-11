@@ -32,7 +32,7 @@ lot B-9 froze them, its revision of 06:42 included (an unset token is ``ok``: a 
     the check's summary, id and detail — two when the managed profile's restore limit derives from a broken upload limit
     — and the start goes on (``log_configuration_audit()`` returns); a default self-hosted start, no token and no limit
     set, logs nothing about the backup checks.
-(g) The i18n: every key of (a), (b) and (h) is a message in the four catalogues of ``frontend/src/lib/i18n/backup``,
+(g) The i18n: every key of (a), (b) and (h) is a message in the four catalogues of ``frontend/src/lib/features/backup/i18n``,
     naming exactly the placeholders of its detail (``{minimum}``, ``{reason}``, ``{limit_mb}``, ``{variable}``), and the
     others none.
 (h) Lot B-35, the restore limit (``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``, what an archive may unpack to). The reader,
@@ -178,7 +178,7 @@ CANARY_TOKEN = f"{CANARY}-" + "c" * 39
 
 #: The project root: the working directory of the fresh interpreters, and where the catalogues are.
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-CATALOGUES = PROJECT_ROOT / "frontend" / "src" / "lib" / "i18n" / "backup"
+CATALOGUES = PROJECT_ROOT / "frontend" / "src" / "lib" / "features" / "backup" / "i18n"
 LANGUAGES = ("en", "it", "fr", "es")
 #: A placeholder of an ICU message: ``{name}``, or the name of ``{name, plural, ...}``; never the ``{#`` of a plural branch.
 PLACEHOLDER = re.compile(r"\{\s*([A-Za-z_]\w*)\s*[,}]")
@@ -821,7 +821,7 @@ def test_a_default_start_logs_nothing_about_the_backup_checks(checks, platform, 
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_message_of_the_checks_is_in_the_catalogue_with_its_placeholders(language):
-    """(g) §3: each key of the three tables is a message of ``frontend/src/lib/i18n/backup/<language>.json``, naming
+    """(g) §3: each key of the three tables is a message of ``frontend/src/lib/features/backup/i18n/<language>.json``, naming
     exactly the placeholders its detail gives (``{minimum}``, ``{reason}``, ``{limit_mb}``, ``{variable}``) and, for a
     result without a detail, none: the Security tab (A8b) renders them with the detail as it comes."""
     path = CATALOGUES / f"{language}.json"

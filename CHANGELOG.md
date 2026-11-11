@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Scalable Capital: a tax given back (a negative tax on a sale, or a positive Taxes row) is now imported as Interest «Tax refund» instead of a Deposit: it is money returned from your investment's gain, so it counts in your returns. Transactions imported before keep their type.
 - The admin guide now opens the backup chapter with a quick start for making a backup from the app, with screenshots: the command line is no longer the first thing you see.
+- An exchange rate more than a week old is now flagged wherever a value depends on it: the lots analysis shows the same «out-of-date rate» notice as the Dashboard, and the Yield on Cost tooltip marks the old rate it used. No figure changes, only the warning.
+- Currency pairs are written the same way everywhere, with symbols and flags: `$ 🇺🇸 USD / EUR 🇪🇺 €` for a pair, `$ 🇺🇸 USD → EUR 🇪🇺 €` for a conversion, in its direction.
+- Risk analysis: when an asset is left out because an exchange rate is missing, the message now names the currency pair and says from which date a rate is stored, or that none is.
 
 ### 🐛 Fixed
 

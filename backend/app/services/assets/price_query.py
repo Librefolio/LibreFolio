@@ -49,6 +49,7 @@ from backend.app.services.assets.observed_prices import ObservedPrices, fill_poi
 from backend.app.services.assets.price_sampling import SampleResolution, choose_resolution, resolve_sample_references, sample_dates
 from backend.app.services.assets.price_store import storable_current_value
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.market_series import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
@@ -870,7 +871,7 @@ class PriceQueryOperations:
                     result.errors.append(f"Missing FX rate {original_ep.value.code}->{target} for event on {original_ep.date.isoformat()}")
                     continue
                 new_cur, rate_date, _bfill = conv
-                days_back = (original_ep.date - rate_date).days if rate_date else 0
+                days_back = fx_days_back(original_ep.date, rate_date)
                 result.events[ei] = FAAssetEventPointOut(
                     date=original_ep.date,
                     type=original_ep.type,

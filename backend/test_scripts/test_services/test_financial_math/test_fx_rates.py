@@ -757,3 +757,21 @@ def test_missing_pair_infos_gives_the_result_of_the_four_comprehensions_it_repla
         keys = (set(dates), set(spans))
         missing_pair_infos(dates, spans)
         assert (set(dates), set(spans)) == keys
+
+
+def test_fx_days_back_is_the_old_expressions_of_every_reader_of_the_provenance():
+    """``fx_days_back``: the days between the day asked and the rate row, ``0`` the same day; equal to each expression it replaced (a row is never newer)."""
+    import random
+    from datetime import timedelta
+
+    from backend.app.services.financial_math.fx_rates import fx_days_back
+
+    assert fx_days_back(date(2026, 10, 28), date(2026, 10, 20)) == 8
+    assert fx_days_back(date(2026, 10, 20), date(2026, 10, 20)) == 0
+    rng = random.Random(11)
+    for _ in range(300):
+        requested = date(2020, 1, 1) + timedelta(days=rng.randrange(3000))
+        rate_date = requested - timedelta(days=rng.randrange(0, 400))
+        assert fx_days_back(requested, rate_date) == (requested - rate_date).days  # /fx/convert, YoC, event_store, price_query
+        assert fx_days_back(requested, rate_date) == max((requested - rate_date).days, 0)  # average cost
+        assert fx_days_back(requested, rate_date) == ((requested - rate_date).days if rate_date < requested else 0)  # observed prices

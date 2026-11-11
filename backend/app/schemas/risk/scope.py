@@ -162,6 +162,14 @@ class RiskEligibilityRequest(StrictModel):
         return Currency.validate_code(value)
 
 
+class RiskMissingFx(StrictModel):
+    """The conversion an asset's period lacks (reason ``missing_fx``): from the asset's currency into the report currency, and since when a rate exists."""
+
+    from_currency: str = Field(..., description="The asset's currency, where the conversion starts")
+    to_currency: str = Field(..., description="The report currency, where it arrives")
+    first_rate_date: Optional[date] = Field(None, description="Date of the earliest rate stored for the pair; null when no rate is stored at all")
+
+
 class RiskAssetEligibility(StrictModel):
     asset_id: PositiveInt
     level: RiskEligibilityLevel
@@ -169,6 +177,7 @@ class RiskAssetEligibility(StrictModel):
     first_quote: Optional[date] = Field(None, description="Earliest quote in the asset's history, up to the period end")
     last_quote: Optional[date] = Field(None, description="Latest quote on or before the period end")
     quotes_in_period: int = Field(..., ge=0)
+    missing_fx: Optional[RiskMissingFx] = Field(None, description="Which conversion is missing and since when a rate exists; set only with the reason `missing_fx`")
 
 
 class RiskEligibilityResponse(StrictModel):

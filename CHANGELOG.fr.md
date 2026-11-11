@@ -17,6 +17,9 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 - Scalable Capital : un impôt restitué (un impôt négatif sur une vente, ou une ligne Taxes positive) est désormais importé comme Intérêt « Tax refund » au lieu d'un Dépôt : c'est de l'argent rendu sur le gain de l'investissement, il compte donc dans vos rendements. Les transactions importées avant gardent leur type.
 - Le guide admin ouvre désormais le chapitre sur la sauvegarde par un démarrage rapide pour la faire depuis l'application, avec des captures : la ligne de commande n'est plus la première chose que l'on voit.
+- Un taux de change de plus d'une semaine est désormais signalé partout où une valeur en dépend : l'analyse des lots affiche le même avertissement « taux de change non à jour » que le Tableau de bord, et l'info-bulle du Yield on Cost indique l'ancien taux utilisé. Aucun chiffre ne change, seulement l'avertissement.
+- Les paires de devises s'écrivent partout de la même façon, avec symboles et drapeaux : `$ 🇺🇸 USD / EUR 🇪🇺 €` pour une paire, `$ 🇺🇸 USD → EUR 🇪🇺 €` pour une conversion, dans son sens.
+- Analyse du risque : quand un actif est écarté faute de taux de change, le message nomme désormais la paire de devises et indique depuis quelle date un taux est enregistré, ou qu'il n'y en a aucun.
 
 ### 🐛 Corrections
 

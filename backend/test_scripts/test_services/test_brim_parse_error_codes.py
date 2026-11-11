@@ -11,7 +11,7 @@ user an English sentence. These tests keep the plugins honest, **statically** (`
 2. a coded raise is not swallowed: inside a ``try`` body a broad ``except Exception`` (or a bare ``except``) must come
    after an ``except BRIMParseError`` that re-raises.
 3. every constant code used has a non-empty ``importWizard.parseRefusal.<code>`` in the four source catalogues
-   (``frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json``).
+   (``frontend/src/lib/features/transactions/import/i18n/{en,it,fr,es}.json``).
 4. the placeholders of the English text are all supplied by the ``context`` of the raise sites of that code (``plugin_name``
    is always allowed: the wizard adds it), and it/fr/es use exactly the placeholder names of English.
 5. behaviour: the generic CSV and DEGIRO really raise the codes (and contexts) the catalogue expects.
@@ -36,7 +36,7 @@ from backend.app.services.brim.registry import BRIMProviderRegistry
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROVIDERS_DIR = REPO_ROOT / "backend" / "app" / "services" / "brim_providers"
-I18N_DIR = REPO_ROOT / "frontend" / "src" / "lib" / "i18n" / "importWizard"
+I18N_DIR = REPO_ROOT / "frontend" / "src" / "lib" / "features" / "transactions" / "import" / "i18n"
 LANGUAGES = ("en", "it", "fr", "es")
 REFUSAL_PREFIX = ("importWizard", "parseRefusal")
 #: The wizard adds ``plugin_name`` to the ICU values whenever the reason names a plugin, whatever the plugin's context holds.

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import PriceHistory, Transaction
 from backend.app.schemas.common import Currency
+from backend.app.schemas.portfolio.data_quality import StaleFxPair
 from backend.app.schemas.portfolio.lots import LotAnalysisType
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.change_days import reading_change_days
@@ -21,6 +22,7 @@ from backend.app.services.financial_math.lots.prices import opening_reference_pr
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import realized_gain
 from backend.app.services.fx.conversion import unit_rate_steps
+from backend.app.services.platform.data_quality_thresholds import is_stale
 
 #: One unit of a currency: the amount every rate of the resolver converts.
 _ONE = Decimal("1")
@@ -150,6 +152,21 @@ class FxRateResolver:
             for rates in self._rates.maps:
                 days.update(reading_change_days(rates, currency, self.target_currency))
         return tuple(sorted(days))
+
+    def stale_pairs(self, day: date_type) -> list[StaleFxPair]:
+        """The pairs the analysis values on ``day`` from a stored rate older than the stale threshold, oldest row first.
+
+        The same notice the portfolio report gives (``stale_fx_pairs``, D-P4): the value is the one ``convert`` gives, the warning says the rate
+        behind it is old. A currency whose rate was not asked on ``day`` is not read here, so it is not listed.
+        """
+        stale: list[StaleFxPair] = []
+        for currency in sorted({*self._windows, *(currency for currency, _day in self._needs)}):
+            if currency == self.target_currency:
+                continue
+            rate_day = next((found for rates in self._rates.maps if isinstance(rates, AskedDayRates) and (found := rates.rate_day_at(currency, self.target_currency, day)) is not None), None)
+            if rate_day is not None and is_stale(rate_day, day):
+                stale.append(StaleFxPair(pair=f"{currency}/{self.target_currency}", last_rate_date=rate_day, stale_days=(day - rate_day).days))
+        return sorted(stale, key=lambda item: (item.last_rate_date, item.pair))
 
     def missing_pairs(self) -> list[WACMissingPairInfo]:
         """Every conversion asked for and not made, one entry per pair, as the data-quality report lists them."""

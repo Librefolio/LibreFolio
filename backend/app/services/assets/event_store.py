@@ -27,6 +27,7 @@ from backend.app.schemas.common import (
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.price_store import PRICE_UPSERT_CHUNK_SIZE
+from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.financial_math.splits import costless_incoming_split_adjustments, is_split_event_type, is_valid_split_ratio
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.utils.datetime_utils import utcnow
@@ -695,7 +696,7 @@ class EventStoreOperations:
                     if ep.value.code == target_currency:
                         continue
                     # Compute days_back magnitude (0 for same-day, >0 for backward-fill).
-                    days_back = (ep.date - rate_date).days if rate_date else 0
+                    days_back = fx_days_back(ep.date, rate_date)
                     event_points[idx] = FAAssetEventPointOut(
                         date=ep.date,
                         type=ep.type,

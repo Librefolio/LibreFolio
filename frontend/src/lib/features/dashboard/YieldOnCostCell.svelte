@@ -3,9 +3,9 @@
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {currencyStoreVersion, ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
-    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {formatCurrencyAmountPlain, formatCurrencyPairPlain, formatPairSlugPlain} from '$lib/utils/currency/currencyFormat';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
@@ -19,6 +19,7 @@
         from_currency: string;
         to_currency: string;
         days_back: number;
+        stale?: boolean;
     }
 
     interface Provenance {
@@ -78,20 +79,12 @@
         return formatAxisDate(uiLocale(), value, true);
     }
 
-    function formatCurrencyCode(code: string): string {
-        const flag = getCurrencyInfo(code).flag_emoji;
-        return flag && flag !== '🏳️' ? `${flag} ${code}` : code;
-    }
-
-    function formatFxPair(pair: string): string {
-        const [fromCurrency, toCurrency] = pair.split('/');
-        if (!fromCurrency || !toCurrency) return pair;
-        return `${formatCurrencyCode(fromCurrency)} → ${formatCurrencyCode(toCurrency)}`;
-    }
-
     function fxLines(provenance: Provenance): string[] {
         const unique = new Map(provenance.fx.filter((entry) => entry.from_currency !== entry.to_currency).map((entry) => [`${entry.from_currency}/${entry.to_currency}/${entry.rate_date}`, entry]));
-        const lines = [...unique.values()].map((entry) => `${label('dashboard.yieldOnCostFxPair', 'Conversion')}: ${formatCurrencyCode(entry.from_currency)} → ${formatCurrencyCode(entry.to_currency)} · ${label('dashboard.yieldOnCostFxRateDate', 'rate from')} ${formatDate(entry.rate_date)}`);
+        const lines = [...unique.values()].map(
+            (entry) =>
+                `${label('dashboard.yieldOnCostFxPair', 'Conversion')}: ${formatCurrencyPairPlain(entry.from_currency, entry.to_currency, 'conversion')} · ${label('dashboard.yieldOnCostFxRateDate', 'rate from')} ${formatDate(entry.rate_date)}${entry.stale ? ` · ⚠ ${labelWithValues('dashboard.yieldOnCostFxStale', 'old rate: {days} days before', {days: String(entry.days_back)})}` : ''}`,
+        );
         return lines.length > 3 ? [...lines.slice(0, 3), `… (+${lines.length - 3})`] : lines;
     }
 
@@ -114,7 +107,7 @@
         if (reason === 'missing_fx' && provenance.issue_pair && provenance.issue_date) {
             lines.push(
                 labelWithValues('dashboard.yieldOnCostReasons.missingFxDetails', 'The {pair} exchange rate required for the calculation is missing on {date}.', {
-                    pair: formatFxPair(provenance.issue_pair),
+                    pair: formatPairSlugPlain(provenance.issue_pair),
                     date: formatDate(provenance.issue_date),
                 }),
             );

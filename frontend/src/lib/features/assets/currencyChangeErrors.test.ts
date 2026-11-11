@@ -35,7 +35,7 @@
  *
  * Expected. Red before the cure, by absence: `currencyChangeErrors.ts` does not exist, so this file fails to load. With
  * the module but not the key, the catalogue cases stay red (the key echoed back, or the English text in it/fr/es).
- * Green once the module and the key in the four sources (`src/lib/i18n/assets/<lang>.json`) are in. The parse control
+ * Green once the module and the key in the four sources (`src/lib/features/assets/i18n/<lang>.json`) are in. The parse control
  * is green as soon as the file loads.
  *
  * X-R49. The same refusal has a second door. The provider assignment (`POST /assets/provider`) regenerates the plan of
@@ -53,7 +53,7 @@
  *
  * Expected (X-R49). Red before the cure: the module answers `null` to the plan's code and asks nothing, so every case
  * of its describe is red, the side-by-side case included; the catalogue cases of the new key stay red until the key is
- * in the four sources (`src/lib/i18n/assets/<lang>.json`). Green before the cure and after it: the inherited names, the
+ * in the four sources (`src/lib/features/assets/i18n/<lang>.json`). Green before the cure and after it: the inherited names, the
  * list and the near miss `PROVIDER_SOMETHING_NEW` — guards against a lookup that reads what an object inherits.
  *
  * X-R62. A third door, on the events this time. Removing the provider (`DELETE /assets/provider`, «No provider» in the
@@ -80,7 +80,7 @@
  *
  * Expected (X-R62). Red before the cure: the module answers `null` to both codes and asks nothing, so every case of
  * their two describes is red, the side-by-side case included; the catalogue cases stay red until both keys are in the
- * four sources (`src/lib/i18n/assets/<lang>.json`). Green before the cure and after it: the near misses — another code
+ * four sources (`src/lib/features/assets/i18n/<lang>.json`). Green before the cure and after it: the near misses — another code
  * of the removal, a code in a list, a detail without a code or that is not an object.
  *
  * N68 (lot X5-3, developer decision 19/10/2026). Changing a currency is no longer blocked: `PATCH /assets/patch` deletes the

@@ -267,7 +267,7 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
   error. It now reads `isAxiosError()`, as the other callers do (backlog E-3).
 - **A `<` in a catalogue** («Correzione fuori lotto», during E3: a red of E2 that T found in `dev_release2`): the
   example `LibreFolio <noreply@example.com>` broke the i18n markup gate, which forbids `<` in translations; reworded
-  in the four languages. Lesson: a lot that touches `lib/i18n/email/` also runs `front-utility core-unit`.
+  in the four languages. Lesson: a lot that touches `lib/features/email/i18n/` also runs `front-utility core-unit`.
 - **A warning on every self-hosted email change** («E4.1»): with email off — the default — every change would have
   logged a WARNING; now an `info` line, and the warning only for email set but unusable.
 - **The E2E slot overran** («E4b.6»): the runner rebuilds the frontend when a file of `frontend/src` is newer than the
@@ -355,7 +355,7 @@ those pages: expected.
 | The `LIBREFOLIO_PUBLIC_URL` example (E9) | `frontend/src/lib/features/email/publicUrlExample.ts` |
 | The logo sent inline (E9) | `backend/app/services/email/templates/logo.png` |
 | Verification page | `frontend/src/routes/verify-email/+page.svelte` |
-| i18n source `email` | `frontend/src/lib/i18n/email/` |
+| i18n source `email` | `frontend/src/lib/features/email/i18n/` |
 | Forgot-password card hosting the form (A's file) | `frontend/src/lib/features/auth/ForgotPasswordCard.svelte` |
 | «Send by email» in the link-share registry (A's file) | `frontend/src/lib/features/settings/users/linkShareActions.ts` |
 | Address probe reused by the Email tab (A's file) | `frontend/src/lib/features/settings/users/addressProbe.ts` |

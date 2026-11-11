@@ -217,7 +217,7 @@ plugins may grow over time or be imported "dynamically" by linking folders in th
 | Layout gate (U-1) | `backend/test_scripts/test_utilities/test_plugin_layout_gate.py` |
 | Plan 45 of U | `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` |
 | The generic vocabulary (`base`, U-2; 288 keys since U-3) | `frontend/src/lib/i18n/base/en.json` |
-| A subsystem's declared prefixes (U-3) | `frontend/src/lib/i18n/risk/prefixes.txt` |
+| A subsystem's declared prefixes (U-3) | `frontend/src/lib/features/risk/i18n/prefixes.txt` |
 | A plugin's fragment (U-3) | `backend/app/services/risk_plugins/asset_risk_return/i18n/en.json` |
 | The ownership gate `utils gate-plugin-i18n-ownership` | `backend/test_scripts/test_utilities/test_plugin_i18n_ownership_gate.py` |
 | The builder (`build`, `check`, `where`) | `scripts/i18n_catalog.py` |

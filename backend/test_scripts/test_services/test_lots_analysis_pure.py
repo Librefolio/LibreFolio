@@ -394,6 +394,28 @@ class TestFxRateResolver:
         resolver.need("USD", date(2024, 1, 1))
         assert resolver._needs == [("USD", date(2024, 1, 1))]
 
+    # -- CP-11a: a rate read from an old stored row is listed, the value stays ---- #
+
+    @pytest.mark.asyncio
+    async def test_stale_pairs_lists_a_rate_older_than_the_threshold_and_leaves_the_value(self, monkeypatch):
+        """USD's last stored row is 8 days before the last day (stale, threshold 7), GBP's is 7 days before (not stale): only USD is listed,
+        with its row and its age, and the amount converts as it did."""
+        from backend.test_scripts.fx_steps_double import steps_double
+
+        last = date(2026, 10, 28)
+        row_of = {"USD": date(2026, 10, 20), "GBP": date(2026, 10, 21)}
+        monkeypatch.setattr(conversions_module, "unit_rate_steps", steps_double(lambda source, _destination, day: min(day, row_of[source]), lambda _s, _d, _day: Decimal("0.9")))
+        resolver = FxRateResolver("EUR")
+        for currency in ("USD", "GBP", "EUR"):
+            resolver.need_days(currency, last - timedelta(days=3), last)
+        await resolver.load(None)
+
+        stale = resolver.stale_pairs(last)
+
+        assert [(item.pair, item.last_rate_date, item.stale_days) for item in stale] == [("USD/EUR", date(2026, 10, 20), 8)]
+        assert resolver.convert(D("100"), "USD", last) == D("90.0")
+        assert resolver.stale_pairs(date(2026, 10, 27)) == []  # USD is 7 days old on the 27th: not yet stale
+
     # -- B3a: a conversion that fails is recorded, never replaced ------------ #
 
     def test_missing_pairs_reports_each_failed_conversion_once_per_pair_and_date(self):

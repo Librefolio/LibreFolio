@@ -7,7 +7,7 @@
  * new address was sent a confirmation link) or `warning` (blocked: another account holds the new address), and the
  * Security tab renders its i18n key `auth.checks.ownerEmailChange.<state>`. The catalogue build fills a missing it, fr or
  * es entry from English, so a forgotten translation would never show in the app nor in a catalogue test: this file reads
- * the SOURCES, `lib/i18n/auth/<lang>.json`, directly.
+ * the SOURCES, `lib/features/auth/i18n/<lang>.json`, directly.
  *
  * Contract. `ok`, `pending` and `blocked` exist, non-empty strings, in each of en, it, fr and es, in the `auth` source; the
  * messages have no parameter (the check's detail is empty), so no ICU placeholder; and the it, fr and es text of `pending`
@@ -30,9 +30,9 @@ const TRANSLATIONS: readonly Lang[] = ['it', 'fr', 'es'];
 const STATES = ['ok', 'pending', 'blocked'] as const;
 const OWNER_CHANGE = 'auth.checks.ownerEmailChange';
 
-/** `lib/i18n/auth/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
+/** `lib/features/auth/i18n/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
 function authSource(lang: Lang): unknown {
-    return JSON.parse(readFileSync(new URL(`./auth/${lang}.json`, import.meta.url), 'utf8'));
+    return JSON.parse(readFileSync(new URL(`../features/auth/i18n/${lang}.json`, import.meta.url), 'utf8'));
 }
 
 /** The value at a dotted key of a nested source; `undefined` when any step is missing or not an object. */

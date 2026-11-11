@@ -640,7 +640,9 @@
         "missing_fx": "Falta el tipo de cambio a {currency} al inicio o al final del período",
         "starts_late": "Primera cotización el {date}, después del inicio del período",
         "stale_at_end": "Último precio el {date}, más de {days} días antes del final",
-        "no_price_history": "Nunca se ha registrado un precio para este activo"
+        "no_price_history": "Nunca se ha registrado un precio para este activo",
+        "missing_fx_since": "Sin tipo de cambio {pair} al inicio o al final del período: el primer tipo guardado es del {date}",
+        "missing_fx_none": "Sin tipo de cambio {pair} al inicio o al final del período: no hay ningún tipo guardado para este par"
       },
       "levels": {
         "ineligible": "No analizable en el período",

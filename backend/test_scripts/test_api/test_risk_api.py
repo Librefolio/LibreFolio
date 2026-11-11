@@ -864,6 +864,9 @@ async def test_asset_eligibility_judges_each_asset_on_its_own_quotes_in_request_
     # The facts behind each verdict travel with it.
     assert (by_key["eligible"]["quotes_in_period"], by_key["eligible"]["first_quote"], by_key["eligible"]["last_quote"]) == (20, start.isoformat(), (start + timedelta(days=76)).isoformat())
     assert (by_key["no_prices"]["quotes_in_period"], by_key["no_prices"]["first_quote"], by_key["no_prices"]["last_quote"]) == (0, (start - timedelta(days=30)).isoformat(), (start - timedelta(days=10)).isoformat())
+    # CP-11: the asset with no exchange rate says which conversion is missing, in its direction, and that no rate is stored at all; the others say nothing.
+    assert by_key["no_fx"]["missing_fx"] == {"from_currency": "KES", "to_currency": "EUR", "first_rate_date": None}
+    assert [key for key, item in by_key.items() if item["missing_fx"] is not None] == ["no_fx"]
     assert by_key["late"]["first_quote"] == (start + timedelta(days=10)).isoformat()
     assert by_key["stale"]["last_quote"] == (end - timedelta(days=10)).isoformat()
     # The quoted histories do not overlap (one ends before another begins): both fields present, null.

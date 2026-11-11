@@ -6,7 +6,7 @@
  * Callers pass already-escaped HTML for the values.
  */
 import {computeFxConversionInfo} from '$lib/features/fx/fxConversionHelper';
-import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
+import {formatCurrencyPairHtml} from '$lib/utils/currency/currencyFormat';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 
 /** Two lines, "From:" and "To:", with labels padded to the longer one. */
@@ -17,10 +17,10 @@ export function renderFromToHtml(fromHtml: string, toHtml: string, labels: {from
     return `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="${labelCls}" style="${labelStyle}">${labels.from}:</span> ${fromHtml}</span><hr class="border-lf-subtle my-0.5"/><span><span class="${labelCls}" style="${labelStyle}">${labels.to}:</span> ${toHtml}</span></div>`;
 }
 
-/** `USD → EUR @ 0.8554`: the rate the two amounts imply (|to| / |from|); empty when it cannot be computed. */
+/** `$ 🇺🇸 USD → EUR 🇪🇺 € @ 0.8554`: the rate the two amounts imply (|to| / |from|); empty when it cannot be computed. */
 export function renderImpliedRateHtml(from: {code: string; amount: number}, to: {code: string; amount: number}): string {
     if (from.code === to.code) return '';
     const info = computeFxConversionInfo(from.amount, from.code, to.amount, to.code);
     if (!info) return '';
-    return `<span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400" data-testid="import-tx-pair-rate">${formatCurrencyCodeHtml(info.base)}<span>→</span>${formatCurrencyCodeHtml(info.quote)}<span class="font-mono">@ ${formatFixed(info.impliedRate, 4)}</span></span>`;
+    return `<span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400" data-testid="import-tx-pair-rate">${formatCurrencyPairHtml(info.base, info.quote, 'conversion')}<span class="font-mono">@ ${formatFixed(info.impliedRate, 4)}</span></span>`;
 }

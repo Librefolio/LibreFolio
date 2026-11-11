@@ -577,6 +577,8 @@ class LotsAnalysisService:
         # Every builder has converted what it needed: report, once, what could not be converted or costed.
         conversion_gaps = fx_resolver.missing_pairs()
         await self._report_gaps(data_quality, average_cost_lines, conversion_gaps, target_currency, asset)
+        # The rates read on the last day of the analysis that are old: a notice, no value changes (CP-11a)
+        data_quality.stale_fx_pairs = fx_resolver.stale_pairs(actual_to)
 
         return LotsAnalysisResponse(
             asset_id=asset_id,

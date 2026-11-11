@@ -172,6 +172,7 @@
     },
     "allocationNoShares": "Aucun pourcentage à afficher : les parts totalisent zéro ou moins (par exemple un découvert qui annule vos positions). Les montants sont listés ci-dessous.",
     "allocationHistoryNoShares": "Aucun pourcentage à afficher : ces jours-là, les parts totalisent zéro ou moins.",
-    "pnlDeltaDayTooltip": "Variation du jour du P&L total, et cette variation en pourcentage par rapport à la valeur du portefeuille d'hier."
+    "pnlDeltaDayTooltip": "Variation du jour du P&L total, et cette variation en pourcentage par rapport à la valeur du portefeuille d'hier.",
+    "yieldOnCostFxStale": "taux ancien : {days} jours avant"
   }
 }

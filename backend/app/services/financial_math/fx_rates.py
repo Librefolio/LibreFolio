@@ -22,6 +22,15 @@ from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.utils.day_spans import merged_spans
 
 
+def fx_days_back(requested_date: date, rate_date: date) -> int:
+    """How many days before ``requested_date`` the stored rate row used for it is: ``0`` when the row is of that very day.
+
+    The one reader of the provenance ``convert_bulk`` returns as ``(converted, rate_date, backward_fill_applied)``: a row is never
+    newer than the day asked, and ``backward_fill_applied`` is exactly ``fx_days_back(...) > 0``, so the days are all a caller needs.
+    """
+    return max((requested_date - rate_date).days, 0)
+
+
 def missing_pair_infos(dates_by_pair: Mapping[str, Iterable[date]], spans_by_pair: Mapping[str, Iterable[tuple[date, date]]]) -> list[WACMissingPairInfo]:
     """The conversions asked and not made, one entry per ``FROM/TO`` pair, as the data-quality report lists them.
 

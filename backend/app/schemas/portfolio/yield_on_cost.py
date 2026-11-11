@@ -42,6 +42,7 @@ class YieldOnCostFxProvenance(StrictModel):
     from_currency: str
     to_currency: str
     days_back: int = Field(..., ge=0)
+    stale: bool = Field(False, description="The stored rate row is older than the stale threshold on the requested day: a notice, the value is the same (CP-11a)")
 
     @field_validator("from_currency", "to_currency")
     @classmethod

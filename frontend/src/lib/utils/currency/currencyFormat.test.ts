@@ -65,7 +65,7 @@ import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.
 import * as currencyStore from '$lib/stores/reference/currencyStore';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 
-import {formatCurrencyAmountHtml, formatCurrencyAmountPlain, formatCurrencyCodeHtml, type CurrencyAmountFormatOptions} from './currencyFormat';
+import {formatCurrencyAmountHtml, formatCurrencyAmountPlain, formatCurrencyCodeHtml, formatCurrencyPairHtml, formatCurrencyPairPlain, formatPairSlugHtml, formatPairSlugPlain, type CurrencyAmountFormatOptions} from './currencyFormat';
 
 const AMOUNT = 1234.5;
 
@@ -462,5 +462,45 @@ describe('currencyFormat — the number in the interface language (M-18 CP2)', (
         expect(formatCurrencyAmountPlain(VALUE, 'EUR')).toBe(`${PRIVACY_PLACEHOLDER} ${EUR_SUFFIX}`);
         expect(formatCurrencyAmountPlain(-VALUE, 'EUR', {showSign: true})).toBe(`-${PRIVACY_PLACEHOLDER} ${EUR_SUFFIX}`);
         expect(formatCurrencyAmountHtml(VALUE, 'EUR')).toBe(`<span class="currency-amount">${PRIVACY_PLACEHOLDER}</span> ${EUR_HTML_SUFFIX}`);
+    });
+});
+
+describe('formatCurrencyPair*: a pair in the direction of the conversion (CP-11b)', () => {
+    const FLAG = (flag: string) => `<span class="emoji-flag">${flag}</span>`;
+    const CODE = (code: string) => `<span class="currency-code">${code}</span>`;
+    const SYMBOL = (symbol: string) => `<span class="currency-symbol">${symbol}</span>`;
+
+    it('writes the start as formatCurrencyCodeHtml does and the arrival as its mirror, USD to EUR', () => {
+        expect(formatCurrencyPairHtml('USD', 'EUR')).toBe(`${SYMBOL('$')} ${FLAG('🇺🇸')} ${CODE('USD')} / ${CODE('EUR')} ${FLAG('🇪🇺')} ${SYMBOL('€')}`);
+        expect(formatCurrencyPairPlain('USD', 'EUR')).toBe('$ 🇺🇸 USD / EUR 🇪🇺 €');
+    });
+
+    it('follows the direction: EUR to USD is the mirror image, never alphabetical', () => {
+        expect(formatCurrencyPairHtml('EUR', 'USD')).toBe(`${SYMBOL('€')} ${FLAG('🇪🇺')} ${CODE('EUR')} / ${CODE('USD')} ${FLAG('🇺🇸')} ${SYMBOL('$')}`);
+        expect(formatCurrencyPairPlain('EUR', 'USD')).toBe('€ 🇪🇺 EUR / USD 🇺🇸 $');
+    });
+
+    it('leaves the symbol and the flag out on the side of a currency that has none (symbol equal to its code, white flag)', () => {
+        expect(formatCurrencyPairHtml('XAU', 'EUR')).toBe(`${CODE('XAU')} / ${CODE('EUR')} ${FLAG('🇪🇺')} ${SYMBOL('€')}`);
+        expect(formatCurrencyPairPlain('XAU', 'EUR')).toBe('XAU / EUR 🇪🇺 €');
+        expect(formatCurrencyPairPlain('USD', 'XAU')).toBe('$ 🇺🇸 USD / XAU');
+    });
+
+    it('writes a conversion with an arrow instead of the slash, everything else the same', () => {
+        expect(formatCurrencyPairHtml('USD', 'EUR', 'conversion')).toBe(`${SYMBOL('$')} ${FLAG('🇺🇸')} ${CODE('USD')} → ${CODE('EUR')} ${FLAG('🇪🇺')} ${SYMBOL('€')}`);
+        expect(formatCurrencyPairPlain('USD', 'EUR', 'conversion')).toBe('$ 🇺🇸 USD → EUR 🇪🇺 €');
+        expect(formatCurrencyPairPlain('EUR', 'USD', 'conversion')).toBe('€ 🇪🇺 EUR → USD 🇺🇸 $');
+        expect(formatCurrencyPairPlain('XAU', 'EUR', 'conversion')).toBe('XAU → EUR 🇪🇺 €');
+        expect(formatPairSlugPlain('USD/EUR', 'conversion')).toBe('$ 🇺🇸 USD → EUR 🇪🇺 €');
+        expect(formatPairSlugHtml('USD/EUR', 'conversion')).toBe(formatCurrencyPairHtml('USD', 'EUR', 'conversion'));
+        expect(formatPairSlugPlain('nonsense', 'conversion')).toBe('nonsense');
+    });
+
+    it('reads a FROM/TO slug in its order, and gives back what is no pair', () => {
+        expect(formatPairSlugPlain('USD/EUR')).toBe('$ 🇺🇸 USD / EUR 🇪🇺 €');
+        expect(formatPairSlugPlain('eur-usd')).toBe('€ 🇪🇺 EUR / USD 🇺🇸 $');
+        expect(formatPairSlugHtml('USD/EUR')).toBe(formatCurrencyPairHtml('USD', 'EUR'));
+        expect(formatPairSlugPlain('nonsense')).toBe('nonsense');
+        expect(formatPairSlugHtml('<b>')).toBe('&lt;b&gt;');
     });
 });

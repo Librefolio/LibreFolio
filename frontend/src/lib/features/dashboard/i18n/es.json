@@ -172,6 +172,7 @@
     },
     "allocationNoShares": "No hay porcentajes que mostrar: las porciones suman cero o menos (por ejemplo, un descubierto que anula tus posiciones). Los importes se listan debajo.",
     "allocationHistoryNoShares": "No hay porcentajes que mostrar: en estos días las porciones suman cero o menos.",
-    "pnlDeltaDayTooltip": "Variación de hoy del P&L total, y esa variación en porcentaje respecto al valor de la cartera de ayer."
+    "pnlDeltaDayTooltip": "Variación de hoy del P&L total, y esa variación en porcentaje respecto al valor de la cartera de ayer.",
+    "yieldOnCostFxStale": "tasa antigua: {days} días antes"
   }
 }
