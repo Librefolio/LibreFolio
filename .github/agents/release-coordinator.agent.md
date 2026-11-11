@@ -254,6 +254,11 @@ at load 78 failed five green tests with 30 s `ReadTimeout`s that passed alone.
   E2E block, the gallery. Each coordinator owns a fixed number of slots, agreed between
   coordinators (1.3: two for the release, one for colour). A child runs heavy work only
   inside a slot you granted, with a cut-off time, and tells you when the slot is free.
+- **Full suites are yours, and rare** (developer decision, 11/11/2026). Children run only the suites of the files
+  they touched. You run `all-backend` / `all-frontend` on the merged result once enough changes have piled up across
+  several subsystems since the previous full run: not at every merge. A red found after a merge is fixed then; a
+  change that is broad by nature (a column type on every model, a move across the whole backend) earns a full run of
+  its own side before its merge. Docs builds do not take the heavy lock.
 - **Light checks wait for the load.** `front check`, single unit files, Vitest of a few
   files, ruff/black/Prettier, docs builds: only while the 1-minute load
   (`sysctl -n vm.loadavg`) is below 50, so that they never starve a running slot.
