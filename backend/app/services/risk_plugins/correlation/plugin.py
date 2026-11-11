@@ -4,15 +4,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.risk import (
-    RiskCorrelationOutput,
-    RiskMatrixCell,
-    RiskMode,
-    RiskOutputKind,
-    RiskScopeKind,
-    RiskValueStatus,
-    RiskWarning,
-)
+from backend.app.schemas.risk.outputs import RiskCorrelationOutput, RiskMatrixCell
+from backend.app.schemas.risk.results import RiskWarning
+from backend.app.schemas.risk.vocabulary import RiskMode, RiskOutputKind, RiskScopeKind, RiskValueStatus
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import prepared_asset_returns

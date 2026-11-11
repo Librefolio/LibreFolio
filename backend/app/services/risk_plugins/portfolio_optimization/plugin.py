@@ -4,22 +4,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.risk import (
-    RiskCovarianceEstimator,
-    RiskErrorCode,
-    RiskFreeReference,
-    RiskMode,
-    RiskOptimizationConstraintSummary,
-    RiskOptimizationFrontierPoint,
-    RiskOptimizationSensitivityPoint,
-    RiskOptimizationSolver,
-    RiskOptimizationStrategy,
-    RiskOptimizationWeight,
-    RiskOutputKind,
-    RiskPortfolioOptimizationOutput,
-    RiskReturnBasis,
-    RiskScopeKind,
-)
+from backend.app.schemas.risk.outputs import RiskOptimizationConstraintSummary, RiskOptimizationFrontierPoint, RiskOptimizationSensitivityPoint, RiskOptimizationWeight, RiskPortfolioOptimizationOutput
+from backend.app.schemas.risk.series import RiskFreeReference
+from backend.app.schemas.risk.vocabulary import RiskCovarianceEstimator, RiskErrorCode, RiskMode, RiskOptimizationSolver, RiskOptimizationStrategy, RiskOutputKind, RiskReturnBasis, RiskScopeKind
 from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
@@ -193,7 +180,7 @@ class PortfolioOptimizationAnalytic(RiskAnalytic):
             )
             result, _cache_hit, _worker_result = await run_optimization(
                 request,
-                algorithm_version=(f"{self.analytic_code}@" f"{self.algorithm_version}"),
+                algorithm_version=(f"{self.analytic_code}@{self.algorithm_version}"),
             )
         except OptimizationResourceLimitError as exc:
             raise RiskUnavailableError(
@@ -268,10 +255,10 @@ class PortfolioOptimizationAnalytic(RiskAnalytic):
                     )
                     for point in result.sensitivity
                 ],
-                method=("riskfolio_classic_mean_variance_" "long_only_fully_invested"),
+                method=("riskfolio_classic_mean_variance_long_only_fully_invested"),
                 algorithm_version=result.algorithm_version,
             ),
-            method=("riskfolio_classic_mean_variance_" "long_only_fully_invested"),
+            method=("riskfolio_classic_mean_variance_long_only_fully_invested"),
             n_observations=len(returns),
             calendar_days=prepared.calendar_days,
             annualization_factor=prepared.annualization_factor,

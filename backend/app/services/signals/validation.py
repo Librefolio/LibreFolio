@@ -10,12 +10,9 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from backend.app.schemas.signals import (
-    SignalAvailability,
-    SignalAvailabilityReason,
-    SignalComputation,
-    SignalPricePoint,
-)
+from backend.app.schemas.signals.inputs import SignalPricePoint
+from backend.app.schemas.signals.result import SignalAvailability, SignalComputation
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason
 from backend.app.services.signals.base import SignalPlugin
 
 

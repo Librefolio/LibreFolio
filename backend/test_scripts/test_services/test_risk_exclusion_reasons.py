@@ -31,7 +31,9 @@ setup_test_database()
 
 from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, PriceHistory, ProviderInputType  # noqa: E402
 from backend.app.db.session import get_async_engine  # noqa: E402
-from backend.app.schemas.risk import RiskAnalyticResult, RiskQueryRequest, RiskResultStatus  # noqa: E402
+from backend.app.schemas.risk.results import RiskAnalyticResult
+from backend.app.schemas.risk.scope import RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskResultStatus  # noqa: E402
 from backend.app.services.risk.service import RiskService  # noqa: E402
 
 # A period of 2009 nothing else in the suite prices, and a currency nothing else stores a rate for.

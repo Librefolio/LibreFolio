@@ -9,15 +9,9 @@ import pytest
 import talib
 
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
-from backend.app.schemas.signals import (
-    SignalAvailabilityReason,
-    SignalDomain,
-    SignalExecutionContext,
-    SignalRequest,
-    SignalSourceCapability,
-    SignalStatus,
-    SignalVolumeKind,
-)
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalSourceCapability
+from backend.app.schemas.signals.result import SignalRequest
+from backend.app.schemas.signals.vocabulary import SignalAvailabilityReason, SignalDomain, SignalStatus, SignalVolumeKind
 from backend.app.services.signal_plugins.mfi import plugin as mfi_module
 from backend.app.services.signal_plugins.mfi.plugin import (
     MfiSignalParams,

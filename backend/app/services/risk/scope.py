@@ -19,15 +19,9 @@ from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel
 from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason, DataQualityReport
 from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.prices import FAPriceQueryItem
-from backend.app.schemas.risk import (
-    AssetRiskScope,
-    AssetSetRiskScope,
-    PortfolioRiskScope,
-    PreparedAssetSeriesSet,
-    RiskExcludedAsset,
-    RiskQueryRequest,
-    RiskWarning,
-)
+from backend.app.schemas.risk.results import RiskExcludedAsset, RiskWarning
+from backend.app.schemas.risk.scope import AssetRiskScope, AssetSetRiskScope, PortfolioRiskScope, RiskQueryRequest
+from backend.app.schemas.risk.series import PreparedAssetSeriesSet
 from backend.app.services.assets import price_query
 from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.financial_math.weights import share_of

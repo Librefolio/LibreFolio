@@ -59,8 +59,12 @@ from backend.app.schemas.portfolio.report import PortfolioReportMetadata, Portfo
 from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PortfolioHolding, PortfolioSummary, PositionsContribution
 from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.risk import RiskAnalyticResult, RiskDrawdownOutput, RiskDrawdownRecoveryStatus, RiskQueryRequest, RiskQueryResponse, RiskResultStatus, RiskReturnBasis
-from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.risk.outputs import RiskDrawdownOutput
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskQueryResponse
+from backend.app.schemas.risk.scope import RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskResultStatus, RiskReturnBasis
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.vocabulary import SignalCadence, SignalDomain
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
 from backend.app.services.ai_export.components import broker_cost_efficiency, broker_financial, drawdown_context, portfolio_financial, portfolio_income
 from backend.app.services.ai_export.components import portfolio_broker_registry as portfolio_broker_registry_module

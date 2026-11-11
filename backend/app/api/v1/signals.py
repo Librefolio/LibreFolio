@@ -16,13 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.signals import (
-    SignalCadence,
-    SignalExecutionContext,
-    SignalPreviewRequest,
-    SignalPreviewResponse,
-    SignalPricePoint,
-)
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.preview import SignalPreviewRequest, SignalPreviewResponse
+from backend.app.schemas.signals.vocabulary import SignalCadence
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.service import SignalService
 

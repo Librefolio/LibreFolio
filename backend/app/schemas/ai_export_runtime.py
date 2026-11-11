@@ -17,7 +17,7 @@ from pydantic import (
 )
 
 from backend.app.schemas.common import CurrencyCode, StrictModel
-from backend.app.schemas.signals import SignalTemporalClass
+from backend.app.schemas.signals.vocabulary import SignalTemporalClass
 from backend.app.utils.json_utils import ensure_json_safe
 
 _ID_PATTERN = r"^[a-z][a-z0-9_.-]*$"

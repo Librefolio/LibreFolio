@@ -15,7 +15,7 @@ from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
 
-from backend.app.schemas.signals import SignalAggregationProfile
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.points import (
     BandObservedPoint,

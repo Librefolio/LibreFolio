@@ -8,31 +8,11 @@ from datetime import date, timedelta
 from typing import Mapping, Optional, Sequence
 
 from backend.app.logging_config import get_logger
-from backend.app.schemas.signals import (
-    SignalAnnotation,
-    SignalAnnotationDirection,
-    SignalAnnotationRequest,
-    SignalAnnotationSampling,
-    SignalAreaSeries,
-    SignalBandSeries,
-    SignalBandValueSource,
-    SignalBarSeries,
-    SignalCadence,
-    SignalExecutionContext,
-    SignalLineCrossoverRequest,
-    SignalLineSeries,
-    SignalOutputValueSource,
-    SignalPricePoint,
-    SignalPriceValueSource,
-    SignalResult,
-    SignalSeries,
-    SignalStatus,
-    SignalThresholdCrossingRequest,
-    SignalThresholdDirection,
-    SignalValueSource,
-    SignalWarning,
-    SignalWarningCode,
-)
+from backend.app.schemas.signals.annotations import SignalAnnotation, SignalAnnotationRequest, SignalLineCrossoverRequest, SignalThresholdCrossingRequest
+from backend.app.schemas.signals.inputs import SignalBandValueSource, SignalExecutionContext, SignalOutputValueSource, SignalPricePoint, SignalPriceValueSource, SignalValueSource
+from backend.app.schemas.signals.outputs import SignalAreaSeries, SignalBandSeries, SignalBarSeries, SignalLineSeries, SignalSeries
+from backend.app.schemas.signals.result import SignalResult, SignalWarning
+from backend.app.schemas.signals.vocabulary import SignalAnnotationDirection, SignalAnnotationSampling, SignalCadence, SignalStatus, SignalThresholdDirection, SignalWarningCode
 
 logger = get_logger(__name__)
 

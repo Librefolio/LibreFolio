@@ -23,13 +23,8 @@ from backend.app.api.v1.risk import (
 from backend.app.config import set_test_mode
 from backend.app.db.models import Asset, AssetType, PriceHistory, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.risk import (
-    RiskAnalyticResult,
-    RiskError,
-    RiskErrorCode,
-    RiskQueryResponse,
-    RiskResultStatus,
-)
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskQueryResponse
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskResultStatus
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
@@ -64,7 +59,7 @@ async def fixture_user_id() -> int:
 
     if user_id is None:
         pytest.fail(
-            f"Test database is not populated: user '{FIXTURE_USERNAME}' is missing.\n" "These tests run real analytics against the mock portfolio, so they need the fixtures.\n" "Seed them with: ./dev.py test db populate --force",
+            f"Test database is not populated: user '{FIXTURE_USERNAME}' is missing.\nThese tests run real analytics against the mock portfolio, so they need the fixtures.\nSeed them with: ./dev.py test db populate --force",
         )
     return user_id
 

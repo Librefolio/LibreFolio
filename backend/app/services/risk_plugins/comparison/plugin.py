@@ -8,18 +8,10 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.risk import (
-    RiskComparisonHoldingItem,
-    RiskComparisonOutput,
-    RiskComparisonPoint,
-    RiskErrorCode,
-    RiskFreeReference,
-    RiskMode,
-    RiskOutputKind,
-    RiskReturnBasis,
-    RiskScopeKind,
-    RiskWarning,
-)
+from backend.app.schemas.risk.outputs import RiskComparisonHoldingItem, RiskComparisonOutput, RiskComparisonPoint
+from backend.app.schemas.risk.results import RiskWarning
+from backend.app.schemas.risk.series import RiskFreeReference
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskReturnBasis, RiskScopeKind
 from backend.app.services.financial_math.returns import observed_annualization
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import register_plugin

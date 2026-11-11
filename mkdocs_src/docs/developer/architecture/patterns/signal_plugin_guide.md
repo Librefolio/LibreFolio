@@ -497,7 +497,7 @@ A plugin never sets the status itself. `compute()` returns a `SignalComputation`
 result is mathematically undefined. The service then assigns the status of a computed result —
 `partial` when the warm-up is incomplete, partial coverage was used, or the availability
 reason is `partial_undefined_metric`; `ok` otherwise — and builds a `SignalResult`. Its
-`validate_status_matrix` validator (`backend/app/schemas/signals.py`) rejects every
+`validate_status_matrix` validator (`backend/app/schemas/signals/`) rejects every
 combination outside this matrix:
 
 | Status | Required | Forbidden |

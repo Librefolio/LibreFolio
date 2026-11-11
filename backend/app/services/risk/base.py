@@ -18,23 +18,11 @@ from pydantic_core import to_jsonable_python
 
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio.data_quality import DataQualityReport
-from backend.app.schemas.risk import (
-    PreparedAssetSeriesSet,
-    RiskAnalyticOutput,
-    RiskCatalogDefinition,
-    RiskCompositionPolicy,
-    RiskErrorCode,
-    RiskExcludedAsset,
-    RiskFreeReference,
-    RiskHistoricalReplayAudit,
-    RiskHistoricalReplayExclusionReason,
-    RiskMode,
-    RiskOutputKind,
-    RiskReturnBasis,
-    RiskSamplingStrategy,
-    RiskScopeKind,
-    RiskWarning,
-)
+from backend.app.schemas.risk.outputs import RiskAnalyticOutput
+from backend.app.schemas.risk.results import RiskExcludedAsset, RiskHistoricalReplayAudit, RiskWarning
+from backend.app.schemas.risk.scope import RiskCatalogDefinition
+from backend.app.schemas.risk.series import PreparedAssetSeriesSet, RiskFreeReference
+from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskHistoricalReplayExclusionReason, RiskMode, RiskOutputKind, RiskReturnBasis, RiskSamplingStrategy, RiskScopeKind
 
 _ANALYTIC_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 

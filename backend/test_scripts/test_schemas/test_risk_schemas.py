@@ -10,22 +10,13 @@ from pathlib import Path
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from backend.app.schemas import risk as risk_schemas
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport, DataQualityStatus
-from backend.app.schemas.risk import (
-    AssetReturnPoint,
-    AssetReturnSeries,
-    AssetRiskScope,
-    AssetSetRiskScope,
-    AssetValuationPoint,
-    AssetValuationSeries,
-    PortfolioRiskScope,
-    PreparedAssetSeries,
-    PreparedAssetSeriesSet,
+from backend.app.schemas.risk import outputs as risk_outputs
+from backend.app.schemas.risk import results as risk_results
+from backend.app.schemas.risk import series as risk_series
+from backend.app.schemas.risk.outputs import (
     RiskAnalyticOutput,
-    RiskAnalyticRequest,
-    RiskAnalyticResult,
     RiskAssetSetComparisonItem,
     RiskAssetSetComparisonOutput,
     RiskAssetSetDrawdownItem,
@@ -36,46 +27,45 @@ from backend.app.schemas.risk import (
     RiskAssetSetVarCvarOutput,
     RiskComparisonOutput,
     RiskComparisonPoint,
-    RiskCompositionPolicy,
     RiskContributionOutput,
     RiskDrawdownOutput,
     RiskDrawdownPoint,
-    RiskDrawdownRecoveryStatus,
-    RiskError,
-    RiskErrorCode,
-    RiskHistoricalReplayAudit,
-    RiskHistoricalReplayExcludedAsset,
-    RiskHistoricalReplayExclusionReason,
-    RiskHistoricalReplayExclusionTreatment,
-    RiskHistoricalReplayProxyAsset,
     RiskKpiOutput,
-    RiskMode,
-    RiskOutputKind,
-    RiskQueryRequest,
-    RiskResultMetadata,
-    RiskResultStatus,
-    RiskReturnBasis,
     RiskReturnItem,
     RiskReturnOutput,
-    RiskSamplingStrategy,
-    RiskScopeKind,
-    RiskStressApplicationRule,
     RiskStressBucketAudit,
     RiskStressConfiguredBucketImpact,
     RiskStressImpact,
-    RiskStressMethod,
     RiskStressOutput,
     RiskVarCvarBin,
     RiskVarCvarOutput,
     RiskWorstHorizonWindow,
 )
-from backend.app.schemas.risk_scenarios import (
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskHistoricalReplayAudit, RiskHistoricalReplayExcludedAsset, RiskHistoricalReplayProxyAsset, RiskResultMetadata
+from backend.app.schemas.risk.scenarios import (
     RISK_SCENARIO_OFFICIAL_LANGUAGES,
     RiskHistoricalReplayScenario,
     RiskHypotheticalShockScenario,
     RiskScenarioDimension,
     RiskScenarioLocalizedText,
     RiskScenarioMissingHistoryPolicy,
+)
+from backend.app.schemas.risk.scope import AssetRiskScope, AssetSetRiskScope, PortfolioRiskScope, RiskAnalyticRequest, RiskQueryRequest
+from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet
+from backend.app.schemas.risk.vocabulary import (
+    RiskCompositionPolicy,
+    RiskDrawdownRecoveryStatus,
+    RiskErrorCode,
+    RiskHistoricalReplayExclusionReason,
+    RiskHistoricalReplayExclusionTreatment,
+    RiskMode,
+    RiskOutputKind,
+    RiskResultStatus,
+    RiskReturnBasis,
+    RiskSamplingStrategy,
+    RiskScopeKind,
+    RiskStressApplicationRule,
+    RiskStressMethod,
 )
 from backend.app.services.financial_math import returns as financial_math_returns
 from scripts.i18n_catalog import load_catalog
@@ -344,7 +334,8 @@ def test_the_annualization_check_reads_the_house_formula(monkeypatch, build):
         calls.append((n_observations, calendar_days))
         return _GUARD_STUB_FACTOR
 
-    monkeypatch.setattr(risk_schemas, "observations_per_year", stub)
+    monkeypatch.setattr(risk_series, "observations_per_year", stub)
+    monkeypatch.setattr(risk_results, "observations_per_year", stub)
 
     with pytest.raises(ValidationError, match="annualization_factor"):
         build(_GUARD_TRUE_FACTOR)
@@ -357,7 +348,8 @@ def test_the_annualization_check_reads_the_house_formula(monkeypatch, build):
 def test_the_name_the_validators_read_is_the_house_function():
     # The patch above proves the validators read ``observations_per_year`` from the schema module; this proves that
     # name is the layer's own object, not a copy defined in the schema that a later edit could make drift.
-    assert risk_schemas.observations_per_year is financial_math_returns.observations_per_year
+    assert risk_series.observations_per_year is financial_math_returns.observations_per_year
+    assert risk_results.observations_per_year is financial_math_returns.observations_per_year
 
 
 def test_historical_replay_audit_is_strict_and_serializable():
@@ -1188,7 +1180,7 @@ def test_comparison_output_without_the_k6_fields_still_validates_with_their_defa
 
 
 def test_comparison_output_states_the_benchmark_ratios_and_one_item_per_holding():
-    holding_item = risk_schemas.RiskComparisonHoldingItem
+    holding_item = risk_outputs.RiskComparisonHoldingItem
 
     output = RiskComparisonOutput(**_comparison_output(comparison_sharpe=-0.35, comparison_sortino=0.42, items=[_holding(1, beta=1.3, correlation=-0.4), _holding(2, beta=None, correlation=None)]))
 
@@ -1213,7 +1205,7 @@ def test_comparison_output_states_the_benchmark_ratios_and_one_item_per_holding(
     ],
 )
 def test_comparison_holding_item_takes_any_finite_beta_and_a_correlation_within_its_bounds(beta, correlation):
-    holding_item = risk_schemas.RiskComparisonHoldingItem
+    holding_item = risk_outputs.RiskComparisonHoldingItem
 
     item = holding_item(asset_id=1, beta=beta, correlation=correlation)
 
@@ -1234,7 +1226,7 @@ def test_comparison_holding_item_takes_any_finite_beta_and_a_correlation_within_
     ],
 )
 def test_comparison_holding_item_refuses(override):
-    holding_item = risk_schemas.RiskComparisonHoldingItem
+    holding_item = risk_outputs.RiskComparisonHoldingItem
     assert holding_item(**_holding(1)).asset_id == 1  # the control: the same item, unaltered, is valid
 
     with pytest.raises(ValidationError):

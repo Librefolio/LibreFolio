@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.schemas.risk import RiskWarning
+from backend.app.schemas.risk.results import RiskWarning
 from scripts.i18n_catalog import load_catalog
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

@@ -32,13 +32,7 @@ from typing import Annotated, Literal, Union
 from pydantic import Field, FiniteFloat, model_validator
 
 from backend.app.schemas.common import CurrencyCode, StrictModel
-from backend.app.schemas.signals import (
-    SignalAggregationProfile,
-    SignalBandComponent,
-    SignalSeriesKind,
-    SignalStatus,
-    SignalTemporalClass,
-)
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalBandComponent, SignalSeriesKind, SignalStatus, SignalTemporalClass
 
 
 class TechnicalBucket(StrictModel):

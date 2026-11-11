@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import QuantLib as ql
 
-from backend.app.schemas.risk import RiskSamplingStrategy, RiskSimulationProcess
+from backend.app.schemas.risk.vocabulary import RiskSamplingStrategy, RiskSimulationProcess
 from backend.app.services.risk.quant.models import (
     SimulationEngineRequest,
     SimulationEngineResult,

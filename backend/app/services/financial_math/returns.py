@@ -301,7 +301,7 @@ def observations_per_year(n_observations: int, calendar_days: int) -> float:
     """The observed annualization factor of a return series: ``n_observations × DAYS_PER_YEAR / calendar_days``.
 
     The one home of the formula (MF-D3): ``observed_annualization`` computes it, and the risk schemas' validators check a
-    contract's factor against it (``schemas/risk.py``, which may import this pure module). ValueError for a span that is
+    contract's factor against it (``schemas/risk/``, which may import this pure module). ValueError for a span that is
     not positive.
     """
     if calendar_days <= 0:

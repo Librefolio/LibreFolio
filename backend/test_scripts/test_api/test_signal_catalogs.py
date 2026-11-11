@@ -12,7 +12,7 @@ import pytest
 from backend.app.api.v1.assets.prices import list_asset_signal_catalog
 from backend.app.api.v1.fx.currencies import list_fx_signal_catalog
 from backend.app.config import get_settings
-from backend.app.schemas.signals import SignalCatalogResponse
+from backend.app.schemas.signals.result import SignalCatalogResponse
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
 settings = get_settings()
@@ -65,7 +65,7 @@ FX_CODES = {
 async def create_user_and_login(
     client: httpx.AsyncClient,
 ) -> None:
-    username = f"signal_catalog_{int(time.time() * 1000)}_" f"{uuid.uuid4().hex[:6]}"
+    username = f"signal_catalog_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
     password = "TestPass123!"
     register = await client.post(
         f"{API_BASE}/auth/register",

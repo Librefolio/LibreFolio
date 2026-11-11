@@ -13,7 +13,7 @@ from datetime import date as date_type
 
 import structlog
 
-from backend.app.schemas.signals import SignalResult
+from backend.app.schemas.signals.result import SignalResult
 from backend.app.services.assets.price_sampling import SampleResolution
 from backend.app.services.signals.aggregation import align_signal_series, sample_signal_series
 from backend.app.services.signals.registry import SignalPluginRegistry

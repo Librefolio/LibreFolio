@@ -8,28 +8,10 @@ import pandas as pd
 import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
-from backend.app.schemas.signals import (
-    SignalAggregationProfile,
-    SignalAiExportTemporalRule,
-    SignalAxisRole,
-    SignalAxisSpec,
-    SignalBandPoint,
-    SignalBandSeries,
-    SignalCategory,
-    SignalComputation,
-    SignalDomain,
-    SignalEventPoint,
-    SignalExecutionContext,
-    SignalInputRequirements,
-    SignalOutputSpec,
-    SignalPriceField,
-    SignalPricePoint,
-    SignalSeriesKind,
-    SignalTemporalClass,
-    SignalUnit,
-    SignalViewTransform,
-    SignalWarmupRequirement,
-)
+from backend.app.schemas.signals.inputs import SignalEventPoint, SignalExecutionContext, SignalInputRequirements, SignalPricePoint, SignalWarmupRequirement
+from backend.app.schemas.signals.outputs import SignalAxisSpec, SignalBandPoint, SignalBandSeries, SignalOutputSpec
+from backend.app.schemas.signals.result import SignalAiExportTemporalRule, SignalComputation
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalAxisRole, SignalCategory, SignalDomain, SignalPriceField, SignalSeriesKind, SignalTemporalClass, SignalUnit, SignalViewTransform
 from backend.app.services.provider_registry import register_plugin
 from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry

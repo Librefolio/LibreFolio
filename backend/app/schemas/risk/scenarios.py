@@ -80,7 +80,6 @@ class RiskScenarioLocalizedText(RootModel[Dict[str, str]]):
 
 
 class RiskHistoricalReplayDefaults(StrictModel):
-
     start: Optional[date] = None
     end: Optional[date] = None
     missing_history_policy: RiskScenarioMissingHistoryPolicy = RiskScenarioMissingHistoryPolicy.MANUAL_PROXY_OR_EXCLUDE
@@ -96,7 +95,6 @@ class RiskHistoricalReplayDefaults(StrictModel):
 
 
 class RiskHistoricalReplayEditable(StrictModel):
-
     dates: bool = True
     missing_history_policy: bool = True
     proxies: bool = True
@@ -104,7 +102,6 @@ class RiskHistoricalReplayEditable(StrictModel):
 
 
 class RiskHistoricalReplayLimits(StrictModel):
-
     minimum_calendar_days: PositiveInt = 1
     maximum_calendar_days: Optional[PositiveInt] = None
 
@@ -116,7 +113,6 @@ class RiskHistoricalReplayLimits(StrictModel):
 
 
 class RiskHypotheticalShockDefaults(StrictModel):
-
     dimension: RiskScenarioDimension
     bucket_shocks: Dict[str, FiniteFloat] = Field(..., min_length=1, max_length=100)
 
@@ -137,14 +133,12 @@ class RiskHypotheticalShockDefaults(StrictModel):
 
 
 class RiskHypotheticalShockEditable(StrictModel):
-
     dimension: bool = False
     bucket_shocks: bool = True
     manual_overrides: bool = True
 
 
 class RiskHypotheticalShockLimits(StrictModel):
-
     minimum_shock: FiniteFloat = -1.0
     maximum_shock: FiniteFloat = 1.0
     maximum_buckets: PositiveInt = 100
@@ -157,7 +151,6 @@ class RiskHypotheticalShockLimits(StrictModel):
 
 
 class RiskScenarioBase(StrictModel):
-
     schema_version: Literal[RISK_SCENARIO_SCHEMA_VERSION]
     id: str = Field(..., min_length=1, max_length=80)
     kind: RiskScenarioKind
@@ -238,21 +231,18 @@ RiskScenarioDefinition = Annotated[
 
 
 class RiskScenarioCatalogEntry(StrictModel):
-
     source: RiskScenarioSource
     source_file: str
     scenario: RiskScenarioDefinition
 
 
 class RiskScenarioCatalogWarning(StrictModel):
-
     code: str = Field(..., min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     source_file: str
     message: str
 
 
 class RiskGeographyGroupDefinition(StrictModel):
-
     schema_version: Literal[RISK_SCENARIO_SCHEMA_VERSION]
     id: str = Field(..., min_length=1, max_length=80)
     name: RiskScenarioLocalizedText
@@ -277,7 +267,6 @@ class RiskGeographyGroupDefinition(StrictModel):
 
 
 class RiskScenarioCatalogStatus(StrictModel):
-
     schema_version: Literal[RISK_SCENARIO_SCHEMA_VERSION] = RISK_SCENARIO_SCHEMA_VERSION
     loaded_at: datetime
     built_in_count: int = Field(..., ge=0)
@@ -293,7 +282,6 @@ class RiskScenarioCatalogStatus(StrictModel):
 
 
 class RiskScenarioCatalogResponse(StrictModel):
-
     items: List[RiskScenarioCatalogEntry] = Field(default_factory=list)
     geography_groups: List[RiskGeographyGroupDefinition] = Field(default_factory=list)
     status: RiskScenarioCatalogStatus

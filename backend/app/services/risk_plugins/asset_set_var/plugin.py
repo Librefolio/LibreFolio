@@ -4,15 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.schemas.risk import (
-    RiskAssetSetVarCvarItem,
-    RiskAssetSetVarCvarOutput,
-    RiskErrorCode,
-    RiskMode,
-    RiskOutputKind,
-    RiskScopeKind,
-    RiskWorstHorizonWindow,
-)
+from backend.app.schemas.risk.outputs import RiskAssetSetVarCvarItem, RiskAssetSetVarCvarOutput, RiskWorstHorizonWindow
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.financial_math.returns import calendar_days_to_observations
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import register_plugin

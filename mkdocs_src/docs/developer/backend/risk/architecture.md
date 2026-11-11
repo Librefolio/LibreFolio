@@ -37,8 +37,8 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | Source | Responsibility |
 |---|---|
 | `backend/app/api/v1/risk.py` | The four routes; maps scope errors to 403 and 404. |
-| `backend/app/schemas/risk.py` | Request, scope, result, metadata and output contracts, and every enum (`RiskMode`, `RiskResultStatus`, `RiskErrorCode`, `RiskOutputKind`, …). |
-| `backend/app/schemas/risk_scenarios.py` | Typed scenario catalogue contracts. |
+| `backend/app/schemas/risk/` | Request, scope, result, metadata and output contracts, and every enum (`RiskMode`, `RiskResultStatus`, `RiskErrorCode`, `RiskOutputKind`, …). |
+| `backend/app/schemas/risk/scenarios.py` | Typed scenario catalogue contracts. |
 | `backend/app/services/risk/service.py` | `RiskService`: `execute()` orchestrates a query through the five modules below (pre-flight, gates, per-analytic isolation, the `failed` envelope); `asset_eligibility()` gives the eligibility verdicts; `catalog()` lists the analytics. |
 | `backend/app/services/risk/plan.py` | `AnalyticPlan` — a requested analytic with its plugin and validated parameters — and the predicates on the kind of calculation it asks for (`is_historical_replay_plan()`, `is_hypothetical_plan()`, `is_geography_hypothetical_plan()`, `reads_the_twrr_alone()`). |
 | `backend/app/services/risk/scope.py` | The scope: access, holdings and weights (`load_scope_inputs()` into `ScopeInputs`), the asset lookups, the bulk price load (`prepare_asset_series()`), the exclusions (`scope_exclusions()`); `RiskScopeAccessError` and `RiskScopeNotFoundError`, which the API maps to 403 and 404. |

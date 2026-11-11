@@ -24,12 +24,7 @@ from typing import Any, get_args
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas.signals import (
-    SignalAggregationProfile,
-    SignalSeriesKind,
-    SignalStatus,
-    SignalTemporalClass,
-)
+from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalSeriesKind, SignalStatus, SignalTemporalClass
 from backend.app.services.ai_export.components import technical_payloads
 from backend.app.services.ai_export.components.technical_payloads import (
     AssetOhlcReturnsPayload,
