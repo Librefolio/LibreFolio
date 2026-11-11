@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔄 Changed
 
 - Scalable Capital: a tax given back (a negative tax on a sale, or a positive Taxes row) is now imported as Interest «Tax refund» instead of a Deposit: it is money returned from your investment's gain, so it counts in your returns. Transactions imported before keep their type.
+- The admin guide now opens the backup chapter with a quick start for making a backup from the app, with screenshots: the command line is no longer the first thing you see.
 
 ### 🐛 Fixed
 
