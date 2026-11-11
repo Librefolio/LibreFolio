@@ -219,7 +219,7 @@ process, once for the module, then copied per test —: the models do not declar
 ``broker_user_access`` has in ``001_initial``, and a deletion relies on it. The BRIM report directory moves under
 ``tmp_path`` there, because private broker ids start at 1 like the lane's, and ``delete_files_for_brokers`` is replaced
 by a spy. Assumed: the routes reach the hook as ``user_service.account_protection`` and the report cleanup as
-``brim_provider.delete_files_for_brokers`` or a name ``user_service`` imported, the two names the spy replaces.
+``storage.delete_files_for_brokers`` or a name ``user_service`` imported, the two names the spy replaces.
 
 A7b's cases run in-process only, on the private instance of ``create_all``. A pending administrator is an inactive
 superuser that ``pending_admin``, ``issue_setup_link`` and ``user_usage`` read: in the lane's database every concurrent
@@ -377,7 +377,7 @@ from backend.app.services.accounts.bootstrap_admin_service import BootstrapActio
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, hash_token, inspect_token, issue_token, revoke_tokens
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.email import verification as email_verification
 from backend.app.utils.datetime_utils import utcnow
@@ -2336,7 +2336,7 @@ async def private_head(head_template: Path, tmp_path: Path, monkeypatch: pytest.
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
     reports = tmp_path / "broker_reports"
-    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: reports)
+    monkeypatch.setattr(storage, "get_broker_reports_dir", lambda: reports)
     database = tmp_path / "instance.db"
     with contextlib.closing(sqlite3.connect(head_template)) as source, contextlib.closing(sqlite3.connect(database)) as copy:
         source.backup(copy)
@@ -2370,7 +2370,7 @@ def _spy_on_report_cleanup(monkeypatch: pytest.MonkeyPatch) -> list[list[int]]:
         calls.append([int(broker_id) for broker_id in broker_ids])
         return FILES_REMOVED
 
-    monkeypatch.setattr(brim_provider, "delete_files_for_brokers", delete_files_for_brokers)
+    monkeypatch.setattr(storage, "delete_files_for_brokers", delete_files_for_brokers)
     monkeypatch.setattr(user_service, "delete_files_for_brokers", delete_files_for_brokers, raising=False)
     return calls
 

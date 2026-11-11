@@ -15,8 +15,8 @@ with ``test_``.
 import os
 import sys
 
-#: Unpickling ``brim_provider.parse_file`` drags this module into a worker that lacks it, and the first parse pays for it.
-BRIM_MODULE = "backend.app.services.brim.brim_provider"
+#: Unpickling ``parsing.parse_file`` drags this module into a worker that lacks it, and the first parse pays for it.
+BRIM_MODULE = "backend.app.services.brim.parsing"
 #: The module of ``BRIMProviderRegistry``, read here through ``sys.modules`` only.
 REGISTRY_MODULE = "backend.app.services.brim.registry"
 #: A plugin module, loaded only by the registry's discovery: the one the parse tests use. The first parse discovers every
