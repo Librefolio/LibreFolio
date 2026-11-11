@@ -856,6 +856,15 @@ transaction breaks these rules, so flip source signs as needed:
     key on purpose, and `test_no_i18n_key_overrides_the_language_of_the_file`
     (`test_brim_degiro.py`) fails if one is added.
 
+    **An info note the user must read is in the four languages** (the developer, 11/11/2026). A
+    note that explains what the import did on purpose — a tax refund booked as interest, rows not
+    settled yet, rows of another account left out — gets both keys, `importWizard.brimNotice.<code>`
+    and `importWizard.brimEvidence.<code>`, in the four catalogues, whatever the file's language: the
+    plugin's own `message` and `comment` stay as the English fallback. Trade Republic's three notes
+    (`traderepublic_tax_refund`, `traderepublic_not_yet_settled`, `traderepublic_other_account`) and
+    the Scalable notices follow it; the notes of the plugins written before the rule (DEGIRO, Fineco,
+    Crédit Agricole, Danske Bank) keep the file's language until they are revisited.
+
     Field todos follow the same rule, keyed by their `reason_code` under the same namespace
     and resolved by `resolveBrimTodoMessage` (same file), wherever the wizard and the bulk
     editor list them. A todo is worth a key only when its message has no file language to

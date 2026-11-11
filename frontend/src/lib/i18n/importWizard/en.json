@@ -209,7 +209,9 @@
       "date_before_1900": "The date {date} is before 1 January 1900: check the year.",
       "date_unreadable": "Row {row}: {value} is not a valid date in the format {order, select, day_first {dd/mm/yyyy} month_first {mm/dd/yyyy} day_first_short {dd/mm/yy} month_first_short {mm/dd/yy} year_first_short {yy/mm/dd} year_first {yyyy-mm-dd} other {dd/mm/yyyy}}. Fix the date in the file, or change the format in Settings › Plugins › Broker imports › Generic CSV › “Date format”, then press “Re-parse all”.",
       "date_unreadable_more": "{n, plural, one {# more row has} other {# more rows have}} a date that is not valid in this format: the same fix applies.",
-      "traderepublic_other_account": "{count, plural, one {# row belongs} other {# rows belong}} to another account, such as a child's JUNIOR account, and {count, plural, one {was} other {were}} ignored: export that account from its own login and import it into a separate broker."
+      "traderepublic_other_account": "{count, plural, one {# row belongs} other {# rows belong}} to another account, such as a child's JUNIOR account, and {count, plural, one {was} other {were}} ignored: export that account from its own login and import it into a separate broker.",
+      "traderepublic_tax_refund": "{count, plural, one {# tax refund was imported as interest} other {# tax refunds were imported as interest}} («Tax refund»): money given back from the investment's gain, so it counts in the P&L.",
+      "traderepublic_not_yet_settled": "{count, plural, one {# row is dated after today: it is not settled yet and was left out} other {# rows are dated after today: they are not settled yet and were left out}}. They will come with the next export."
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
@@ -565,7 +567,9 @@
       "fineco_incomplete_rows": "The last column names the field without a number; the row is imported as it is.",
       "rows_not_recognized": "The last column says what each row is, or what of it was not imported.",
       "rows_unreadable": "The last column says what could not be read on each row.",
-      "traderepublic_other_account": "The account_type column is not DEFAULT on these rows."
+      "traderepublic_other_account": "The account_type column is not DEFAULT on these rows.",
+      "traderepublic_tax_refund": "A positive tax is money given back.",
+      "traderepublic_not_yet_settled": "The date (or value_date) of these rows is after today."
     },
     "notesCount": "{n, plural, one {# note} other {# notes}}",
     "noNotices": "No warnings or notes",

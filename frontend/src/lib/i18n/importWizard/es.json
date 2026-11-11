@@ -209,7 +209,9 @@
       "date_before_1900": "La fecha {date} es anterior al 1 de enero de 1900: comprueba el año.",
       "date_unreadable": "Fila {row}: {value} no es una fecha válida en el formato {order, select, day_first {dd/mm/aaaa} month_first {mm/dd/aaaa} day_first_short {dd/mm/aa} month_first_short {mm/dd/aa} year_first_short {aa/mm/dd} year_first {aaaa-mm-dd} other {dd/mm/aaaa}}. Corrige la fecha en el archivo, o cambia el formato en Configuración › Plugins › Importaciones de brókeres › CSV genérico › «Formato de las fechas» y luego pulsa «Reanalizar todos».",
       "date_unreadable_more": "{n, plural, one {# fila más tiene} other {# filas más tienen}} una fecha no válida en este formato: vale la misma corrección.",
-      "traderepublic_other_account": "{count, plural, one {# fila pertenece} other {# filas pertenecen}} a otra cuenta, por ejemplo la cuenta JUNIOR de un hijo, y {count, plural, one {se ha ignorado} other {se han ignorado}}: exporta esa cuenta desde su propio acceso e impórtala en un bróker aparte."
+      "traderepublic_other_account": "{count, plural, one {# fila pertenece} other {# filas pertenecen}} a otra cuenta, por ejemplo la cuenta JUNIOR de un hijo, y {count, plural, one {se ha ignorado} other {se han ignorado}}: exporta esa cuenta desde su propio acceso e impórtala en un bróker aparte.",
+      "traderepublic_tax_refund": "{count, plural, one {# devolución de impuestos se importó como interés} other {# devoluciones de impuestos se importaron como intereses}} («Tax refund»): es dinero devuelto de la ganancia de la inversión, así que cuenta en el P&L.",
+      "traderepublic_not_yet_settled": "{count, plural, one {# fila tiene una fecha posterior a hoy: aún no está liquidada y se ha dejado fuera} other {# filas tienen una fecha posterior a hoy: aún no están liquidadas y se han dejado fuera}}. Llegarán con la próxima exportación."
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",
@@ -565,7 +567,9 @@
       "fineco_incomplete_rows": "La última columna nombra el campo sin número; la fila se importa tal cual.",
       "rows_not_recognized": "La última columna dice qué es cada fila, o qué no se importó.",
       "rows_unreadable": "La última columna dice qué no se pudo leer en cada fila.",
-      "traderepublic_other_account": "En estas filas la columna account_type no es DEFAULT."
+      "traderepublic_other_account": "En estas filas la columna account_type no es DEFAULT.",
+      "traderepublic_tax_refund": "Un impuesto positivo es dinero devuelto.",
+      "traderepublic_not_yet_settled": "La fecha (o la value_date) de estas filas es posterior a hoy."
     },
     "notesCount": "{n, plural, one {# nota} other {# notas}}",
     "noNotices": "Sin advertencias ni notas",
