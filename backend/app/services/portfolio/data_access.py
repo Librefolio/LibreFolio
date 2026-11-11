@@ -17,12 +17,12 @@ from backend.app.db.models import (
     Transaction,
     TransactionType,
 )
-from backend.app.schemas.common import DateSpan, is_canonical_iso_currency
+from backend.app.schemas.common import is_canonical_iso_currency
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.accounts.settings_service import get_effective_base_currency
+from backend.app.services.financial_math import fx_rates
 from backend.app.services.financial_math.holding_window import closing_move
 from backend.app.services.portfolio import engine_facts
-from backend.app.utils.day_spans import merged_spans
 
 
 class PortfolioDataMixin:
@@ -190,7 +190,7 @@ class PortfolioDataMixin:
         for item in items:
             merged[item.pair].update(item.dates)
             spans[item.pair].extend((span.start, span.end) for span in item.ranges)
-        return [WACMissingPairInfo(pair=pair, dates=sorted(dates), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans[pair])]) for pair, dates in sorted(merged.items())]
+        return fx_rates.missing_pair_infos(merged, spans)
 
     async def _get_configured_fx_pair_sets(self) -> tuple[set[str], set[str]]:
         from backend.app.services.financial_math.portfolio.data_quality import load_configured_fx_pair_sets  # noqa: PLC0415 — same lazy engine import as the methods below

@@ -16,6 +16,7 @@ from backend.app.schemas.portfolio.data_quality import DataQualityIssue, DataQua
 from backend.app.schemas.portfolio.lots import GanttSegmentSchema, LotAnalysisStatus, LotAnalysisType, LotsAnalysisMetadata, LotsAnalysisResponse, LotSummarySchema, LotTimelineEventKind, LotTimelineEventSchema
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.accounts.settings_service import get_effective_base_currency
+from backend.app.services.financial_math import fx_rates
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, ReferencePriceResolution, fails_the_replay
@@ -45,7 +46,6 @@ from backend.app.services.financial_math.price_marks import AssetPriceSeries, Ma
 from backend.app.services.financial_math.splits import load_split_links
 from backend.app.services.financial_math.valuation import normalize_quote_base_quantity
 from backend.app.utils.datetime_utils import latest_range_end
-from backend.app.utils.day_spans import merged_spans
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,
@@ -836,8 +836,7 @@ class LotsAnalysisService:
         if not dates_by_pair and not spans_by_pair and not unknown_cost:
             return
         # The movements' dates, and the valuation days with no rate as ranges (D-P4)
-        pairs = sorted({*dates_by_pair, *spans_by_pair})
-        missing_pairs = [WACMissingPairInfo(pair=pair, dates=sorted(dates_by_pair.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans_by_pair.get(pair, ()))]) for pair in pairs]
+        missing_pairs = fx_rates.missing_pair_infos(dates_by_pair, spans_by_pair)
         configured_pairs, real_provider_pairs = await load_configured_fx_pair_sets(self.db) if missing_pairs else (set(), set())
         gap_report = build_data_quality_report(
             [],
