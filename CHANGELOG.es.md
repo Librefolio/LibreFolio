@@ -9,6 +9,24 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### 🐛 Corregido
+
+- Subir un archivo `.json` ya no pierde su contenido, y los archivos con una extensión inusual o muy larga se guardan de forma segura.
+- Las listas de Divisas, Archivos y Activos ya no se vacían para mostrar un indicador de carga tras actualizar o editar: se quedan en pantalla mientras llegan los datos nuevos.
+- Cambiar de pestaña en la página de un activo mantiene el rango de fechas que elegiste.
+- En el paso «Correcciones» de la importación, un posible desdoblamiento muestra el ticker y la cantidad en lugar de los marcadores sin rellenar.
+- Escape dentro del menú de AI Export cierra solo el menú, no el panel de debajo.
+- Tras Escape o una elección en una lista de dos niveles (como el tipo de activo), el foco del teclado vuelve al campo.
+- Las confirmaciones con muchos elementos escriben su número en tu idioma.
+- Bonos de Borsa Italiana: el vencimiento en la descripción ahora es correcto en las páginas en inglés y para vencimientos posteriores a 2068. Un activo ya guardado con una fecha errónea se corrige pidiendo de nuevo sus metadatos a su proveedor.
+- Ajustes › Acerca de ahora también lista los plugins de Riesgo y Herramientas que no se cargan.
+- Mientras el Panel espera para recargarse tras un cambio del filtro de bróker, muestra que está trabajando en lugar de mantener en silencio los totales antiguos.
+- En el gráfico de comparación de lotes, el trazo discontinuo de la leyenda «estimado al coste» tiene el mismo color que su línea.
+- Los botones del programador que quitan un horario tienen un nombre traducido para los lectores de pantalla.
+- «Analizar Lotes» ahora se desplaza hasta el final hacia el panel de lotes también en máquinas lentas.
+- El comando de copia de seguridad lee `--password-file` y `--instance-key-file` con una sola apertura: un archivo cambiado después de la comprobación ya no puede leerse en su lugar.
+
+- En una instancia bloqueada por su proveedor de alojamiento, el administrador también ve las «Copias de seguridad ya guardadas» y puede descargarlas, no solo hacer una nueva.
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** es la versión para quien gestiona la instancia: da al administrador lo necesario para abrir LibreFolio a su familia y amigos, y para mantenerlo seguro.

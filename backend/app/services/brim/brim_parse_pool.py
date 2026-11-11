@@ -3,7 +3,7 @@ Off-loading for BRIM file parsing.
 
 ## Why this module exists
 
-``brim_provider.parse_file`` reads a CSV or a PDF and turns it into transactions. It is
+``parsing.parse_file`` reads a CSV or a PDF and turns it into transactions. It is
 plain synchronous code, and it was being called straight from an ``async def`` endpoint.
 Two consequences, both invisible until several files are imported at once:
 
@@ -57,7 +57,7 @@ import structlog
 
 from backend.app.config.brim import BrimConfigError, brim_prewarm_enabled
 from backend.app.schemas.brim import BRIMParseOutput
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import parsing
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.plugin_settings.runtime import bound_settings_for
@@ -172,12 +172,12 @@ async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int, *
 
 
 async def _parse_offloaded(args: tuple) -> BRIMParseOutput:
-    """``brim_provider.parse_file(*args)`` on the pool, or on a thread when the pool is out."""
+    """``parsing.parse_file(*args)`` on the pool, or on a thread when the pool is out."""
     pool = _get_pool()
     if pool is not None:
         loop = asyncio.get_running_loop()
         try:
-            future = loop.run_in_executor(pool, brim_provider.parse_file, *args)
+            future = loop.run_in_executor(pool, parsing.parse_file, *args)
         except Exception as exc:  # pragma: no cover - environment dependent
             # Submitting is our own machinery: a failure here is never the parser's.
             _disable_pool(exc)
@@ -189,7 +189,7 @@ async def _parse_offloaded(args: tuple) -> BRIMParseOutput:
                 # re-raised untouched, because turning "unsupported layout" into a silent
                 # retry would hide the only useful message the user gets.
                 _disable_pool(exc)
-    return await asyncio.to_thread(brim_provider.parse_file, *args)
+    return await asyncio.to_thread(parsing.parse_file, *args)
 
 
 def _disable_pool(exc: BaseException) -> None:

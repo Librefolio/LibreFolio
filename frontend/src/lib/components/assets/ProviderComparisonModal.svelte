@@ -237,7 +237,7 @@
             .map(([key, val]) => ({
                 key,
                 pct: formatPercent(val as number, {scale: 100, signed: false}),
-                hook: `${((val as number) * 100).toFixed(2)}%`,
+                hook: formatPercent(val as number, {scale: 100, signed: false, locale: 'en'}),
             }));
     }
 

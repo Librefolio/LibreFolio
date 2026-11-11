@@ -1,4 +1,4 @@
-"""Uploaded content reaches the browser only as types that cannot run (``backend/app/api/v1/uploads.py``, ``backend/app/api/v1/brokers.py``).
+"""Uploaded content reaches the browser only as types that cannot run (``backend/app/api/v1/uploads.py``, ``backend/app/api/v1/brokers/``).
 
 Two routes send back a file that a user uploaded:
 
@@ -33,6 +33,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 
 import backend.app.api.v1.brokers as brokers
+import backend.app.api.v1.brokers.files as broker_files
 import backend.app.api.v1.uploads as uploads
 from backend.app.services.files.static_uploads import get_uploads_dir
 
@@ -159,8 +160,8 @@ def brim_app() -> FastAPI:
     """The broker import router on a fresh app, signed in, with no session: the global app is left untouched."""
     app = FastAPI()
     app.include_router(brokers.brim_router, prefix="/api/v1")
-    app.dependency_overrides[brokers.get_current_user] = lambda: SIGNED_IN
-    app.dependency_overrides[brokers.get_session_generator] = lambda: None
+    app.dependency_overrides[broker_files.get_current_user] = lambda: SIGNED_IN
+    app.dependency_overrides[broker_files.get_session_generator] = lambda: None
     return app
 
 
@@ -177,8 +178,8 @@ def store_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                 raise HTTPException(status_code=404, detail="File not found")
             return SimpleNamespace(filename=filename, target_broker_id=None)
 
-        monkeypatch.setattr(brokers, "_get_brim_file_with_access", file_with_access)
-        monkeypatch.setattr(brokers.brim_provider, "get_file_path", lambda file_id: path if file_id == REPORT_ID else None)
+        monkeypatch.setattr(broker_files, "get_brim_file_with_access", file_with_access)
+        monkeypatch.setattr(broker_files.storage, "get_file_path", lambda file_id: path if file_id == REPORT_ID else None)
         return REPORT_ID
 
     return store

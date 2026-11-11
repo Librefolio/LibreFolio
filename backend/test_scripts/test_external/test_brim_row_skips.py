@@ -41,7 +41,7 @@ import pytest
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput
-from backend.app.services.brim.brim_provider import write_combined_csv
+from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as brim_io
 from scripts.i18n_catalog import load_catalog

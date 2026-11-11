@@ -20,3 +20,12 @@ export function buildTabUrl(currentUrl: URL, tabId: string | null | undefined): 
     const search = params.toString();
     return search ? `${currentUrl.pathname}?${search}` : currentUrl.pathname;
 }
+
+/**
+ * The tab URL built from the address bar instead of SvelteKit's `$page.url`. A page that writes its dates with
+ * `history.replaceState` (`replaceHistoryDateRange`) changes the bar but not `$page.url`, so building from `$page.url`
+ * puts the old dates back on a tab change (K-20).
+ */
+export function buildTabUrlFromLocation(currentHref: string, tabId: string | null | undefined): string {
+    return buildTabUrl(new URL(currentHref), tabId);
+}

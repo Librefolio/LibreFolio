@@ -6,6 +6,7 @@
     import {auth} from '$lib/stores/app/auth';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import BackupDownloadCard from '$lib/features/backup/BackupDownloadCard.svelte';
+    import BackupList from '$lib/features/backup/BackupList.svelte';
     import ToastContainer from '$lib/components/ui/feedback/ToastContainer.svelte';
     import {instanceBlock} from '../instanceBlock.svelte';
 
@@ -86,6 +87,11 @@
             <section class="rounded-2xl border border-lf-subtle bg-lf-card p-4 shadow-xl sm:p-6" aria-labelledby="instance-blocked-backup-title" data-testid="instance-blocked-backup">
                 <h2 id="instance-blocked-backup-title" class="mb-3 text-base font-semibold text-lf-primary">{$_('instance.block.backupTitle')}</h2>
                 <BackupDownloadCard />
+                <!-- FB-24: the backups already kept, to download (or delete): the instance is blocked, so no restore, and no storage bar -->
+                <div class="mt-5 space-y-2 border-t border-lf-subtle pt-4" data-testid="instance-blocked-kept-backups">
+                    <h3 class="text-sm font-semibold text-lf-primary">{$_('instance.block.keptBackupsTitle')}</h3>
+                    <BackupList allowRestore={false} />
+                </div>
             </section>
         {/if}
     </div>

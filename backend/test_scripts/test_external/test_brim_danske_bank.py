@@ -81,7 +81,8 @@ from backend.app.schemas.brim import COMBINED_REQUIRED_HEADERS, BRIMCombinedTabl
 from backend.app.schemas.common import DateRangeModel
 from backend.app.services.brim import brim_report_sets
 from backend.app.services.brim.brim_gap_fix import compute_gap_fix
-from backend.app.services.brim.brim_provider import BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.services.brim.brim_provider import BRIMProvider, BRIMSetRequiredError
+from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 
 # =============================================================================

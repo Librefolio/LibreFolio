@@ -345,6 +345,29 @@ describe('TreeSelect — beyond the signals picker', () => {
         });
     });
 
+    describe('focus after closing (K-23)', () => {
+        it('Escape returns the focus to the field, not to <body>', async () => {
+            const {trigger} = mount();
+            const input = await openByClick(trigger);
+            expect(document.activeElement).toBe(input);
+
+            await fireEvent.keyDown(input, {key: 'Escape'});
+
+            expect(trigger).toHaveAttribute('aria-expanded', 'false');
+            await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+        });
+
+        it('choosing a row with Enter returns the focus to the field too', async () => {
+            const {trigger} = mount();
+            const input = await openByClick(trigger);
+
+            await fireEvent.keyDown(input, {key: 'Enter'});
+
+            expect(trigger).toHaveAttribute('aria-expanded', 'false');
+            await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+        });
+    });
+
     describe('defaultExpanded', () => {
         it("'first', the default, opens the first collapsible group, skipping the inline run in front of it", async () => {
             const {trigger} = mount();

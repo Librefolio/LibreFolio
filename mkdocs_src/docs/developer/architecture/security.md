@@ -1664,7 +1664,7 @@ All other endpoints — including Auth (profile, password), Settings (user setti
     fallback of the file preview, an `<iframe>`, shows the file instead of downloading it (H6-2). Any other type (HTML, SVG,
     XML…) and every request with `?download=true` are an `attachment`: a type that can carry active content is never
     shown on the app's own address. Every response carries `X-Content-Type-Options: nosniff`. The broker report route
-    (`GET /brokers/import/files/{id}/download`, `backend/app/api/v1/brokers.py`) imports the same list, so the two routes
+    (`GET /brokers/import/files/{id}/download`, `backend/app/api/v1/brokers/files.py`) imports the same list, so the two routes
     cannot disagree about what is safe to show.
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
@@ -3462,7 +3462,7 @@ document too, in every profile, and two switches add more, off on a self-hosted 
 - **A header the route set is kept.** The middleware adds a header only when the response has none of that name, in
   any case: a route's `Referrer-Policy: no-referrer` stays, and the `nosniff` that the file routes of the uploads
   (`backend/app/api/v1/uploads.py`: the text preview and `serve_file()`) and the download of a broker report
-  (`backend/app/api/v1/brokers.py`) set themselves is not repeated. Names are compared whole, never by prefix: `content-security-policy` is a prefix of
+  (`backend/app/api/v1/brokers/files.py`) set themselves is not repeated. Names are compared whole, never by prefix: `content-security-policy` is a prefix of
   `content-security-policy-report-only`, so a prefix check would let a route's report-only policy suppress the enforced
   one, or the reverse. A route that sets its own `X-Frame-Options`, `Content-Security-Policy` or
   `Content-Security-Policy-Report-Only` keeps it alone, and the middleware still adds the others. WebSocket and

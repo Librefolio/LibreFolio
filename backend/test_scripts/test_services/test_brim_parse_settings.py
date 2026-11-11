@@ -2,7 +2,7 @@
 
 Modules under test: ``services/brim/brim_parse_pool.py`` (``parse_file_offloaded``), ``services/brim/brim_provider.py``
 (``parse_file``), ``services/plugin_settings/runtime.py`` (``bound_settings_for``) and the parse endpoint of
-``api/v1/brokers.py``. The contract pinned here:
+``api/v1/brokers/``. The contract pinned here:
 
 1. **A plugin that declares no field is parsed exactly as before** (every real BRIM plugin): ``parse_file`` is called with
    the same three positional arguments and no keyword, whether or not the caller says which user it is parsing for, and
@@ -45,12 +45,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.pool import NullPool
 from structlog.testing import capture_logs
 
-from backend.app.api.v1 import brokers as brokers_api
+from backend.app.api.v1.brokers import parse as brokers_api
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import PluginSystemSetting, PluginUserSetting, User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.brim import BRIMParseOutput, BRIMParseRequest
-from backend.app.services.brim import brim_parse_pool, brim_provider
+from backend.app.services.brim import brim_parse_pool, parsing, storage
 from backend.app.services.brim.brim_provider import BRIMParseError
 from backend.app.services.plugin_settings import resolver, runtime
 from backend.app.services.plugin_settings.contract import BoundSettings
@@ -99,8 +99,8 @@ def uploaded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """A file uploaded under ``tmp_path`` (the reports directory is redirected): its id."""
     reports = tmp_path / "broker_reports"
     reports.mkdir()
-    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: reports)
-    return brim_provider.save_uploaded_file(b"date,amount\n2026-01-01,10\n", "generic_simple.csv", user_id=1, broker_id=BROKER_ID).file_id
+    monkeypatch.setattr(storage, "get_broker_reports_dir", lambda: reports)
+    return storage.save_uploaded_file(b"date,amount\n2026-01-01,10\n", "generic_simple.csv", user_id=1, broker_id=BROKER_ID).file_id
 
 
 @pytest.fixture
@@ -175,7 +175,7 @@ async def rows(private_engine: AsyncEngine) -> dict[str, Any]:
 
 
 class _Spy:
-    """A stand-in for ``brim_provider.parse_file``: records each call as ``(args, kwargs)`` and answers an empty parse."""
+    """A stand-in for ``parsing.parse_file``: records each call as ``(args, kwargs)`` and answers an empty parse."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[tuple, dict]] = []
@@ -202,7 +202,7 @@ async def test_a_plugin_without_fields_is_parsed_exactly_as_before(extra: dict, 
     is never reached. Red today for the calls that name a user: ``parse_file_offloaded`` has no ``user_id``."""
     print_section(f"1: no field, {extra or 'the legacy call'}")
     spy = _Spy()
-    monkeypatch.setattr(brim_provider, "parse_file", spy)
+    monkeypatch.setattr(parsing, "parse_file", spy)
     monkeypatch.setattr(runtime, "get_async_engine", _no_database)
 
     output = await brim_parse_pool.parse_file_offloaded("a-file-id", REAL_PLUGIN, BROKER_ID, **extra)
@@ -231,7 +231,7 @@ async def test_a_plugin_with_fields_gets_its_settings_handed_to_parse_file(lab_p
     defaults; the instance's region and secret reach all three."""
     print_section("2: the parent resolves, parse_file receives")
     spy = _Spy()
-    monkeypatch.setattr(brim_provider, "parse_file", spy)
+    monkeypatch.setattr(parsing, "parse_file", spy)
 
     for user_id in (rows["alice"], rows["bob"], None):
         await brim_parse_pool.parse_file_offloaded("a-file-id", BRIM_CODE, BROKER_ID, user_id=user_id)
@@ -256,8 +256,8 @@ async def test_parse_file_binds_the_settings_it_is_given_before_the_plugin_parse
     secret = _marker()
     bound = BoundSettings(brim_lab.SETTINGS_FIELDS, {"region": "us", "statement_language": "it"}, {"api_key": secret}, fingerprint="fp")
 
-    brim_provider.parse_file(uploaded, BRIM_CODE, BROKER_ID, settings=bound)
-    brim_provider.parse_file(uploaded, BRIM_CODE, BROKER_ID)
+    parsing.parse_file(uploaded, BRIM_CODE, BROKER_ID, settings=bound)
+    parsing.parse_file(uploaded, BRIM_CODE, BROKER_ID)
 
     given, unbound = brim_lab.SettingsBrimPlugin.seen
     assert given is bound, "the plugin reads the very BoundSettings the child was given"
@@ -273,9 +273,9 @@ async def test_parse_file_holds_the_secrets_in_flight_for_the_length_of_the_pars
     in_flight: list[frozenset[str]] = []
     monkeypatch.setattr(brim_lab.SettingsBrimPlugin, "on_parse", lambda _bound: in_flight.append(active_secrets()))
 
-    brim_provider.parse_file(uploaded, BRIM_CODE, BROKER_ID, settings=bound)
+    parsing.parse_file(uploaded, BRIM_CODE, BROKER_ID, settings=bound)
     assert active_secrets() == frozenset(), "the secrets are in flight for the parse only"
-    brim_provider.parse_file(uploaded, BRIM_CODE, BROKER_ID)
+    parsing.parse_file(uploaded, BRIM_CODE, BROKER_ID)
 
     assert in_flight == [frozenset({secret, token}), frozenset()]
 
@@ -373,8 +373,8 @@ async def test_the_parse_endpoint_passes_the_calling_user_to_the_offloaded_parse
         seen["args"], seen["kwargs"] = args, kwargs
         raise _Stop
 
-    monkeypatch.setattr(brokers_api, "_get_brim_file_with_access", access)
-    monkeypatch.setattr(brokers_api, "_require_broker_editor", editor)
+    monkeypatch.setattr(brokers_api, "get_brim_file_with_access", access)
+    monkeypatch.setattr(brokers_api, "require_broker_editor", editor)
     monkeypatch.setattr(brokers_api, "_refuse_report_set_member", lambda _code, _info: None)
     monkeypatch.setattr(brokers_api, "parse_file_offloaded", offloaded)
 

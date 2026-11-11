@@ -9,6 +9,24 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ## [Unreleased]
 
+### 🐛 Corretto
+
+- Caricare un file `.json` non ne perde più il contenuto, e i file con un'estensione insolita o molto lunga vengono salvati in modo sicuro.
+- Le liste di Cambi, File e Asset non si svuotano più mostrando la rotellina dopo un aggiornamento o una modifica: restano a schermo mentre arrivano i dati nuovi.
+- Cambiare scheda nella pagina di un asset mantiene l'intervallo di date che hai scelto.
+- Nel passo «Correzioni» dell'import, un possibile frazionamento mostra il ticker e la quantità invece dei segnaposti grezzi.
+- Esc dentro il menu dell'AI Export chiude solo il menu, non il pannello sotto.
+- Dopo Esc o una scelta in un elenco a due livelli (come il tipo di asset), il focus della tastiera torna sul campo.
+- Le conferme con molti elementi scrivono il loro numero nella tua lingua.
+- Obbligazioni di Borsa Italiana: la scadenza nella descrizione ora è giusta anche sulle pagine in inglese e per le scadenze dopo il 2068. Un asset già salvato con la data sbagliata si corregge chiedendo di nuovo i metadati al suo provider.
+- Impostazioni › Informazioni ora elenca anche i plugin di Rischio e Strumenti che non si caricano.
+- Mentre la Dashboard aspetta di ricaricarsi dopo un cambio del filtro broker, mostra che sta lavorando invece di tenere in silenzio i totali vecchi.
+- Nel grafico di confronto dei lotti, il tratteggio in legenda di «stimato al costo» ha lo stesso colore della sua linea.
+- I pulsanti dello scheduler che tolgono un orario hanno un nome tradotto per i lettori di schermo.
+- «Analizza Lotti» ora scorre fino in fondo al pannello dei lotti anche sulle macchine lente.
+- Il comando di backup legge `--password-file` e `--instance-key-file` con una sola apertura: un file scambiato dopo il controllo non può più essere letto al suo posto.
+
+- Su un'istanza bloccata dal fornitore di hosting l'amministratore vede anche i «Backup già conservati» e può scaricarli, non solo farne uno nuovo.
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** è la versione per chi gestisce l'istanza: dà all'amministratore quello che serve per aprire LibreFolio a famiglia e amici, e per tenerlo al sicuro.

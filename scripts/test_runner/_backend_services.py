@@ -1119,7 +1119,7 @@ def services_brim_parse_error(verbose: bool = False, test_names: list = None) ->
 def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> bool:
     """Test parse resilience when the file is renamed underfoot."""
     print_section("Services: BRIM Parse Race")
-    print_info("Testing: backend/app/services/brim/brim_provider.py (uploaded → parsed rename race)")
+    print_info("Testing: backend/app/services/brim/storage.py (uploaded → parsed rename race)")
     print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata, re-detection, the per-broker metadata lock (no link followed, created 0o600)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
@@ -1129,7 +1129,7 @@ def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> 
 def services_brim_parse_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the BRIM parse hook of the plugin settings: the parent resolves, the child binds, a secret never leaves."""
     print_section("Services: BRIM Parse Settings")
-    print_info("Testing: backend/app/services/brim/brim_parse_pool.py (parse_file_offloaded, user_id), brim_provider.parse_file (settings), plugin_settings/runtime.py (bound_settings_for)")
+    print_info("Testing: backend/app/services/brim/brim_parse_pool.py (parse_file_offloaded, user_id), parsing.parse_file (settings), plugin_settings/runtime.py (bound_settings_for)")
     print_info("Tests: no field = parsed exactly as before, fields = BoundSettings handed to the child, errors and logs masked, the endpoint passes the user, pickle round-trip")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_settings.py", test_names)
@@ -1139,7 +1139,7 @@ def services_brim_parse_settings(verbose: bool = False, test_names: list = None)
 def services_brim_parse_failure_detail(verbose: bool = False, test_names: list = None) -> bool:
     """Test the 400 of a failed BRIM parse: an object the wizard translates, not an English sentence (W5-5, C-70b)."""
     print_section("Services: BRIM Parse Failure Detail")
-    print_info("Testing: backend/app/api/v1/brokers.py (parse_file), brim_parse_pool.parse_file_offloaded, brim_provider guard")
+    print_info("Testing: backend/app/api/v1/brokers/parse.py (parse_file), brim_parse_pool.parse_file_offloaded, brim_provider guard")
     print_info("Tests: BRIMParseError with/without a code, the guard's coded and silent refusals, unknown plugin stays a string, 404 unchanged")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_failure_detail.py", test_names)
@@ -1169,7 +1169,7 @@ def services_brim_field_contract(verbose: bool = False, test_names: list = None)
 def services_brim_file_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the wiring of a BRIM plugin's settings: the value reaches the pool worker, the fingerprint is stored, a changed setting makes a parse stale."""
     print_section("Services: BRIM File Settings")
-    print_info("Testing: brim_parse_pool.parse_file_offloaded (bound), brim_provider.save_parse_result (settings_fingerprint), services/brim/brim_file_settings.py (apply_settings_staleness)")
+    print_info("Testing: brim_parse_pool.parse_file_offloaded (bound), storage.save_parse_result (settings_fingerprint), services/brim/brim_file_settings.py (apply_settings_staleness)")
     print_info("Tests: the value reaches the subprocess, the fingerprint is stored and never served, stale by the user's own value")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_file_settings.py", test_names)
@@ -1215,7 +1215,7 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
 def services_brim_report_sets(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM report-set schemas, plugin-contract defaults and combined-file storage."""
     print_section("Services: BRIM Report Sets")
-    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim/brim_provider.py (report roles, truth points, combined files)")
+    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim/brim_provider.py, combined_files.py (report roles, truth points, combined files)")
     print_info("Tests: schemas, BRIMProvider set defaults, two-role fake plugin, batch_id, combined-file write/save/reuse/stale/delete/list")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_sets.py", test_names)
@@ -1400,7 +1400,7 @@ def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) 
     """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
     print_section("Services: Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)")
     print_info(
-        "Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows), services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes), services/fx/conversion.py (convert_bulk), services/fx/period_changes.py (_first_rate_days_inside), schemas/portfolio.py (PortfolioPlannerSourceIssueCode), schemas/pac_allocator/base.py (PlannerIssueCode)"
+        "Testing: services/brim/candidates.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows), services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes), services/fx/conversion.py (convert_bulk), services/fx/period_changes.py (_first_rate_days_inside), schemas/portfolio.py (PortfolioPlannerSourceIssueCode), schemas/pac_allocator/base.py (PlannerIssueCode)"
     )
     print_info(
         "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard; X-R45 reverted: the planner's latest saved FX row and the WAC row of its exact date are read as stored (a legacy 0, inf or 1E+14); X-R45b: a latest saved rate of 0 or inf falls back to the previous valid one with one allocation.saved_fx_skipped warning (pair, skipped_date, used_date), over a run of two too; no valid rate before → the latest row's quote with no rate and allocation.saved_fx_invalid; 1E+14 quoted as read back; the code a source issue code, not a tool one; guards: the latest usable rate wins, convert_bulk and _first_rate_days_inside still skip unusable rates"

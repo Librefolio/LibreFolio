@@ -6,11 +6,11 @@ THEN calls ``_validate_broker_balances(broker_id, None)``; on a ``BalanceValidat
 and ``continue``s. The question is whether the flag stays False in the database after the refused update.
 
 Observed (guard, green today): it does NOT. The service leaves the flag False in its session, but the endpoint
-(``api/v1/brokers.py::update_broker``) rolls the session back unless the update succeeded, so the stored broker is
+(``api/v1/brokers/crud.py::update_broker``) rolls the session back unless the update succeeded, so the stored broker is
 unchanged and a read-back still says ``allow_cash_overdraft == True``. The correctness of the refusal rests on that
 rollback of the caller, not on the service (a caller that committed after a refused item would persist the flag).
 
-Reference: backend/app/api/v1/brokers.py (update_broker), backend/app/services/brokers/broker_service.py (update_bulk).
+Reference: backend/app/api/v1/brokers/ (update_broker), backend/app/services/brokers/broker_service.py (update_bulk).
 """
 
 import uuid

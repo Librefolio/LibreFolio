@@ -9,6 +9,24 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Corrigé
+
+- Téléverser un fichier `.json` ne perd plus son contenu, et les fichiers avec une extension inhabituelle ou très longue sont enregistrés en toute sécurité.
+- Les listes Devises, Fichiers et Actifs ne se vident plus pour afficher un indicateur de chargement après une actualisation ou une modification : elles restent à l'écran pendant l'arrivée des nouvelles données.
+- Changer d'onglet sur la page d'un actif conserve la période que vous avez choisie.
+- À l'étape « Corrections » de l'import, un possible fractionnement affiche le ticker et la quantité au lieu des espaces réservés bruts.
+- Échap dans le menu de l'AI Export ferme seulement le menu, pas le panneau en dessous.
+- Après Échap ou un choix dans une liste à deux niveaux (comme le type d'actif), le focus du clavier revient sur le champ.
+- Les confirmations avec de nombreux éléments indiquent leur nombre dans votre langue.
+- Obligations de Borsa Italiana : l'échéance dans la description est désormais correcte sur les pages en anglais et pour les échéances après 2068. Un actif déjà enregistré avec une date erronée se corrige en redemandant ses métadonnées à son fournisseur.
+- Paramètres › À propos liste désormais aussi les plugins Risque et Outils qui ne se chargent pas.
+- Pendant que le Tableau de bord attend de se recharger après un changement du filtre de courtier, il indique qu'il travaille au lieu de garder en silence les anciens totaux.
+- Dans le graphique de comparaison des lots, le tiret de légende « estimé au coût » a la même couleur que sa ligne.
+- Les boutons du planificateur qui retirent un horaire ont un nom traduit pour les lecteurs d'écran.
+- « Analyser les Lots » fait désormais défiler jusqu'au bout vers le panneau des lots, même sur les machines lentes.
+- La commande de sauvegarde lit `--password-file` et `--instance-key-file` en une seule ouverture : un fichier échangé après la vérification ne peut plus être lu à sa place.
+
+- Sur une instance bloquée par son hébergeur, l'administrateur voit aussi les «Sauvegardes déjà conservées» et peut les télécharger, pas seulement en faire une nouvelle.
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 « Keyholder »** est la version pour qui gère l'instance : elle donne à l'administrateur ce qu'il faut pour ouvrir LibreFolio à sa famille et à ses amis, et pour le garder en sécurité.

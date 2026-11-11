@@ -13,7 +13,7 @@ Creator becomes OWNER automatically.
 Users only see brokers they have access to.
 
 See checklist: 01_test_broker_transaction_subsystem.md - Category 5
-Reference: backend/app/api/v1/brokers.py
+Reference: backend/app/api/v1/brokers/
 """
 
 import uuid

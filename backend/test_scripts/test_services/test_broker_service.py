@@ -1197,7 +1197,7 @@ _AUTO_COST_HISTORIES = [
 ]
 
 # BR-U-080: a deletion that fails half way. Unlike the rest of 4.9 this case COMMITS, as DELETE /brokers does:
-# it commits whenever response.errors is empty (api/v1/brokers.py), and delete_bulk reports a broker that failed
+# it commits whenever response.errors is empty (api/v1/brokers/crud.py), and delete_bulk reports a broker that failed
 # in its result, never in errors. What the case reads is therefore what the database keeps, through sessions of
 # its own. Its rows are its own — a user, three brokers, an asset, none shared — and it removes them at the end.
 
@@ -1529,7 +1529,7 @@ class TestDeleteBulkCrossBrokerPair:
             monkeypatch.setattr(auto_cost, "compute_wac_iterative", computes_once_then_fails)
 
             response = await BrokerService(session).delete_bulk([BRDeleteItem(id=sender, force=True)], user_id=user_id)
-            if not response.errors:  # what DELETE /brokers does next (api/v1/brokers.py)
+            if not response.errors:  # what DELETE /brokers does next (api/v1/brokers/crud.py)
                 await session.commit()
             else:
                 await session.rollback()
@@ -1550,7 +1550,7 @@ class TestDeleteBulkCrossBrokerPair:
 # ============================================================================
 #
 # DELETE /brokers hands its brokers to delete_bulk in one session and commits when response.errors is empty
-# (api/v1/brokers.py); delete_bulk catches a broker's failure into that broker's result and never fills errors. So
+# (api/v1/brokers/crud.py); delete_bulk catches a broker's failure into that broker's result and never fills errors. So
 # whatever TransactionService.delete_by_broker wrote before it failed is committed with the rest of the request. The
 # cure decided for W-B20: delete_bulk starts the write transaction once (begin_writes, db/session.py), then deletes
 # each broker inside a savepoint of its own — a broker that fails leaves nothing behind, the brokers before and after
@@ -1705,7 +1705,7 @@ def _assert_pair_as_seeded(before: dict, world: _PairWorld) -> None:
 
 async def _delete_as_the_router_does(engine, user_id: int, items: list[BRDeleteItem]) -> BRBulkDeleteResponse:
     """DELETE /brokers from a session of its own that has done nothing yet: delete_bulk, then a commit when errors is
-    empty and a rollback otherwise (api/v1/brokers.py)."""
+    empty and a rollback otherwise (api/v1/brokers/crud.py)."""
     async with AsyncSession(engine, expire_on_commit=False) as request:
         response = await BrokerService(request).delete_bulk(items, user_id=user_id)
         if not response.errors:

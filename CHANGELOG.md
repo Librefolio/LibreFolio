@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🐛 Fixed
+
+- Uploading a `.json` file no longer loses its contents, and files with an unusual or very long extension are stored safely.
+- The FX, Files and Assets lists no longer blank out to a spinner after a refresh or an edit: they stay on screen while the new data arrives.
+- Switching tabs on an asset's page keeps the date range you chose.
+- The import wizard's «Corrections» step shows the ticker and quantity of a possible stock split instead of raw placeholders.
+- Pressing Escape inside the AI Export menu closes only the menu, not the panel under it.
+- After Escape or a choice in a two-level list (such as the asset type), the keyboard focus goes back to the field.
+- Confirmation dialogs with many items write their count in your language.
+- Borsa Italiana bonds: the maturity in the description is now right on English pages and for maturities after 2068. An asset already saved with a wrong date is fixed when you ask its provider for the metadata again.
+- Settings › About now also lists the Risk and Tools plugins that fail to load.
+- While the Dashboard waits to reload after a change of the broker filter, it shows that it is busy instead of silently keeping the old totals.
+- In the lot comparison chart, the dashed legend mark of «estimated at cost» has the same colour as its line.
+- The scheduler's buttons that remove a time have a translated name for screen readers.
+- «Analyze Lots» now scrolls all the way to the lots panel on slower machines.
+- The backup command reads `--password-file` and `--instance-key-file` with a single open: a file swapped after the check can no longer be read in its place.
+
+- On an instance blocked by its hosting provider, the administrator also sees the «Backups already kept» and can download them, not only make a new one.
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** is the release for whoever runs the instance: it gives the administrator what is needed to open LibreFolio to family and friends, and to keep it safe.
