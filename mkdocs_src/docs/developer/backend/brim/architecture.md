@@ -449,10 +449,11 @@ Each plugin is a folder of `backend/app/services/brim_providers/`, named after i
 backend/app/services/brim_providers/
 ├── __init__.py                                   ← the family's docstring
 ├── _brim_io.py, _brim_output.py, _scalable.py    ← helpers shared by the plugins (discovery skips them)
-├── sample_reports/                               ← every plugin's sample exports, read by the tests
+├── sample_reports/                               ← what belongs to no plugin: README and malformed/ fixtures
 └── broker_directa/
     ├── __init__.py   ← its docstring and nothing else
     ├── plugin.py     ← the code, loaded as backend.app.services.brim_providers.broker_directa.plugin
+    ├── sample_reports/ ← its sample exports, read by the tests
     ├── static/       ← optional: its icons, served as /api/v1/uploads/plugin/brim/broker_directa/<file>
     └── i18n/         ← en.json, it.json, fr.json, es.json: brimPlugins.broker_directa.name and .description
 ```

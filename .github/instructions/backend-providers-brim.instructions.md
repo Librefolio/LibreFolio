@@ -45,7 +45,7 @@ The abstract base class is in `backend/app/services/brim/brim_provider.py`. Read
 3. Decorate with `@register_provider(BRIMProviderRegistry)` (`BRIMProviderRegistry` from `services/brim/registry.py`, the
    decorator from `services/provider_registry.py`)
 4. Implement the required abstract methods (see base class)
-5. Add sample report in `sample_reports/` for testing
+5. Add sample report in the plugin's own `sample_reports/` folder for testing
 6. Add the icon in the plugin's own `static/` folder (`generate_static_url("<plugin folder>/<file>")`)
 7. Give the plugin its name and description in the four languages, in its own `i18n/` fragment:
    `./dev.py i18n add brimPlugins.broker_mybroker.name --en … --it … --fr … --es … --into brim_providers/broker_mybroker`

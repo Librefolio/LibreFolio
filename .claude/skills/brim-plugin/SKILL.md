@@ -136,7 +136,7 @@ without values (defaults, no secret), so nothing they use may depend on a settin
 2. Implement `can_parse` (quick header/extension sniff) and `parse` (full parsing →
    `BRIMParseOutput`). Use the base-class helpers instead of re-implementing them.
 3. Map the broker's operation labels to `TransactionType`, applying the sign rules above.
-4. Add a sample export under `sample_reports/`, set `test_file_pattern`, and add a
+4. Add a sample export under the plugin's own `sample_reports/`, set `test_file_pattern`, and add a
    user-facing docs page under `mkdocs_src/docs/user/transactions/import/`.
 5. Give the plugin its name and description in EN/IT/FR/ES, in its own `i18n/`:
    `./dev.py i18n add brimPlugins.broker_<name>.name --en … --it … --fr … --es …
