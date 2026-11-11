@@ -20,7 +20,7 @@
     import {getTransactionTypeIconUrl} from '$lib/features/transactions/transactionTypeStore';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
-    import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
+    import {formatCurrencyAmountPlain, formatCurrencyCodeHtml, formatCurrencyPairHtml, formatPairSlugHtml} from '$lib/utils/currency/currencyFormat';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {formatExactDecimal, formatPrice, priceFractionDigits} from '$lib/utils/core/formatFixed';
 
@@ -342,7 +342,7 @@
 
     function buildBadgeTooltipHtml(): string {
         const disclaimer = $t('transactions.wac.fxDisclaimer') || 'The FX rate used may differ from the one applied by your broker. Verify the average cost with your broker.';
-        const pairs = [...new Set((previewResult?.qualifying_txs ?? []).filter((q) => q.original_currency && q.currency && q.original_currency !== q.currency).map((q) => `${formatCurrencyCodeHtml(q.original_currency!)} → ${formatCurrencyCodeHtml(q.currency!)}`))];
+        const pairs = [...new Set((previewResult?.qualifying_txs ?? []).filter((q) => q.original_currency && q.currency && q.original_currency !== q.currency).map((q) => formatCurrencyPairHtml(q.original_currency!, q.currency!, 'conversion')))];
         const pairsHtml = pairs.length > 0 ? `<br/><br/><b>${$t('transactions.wac.convertedPairs') || 'Converted pairs'}:</b><ul class="list-disc pl-4 mt-1">${pairs.map((p) => `<li>${p}</li>`).join('')}</ul>` : '';
         return `${disclaimer}${pairsHtml}`;
     }
@@ -483,9 +483,8 @@
                 {#each previewResult?.missing_pairs ?? [] as mp}
                     {@const pairStr = typeof mp === 'string' ? mp : mp.pair}
                     {@const dates = typeof mp === 'string' ? [] : (mp.dates ?? [])}
-                    {@const parts = pairStr.split('/')}
                     <li>
-                        {@html formatCurrencyCodeHtml(parts[0])} / {@html formatCurrencyCodeHtml(parts[1])} — {$t('transactions.wac.noRateAvailable') || 'no rate available'}
+                        {@html formatPairSlugHtml(pairStr)} — {$t('transactions.wac.noRateAvailable') || 'no rate available'}
                         {#if dates.length > 0}
                             <span class="text-lf-muted">: {dates.join(', ')}</span>
                         {/if}
@@ -509,7 +508,7 @@
             </div>
             <ul class="list-disc pl-4 space-y-0.5">
                 {#each stalePairs as sp}
-                    <li>{@html formatCurrencyCodeHtml(sp.from)} / {@html formatCurrencyCodeHtml(sp.to)} — {sp.date} ({sp.days}{$t('transactions.wac.fxDaysAgo') || 'd ago'})</li>
+                    <li>{@html formatCurrencyPairHtml(sp.from, sp.to, 'conversion')} — {sp.date} ({sp.days}{$t('transactions.wac.fxDaysAgo') || 'd ago'})</li>
                 {/each}
             </ul>
             <p class="mt-1.5 text-[9px] text-lf-warning/80 italic">{$t('transactions.wac.fxDisclaimer') || 'The FX rate used may differ from the one applied by your broker. Verify the average cost with your broker.'}</p>
