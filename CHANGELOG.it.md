@@ -39,6 +39,11 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Il comando di backup legge `--password-file` e `--instance-key-file` con una sola apertura: un file scambiato dopo il controllo non può più essere letto al suo posto.
 
 - Su un'istanza bloccata dal fornitore di hosting l'amministratore vede anche i «Backup già conservati» e può scaricarli, non solo farne uno nuovo.
+
+### ⚠️ Modifiche incompatibili
+
+- Gli endpoint della query dei prezzi, della query degli eventi e della conversione non riportano più i cambi mancanti come testo in `errors`: arrivano in una nuova lista `fx_issues` di `{code, from_currency, to_currency, first_date, last_date, count}`, nel verso della conversione.
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** è la versione per chi gestisce l'istanza: dà all'amministratore quello che serve per aprire LibreFolio a famiglia e amici, e per tenerlo al sicuro.

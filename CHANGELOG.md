@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The backup command reads `--password-file` and `--instance-key-file` with a single open: a file swapped after the check can no longer be read in its place.
 
 - On an instance blocked by its hosting provider, the administrator also sees the «Backups already kept» and can download them, not only make a new one.
+
+### ⚠️ Breaking changes
+
+- Missing exchange rates are no longer reported as text in `errors` by the price query, event query and conversion endpoints: they come in a new `fx_issues` list of `{code, from_currency, to_currency, first_date, last_date, count}`, in the direction of the conversion.
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** is the release for whoever runs the instance: it gives the administrator what is needed to open LibreFolio to family and friends, and to keep it safe.
