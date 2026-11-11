@@ -21,6 +21,7 @@ from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoInputTransaction, FragmentInterval
+from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.financial_math.lots.scope_boundary import TransferPartner, read_arrivals_at_scope_boundary
 from backend.app.services.financial_math.splits import SplitLink, is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
@@ -519,7 +520,7 @@ def _append_fx_provenance(
             rate_date=rate_date,
             from_currency=spec.from_currency,
             to_currency=target_currency,
-            days_back=(spec.requested_date - rate_date).days,
+            days_back=fx_days_back(spec.requested_date, rate_date),
         )
     )
 

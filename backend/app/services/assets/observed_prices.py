@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import PriceHistory
 from backend.app.schemas import FAPricePoint
 from backend.app.schemas.prices import AssetBackwardFillInfo
+from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.stretch_conversion import rate_not_found_error
 
@@ -80,11 +81,11 @@ def point_of(day: date_type, row: PriceHistory, conversion: object, target: str 
             backward_fill_info=AssetBackwardFillInfo(actual_rate_date=row.date, days_back=days_back, fx_rate_date=None, fx_days_back=None),
         )
     assert isinstance(conversion, _Conversion)
-    fx_days_back = (day - conversion.rate_date).days if conversion.rate_date < day else 0
+    fx_back = fx_days_back(day, conversion.rate_date)
     if days_back:
-        backward_fill = AssetBackwardFillInfo(actual_rate_date=row.date, days_back=days_back, fx_rate_date=conversion.rate_date, fx_days_back=fx_days_back)
-    elif fx_days_back > 0:
-        backward_fill = AssetBackwardFillInfo(actual_rate_date=day, days_back=0, fx_rate_date=conversion.rate_date, fx_days_back=fx_days_back)
+        backward_fill = AssetBackwardFillInfo(actual_rate_date=row.date, days_back=days_back, fx_rate_date=conversion.rate_date, fx_days_back=fx_back)
+    elif fx_back > 0:
+        backward_fill = AssetBackwardFillInfo(actual_rate_date=day, days_back=0, fx_rate_date=conversion.rate_date, fx_days_back=fx_back)
     else:
         backward_fill = None
     return FAPricePoint(

@@ -40,6 +40,7 @@ from enum import StrEnum
 from typing import Any, Literal
 
 from backend.app.schemas.common import Currency
+from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.fx.conversion import convert_bulk
 
 _ZERO = Decimal("0")
@@ -483,7 +484,7 @@ def _fold_position(  # noqa: C901 — one flat branch per movement kind and per 
                             converted_amount=found.amount,
                             rate=found.amount / movement.cost_amount,
                             rate_date=found.rate_date,
-                            days_back=max((movement.date - found.rate_date).days, 0),
+                            days_back=fx_days_back(movement.date, found.rate_date),
                         )
 
                 added_asset: Decimal | None = None
