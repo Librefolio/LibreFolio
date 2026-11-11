@@ -47,7 +47,8 @@ import httpx
 import psutil
 import pytest
 
-from backend.app.config import PROJECT_ROOT, get_settings, get_test_data_dir
+from backend.app.config import get_settings, get_test_data_dir
+from backend.test_scripts.brim_samples import SampleDir
 from backend.test_scripts.test_server_helper import _TestingServerManager, port_holder_pids
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -61,9 +62,7 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 
 # Sample file paths
-SAMPLE_DIR = PROJECT_ROOT / "app" / "services" / "brim_providers" / "sample_reports"
-
-
+SAMPLE_DIR = SampleDir()
 # ============================================================================
 # AUTH HELPERS
 # ============================================================================
@@ -1719,7 +1718,7 @@ class TestGapFixEndpoint:
 # first checkpoint closes a gap in that history and must say so (``kind == "gap"``).
 
 DANSKE_CODE = "broker_danske_bank"
-DANSKE_SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+DANSKE_SAMPLE_DIR = SampleDir()
 DANSKE_MAIN = (("danske_bank-custody.xlsx", "custody"), ("danske_bank-cash.csv", "cash"))
 DANSKE_GAP_FIX_TAGS = ["import", "danske_bank", "gap_fix"]
 # A row of an earlier Danske import: the plugin's history tag, dated well before the main set's first checkpoint (2020-02-02).
@@ -2633,7 +2632,7 @@ class TestDamagedWorkbookPreview:
 # reads, row by row, is in test_external/test_brim_degiro.py. The test deletes the file and the broker it created.
 
 DEGIRO_CODE = "broker_degiro"
-DEGIRO_ACCOUNT_SAMPLE = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "degiro-account-en.csv"
+DEGIRO_ACCOUNT_SAMPLE = SampleDir() / "degiro-account-en.csv"
 # The rows of the English sample without an asset, as (type, currency, amount): the editor can save them as parsed.
 DEGIRO_CASH_ROWS = [("DEPOSIT", "EUR", Decimal("2500.00")), ("FEE", "EUR", Decimal("-2.50")), ("INTEREST", "CZK", Decimal("3.47")), ("INTEREST", "EUR", Decimal("0.75")), ("INTEREST", "EUR", Decimal("3.00"))]
 DEGIRO_PAIR_CODES = {"linkUuidPairCount", "pairTypeMismatch", "pairDescriptionMismatch", "pairTagsMismatch"}
@@ -2720,7 +2719,7 @@ class TestDegiroConversionsThroughTheBatch:
 # answer, file by file, is in test_external/test_brim_scalable.py, test_brim_providers.py (category 4e) and
 # test_brim_degiro.py (A2). Each test deletes the files and the broker it created.
 
-SCALABLE_DEPOSIT_SAMPLE = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "scalable-deposit-export.csv"
+SCALABLE_DEPOSIT_SAMPLE = SampleDir() / "scalable-deposit-export.csv"
 SCALABLE_BROKER_CODE = "broker_scalable"
 SCALABLE_DEPOSIT_CODE = "broker_scalable_deposit"
 # What the broker plugin owes about the overnight account's export, but the English sentence: its code and its context.

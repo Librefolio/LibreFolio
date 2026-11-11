@@ -76,13 +76,14 @@ from backend.app.services.brim_providers.broker_trading212.plugin import Trading
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS & HELPERS
 # =============================================================================
 
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 DEGIRO_SAMPLE = SAMPLE_DIR / "degiro-export.csv"
 DIRECTA_SAMPLE = SAMPLE_DIR / "directa-export.csv"
 CA_SAMPLE = SAMPLE_DIR / "credit_agricole-export.csv"
@@ -2425,7 +2426,7 @@ class TestBrokerParserCoverageHelpers:
         assert out.warnings[0].message == "riga saltata"
         assert out.warnings[0].evidence == []
 
-        untouched = FinecoBrokerProvider().parse(PROJECT_ROOT / "backend/app/services/brim_providers/sample_reports/fineco-export.csv", broker_id=1)
+        untouched = FinecoBrokerProvider().parse(SAMPLE_DIR / "fineco-export.csv", broker_id=1)
         assert all(isinstance(n, BRIMNotice) for n in untouched.warnings)
 
     def test_credit_agricole_account_carries_causale_tag_and_currency(self):
@@ -5668,7 +5669,7 @@ class TestWindows1252Invariance:
             outcome = _parse_outcome(plugin, copy)
         except Exception as exc:
             pytest.fail(f"{code}.parse() crashes on the Windows-1252 copy of {sample.name}: {type(exc).__name__}: {exc}")
-        actual = _relocated(outcome, str(tmp_path), str(SAMPLE_DIR))
+        actual = _relocated(outcome, str(tmp_path), str(sample.parent))
 
         assert actual[0] == expected[0], f"{code} on {sample.name}: the original gives {_summary(expected)}, its Windows-1252 copy gives {_summary(actual)}"
         assert actual == expected, f"{code} on {sample.name}: the Windows-1252 copy gives a different {expected[0]} than the original"

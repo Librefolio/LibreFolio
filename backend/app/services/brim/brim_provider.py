@@ -392,7 +392,7 @@ class BRIMProvider(PluginSettingsMixin, ABC):
     def test_file_pattern(self) -> Optional[str]:
         """
         Filename contain pattern for auto-detection tests.
-        Using for test with backend/app/services/brim_providers/sample_reports/* files
+        Using for test with backend/app/services/brim_providers/<plugin>/sample_reports/* files
 
         Override this to specify what filename substring should auto-detect
         to this plugin. Used only for testing purposes.

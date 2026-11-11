@@ -120,6 +120,7 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim import brim_provider, candidates, combined_files, duplicates, parsing, storage
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_samples import SampleDir
 
 BROKER_ID = 42
 OTHER_BROKER_ID = 43
@@ -3072,7 +3073,7 @@ class TestCombineSetExclusions:
 # defect: it found nothing to reuse) or a grace runs out (the cure: it is waiting for the lock).
 
 DANSKE_CODE = "broker_danske_bank"
-DANSKE_SAMPLE_DIR = Path(__file__).resolve().parents[2] / "app" / "services" / "brim_providers" / "sample_reports"
+DANSKE_SAMPLE_DIR = SampleDir()
 DANSKE_PAIR = (("danske_bank-custody.xlsx", "custody"), ("danske_bank-cash.csv", "cash"))
 # Every wait for something that must happen is bounded by this: a regression fails the test, it never hangs the suite.
 _WAIT_SECONDS = 30.0

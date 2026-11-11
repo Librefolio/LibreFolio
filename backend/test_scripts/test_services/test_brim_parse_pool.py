@@ -85,9 +85,10 @@ from backend.app.services.brim import brim_parse_pool, parsing
 from backend.app.services.brim.brim_provider import BRIMParseError
 from backend.app.services.brim.storage import delete_file, get_file_path, save_uploaded_file
 from backend.app.services.plugin_settings import runtime as settings_runtime
+from backend.test_scripts.brim_samples import SampleDir
 from backend.test_scripts.test_services._brim_pool_probe import BRIM_MODULE, PLUGIN_MODULE, PRELOAD_MODULE
 
-SAMPLE = Path(__file__).resolve().parents[2] / "app" / "services" / "brim_providers" / "sample_reports" / "schwab-export.csv"
+SAMPLE = SampleDir() / "schwab-export.csv"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 #: Printed before the JSON of what a fresh interpreter saw: the only line of its output the test reads.

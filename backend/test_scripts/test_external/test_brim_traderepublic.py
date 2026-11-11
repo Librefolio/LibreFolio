@@ -38,10 +38,10 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import pytest
 
-from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMNotice, BRIMParseOutput
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_samples import SampleDir
 
 # =============================================================================
 # CONSTANTS
@@ -49,7 +49,7 @@ from backend.app.services.brim.registry import BRIMProviderRegistry
 
 PLUGIN_CODE = "broker_traderepublic"
 PLUGIN_VERSION = "1.2.0"
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 CLEAN_SAMPLE = SAMPLE_DIR / "traderepublic-transactions.csv"
 EXCEL_SAMPLE = SAMPLE_DIR / "traderepublic-transactions-excel.csv"
 DUTCH_SAMPLE = SAMPLE_DIR / "traderepublic-export.csv"

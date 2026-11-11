@@ -37,19 +37,19 @@ from typing import List, Mapping, Optional, Sequence, Tuple, Union
 
 import pytest
 
-from backend.app.config import PROJECT_ROOT
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import BRIMFieldTodo, BRIMNotice, BRIMParseOutput, is_fake_asset_id
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.transactions.validation import TransactionValidationMixin
+from backend.test_scripts.brim_samples import SampleDir
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
 
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 BROKER_ID = 1
 ROWS_NOT_RECOGNIZED = "rows_not_recognized"
 POSSIBLE_SPLIT = "possible_split"

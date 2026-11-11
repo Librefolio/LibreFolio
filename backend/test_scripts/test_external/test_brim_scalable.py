@@ -47,11 +47,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import pytest
 
-from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMNotice, BRIMParseOutput, BRIMRefusal
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
@@ -65,7 +65,7 @@ DEPOSIT_NAME = "Scalable Capital overnight account"
 PLUGIN_CODES = (BROKER_CODE, DEPOSIT_CODE)
 DOCS_URL = "/mkdocs/user/transactions/import/scalable/"
 PLUGIN_VERSION = "1.1.0"
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 PRIME_SAMPLE = SAMPLE_DIR / "scalable-prime-export.csv"
 BROKER_SAMPLE = SAMPLE_DIR / "scalable-broker-export.csv"
 DEPOSIT_SAMPLE = SAMPLE_DIR / "scalable-deposit-export.csv"
