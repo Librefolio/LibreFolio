@@ -57,12 +57,12 @@ import {appears, optionsClosed} from '../fixtures/probe';
 import {continueToReview, continueToStep, parseSelectedSet, selectReportSet, type ParseResponse} from '../fixtures/import-wizard';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
+import {samplePath} from '../fixtures/brimSamples';
 
 test.setTimeout(120_000);
 
-const SAMPLES = resolve(process.cwd(), '../backend/app/services/brim_providers/sample_reports');
-const ACCOUNT_FIXTURE = resolve(SAMPLES, 'credit_agricole-conti-contract.csv');
-const SECURITIES_FIXTURE = resolve(SAMPLES, 'credit_agricole-securities-contract.csv');
+const ACCOUNT_FIXTURE = samplePath('credit_agricole-conti-contract.csv');
+const SECURITIES_FIXTURE = samplePath('credit_agricole-securities-contract.csv');
 const CA = 'broker_credit_agricole';
 const API = `http://localhost:${process.env.TEST_PORT || '6041'}/api/v1`;
 

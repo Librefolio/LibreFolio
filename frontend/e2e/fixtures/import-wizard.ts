@@ -40,12 +40,12 @@ import {expect, test, type Locator, type Page} from './playwright';
 import {waitForParseVerdict, waitForSettled} from './app-events';
 import {findAcrossPages} from './paging';
 import {uniqueSuffix} from './unique';
+import {samplePath} from './brimSamples';
 
 const API = '/api/v1';
 const BROKERS_PATH = `${API}/brokers`;
 const UPLOAD_PATH = `${API}/brokers/import/upload`;
 const FILES_PATH = `${API}/brokers/import/files`;
-const SAMPLE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../backend/app/services/brim_providers/sample_reports');
 const UI_TIMEOUT = 10_000;
 /** A step change waits on the server: candidates, the duplicate re-check. */
 const STEP_TIMEOUT = 30_000;
@@ -117,7 +117,7 @@ async function brokerIdByName(page: Page, name: string): Promise<number> {
 /**
  * Upload a copy of a sample report to the broker named `brokerName`, under a unique name.
  *
- * `sample` is the file name of a CSV in `backend/app/services/brim_providers/sample_reports`.
+ * `sample` is the file name of a CSV in `backend/app/services/brim_providers/<plugin>/sample_reports` (`samplePath`).
  * The copy is pushed onto `owned` as soon as the server has accepted it — before anything about
  * it is checked — so a failed check still leaves it to {@link deleteOwnedReports}. The wizard
  * reads the broker files when it enters step 2: upload before that.
@@ -127,7 +127,7 @@ export async function uploadOwnedReport(page: Page, owned: OwnedReport[], report
     const extension = path.extname(report.sample);
     const fileName = `${path.basename(report.sample, extension)}-${uniqueSuffix()}${extension}`;
     const response = await page.request.post(UPLOAD_PATH, {
-        multipart: {broker_id: String(brokerId), file: {name: fileName, mimeType: 'text/csv', buffer: readFileSync(path.join(SAMPLE_DIR, report.sample))}},
+        multipart: {broker_id: String(brokerId), file: {name: fileName, mimeType: 'text/csv', buffer: readFileSync(samplePath(report.sample))}},
     });
     const uploaded = await jsonFrom<UploadedInfo>(response, `upload ${fileName} to "${report.brokerName}"`);
     const copy: OwnedReport = {brokerId, fileId: uploaded.file_id, fileName};

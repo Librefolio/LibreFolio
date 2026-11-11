@@ -73,6 +73,7 @@ import {uniqueSuffix} from '../fixtures/unique';
 import {readFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from '../fixtures/brimSamples';
 
 const API = '/api/v1';
 const BROKERS_PATH = `${API}/brokers`;
@@ -81,7 +82,7 @@ const FILES_PATH = `${API}/brokers/import/files`;
 const PLUGIN_CHECK_PATH = /^\/api\/v1\/brokers\/import\/files\/[^/]+\/plugin-check$/;
 const SPEC_DIR = path.dirname(fileURLToPath(import.meta.url));
 /** The LibreFolio exporter's overnight account file (synthetic): read by `broker_scalable_deposit` and the generic CSV, refused by `broker_scalable`. */
-const DEPOSIT_SAMPLE = path.resolve(SPEC_DIR, '../../../backend/app/services/brim_providers/sample_reports/scalable-deposit-export.csv');
+const DEPOSIT_SAMPLE = samplePath('scalable-deposit-export.csv');
 const SCALABLE_BROKER = 'broker_scalable';
 const SCALABLE_DEPOSIT = 'broker_scalable_deposit';
 /** A fallback plugin (detection priority 0): its brokers are offered only when no broker of a specific plugin is. */

@@ -66,6 +66,7 @@ import {
 import {continueToReview, type ParseResponse, parseSelectedFile, selectBrokerFile} from './fixtures/import-wizard';
 import {canEdit, listBrokers, readTransactions, seededRow, type TxRow} from './fixtures/owned-pair';
 import {appears, optionsClosed} from './fixtures/probe';
+import {samplePath} from './fixtures/brimSamples';
 import {
     chooseLabYear,
     currentUserId,
@@ -4072,7 +4073,7 @@ test.describe('Gallery Screenshots', () => {
             test.setTimeout(300_000); // 5 minutes
             // generic_simple.csv contains UNETF (unknown asset → unresolved card in step 4)
             const viewport = getViewport(testInfo);
-            const GENERIC_SIMPLE = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+            const GENERIC_SIMPLE = samplePath('generic_simple.csv');
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 await setBrowserLocale(page, lang);

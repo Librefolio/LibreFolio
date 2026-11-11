@@ -9,6 +9,7 @@ import {uniqueSuffix} from './fixtures/unique';
 import {readFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from './fixtures/brimSamples';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -110,13 +111,13 @@ async function uploadBrimFile(page: Page, brokerId: number, filename: string, co
 
 const BRIM_UPLOAD_PATH = `${API}/brokers/import/upload`;
 /** The repository's synthetic Generic CSV sample — never a real broker export. */
-const SAMPLE_BRIM_REPORT = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+const SAMPLE_BRIM_REPORT = samplePath('generic_simple.csv');
 const SAMPLE_BRIM_REPORT_NAME = path.basename(SAMPLE_BRIM_REPORT);
 
 type BrimFileInfo = {file_id: string; filename: string; target_broker_id: number | null};
 
 /** A second synthetic Generic CSV sample, for uploads of two files in one action. */
-const SECOND_BRIM_REPORT = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_with_assets.csv');
+const SECOND_BRIM_REPORT = samplePath('generic_with_assets.csv');
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type UploadedInfo = BrimFileInfo & {batch_id?: string | null};
 
@@ -472,7 +473,7 @@ test.describe('Files Page', () => {
             await expect(page.getByTestId('file-uploader')).toBeVisible();
 
             // Upload a test file from BRIM samples
-            const testFilePath = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+            const testFilePath = samplePath('generic_simple.csv');
             await page.getByTestId('file-input').setInputFiles(testFilePath);
 
             // Selected: the drop zone lists the file by name.
@@ -533,7 +534,7 @@ test.describe('Files Page', () => {
             await expect(page.getByTestId('file-uploader')).toBeVisible();
 
             // Select a file
-            const testFilePath = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_dates.csv');
+            const testFilePath = samplePath('generic_dates.csv');
             await page.getByTestId('file-input').setInputFiles(testFilePath);
 
             // Verify file appears in selection: the drop zone lists it by name.
