@@ -242,6 +242,16 @@ def external_brim_degiro(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "BRIM DEGIRO tests", verbose=verbose)
 
 
+def external_brim_traderepublic(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Trade Republic plugin (the Transaction export in both shapes, and the Dutch CSV)."""
+    print_section("External: BRIM Trade Republic Tests")
+    print_info("Testing: broker_traderepublic — recognition by required columns, the date column, legs read verbatim, notices")
+    print_info("Tests: clean and Excel samples row by row, ; variant, tax refunds, unsettled rows, rows not recognised or unreadable, assets")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_traderepublic.py", test_names or None)
+    return run_command(cmd, "BRIM Trade Republic tests", verbose=verbose)
+
+
 def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bool:
     """Test the Scalable Capital plugins (broker account and overnight account)."""
     print_section("External: BRIM Scalable Capital Tests")
@@ -336,6 +346,16 @@ These tests verify external API integrations:
         isolation="pure",
     )
     add_test(cat, "brim-degiro", external_brim_degiro, name="BRIM DEGIRO", desc="Test the DEGIRO plugin", prereq="Sample files in test fixtures", tests="Recognition, reading by position, types, FX pairs, numbers, messages, orders list")
+    add_test(
+        cat,
+        "brim-traderepublic",
+        external_brim_traderepublic,
+        name="BRIM Trade Republic",
+        desc="Test the Trade Republic plugin (Transaction export, also re-saved by Excel, and the Dutch CSV)",
+        prereq="Sample files in test fixtures",
+        tests="Recognition, both shapes and ; identical, sample row by row, date column, tax refund, unsettled rows, duplicates, rows left out, assets",
+        isolation="pure",
+    )
     add_test(
         cat,
         "brim-scalable",
