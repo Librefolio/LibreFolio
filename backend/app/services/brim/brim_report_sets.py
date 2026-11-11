@@ -40,7 +40,7 @@ from backend.app.schemas.brim import (
     BRIMTruthCash,
     BRIMVerification,
 )
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import combined_files, storage
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.platform.storage_limit import StorageLimitProblem, problem_for_added
@@ -155,7 +155,7 @@ def collect_members(*, broker_id: int, plugin_code: str, batch_id: str, exclude_
     another plugin, or removed from it). Each must be an original of this broker and upload:
     any other id is refused rather than ignored, so a stale request never passes silently.
     """
-    originals = [info for info in brim_provider.list_files(broker_ids=[broker_id]) if info.kind == "original" and info.batch_id == batch_id and info.target_broker_id == broker_id]
+    originals = [info for info in storage.list_files(broker_ids=[broker_id]) if info.kind == "original" and info.batch_id == batch_id and info.target_broker_id == broker_id]
     known = {info.file_id for info in originals}
     unknown = sorted({file_id for file_id in exclude_file_ids if file_id not in known})
     if unknown:
@@ -240,7 +240,7 @@ def build_preview(  # noqa: C901 — one pass per concern (members, roles, cover
     fingerprints = set()
 
     for member in members:
-        path = brim_provider.get_file_path(member.file_id)
+        path = storage.get_file_path(member.file_id)
         role = plugin.detect_role(path) if path is not None else None
         if role is None:
             member_infos.append(BRIMSetMemberInfo(file_id=member.file_id, filename=member.filename))
@@ -397,14 +397,14 @@ def _combine_under_broker_lock(*, broker_id: int, plugin: BRIMProvider, plugin_c
     is re-entrant within a thread, so taken on the event loop it would let both through.
     """
     member_ids = [member.file_id for member in recognised]
-    with brim_provider.broker_metadata_lock(broker_id):
-        reusable = brim_provider.find_reusable_combined(broker_id=broker_id, plugin_code=plugin_code, plugin_version=plugin.plugin_version, member_ids=member_ids)
+    with storage.broker_metadata_lock(broker_id):
+        reusable = combined_files.find_reusable_combined(broker_id=broker_id, plugin_code=plugin_code, plugin_version=plugin.plugin_version, member_ids=member_ids)
         if reusable is not None:
-            return reusable, brim_provider.read_combine_summary(reusable.file_id), True
+            return reusable, combined_files.read_combine_summary(reusable.file_id), True
 
         paths_by_role: Dict[str, List[Path]] = defaultdict(list)
         for member in recognised:
-            path = brim_provider.get_file_path(member.file_id)
+            path = storage.get_file_path(member.file_id)
             if path is None:
                 raise BRIMSetMembersNotFound(f"File {member.filename} is no longer available")
             paths_by_role[member.role].append(path)
@@ -415,10 +415,10 @@ def _combine_under_broker_lock(*, broker_id: int, plugin: BRIMProvider, plugin_c
             message = getattr(exc, "message", None) or str(exc)
             raise BRIMSetCombineFailed(f"The report set could not be combined: {message}") from exc
         # The space limit (C8): the combined file is new data, refused before it is written when it would pass the limit.
-        problem = problem_for_added(brim_provider.combined_csv_size(table))
+        problem = problem_for_added(combined_files.combined_csv_size(table))
         if problem is not None:
             raise BRIMSetStorageLimit(problem)
-        info = brim_provider.save_combined_file(
+        info = combined_files.save_combined_file(
             broker_id=broker_id,
             plugin_code=plugin_code,
             plugin_version=plugin.plugin_version,

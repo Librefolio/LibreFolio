@@ -21,9 +21,11 @@ from backend.app.schemas.brim import (
     BRIMParseResponse,
     BRIMVerification,
 )
-from backend.app.services.brim import brim_provider, brim_report_sets
+from backend.app.services.brim import brim_report_sets, storage
 from backend.app.services.brim.brim_parse_pool import parse_file_offloaded
-from backend.app.services.brim.brim_provider import BRIMCannotParseError, BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates_bulk
+from backend.app.services.brim.brim_provider import BRIMCannotParseError, BRIMParseError, BRIMProvider, BRIMSetRequiredError
+from backend.app.services.brim.candidates import search_asset_candidates_bulk
+from backend.app.services.brim.duplicates import detect_tx_duplicates
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.plugin_settings.runtime import bound_settings_for
 
@@ -103,7 +105,7 @@ async def parse_file(
     plugin_code = request.plugin_code
     if plugin_code == "auto":
         # Auto-detect plugin based on file content
-        file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
+        file_path = await asyncio.to_thread(storage.get_file_path, file_id)
         if not file_path:
             raise HTTPException(status_code=404, detail="File not found")
 
@@ -173,7 +175,7 @@ async def parse_file(
         # Move file to parsed folder on success. Four filesystem operations
         # (rename, read, write, unlink) — off the event loop like every other
         # blocking call in this handler.
-        await asyncio.to_thread(brim_provider.move_to_parsed, file_id)
+        await asyncio.to_thread(storage.move_to_parsed, file_id)
 
         # Build response
         response = BRIMParseResponse(
@@ -197,7 +199,7 @@ async def parse_file(
         # plugin_code so BRIMFileInfo can compute parse_is_stale if the
         # plugin is bumped later. Off the event loop: the write holds the broker's metadata lock.
         await asyncio.to_thread(
-            brim_provider.save_parse_result,
+            storage.save_parse_result,
             file_id,
             response.model_dump(mode="json"),
             plugin_code=plugin_code,
@@ -226,7 +228,7 @@ async def parse_file(
 
     except ValueError as e:
         # Parse failed - move to failed folder
-        await asyncio.to_thread(brim_provider.move_to_failed, file_id, str(e))
+        await asyncio.to_thread(storage.move_to_failed, file_id, str(e))
         if isinstance(e, BRIMCannotParseError):
             refusal = e.refusal or {}
             reason = {"code": refusal.get("code"), "message": refusal.get("message"), "context": refusal.get("context") or {}}
@@ -235,7 +237,7 @@ async def parse_file(
 
     except BRIMParseError as e:
         # Parse failed - move to failed folder
-        await asyncio.to_thread(brim_provider.move_to_failed, file_id, e.message)
+        await asyncio.to_thread(storage.move_to_failed, file_id, e.message)
         reason = {"code": e.details.get("code"), "message": e.message, "context": e.details.get("context") or {}}
         raise HTTPException(status_code=400, detail=_parse_failed_detail(f"Parse error: {e.message}", plugin_code, _plugin_name(plugin_code), reason)) from e
 

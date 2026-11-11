@@ -18,7 +18,7 @@ from backend.app.schemas.brokers import (
     BRSelfAccessResponse,
     BRSelfRoleUpdate,
 )
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 from backend.app.services.brokers.broker_service import BrokerService
 
 logger = get_logger(__name__)
@@ -165,7 +165,7 @@ async def leave_broker_access(
 
     if broker_deleted:
         # Same orphaned-BRIM-file cleanup as the bulk delete endpoint
-        files_removed = await asyncio.to_thread(brim_provider.delete_files_for_brokers, [broker_id])
+        files_removed = await asyncio.to_thread(storage.delete_files_for_brokers, [broker_id])
         logger.info(f"Broker {broker_id} cascade-deleted: last owner left", user_id=current_user.id, brim_files_removed=files_removed)
     else:
         logger.info(f"User left broker {broker_id}", user_id=current_user.id)

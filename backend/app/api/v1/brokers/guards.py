@@ -11,7 +11,7 @@ from backend.app.db.models import User, UserRole
 from backend.app.schemas.brim import (
     BRIMFileInfo,
 )
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 from backend.app.services.brokers.broker_service import BrokerService
 
 
@@ -32,7 +32,7 @@ async def get_brim_file_with_access(
     if not is_brim_file_id(file_id):
         raise HTTPException(status_code=404, detail="File not found")
     # Off the event loop: reading a sidecar may detect the file's plugins again (item 8), which reads the file.
-    file_info = await asyncio.to_thread(brim_provider.get_file_info, file_id)
+    file_info = await asyncio.to_thread(storage.get_file_info, file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
 
