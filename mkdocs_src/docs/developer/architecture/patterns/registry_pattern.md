@@ -19,7 +19,7 @@ Each family keeps its registry in its own runtime package:
 - `RiskAnalyticRegistry` in `backend/app/services/risk/registry.py`
 - `ToolPluginRegistry` in `backend/app/services/tools/registry.py`
 
-`backend/app/services/provider_registry.py` keeps what they share: the base classes `AbstractPluginRegistry` and `AbstractProviderRegistry`, the folder-per-plugin discovery (`PLUGIN_MODULE_NAME`), the registry errors, and both decorators.
+`backend/app/services/platform/provider_registry.py` keeps what they share: the base classes `AbstractPluginRegistry` and `AbstractProviderRegistry`, the folder-per-plugin discovery (`PLUGIN_MODULE_NAME`), the registry errors, and both decorators.
 
 ### 🗺️ High-Level Flow
 
