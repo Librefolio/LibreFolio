@@ -177,6 +177,8 @@ same laptop.
 - **Test temp files go to disk, not `/tmp`** (developer decision, 11/11/2026). `/tmp` is a 7.8 GB RAM disk and stays so.
   Run every test command (`dev.py test`, pytest, Vitest, Playwright, `mkdocs gallery`) with
   `TMPDIR=~/.cache/librefolio-test-tmp/<lane-name>` (create it first): pytest's basetemp, Playwright and Node write there.
+  `dev.py test`, `server --test` and `mkdocs gallery` set it by themselves (`~/.cache/librefolio-test-tmp/<port>`, WT-T1);
+  set it by hand only for pytest, Vitest or Playwright run directly. pytest keeps `tmp_path` of failed tests only.
   Locks and the small lane data directory stay in `/tmp`. Delete your subfolder when your lane ends; the coordinator,
   when space runs short, deletes the subfolders no process holds open, oldest first.
 
