@@ -7,8 +7,8 @@
  * 3. FX detail (flat mode)
  *
  * Strategy: tests verify component structure and the absence of legacy markup.
- * Data-conditional checks use `test.info().annotations.push` (not `test.skip`)
- * when the data state is genuinely variable.
+ * No check depends on what the seed happens to hold: a state the test needs is served by
+ * route (`serveDashboardIssues`) or built into the URL, and asserted unconditionally.
  *
  * Prerequisites:
  * - Test server running (./dev.py server --test)
@@ -49,13 +49,9 @@ async function goToFirstAssetDetail(page: import('@playwright/test').Page) {
 }
 
 /**
- * The grouped (dashboard) banner is foldable and collapsed by default — it shows only the
- * "N avviso/i" header until opened. Click the header toggle so issue rows / CTAs become visible.
- */
-/**
  * Expand the banner and *stay* expanded.
  *
- * The lenient version below clicks once, which loses a race the injected-issue tests made
+ * A single click loses a race the injected-issue tests made
  * visible: the dashboard re-renders when the portfolio report lands, so a toggle clicked
  * before that lands is a toggle on a banner that is about to be replaced by a collapsed
  * one. Retrying until `aria-expanded` sticks is the fix.
@@ -69,15 +65,6 @@ async function expandDataQualityBannerStrict(page: import('@playwright/test').Pa
         }
         expect(await toggle.getAttribute('aria-expanded')).toBe('true');
     }).toPass({timeout: 15_000});
-}
-
-async function expandDataQualityBanner(page: import('@playwright/test').Page) {
-    const toggle = page.getByTestId('data-quality-toggle');
-    if (await toggle.isVisible({timeout: 3000}).catch(() => false)) {
-        if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-            await toggle.click();
-        }
-    }
 }
 
 /**
@@ -422,21 +409,17 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
         await expect(page.getByTestId('dashboard-missing-fx-banner')).toHaveCount(0);
     });
 
-    test('when data quality banner is present it is grouped with issue rows', async ({page}) => {
+    test('a data quality banner is grouped with its issue rows', async ({page}) => {
+        // The list is served, so the banner is always there: what the seed happens to report is not the subject.
+        await serveDashboardIssues(page, [headerIssue('error', 1), headerIssue('warning', 1)]);
         await goToDashboard(page);
-        const banner = page.getByTestId('data-quality-banner');
-        const hasBanner = await banner.isVisible({timeout: 3000}).catch(() => false);
 
-        if (hasBanner) {
-            // Grouped mode: single container
-            await expect(banner).toHaveCount(1);
-            // Foldable: reveal the rows, then at least one issue row must be visible
-            await expandDataQualityBanner(page);
-            const issueRows = page.locator('[data-testid^="data-quality-issue-"]');
-            await expect(issueRows.first()).toBeVisible();
-        } else {
-            test.info().annotations.push({type: 'info', description: 'No data quality issues in test DB — banner hidden (expected)'});
-        }
+        // Grouped mode: a single container
+        await expect(page.getByTestId('data-quality-banner')).toHaveCount(1);
+        // Foldable: reveal the rows, then each served issue has its row
+        await expandDataQualityBannerStrict(page);
+        await expect(page.getByTestId('data-quality-issue-MISSING_PRICE')).toBeVisible();
+        await expect(page.getByTestId('data-quality-issue-STALE_PRICE')).toBeVisible();
     });
 
     // The grouped header counts errors and warnings and names only the non-zero ones; info issues
@@ -797,20 +780,16 @@ test.describe('DataQualityBanner — FX Detail (flat mode)', () => {
     });
 
     test('range-before-data issue appears when URL date precedes first data', async ({page}) => {
-        // Navigate with a very early date range to trigger the issue
-        await page.goto('/fx/EUR-USD?start=2000-01-01&end=2000-12-31');
+        // A start date before any stored EUR-USD point, an end date of today: the chart holds every point, so the
+        // first one is later than the start and the page owes the note. If the seed ever holds data from 2000 or
+        // earlier, this fails loudly instead of turning into a green no-op.
+        await page.goto(`/fx/EUR-USD?start=2000-01-01&end=${todayIso()}`);
         await page.waitForSelector('[data-testid="fx-detail-page"]', {timeout: 15_000});
         await waitForSettled(page.getByTestId('fx-detail-page'), 25_000);
 
         const issue = page.getByTestId('data-quality-issue-RANGE_BEFORE_FIRST_DATA');
-        const isVisible = await issue.isVisible({timeout: 3000}).catch(() => false);
-
-        if (isVisible) {
-            const text = await issue.textContent();
-            // Message should contain a year (date of first available data)
-            expect(text).toMatch(/\d{4}/);
-        } else {
-            test.info().annotations.push({type: 'info', description: 'EUR-USD data starts before 2000 — range issue not triggered'});
-        }
+        await expect(issue).toBeVisible({timeout: 10_000});
+        // The message names the date of the first available data: a year
+        await expect(issue).toContainText(/\d{4}/);
     });
 });
