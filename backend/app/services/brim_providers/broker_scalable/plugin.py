@@ -56,8 +56,11 @@ class ScalableBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        """1.1.0: a status the file shows that the importer does not know is reported; the known ones that are not movements are dropped quietly (W-B86)."""
-        return "1.1.0"
+        """1.2.0: a tax refund is an INTEREST «Tax refund», no longer a DEPOSIT (lane 73, the developer's rule of 11/11/2026).
+
+        1.1.0: a status the file shows that the importer does not know is reported; the known ones that are not movements are dropped quietly (W-B86).
+        """
+        return "1.2.0"
 
     @property
     def docs_url(self) -> Optional[str]:

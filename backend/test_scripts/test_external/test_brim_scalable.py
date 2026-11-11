@@ -64,7 +64,7 @@ BROKER_NAME = "Scalable Capital broker"
 DEPOSIT_NAME = "Scalable Capital overnight account"
 PLUGIN_CODES = (BROKER_CODE, DEPOSIT_CODE)
 DOCS_URL = "/mkdocs/user/transactions/import/scalable/"
-PLUGIN_VERSION = "1.1.0"
+PLUGIN_VERSION = "1.2.0"
 SAMPLE_DIR = SampleDir()
 PRIME_SAMPLE = SAMPLE_DIR / "scalable-prime-export.csv"
 BROKER_SAMPLE = SAMPLE_DIR / "scalable-broker-export.csv"
@@ -569,10 +569,10 @@ PRIME_SPEC = SampleSpec(
         Tx(11, "WITHDRAWAL", "2026-04-15", "-200"),
         Tx(12, "DEPOSIT", "2026-04-01", "5000"),
         Tx(13, "FEE", "2026-03-31", "-4.99"),
-        Tx(14, "DEPOSIT", "2026-03-20", "12.5"),
+        Tx(14, "INTEREST", "2026-03-20", "12.5", prefix=LEG_REFUND),
         Tx(15, "TAX", "2026-03-10", "-8.4"),
     ),
-    # The pending and the cancelled order (2, 3) are dropped without a notice (W-B86); the tax refund booked as a deposit (14), the security transfer (16)
+    # The pending and the cancelled order (2, 3) are dropped without a notice (W-B86); the tax refund booked as interest (14), the security transfer (16)
     notices={TAX_REFUND: (14,), NOT_IMPORTED: (16,)},
     assets=(APPLE, TELEKOM, MSCI_WORLD, ALL_WORLD_ACC),
     silent=(2, 3),
@@ -600,7 +600,7 @@ BROKER_SPEC = SampleSpec(
         Tx(13, "WITHDRAWAL", "2026-04-02", "-1000"),
         Tx(14, "DEPOSIT", "2026-04-01", "5000"),
         Tx(15, "FEE", "2026-03-31", "-4.99"),
-        Tx(16, "DEPOSIT", "2026-03-20", "12.5"),
+        Tx(16, "INTEREST", "2026-03-20", "12.5", prefix=LEG_REFUND),
         Tx(17, "TAX", "2026-03-10", "-8.4"),
         # BONUS, a cash type the plugin does not know: booked by its sign
         Tx(18, "DEPOSIT", "2026-03-05", "25"),
@@ -1192,10 +1192,10 @@ class TestTrades:
         _run(tmp_path, layout, cases)
 
     @pytest.mark.parametrize("layout", BROKER_LAYOUTS)
-    def test_a_negative_tax_on_a_sale_is_given_back_as_a_deposit(self, layout: Layout, tmp_path: Path):
-        """A tax below zero is a refund: DEPOSIT ``+|tax|`` without an asset, described ``Tax refund · …``, and ``scalable_tax_refund``; no TAX leg."""
+    def test_a_negative_tax_on_a_sale_is_given_back_as_interest(self, layout: Layout, tmp_path: Path):
+        """A tax below zero is a refund: INTEREST ``+|tax|`` on the security, described ``Tax refund · …``, and ``scalable_tax_refund``; no TAX leg."""
         cases = [
-            (_trade("Sell", APPLE, "5", "180,4", "902", fee="0,99", tax="-12,34"), (Leg("SELL", "902", "-5", asset=True), Leg("FEE", "-0.99", asset=True, prefix=LEG_FEE), Leg("DEPOSIT", "12.34", prefix=LEG_REFUND)), TAX_REFUND),
+            (_trade("Sell", APPLE, "5", "180,4", "902", fee="0,99", tax="-12,34"), (Leg("SELL", "902", "-5", asset=True), Leg("FEE", "-0.99", asset=True, prefix=LEG_FEE), Leg("INTEREST", "12.34", asset=True, prefix=LEG_REFUND)), TAX_REFUND),
             (_trade("Buy", MSCI_WORLD, "2", "100,5", "-201"), (Leg("BUY", "-201", "2", asset=True),), None),
         ]
 
@@ -1279,7 +1279,7 @@ class TestCashRows:
             (_cash("Withdrawal", "-200"), (Leg("WITHDRAWAL", "-200"),), None),
             (_cash("Fee", "-4,99"), (Leg("FEE", "-4.99"),), None),
             (_cash("Taxes", "-8,4"), (Leg("TAX", "-8.4"),), None),
-            (_cash("Taxes", "12,5"), (Leg("DEPOSIT", "12.5"),), TAX_REFUND),
+            (_cash("Taxes", "12,5"), (Leg("INTEREST", "12.5", prefix=LEG_REFUND),), TAX_REFUND),
             (_cash("Deposit", "-50"), (Leg("WITHDRAWAL", "-50"),), CASH_BY_SIGN),
             (_cash("Withdrawal", "60"), (Leg("DEPOSIT", "60"),), CASH_BY_SIGN),
             (_cash("Fee", "2,5"), (Leg("DEPOSIT", "2.5"),), CASH_BY_SIGN),
