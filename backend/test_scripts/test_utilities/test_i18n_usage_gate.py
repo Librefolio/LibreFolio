@@ -898,7 +898,7 @@ class TestSuffixComposition:
 
     ``ChartSignalsSection.svelte:142`` builds the long name of a signal by appending
     ``Full`` to its ``displayNameKey``, whose values are literals in
-    ``charts/signals/registry.ts:91-107``. The template opens on an interpolation, so it
+    ``features/signals/registry.ts:91-107``. The template opens on an interpolation, so it
     has no literal head and the scan dropped it: every ``…Full`` key read as dead. Their
     ``…Abbr`` siblings have no such template, and are the doubtful keys of §2.2.
     """
@@ -923,7 +923,7 @@ export const SIGNALS = [
 
     @pytest.fixture
     def usage(self, tmp_path):
-        src = _tree(tmp_path / "src", {"charts/signals/registry.ts": self.REGISTRY, "components/ChartSignalsSection.svelte": self.SECTION})
+        src = _tree(tmp_path / "src", {"features/signals/registry.ts": self.REGISTRY, "components/ChartSignalsSection.svelte": self.SECTION})
         return collect_from_source(src)
 
     @pytest.mark.parametrize("key", ["ns.signals.fxPairFull", "ns.signals.linearFull"])
@@ -1624,7 +1624,7 @@ class TestGeneratedClients:
     reference on a synced tree and as nothing on a fresh clone: one commit, two verdicts.
     The backend the client is generated from is read directly anyway (R2, R4), so the
     client adds nothing true and something unstable. Product files also import it
-    directly (``charts/signals/backendTypes.ts:3``, ``providerProbeState.svelte.ts:2``), so
+    directly (``features/signals/backendTypes.ts:3``, ``providerProbeState.svelte.ts:2``), so
     it must not come back one import away as a witness for R8 either.
 
     The healthy half: only generated clients. A generator, a helper whose name begins with
