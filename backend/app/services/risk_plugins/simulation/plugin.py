@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend.app.schemas.risk.outputs import RiskSimulationBandPoint, RiskSimulationOutput
 from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskMode, RiskOutputKind, RiskSamplingStrategy, RiskScopeKind, RiskSimulationCovarianceEstimator, RiskSimulationDriftEstimator, RiskSimulationProcess, RiskSimulationRegime
 from backend.app.services.financial_math.returns import calendar_days_to_observations
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Type
 
-from backend.app.services.provider_registry import AbstractPluginRegistry
+from backend.app.services.platform.provider_registry import AbstractPluginRegistry
 from backend.app.services.risk.base import RiskAnalytic
 
 

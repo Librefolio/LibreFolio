@@ -45,7 +45,7 @@ from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.brim_providers.broker_credit_agricole import _report_set
 from backend.app.services.brim_providers.broker_credit_agricole._combined import COMBINED_MARKERS, CombinedParser, TableBuilder, read_combined
 from backend.app.services.brim_providers.broker_credit_agricole._rows import ROLE_ACCOUNT, ROLE_SECURITIES, detect_role
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 _HEADER_SCAN_ROWS = 60
 

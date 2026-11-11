@@ -48,7 +48,7 @@ from backend.test_scripts.test_utils import print_section, print_success
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SERVICES_DIR = REPO_ROOT / "backend" / "app" / "services"
 SERVICES_PACKAGE = "backend.app.services"
-PROVIDER_REGISTRY = SERVICES_DIR / "provider_registry.py"
+PROVIDER_REGISTRY = SERVICES_DIR / "platform" / "provider_registry.py"
 
 PLUGIN_FAMILIES = ("brim_providers", "asset_source_providers", "fx_providers", "risk_plugins", "signal_plugins", "tool_plugins")
 # The module of a plugin folder that holds its code: provider_registry.PLUGIN_MODULE_NAME, read back from its source.

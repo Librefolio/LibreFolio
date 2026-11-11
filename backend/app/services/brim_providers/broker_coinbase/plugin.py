@@ -46,7 +46,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -136,7 +136,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import transactions from Coinbase CSV export. " "Supports crypto buys, sells, and staking rewards."
+        return "Import transactions from Coinbase CSV export. Supports crypto buys, sells, and staking rewards."
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -265,7 +265,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
                     orig_quantity = quantity
                     if tx_type in (TransactionType.INTEREST, TransactionType.DIVIDEND):
                         if quantity != Decimal("0"):
-                            warnings.append(f"Row {row_num}: {tx_type_raw} had quantity={quantity} {asset}" f" — recorded as cash-only INTEREST (token qty discarded, cash preserved)")
+                            warnings.append(f"Row {row_num}: {tx_type_raw} had quantity={quantity} {asset} — recorded as cash-only INTEREST (token qty discarded, cash preserved)")
                         quantity = Decimal("0")
 
                     if tx_type in (TransactionType.INTEREST, TransactionType.DIVIDEND) and orig_quantity and orig_quantity != Decimal("0"):

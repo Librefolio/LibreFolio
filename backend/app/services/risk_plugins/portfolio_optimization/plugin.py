@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.app.schemas.risk.outputs import RiskOptimizationConstraintSummary, RiskOptimizationFrontierPoint, RiskOptimizationSensitivityPoint, RiskOptimizationWeight, RiskPortfolioOptimizationOutput
 from backend.app.schemas.risk.series import RiskFreeReference
 from backend.app.schemas.risk.vocabulary import RiskCovarianceEstimator, RiskErrorCode, RiskMode, RiskOptimizationSolver, RiskOptimizationStrategy, RiskOutputKind, RiskReturnBasis, RiskScopeKind
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,

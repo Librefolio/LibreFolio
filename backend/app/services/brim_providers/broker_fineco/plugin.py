@@ -94,7 +94,7 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as io
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.utils.datetime_utils import server_today
 
 logger = structlog.get_logger(__name__)
@@ -142,7 +142,7 @@ REQUIRED_NUMBER_COLUMNS: Dict[TransactionType, Tuple[int, ...]] = {
 # The notes' texts, in the export's language (the wizard shows the translation of each code, importWizard.brimNotice.*).
 NOT_SETTLED_MESSAGE = "Righe non ancora regolate (data valuta dopo oggi): {n}. Non sono state importate e arriveranno con il prossimo export."
 NOT_SETTLED_COMMENT = "La data valuta di queste righe è dopo oggi: non sono ancora regolate."
-INCOMPLETE_MESSAGE = "Questo import potrebbe essere sbagliato: righe senza un numero necessario (quantità o controvalore): {n}. Controlla le righe; se il file è giusto, è probabilmente un errore del plugin: apri una issue su GitHub " "per analizzarlo e risolverlo."
+INCOMPLETE_MESSAGE = "Questo import potrebbe essere sbagliato: righe senza un numero necessario (quantità o controvalore): {n}. Controlla le righe; se il file è giusto, è probabilmente un errore del plugin: apri una issue su GitHub per analizzarlo e risolverlo."
 INCOMPLETE_COMMENT = "L'ultima colonna nomina il campo senza numero; la riga è importata così com'è."
 INCOMPLETE_COLUMN = "Campo vuoto"
 

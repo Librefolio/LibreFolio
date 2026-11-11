@@ -10,7 +10,7 @@ from backend.app.schemas.signals.inputs import SignalEventPoint, SignalExecution
 from backend.app.schemas.signals.outputs import SignalAxisSpec, SignalOutputSpec
 from backend.app.schemas.signals.result import SignalComputation
 from backend.app.schemas.signals.vocabulary import SignalAggregationProfile, SignalAxisRole, SignalCategory, SignalDomain, SignalPriceField, SignalSeriesKind, SignalUnit
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.risk_adapters import (

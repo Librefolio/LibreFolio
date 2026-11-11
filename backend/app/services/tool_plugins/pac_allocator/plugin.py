@@ -52,7 +52,7 @@ from backend.app.schemas.tools import (
     ToolUIDescriptor,
 )
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import (
     ToolExecutionContext,
     ToolExecutionError,

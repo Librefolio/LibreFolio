@@ -69,7 +69,7 @@ PRIORITY_MAP = {
     "backend/app/services/accounts/global_settings_service.py": "LOW",
     "backend/app/services/accounts/settings_service.py": "LOW",
     "backend/app/services/files/static_uploads.py": "LOW",
-    "backend/app/services/provider_registry.py": "LOW",
+    "backend/app/services/platform/provider_registry.py": "LOW",
     "backend/app/schemas/": "LOW",
     # INFRA — not unit-testable
     "backend/app/main.py": "INFRA",
@@ -507,7 +507,7 @@ Categories (JS/Svelte):
         "--input",
         "-i",
         default=None,
-        help="Path to coverage JSON file (default: /tmp/cov_report.json, " "or the newest JS report when --lang js)",
+        help="Path to coverage JSON file (default: /tmp/cov_report.json, or the newest JS report when --lang js)",
     )
     parser.add_argument(
         "--lang",
@@ -648,7 +648,7 @@ def register_subparser(subparsers):
         "--input",
         "-i",
         default=None,
-        help="Path to coverage JSON (default: /tmp/cov_report.json, " "or the newest JS report with --lang js)",
+        help="Path to coverage JSON (default: /tmp/cov_report.json, or the newest JS report with --lang js)",
     )
     p.add_argument(
         "--lang",

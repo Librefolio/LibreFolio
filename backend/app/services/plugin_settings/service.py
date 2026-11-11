@@ -50,11 +50,11 @@ from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.instance_key import InstanceKeyError
+from backend.app.services.platform.provider_registry import AbstractProviderRegistry
 from backend.app.services.plugin_settings.crypto import encrypt_secret, key_id_of, secret_aad, settings_subkey
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, SettingValueError, env_variables, validate_value
 from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, missing_field_keys, resolve_plugin_fields
 from backend.app.services.plugin_settings.runtime import stored_value
-from backend.app.services.provider_registry import AbstractProviderRegistry
 from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.utils.datetime_utils import utcnow
 

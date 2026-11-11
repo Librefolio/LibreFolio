@@ -16,7 +16,7 @@ import httpx
 from backend.app.logging_config import get_logger
 from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError, raise_if_fx_rate_limited, raise_longest_refusal
 from backend.app.services.fx.registry import FXProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = get_logger(__name__)
 
@@ -186,8 +186,8 @@ class BOEProvider(FXRateProvider):
                     # Guard: detect HTML bot-protection pages
                     body = response.text
                     if "<html" in body.lower()[:500] or "<!doctype" in body.lower()[:500]:
-                        logger.error(f"BOE returned HTML instead of CSV for {currency} " f"(first 200 chars: {body[:200]})")
-                        raise FXServiceError(f"BOE returned HTML instead of CSV for {currency} — " f"possible bot protection or endpoint change")
+                        logger.error(f"BOE returned HTML instead of CSV for {currency} (first 200 chars: {body[:200]})")
+                        raise FXServiceError(f"BOE returned HTML instead of CSV for {currency} — possible bot protection or endpoint change")
 
                     observations = self._parse_response(body, currency)
                     return currency, observations
