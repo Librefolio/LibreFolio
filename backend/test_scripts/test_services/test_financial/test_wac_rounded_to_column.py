@@ -82,13 +82,13 @@ from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.base import NO_VALUE
 
-import backend.app.services.portfolio_service as portfolio_service_module
+import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, Transaction, TransactionType
 from backend.app.db.precision import decimal_limit_issue, round_computed_value
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationIssue
 from backend.app.schemas.wac import WACPreviewResultItem
-from backend.app.services.portfolio_service import compute_wac_iterative
+from backend.app.services.portfolio.portfolio_service import compute_wac_iterative
 from backend.app.services.transactions.auto_cost import TransactionAutoCostMixin
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow

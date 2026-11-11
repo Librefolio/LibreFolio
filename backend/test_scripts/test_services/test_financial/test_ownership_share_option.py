@@ -59,7 +59,7 @@ cache and the report's L2 cache (process-global) are emptied around each test.
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory); alone:
 ``./dev.py test services ownership-share-option``.
 
-Reference: backend/app/services/portfolio_service.py (_engine_run, get_report and its L2 key, get_positions_series),
+Reference: backend/app/services/portfolio/portfolio_service.py (_engine_run, get_report and its L2 key, get_positions_series),
 backend/app/services/financial_math/portfolio/engine.py (calculate: broker_shares, the blob key),
 backend/app/services/financial_math/native_cash.py (broker_shares), backend/app/services/risk/scope.py (load_scope_inputs).
 """
@@ -85,10 +85,10 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Fx
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery, PositionKey, PositionsSeriesQuery
 from backend.app.schemas.risk import PortfolioRiskScope, RiskAnalyticRequest, RiskCompositionPolicy, RiskMode, RiskQueryRequest, RiskScenarioDimension, RiskStressMethod
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.market_series import prepare_asset_series_set
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk.results import build_execution_context, portfolio_twrr_returns
 from backend.app.services.risk.scope import load_asset_classifications, load_scope_inputs
 from backend.app.services.risk_plugins.stress.plugin import StressAnalytic, StressParams

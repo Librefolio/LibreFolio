@@ -75,10 +75,10 @@ LAYER_PACKAGE = "backend.app.services.financial_math"
 # "...services.risk" also covers "risk_plugins", and "...services.signal" covers "signal_plugins",
 # "signal_runtime", "signal_service" and every other "signal_*" module.
 FORBIDDEN_PREFIXES = (
-    "backend.app.services.portfolio_service",
+    "backend.app.services.portfolio.portfolio_service",
     "backend.app.services.brokers",
     "backend.app.services.transactions",
-    "backend.app.services.lots_analysis_service",
+    "backend.app.services.portfolio.lots_analysis_service",
     "backend.app.api",
     "backend.app.services.ai_export",
     "backend.app.services.risk",
@@ -115,7 +115,7 @@ SPLIT_EVENT_TYPE_HOMES = {
 KNOWN_APP_MODULES = (
     *SPLIT_EVENT_TYPE_HOMES,
     "db/models.py",
-    "services/portfolio_service.py",
+    "services/portfolio/portfolio_service.py",
     "services/transactions/auto_cost.py",
 )
 
@@ -258,10 +258,10 @@ def _interest_primitive_definitions() -> dict[str, list[tuple[str, int]]]:
 
 # Every shape (a) must reject, written from inside ``financial_math.lots``: (source, line, module it binds).
 _FORBIDDEN_SHAPES = (
-    ("import backend.app.services.portfolio_service", 1, "backend.app.services.portfolio_service"),
+    ("import backend.app.services.portfolio.portfolio_service", 1, "backend.app.services.portfolio.portfolio_service"),
     ("import backend.app.services.brokers.broker_service as brokers", 1, "backend.app.services.brokers.broker_service"),
     ("import backend.app.services.fx.conversion, backend.app.services.transactions.transaction_service", 1, "backend.app.services.transactions.transaction_service"),
-    ("from backend.app.services.lots_analysis_service import LotsAnalysisService", 1, "backend.app.services.lots_analysis_service"),
+    ("from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService", 1, "backend.app.services.portfolio.lots_analysis_service"),
     ("from backend.app.api.v1 import portfolio", 1, "backend.app.api.v1"),
     ("from backend.app import api", 1, "backend.app.api"),
     ("from backend.app.services.ai_export.components import fx_core", 1, "backend.app.services.ai_export.components"),
@@ -272,9 +272,9 @@ _FORBIDDEN_SHAPES = (
     ("from backend.app.services.signal_service import SignalService", 1, "backend.app.services.signal_service"),
     ("from backend.app.services.signal_plugins import base", 1, "backend.app.services.signal_plugins"),
     ("import backend.app.services.signal_runtime", 1, "backend.app.services.signal_runtime"),
-    ("from ...portfolio_service import PortfolioService", 1, "backend.app.services.portfolio_service"),
+    ("from ...portfolio.portfolio_service import PortfolioService", 1, "backend.app.services.portfolio.portfolio_service"),
     ("from ... import risk", 1, "backend.app.services.risk"),
-    ("def load():\n    from backend.app.services.portfolio_service import PortfolioService\n", 2, "backend.app.services.portfolio_service"),
+    ("def load():\n    from backend.app.services.portfolio.portfolio_service import PortfolioService\n", 2, "backend.app.services.portfolio.portfolio_service"),
     ("from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from backend.app.services.brokers.broker_service import BrokerService\n", 4, "backend.app.services.brokers.broker_service"),
 )
 
@@ -501,7 +501,7 @@ def test_an_old_home_of_the_layer_stays_gone(old_home):
 def test_only_the_split_loader_names_the_split_event_type():
     """(d) The rows linked to a SPLIT asset event are read through ``financial_math.splits``, never by a join of one's own.
 
-    Before MF-I2: red, naming ``services/portfolio_service.py``, ``services/brokers/summary.py`` (since
+    Before MF-I2: red, naming ``services/portfolio/portfolio_service.py``, ``services/brokers/summary.py`` (since
     removed) and ``services/transactions/auto_cost.py``.
     """
     offenders = [f"backend/app/{module}:{line}" for module, lines in sorted(_split_event_type_uses().items()) if module not in SPLIT_EVENT_TYPE_HOMES for line in lines]

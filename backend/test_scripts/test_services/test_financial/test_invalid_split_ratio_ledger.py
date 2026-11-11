@@ -75,8 +75,8 @@ from backend.app.schemas.portfolio import IssueDomain, IssueSeverity, PortfolioR
 from backend.app.services.financial_math.average_cost import CostEffect
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.yield_on_cost import YieldOnCostPositionInput, calculate_yield_on_cost_for_positions
-from backend.app.services.lots_analysis_service import get_lots_analysis
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 D0 = date(2025, 1, 2)  # DEPOSIT 1000

@@ -68,8 +68,8 @@ from backend.app.services.ai_export.dependencies import (
 )
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.portfolio import period as period_math
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 CURRENCY = "USD"
 

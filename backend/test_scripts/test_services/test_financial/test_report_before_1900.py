@@ -46,7 +46,7 @@ module's fixture, undone at its end. No sleep, no wall clock, no translated text
 
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory).
 
-Reference: backend/app/services/financial_math/portfolio/engine.py (calculate step 5), backend/app/services/portfolio_service.py
+Reference: backend/app/services/financial_math/portfolio/engine.py (calculate step 5), backend/app/services/portfolio/portfolio_service.py
 (get_report), backend/app/services/financial_math/series_steps.py.
 """
 
@@ -69,11 +69,11 @@ from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery, PortfolioReportResponse
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.portfolio.models import StateSegment
 from backend.app.services.financial_math.returns import annualized_to_cumulative
 from backend.app.services.financial_math.series_steps import points_between, value_at
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 END = date(2025, 6, 30)

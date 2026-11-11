@@ -86,8 +86,8 @@ from backend.app.services.ai_export.dependencies import (
     build_bucket_plan_for_scope,
 )
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService, _portfolio_l2_cache, _wac_cache
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService, _portfolio_l2_cache, _wac_cache
 from backend.app.utils.datetime_utils import utcnow
 
 CURRENCY = "EUR"  # Asset/FX scope target_currency throughout - both native currencies

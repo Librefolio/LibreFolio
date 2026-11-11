@@ -51,7 +51,7 @@ translated text, no fixed position (points are found by date, brokers by id).
 
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory).
 
-Reference: backend/app/services/portfolio_service.py (get_report, get_history), backend/app/schemas/portfolio.py,
+Reference: backend/app/services/portfolio/portfolio_service.py (get_report, get_history), backend/app/schemas/portfolio.py,
 backend/app/schemas/common.py (StepSpan, DateSpan), backend/app/services/financial_math/series_steps.py,
 backend/app/services/financial_math/portfolio/derived_views.py, backend/app/services/financial_math/returns.py.
 """
@@ -78,12 +78,12 @@ from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import Currency, OpenDateRangeModel
 from backend.app.schemas.portfolio import AllocationItem, PortfolioReportQuery, PortfolioReportResponse
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.returns import annualized_to_cumulative, calculate_simple_roi_series, calculate_twrr_series, period_mwrr_series, rebase_to_period
 from backend.app.services.financial_math.weights import slice_percents
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 END = date(2025, 1, 31)

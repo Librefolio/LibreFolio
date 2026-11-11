@@ -37,7 +37,7 @@ WAC and engine blob caches are emptied around each test. No sleep, no wall-clock
 
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory).
 
-Reference: backend/app/services/portfolio_service.py (get_positions_contribution),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_positions_contribution),
 backend/app/services/financial_math/portfolio/daily_state.py (_transfer_leg_capital),
 backend/test_scripts/test_services/test_financial_math/test_market_value_transfers.py (the records and the period
 function, pure).
@@ -62,9 +62,9 @@ from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import OtherPeriodEffect, PortfolioReportQuery, PositionsContribution
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 TRANSFER_ROW = "Transfers at market value"

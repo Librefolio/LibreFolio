@@ -1,6 +1,6 @@
 """MF-K3 (workstream MF, wave 6) — the Dashboard's TWRR and simple ROI: the card and the line follow one rule.
 
-What changed (``backend/app/services/portfolio_service.py``, HEAD ``33b66ba1c`` → the working tree):
+What changed (``backend/app/services/portfolio/portfolio_service.py``, HEAD ``33b66ba1c`` → the working tree):
 
 * the summary card's ``twrr_percent`` is ``returns.period_twrr(period_navs, period_cfs)``, the last point of
   ``period_twrr_series``: None where the period's last NAV is at or below zero. HEAD computed ``calculate_twrr`` under
@@ -48,7 +48,7 @@ WAC and engine blob caches (process-global) are emptied around each test. No sle
 Runs in ``./dev.py test services roi-fifo-utils``; alone:
 ``./dev.py test services roi-fifo-utils test_portfolio_twrr_roi_card_and_line``.
 
-Reference: backend/app/services/portfolio_service.py (get_summary «5. Performance», get_history_steps),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_summary «5. Performance», get_history_steps),
 backend/app/services/financial_math/returns.py (period_twrr, period_twrr_series, period_roi_cash_flows),
 backend/app/services/financial_math/portfolio/derived_views.py (build_performance_inputs, build_roi_cash_flows).
 """
@@ -71,8 +71,8 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.portfolio import PortfolioHistoryPoint, PortfolioSummary
-from backend.app.services import portfolio_service as portfolio_service_module
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 D = Decimal
 EUR = "EUR"

@@ -39,7 +39,7 @@ wall-clock dependency (every range is explicit), no translated text.
 
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory).
 
-Reference: backend/app/services/portfolio_service.py (get_report, get_summary, get_history_steps),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_report, get_summary, get_history_steps),
 backend/app/services/financial_math/returns.py (period_mwrr, period_mwrr_series, _mwrr_solve),
 backend/app/services/ai_export/components/portfolio_financial.py (portfolio.summary, portfolio.performance).
 """
@@ -63,12 +63,12 @@ from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import IssueCode, MwrrLinePoint, PortfolioHistoryPoint, PortfolioReportQuery, PortfolioReportResponse, PortfolioSummary
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.financial_math.series_steps import value_at
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 

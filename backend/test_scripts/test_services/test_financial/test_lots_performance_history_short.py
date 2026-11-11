@@ -54,7 +54,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import PriceHistory, TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
-from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
 from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_services._scope_boundary_books import add_prices, asset_row, new_asset, new_broker, new_user
 from backend.test_scripts.test_services.test_financial.test_lots_change_days_parity import Book, _as_is_and_every_day, _assert_not_vacuous, _dump, _first_difference, _own_no_rate, _point_counts, _windows

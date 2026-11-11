@@ -95,7 +95,7 @@ from backend.app.services.ai_export.temporal.policy import (
     indicator_history_row_limit,
 )
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.signal_plugins.drawdown.plugin import DrawdownParams, DrawdownPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
@@ -1075,9 +1075,7 @@ class TestMultiOutputOhlc:
         table = technical_shared.build_indicator_table_payloads(
             (result,),
             context,
-        )[
-            0
-        ].model_dump(mode="json")
+        )[0].model_dump(mode="json")
         row = next(row for row in table["rows"] if row["start_date"] == bucket.start_date.isoformat() and row["end_date"] == bucket.end_date.isoformat())
 
         assert row["cells"]["bands.lower"]["min"]["date"] == middle.isoformat()

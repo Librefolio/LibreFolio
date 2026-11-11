@@ -69,7 +69,7 @@ from backend.app.services.financial_math.returns import (
     period_mwrr_series,
     rebase_to_period,
 )
-from backend.app.services.portfolio_service import _engine_missing_fx_pairs
+from backend.app.services.portfolio.portfolio_service import _engine_missing_fx_pairs
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 

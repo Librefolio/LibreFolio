@@ -66,7 +66,7 @@ async def build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence 
     issues: list[PortfolioPlannerSourceIssue],
 ) -> list[PortfolioPlannerWacContext]:
     # Resolved at call time, not at module load: tests patch portfolio_service.compute_wac_iterative.
-    from backend.app.services.portfolio_service import compute_wac_iterative  # noqa: PLC0415
+    from backend.app.services.portfolio.portfolio_service import compute_wac_iterative  # noqa: PLC0415
 
     prepared: list[tuple[int, int, object | None]] = []
     fx_keys: set[tuple[str, str, date_type]] = set()

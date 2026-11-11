@@ -46,7 +46,7 @@ server, no network. The report, WAC and engine blob caches are emptied around ea
 
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory).
 
-Reference: backend/app/services/portfolio_service.py (get_report, get_summary, _engine_missing_fx_pairs),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_report, get_summary, _engine_missing_fx_pairs),
 backend/app/services/financial_math/portfolio/data_quality.py, backend/app/services/financial_math/portfolio/daily_state.py,
 backend/app/services/fx/conversion.py (UnitRateSteps.rate_day_at), backend/app/schemas/portfolio.py, schemas/wac.py.
 """
@@ -72,10 +72,10 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Fx
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import DataQualityReport, IssueCode, PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 PAIR = "USD/EUR"

@@ -29,7 +29,6 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceResponse,
 )
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
-from backend.app.services import portfolio_service
 from backend.app.services.financial_math import average_cost
 from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, _fold_average_costs
 from backend.app.services.financial_math.portfolio import engine as portfolio_engine
@@ -41,6 +40,7 @@ from backend.app.services.pac_allocator.source import fx_quotes as source_fx_quo
 from backend.app.services.pac_allocator.source import loaders as source_loaders
 from backend.app.services.pac_allocator.source import portfolio_allocation_source as source
 from backend.app.services.pac_allocator.source import wac as source_wac
+from backend.app.services.portfolio import portfolio_service
 
 AS_OF = date(2026, 9, 15)
 CAPTURED_AT = datetime(2026, 9, 15, 12, 30, tzinfo=UTC)

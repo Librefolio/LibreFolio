@@ -45,9 +45,9 @@ from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.series_steps import value_at
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 D0, D1, D2, D3 = date(2025, 9, 1), date(2025, 9, 3), date(2025, 9, 8), date(2025, 9, 10)

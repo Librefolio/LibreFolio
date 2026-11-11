@@ -61,7 +61,7 @@ cash of ``foreign-cash-revalued``, whose two EUR/USD rates are flushed with the 
 and engine blob caches are emptied around each test. Cards and holdings are found by the test's own broker and asset
 ids; the user owns only the test's brokers, so its cards are all of them.
 
-Reference: backend/app/services/portfolio_service.py (get_summary, the by_broker loop),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_summary, the by_broker loop),
 backend/app/services/financial_math/portfolio/daily_state.py (BrokerDailyContribution).
 """
 
@@ -86,12 +86,12 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-import backend.app.services.portfolio_service as portfolio_service_module
+import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import BrokerBreakdown, PortfolioSummary
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_services._range_bounds import lift_range_bound
 from backend.test_scripts.test_utils import print_section, print_success
 

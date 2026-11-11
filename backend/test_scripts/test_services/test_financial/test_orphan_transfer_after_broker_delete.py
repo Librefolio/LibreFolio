@@ -201,8 +201,8 @@ from backend.app.schemas.brokers import BRDeleteItem
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import IssueSeverity, LotAnalysisType, LotsAnalysisResponse, PortfolioSummary
 from backend.app.services.brokers.broker_service import BrokerService
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_utils import print_section, print_success
 

@@ -41,7 +41,7 @@ from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
-from backend.app.services.portfolio_service import HeldAssetQuoteFacts, PortfolioService
+from backend.app.services.portfolio.portfolio_service import HeldAssetQuoteFacts, PortfolioService
 from backend.app.utils.currency_units import minor_unit_factor
 from scripts.i18n_catalog import load_catalog
 

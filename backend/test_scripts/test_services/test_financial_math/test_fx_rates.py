@@ -65,7 +65,6 @@ import pytest
 
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
-from backend.app.services import portfolio_service
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx import storage as fx_storage
 from backend.app.services.pac_allocator.evaluation import scenario
@@ -74,6 +73,7 @@ from backend.app.services.pac_allocator.evaluation.keys import fx_pair_key
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.source import wac as source_wac
 from backend.app.services.pac_allocator.source.keys import normalized_fx_pair
+from backend.app.services.portfolio import portfolio_service
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 APP_ROOT = REPO_ROOT / "backend" / "app"

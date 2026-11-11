@@ -62,8 +62,8 @@ from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buc
 from backend.app.services.financial_math.lots.summary import residual_cost
 from backend.app.services.financial_math.returns import price_return
 from backend.app.services.financial_math.series_steps import points_between
-from backend.app.services.lots_analysis_service import LotsAnalysisService, analysis_failure_codes
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService, analysis_failure_codes
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 if TYPE_CHECKING:
     from backend.app.services.ai_export.dependencies import BuildContext

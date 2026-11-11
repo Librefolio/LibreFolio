@@ -44,9 +44,9 @@ from sqlalchemy.pool import NullPool
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import PortfolioCalculationResult, PositionFrame
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
 
 EUR = "EUR"
 D0, D1, D2, D3 = date(2025, 6, 2), date(2025, 6, 3), date(2025, 6, 9), date(2025, 6, 16)

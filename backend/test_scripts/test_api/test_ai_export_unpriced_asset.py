@@ -99,11 +99,11 @@ from backend.app.schemas.ai_export_runtime import (
 )
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.ai_export.components import technical_shared
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.assets import price_query
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import service as risk_service_module
 
 EUR = "EUR"

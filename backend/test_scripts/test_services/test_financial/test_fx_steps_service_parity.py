@@ -136,14 +136,14 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Fx
 from backend.app.db.precision import usable_fx_rate_bounds
 from backend.app.schemas.common import Currency, OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.native_cash import CashMovement, NativeCash
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
 Pair = tuple[str, str]
@@ -1052,9 +1052,9 @@ class TestTheCost:
             calls = _record_fx(monkeypatch, native_cash_module)
             await native_cash_module.compute_native_cash(session, movements, report_currency=EUR, rates_until=NATIVE_RATES_UNTIL)
         units = [item for item in calls.bulk_items if item not in {(movement.currency, movement.amount, EUR, movement.date) for movement in foreign}]
-        assert calls.bulk_items == [
-            (movement.currency, movement.amount, EUR, movement.date) for movement in foreign
-        ], f"compute_native_cash handed convert_bulk {len(calls.bulk_items)} items for {len(foreign)} foreign movements: {len(units)} are no movement (one unit per asked day, e.g. {units[:3]})"
+        assert calls.bulk_items == [(movement.currency, movement.amount, EUR, movement.date) for movement in foreign], (
+            f"compute_native_cash handed convert_bulk {len(calls.bulk_items)} items for {len(foreign)} foreign movements: {len(units)} are no movement (one unit per asked day, e.g. {units[:3]})"
+        )
         assert len(calls.steps_requests) == 1, f"compute_native_cash called unit_rate_steps {len(calls.steps_requests)} time(s): expected 1"
         problems = _days_problems(calls.asked_days(), _needs_by_pair(_unit_requests_today(foreign, NATIVE_RATES_UNTIL), EUR))
         assert not problems, f"the native cash's windows do not ask the days of today:{_show(problems)}"

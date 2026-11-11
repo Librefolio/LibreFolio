@@ -95,7 +95,6 @@ from backend.app.schemas.portfolio import (
     LotsAnalysisResponse,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services import lots_analysis_service
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots import conversions as conversions_module
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, need_closure_rates, needs_market_series
@@ -103,7 +102,8 @@ from backend.app.services.financial_math.lots.prices import opening_reference_pr
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.conversion import convert_bulk
-from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.app.services.portfolio import lots_analysis_service
+from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
 from backend.test_scripts.test_services._lots_steps import daily_points, fold_gap_ranges
 
 # Non-test names of the L1a battery: its books, readings and comparison helpers. Never its ``test_*`` functions.

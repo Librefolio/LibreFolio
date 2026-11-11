@@ -1,6 +1,6 @@
 """W-B94 road (b) — the TRANSACTION_IMPLIED grace of an asset priced by the cost of the transfer that brought it in.
 
-Through ``PortfolioService.get_summary`` (``backend/app/services/portfolio_service.py``, section «6. Data quality report»)
+Through ``PortfolioService.get_summary`` (``backend/app/services/portfolio/portfolio_service.py``, section «6. Data quality report»)
 and ``financial_math.portfolio.data_quality.transaction_implied_assets_to_report``.
 
 With W-B94 an asset that has no quote and no other operation, received by an incoming TRANSFER with a cost, is valued
@@ -47,9 +47,9 @@ from sqlalchemy.pool import NullPool
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, ProviderInputType, Transaction, TransactionType, User, UserRole
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.platform.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 D = date(2025, 6, 2)

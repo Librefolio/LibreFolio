@@ -52,8 +52,8 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse, PortfolioSummary
 from backend.app.services.financial_math.series_steps import value_at
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
 REPORT = "EUR"
