@@ -14,7 +14,6 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.services import portfolio_service
 from backend.app.services.platform.data_quality_thresholds import (
     QUANTITY_DUST_THRESHOLD,
     REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE,
@@ -22,6 +21,7 @@ from backend.app.services.platform.data_quality_thresholds import (
     STALE_PRICE_THRESHOLD_DAYS,
     TRANSACTION_IMPLIED_GRACE_DAYS,
 )
+from backend.app.services.portfolio import portfolio_service
 from backend.app.services.risk_plugins.asset_risk_return.plugin import AssetRiskReturnAnalytic
 from backend.app.services.risk_plugins.asset_set_comparison.plugin import AssetSetComparisonAnalytic
 from backend.app.services.risk_plugins.asset_set_kpi.plugin import AssetSetKpiAnalytic
@@ -57,7 +57,7 @@ CONSUMERS = {
     # The daily state holds a position only above the dust threshold (MF6-2), as the holdings do.
     "backend/app/services/financial_math/portfolio/daily_state.py": {"STALE_PRICE_THRESHOLD_DAYS", "QUANTITY_DUST_THRESHOLD"},
     # The holdings read positions through the dust threshold...
-    "backend/app/services/portfolio_service.py": {"TRANSACTION_IMPLIED_GRACE_DAYS", "QUANTITY_DUST_THRESHOLD"},
+    "backend/app/services/portfolio/portfolio_service.py": {"TRANSACTION_IMPLIED_GRACE_DAYS", "QUANTITY_DUST_THRESHOLD"},
     # ...and so do the asset list's held-now flags.
     "backend/app/services/assets/crud.py": {"QUANTITY_DUST_THRESHOLD"},
     "backend/app/services/market_series.py": {"STALE_PRICE_THRESHOLD_DAYS"},

@@ -40,7 +40,7 @@ own asset ids. The overdraft flag is set on the brokers whose cash goes below ze
 ledger would need it; the engine itself does not read it (rows are flushed directly, not through
 the transaction service that enforces it).
 
-Reference: backend/app/services/portfolio_service.py (get_summary, step 4),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_summary, step 4),
 backend/app/services/financial_math/weights.py.
 """
 
@@ -65,12 +65,12 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-import backend.app.services.portfolio_service as portfolio_service_module
+import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import PortfolioHolding, PortfolioSummary
 from backend.app.services.ai_export.components.broker_concentration_context import concentration_metrics
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 OPEN_DAY = date(2025, 1, 2)  # the DEPOSIT and every BUY

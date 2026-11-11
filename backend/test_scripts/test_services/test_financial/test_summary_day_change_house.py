@@ -1,6 +1,6 @@
 """MF-A12 (workstream MF, lot A12; coordinator's decision N92) — a Dashboard holding's one-day columns ask the house.
 
-What changed. ``PortfolioService.get_summary`` (``backend/app/services/portfolio_service.py``), for a holding valued at
+What changed. ``PortfolioService.get_summary`` (``backend/app/services/portfolio/portfolio_service.py``), for a holding valued at
 its market price (``valuation_source == "MARKET_PRICE"``) that has a usable price the day before:
 
 * ``price_change_1d`` is ``returns.change_ratio(current_price - prev_price_base, prev_price_base)`` rounded to 4
@@ -52,7 +52,7 @@ test. Every patch goes through ``monkeypatch``. No sleep.
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory); alone:
 ``./dev.py test services roi-fifo-utils test_summary_day_change_house``.
 
-Reference: backend/app/services/portfolio_service.py (get_summary, the MARKET_PRICE branch),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_summary, the MARKET_PRICE branch),
 backend/app/services/financial_math/returns.py (change_ratio, price_return),
 LibreFolio_developer_journal/Release_2/Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md («MF-A12», N92).
 """
@@ -77,10 +77,10 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.portfolio import PortfolioHolding
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math import returns
 from backend.app.services.financial_math.valuation import compute_holding_value
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 D = Decimal
 EUR = "EUR"

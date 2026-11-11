@@ -4,7 +4,7 @@ Integration tests for PortfolioService.
 Uses a real AsyncSession against the test database.
 Tests WAC orchestration and history aggregation.
 
-Reference: backend/app/services/portfolio_service.py
+Reference: backend/app/services/portfolio/portfolio_service.py
 """
 
 import json
@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 import backend.app.services.financial_math.portfolio.models as portfolio_models_module
-import backend.app.services.portfolio_service as portfolio_service_module
+import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRAccessBulkItem
@@ -49,7 +49,7 @@ from backend.app.services.financial_math.portfolio.derived_views import DerivedV
 from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.platform.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS
-from backend.app.services.portfolio_service import (
+from backend.app.services.portfolio.portfolio_service import (
     PortfolioService,
     _portfolio_l2_cache,
 )
@@ -211,7 +211,7 @@ class TestPortfolioServiceGetHistory:
         result = await service.get_history(user_id=test_user.id)
 
         for point in result:
-            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: " f"nav={point.nav_value} != cash+market_value"
+            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: nav={point.nav_value} != cash+market_value"
 
     @pytest.mark.asyncio
     async def test_dividend_and_interest_move_nav_exactly_like_a_deposit(self, session, test_user, broker_with_access, test_asset):

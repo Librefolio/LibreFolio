@@ -1,6 +1,6 @@
 """MF-J45c (workstream MF) — the report the portfolio's Layer-2 cache shares stays read-only for its consumers.
 
-What it guards. ``PortfolioService.get_report`` (``backend/app/services/portfolio_service.py``) keeps its answers in
+What it guards. ``PortfolioService.get_report`` (``backend/app/services/portfolio/portfolio_service.py``) keeps its answers in
 ``_portfolio_l2_cache`` (``get_ttl_cache("portfolio_layer2")``). On a miss it stores the ``PortfolioReportResponse`` it
 built and returns that object; on a hit it returns the stored object as it is (``return cached``). One Pydantic object
 therefore goes to every request with the same key — and to every AI Export component of a request, which memoizes it.
@@ -53,7 +53,7 @@ through ``monkeypatch``. No sleep, no wall-clock assertion.
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory); alone:
 ``./dev.py test services roi-fifo-utils test_portfolio_l2_report_shared``.
 
-Reference: backend/app/services/portfolio_service.py (_portfolio_l2_cache; get_report: the L2 check, ``return cached``,
+Reference: backend/app/services/portfolio/portfolio_service.py (_portfolio_l2_cache; get_report: the L2 check, ``return cached``,
 ``_portfolio_l2_cache.set``), LibreFolio_developer_journal/Release_2/Phase_1/11_financialMath/
 plan-phase01FinancialMath.prompt.md («MF-J45c»).
 """
@@ -98,14 +98,14 @@ from backend.app.schemas.ai_export_runtime import (
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.risk import RiskQueryRequest, RiskResultStatus
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.ai_export.components.types import Domain
 from backend.app.services.ai_export.datasets.catalog import PUBLIC_DATASETS
 from backend.app.services.ai_export.datasets.spec import DatasetSpec
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.ai_export.runtime_service import AiExportSnapshotService
 from backend.app.services.assets import price_query
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import service as risk_service_module
 from backend.app.services.risk.service import RiskService
 from backend.test_scripts.test_utils import print_section, print_success

@@ -123,7 +123,6 @@ from backend.app.db.base import SQLModel  # every model, for create_all; importi
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.portfolio_financial import PORTFOLIO_PERFORMANCE_COMPONENT, PORTFOLIO_POSITIONS_COMPONENT, PORTFOLIO_SUMMARY_COMPONENT
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
@@ -132,7 +131,8 @@ from backend.app.services.financial_math.portfolio.engine import PortfolioCalcul
 from backend.app.services.financial_math.portfolio.models import DailyStates, PortfolioCalculationResult, StateSegment
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.pac_allocator.source.distribution import build_planner_current_distribution
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
 EUR = "EUR"

@@ -1266,7 +1266,7 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
     """Test ROI, FIFO, and PortfolioService pure-math utilities."""
     print_section("Services: ROI / FIFO / Portfolio Utils")
     print_info("Testing: backend/app/services/financial_math/returns.py")
-    print_info("Testing: backend/app/services/portfolio_service.py (compute_wac_iterative, get_report)")
+    print_info("Testing: backend/app/services/portfolio/portfolio_service.py (compute_wac_iterative, get_report)")
     print_info("Tests: TWRR/MWRR/SimpleROI + series, FIFO lots (FifoLotEngine), price marks, WAC")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/", test_names)
@@ -1333,7 +1333,7 @@ def services_transfer_cost_estimate(verbose: bool = False, test_names: list = No
 def services_engine_shared_run(verbose: bool = False, test_names: list = None) -> bool:
     """Test that the Portfolio page's report, Performance table, positions chart and BUY funding share one engine run (FB-14)."""
     print_section("Services: Engine Shared Run (FB-14)")
-    print_info("Testing: backend/app/services/portfolio_service.py (_engine_run: get_report, get_positions_contribution, get_positions_series, get_acquisition_funding_history)")
+    print_info("Testing: backend/app/services/portfolio/portfolio_service.py (_engine_run: get_report, get_positions_contribution, get_positions_series, get_acquisition_funding_history)")
     print_info("Tests: one build for the report then the series, for both concurrent (single-flight), none for the standalone contribution and funding after the report; every output equal to the old per-caller flags' (PortfolioService on a private SQLite file)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_engine_shared_run.py", test_names)
@@ -1343,7 +1343,7 @@ def services_engine_shared_run(verbose: bool = False, test_names: list = None) -
 def services_ownership_share_option(verbose: bool = False, test_names: list = None) -> bool:
     """Test the report and the positions series with the owner's share ignored, apply_ownership_share (MF6-3, D4)."""
     print_section("Services: Ownership Share Option (MF6-3)")
-    print_info("Testing: backend/app/services/portfolio_service.py (get_report, get_positions_series, _engine_run, the L2 key) and financial_math/portfolio/engine.py (calculate: broker_shares, the blob key)")
+    print_info("Testing: backend/app/services/portfolio/portfolio_service.py (get_report, get_positions_series, _engine_run, the L2 key) and financial_math/portfolio/engine.py (calculate: broker_shares, the blob key)")
     print_info(
         "Tests: apply_ownership_share=False equals the default for an owner at 100 %, an editor, a viewer; equals the editor's view for an owner at 30 %, 0 %, and 30 %/60 % with transfers (no share mismatch); caches never swap the two answers; the risk scope of one broker is share-invariant by default, whole with the option, stress amounts included (PortfolioService on a private SQLite file)"
     )
@@ -1355,7 +1355,7 @@ def services_ownership_share_option(verbose: bool = False, test_names: list = No
 def services_closed_by(verbose: bool = False, test_names: list = None) -> bool:
     """Test how a closed position closed: AssetPeriodContribution.closed_by and closed_to_broker_id (MF-CB)."""
     print_section("Services: Closed By (MF-CB)")
-    print_info("Testing: backend/app/services/portfolio_service.py (get_positions_contribution, get_report) and backend/app/schemas/portfolio.py (AssetPeriodContribution)")
+    print_info("Testing: backend/app/services/portfolio/portfolio_service.py (get_positions_contribution, get_report) and backend/app/schemas/portfolio.py (AssetPeriodContribution)")
     print_info(
         "Tests: a fully sold row says SELL, TRANSFER (with the receiving broker when the user has access to it) or ADJUSTMENT, from the move of its last close; two exits, the later; same-day exits, the later id; another user's broker or an orphan names no broker; open and income-only rows say nothing; a row closed before the period says how; no figure changes (PortfolioService on a private SQLite file)"
     )
@@ -4310,7 +4310,7 @@ Note: No backend server required.
         services_tools_lifecycle,
         name="Tool Lifecycle",
         desc="Owned spawn workers, quotas, ready/ACK, cancellation, PID identity and full-tree cleanup",
-        exclusive_because=("owns native POSIX process groups and exercises forceful teardown and executor quarantine; " "requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"),
+        exclusive_because=("owns native POSIX process groups and exercises forceful teardown and executor quarantine; requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"),
     )
     add_test(
         cat,
@@ -4334,7 +4334,7 @@ Note: No backend server required.
         services_tool_settings_lifecycle,
         name="Tool Settings Lifecycle",
         desc="CP12 X5-4b with real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs",
-        exclusive_because=("starts real multiprocessing spawn workers that own native POSIX process sessions and the executor's process-wide pool, " "like tools-lifecycle; run it in the same leased resource slot, never beside other process-owning units"),
+        exclusive_because=("starts real multiprocessing spawn workers that own native POSIX process sessions and the executor's process-wide pool, like tools-lifecycle; run it in the same leased resource slot, never beside other process-owning units"),
     )
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

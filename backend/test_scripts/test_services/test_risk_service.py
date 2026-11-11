@@ -46,7 +46,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk import replay as risk_replay_module
 from backend.app.services.risk import scope as risk_scope_module
 from backend.app.services.risk import service as risk_service_module

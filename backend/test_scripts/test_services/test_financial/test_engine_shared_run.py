@@ -7,7 +7,7 @@ report: funding only if asked, ``period_start`` only with the contribution, no p
 ``period_start``, no funding; the contribution: ``period_start`` only; the funding: funding only, no ``period_start``).
 Those flags are part of the engine's blob-cache key and of its single-flight key (``financial_math/portfolio/engine.py``,
 step 5b, ``_IN_FLIGHT``), so the page's report and positions-series requests built the engine twice. The cure
-(``backend/app/services/portfolio_service.py``, ``PortfolioService._engine_run``): every one of them asks the same run —
+(``backend/app/services/portfolio/portfolio_service.py``, ``PortfolioService._engine_run``): every one of them asks the same run —
 from t=0, ``period_start=date_from``, ``include_positions=True``, ``include_acquisition_funding=True`` — the candles
 alone staying a flag of the caller.
 
@@ -50,7 +50,7 @@ cache and the report's L2 cache (process-global) are emptied around each test; `
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory); alone:
 ``./dev.py test services engine-shared-run``.
 
-Reference: backend/app/services/portfolio_service.py (_engine_run and its four callers),
+Reference: backend/app/services/portfolio/portfolio_service.py (_engine_run and its four callers),
 backend/app/services/financial_math/portfolio/engine.py (calculate: the blob key and the single-flight after step 5b).
 """
 
@@ -76,9 +76,9 @@ from backend.app.db.base import SQLModel  # every model, for create_all; importi
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery, PositionKey, PositionsSeriesQuery
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
 EUR = "EUR"

@@ -44,7 +44,7 @@ test. No sleep.
 Runs in ``./dev.py test services roi-fifo-utils``; alone:
 ``./dev.py test services roi-fifo-utils test_positions_contribution_dust_identity``.
 
-Reference: backend/app/services/portfolio_service.py (get_positions_contribution, get_summary),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_positions_contribution, get_summary),
 backend/app/services/financial_math/portfolio/daily_state.py (DailyStateBuilder.build),
 test_portfolio_engine/test_daily_state_dust_threshold.py (the engine's numbers),
 test_positions_contribution_engine.py (TestInvariant, the same identities without dust).
@@ -69,10 +69,10 @@ from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import AssetPeriodContribution, PortfolioReportQuery, PortfolioSummary, PositionsContribution
-from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import portfolio_service as portfolio_service_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 D = Decimal
 ZERO = D("0")

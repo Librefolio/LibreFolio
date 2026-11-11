@@ -53,7 +53,7 @@ from backend.app.services.financial_math.yield_on_cost import (
     calculate_yield_on_cost_for_positions,
     compute_yield_on_cost_dependency_identity,
 )
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 AS_OF = date(2025, 12, 31)
 WINDOW_START = AS_OF - timedelta(days=364)

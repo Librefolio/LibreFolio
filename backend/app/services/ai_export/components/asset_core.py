@@ -81,7 +81,7 @@ from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.financial_math.valuation import compute_holding_value
-from backend.app.services.lots_analysis_service import analysis_failure_codes
+from backend.app.services.portfolio.lots_analysis_service import analysis_failure_codes
 
 # =============================================================================
 # Static methodology text for asset.provenance (never user/provider content)

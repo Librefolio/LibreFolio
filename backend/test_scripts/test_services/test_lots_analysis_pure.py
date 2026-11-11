@@ -67,7 +67,7 @@ from backend.app.services.financial_math.lots.histories import (
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.lots.scope_boundary import BoundaryLeg
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, ObservationKind, PriceObservation, build_asset_price_series
-from backend.app.services.lots_analysis_service import LotsAnalysisService, _parse_transfer_pair_id
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService, _parse_transfer_pair_id
 
 # --------------------------------------------------------------------------- #
 # Builders

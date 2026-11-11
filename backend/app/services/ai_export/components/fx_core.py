@@ -298,7 +298,7 @@ async def _load_exposure_report(context: BuildContext) -> PortfolioReportRespons
     async def _loader(session) -> PortfolioReportResponse:
         # Local import: avoids importing the (heavier) portfolio service at
         # module load time for FX-only requests that never build exposure.
-        from backend.app.services.portfolio_service import PortfolioService  # noqa: PLC0415
+        from backend.app.services.portfolio.portfolio_service import PortfolioService  # noqa: PLC0415
 
         query = PortfolioReportQuery(
             broker_ids=list(scope.broker_scope) or None,

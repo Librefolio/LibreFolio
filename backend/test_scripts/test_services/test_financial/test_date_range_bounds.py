@@ -58,8 +58,8 @@ from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
 from backend.app.schemas.risk import RiskQueryRequest
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
-from backend.app.services.lots_analysis_service import get_lots_analysis
-from backend.app.services.portfolio_service import PortfolioService, _portfolio_l2_cache
+from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
+from backend.app.services.portfolio.portfolio_service import PortfolioService, _portfolio_l2_cache
 from backend.app.services.risk.scope import load_scope_inputs
 from backend.app.services.risk.service import RiskService
 from backend.test_scripts.test_services._range_bounds import RANGE_BOUND_CONSUMERS

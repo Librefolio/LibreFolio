@@ -19,7 +19,7 @@ Component and model for unified data quality warnings across the LibreFolio UI.
 |------|------|
 | 🐍 `backend/app/schemas/portfolio.py` | Defines `IssueCode`, `IssueSeverity`, `IssueDomain`, `DataQualityIssue`, and `DataQualityReport` schemas. |
 | ⚙️ `backend/app/services/financial_math/portfolio/data_quality.py` | `build_data_quality_report()` — generates portfolio-wide issues from the engine's daily states; `DerivedViewsBuilder.build_data_quality_report()` (`derived_views.py`) passes its daily states to it. |
-| 📊 `backend/app/services/portfolio_service.py` | `get_summary()` / `get_report()` — collect the missing FX pairs, the assets without cost basis and the assets with an invalid split ratio, then call `build_data_quality_report()`. |
+| 📊 `backend/app/services/portfolio/portfolio_service.py` | `get_summary()` / `get_report()` — collect the missing FX pairs, the assets without cost basis and the assets with an invalid split ratio, then call `build_data_quality_report()`. |
 | 🎨 `frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte` | Reusable UI component (supporting `grouped` and `flat` modes). |
 | 🌐 `frontend/src/lib/i18n/dataQuality/{en,it,fr,es}.json` | `dataQuality.*` translation namespace for localized warnings: the `dataQuality` subsystem, one of the sources of the generated catalogue (see [Internationalization](i18n.md)). |
 

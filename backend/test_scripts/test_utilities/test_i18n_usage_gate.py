@@ -554,11 +554,11 @@ SEVERITY = "flat_series"
 """
 
     def test_a_dictionary_value_is_a_key_reference(self, tmp_path):
-        backend = _tree(tmp_path / "backend", {"services/lots_analysis_service.py": self.MAPPING})
+        backend = _tree(tmp_path / "backend", {"services/portfolio/lots_analysis_service.py": self.MAPPING})
         assert {"dataQuality.referencePriceFallback", "dataQuality.transferPairMissing"} <= U.harvest_backend_keys(backend)
 
     def test_prose_comments_and_bare_codes_are_not_keys(self, tmp_path):
-        keys = U.harvest_backend_keys(_tree(tmp_path / "backend", {"services/lots_analysis_service.py": self.MAPPING}))
+        keys = U.harvest_backend_keys(_tree(tmp_path / "backend", {"services/portfolio/lots_analysis_service.py": self.MAPPING}))
         # Barrier: the file was read.
         assert "dataQuality.referencePriceFallback" in keys
         assert "dataQuality.inProseOnly" not in keys

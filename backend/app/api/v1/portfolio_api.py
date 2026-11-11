@@ -27,13 +27,13 @@ from backend.app.schemas.portfolio import (
     PositionsSeriesQuery,
     PositionsSeriesResponse,
 )
-from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.pac_allocator.source.portfolio_allocation_source import (
     PortfolioPlannerSourceAccessError,
     PortfolioPlannerSourceAssetNotFoundError,
     build_portfolio_planner_source,
 )
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 logger = get_logger(__name__)
 

@@ -285,7 +285,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse, cost_basis_allowed
-from backend.app.services.portfolio_service import compute_wac_iterative
+from backend.app.services.portfolio.portfolio_service import compute_wac_iterative
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 from scripts.i18n_catalog import flatten, load_catalog
@@ -3195,8 +3195,7 @@ class TestJ60ANegativeManualCostOnACreate:
 
         views = [(issue.operation, issue.index, issue.code) for issue in response.issues]
         assert (response.committed, views) == (False, [("create", 0, COST_BASIS_NOT_ALLOWED)]), (
-            f"N78-1: an ADJUSTMENT -{ADJUSTMENT_QUANTITY} on source created at a cost of {J60_NEGATIVE_COST.amount} {EUR} (no mode) takes no cost, so it must be refused with exactly "
-            f"{COST_BASIS_NOT_ALLOWED} on create 0 ({_endpoint(commit)}); today {await _j60_today(world, response, 'create', 0)}"
+            f"N78-1: an ADJUSTMENT -{ADJUSTMENT_QUANTITY} on source created at a cost of {J60_NEGATIVE_COST.amount} {EUR} (no mode) takes no cost, so it must be refused with exactly {COST_BASIS_NOT_ALLOWED} on create 0 ({_endpoint(commit)}); today {await _j60_today(world, response, 'create', 0)}"
         )
         changed = _changed(before, await _raw_rows(world, brokers))
         assert changed == {}, f"N78-1: the refused batch changed rows of the test's brokers (before, after): {changed}"

@@ -36,7 +36,7 @@ from backend.app.services.assets import price_query
 from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.financial_math.weights import share_of
 from backend.app.services.market_series import prepare_asset_series_set, prepare_asset_series_set_from_readings
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk.base import RiskAssetClassification, resource_limit_error
 from backend.app.services.risk.scenario_catalog import get_loaded_risk_scenario_catalog
 from backend.app.utils.date_range_limits import range_span_floor

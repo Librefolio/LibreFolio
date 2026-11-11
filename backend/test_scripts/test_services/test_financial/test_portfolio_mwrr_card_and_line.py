@@ -73,7 +73,7 @@ the report's ``mwrr_line`` (PortfolioService.get_history_steps), true values at 
 through, dated within the response's ``range``. The line's first and last points are the period's
 ends by construction (range.start, range.end), not a position in a shared collection.
 
-Reference: backend/app/services/portfolio_service.py (get_summary, get_history_steps),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_summary, get_history_steps),
 backend/app/services/financial_math/returns.py (period_mwrr, period_mwrr_series).
 """
 
@@ -97,12 +97,12 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-import backend.app.services.portfolio_service as portfolio_service_module
+import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import IssueCode, MwrrLinePoint, PortfolioHistoryPoint, PortfolioSummary
 from backend.app.services.financial_math.series_steps import value_at
-from backend.app.services.portfolio_service import HistorySteps, PortfolioService
+from backend.app.services.portfolio.portfolio_service import HistorySteps, PortfolioService
 
 EUR = "EUR"
 

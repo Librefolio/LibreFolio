@@ -59,7 +59,7 @@ from backend.app.db.precision import storable_fx_rate, truncate_fx_rate, usable_
 from backend.app.db.session import get_async_engine
 from backend.app.services.fx.storage import delete_rates_bulk, normalize_rate_for_storage, normalize_storable_rate, upsert_rates_bulk
 from backend.app.services.fx.sync import _count_actual_changes
-from backend.app.services.portfolio_service import _portfolio_l2_cache
+from backend.app.services.portfolio.portfolio_service import _portfolio_l2_cache
 from backend.test_scripts.test_utils import print_section, print_success
 
 # ============================================================================

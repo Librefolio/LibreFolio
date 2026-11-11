@@ -1,6 +1,6 @@
 # 📊 Lots Analysis Service
 
-`backend/app/services/lots_analysis_service.py` is the orchestration layer behind `POST /portfolio/lots/analysis`.
+`backend/app/services/portfolio/lots_analysis_service.py` is the orchestration layer behind `POST /portfolio/lots/analysis`.
 
 It runs `FifoLotEngine` once, then converts engine output into `LotsAnalysisResponse`: FX-normalized values, qbq-aware valuations from the unified price resolver, lot/event histories, WAC series, income allocation, and valuation at cost on the days the asset has no price yet. Frontend consumer: `LotsAnalysisPanel.svelte`.
 
