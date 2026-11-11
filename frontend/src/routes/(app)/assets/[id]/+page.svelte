@@ -86,6 +86,7 @@
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
     import {buildFxPairComparisonQuery, fxPairComparisonViews} from '$lib/charts/crossTypeCalendar';
     import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, collectConfiguredComparisonFxSlugs, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {buildChartRequestBody, calendarComparisonFingerprint as chartCalendarComparisonFingerprint, calendarDataFingerprint as chartCalendarDataFingerprint, calendarPeerAssetIds, calendarReturnRequests, chartCurrencies, fxPairTargetsOf, heldPointsToChartPoints, priceComparisonLoadFingerprint as chartPriceComparisonLoadFingerprint, priceComparisonRuntimeIsAuthoritative as chartPriceComparisonRuntimeIsAuthoritative} from '$lib/features/assets/detail/assetDetailChartRequest';
     import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
     import {renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
@@ -1027,41 +1028,19 @@
     }
 
     function calendarComparisonFingerprint(configs: SignalConfig[]): string {
-        return JSON.stringify(comparisonAssetIds(configs));
+        return chartCalendarComparisonFingerprint(configs, data.assetId);
     }
 
     function calendarDataFingerprint(configs: SignalConfig[], windowDays = calendarWindowDays): string {
-        return JSON.stringify({
-            assetId: data.assetId,
-            start: urlDateStart,
-            end: urlDateEnd,
-            targetCurrency: displayCurrency || assetInfo?.currency || '',
-            windowDays,
-            peers: comparisonAssetIds(configs),
-        });
+        return chartCalendarDataFingerprint(configs, {assetId: data.assetId, urlDateStart, urlDateEnd, displayCurrency, nativeCurrency: assetInfo?.currency ?? '', windowDays});
     }
 
     function priceComparisonLoadFingerprint(configs: SignalConfig[]): string {
-        return JSON.stringify({
-            peers: configs
-                .filter((config) => config.signalType === 'asset-comparison')
-                .map((config) => ({configId: config.id, assetId: Number(config.params.assetId)}))
-                .filter((peer) => Number.isSafeInteger(peer.assetId) && peer.assetId > 0 && peer.assetId !== data.assetId)
-                .sort((left, right) => left.configId.localeCompare(right.configId)),
-            start: comparisonStart,
-            end: dateEnd,
-            targetCurrency: displayCurrency || '',
-        });
+        return chartPriceComparisonLoadFingerprint(configs, {assetId: data.assetId, comparisonStart, dateEnd, displayCurrency});
     }
 
     function priceComparisonRuntimeIsAuthoritative(configs: SignalConfig[]): boolean {
-        return configs
-            .filter((config) => config.signalType === 'asset-comparison')
-            .filter((config) => {
-                const assetId = Number(config.params.assetId);
-                return Number.isSafeInteger(assetId) && assetId > 0 && assetId !== data.assetId;
-            })
-            .every((config) => Object.hasOwn(config.params, '_conversionFailed') && comparisonEvents.has(Number(config.params.assetId)));
+        return chartPriceComparisonRuntimeIsAuthoritative(configs, data.assetId, (peerId) => comparisonEvents.has(peerId));
     }
 
     async function retryBackendSignals() {
@@ -1310,11 +1289,6 @@
      * `silent`: the reload after a price catch-up (Y5-1) — the chart and the signals on screen stay as they are, and nothing
      * says the page is busy (no `loading`, no calendar `loading`, no `signalsLoading`): it is not a load the user asked for.
      */
-    /** The `fx-pair` signals of `configs` as the FX page reads them: the pair, and whether the signal shows it inverted. */
-    function fxPairTargetsOf(configs: readonly SignalConfig[]): Array<{configId: string; pairSlug: string; inverted: boolean}> {
-        return configs.filter((config) => config.signalType === 'fx-pair' && config.params.pairSlug).map((config) => ({configId: config.id, pairSlug: String(config.params.pairSlug), inverted: Boolean(config.params._inverted)}));
-    }
-
     /**
      * FB-11: the rolling return of the FX pairs the `fx-pair` signals compare, asked of `POST /fx/currencies/convert` over the
      * period on screen and the window (`buildFxPairComparisonQuery`). Independent of the asset's own request: it never throws
@@ -1360,8 +1334,7 @@
         const requestedEnd = dateEnd;
         const requestedDisplayCurrency = displayCurrency;
         const requestedNativeCurrency = assetInfo?.currency ?? '';
-        const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
-        const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
+        const {effectiveCurrency, targetCurrency} = chartCurrencies(displayCurrency, assetInfo?.currency ?? '');
         const wantsCalendarReturn = primaryMode === 'calendar-return';
         if (wantsCalendarReturn) void loadCalendarPairComparisons(requestedSignalConfigs);
         const backendSignalConfigs = wantsCalendarReturn ? [] : requestedSignalConfigs;
@@ -1376,42 +1349,12 @@
         const requestedCalendarFingerprint = wantsCalendarReturn ? calendarDataFingerprint(requestedSignalConfigs, requestedCalendarWindow) : null;
         const retainCurrentCalendarDiagnostics = requestedCalendarFingerprint !== null && calendarSnapshotFingerprint === requestedCalendarFingerprint;
         const calendarRequestIsCurrent = () => requestedCalendarFingerprint !== null && dataRequestIsCurrent() && primaryMode === 'calendar-return' && calendarDataFingerprint(signals, calendarWindowDays) === requestedCalendarFingerprint;
-        const calendarRequests = wantsCalendarReturn
-            ? [
-                  {
-                      instance_id: CALENDAR_RETURN_INSTANCE_ID,
-                      signal_code: CALENDAR_RETURN_SIGNAL_CODE,
-                      params: {window_days: requestedCalendarWindow},
-                  },
-              ]
-            : [];
-        const calendarComparisonAssetIds = wantsCalendarReturn
-            ? [
-                  ...new Set(
-                      requestedSignalConfigs
-                          .filter((config) => config.signalType === 'asset-comparison')
-                          .map((config) => Number(config.params.assetId))
-                          .filter((assetId) => assetId > 0 && assetId !== requestedAssetId),
-                  ),
-              ]
-            : [];
+        const calendarRequests = wantsCalendarReturn ? calendarReturnRequests(requestedCalendarWindow) : [];
+        const calendarComparisonAssetIds = wantsCalendarReturn ? calendarPeerAssetIds(requestedSignalConfigs, requestedAssetId) : [];
         let pricesFromCache = false;
         // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the
         // prices are asked in background, with no loading state.
         let staleShown = false;
-        const chartPointsOf = (held: ReturnType<ReturnType<typeof getAssetPriceStore>['getRange']>['data']) =>
-            held.map((p) => ({
-                date: p.date,
-                close: p.close,
-                open: p.open,
-                high: p.high,
-                low: p.low,
-                volume: p.volume,
-                currency: p.currency,
-                original_close: p.originalClose,
-                backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
-            }));
-
         // FB-7b: «All» still pending, its first day unknown: the series is asked from the sentinel `min` (the server answers the asset's
         // first stored day, whatever its year) and never from a made-up start; the store cannot answer a start it does not know
         const askedFromMin = isMaxPending;
@@ -1426,7 +1369,7 @@
                     staleShown = true;
                     // A silent reload of the range already on screen leaves the chart alone; a return to the page, or another range, shows them.
                     if (!silent || chartData.length === 0) {
-                        chartData = chartPointsOf(held);
+                        chartData = heldPointsToChartPoints(held);
                         error = null;
                     }
                 }
@@ -1434,7 +1377,7 @@
             if (gaps.length === 0) {
                 // Cache hit — update chart data without loading spinner
                 const cached = store.getRange(dateStart, dateEnd).data;
-                chartData = chartPointsOf(cached);
+                chartData = heldPointsToChartPoints(cached);
                 if (chartData.length === 0 && !error) {
                     error = catalogueError('assetDetail.noData');
                 } else {
@@ -1451,25 +1394,18 @@
             }
         }
 
-        const requestBody: AssetPriceBulkQueryBody = [
-            {
-                asset_id: data.assetId,
-                date_range: {start: askedFromMin ? ('min' as const) : dateStart, end: dateEnd},
-                include_price: !pricesFromCache,
-                include_events: true,
-                target_currency: targetCurrency,
-                signals: [...requestPlan.requests, ...calendarRequests],
-            },
-            ...calendarComparisonAssetIds.map((assetId) => ({
-                asset_id: assetId,
-                // every item of the bulk shares the main one's range: the peer's own first day, when the main one asks from `min`
-                date_range: {start: askedFromMin ? ('min' as const) : dateStart, end: dateEnd},
-                include_price: false,
-                include_events: true,
-                target_currency: effectiveCurrency || undefined,
-                signals: calendarRequests,
-            })),
-        ];
+        const requestBody: AssetPriceBulkQueryBody = buildChartRequestBody({
+            assetId: data.assetId,
+            askedFromMin,
+            dateStart,
+            dateEnd,
+            includePrice: !pricesFromCache,
+            targetCurrency,
+            effectiveCurrency,
+            signals: [...requestPlan.requests, ...calendarRequests],
+            calendarRequests,
+            peerAssetIds: calendarComparisonAssetIds,
+        }) as AssetPriceBulkQueryBody;
         // N64: the same request, answered over the same price data (the generations of this asset's store and of each
         // peer's, read now), comes back from the signal cache with its events: no request, no spinner, no token (Q1).
         // Any invalidation of those stores — Refresh, a sync, a save, a catch-up marking them stale (Q2) — misses.

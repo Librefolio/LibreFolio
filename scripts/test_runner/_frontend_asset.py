@@ -37,6 +37,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/features/assets/assetSimilarity.test.ts",
         "src/lib/features/assets/assetGrouping.test.ts",
         "src/lib/features/assets/identifierQuestions.test.ts",
+        "src/lib/features/assets/detail/assetDetailChartRequest.test.ts",
         "src/lib/utils/__tests__/assetTypeTables.test.ts",
         "src/lib/features/dashboard/allocationTypeEmoji.test.ts",
         "src/lib/features/dashboard/growthLadderAxis.test.ts",
