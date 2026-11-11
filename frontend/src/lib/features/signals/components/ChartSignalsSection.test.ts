@@ -51,14 +51,15 @@ const SIGNAL: SignalConfig = {
     style: {color: '#3b82f6', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null},
 };
 
-const CONVERSION_ERROR = 'synthetic-price-conversion-failure';
+/** The missing rate the comparison load found (`fx_issues`, CP-11d): EUR into USD on one day. */
+const CONVERSION_ISSUE = {code: 'rate_not_found', from_currency: 'EUR', to_currency: 'USD', first_date: '2026-01-02', last_date: '2026-01-02', count: 1};
 const FAILED_COMPARISON_SIGNAL: SignalConfig = {
     id: 'failed-comparison',
     signalType: 'asset-comparison',
     params: {
         assetId: '42',
         _conversionFailed: true,
-        _conversionError: CONVERSION_ERROR,
+        _conversionError: CONVERSION_ISSUE,
     },
     style: {color: '#f59e0b', lineWidth: 2, lineType: 'solid', markerStart: null, markerEnd: null},
 };
@@ -276,7 +277,8 @@ describe('ChartSignalsSection — asset comparison mode diagnostics', () => {
         expect(syncButton).toHaveAttribute('aria-label', syncAriaLabel);
         expect(within(card).queryByTestId(`signal-fx-create-${FAILED_COMPARISON_SIGNAL.id}`)).toBeNull();
         await fireEvent.click(issue);
-        expect(await screen.findByTestId('tooltip-content')).toHaveTextContent(CONVERSION_ERROR);
+        // The sentence is worded here from the issue: the pair in the direction of the conversion, and the day
+        expect(await screen.findByTestId('tooltip-content')).toHaveTextContent(/EUR.*→.*USD.*2026-01-02/);
 
         await view.rerender({...props, configuredFxSlugs: []});
 

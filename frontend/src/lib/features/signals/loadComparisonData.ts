@@ -9,6 +9,7 @@
  * @module charts/loadComparisonData
  */
 
+import {priceRateIssueOf} from './fxIssue';
 import {zodiosApi} from '$lib/api';
 import type {SignalConfig} from '$lib/features/signals';
 import {getAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
@@ -157,7 +158,7 @@ export async function loadComparisonAssetsData(assetIds: readonly number[], date
 
     const items = idsToLoad.map((assetId): ComparisonAssetLoadItem => {
         const result = resultByAssetId.get(assetId);
-        const errors = result && Array.isArray(result.errors) ? result.errors.filter((error): error is string => typeof error === 'string') : [];
+        const conversionIssue = priceRateIssueOf(result);
         const assetMeta = allAssets.find((a) => a.id === assetId);
 
         // Map backend price points to LineDataPoint format.
@@ -190,7 +191,8 @@ export async function loadComparisonAssetsData(assetIds: readonly number[], date
                 _assetCurrency: assetMeta?.currency ?? undefined,
                 _targetCurrency: targetCurrency ?? undefined,
                 _conversionFailed: hasPriceConversionError,
-                _conversionError: hasPriceConversionError ? errors[0] : undefined,
+                // The missing rate as data (`fx_issues`): the card words it where it is shown
+                _conversionError: hasPriceConversionError ? conversionIssue : undefined,
             },
             events: result && Array.isArray(result.events) ? [...result.events] : [],
         };

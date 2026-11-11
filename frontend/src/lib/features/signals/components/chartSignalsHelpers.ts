@@ -15,6 +15,7 @@
  * @module charts/chartSignalsHelpers
  */
 
+import {fxIssueSentence} from '../fxIssue';
 import type {SignalConfig, SignalInputField, SignalProblem} from '$lib/features/signals';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
@@ -82,8 +83,13 @@ export function formatSignalProblem(problem: SignalProblem, translate: SignalPro
                 available: problemCount(problem.availablePoints),
                 required: problemCount(problem.minimumPoints),
             });
-        case 'fx_conversion_unavailable':
+        case 'fx_conversion_unavailable': {
+            if (problem.fxIssue) {
+                const sentence = fxIssueSentence(problem.fxIssue);
+                return translate(sentence.key, sentence.values);
+            }
             return problem.message || translate('chartSettings.signalProblems.unavailable');
+        }
         case 'undefined_metric':
             if (hasUndefinedWindow(problem)) return translate('chartSettings.signalProblems.undefinedWindowUnavailable', undefinedWindowValues(problem));
             return problem.message || translate('chartSettings.signalProblems.unavailable');

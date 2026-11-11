@@ -29,14 +29,16 @@ import {describe, expect, it} from 'vitest';
 import type {SignalConfig} from '$lib/features/signals';
 import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, type CalendarReturnView, type CalendarReturnViewState} from '$lib/features/signals/calendarReturn';
 import * as priceQuery from './assetDetailPriceQuery';
-import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable, priceConversionErrorFromItem, type CalendarComparisonContext} from './assetDetailPriceQuery';
+import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable, priceConversionIssueFromItem, type CalendarComparisonContext} from './assetDetailPriceQuery';
 
 type ViewPoint = CalendarReturnView['points'][number];
 
-/** A price conversion failure, as the backend words it. */
-const FX_ERROR = 'Conversion 0: No FX rate found for USD/EUR on or before 2026-02-02. Please sync rates using POST /api/v1/fx/currencies/sync';
-/** An event conversion failure, as the backend words it: about an event, not about the prices. */
-const EVENT_FX_ERROR = 'Missing FX rate USD->EUR for event on 2026-01-05';
+/** A text error that is not a list entry of `errors` shape in the cases below (a string where a list is expected). */
+const FX_ERROR = 'Conversion 0: No FX rate found for USD/EUR on or before 2026-02-02.';
+/** A price conversion failure, as the endpoint says it (`fx_issues`, CP-11d): USD into EUR, one day. */
+const FX_ISSUE = {code: 'rate_not_found', from_currency: 'USD', to_currency: 'EUR', first_date: '2026-02-02', last_date: '2026-02-02', count: 1};
+/** An event conversion failure: about an event, not about the prices. */
+const EVENT_ISSUE = {code: 'event_rate_missing', from_currency: 'USD', to_currency: 'EUR', first_date: '2026-01-05', last_date: '2026-01-05', count: 1};
 /** A warning about something else than a conversion. */
 const OTHER_ERROR = 'Provider timeout while loading prices';
 
@@ -179,9 +181,9 @@ describe('parseAssetPriceQueryWithSignalIsolation: each item is validated with i
     });
 
     it('returns the schema output for the rest of the item', () => {
-        const {items} = parseAssetPriceQueryWithSignalIsolation({items: [priceItem(7, {errors: [FX_ERROR], unknown_field: 'a key the schema does not know'})]});
+        const {items} = parseAssetPriceQueryWithSignalIsolation({items: [priceItem(7, {fx_issues: [FX_ISSUE], unknown_field: 'a key the schema does not know'})]});
 
-        expect(items).toEqual([{asset_id: 7, prices: [{date: '2026-02-02', close: '101.5'}], errors: [FX_ERROR], signals: [], resolution: 'daily'}]);
+        expect(items).toEqual([{asset_id: 7, prices: [{date: '2026-02-02', close: '101.5'}], fx_issues: [FX_ISSUE], signals: [], resolution: 'daily'}]);
         expect(items.find((item) => item.asset_id === 7)).not.toHaveProperty('unknown_field');
     });
 
@@ -211,40 +213,31 @@ describe('parseAssetPriceQueryWithSignalIsolation: each item is validated with i
     });
 });
 
-describe('priceConversionErrorFromItem: the first string error, when it is about FX, conversion or currency and not about an event', () => {
-    it.each([
-        {label: 'a price conversion failure', error: FX_ERROR},
-        {label: 'an FX rate', error: 'FX rate USD/EUR unavailable for 2026-02-02'},
-        {label: 'a currency route', error: 'No currency route from GBP to EUR'},
-        {label: 'mixed currencies, in capitals', error: 'Technical signal computation excluded unconverted price dates because the series contains MIXED CURRENCIES: EUR, USD'},
-    ])('returns an error about $label', ({error}) => {
-        expect(priceConversionErrorFromItem({asset_id: 7, errors: [error]})).toBe(error);
+describe('priceConversionIssueFromItem: the first price that could not be converted for want of a rate, from `fx_issues`', () => {
+    it('returns the first rate_not_found issue', () => {
+        expect(priceConversionIssueFromItem({asset_id: 7, fx_issues: [FX_ISSUE]})).toEqual(FX_ISSUE);
     });
 
-    it('skips the entries that are not strings', () => {
-        expect(priceConversionErrorFromItem({asset_id: 7, errors: [42, null, {message: FX_ERROR}, FX_ERROR]})).toBe(FX_ERROR);
+    it('skips the entries that are not issues and the issues of an event', () => {
+        expect(priceConversionIssueFromItem({asset_id: 7, fx_issues: [42, null, {message: 'x'}, EVENT_ISSUE, FX_ISSUE]})).toEqual(FX_ISSUE);
     });
 
-    it('reads only the first string error', () => {
-        expect(priceConversionErrorFromItem({asset_id: 7, errors: [OTHER_ERROR, FX_ERROR]})).toBeUndefined();
-        expect(priceConversionErrorFromItem({asset_id: 7, errors: [EVENT_FX_ERROR, FX_ERROR]})).toBeUndefined();
+    it('does not read the text of `errors` any more: a text that talks of FX is no issue', () => {
+        expect(priceConversionIssueFromItem({asset_id: 7, errors: [FX_ERROR]})).toBeUndefined();
     });
 
     it.each([
-        {label: 'an event conversion failure', errors: [EVENT_FX_ERROR]},
-        {label: 'an event conversion failure in capitals', errors: ['MISSING FX RATE USD->EUR FOR EVENT ON 2026-01-05']},
-        {label: 'an error about something else', errors: [OTHER_ERROR]},
-        {label: 'a word that only contains the letters fx', errors: ['Provider ETFX feed unavailable']},
-        {label: 'no string error', errors: [404, null]},
-        {label: 'an empty error list', errors: []},
-    ])('gives nothing for $label', ({errors}) => {
-        expect(priceConversionErrorFromItem({asset_id: 7, errors})).toBeUndefined();
+        {label: 'an event conversion failure', fx_issues: [EVENT_ISSUE]},
+        {label: 'no issue', fx_issues: []},
+        {label: 'entries that are not issues', fx_issues: [404, null]},
+        {label: 'issues that are not a list', fx_issues: FX_ISSUE},
+    ])('gives nothing for $label', ({fx_issues}) => {
+        expect(priceConversionIssueFromItem({asset_id: 7, fx_issues})).toBeUndefined();
     });
 
-    it('gives nothing without an item, without errors, or with errors that are not a list', () => {
-        expect(priceConversionErrorFromItem(undefined)).toBeUndefined();
-        expect(priceConversionErrorFromItem({asset_id: 7})).toBeUndefined();
-        expect(priceConversionErrorFromItem({asset_id: 7, errors: FX_ERROR})).toBeUndefined();
+    it('gives nothing without an item or without issues', () => {
+        expect(priceConversionIssueFromItem(undefined)).toBeUndefined();
+        expect(priceConversionIssueFromItem({asset_id: 7})).toBeUndefined();
     });
 });
 
@@ -313,10 +306,10 @@ describe('calendarComparisonProblemsFromResponse: the calendar-return problem of
     });
 });
 
-describe('calendarComparisonProblemsFromResponse: missing_input_fields becomes fx_conversion_unavailable, with the conversion error as message, when the peer currency failed to convert to the shown one', () => {
+describe('calendarComparisonProblemsFromResponse: missing_input_fields becomes fx_conversion_unavailable, carrying the missing rate (`fxIssue`), when the peer currency failed to convert to the shown one', () => {
     /** The problem of a peer whose calendar result misses its close, with `errors` on its item. */
-    function missingFieldsProblem(assetId: number, errors: unknown[], context: CalendarComparisonContext = CONTEXT) {
-        const item = priceItem(assetId, {errors, signals: [unavailableCalendarResult('missing_input_fields', ['close'])]});
+    function missingFieldsProblem(assetId: number, issues: unknown[], context: CalendarComparisonContext = CONTEXT, errors: unknown[] = []) {
+        const item = priceItem(assetId, {errors, fx_issues: issues, signals: [unavailableCalendarResult('missing_input_fields', ['close'])]});
         return problemsFor([item], [assetId], {context}).get(assetId);
     }
 
@@ -324,56 +317,56 @@ describe('calendarComparisonProblemsFromResponse: missing_input_fields becomes f
         const base = missingFieldsProblem(7, []);
         expect(base).toMatchObject({code: 'missing_input_fields', status: 'unavailable', missingPriceFields: ['close']});
 
-        expect(missingFieldsProblem(7, [FX_ERROR])).toEqual({...base, code: 'fx_conversion_unavailable', message: FX_ERROR});
+        expect(missingFieldsProblem(7, [FX_ISSUE])).toEqual({...base, code: 'fx_conversion_unavailable', message: null, fxIssue: FX_ISSUE});
     });
 
     it.each([
-        {label: 'the peer shares the shown currency', assetId: 8, errors: [FX_ERROR], context: CONTEXT},
-        {label: 'the peer has no currency', assetId: 9, errors: [FX_ERROR], context: CONTEXT},
-        {label: 'the peer currency is null', assetId: 10, errors: [FX_ERROR], context: CONTEXT},
-        {label: 'the peer is not a known asset', assetId: 11, errors: [FX_ERROR], context: CONTEXT},
-        {label: 'no currency is shown', assetId: 7, errors: [FX_ERROR], context: {...CONTEXT, displayCurrency: ''}},
-        {label: 'the item error is not about a conversion', assetId: 7, errors: [OTHER_ERROR], context: CONTEXT},
-        {label: 'the item error is about an event', assetId: 7, errors: [EVENT_FX_ERROR], context: CONTEXT},
+        {label: 'the peer shares the shown currency', assetId: 8, errors: [FX_ISSUE], context: CONTEXT},
+        {label: 'the peer has no currency', assetId: 9, errors: [FX_ISSUE], context: CONTEXT},
+        {label: 'the peer currency is null', assetId: 10, errors: [FX_ISSUE], context: CONTEXT},
+        {label: 'the peer is not a known asset', assetId: 11, errors: [FX_ISSUE], context: CONTEXT},
+        {label: 'no currency is shown', assetId: 7, errors: [FX_ISSUE], context: {...CONTEXT, displayCurrency: ''}},
+        {label: 'the item has no missing-rate issue', assetId: 7, errors: [], context: CONTEXT},
+        {label: 'the item issue is about an event', assetId: 7, errors: [EVENT_ISSUE], context: CONTEXT},
     ])('keeps missing_input_fields when $label', ({assetId, errors, context}) => {
         expect(missingFieldsProblem(assetId, errors, context)).toMatchObject({code: 'missing_input_fields'});
     });
 
     it('rewrites no other problem', () => {
-        expect(problemsFor([priceItem(7, {errors: [FX_ERROR], signals: [unavailableCalendarResult('undefined_metric')]})], [7]).get(7)).toMatchObject({code: 'undefined_metric'});
-        expect(problemsFor([priceItem(7, {errors: [FX_ERROR], signals: [failedCalendarResult('Calendar computation failed')]})], [7]).get(7)).toMatchObject({code: 'calculation_failed'});
-        expect(problemsFor([priceItem(7, {errors: [FX_ERROR]})], [7]).get(7)).toMatchObject({code: 'result_missing'});
+        expect(problemsFor([priceItem(7, {fx_issues: [FX_ISSUE], signals: [unavailableCalendarResult('undefined_metric')]})], [7]).get(7)).toMatchObject({code: 'undefined_metric'});
+        expect(problemsFor([priceItem(7, {fx_issues: [FX_ISSUE], signals: [failedCalendarResult('Calendar computation failed')]})], [7]).get(7)).toMatchObject({code: 'calculation_failed'});
+        expect(problemsFor([priceItem(7, {fx_issues: [FX_ISSUE]})], [7]).get(7)).toMatchObject({code: 'result_missing'});
     });
 });
 
 describe('calendarComparisonFxFailuresFromResponse: the peers whose item reports a conversion error; a peer absent from the answer keeps its previous outcome', () => {
     it('lists the peers whose item has a conversion error', () => {
-        const items = [priceItem(7, {errors: [FX_ERROR]}), priceItem(8, {errors: [OTHER_ERROR]}), priceItem(9), priceItem(10, {errors: [EVENT_FX_ERROR]})];
+        const items = [priceItem(7, {fx_issues: [FX_ISSUE]}), priceItem(8, {errors: [OTHER_ERROR]}), priceItem(9), priceItem(10, {fx_issues: [EVENT_ISSUE]})];
 
         expect(calendarComparisonFxFailuresFromResponse(items, [7, 8, 9, 10], new Set())).toEqual(new Set([7]));
     });
 
     it('keeps the previous outcome of a peer absent from the answer, and only of such a peer', () => {
         // 7 fails now; 8 failed before and is fine now; 11 is absent and failed before; 12 is absent and did not.
-        const failures = calendarComparisonFxFailuresFromResponse([priceItem(7, {errors: [FX_ERROR]}), priceItem(8)], [7, 8, 11, 12], new Set([8, 11]));
+        const failures = calendarComparisonFxFailuresFromResponse([priceItem(7, {fx_issues: [FX_ISSUE]}), priceItem(8)], [7, 8, 11, 12], new Set([8, 11]));
 
         expect(failures).toEqual(new Set([7, 11]));
     });
 
     it('reads only the given peers', () => {
-        const failures = calendarComparisonFxFailuresFromResponse([priceItem(7, {errors: [FX_ERROR]}), priceItem(13, {errors: [FX_ERROR]})], [7], new Set([14]));
+        const failures = calendarComparisonFxFailuresFromResponse([priceItem(7, {fx_issues: [FX_ISSUE]}), priceItem(13, {fx_issues: [FX_ISSUE]})], [7], new Set([14]));
 
         expect(failures).toEqual(new Set([7]));
     });
 
     it('finds the item of each peer by asset id, past entries that are not items', () => {
-        expect(calendarComparisonFxFailuresFromResponse([null, 'item', priceItem(7, {errors: [FX_ERROR]})], [7], new Set())).toEqual(new Set([7]));
+        expect(calendarComparisonFxFailuresFromResponse([null, 'item', priceItem(7, {fx_issues: [FX_ISSUE]})], [7], new Set())).toEqual(new Set([7]));
     });
 
     it('returns a new set and leaves the previous one untouched', () => {
         const previous = new Set([7]);
 
-        const failures = calendarComparisonFxFailuresFromResponse([priceItem(8, {errors: [FX_ERROR]})], [7, 8], previous);
+        const failures = calendarComparisonFxFailuresFromResponse([priceItem(8, {fx_issues: [FX_ISSUE]})], [7, 8], previous);
 
         expect(failures).toEqual(new Set([7, 8]));
         expect(failures).not.toBe(previous);
