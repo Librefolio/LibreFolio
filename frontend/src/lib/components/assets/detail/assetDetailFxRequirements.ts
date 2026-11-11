@@ -17,6 +17,7 @@
  * @module components/assets/detail/assetDetailFxRequirements
  */
 
+import {createPairSlug} from '$lib/features/fx/fxStoreRegistry';
 import {getComparisonEventFxDependency} from '$lib/charts/loadComparisonData';
 import type {SignalConfig, SignalProblem} from '$lib/charts/signals';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -94,16 +95,10 @@ export function buildRequiredFxPairs(input: RequiredFxPairsInput): RequiredFxPai
     const pairs: RequiredFxPairInfo[] = [];
     const seenSlugs = new Set<string>();
 
-    // Helper to compute canonical slug
-    const toSlug = (a: string, b: string) => {
-        const [lo, hi] = a < b ? [a, b] : [b, a];
-        return `${lo}-${hi}`;
-    };
-
     // Main asset FX pair
     const asset = input.asset;
     if (asset && input.displayCurrency !== asset.currency) {
-        const slug = toSlug(asset.currency, input.displayCurrency);
+        const slug = createPairSlug(asset.currency, input.displayCurrency);
         const missing = !input.configuredFxSlugs.includes(slug);
         let status: RequiredFxPairInfo['status'];
         if (missing) {
@@ -134,7 +129,7 @@ export function buildRequiredFxPairs(input: RequiredFxPairsInput): RequiredFxPai
         if (!targetId || targetId === input.pageAssetId) continue;
         const targetAsset = input.assets.find((a) => a.id === targetId);
         if (!targetAsset?.currency || targetAsset.currency === input.displayCurrency) continue;
-        const slug = toSlug(targetAsset.currency, input.displayCurrency);
+        const slug = createPairSlug(targetAsset.currency, input.displayCurrency);
         if (seenSlugs.has(slug)) continue;
         seenSlugs.add(slug);
 
@@ -189,7 +184,7 @@ export function buildRequiredFxPairs(input: RequiredFxPairsInput): RequiredFxPai
             for (const event of source.values) {
                 const dependency = getComparisonEventFxDependency(event, input.displayCurrency);
                 if (!dependency) continue;
-                const slug = toSlug(dependency.sourceCurrency, input.displayCurrency);
+                const slug = createPairSlug(dependency.sourceCurrency, input.displayCurrency);
                 const missing = !input.configuredFxSlugs.includes(slug);
                 const existing = pairs.find((pair) => pair.slug === slug);
                 if (existing) {

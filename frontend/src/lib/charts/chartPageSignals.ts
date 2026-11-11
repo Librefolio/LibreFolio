@@ -9,8 +9,6 @@
  * - the peer assets of the comparison signals;
  * - the data sources both pages hand the one renderer of saved signals, `chartSignalRendering.ts` (lot Y-42).
  *
- * The FX detail page still has its own copies of the first three; they come here with FE4.
- *
  * @module charts/chartPageSignals
  */
 
