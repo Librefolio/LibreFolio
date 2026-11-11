@@ -33,7 +33,7 @@ The frontend keeps `SignalConfig` and all local style/view behavior. Backend cat
 - Status is explicit per instance (`ok`, `partial`, `unavailable`, `failed`); one failure never removes prices or sibling results.
 - One bulk request is mandatory for list views; no request-per-card/pair/signal.
 - The old TypeScript technical classes remain only as rollback until Gate E visual review, then are removed.
-  *2026-11-07 lint:* removed — `frontend/src/lib/charts/signals/` holds only the comparison, measure and synthetic signals and
+  *2026-11-07 lint:* removed — `frontend/src/lib/features/signals/` holds only the comparison, measure and synthetic signals and
   the backend catalogue, request and renderer modules.
 - *Delivered on 2026-10-12* (U-1, `0848f26bf`): each signal plugin is a folder (`<plugin>/plugin.py`) with its own
   translations —
@@ -55,6 +55,6 @@ The July brainstorm that put the signals first in Release 2: [[sources/release2-
 | Production plugins | `backend/app/services/signal_plugins/` |
 | Asset adapter | `backend/app/services/assets/price_query.py` |
 | FX adapter | `backend/app/api/v1/fx/currencies.py` |
-| Frontend catalog/renderer | `frontend/src/lib/charts/signals/catalogMapper.ts`, `backendRenderer.ts` |
-| Bulk request/result mapping | `frontend/src/lib/charts/signals/requestBuilder.ts`, `resultMapper.ts` |
+| Frontend catalog/renderer | `frontend/src/lib/features/signals/catalogMapper.ts`, `backendRenderer.ts` |
+| Bulk request/result mapping | `frontend/src/lib/features/signals/requestBuilder.ts`, `resultMapper.ts` |
 | Execution plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` |

@@ -1,0 +1,670 @@
+<!--
+  MeasurePanel — Measurement overlay manager and summary table.
+
+  Features:
+  - 2-click placement: 1st click = startDate, 2nd click = endDate
+  - Expandable card per measure: params row, style row, summary table
+  - Measures rendered as overlay signals via onmeasureschange callback
+
+  Used in FX detail page (inline foldable panel).
+  Uses Svelte 5 runes.
+-->
+<script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {_ as t} from '$lib/i18n';
+    import {ChevronDown, Trash2} from 'lucide-svelte';
+    import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+    import type {RenderedSignal} from '$lib/features/signals';
+    import type {MeasurementResult} from '$lib/features/signals/MeasureSignal';
+    import {MeasureSignal} from '$lib/features/signals/MeasureSignal';
+    import {hslToHex} from '$lib/utils/colors';
+    import {signalLabelToHtml, type SignalLabelInfo} from '$lib/components/charts/signalLabel';
+    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
+    import SignalStyleEditor from './SignalStyleEditor.svelte';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import type {ColumnDef, HtmlCell} from '$lib/components/table/types';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
+
+    // =========================================================================
+    // Props
+    // =========================================================================
+
+    interface Props {
+        chartData: LineDataPoint[];
+        overlaySignals?: RenderedSignal[];
+        onmeasureschange?: (measures: RenderedSignal[]) => void;
+        onmeasuremodechange?: (active: boolean) => void;
+        viewMode?: 'absolute' | 'percentage';
+        /** Label info for the main/primary series (replaces old pairLabel string) */
+        mainSignalInfo?: SignalLabelInfo;
+        /** Display currency code when FX conversion is active (e.g. "EUR") */
+        displayCurrency?: string;
+        /** Display currency flag emoji when FX conversion is active (e.g. "🇪🇺") */
+        displayCurrencyFlag?: string;
+        /** Main asset native currency code (e.g. "USD") — shown when no conversion */
+        mainCurrency?: string;
+        /** Main asset native currency flag emoji (e.g. "🇺🇸") */
+        mainCurrencyFlag?: string;
+        /** Presentation semantics for the measured primary series. */
+        measurementUnit?: 'price' | 'percentage-points';
+        /** Keep date anchors when the active series temporarily lacks endpoints. */
+        preserveUnavailableMeasures?: boolean;
+        /** Isolate DataTable preferences when multiple panels are mounted. */
+        storageKeyPrefix?: string;
+    }
+
+    let {
+        chartData,
+        overlaySignals = [],
+        onmeasureschange,
+        onmeasuremodechange,
+        viewMode = 'absolute',
+        mainSignalInfo = {label: 'Main', isCrown: true},
+        displayCurrency: displayCurrencyProp,
+        displayCurrencyFlag: displayCurrencyFlagProp,
+        mainCurrency: mainCurrencyProp,
+        mainCurrencyFlag: mainCurrencyFlagProp,
+        measurementUnit = 'price',
+        preserveUnavailableMeasures = false,
+        storageKeyPrefix = 'measure-summary',
+    }: Props = $props();
+
+    // =========================================================================
+    // State
+    // =========================================================================
+
+    let measures: MeasureSignal[] = $state([]);
+    let pendingStartDate: string | null = $state(null);
+    let pendingStartValue: number | null = $state(null);
+    let pendingMeasure: MeasureSignal | null = $state(null);
+    let measureActive = $state(false);
+    let nextId = $state(0);
+    let expandedIds = $state<Set<string>>(new Set());
+    let measureTableRefs = $state<Record<string, DataTable<MeasureSummaryRow> | undefined>>({});
+    /** Debounce guard: timestamp of last addPoint call to prevent double-fire */
+    let lastAddPointTime = 0;
+
+    // Responsive breakpoint for tablet layout (<640px)
+    let isNarrow = $state(false);
+    $effect(() => {
+        const mql = window.matchMedia('(max-width: 639px)');
+        isNarrow = mql.matches;
+        const handler = (e: MediaQueryListEvent) => {
+            isNarrow = e.matches;
+        };
+        mql.addEventListener('change', handler);
+        return () => mql.removeEventListener('change', handler);
+    });
+
+    // =========================================================================
+    // Measure mode
+    // =========================================================================
+
+    export function startMeasureMode() {
+        measureActive = true;
+        pendingStartDate = null;
+        pendingStartValue = null;
+        onmeasuremodechange?.(true);
+    }
+
+    export function stopMeasureMode() {
+        measureActive = false;
+        pendingStartDate = null;
+        pendingStartValue = null;
+        pendingMeasure = null;
+        onmeasuremodechange?.(false);
+        emitRendered(); // clear pending preview
+    }
+
+    export function clearMeasures() {
+        measures = [];
+        pendingStartDate = null;
+        pendingStartValue = null;
+        pendingMeasure = null;
+        measureActive = false;
+        nextId = 0;
+        expandedIds = new Set();
+        measureTableRefs = {};
+        lastAddPointTime = 0;
+        onmeasuremodechange?.(false);
+        emitRendered();
+    }
+
+    /**
+     * Called from parent on mousemove to update the live preview line. Answers whether `date`
+     * is the pending start, where a measure of one day is refused: the chart's cue for the
+     * not-allowed cursor.
+     */
+    export function updatePendingEnd(date: string, value: number): boolean {
+        if (!measureActive || pendingStartDate === null) return false;
+        if (date === pendingStartDate) {
+            // Back on the start day the preview goes: it would be a measure of one day.
+            if (pendingMeasure) {
+                pendingMeasure = null;
+                emitRendered();
+            }
+            return true;
+        }
+        const [s, e] = pendingStartDate <= date ? [pendingStartDate, date] : [date, pendingStartDate];
+        pendingMeasure = new MeasureSignal(
+            '__pending__',
+            {
+                ...MeasureSignal.getDefaultStyle(),
+                color: hslToHex((30 + measures.length * 137.5) % 360, 70, 55),
+                lineType: 'dashed',
+            },
+            {startDate: s, endDate: e},
+        );
+        emitRendered();
+        return false;
+    }
+
+    export function addPoint(date: string, value: number) {
+        if (!measureActive) return;
+        // Debounce: ignore clicks within 300ms of each other (prevents double-fire on mobile)
+        const now = Date.now();
+        if (now - lastAddPointTime < 300) return;
+        lastAddPointTime = now;
+
+        if (pendingStartDate === null) {
+            pendingStartDate = date;
+            pendingStartValue = value;
+        } else if (date === pendingStartDate) {
+            // A second click on the start day would make a measure of one day: ignored, the start stays pending.
+            return;
+        } else {
+            const id = `measure-${nextId++}`;
+            const [start, end] = pendingStartDate <= date ? [pendingStartDate, date] : [date, pendingStartDate];
+
+            const measure = new MeasureSignal(
+                id,
+                {
+                    ...MeasureSignal.getDefaultStyle(),
+                    color: hslToHex((30 + measures.length * 137.5) % 360, 70, 55),
+                },
+                {startDate: start, endDate: end},
+            );
+            measures = [...measures, measure];
+            // Auto-expand new measure
+            const next = new Set(expandedIds);
+            next.add(id);
+            expandedIds = next;
+            emitRendered();
+            stopMeasureMode();
+        }
+    }
+
+    /**
+     * Create a measure using the full chart data range (first → last point).
+     * Useful on mobile where 2-tap interaction is unreliable.
+     */
+    export function addMeasureFromChartData() {
+        const measurable = chartData.filter((point) => !point.missing);
+        if (measurable.length < 2) return;
+        const startDate = measurable[0].date;
+        const endDate = measurable[measurable.length - 1].date;
+        if (startDate === endDate) return;
+
+        const id = `measure-${nextId++}`;
+        const measure = new MeasureSignal(
+            id,
+            {
+                ...MeasureSignal.getDefaultStyle(),
+                color: hslToHex((30 + measures.length * 137.5) % 360, 70, 55),
+            },
+            {startDate, endDate},
+        );
+        measures = [...measures, measure];
+        const next = new Set(expandedIds);
+        next.add(id);
+        expandedIds = next;
+        emitRendered();
+        // Stop measure mode if active
+        if (measureActive) stopMeasureMode();
+    }
+
+    function removeMeasure(id: string) {
+        measures = measures.filter((m) => m.id !== id);
+        emitRendered();
+    }
+
+    function updateMeasureStyle(id: string, key: keyof import('$lib/features/signals').SignalStyle, value: any) {
+        const m = measures.find((m) => m.id === id);
+        if (!m) return;
+        (m.style as any)[key] = value;
+        measures = [...measures]; // trigger reactivity
+        emitRendered();
+    }
+
+    function updateMeasureDates(id: string, newStart: string, newEnd: string) {
+        const m = measures.find((m) => m.id === id);
+        if (!m) return;
+        // Ensure start <= end
+        const [s, e] = newStart <= newEnd ? [newStart, newEnd] : [newEnd, newStart];
+        // Update dates on the object (mutation, no reactivity trigger yet)
+        m.params.startDate = s;
+        m.params.endDate = e;
+        // Check if the new range produces a valid measurement BEFORE triggering reactivity
+        const check = m.getMeasurement(chartData);
+        if (!check) {
+            if (preserveUnavailableMeasures) {
+                measures = [...measures];
+                emitRendered();
+                return;
+            }
+            // Auto-delete: range doesn't have matching data points for start/end
+            removeMeasure(id);
+            return;
+        }
+        measures = [...measures]; // trigger reactivity only if valid
+        emitRendered();
+    }
+
+    // =========================================================================
+    // Render
+    // =========================================================================
+
+    function emitRendered() {
+        const rendered: RenderedSignal[] = measures.map((m) => m.render(chartData, viewMode)).filter((r) => r.data.length > 0);
+        // Include pending preview (live measure during placement)
+        if (pendingMeasure) {
+            const preview = pendingMeasure.render(chartData, viewMode);
+            if (preview.data.length > 0) rendered.push(preview);
+        }
+        onmeasureschange?.(rendered);
+    }
+
+    $effect(() => {
+        void chartData;
+        void viewMode;
+        if (measures.length > 0) {
+            // Auto-delete measures whose start/end dates are no longer in chartData
+            if (!preserveUnavailableMeasures && chartData.length > 0) {
+                const valid = measures.filter((m) => m.getMeasurement(chartData) !== null);
+                if (valid.length < measures.length) {
+                    measures = valid;
+                }
+            }
+            emitRendered();
+        }
+    });
+
+    // =========================================================================
+    // Derived
+    // =========================================================================
+
+    let measurements: Array<{measure: MeasureSignal; result: MeasurementResult | null}> = $derived.by(() => {
+        void overlaySignals;
+        return measures.map((measure) => ({
+            measure,
+            result: measure.getMeasurement(chartData),
+        }));
+    });
+
+    // =========================================================================
+    // Formatting helpers
+    // =========================================================================
+
+    function fmtValue(v: number): string {
+        if (measurementUnit === 'percentage-points') return formatPercent(v, {signed: false});
+        // C-97c: the decimals of today, and more when 4 significant digits need them (a price under 0.001).
+        if (Math.abs(v) >= 1) return formatPrice(v, {minDecimals: 4});
+        return formatPrice(v, {minDecimals: 0, floorDecimals: 6});
+    }
+
+    function fmtDelta(v: number): string {
+        return measurementUnit === 'percentage-points' ? formatPercent(v, {suffix: ' pp'}) : formatPrice(v, {minDecimals: 4, signed: true});
+    }
+
+    function fmtPct(v: number): string {
+        return formatPercent(v);
+    }
+
+    function compactDelta(result: MeasurementResult): {
+        value: number | null;
+        label: string;
+    } {
+        if (measurementUnit === 'percentage-points') return {value: result.deltaAbs, label: fmtDelta(result.deltaAbs)};
+        return {value: result.deltaPct, label: result.deltaPct !== null ? fmtPct(result.deltaPct) : '—'};
+    }
+
+    function toggleExpand(id: string) {
+        const next = new Set(expandedIds);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        expandedIds = next;
+    }
+
+    // =========================================================================
+    // Measure summary table (DataTable)
+    // =========================================================================
+
+    interface MeasureSummaryRow {
+        id: string;
+        signalInfo: SignalLabelInfo;
+        valueStart: number;
+        valueEnd: number;
+        deltaAbs: number;
+        deltaPct: number | null;
+        annualizedPct: number | null;
+        days: number;
+        isGhost?: boolean;
+    }
+
+    /** Gain/loss colour of a signed figure; neutral for «—», since `null >= 0` is true in JS. */
+    function colorClass(v: number | null): string {
+        if (v === null) return 'text-lf-muted';
+        return v >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss;
+    }
+
+    function wrapGhost(html: string, isGhost?: boolean): HtmlCell {
+        return {type: 'html', html: isGhost ? `<span style="opacity:0.7">${html}</span>` : html};
+    }
+
+    const allSummaryColumns: ColumnDef<MeasureSummaryRow>[] = [
+        {
+            id: 'signal',
+            header: () => $t('measure.table.signal'),
+            type: 'text',
+            cell: (r) => {
+                const labelHtml = signalLabelToHtml(r.signalInfo);
+                const opacity = r.isGhost ? 'opacity:0.7;' : '';
+                return {type: 'html' as const, html: `<div style="${opacity}display:flex;align-items:center;overflow:hidden;white-space:nowrap">${labelHtml}</div>`};
+            },
+            sortable: false,
+            filterable: false,
+            width: 480,
+            minWidth: 180,
+        },
+        {
+            id: 'valueStart',
+            header: () => $t('common.start'),
+            type: 'number',
+            cell: (r) => wrapGhost(`<span class="font-mono text-right text-lf-secondary">${fmtValue(r.valueStart)}</span>`, r.isGhost),
+            getValue: (r) => r.valueStart,
+            sortable: true,
+            filterable: true,
+            width: 90,
+        },
+        {
+            id: 'valueEnd',
+            header: () => $t('common.end'),
+            type: 'number',
+            cell: (r) => wrapGhost(`<span class="font-mono text-right text-lf-secondary">${fmtValue(r.valueEnd)}</span>`, r.isGhost),
+            getValue: (r) => r.valueEnd,
+            sortable: true,
+            filterable: true,
+            width: 90,
+        },
+        {
+            id: 'deltaAbs',
+            header: () => (measurementUnit === 'percentage-points' ? 'Δ pp' : $t('measure.table.deltaAbs')),
+            type: 'number',
+            cell: (r) => wrapGhost(`<span class="font-mono ${colorClass(r.deltaAbs)}">${fmtDelta(r.deltaAbs)}</span>`, r.isGhost),
+            getValue: (r) => r.deltaAbs,
+            sortable: true,
+            filterable: true,
+            width: 80,
+        },
+        {
+            id: 'deltaPct',
+            header: () => $t('measure.table.deltaPct'),
+            type: 'number',
+            cell: (r) => (r.deltaPct !== null ? wrapGhost(`<span class="font-mono ${colorClass(r.deltaPct)}">${fmtPct(r.deltaPct)}</span>`, r.isGhost) : {type: 'html', html: '<span class="text-lf-muted">—</span>'}),
+            getValue: (r) => r.deltaPct ?? 0,
+            sortable: true,
+            filterable: true,
+            width: 80,
+        },
+        {
+            id: 'annualizedPct',
+            header: () => $t('measure.table.annualized'),
+            type: 'number',
+            headerTooltip: '$\\large (1 + \\Delta\\%)^{\\frac{365}{d}} - 1$',
+            cell: (r) => (r.annualizedPct !== null ? wrapGhost(`<span class="font-mono ${colorClass(r.annualizedPct)}">${fmtPct(r.annualizedPct)}</span>`, r.isGhost) : {type: 'html', html: '<span class="text-lf-muted">—</span>'}),
+            getValue: (r) => r.annualizedPct ?? 0,
+            sortable: true,
+            filterable: true,
+            width: 80,
+        },
+        {
+            id: 'days',
+            header: () => $t('datePicker.granularity.days'),
+            type: 'number',
+            cell: (row) => wrapGhost(`<span class="font-mono text-lf-muted">${row.days}d</span>`, row.isGhost),
+            getValue: (row) => row.days,
+            sortable: true,
+            filterable: true,
+            width: 70,
+        },
+    ];
+    let summaryColumns = $derived(allSummaryColumns.filter((column) => (measurementUnit === 'percentage-points' ? column.id !== 'deltaPct' && column.id !== 'annualizedPct' : column.id !== 'days')));
+
+    /** Original (unconverted) chart data derived from chartData's originalValue field */
+    let originalChartData: LineDataPoint[] = $derived.by(() => {
+        if (!chartData.some((d) => d.originalValue !== undefined)) return [];
+        return chartData.filter((d) => d.originalValue !== undefined).map((d) => ({date: d.date, value: d.originalValue!}));
+    });
+
+    /** Original currency code (from first point with originalCurrency) */
+    let originalCurrencyCode = $derived(chartData.find((d) => d.originalCurrency)?.originalCurrency ?? '');
+
+    function buildSummaryRows(result: MeasurementResult, measureObj: MeasureSignal): MeasureSummaryRow[] {
+        // When FX conversion is active, add 💱(target currency) suffix to main label
+        // When no conversion, add (native currency) suffix
+        const conversionActive = measurementUnit === 'price' && originalChartData.length > 0 && displayCurrencyProp && displayCurrencyFlagProp;
+        let mainLabel: string;
+        let mainSuffix: string | undefined;
+        if (conversionActive) {
+            mainLabel = mainSignalInfo.label ?? 'Main';
+            mainSuffix = ` <span style="font-size:10px">(${displayCurrencyFlagProp} ${displayCurrencyProp}) 💱</span>`;
+        } else if (measurementUnit === 'price' && mainCurrencyProp) {
+            mainLabel = mainSignalInfo.label ?? 'Main';
+            mainSuffix = ` <span style="font-size:10px;opacity:0.7">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+        } else {
+            mainLabel = mainSignalInfo.label ?? 'Main';
+        }
+
+        const rows: MeasureSummaryRow[] = [
+            {
+                id: 'main',
+                signalInfo: {...mainSignalInfo, label: mainLabel, suffix: mainSuffix},
+                valueStart: result.startValue,
+                valueEnd: result.endValue,
+                deltaAbs: result.deltaAbs,
+                deltaPct: result.deltaPct,
+                annualizedPct: result.annualizedPct,
+                days: result.days,
+            },
+        ];
+
+        // Original currency row (when FX conversion is active)
+        if (originalChartData.length > 0 && originalCurrencyCode) {
+            const origFlag = getCurrencyInfo(originalCurrencyCode).flag_emoji;
+            const origResult = measureObj.getMeasurementForSignal(originalChartData);
+            if (origResult) {
+                rows.push({
+                    id: 'main-original',
+                    signalInfo: {
+                        label: mainSignalInfo.label ?? 'Main',
+                        suffix: ` <span style="font-size:10px;opacity:0.7">(${origFlag} ${originalCurrencyCode})</span>`,
+                        isCrown: false,
+                        color: mainSignalInfo.color,
+                        iconUrl: mainSignalInfo.iconUrl,
+                        assetType: mainSignalInfo.assetType,
+                    },
+                    valueStart: origResult.startValue,
+                    valueEnd: origResult.endValue,
+                    deltaAbs: origResult.deltaAbs,
+                    deltaPct: origResult.deltaPct,
+                    annualizedPct: origResult.annualizedPct,
+                    days: result.days,
+                    isGhost: true,
+                });
+            }
+        }
+
+        for (const signal of overlaySignals.filter((s) => s.data.length > 0 && (s.yAxisIndex ?? 0) === 0)) {
+            // Ghost overlay signals (opacity < 1) get 💱 label — they show original currency data
+            const isGhost = signal.opacity != null && signal.opacity < 1;
+            const sigResult = measureObj.getMeasurementForSignal(signal.data);
+            if (sigResult) {
+                // Build label with currency suffix (ghost labels already include currency)
+                let sigLabel = signal.label;
+                let sigSuffix: string | undefined;
+                if (!isGhost && signal.currency) {
+                    sigSuffix = ` <span style="font-size:10px;opacity:0.7">(${signal.currencyFlag || ''} ${escapeHtml(signal.currency)})</span>`;
+                }
+                rows.push({
+                    id: `sig-${signal.label}`,
+                    signalInfo: {
+                        label: sigLabel,
+                        suffix: sigSuffix,
+                        color: signal.color,
+                        iconUrl: isGhost ? undefined : signal.iconUrl,
+                        assetType: isGhost ? undefined : signal.assetType,
+                    },
+                    valueStart: sigResult.startValue,
+                    valueEnd: sigResult.endValue,
+                    deltaAbs: sigResult.deltaAbs,
+                    deltaPct: sigResult.deltaPct,
+                    annualizedPct: sigResult.annualizedPct,
+                    days: result.days,
+                    isGhost,
+                });
+            }
+        }
+        return rows;
+    }
+</script>
+
+<div class="space-y-3 text-lf-primary">
+    <!-- Pending indicator -->
+    {#if measureActive && pendingStartDate}
+        <div class="text-xs text-lf-warning-on-soft bg-lf-warning-soft rounded px-3 py-1.5 border border-lf-warning-line">
+            📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue == null ? '' : formatPrice(pendingStartValue, {minDecimals: 4})}})}
+        </div>
+    {/if}
+
+    <!-- Measure cards -->
+    {#if measures.length > 0}
+        <div class="space-y-2">
+            {#each measurements as { measure, result }}
+                {@const isExpanded = expandedIds.has(measure.id)}
+                <div class="rounded-lg border border-lf-subtle overflow-visible">
+                    <!-- Card header: responsive layout (wide=1 row, tablet=2 rows via stacked DRP) -->
+                    <div
+                        class="flex {isNarrow ? 'items-stretch' : 'items-center'} gap-2 px-3 py-2 bg-lf-panel
+                                    hover:bg-lf-neutral transition-colors"
+                    >
+                        <!-- 1. Chevron -->
+                        <button type="button" class="flex items-center text-xs font-mono text-lf-secondary shrink-0 self-center" onclick={() => toggleExpand(measure.id)}>
+                            <ChevronDown size={13} class="transition-transform shrink-0 {isExpanded ? 'rotate-180' : ''}" />
+                        </button>
+
+                        <!-- 2. DateRangePicker (or collapsed summary) -->
+                        {#if isExpanded}
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <div class="min-w-0 max-w-[300px] shrink-0 self-center" onclick={(e) => e.stopPropagation()}>
+                                <DateRangePicker start={String(measure.params.startDate)} end={String(measure.params.endDate)} showPresets={false} showCustomWindow={false} compact={true} stacked={isNarrow} onchange={(s, e) => updateMeasureDates(measure.id, s, e)} />
+                            </div>
+                        {:else}
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <span class="flex items-center gap-2 text-xs font-mono text-lf-secondary cursor-pointer self-center" onclick={() => toggleExpand(measure.id)}>
+                                📏 {measure.params.startDate} → {measure.params.endDate}
+                                {#if result}
+                                    {@const delta = compactDelta(result)}
+                                    <span class={colorClass(delta.value)}>
+                                        {delta.label}
+                                    </span>
+                                    <span class="text-lf-muted">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
+                                {/if}
+                            </span>
+                        {/if}
+
+                        <!-- 3. Stats + Style wrapper (flex-1 fills remaining space) -->
+                        <div class="flex-1 flex {isNarrow ? 'flex-col justify-between items-end' : 'items-center gap-2'} min-w-0">
+                            {#if result}
+                                {@const delta = compactDelta(result)}
+                                <div class="flex items-center gap-2 shrink-0 {isExpanded ? '' : 'hidden'}">
+                                    <span class="text-xs font-mono shrink-0 {colorClass(delta.value)}">
+                                        {delta.label}
+                                    </span>
+                                    <span class="text-xs font-mono text-lf-muted shrink-0">· {result.days}d</span>
+                                </div>
+                            {/if}
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <div class={isNarrow ? 'w-full' : 'ml-auto flex-1 min-w-[100px] max-w-[400px]'} onclick={(e) => e.stopPropagation()}>
+                                <SignalStyleEditor style={measure.style} onstylechange={(key, value) => updateMeasureStyle(measure.id, key, value)} simplified />
+                            </div>
+                        </div>
+
+                        <!-- 4. Icons: eye + trash (flex-col-reverse in narrow → trash on top, eye on bottom) -->
+                        <div class="flex {isNarrow ? 'flex-col-reverse justify-between items-center' : 'items-center'} gap-1 shrink-0">
+                            {#if isExpanded}
+                                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                                <div onclick={(e) => e.stopPropagation()}>
+                                    <ColumnVisibilityToggle tableRef={measureTableRefs[measure.id]} />
+                                </div>
+                            {/if}
+                            <span
+                                class="p-1 text-lf-muted hover:text-lf-danger rounded transition-colors flex items-center justify-center"
+                                role="button"
+                                tabindex="-1"
+                                title={$t('common.remove')}
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    removeMeasure(measure.id);
+                                }}
+                                onkeydown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.stopPropagation();
+                                        removeMeasure(measure.id);
+                                    }
+                                }}
+                            >
+                                <Trash2 size={13} />
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Expanded content -->
+                    {#if isExpanded}
+                        <!-- Summary table (DataTable) -->
+                        {#if result}
+                            <div class="border-t border-lf-subtle">
+                                <DataTable
+                                    bind:this={measureTableRefs[measure.id]}
+                                    data={buildSummaryRows(result, measure)}
+                                    columns={summaryColumns}
+                                    getRowId={(r) => r.id}
+                                    storageKey={`${storageKeyPrefix}-${measure.id}`}
+                                    enableSelection={false}
+                                    enableActions={false}
+                                    enableSorting={true}
+                                    enableColumnFilters={true}
+                                    enableColumnVisibility={true}
+                                    enableColumnResize={true}
+                                    enablePagination={false}
+                                    tableLayout="auto"
+                                />
+                            </div>
+                        {/if}
+                    {/if}
+                </div>
+            {/each}
+        </div>
+    {:else if !measureActive}
+        <p class="text-xs text-lf-muted italic">
+            {$t('measure.empty')}
+        </p>
+    {/if}
+</div>

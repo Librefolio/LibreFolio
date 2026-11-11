@@ -476,9 +476,11 @@ async def test_serve_plugin_static_direct_returns_file_response():
     """UPLOAD-U3: Direct plugin static call resolves existing asset."""
     candidate = None
     for provider_type, base_dir in uploads_api.PLUGIN_STATIC_DIRS.items():
-        for asset_path in sorted(base_dir.rglob("*")):
+        # brim: the served files are the ones inside <plugin folder>/static/ (the plugin's code and samples are not)
+        pattern = "*/static/**/*" if provider_type == "brim" else "*"
+        for asset_path in sorted(base_dir.glob(pattern)):
             if asset_path.is_file():
-                candidate = (provider_type, asset_path, asset_path.relative_to(base_dir).as_posix())
+                candidate = (provider_type, asset_path, asset_path.relative_to(base_dir).as_posix().replace("/static/", "/", 1) if provider_type == "brim" else asset_path.relative_to(base_dir).as_posix())
                 break
         if candidate:
             break

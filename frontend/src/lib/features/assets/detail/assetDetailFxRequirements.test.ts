@@ -16,7 +16,7 @@
  * their own currency, as `getComparisonEventFxDependency` reads them.
  */
 import {describe, expect, it} from 'vitest';
-import type {SignalConfig, SignalProblem, SignalProblemCode} from '$lib/charts/signals';
+import type {SignalConfig, SignalProblem, SignalProblemCode} from '$lib/features/signals';
 import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from './assetDetailFxRequirements';
 
 type PairStatus = RequiredFxPairInfo['status'];

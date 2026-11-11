@@ -22,8 +22,8 @@ vi.hoisted(() => {
 });
 
 import {waitLocale} from 'svelte-i18n';
-import type {RenderedSignal} from '$lib/charts/signals';
-import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
+import type {RenderedSignal} from '$lib/features/signals';
+import {backendSignalSchemas} from '$lib/features/signals/backendTypes';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
@@ -36,32 +36,8 @@ import type {LineDataPoint} from './LineChart.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
 import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from './calendarReturnWindow';
 import * as calendarReturnWindowModule from './calendarReturnWindow';
-import {
-    buildDeltaHtml,
-    buildEventScatterGroups,
-    buildStaleTooltipHtml,
-    computeGhostSeries,
-    computeZoomWindow,
-    countBuckets,
-    emptyCalendarReturnView,
-    extractCalendarReturnView,
-    extractCalendarReturnViewsByAsset,
-    formatMonthLabel,
-    formatTruncatedGhostLabel,
-    getBucketInfo,
-    bucketSpanUpTo,
-    getVisibleDailyPoints,
-    resolveActivePointIndex,
-    resolveZoomBounds,
-    resolveZoomIndex,
-    splitGhostLabel,
-    synthesizeDailyOHLC,
-    toAbsoluteValue,
-    toDisplaySeries,
-    extendToOverlayDays,
-    type BucketInfo,
-    type EventScatterContext,
-} from './priceChartHelpers';
+import {buildDeltaHtml, buildEventScatterGroups, buildStaleTooltipHtml, computeGhostSeries, computeZoomWindow, countBuckets, formatMonthLabel, formatTruncatedGhostLabel, getBucketInfo, bucketSpanUpTo, getVisibleDailyPoints, resolveActivePointIndex, resolveZoomBounds, resolveZoomIndex, splitGhostLabel, synthesizeDailyOHLC, toAbsoluteValue, toDisplaySeries, extendToOverlayDays, type BucketInfo, type EventScatterContext} from './priceChartHelpers';
+import {emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset} from '$lib/features/signals/calendarReturn';
 import {aggregateLineSeries, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
 
 /** Minimal daily point; overrides layer on top. */

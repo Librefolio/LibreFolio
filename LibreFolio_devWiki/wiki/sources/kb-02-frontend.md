@@ -73,7 +73,7 @@ None — all major patterns already in wiki. This source consolidates component 
 | Routes | `frontend/src/routes/(app)/` |
 | Components | `frontend/src/lib/components/` |
 | Stores | `frontend/src/lib/stores/` |
-| Signal Library | `frontend/src/lib/charts/signals/` |
+| Signal Library | `frontend/src/lib/features/signals/` |
 | Charts | `frontend/src/lib/components/charts/` |
 | Asset components | `frontend/src/lib/features/assets/` |
 | FX components | `frontend/src/lib/features/fx/` |

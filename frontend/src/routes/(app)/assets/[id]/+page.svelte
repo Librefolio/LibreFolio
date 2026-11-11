@@ -26,9 +26,9 @@
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
-    import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
-    import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
-    import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
+    import ChartSignalsSection from '$lib/features/signals/components/ChartSignalsSection.svelte';
+    import type {SignalDataSummary} from '$lib/features/signals/components/ChartSignalsSection.svelte';
+    import MeasurePanel from '$lib/features/signals/components/MeasurePanel.svelte';
     import AssetModal from '$lib/features/assets/AssetModal.svelte';
     import AssetPriceSummary from '$lib/features/assets/AssetPriceSummary.svelte';
     import {fetchSeriesRangeDelta, summaryRangeDelta} from '$lib/features/assets/detail/assetDetailRangeChange';
@@ -62,7 +62,7 @@
         type SignalDefinition,
         type SignalInstanceResult,
         type SignalProblem,
-    } from '$lib/charts/signals';
+    } from '$lib/features/signals';
     import {DEFAULT_AXIS_SCALE, detailModesForPrimaryView, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, primaryViewForDetailModes, resolveLineShape, setPairSettings, getGlobalLineShape, lineShapeFollowsGlobal, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {LineShape} from '$lib/components/charts/lineShape';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -81,21 +81,21 @@
     import {buildTabUrlFromLocation, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {todayIso} from '$lib/utils/dateOnly';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
-    import type {SignalLabelInfo} from '$lib/charts/signalLabel';
-    import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
-    import {buildFxPairComparisonQuery, fxPairComparisonViews} from '$lib/charts/crossTypeCalendar';
-    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, collectConfiguredComparisonFxSlugs, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import type {SignalLabelInfo} from '$lib/components/charts/signalLabel';
+    import {buildOverlaySignalInfoMap} from '$lib/components/charts/signalLabel';
+    import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/features/signals/comparisonSeries';
+    import {buildFxPairComparisonQuery, fxPairComparisonViews} from '$lib/features/signals/crossTypeCalendar';
+    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, collectConfiguredComparisonFxSlugs, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/features/signals/loadComparisonData';
     import {buildChartRequestBody, calendarComparisonFingerprint as chartCalendarComparisonFingerprint, calendarDataFingerprint as chartCalendarDataFingerprint, calendarPeerAssetIds, calendarReturnRequests, chartCurrencies, fxPairTargetsOf, heldPointsToChartPoints, priceComparisonLoadFingerprint as chartPriceComparisonLoadFingerprint, priceComparisonRuntimeIsAuthoritative as chartPriceComparisonRuntimeIsAuthoritative} from '$lib/features/assets/detail/assetDetailChartRequest';
-    import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
-    import {renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/features/signals/chartPageSignals';
+    import {renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
     import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
     import {percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
-    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
-    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
+    import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/features/signals/calendarReturn';
     import {assetChartAnswerForCache, assetChartAnswerKey, calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/features/assets/detail/assetDetailPriceQuery';
     import {assetChartAnswers, clearAssetPageAnswers, comparisonSeriesAnswers} from '$lib/stores/signalResultCache';
     import {mergeChartPointsIncremental} from '$lib/features/assets/detail/assetDetailChartPoints';
@@ -107,7 +107,7 @@
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
-    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {signalCatalogStore} from '$lib/features/signals/signalCatalogStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {FxPairCreatedDetail, FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
     import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';

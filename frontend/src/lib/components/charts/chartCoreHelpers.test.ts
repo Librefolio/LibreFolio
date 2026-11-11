@@ -10,7 +10,7 @@ vi.hoisted(() => {
 });
 
 import {waitLocale} from 'svelte-i18n';
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/features/signals';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {CHART_GAIN_LOSS, chartNeutrals, GROWTH_SERIES} from '$lib/theme/chartTheme';
@@ -236,10 +236,10 @@ describe('canonical overlay axis and reference helpers', () => {
 
     describe('axis label adoption contract', () => {
         it('routes every settings preview row through semantic axis label helpers', () => {
-            const source = readFileSync(new URL('./ChartSettingsModal.svelte', import.meta.url), 'utf8');
+            const source = readFileSync(new URL('../../features/signals/components/ChartSettingsModal.svelte', import.meta.url), 'utf8');
             const previewRowsContract = source.match(/let previewPrimaryLabel = \$derived\.by\([\s\S]*?let previewAxisRows = \$derived\(\[[\s\S]*?\]\);/)?.[0];
 
-            expect(source).toMatch(/import\s+\{\s*exchangeRateAxisLabel,\s*percentageAxisLabel,\s*priceAxisLabel,\s*secondaryAxisLabel\s*\}\s+from\s+['"]\.\/axisLabelHelpers['"]/);
+            expect(source).toMatch(/import\s+\{\s*exchangeRateAxisLabel,\s*percentageAxisLabel,\s*priceAxisLabel,\s*secondaryAxisLabel\s*\}\s+from\s+['"]\.\.\/\.\.\/\.\.\/components\/charts\/axisLabelHelpers['"]/);
             expect(previewRowsContract).toBeDefined();
             if (!previewRowsContract) throw new Error('ChartSettingsModal preview axis rows contract not found');
 
@@ -290,7 +290,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
         /**
          * Y-39a, «parity between the card and the preview»: each list page draws its cards' saved signals through
-         * `$lib/charts/chartSignalRendering`, and hands its settings modal the same sources, `signalSources`. The two maps
+         * `$lib/features/signals/chartSignalRendering`, and hands its settings modal the same sources, `signalSources`. The two maps
          * the preview read until then went away with the modal props of the same names: `pairsDataMap` (each pair turned by
          * its own card, where the card turns it by the signal's own `_inverted`) and `assetsDataMap` (no target name, so the
          * preview called a comparison «Asset #id»). A prop counts as passed in both forms Svelte takes, `name=` and the
@@ -321,9 +321,9 @@ describe('canonical overlay axis and reference helpers', () => {
             ).toEqual({signalSources: true, pairsDataMap: false, assetsDataMap: false});
         });
 
-        it.each(SIGNAL_SOURCE_LIST_PAGES)('Y-39a: the %s imports $lib/charts/chartSignalRendering, the renderer its cards and its settings preview share', (page, path) => {
+        it.each(SIGNAL_SOURCE_LIST_PAGES)('Y-39a: the %s imports $lib/features/signals/chartSignalRendering, the renderer its cards and its settings preview share', (page, path) => {
             const source = readFileSync(path, 'utf8');
-            const clauses = [...source.matchAll(/import\s+(type\s+)?([^;'"]*?)\s*\bfrom\s*['"]\$lib\/charts\/chartSignalRendering['"]/g)].filter(([, typeOnly]) => !typeOnly).map(([, , clause]) => clause.trim());
+            const clauses = [...source.matchAll(/import\s+(type\s+)?([^;'"]*?)\s*\bfrom\s*['"]\$lib\/features\/signals\/chartSignalRendering['"]/g)].filter(([, typeOnly]) => !typeOnly).map(([, , clause]) => clause.trim());
             // A value binding: a namespace, or a specifier that is not `type …` — a type alone renders nothing.
             const valueImports = clauses.filter(
                 (clause) =>
@@ -335,7 +335,7 @@ describe('canonical overlay axis and reference helpers', () => {
                         .some((specifier) => specifier !== '' && !/^type\s/.test(specifier)),
             );
 
-            expect(valueImports, `${page}: draws its saved signals without $lib/charts/chartSignalRendering`).not.toEqual([]);
+            expect(valueImports, `${page}: draws its saved signals without $lib/features/signals/chartSignalRendering`).not.toEqual([]);
         });
     });
 

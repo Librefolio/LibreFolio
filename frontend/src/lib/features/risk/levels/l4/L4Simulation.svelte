@@ -3,7 +3,7 @@
 
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
-    import type {RenderedSignal} from '$lib/charts/signals';
+    import type {RenderedSignal} from '$lib/features/signals';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import {riskOutput} from '$lib/features/risk/riskTypes';

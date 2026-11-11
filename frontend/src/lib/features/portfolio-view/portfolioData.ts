@@ -20,7 +20,7 @@
 import {get, writable, type Readable} from 'svelte/store';
 import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
 import {fetchReport as fetchStoreReport, peekReport as peekStoreReport, type AllocationHistoryDimensions, type PortfolioAcquisitionFundingSeries, type PortfolioBrokerPnlHistory, type PortfolioCostHistorySeries, type PortfolioDepositHistorySeries, type PortfolioHistoryPoint, type PortfolioIncomeHistorySeries, type PortfolioMwrrLinePoint, type PortfolioPnlCandleSeries, type PortfolioRange, type PortfolioReport, type PortfolioSummary, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
-import {createLazyReportRetry, type LazyReportRetry} from '$lib/stores/portfolio/lazyReportRetry.svelte';
+import {createLazyReportRetry, type LazyReportRetry} from '$lib/features/portfolio-view/lazyReportRetry.svelte';
 import {createPositionsSeriesController, type PositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
 import {createPositionsRollingController, type PositionsRollingController, type RollingScope} from '$lib/features/dashboard/positionsRolling';
 import {startActivePolling, type ActivePolling, type ActivePollingState, type PollOutcome} from '$lib/features/live-updates/activePolling';

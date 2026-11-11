@@ -1,6 +1,6 @@
 """The PDF viewer's Chinese, Japanese and Korean fonts, fetched once and served by the instance (lot H-55, decision (c)).
 
-Owner: workstream H (platform). The viewer (``frontend/src/lib/utils/files/pdfViewerAssets.ts``) asks for a CJK font only
+Owner: workstream H (platform). The viewer (``frontend/src/lib/features/files/pdfViewerAssets.ts``) asks for a CJK font only
 when a PDF needs it, and asks the instance: the Content-Security-Policy keeps ``connect-src 'self'``, so the browser never
 reaches a third party. These fonts are tens of megabytes each, too heavy for the image: the instance fetches a file once
 from jsDelivr, at the version the lock installed, and keeps it only if its sha256 is the one the list holds

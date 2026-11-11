@@ -47,7 +47,7 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
 
 import type {ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, within} from '$test/component';
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/features/signals';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {DEFAULT_CHART_SETTINGS, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
 import AssetCard from './AssetCard.svelte';

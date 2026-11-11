@@ -270,6 +270,10 @@ at load 78 failed five green tests with 30 s `ReadTimeout`s that passed alone.
 - **Is a suite alive?** Read the runner's own log and its port, not `ps` alone: the
   runner, its server and its workers are separate processes, and a stopped run can leave
   a worker behind.
+- **Test temp files live in `~/.cache/librefolio-test-tmp/<lane>`, not `/tmp`** (developer decision, 11/11/2026; a full
+  `all-backend` leaves ~3.8 GB of pytest basetemp and filled the 7.8 GB RAM `/tmp` twice). Children run tests with that
+  `TMPDIR` and delete their subfolder at the end; when space runs short you delete the subfolders no process holds open
+  (`lsof +D`), oldest first. Your own full runs use `~/.cache/librefolio-test-tmp/coordinator`.
 - Scripts, logs and slot helpers live in session folders, not `/tmp`: a reboot wipes
   `/tmp`. Lane data directories in `/tmp` are fine, because the runner recreates them.
 

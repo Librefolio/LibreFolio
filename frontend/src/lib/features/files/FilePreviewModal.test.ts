@@ -203,8 +203,8 @@ vi.mock('@embedpdf/snippet', () => ({
  * preview gets (`pdfViewerOfflineOptions`) stay the module's own, so the test checks the real ones reach the viewer.
  */
 const viewerAssets = vi.hoisted(() => ({next: {} as Record<string, unknown>, bases: [] as string[]}));
-vi.mock('$lib/utils/files/pdfViewerAssets', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('$lib/utils/files/pdfViewerAssets')>()),
+vi.mock('$lib/features/files/pdfViewerAssets', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('$lib/features/files/pdfViewerAssets')>()),
     pdfViewerAssets: async (base: string) => {
         viewerAssets.bases.push(base);
         return viewerAssets.next;
@@ -617,7 +617,7 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
     // The first dynamic imports of a file are the slow part of the viewer chain: paid here, once, outside every wait.
     // Both modules are mocked above, so this returns the mocks and leaves them loaded for the preview's own `import()`s.
     beforeAll(async () => {
-        await Promise.all([import('@embedpdf/snippet'), import('$lib/utils/files/pdfViewerAssets')]);
+        await Promise.all([import('@embedpdf/snippet'), import('$lib/features/files/pdfViewerAssets')]);
     });
 
     beforeEach(async () => {

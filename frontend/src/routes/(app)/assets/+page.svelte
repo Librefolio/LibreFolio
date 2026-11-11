@@ -43,16 +43,16 @@
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
-    import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
+    import ChartSettingsModal from '$lib/features/signals/components/ChartSettingsModal.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import type {ChartPrimaryView, ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
-    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
     import {calendarReturnRangeDays, calendarReturnWindowDays} from '$lib/components/charts/calendarReturnWindow';
-    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
+    import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
@@ -63,25 +63,25 @@
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
-    import {reducedPrices, type ReducedEntry} from '$lib/stores/reducedPriceCache';
+    import {reducedPrices, type ReducedEntry} from '$lib/features/assets/reducedPriceCache';
     import type {DerivedBase} from '$lib/features/assets/assetPriceDerived';
     import {buildReducedQuery, cardsOfAnotherStep, comparisonTargetFrom, comparisonTargetIds, estimateEntryDays, signalBaseData, type CardQueryInput} from '$lib/utils/reducedPriceQuery';
     import {DEFAULT_COMPACT_PLOT_WIDTH_PX, compactMaxPoints, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {assetRangeDelta, rangeStartFor, type RangeDelta} from '$lib/utils/rangeChange';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
-    import {TargetSampleLoader, type TargetSampleRequest} from '$lib/utils/targetSampleLoader';
+    import {TargetSampleLoader, type TargetSampleRequest} from '$lib/features/assets/targetSampleLoader';
     import {MIN_START, sendBulkBatches} from '$lib/api/bulkBatches';
     import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
-    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {signalCatalogStore} from '$lib/features/signals/signalCatalogStore.svelte';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/features/assets/assetLifecycle';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
@@ -840,7 +840,7 @@
     /**
      * The prices and backend signals of the cards (Z-29b). Each card asks for the series its plot takes, one point a day, a
      * week or a month (`max_points` from its measured width; `utils/reducedPriceQuery.ts`), and each comparison target for
-     * the same buckets (`sample_like`). Only what the reduced cache (`stores/reducedPriceCache.ts`) does not hold, or holds
+     * the same buckets (`sample_like`). Only what the reduced cache (`features/assets/reducedPriceCache.ts`) does not hold, or holds
      * for another step or stale, is asked; the answers go to the cache and the cards draw them as they are. `only` limits it
      * to some cards: a settings change reloads its own card, a width that changes the step its own.
      */

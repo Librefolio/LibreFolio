@@ -1,5 +1,5 @@
 ---
-applyTo: "frontend/src/lib/charts/signals/**"
+applyTo: "frontend/src/lib/features/signals/**"
 ---
 
 # Chart Signal Architecture

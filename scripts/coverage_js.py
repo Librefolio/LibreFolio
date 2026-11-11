@@ -184,7 +184,7 @@ JS_PRIORITY_MAP = {
     "src/lib/features/risk/": "HIGH",
     # MEDIUM — presentation with real behaviour inside
     "src/lib/components/": "MEDIUM",
-    "src/lib/charts/": "MEDIUM",
+    "src/lib/features/signals/": "MEDIUM",
     "src/lib/actions/": "MEDIUM",
     "src/routes/": "MEDIUM",
     # LOW — mechanical or generated
@@ -229,14 +229,14 @@ def classify_category_js(filepath: str, func_name: str, stmts: int) -> str:  # n
     """Classify a frontend function into a fine-grained category."""
     if filepath.startswith(("src/lib/workers/", "src/lib/types/")) or "debug" in filepath:
         return "JS_INFRA"
+    if filepath.startswith("src/lib/features/signals/"):
+        return "JS_CHART"
     if filepath.startswith("src/lib/features/"):
         return "JS_FEATURE"
     if filepath.startswith("src/lib/stores/"):
         return "JS_STORE"
     if filepath.startswith(("src/lib/api/", "src/lib/services/")):
         return "JS_API"
-    if filepath.startswith("src/lib/charts/"):
-        return "JS_CHART"
     if filepath.startswith("src/lib/actions/"):
         return "JS_ACTION"
     if filepath.startswith("src/lib/i18n/"):

@@ -58,8 +58,8 @@ vi.mock('$lib/stores/app/themeStore', () => ({
     getCurrentResolvedTheme: () => 'light',
     applyTheme: vi.fn(),
 }));
-vi.mock('$lib/charts/signals/registry', () => ({getRegisteredSignalTypes: () => []}));
-vi.mock('$lib/charts/signals/catalogMapper', () => ({mapBackendSignalDefinition: (raw: unknown) => raw}));
+vi.mock('$lib/features/signals/registry', () => ({getRegisteredSignalTypes: () => []}));
+vi.mock('$lib/features/signals/catalogMapper', () => ({mapBackendSignalDefinition: (raw: unknown) => raw}));
 
 import {zodiosApi} from '$lib/api';
 import {instanceConfig, type InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';

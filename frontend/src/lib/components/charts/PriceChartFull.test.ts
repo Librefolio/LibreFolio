@@ -354,7 +354,7 @@ import {get} from 'svelte/store';
 import {addMessages, waitLocale} from 'svelte-i18n';
 import {cleanup, render, setupI18n, waitFor} from '$test/component';
 import {_} from '$lib/i18n';
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/features/signals';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {CHART_GAIN_LOSS, PRICE_SERIES} from '$lib/theme/chartTheme';
@@ -362,7 +362,8 @@ import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
 import CandlestickChart from './CandlestickChart.svelte';
 import type {LineDataPoint} from './LineChart.svelte';
 import PriceChartFull, {type EventMarker} from './PriceChartFull.svelte';
-import {synthesizeDailyOHLC, type CalendarReturnPointContext} from './priceChartHelpers';
+import {synthesizeDailyOHLC} from './priceChartHelpers';
+import {type CalendarReturnPointContext} from '$lib/features/signals/calendarReturn';
 import {aggregateOHLCV, type ChartResolution} from './timeSeriesAggregation';
 
 type UiLanguage = 'en' | 'it' | 'fr';

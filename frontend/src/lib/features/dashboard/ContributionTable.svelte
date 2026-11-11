@@ -17,7 +17,7 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {makePositionKey} from '$lib/utils/core/positionKey';
+    import {makePositionKey} from '$lib/features/dashboard/positionKey';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';

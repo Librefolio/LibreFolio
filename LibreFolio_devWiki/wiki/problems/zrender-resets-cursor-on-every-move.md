@@ -52,5 +52,5 @@ could not exist without this fix. Found during the Y-N65 analysis by reading zre
 |------|------|
 | Line view cursor | `frontend/src/lib/components/charts/PriceChartFull.svelte` |
 | Candles cursor | `frontend/src/lib/components/charts/CandlestickChart.svelte` |
-| The answer that refuses a day | `frontend/src/lib/components/charts/MeasurePanel.svelte` (`updatePendingEnd`) |
+| The answer that refuses a day | `frontend/src/lib/features/signals/components/MeasurePanel.svelte` (`updatePendingEnd`) |
 | Tests (zr stand-in, held frames) | `frontend/src/lib/components/charts/PriceChartFull.test.ts` |

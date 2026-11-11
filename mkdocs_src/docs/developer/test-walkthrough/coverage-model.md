@@ -364,7 +364,7 @@ whichever exists. Pass `--input` to point elsewhere.
 | `JS_STORE` | `src/lib/stores/` — shared client state |
 | `JS_API` | `src/lib/api/`, `src/lib/services/` |
 | `JS_UTILITY` | `src/lib/utils/`, `src/lib/features/risk/` — pure functions, the cheapest to test |
-| `JS_CHART` | `src/lib/charts/` — chart building and signal overlays |
+| `JS_CHART` | `src/lib/features/signals/` — signal overlays and chart building |
 | `SVELTE_UI` | `.svelte` component blocks |
 | `JS_ROUTE` | `src/routes/` — pages and layouts |
 | `JS_ACTION` | `src/lib/actions/` |

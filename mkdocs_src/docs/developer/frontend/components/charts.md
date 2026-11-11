@@ -310,7 +310,7 @@ computable point it is `unavailable` (`undefined_metric`).
   list reads, so a card in the rolling return opens the detail in it. The window is the shared
   `calendarReturnWindow` / `calendarReturnWindowAuto` of the same settings
   (`effectiveCalendarReturnWindow()`).
-- **Request builder.** `lib/charts/fxDetailCalendar.ts` (pure) builds the body of
+- **Request builder.** `lib/features/signals/fxDetailCalendar.ts` (pure) builds the body of
   `POST /api/v1/fx/currencies/convert`: `buildFxDetailCalendarQuery()` returns a conversion of 1 unit
   of the page's base into its quote, in the direction the page shows (`data.urlBase` /
   `data.urlQuote`), daily over `dateStart`..`dateEnd`, with one signal, the calendar rolling return
@@ -379,7 +379,7 @@ a comparison line never mixes currencies.
 #### Measure mode {: #measure-mode }
 
 The asset detail and FX pair pages measure on their chart through `MeasurePanel`
-(`lib/components/charts/MeasurePanel.svelte`). The asset page mounts one panel per primary mode and
+(`lib/features/signals/components/MeasurePanel.svelte`). The asset page mounts one panel per primary mode and
 talks to the one on screen (`activeMeasurePanel()`). 📏 calls the panel's `startMeasureMode()` or
 `stopMeasureMode()`; the panel reports its mode through `onmeasuremodechange`, and the page hands it
 to the chart as `measureMode`, with the chart's two measure callbacks wired to the panel:
@@ -488,7 +488,7 @@ class then only resets the line height.
 
 ### Signal rendering shared by cards, preview and detail pages {: #signal-rendering }
 
-`lib/charts/chartSignalRendering.ts` is the one place that turns a chart's saved signals into
+`lib/features/signals/chartSignalRendering.ts` is the one place that turns a chart's saved signals into
 `RenderedSignal[]`. It is pure (no Svelte state, no store read): the caller says where the series
 come from.
 
@@ -510,7 +510,7 @@ use the same functions: `renderLocalSignals` for their saved local signals, `ren
 for their backend results and, on the FX page, the module's `fxPointToLineDataPoint` to turn store
 points into chart points. They build their `SignalDataSources` with the pure helper
 `detailPageSignalSources({configs, assets, fxPairPoints, selfAssetId?})`
-(`lib/charts/chartPageSignals.ts`):
+(`lib/features/signals/chartPageSignals.ts`):
 
 - an FX pair reads the points of the FX store, straight (the signal's own `_inverted` turns them),
   asked lazily, one pair at a time;
@@ -530,7 +530,7 @@ A saved comparison names its target; it never carries the series. The settings s
 config (`params.assetId` for an `asset-comparison`, `params.pairSlug` for an `fx-pair`), and the
 renderers read the series through `SignalDataSources` (`comparisonTarget(assetId)` and
 `fxPairData(slug)`, see [above](#signal-rendering)). A chart that holds no series of its own (the
-cards of both lists and the settings preview) gets them from `lib/charts/comparisonSeries.ts`, the
+cards of both lists and the settings preview) gets them from `lib/features/signals/comparisonSeries.ts`, the
 one door:
 
 | Function | Role |
@@ -853,7 +853,7 @@ ECharts sets what a tooltip formatter returns as `innerHTML`. Every value a form
 the data or from currency metadata (names, captions, currency codes, flags, event types) goes
 through the shared `escapeHtml` (`lib/utils/core/escapeHtml.ts`) where it is interpolated; a flag
 is such a value, read from `getCurrencyInfo(code).flag_emoji`. A series label with its icon goes
-through `signalLabelToHtml` (`lib/charts/signalLabel.ts`), which escapes it.
+through `signalLabelToHtml` (`lib/components/charts/signalLabel.ts`), which escapes it.
 
 The frontend sources hold one HTML escaper: write no local copy. `escapeHtml` escapes `&`, `<`,
 `>`, `"` and `'`, so its output is also safe inside an attribute, whichever quote the call site

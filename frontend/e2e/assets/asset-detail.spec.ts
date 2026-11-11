@@ -8568,7 +8568,7 @@ test.describe('All-range event markers on a price-cache hit', () => {
     // Path A, from the list: the first answer of a detail that misses the daily
     // cache. With the range on "All", the list bulk-queries ['2000-01-01',
     // today] for its cards. Since Z-29b it keeps that series in its own reduced
-    // cache (`stores/reducedPriceCache.ts`), beside the shared daily price store
+    // cache (`features/assets/reducedPriceCache.ts`), beside the shared daily price store
     // and without touching it. The detail opened from that list therefore finds
     // no daily prices: it asks prices AND events in one request (`include_price:
     // true`) and resolves "All" from that answer. A regression here would be the
@@ -9625,7 +9625,7 @@ test.describe('Asset detail — the price summary shows the backend’s Δ over 
 // The page asks for its prices, its events and its backend signal results in one `POST /assets/prices/query`, and
 // reads the answer with signal isolation (`parseAssetPriceQueryWithSignalIsolation`): an item whose signal results hold
 // an invalid one keeps its prices, and its raw `signals`. `loadChartData` then hands those raw results to
-// `parseBackendSignalResults` (`lib/charts/chartPageSignals.ts`), which throws on the first result the signal result
+// `parseBackendSignalResults` (`lib/features/signals/chartPageSignals.ts`), which throws on the first result the signal result
 // schema rejects — whenever the main item's `signals` holds one, with or without a signal configured. The throw lands
 // in the catch and skips the two statements after the parse:
 //   · the price-cache write (`store.merge` / `store.markFetched`): the next read of the same range asks for the prices
@@ -9648,7 +9648,7 @@ test.describe('X-R16 asset detail: an invalid signal result keeps the prices and
     // A ceiling, never a delay: a sign-in, a page load and the round trips each test waits for by name.
     test.describe.configure({timeout: 60_000});
 
-    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `priceChartHelpers.ts`). */
+    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `calendarReturn.ts`). */
     const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
     /** A result the signal result schema rejects: a status outside ok, partial, unavailable and failed (as in `chartPageSignals.test.ts`). */
     const INVALID_SIGNAL_RESULT = {instance_id: 'x-r16-sma', signal_code: 'SMA', status: 'not-a-status'};
@@ -9838,7 +9838,7 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
     test.describe.configure({timeout: 60_000});
 
     const PRICE_QUERY_PATH = '/api/v1/assets/prices/query';
-    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `priceChartHelpers.ts`). */
+    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `calendarReturn.ts`). */
     const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
     /** The backend indicator the period test configures: SMA, in the trend family of the signals picker. */
     const INDICATOR = {group: 'trend', option: 'sma', signalCode: 'SMA'} as const;

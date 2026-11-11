@@ -30,7 +30,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import {schemas} from '$lib/api';
-import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
+import {backendSignalSchemas} from '$lib/features/signals/backendTypes';
 import {parseFxConvertWithSignalIsolation} from './fxDetailConvertQuery';
 
 /** One day of 1 EUR in USD, as `FXConversionResult` accepts it. */

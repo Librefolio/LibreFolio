@@ -727,7 +727,7 @@ names, read from the plugin class in `SignalPluginRegistry` as AI Export reads i
 (`_sample_signal_result()`). A series no output spec describes stays daily and is logged as a
 warning; none does today. The function is pure and reproduces the browser:
 `downsampleRenderedSignal()` (`frontend/src/lib/components/charts/timeSeriesAggregation.ts`), after
-`backendRenderer.ts` (`frontend/src/lib/charts/signals/`) has split a line or an area into runs at
+`backendRenderer.ts` (`frontend/src/lib/features/signals/`) has split a line or an area into runs at
 the points sent without a value.
 
 - **Daily** gives the series itself.
@@ -806,7 +806,7 @@ item `sample_like` that key, on the same range, so the target comes on the card'
 (`utils/reducedPriceQuery.ts`, `buildReducedQuery()`). `bulkBatches.ts` cuts the request by groups,
 a card with its targets, because a `sample_like` whose named item is in another request is refused
 (422 `sample_reference`). The answers go to the reduced price cache
-(`stores/reducedPriceCache.ts`, beside the daily one, which it does not touch): an entry is
+(`features/assets/reducedPriceCache.ts`, beside the daily one, which it does not touch): an entry is
 answered for a width only if the step that width asks, computed from the entry's own counts of days
 and weeks (`stepForMaxPoints()`), is the entry's; otherwise the card is read again from the backend
 (`cardsOfAnotherStep()`), and a weekly sample is never re-aggregated into months nor turned back

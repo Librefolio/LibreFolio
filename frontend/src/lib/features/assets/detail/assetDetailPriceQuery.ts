@@ -15,11 +15,11 @@
  */
 
 import {schemas} from '$lib/api';
-import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
-import type {SignalConfig} from '$lib/charts/signals/ChartSignal';
-import type {SignalInstanceResult} from '$lib/charts/signals/resultMapper';
-import {getSignalProblem, type SignalProblem} from '$lib/charts/signals/signalProblem';
-import {CALENDAR_RETURN_INSTANCE_ID, isCalendarReturnSignalResult, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+import {backendSignalSchemas} from '$lib/features/signals/backendTypes';
+import type {SignalConfig} from '$lib/features/signals/ChartSignal';
+import type {SignalInstanceResult} from '$lib/features/signals/resultMapper';
+import {getSignalProblem, type SignalProblem} from '$lib/features/signals/signalProblem';
+import {CALENDAR_RETURN_INSTANCE_ID, isCalendarReturnSignalResult, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
 import {canonicalCacheKey, type AssetChartAnswer} from '$lib/stores/signalResultCache';
 
 /** What the calendar problems need to know about the page: the assets and the currency the chart shows. */

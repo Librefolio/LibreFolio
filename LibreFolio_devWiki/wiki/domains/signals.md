@@ -92,15 +92,15 @@ graph LR
 | Output contract and sanitization | `backend/app/services/signals/validation.py` |
 | Plugin registry | `backend/app/services/provider_registry.py` |
 | Production plugins | `backend/app/services/signal_plugins/` |
-| Catalog + schema mapper | `frontend/src/lib/charts/signals/catalogMapper.ts`, `schemaMapper.ts` |
-| Canonical renderer | `frontend/src/lib/charts/signals/backendRenderer.ts` |
-| Request/result mapping | `frontend/src/lib/charts/signals/requestBuilder.ts`, `resultMapper.ts` |
-| Catalog store | `frontend/src/lib/stores/signalCatalogStore.svelte.ts` |
-| FX Pair Comparison | `frontend/src/lib/charts/signals/FxPairSignal.ts` |
-| Asset Comparison | `frontend/src/lib/charts/signals/AssetComparisonSignal.ts` |
-| Benchmarks | `frontend/src/lib/charts/signals/LinearSignal.ts`, `CompoundSignal.ts`, `SineSignal.ts` |
-| Measure Tool | `frontend/src/lib/charts/signals/MeasureSignal.ts` |
-| Signals section UI | `frontend/src/lib/components/charts/ChartSignalsSection.svelte` |
-| Chart settings modal | `frontend/src/lib/components/charts/ChartSettingsModal.svelte` |
-| Signal label utility | `frontend/src/lib/charts/signalLabel.ts` |
+| Catalog + schema mapper | `frontend/src/lib/features/signals/catalogMapper.ts`, `schemaMapper.ts` |
+| Canonical renderer | `frontend/src/lib/features/signals/backendRenderer.ts` |
+| Request/result mapping | `frontend/src/lib/features/signals/requestBuilder.ts`, `resultMapper.ts` |
+| Catalog store | `frontend/src/lib/features/signals/signalCatalogStore.svelte.ts` |
+| FX Pair Comparison | `frontend/src/lib/features/signals/FxPairSignal.ts` |
+| Asset Comparison | `frontend/src/lib/features/signals/AssetComparisonSignal.ts` |
+| Benchmarks | `frontend/src/lib/features/signals/LinearSignal.ts`, `CompoundSignal.ts`, `SineSignal.ts` |
+| Measure Tool | `frontend/src/lib/features/signals/MeasureSignal.ts` |
+| Signals section UI | `frontend/src/lib/features/signals/components/ChartSignalsSection.svelte` |
+| Chart settings modal | `frontend/src/lib/features/signals/components/ChartSettingsModal.svelte` |
+| Signal label utility | `frontend/src/lib/components/charts/signalLabel.ts` |
 | Phase 0 execution plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` |

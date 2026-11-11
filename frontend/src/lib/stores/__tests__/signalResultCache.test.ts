@@ -15,10 +15,10 @@
  */
 import {afterEach, describe, expect, it} from 'vitest';
 
-import type {BackendSignalResult} from '$lib/charts/signals/backendTypes';
+import type {BackendSignalResult} from '$lib/features/signals/backendTypes';
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 
-import type {ComparisonAssetsLoadResult} from '$lib/charts/loadComparisonData';
+import type {ComparisonAssetsLoadResult} from '$lib/features/signals/loadComparisonData';
 import {assetChartAnswers, canonicalCacheKey, clearAssetPageAnswers, comparisonSeriesAnswers, fxSignalAnswers, SignalResultCache, type AssetChartAnswer} from '$lib/stores/signalResultCache';
 
 /** An answer with a shape of its own: nested arrays and objects, so that a shallow copy shows. */

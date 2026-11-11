@@ -7,8 +7,8 @@
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
-    import type {RenderedSignal} from '$lib/charts/signals';
-    import SignalAssetParamControl from '$lib/components/charts/SignalAssetParamControl.svelte';
+    import type {RenderedSignal} from '$lib/features/signals';
+    import SignalAssetParamControl from '$lib/features/signals/components/SignalAssetParamControl.svelte';
     import BenchmarkSelect from '$lib/features/risk/BenchmarkSelect.svelte';
     import type {RiskBenchmarkState} from '$lib/features/risk/riskBenchmarkStore.svelte';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';

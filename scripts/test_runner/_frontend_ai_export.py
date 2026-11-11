@@ -25,14 +25,14 @@ AI_EXPORT_UNIT_TEST_PATHS = (
     "src/lib/features/ai-export/__tests__/safeSerialization.test.ts",
     "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
     "src/lib/components/charts/chartCoreHelpers.test.ts",
-    "src/lib/charts/signals/__tests__/backendRenderer.test.ts",
-    "src/lib/charts/signals/__tests__/backendTypes.test.ts",
-    "src/lib/charts/signals/__tests__/catalogMapper.test.ts",
-    "src/lib/charts/signals/__tests__/localSignalRegression.test.ts",
-    "src/lib/charts/signals/__tests__/previewPolicy.test.ts",
-    "src/lib/charts/signals/__tests__/requestResultMapper.test.ts",
-    "src/lib/charts/signals/__tests__/schemaMapper.test.ts",
-    "src/lib/charts/signals/__tests__/signalProblem.test.ts",
+    "src/lib/features/signals/__tests__/backendRenderer.test.ts",
+    "src/lib/features/signals/__tests__/backendTypes.test.ts",
+    "src/lib/features/signals/__tests__/catalogMapper.test.ts",
+    "src/lib/features/signals/__tests__/localSignalRegression.test.ts",
+    "src/lib/features/signals/__tests__/previewPolicy.test.ts",
+    "src/lib/features/signals/__tests__/requestResultMapper.test.ts",
+    "src/lib/features/signals/__tests__/schemaMapper.test.ts",
+    "src/lib/features/signals/__tests__/signalProblem.test.ts",
 )
 
 AI_EXPORT_E2E_SPECS = (

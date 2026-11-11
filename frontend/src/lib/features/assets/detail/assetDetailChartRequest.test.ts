@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import type {SignalConfig} from '$lib/charts/signals/ChartSignal';
+import type {SignalConfig} from '$lib/features/signals/ChartSignal';
 import {
     buildChartRequestBody,
     calendarComparisonFingerprint,

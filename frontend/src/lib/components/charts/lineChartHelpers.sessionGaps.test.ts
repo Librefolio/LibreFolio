@@ -16,7 +16,7 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/features/signals';
 import {buildBandSeries} from './lineChartHelpers';
 
 // Saturday 3 to Sunday 18 January 2026: two weekend days before the first session, the weekend of

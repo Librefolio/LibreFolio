@@ -18,7 +18,7 @@ frontend/
 │   │   ├── files/             # File management
 │   │   └── settings/          # User & global settings
 │   ├── lib/
-│   │   ├── charts/signals/    # Signal Library (10 signals)
+│   │   ├── features/signals/   # Signal Library (10 signals)
 │   │   ├── components/        # Reusable components
 │   │   │   ├── ui/            # Base (select/, input/, media/, modals, banners, data-editor/)
 │   │   │   ├── charts/        # ECharts (LineChart, Candlestick, ChartSettings, etc.)
@@ -235,7 +235,7 @@ test fails without it.
 | Frontend pages | `frontend/src/routes/(app)/` |
 | Base UI components | `frontend/src/lib/components/ui/` |
 | Chart components | `frontend/src/lib/components/charts/` |
-| Signal Library | `frontend/src/lib/charts/signals/` |
+| Signal Library | `frontend/src/lib/features/signals/` |
 | Asset components | `frontend/src/lib/features/assets/` |
 | Stores | `frontend/src/lib/stores/` |
 | API Client (Zodios) | `frontend/src/lib/api/` |

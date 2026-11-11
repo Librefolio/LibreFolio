@@ -9,7 +9,7 @@
  * when it fails).
  */
 import {describe, expect, it, vi} from 'vitest';
-import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
 import {buildRollingQuery, createPositionsRollingController, rollingLine, rollingAutoPreset, rollingScopeKey, rollingWindowDays, type RollingScope} from './positionsRolling';
 
 const SCOPE: RollingScope = {start: '2026-01-01', end: '2026-10-29', ready: true};
