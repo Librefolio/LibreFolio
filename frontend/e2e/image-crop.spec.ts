@@ -16,6 +16,7 @@ import {TEST_USER} from './fixtures/test-users';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import {samplePath} from './fixtures/brimSamples';
+import {appears} from './fixtures/probe';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +50,27 @@ async function uploadNonImageFile(page: import('@playwright/test').Page, filePat
     await fileInput.setInputFiles(filePath);
     // Wait for file to appear in pending list
     await expect(page.locator('.file-item')).toBeVisible({timeout: 3000});
+}
+
+// Helper: on /brokers, open the Add Broker form and its icon picker (AssetPickerModal).
+// Both controls are always rendered on that path, so they are asserted, never probed.
+async function openBrokerIconPicker(page: import('@playwright/test').Page) {
+    await navigateTo(page, '/brokers');
+    const addBtn = page.getByTestId('add-broker-button');
+    await expect(addBtn).toBeVisible({timeout: 10_000});
+    await addBtn.click();
+    const iconTrigger = page.getByTestId('broker-icon-trigger');
+    await expect(iconTrigger).toBeVisible({timeout: 5_000});
+    await iconTrigger.click();
+    await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
+}
+
+// Helper: on /settings, open the Profile tab and unlock editing.
+async function openProfileTabUnlocked(page: import('@playwright/test').Page) {
+    await page.getByTestId('settings-tab-profile').click();
+    await expect(page.getByTestId('profile-avatar')).toBeVisible({timeout: 5_000});
+    await page.getByTestId('profile-edit-toggle').click();
+    await expect(page.getByTestId('profile-avatar-trigger'), 'unlocked: the camera overlay is rendered').toBeAttached({timeout: 3_000});
 }
 
 // =============================================================================
@@ -94,8 +116,9 @@ test.describe('File Upload with Image Editing', () => {
         await page.getByTestId('image-edit-cancel').click();
 
         // If a confirm dialog appeared, click Discard
+        // Optional by design: the dialog is raised only if init events set hasChanges; "no dialog" ends in the modal closing.
         const discardBtn = page.locator('.confirm-dialog .btn-warning');
-        if (await discardBtn.isVisible({timeout: 1000}).catch(() => false)) {
+        if (await appears(discardBtn, 1_000)) {
             await discardBtn.click();
         }
 
@@ -217,21 +240,20 @@ test.describe('ImageEditModal - Controls & Settings', () => {
         const count = await presetBtns.count();
         expect(count).toBeGreaterThan(0);
 
-        // Click "Avatar" preset if available
-        const avatarPreset = page.locator('.preset-btn', {hasText: /avatar/i});
-        if (await avatarPreset.isVisible().catch(() => false)) {
-            await avatarPreset.click();
-        }
+        // The first preset of the row is Avatar (presetOptions order); the labels are translated, the position is the contract.
+        const avatarPreset = page.getByTestId('image-edit-preset-row').locator('.preset-btn').first();
+        await expect(avatarPreset).toBeEnabled();
+        await avatarPreset.click();
+        await expect(avatarPreset).toHaveClass(/active/);
     });
 
     test('B5: filename input is editable', async ({page}) => {
         const filenameInput = page.getByTestId('image-edit-filename');
-        if (await filenameInput.isVisible().catch(() => false)) {
-            // Clear and type new name
-            await filenameInput.clear();
-            await filenameInput.fill('my-custom-image');
-            await expect(filenameInput).toHaveValue('my-custom-image');
-        }
+        // Always rendered, enabled once the modal is edit-ready (beforeEach waited for that).
+        await expect(filenameInput).toBeEnabled();
+        await filenameInput.clear();
+        await filenameInput.fill('my-custom-image');
+        await expect(filenameInput).toHaveValue('my-custom-image');
     });
 
     test('B6: reset all button works', async ({page}) => {
@@ -260,22 +282,16 @@ test.describe('ImageEditModal - Controls & Settings', () => {
 
     test('B8: format selector exists', async ({page}) => {
         // Look for format select
-        const formatSelect = page.locator('select, [class*="format"]').first();
-        await expect(formatSelect).toBeVisible();
+        await expect(page.getByTestId('image-edit-format')).toBeVisible();
     });
 
     test('B9: quality control exists for JPEG', async ({page}) => {
-        // Switch to JPEG format if possible
-        const formatSelect = page.locator('select').first();
-        if (await formatSelect.isVisible().catch(() => false)) {
-            const options = await formatSelect.locator('option').allTextContents();
-            if (options.some((o) => o.toLowerCase().includes('jpg') || o.toLowerCase().includes('jpeg'))) {
-                await formatSelect.selectOption({label: options.find((o) => o.toLowerCase().includes('jpg') || o.toLowerCase().includes('jpeg'))!});
-                // Quality control should appear
-                const qualityControl = page.locator('[class*="quality"], input[type="number"]');
-                await expect(qualityControl.first()).toBeVisible();
-            }
-        }
+        // The format select always offers png, jpg and webp; png carries no quality control, jpg does.
+        const formatSelect = page.getByTestId('image-edit-format');
+        await expect(formatSelect).toBeEnabled();
+        await expect(page.getByTestId('image-edit-quality')).toBeHidden();
+        await formatSelect.selectOption('jpeg');
+        await expect(page.getByTestId('image-edit-quality')).toBeVisible();
     });
 
     test('B10: crop button confirms and closes modal', async ({page}) => {
@@ -319,8 +335,10 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
         await page.getByTestId('image-edit-cancel').click();
 
         // If confirm dialog appeared (edge case), dismiss it
+        // Optional by design: init has settled (asserted above), so the dialog is not expected; if it is raised anyway, dismiss it.
+        // Either way the test ends asserting the modal closed.
         const discardBtn = page.locator('.confirm-dialog .btn-warning');
-        if (await discardBtn.isVisible({timeout: 500}).catch(() => false)) {
+        if (await appears(discardBtn, 500)) {
             await discardBtn.click();
         }
 
@@ -330,11 +348,10 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
 
     test('C3: ellipse preview toggle works', async ({page}) => {
         const eyeToggle = page.getByTestId('image-edit-ellipse-toggle');
-        if (await eyeToggle.isVisible().catch(() => false)) {
-            await eyeToggle.click();
-            // Toggle again
-            await eyeToggle.click();
-        }
+        await expect(eyeToggle).toBeEnabled();
+        await eyeToggle.click();
+        // Toggle again
+        await eyeToggle.click();
     });
 
     test('C4: modal has proper z-index and is accessible', async ({page}) => {
@@ -354,172 +371,79 @@ test.describe('AssetPickerModal', () => {
     });
 
     test('D1: clicking broker icon opens AssetPickerModal', async ({page}) => {
-        await navigateTo(page, '/brokers');
-
-        // Click "Add Broker" button
-        const addBtn = page.getByTestId('add-broker-button');
-        if (await addBtn.isVisible().catch(() => false)) {
-            await addBtn.click();
-
-            // Click on the icon area
-            const iconTrigger = page.getByTestId('broker-icon-trigger');
-            if (await iconTrigger.isVisible().catch(() => false)) {
-                await iconTrigger.click();
-                await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
-            }
-        }
+        await openBrokerIconPicker(page);
     });
 
     test('D2: existing tab shows files', async ({page}) => {
-        await navigateTo(page, '/brokers');
+        await openBrokerIconPicker(page);
 
-        const addBtn = page.getByTestId('add-broker-button');
-        if (await addBtn.isVisible().catch(() => false)) {
-            await addBtn.click();
+        // Click existing tab
+        await page.getByTestId('asset-picker-existing-tab').click();
 
-            const iconTrigger = page.getByTestId('broker-icon-trigger');
-            if (await iconTrigger.isVisible().catch(() => false)) {
-                await iconTrigger.click();
-                await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
-
-                // Click existing tab
-                await page.getByTestId('asset-picker-existing-tab').click();
-
-                // Search input should be visible
-                await expect(page.getByTestId('asset-picker-search')).toBeVisible();
-            }
-        }
+        // Search input should be visible
+        await expect(page.getByTestId('asset-picker-search')).toBeVisible();
     });
 
     test('D3: URL tab accepts manual URL input', async ({page}) => {
-        await navigateTo(page, '/brokers');
+        await openBrokerIconPicker(page);
 
-        const addBtn = page.getByTestId('add-broker-button');
-        if (await addBtn.isVisible().catch(() => false)) {
-            await addBtn.click();
+        // Click URL tab
+        await page.getByTestId('asset-picker-url-tab').click();
 
-            const iconTrigger = page.getByTestId('broker-icon-trigger');
-            if (await iconTrigger.isVisible().catch(() => false)) {
-                await iconTrigger.click();
-                await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
+        // Type a URL
+        const urlInput = page.locator('input[type="text"], input[type="url"]').last();
+        await urlInput.fill('https://example.com/icon.png');
 
-                // Click URL tab
-                await page.getByTestId('asset-picker-url-tab').click();
-
-                // Type a URL
-                const urlInput = page.locator('input[type="text"], input[type="url"]').last();
-                await urlInput.fill('https://example.com/icon.png');
-
-                // Confirm button should be enabled
-                await expect(page.getByTestId('asset-picker-confirm')).toBeEnabled();
-            }
-        }
+        // Confirm button should be enabled
+        await expect(page.getByTestId('asset-picker-confirm')).toBeEnabled();
     });
 
     test('D4: upload tab exists', async ({page}) => {
-        await navigateTo(page, '/brokers');
+        await openBrokerIconPicker(page);
 
-        const addBtn = page.getByTestId('add-broker-button');
-        if (await addBtn.isVisible().catch(() => false)) {
-            await addBtn.click();
-
-            const iconTrigger = page.getByTestId('broker-icon-trigger');
-            if (await iconTrigger.isVisible().catch(() => false)) {
-                await iconTrigger.click();
-                await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
-
-                // Upload tab should exist
-                await expect(page.getByTestId('asset-picker-upload-tab')).toBeVisible();
-            }
-        }
+        // Upload tab should exist
+        await expect(page.getByTestId('asset-picker-upload-tab')).toBeVisible();
     });
 
     test('D5: can close AssetPickerModal', async ({page}) => {
-        await navigateTo(page, '/brokers');
+        await openBrokerIconPicker(page);
 
-        const addBtn = page.getByTestId('add-broker-button');
-        if (await addBtn.isVisible().catch(() => false)) {
-            await addBtn.click();
-
-            const iconTrigger = page.getByTestId('broker-icon-trigger');
-            if (await iconTrigger.isVisible().catch(() => false)) {
-                await iconTrigger.click();
-                await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
-
-                // Press Escape to close
-                await page.keyboard.press('Escape');
-                await expect(page.getByTestId('asset-picker-modal')).not.toBeVisible({timeout: 3000});
-            }
-        }
+        // Press Escape to close
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('asset-picker-modal')).not.toBeVisible({timeout: 3000});
     });
 
     test('D6: search filters existing files', async ({page}) => {
-        await navigateTo(page, '/brokers');
+        await openBrokerIconPicker(page);
+        await page.getByTestId('asset-picker-existing-tab').click();
 
-        const addBtn = page.getByTestId('add-broker-button');
-        if (await addBtn.isVisible().catch(() => false)) {
-            await addBtn.click();
-
-            const iconTrigger = page.getByTestId('broker-icon-trigger');
-            if (await iconTrigger.isVisible().catch(() => false)) {
-                await iconTrigger.click();
-                await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
-                await page.getByTestId('asset-picker-existing-tab').click();
-
-                // Type in search
-                const searchInput = page.getByTestId('asset-picker-search');
-                await searchInput.fill('nonexistent-file-abc123');
-                // Should show empty state or filtered results
-            }
-        }
+        // Type in search: the field keeps what was typed
+        const searchInput = page.getByTestId('asset-picker-search');
+        await searchInput.fill('nonexistent-file-abc123');
+        await expect(searchInput).toHaveValue('nonexistent-file-abc123');
     });
 
     test('D7: view toggle between grid and list', async ({page}) => {
-        await navigateTo(page, '/brokers');
+        await openBrokerIconPicker(page);
+        await page.getByTestId('asset-picker-existing-tab').click();
 
-        const addBtn = page.getByTestId('add-broker-button');
-        if (await addBtn.isVisible().catch(() => false)) {
-            await addBtn.click();
-
-            const iconTrigger = page.getByTestId('broker-icon-trigger');
-            if (await iconTrigger.isVisible().catch(() => false)) {
-                await iconTrigger.click();
-                await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
-                await page.getByTestId('asset-picker-existing-tab').click();
-
-                // Toggle buttons should exist
-                const gridBtn = page.locator('.toggle-btn').first();
-                const listBtn = page.locator('.toggle-btn').last();
-                if (await gridBtn.isVisible().catch(() => false)) {
-                    await listBtn.click();
-                    await gridBtn.click();
-                }
-            }
-        }
+        // Toggle buttons are always rendered on the existing tab: [grid, list]
+        const gridBtn = page.locator('.toggle-btn').first();
+        const listBtn = page.locator('.toggle-btn').last();
+        await expect(gridBtn).toBeVisible({timeout: 3_000});
+        await listBtn.click();
+        await expect(listBtn).toHaveClass(/active/);
+        await gridBtn.click();
+        await expect(gridBtn).toHaveClass(/active/);
     });
 
     test('D8: circular preview overlay for avatar/icon context', async ({page}) => {
-        // Go to settings, profile tab, click avatar to open AssetPickerModal with circular=true
+        // Go to settings, profile tab, unlock editing, click avatar to open AssetPickerModal with circular=true
         await navigateTo(page, '/settings');
+        await openProfileTabUnlocked(page);
 
-        // Find and click profile tab
-        const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
-        if (await profileTab.isVisible().catch(() => false)) {
-            await profileTab.click();
-
-            // Unlock editing
-            const editLock = page.locator('[data-testid="profile-edit-toggle"], button', {hasText: /edit|pencil/i}).first();
-            if (await editLock.isVisible().catch(() => false)) {
-                await editLock.click();
-
-                // Click avatar
-                const avatarTrigger = page.getByTestId('profile-avatar-trigger');
-                if (await avatarTrigger.isVisible().catch(() => false)) {
-                    await avatarTrigger.click();
-                    await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
-                }
-            }
-        }
+        await page.getByTestId('profile-avatar-trigger').click();
+        await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
     });
 });
 
@@ -542,54 +466,31 @@ test.describe('Avatar - Profile Settings', () => {
     });
 
     test('E2: avatar change requires edit mode', async ({page}) => {
-        const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
-        if (await profileTab.isVisible().catch(() => false)) {
-            await profileTab.click();
+        await page.getByTestId('settings-tab-profile').click();
 
-            // Avatar container should be visible (always present)
-            await expect(page.getByTestId('profile-avatar')).toBeVisible();
-            // But the camera overlay trigger should NOT be visible when locked
-            await expect(page.getByTestId('profile-avatar-trigger')).not.toBeVisible();
-        }
+        // Avatar container should be visible (always present)
+        await expect(page.getByTestId('profile-avatar')).toBeVisible({timeout: 5_000});
+        // But the camera overlay trigger should NOT be visible when locked
+        await expect(page.getByTestId('profile-avatar-trigger')).not.toBeVisible();
     });
 
     test('E3: can open AssetPickerModal from avatar', async ({page}) => {
-        const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
-        if (await profileTab.isVisible().catch(() => false)) {
-            await profileTab.click();
+        await openProfileTabUnlocked(page);
 
-            // Unlock editing
-            const editLock = page.locator('[data-testid="profile-edit-toggle"], [class*="edit-toggle"]').first();
-            if (await editLock.isVisible().catch(() => false)) {
-                await editLock.click();
-
-                const avatarTrigger = page.getByTestId('profile-avatar-trigger');
-                if (await avatarTrigger.isVisible().catch(() => false)) {
-                    await avatarTrigger.click();
-                    await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
-                }
-            }
-        }
+        await page.getByTestId('profile-avatar-trigger').click();
+        await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
     });
 
     test('E4: avatar remove button visible when avatar is set', async ({page}) => {
-        const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
-        if (await profileTab.isVisible().catch(() => false)) {
-            await profileTab.click();
+        await openProfileTabUnlocked(page);
 
-            // Unlock editing
-            const editLock = page.locator('[data-testid="profile-edit-toggle"], [class*="edit-toggle"]').first();
-            if (await editLock.isVisible().catch(() => false)) {
-                await editLock.click();
-
-                // Check if remove button exists (only if avatar is set)
-                const removeBtn = page.getByTestId('avatar-remove-btn');
-                // This is conditional - avatar might not be set
-                const isVisible = await removeBtn.isVisible().catch(() => false);
-                // Just verify the page doesn't crash
-                expect(typeof isVisible).toBe('boolean');
-            }
+        // The remove button exists only if an avatar is set (the user's data, not this spec's): either way the page holds.
+        // Optional by design; absent → it is hidden.
+        const removeBtn = page.getByTestId('avatar-remove-btn');
+        if (!(await appears(removeBtn, 1_000))) {
+            await expect(removeBtn).toBeHidden();
         }
+        await expect(page.getByTestId('profile-avatar')).toBeVisible();
     });
 
     test('E5: sidebar shows user avatar area', async ({page}) => {
@@ -640,18 +541,8 @@ test.describe('Dark Mode - Image Crop Components', () => {
     });
 
     test('F2: AssetPickerModal renders in dark mode', async ({page}) => {
-        await navigateTo(page, '/brokers');
-
-        const addBtn = page.getByTestId('add-broker-button');
-        if (await addBtn.isVisible().catch(() => false)) {
-            await addBtn.click();
-
-            const iconTrigger = page.getByTestId('broker-icon-trigger');
-            if (await iconTrigger.isVisible().catch(() => false)) {
-                await iconTrigger.click();
-                await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
-            }
-        }
+        await openBrokerIconPicker(page);
+        await expect(page.locator('html'), 'the dark theme survives the navigation').toHaveClass(HTML_DARK);
     });
 
     test('F3: FileEditModal renders in dark mode', async ({page}) => {
@@ -663,10 +554,9 @@ test.describe('Dark Mode - Image Crop Components', () => {
         await uploadNonImageFile(page, TEST_CSV);
 
         const editBtn = page.getByTestId('file-edit-btn').first();
-        if (await editBtn.isVisible().catch(() => false)) {
-            await editBtn.click();
-            await expect(page.getByTestId('file-edit-modal')).toBeVisible({timeout: 3000});
-        }
+        await expect(editBtn).toBeVisible({timeout: 3_000});
+        await editBtn.click();
+        await expect(page.getByTestId('file-edit-modal')).toBeVisible({timeout: 3000});
     });
 });
 
@@ -680,83 +570,60 @@ test.describe('Files Page - Grid View', () => {
         await page.getByTestId('files-tab-static').click();
     });
 
-    test('G1: grid view shows file cards with preview', async ({page}) => {
-        // Only test if view toggle exists (files present)
-        const hasViewToggle = await page
-            .getByTestId('view-mode-toggle')
-            .isVisible()
-            .catch(() => false);
-        if (hasViewToggle) {
-            await page.getByTestId('view-mode-grid').click();
-
-            // Grid cards should be visible
-            const cards = page.locator('.file-card');
-            const count = await cards.count();
-            if (count > 0) {
-                // Each card should have title and meta
-                await expect(cards.first().locator('.card-title')).toBeVisible();
-                await expect(cards.first().locator('.card-meta')).toBeVisible();
-            }
+    // The view toggle (and the grid) exist only when the user has static files: data this spec does not own. Optional by design:
+    // the page is settled first (data-busy), so "no toggle" is a fact about the data, not a slow load, and then the empty
+    // list is what is asserted.
+    async function openGrid(page: import('@playwright/test').Page): Promise<boolean> {
+        await expect(page.getByTestId('files-page')).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+        const toggle = page.getByTestId('view-mode-toggle');
+        if ((await toggle.count()) === 0) {
+            await expect(page.locator('.file-card')).toHaveCount(0);
+            return false;
         }
+        await page.getByTestId('view-mode-grid').click();
+        return true;
+    }
+
+    test('G1: grid view shows file cards with preview', async ({page}) => {
+        if (!(await openGrid(page))) return;
+        const cards = page.locator('.file-card');
+        await expect(cards.first()).toBeVisible({timeout: 5_000});
+        // Each card should have title and meta
+        await expect(cards.first().locator('.card-title')).toBeVisible();
+        await expect(cards.first().locator('.card-meta')).toBeVisible();
     });
 
     test('G2: search works in grid view', async ({page}) => {
-        const hasViewToggle = await page
-            .getByTestId('view-mode-toggle')
-            .isVisible()
-            .catch(() => false);
-        if (hasViewToggle) {
-            await page.getByTestId('view-mode-grid').click();
+        if (!(await openGrid(page))) return;
+        // Search bar is rendered with the grid
+        const searchInput = page.locator('.grid-search-input');
+        await expect(searchInput).toBeVisible({timeout: 5_000});
+        await searchInput.fill('nonexistent-file-xyz');
 
-            // Search bar should be visible
-            const searchInput = page.locator('.grid-search-input');
-            if (await searchInput.isVisible().catch(() => false)) {
-                await searchInput.fill('nonexistent-file-xyz');
-
-                // Should show empty state
-                const emptyState = page.locator('.empty-state');
-                await expect(emptyState).toBeVisible();
-            }
-        }
+        // Should show empty state
+        await expect(page.locator('.empty-state')).toBeVisible();
     });
 
     test('G3: grid cards have action buttons', async ({page}) => {
-        const hasViewToggle = await page
-            .getByTestId('view-mode-toggle')
-            .isVisible()
-            .catch(() => false);
-        if (hasViewToggle) {
-            await page.getByTestId('view-mode-grid').click();
-
-            const cards = page.locator('.file-card');
-            const count = await cards.count();
-            if (count > 0) {
-                // First card should have actions: download, copy, delete
-                const actions = cards.first().locator('.card-actions .action-btn');
-                const actionCount = await actions.count();
-                expect(actionCount).toBeGreaterThanOrEqual(3); // download, copy, delete
-            }
-        }
+        if (!(await openGrid(page))) return;
+        const cards = page.locator('.file-card');
+        await expect(cards.first()).toBeVisible({timeout: 5_000});
+        // First card should have actions: download, copy, delete
+        await expect(cards.first().locator('.card-actions .action-btn')).not.toHaveCount(0);
+        expect(await cards.first().locator('.card-actions .action-btn').count()).toBeGreaterThanOrEqual(3);
     });
 
     test('G4: delete button styled as danger', async ({page}) => {
-        const hasViewToggle = await page
-            .getByTestId('view-mode-toggle')
-            .isVisible()
-            .catch(() => false);
-        if (hasViewToggle) {
-            await page.getByTestId('view-mode-grid').click();
-
-            const cards = page.locator('.file-card');
-            if (
-                await cards
-                    .first()
-                    .isVisible()
-                    .catch(() => false)
-            ) {
-                const dangerBtn = cards.first().locator('.action-btn.danger');
-                await expect(dangerBtn).toBeVisible();
-            }
+        if (!(await openGrid(page))) return;
+        const cards = page.locator('.file-card');
+        await expect(cards.first()).toBeVisible({timeout: 5_000});
+        // Delete is offered only on the files the user may manage (canManage), which depends on who owns the grid's files, not on
+        // the first card: the danger button of any card that has one is the subject; no such card means nothing is manageable.
+        const danger = cards.locator('.action-btn.danger');
+        if ((await danger.count()) === 0) {
+            await expect(page.locator('.file-card .action-btn.danger')).toHaveCount(0);
+            return;
         }
+        await expect(danger.first()).toBeVisible();
     });
 });
