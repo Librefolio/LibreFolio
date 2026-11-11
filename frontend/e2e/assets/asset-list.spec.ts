@@ -2622,6 +2622,46 @@ test.describe('Assets list — a compared pair is drawn at the first load (Y-41)
 });
 
 /**
+ * Assets list — a pair compared on a card is drawn in the rolling-return view (FB-11 follow-up).
+ *
+ * In the rolling-return view the cards compared only assets: the FX pair of a saved comparison was left out. Now the page asks the
+ * rolling return of the pairs of all its cards in one `POST /fx/currencies/convert` (not one per card) and each card draws its pair.
+ * The card publishes how many overlay lines it draws (`data-overlay-count`). The comparisons are seeded in this browser's storage.
+ *
+ * Red before: 0 lines on the card, and no conversion asked.
+ */
+test.describe('Assets list — a compared FX pair is drawn in the rolling-return view (FB-11)', () => {
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('two cards with a compared pair each: one conversion request for the list, each card draws its line', async ({page}) => {
+        await goToAssetsPage(page);
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        const otherId = await assetIdByName(page, 'Microsoft Corporation');
+        await seedChartComparisons(page, [[`asset-${appleId}`, [pairComparison('e2e-fb11-pair-a', 'EUR-USD')]]]);
+
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        const conversions: string[] = [];
+        page.on('request', (request) => {
+            if (request.method() === 'POST' && request.url().includes('/fx/currencies/convert') && (request.postData() ?? '').includes('ASSET_CALENDAR_ROLLING_RETURN')) conversions.push(request.postData() ?? '');
+        });
+        await page.getByTestId('assets-global-view-calendar-return').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        await expect(page.getByTestId(`asset-card-${appleId}`), 'the pair is drawn in the rolling-return view').toHaveAttribute('data-overlay-count', '1', {timeout: 15_000});
+        expect(conversions, 'one conversion request for the whole list, not one per card').toHaveLength(1);
+        expect(JSON.parse(conversions[0]), 'it asks the compared pair once').toHaveLength(1);
+        await expect(page.getByTestId(`asset-card-${otherId}`), 'a card with no comparison draws no line').toHaveAttribute('data-overlay-count', '0');
+    });
+});
+
+/**
  * Assets list — the grid toolbar: an icon for the absolute view, a tooltip on settings, sync all and refresh all (Y5-F1).
  *
  * The first button of the cards' view group (`assets-global-view-absolute`) draws the price-line icon and no text, with an
