@@ -261,7 +261,7 @@ the chart is converted, and each Asset comparison gets an item of its own — `i
 `include_events: true`, `target_currency` set to the chart currency — with the same signal request,
 so every line uses one window and one currency. The page's `queryAssetPricesBulkWithSignalIsolation()`
 sends it, and `parseAssetPriceQueryWithSignalIsolation()`
-(`lib/components/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
+(`lib/features/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
 malformed result does not discard the response. The page then reads the signal results inside a `try` of
 their own (X-R16): a malformed one fails the signals only, with the panel's notice «Technical signals could
 not be updated», while the prices still reach the chart, the price cache and the **All** start. The FX
@@ -357,7 +357,7 @@ only its own layout (page size, column widths, order and visibility) under its `
 
 #### Asset detail: page sync and comparison sync
 
-`requiredFxPairs` (built by `buildRequiredFxPairs()`, `lib/components/assets/detail/assetDetailFxRequirements.ts`)
+`requiredFxPairs` (built by `buildRequiredFxPairs()`, `lib/features/assets/detail/assetDetailFxRequirements.ts`)
 lists the FX pairs the page needs to convert into the chart currency: the
 asset's, each Asset comparison's, and those of their events' currencies. Each pair has a status
 (`ok`, `missing`, `no-data`, `partial-gap`) that drives the data-quality banners. The toolbar

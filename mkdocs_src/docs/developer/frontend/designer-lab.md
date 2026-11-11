@@ -1200,7 +1200,7 @@ An abridged export (occurrence lists and classes cut):
       "target": "--color-emerald-600",
       "from": "oklch(59.6% 0.145 163.225)",
       "to": "oklch(62% 0.13 160)",
-      "occurrences": [{"file": "src/lib/components/assets/AssetCard.svelte", "line": 133}],
+      "occurrences": [{"file": "src/lib/features/assets/AssetCard.svelte", "line": 133}],
       "impact": {"uses": 52, "files": 27, "classes": {"text-emerald-600": 46, "bg-emerald-600": 3}},
       "note": "gains green too bright",
       "shots": ["assets/list"]

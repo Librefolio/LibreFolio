@@ -305,7 +305,7 @@ The transactions that lost their link can be linked again: `GET /api/v1/transact
 proposes the event of the same day for each, and the user confirms (see
 [Event Reconciliation](../transactions/service.md#event-reconciliation)). Nothing relinks by itself.
 
-In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`) the flow is:
+In the asset form (`AssetModal.svelte`, in `frontend/src/lib/features/assets/`) the flow is:
 
 ```mermaid
 sequenceDiagram
@@ -398,7 +398,7 @@ included. The route answers HTTP 409 with `detail = {error_code, message, params
 
 Any other error of the endpoint keeps its answer, a 500 with a string `detail`.
 
-In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`), `saveEdit()`
+In the asset form (`AssetModal.svelte`, in `frontend/src/lib/features/assets/`), `saveEdit()`
 first PATCHes the asset's fields (step 1), then assigns the provider (step 2). A step-2 refusal with this code is shown inline, in the form's
 error banner (`formError`, `data-form-error`): one sentence in the interface language built by
 `wipeRefusalMessage()` (`currencyChangeErrors.ts`, which maps each code to its key:
@@ -472,7 +472,7 @@ its answer, a 500 with a string `detail`.
     linked to a generated event) is no longer raised and has no sentence in the frontend
     catalogue; a client that still handles it can drop the branch.
 
-In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`), `saveEdit()`
+In the asset form (`AssetModal.svelte`, in `frontend/src/lib/features/assets/`), `saveEdit()`
 removes the provider in step 2, the `providerNoProvider` branch, once step 1 has PATCHed the
 asset's fields. Before step 1 it asks the [dry run](#provider-change-impact) what the removal
 deletes and, when something goes, shows one confirmation (below). Its `catch` mirrors the assign
