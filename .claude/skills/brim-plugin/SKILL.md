@@ -112,6 +112,10 @@ converter.
       tax, a currency conversion) unless the plugin knows that is safe: a row it cannot import
       is unknown.
     - Rule 9's rows not settled yet are neither: they keep their info note.
+    - **An info note the user must read is in the four languages** (the developer, 11/11/2026): a note on what the
+      import did on purpose (a tax refund as interest, rows not settled yet, rows of another account) gets
+      `importWizard.brimNotice.<code>` and `importWizard.brimEvidence.<code>` in EN/IT/FR/ES, whatever the file's
+      language; the plugin's own text stays as the English fallback.
     - **Beta plugins.** While a plugin is in beta it may still write one plain string per skipped
       row (a `legacy` warning, no link): with no reliable reports there is no way yet to tell the
       safe rows from the unknown ones (decision of 19/10/2026, confirmed 22/10). That is a
