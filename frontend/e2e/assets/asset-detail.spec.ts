@@ -9109,11 +9109,11 @@ test.describe('Provider chip names the provider once its catalogue arrives', () 
             const iconSelector = `img[src=${JSON.stringify(iconUrl)}]`;
             await expect(info.locator(iconSelector), 'the catalogue icon reaches the provider chip').toBeAttached({timeout: 5_000});
 
-            // The chip is the span holding the catalogue's own icon: no test id, class or position.
+            // The chip is found by its test id; it holds the catalogue's own icon.
             // An exact text rather than a header-wide toContainText, so it also says the label is not
             // the raw code (name ≠ code, checked above). Provider names come from the backend
             // registry, not from i18n: this is not an assertion on translated text.
-            const chip = info.locator('span', {has: page.locator(iconSelector)});
+            const chip = info.getByTestId('asset-detail-provider-badge');
             await expect(chip, `the provider chip names «${providerCode}» as the catalogue does, not by its raw code`).toHaveText(provider.name, {timeout: 5_000});
         } finally {
             // The routes stay until the page closes with the test, so the live-price answer outlives the asset page, whose

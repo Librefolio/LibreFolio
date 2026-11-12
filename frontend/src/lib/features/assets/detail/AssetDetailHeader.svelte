@@ -36,6 +36,20 @@
 
     /** Layout of the header pills; the colour roles stay literal in the markup. */
     const badgeBase = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium';
+
+    /** The page the provider badge opens: the address set on the asset, else the provider's. */
+    const externalHref = $derived(userUrl || providerExternalUrl || null);
+    const badgeName = $derived(assetInfo?.provider_code ? assetProviderName : $t('assetDetail.manualChip'));
+    /** The host of an address, or the address itself when it does not parse. */
+    function siteOf(href: string): string {
+        try {
+            return new URL(href).hostname;
+        } catch {
+            return href;
+        }
+    }
+    /** Where the badge leads (tooltip and accessible name; it contains the visible name, WCAG 2.5.3). */
+    const hint = $derived(externalHref ? $t('assetDetail.externalLinkHint', {values: {name: badgeName, site: siteOf(externalHref)}}) : undefined);
 </script>
 
 <div class="flex items-center gap-3" data-testid="asset-detail-header" use:guideAnchor={'asset.detail.header'}>
@@ -72,22 +86,29 @@
                     </a>
                 {/if}
 
-                {#if assetInfo.provider_code}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-lf-success-soft text-lf-success-on-soft">
+                <svelte:element
+                    this={externalHref ? 'a' : 'span'}
+                    data-testid="asset-detail-provider-badge"
+                    data-linked={externalHref ? 'true' : 'false'}
+                    href={externalHref ?? undefined}
+                    target={externalHref ? '_blank' : undefined}
+                    rel={externalHref ? 'noopener noreferrer' : undefined}
+                    title={hint}
+                    aria-label={hint}
+                    class="{badgeBase} min-w-0 max-w-full {assetInfo.provider_code ? 'bg-lf-success-soft text-lf-success-on-soft' : 'bg-lf-warning-soft text-lf-warning-on-soft'} {externalHref ? 'hover:underline focus-visible:outline-lf-focus' : ''}"
+                >
+                    {#if assetInfo.provider_code}
                         {#if providerIconUrl}
                             <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
                         {/if}
-                        {assetProviderName}
-                    </span>
-                {:else}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-lf-warning-soft text-lf-warning-on-soft"> ✏️ {$t('assetDetail.manualChip')} </span>
-                {/if}
-
-                {#if userUrl || providerExternalUrl}
-                    <a href={userUrl || providerExternalUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center p-1 rounded text-lf-muted hover:text-lf-link transition-colors" title={userUrl || providerExternalUrl}>
-                        <ExternalLink size={14} />
-                    </a>
-                {/if}
+                        {badgeName}
+                    {:else}
+                        ✏️ {badgeName}
+                    {/if}
+                    {#if externalHref}
+                        <ExternalLink size={12} class="shrink-0" />
+                    {/if}
+                </svelte:element>
                 <LiveUpdatesStatus state={liveUpdatesState} />
             </div>
         </div>
