@@ -1838,11 +1838,21 @@ test.describe('FX Detail Page', () => {
         await navigationSync.entered.wait;
         assertAssetSyncRequest(navigationSync.requestBody, fixture.peer.id, fixture.changedRange);
         await expect(syncAssetButton).toBeDisabled();
-        const comparisonsBeforeNavigationCompletion = fixture.stats.comparisonRequests.length;
+        const comparisonsBeforeNavigation = fixture.stats.comparisonRequests.length;
+        const unplannedComparisonsBeforeNavigation = fixture.stats.unplannedComparisonRequests;
 
         await navigateTo(page, '/fx');
         await expect(page).toHaveURL(/\/fx(?:\?|$)/, {timeout: 10_000});
         await expect(page.getByTestId('fx-page')).toBeVisible({timeout: 10_000});
+        // The FX list reads the same saved comparison and may ask the peer's prices once, for the range it inherits (or find them already held,
+        // as when this runs alone): its own load, not a reaction to the discarded sync. It is let in before the baseline, so the check below
+        // sees only what the completion could add.
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+        const listComparisons = fixture.stats.comparisonRequests.slice(comparisonsBeforeNavigation);
+        expect(listComparisons.length, 'the list asks the peer at most once').toBeLessThanOrEqual(1);
+        // The list asks prices only (no events), unlike the detail page: it is the peer, over the range the detail left.
+        for (const body of listComparisons) expect(parsePriceQueries(body)).toEqual([{asset_id: fixture.peer.id, date_range: fixture.changedRange, include_price: true, include_events: false}]);
+        const comparisonsBeforeNavigationCompletion = fixture.stats.comparisonRequests.length;
         navigationSync.hold?.release();
         await navigationSync.completed.wait;
         const addPairButton = page.getByTestId('fx-add-pair-button');
@@ -1852,7 +1862,7 @@ test.describe('FX Detail Page', () => {
         await expectNoSyncToasts(page);
         expect(fixture.stats.comparisonRequests.length).toBe(comparisonsBeforeNavigationCompletion);
         expect(fixture.stats.unplannedAssetSyncRequests).toBe(0);
-        expect(fixture.stats.unplannedComparisonRequests).toBe(0);
+        expect(fixture.stats.unplannedComparisonRequests, 'only the list’s own load is unplanned').toBe(unplannedComparisonsBeforeNavigation + listComparisons.length);
     });
 
     // ========================================================================
