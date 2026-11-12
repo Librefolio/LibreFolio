@@ -5,7 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from enum import StrEnum
 from typing import Callable, Literal, Protocol
+
+
+class LotMatchingMethod(StrEnum):
+    """The order in which a replay matches an outflow to the open lots of its broker (project 69, D2, D3).
+
+    ``FIFO`` takes the oldest lot first, ``LIFO`` the most recent: by the lot's opening date, then its id. A transferred
+    lot keeps its purchase date in the arrival broker's queue (D10). The queue is per broker in both methods.
+    """
+
+    FIFO = "FIFO"
+    LIFO = "LIFO"
+
 
 Direction = Literal["LONG", "SHORT"]
 CustodyType = Literal["BROKER", "IN_TRANSIT"]
