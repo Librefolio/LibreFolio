@@ -69,7 +69,7 @@ import type {PlannerStep} from './types';
 
 const NOW = new Date('2026-09-16T12:00:00Z');
 const AS_OF = '2026-09-16';
-const codec = toolContractMap.pac_allocator['1.0.0'].input;
+const codec = toolContractMap.pac_allocator['2.0.0'].input;
 /** The `none` variant every minimum, route cap and variable fee cap defaults to. */
 const NONE = {kind: 'none'};
 
@@ -199,7 +199,7 @@ describe('buildRequest: an all-default scenario', () => {
         // Precondition: every value below is the default the wizard starts from.
         const mode = eurMode(draft, brokerKey);
         expect(mode).toMatchObject({kind: 'whole_quantity', fixedFee: '0', ratePercent: '0', floor: '0', cap: ''});
-        expect(draft.data.routes[routeKey(assetKey, brokerKey)]).toMatchObject({enabled: true, priority: '0', minimumIfActive: '', requiredMinimum: '', cap: '', marginPercent: '0'});
+        expect(draft.data.routes[routeKey(assetKey, brokerKey)]).toMatchObject({enabled: true, priority: '0', minimumIfActive: '', cap: '', marginPercent: '0'});
         expect(fundingEntry(draft, brokerKey, cashKey)).toMatchObject({enabled: true, priority: '0', cap: ''});
         expect(draft.data.fxSpreadPercent).toBe('0');
         expect(draft.requiredPairs).toEqual([]);
@@ -228,6 +228,27 @@ describe('buildRequest: an all-default scenario', () => {
         expect(route.side).toBe('buy');
     });
 
+    it('never writes a required minimum, and ignores one an older draft object still carries (M19)', () => {
+        const {draft, brokerKey, assetKey} = cashScenario();
+        const route = draft.data.routes[routeKey(assetKey, brokerKey)] as unknown as Record<string, unknown>;
+        route.requiredMinimum = '5';
+
+        const request = wireOf(build(draft));
+
+        const sent = itemBy(request.order_routes, 'route_id', routeWireId(draft, assetKey, brokerKey));
+        expect(keysOf(sent)).not.toContain('required_minimum');
+        expect(JSON.stringify(request)).not.toContain('required_minimum');
+    });
+
+    it('writes every target as an entry of its kind (contract 2.0.0)', () => {
+        const {draft, assetKey} = cashScenario();
+
+        const request = wireOf(build(draft));
+
+        expect(itemBy(request.target_weights, 'asset_id', assetKey)).toMatchObject({kind: 'asset', asset_id: assetKey});
+        expect(asList(request.target_weights).every((entry) => entry.kind === 'asset')).toBe(true);
+    });
+
     it('resolves every omitted value to its schema default, and invents no fee schedule', () => {
         const {draft, brokerKey, assetKey, cashKey, accountBrokerKey} = cashScenario();
         const resolved = resolvedOf(build(draft));
@@ -247,7 +268,6 @@ describe('buildRequest: an all-default scenario', () => {
         expect(itemBy(resolved.order_routes, 'route_id', routeWireId(draft, assetKey, brokerKey))).toMatchObject({
             priority: 0,
             minimum_if_active: NONE,
-            required_minimum: NONE,
             cap: NONE,
             execution_margin_rate: '0',
             fee_schedule_id: null,
@@ -263,8 +283,8 @@ describe('buildRequest: an all-default scenario', () => {
         expect(draft.targetTotal).toBe('100');
 
         const request = wireOf(build(draft));
-        expect(itemBy(request.target_weights, 'asset_id', unweighted.key)).toStrictEqual({asset_id: unweighted.key, weight: '0'});
-        expect(itemBy(request.target_weights, 'asset_id', assetKey)).toStrictEqual({asset_id: assetKey, weight: '1'});
+        expect(itemBy(request.target_weights, 'asset_id', unweighted.key)).toStrictEqual({kind: 'asset', asset_id: unweighted.key, weight: '0'});
+        expect(itemBy(request.target_weights, 'asset_id', assetKey)).toStrictEqual({kind: 'asset', asset_id: assetKey, weight: '1'});
         expect(asObject(itemBy(request.assets, 'asset_id', unweighted.key).identity)).toHaveProperty('ticker', null);
     });
 });
@@ -352,7 +372,7 @@ describe('buildRequest: values the user changed', () => {
         const resolved = resolvedOf(built);
         expect(resolved.existing_cash).toStrictEqual([]);
         expect(itemBy(resolved.brokers, 'broker_id', brokerKey).fee_schedules).toStrictEqual([{...schedule, rate: '0', variable_floor: null, variable_cap: NONE}]);
-        expect(itemBy(resolved.order_routes, 'route_id', route.wireId)).toMatchObject({required_minimum: NONE, fee_schedule_id: scheduleId});
+        expect(itemBy(resolved.order_routes, 'route_id', route.wireId)).toMatchObject({fee_schedule_id: scheduleId});
     });
 
     it.each([

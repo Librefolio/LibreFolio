@@ -42,7 +42,7 @@ import {cleanup, render, screen, setupI18n, within} from '$test/component';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {catalogCurrencyDigits, formatPlannerMoneyPlain} from '../format';
-import type {PacReadyResult, PacResolvedRequest} from '../types';
+import type {PacReadyResult} from '../types';
 import type {ResultNames} from './model';
 import StateNotice from './StateNotice.svelte';
 
@@ -57,8 +57,6 @@ const names: ResultNames = {
     ticker: () => null,
     broker: (id) => BROKER_NAMES[id] ?? id,
 };
-/** No route with a required minimum: the infeasible notice lists the reachable funding only. */
-const request = {order_routes: []} as unknown as PacResolvedRequest;
 
 interface TopUp {
     broker_id: string;
@@ -114,7 +112,7 @@ function amountOf(row: TopUp): string {
 }
 
 async function mount(result: PacReadyResult): Promise<void> {
-    render(StateNotice, {result, request, names, digits, ongoto: vi.fn(), onedit: vi.fn()});
+    render(StateNotice, {result, names, digits, ongoto: vi.fn(), onedit: vi.fn()});
     flushSync();
     await tick();
 }
@@ -223,5 +221,15 @@ describe('StateNotice rounding top-ups', () => {
         await mount(infeasible());
         stateNotice('infeasible');
         expect(screen.queryByTestId('pac-planner-top-up')).toBeNull();
+    });
+});
+
+describe('StateNotice infeasible state (M19, §10.2)', () => {
+    it('lists the reachable liquidity only: no route is named as a hard minimum any more', async () => {
+        await mount(infeasible());
+
+        stateNotice('infeasible');
+        const constraints = within(screen.getByTestId('pac-planner-state-constraints')).getAllByTestId('pac-planner-state-constraint');
+        expect(constraints.map((row) => row.getAttribute('data-kind'))).toEqual(['reachable_funding']);
     });
 });

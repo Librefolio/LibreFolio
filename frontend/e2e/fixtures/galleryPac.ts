@@ -91,11 +91,10 @@ export const PAC_SCENARIO = {
     degiroFee: {floor: '1.5', ratePercent: '0.19', cap: '18'},
     microsoftManualPrice: '410',
     manualAsset: {name: 'Global Bond ETF', price: '52.4'},
-    /** DEGIRO's route to the Manual Asset: every limit filled, so the shot shows each one with a value. */
-    bondOnDegiro: {minimum: '100', required: '300', cap: '2500', marginPercent: '0.5'},
+    /** DEGIRO's route to the Manual Asset: every limit filled (the minimum if active and the cap), so the shot shows each one with a value. */
+    bondOnDegiro: {minimum: '100', cap: '2500', marginPercent: '0.5'},
     /** The same Asset on Interactive Brokers, less preferred: the plan buys it on DEGIRO. */
     bondOnIbPriority: '1',
-    appleRequiredOnIb: '2',
     microsoftCapOnIb: '3',
     targets: {apple: '30', microsoft: '30', bond: '40'},
     /** The Review is shot with the target total at 90%: one field still to complete. */
@@ -471,12 +470,10 @@ export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> 
     await expect(bondOnDegiro).toHaveAttribute('data-enabled', 'true');
     await expect(bondOnDegiro).toHaveAttribute('data-ready', 'true');
     await typeValue(bondOnDegiro.getByTestId('pac-planner-route-minimum-if-active'), s.bondOnDegiro.minimum);
-    await typeValue(bondOnDegiro.getByTestId('pac-planner-route-required-minimum'), s.bondOnDegiro.required);
     await typeValue(bondOnDegiro.getByTestId('pac-planner-route-cap'), s.bondOnDegiro.cap);
     await typeValue(bondOnDegiro.getByTestId('pac-planner-route-margin'), s.bondOnDegiro.marginPercent);
     await expect(bondOnDegiro.getByTestId('pac-planner-route-priority-field')).toBeVisible();
     await typeValue(routeCard(page, keys.bond, keys.ib).getByTestId('pac-planner-route-priority'), s.bondOnIbPriority);
-    await typeValue(routeCard(page, keys.apple, keys.ib).getByTestId('pac-planner-route-required-minimum'), s.appleRequiredOnIb);
     await typeValue(routeCard(page, keys.microsoft, keys.ib).getByTestId('pac-planner-route-cap'), s.microsoftCapOnIb);
 
     // Targets: 30 / 30 / 40.
@@ -710,7 +707,7 @@ export async function framePacRouting(page: Page, draft: PacDraft): Promise<Loca
     const bond = routeCard(page, draft.keys.bond, draft.keys.degiro);
     await expect(bond.getByTestId('pac-planner-route-fields')).toBeVisible();
     await expect(bond.getByTestId('pac-planner-route-priority-field')).toBeVisible();
-    await expect(bond.getByTestId('pac-planner-route-required-minimum')).toHaveValue(PAC_SCENARIO.bondOnDegiro.required);
+    await expect(bond.getByTestId('pac-planner-route-minimum-if-active')).toHaveValue(PAC_SCENARIO.bondOnDegiro.minimum);
     await framePacBlock(page, {first: step, last: degiro, fallback: degiro});
     return step;
 }

@@ -35,7 +35,7 @@ const descriptor = {
     name_i18n_key: null,
     operations: [{operation: 'analyze'}],
     output_schema: {},
-    ui: {kind: 'custom', component_key: 'pac-allocator', version: '1.0.0'},
+    ui: {kind: 'custom', component_key: 'pac-allocator', version: '2.0.0'},
 } as const;
 
 const catalog = {

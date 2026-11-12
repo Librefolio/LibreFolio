@@ -106,7 +106,7 @@ afterEach(() => {
 
 type ExactRatio = Extract<PacExactNumber, {kind: 'exact_ratio'}>;
 type EconomicQuantity = PacOrderRow['economic_quantity'];
-type RouteMinimum = PacResolvedOrderRoute['required_minimum'];
+type RouteMinimum = PacResolvedOrderRoute['minimum_if_active'];
 type RouteCap = PacResolvedOrderRoute['cap'];
 
 function finite(value: string): PacExactNumber {
