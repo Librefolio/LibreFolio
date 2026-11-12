@@ -82,6 +82,7 @@ from backend.app.services.pac_allocator import planner_report as report
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
+from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, limited_entries
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -135,6 +136,20 @@ class _Search:
     solver: SolverRunResult
 
 
+@dataclass(frozen=True, slots=True)
+class PlanReport:
+    """A plan's wire result and what the wire cannot carry yet.
+
+    ``limited_entries`` is the internal list of M20 (A3, project 67): the entries that carry a limit, when the result is
+    ``ready_infeasible`` and the request has at least one limit; empty otherwise, and always empty with ``ready_no_incumbent``
+    (a search that ran out of time says nothing about the limits). Contract 2.0.0 (A4) turns it into
+    ``allocation.bounds_unsatisfiable``; until then the wire result is the one of 1.0.0.
+    """
+
+    result: PacPlannerResult
+    limited_entries: tuple[LimitEntry, ...] = ()
+
+
 def plan_pac_allocation(
     request: PacPlannerRequest,
     *,
@@ -165,15 +180,33 @@ def plan_pac_allocation(
     if not normalized.ready or normalized.normalized is None:
         return _failure_result(normalized.availability, snapshot, list(normalized.issues))
 
-    scenario = normalized.normalized
+    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds).result
+
+
+def plan_exact_scenario(
+    scenario: ExactPlannerScenario,
+    *,
+    issues: tuple[PlannerIssue, ...] = (),
+    checkpoint: Checkpoint | None = None,
+    solver_time_budget_seconds: float | None = None,
+) -> PlanReport:
+    """Plan an already normalized scenario: search once, replay, publish, and say which limits a «no solution» concerns.
+
+    ``plan_pac_allocation`` is this after normalization. It is also the way in for a scenario the request cannot yet build
+    (entry limits, until contract 2.0.0). The solver runs once: whether the limits are the cause of an infeasible model is
+    known without searching again, because without limits doing nothing is always a valid plan (M20), and the
+    ``SolverInfeasibilityContradictedError`` guard keeps that honest.
+    """
     view = build_exact_policy_view(scenario, purpose="primary")
     check_budget(checkpoint)
 
     search = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds)
-    issues = list(normalized.issues)
+    issue_list = list(issues)
 
     if search.candidate is None:
-        return _no_incumbent_result(scenario, view, search, issues)
+        result = _no_incumbent_result(scenario, view, search, issue_list)
+        # Only a proven «no solution» names the limits; a search that ran out of time says nothing about them.
+        return PlanReport(result=result, limited_entries=limited_entries(scenario) if isinstance(result, PacPlannerReadyInfeasibleResult) else ())
 
     # The single non-negotiable hop: nothing is published that exact
     # arithmetic has not re-derived from the candidate itself. Its verdict is
@@ -184,7 +217,7 @@ def plan_pac_allocation(
 
     conclusion = _conclude(view, search, published=search.candidate)
     check_budget(checkpoint)
-    return _ready_result(scenario, view, search, evaluation, conclusion, issues, top_ups)
+    return PlanReport(result=_ready_result(scenario, view, search, evaluation, conclusion, issue_list, top_ups))
 
 
 def _search(

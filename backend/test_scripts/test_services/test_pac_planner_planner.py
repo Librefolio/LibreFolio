@@ -127,9 +127,12 @@ from backend.app.services.pac_allocator import planner
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactReplayRejectedError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
+from backend.app.services.pac_allocator.models import ExactCashEntry, ExactLimit
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
+from backend.app.services.pac_allocator.numeric import ExactRatio as R
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
+from backend.test_scripts.test_services import _pac_reference_values as ref
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, V, fx_conversion_request, make, scaled
 
@@ -2057,3 +2060,89 @@ def test_huge_amounts_never_turn_a_feasible_zero_plan_into_proven_infeasibility(
         assert isinstance(outcome, SolverInfeasibilityContradictedError), repr(outcome)
     else:
         _revalidate(outcome)
+
+
+# --------------------------------------------------------------------------
+# A3 step 5 (project 67), M20: «no solution with these limits» is decided after the calculation, without a second search
+# --------------------------------------------------------------------------
+
+
+def _scenario_with_entry_limit(*, minimum: str | None = "10000", cash_maximum: str | None = None):
+    """The incumbent payload's scenario (EUR50 against an EUR10 unit) with a limit on its one Asset or its one cash cell.
+
+    A minimum of EUR10000 on the Asset cannot be reached with EUR50: the model has no solution *because of the limit*.
+    """
+    scenario = normalize_pac_plan(_validated(_incumbent_payload())).normalized
+    (weight,) = scenario.target_weights
+    if minimum is not None:
+        scenario = replace(scenario, target_weights=(replace(weight, minimum=ExactLimit("amount", R(int(minimum)))),))
+    if cash_maximum is not None:
+        (cash,) = scenario.existing_cash
+        scenario = replace(scenario, cash_entries=(ExactCashEntry(broker_id=cash.broker_id, currency=cash.selected.currency, minimum=None, maximum=ExactLimit("amount", R(int(cash_maximum)))),))
+    return scenario
+
+
+@pytest.mark.parametrize("name", sorted(ref.GRID_VARIANTS) + sorted(ref.CASES))
+def test_zero_plan_passes_the_replay_without_limits_or_required_minimum(name):
+    """M20: a request with no limit and no required minimum never is ``ready_infeasible``, because doing nothing is a valid
+    and feasible plan. This is the verification of 12/11 turned into a test, over every case of the reference corpus and every
+    variant of the two grids. A new rule that obliges an operation turns it red, and the rule of M20 no longer holds."""
+    builders = {**ref.GRID_VARIANTS, **ref.CASES}
+    payload = builders[name]()
+    assert not ref.uses_required_minimum(payload)
+    scenario = normalize_pac_plan(_validated(payload)).normalized
+    evaluation = planner._zero_candidate_evaluation(scenario, build_exact_policy_view(scenario, purpose="primary"))
+    assert (evaluation.candidate_valid, evaluation.feasible) == (True, True), evaluation.conflict_codes
+
+
+def test_infeasible_with_limits_lists_the_limited_entries_and_no_incumbent_never_does():
+    """The planner reports which entries carry a limit only when SCIP proves there is no plan: ``ready_infeasible`` and at
+    least one limit. A search that merely ran out of time (``ready_no_incumbent``) never gets the list, nor does a plan, nor
+    a scenario with no limit (here: a required minimum, still in the contract until A4). The list is internal: the wire result
+    is unchanged (``sc/``), and A4 turns it into ``allocation.bounds_unsatisfiable``."""
+    scenario = _scenario_with_entry_limit(minimum="10000", cash_maximum="20")
+    report = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(report.result, PacPlannerReadyInfeasibleResult)
+    assert [entry.key for entry in report.limited_entries] == [f"asset:{scenario.target_weights[0].asset_id}", f"cash:{scenario.existing_cash[0].broker_id}:EUR"]
+
+    timed_out = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=0.0)
+    assert isinstance(timed_out.result, PacPlannerReadyNoIncumbentResult)
+    assert timed_out.limited_entries == ()
+
+    feasible = planner.plan_exact_scenario(_scenario_with_entry_limit(minimum=None, cash_maximum="40"), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(feasible.result, (PacPlannerReadyIncumbentResult, PacPlannerReadyNoOpResult))
+    assert feasible.limited_entries == ()
+
+    forced = planner.plan_exact_scenario(normalize_pac_plan(_validated(_forced_min_payload())).normalized, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(forced.result, PacPlannerReadyInfeasibleResult)
+    assert forced.limited_entries == (), "an infeasible request with no limit is not the limits' doing"
+
+
+def test_planner_calls_the_solver_once_per_request(monkeypatch):
+    """M20: no second search to find out whether the limits are the cause. ``solve_policy_program`` runs once for a
+    ``ready_infeasible`` with limits as for any other request."""
+    calls = []
+    real_solve = planner.solve_policy_program
+
+    def counting_solve(program, *args, **kwargs):
+        calls.append(program)
+        return real_solve(program, *args, **kwargs)
+
+    monkeypatch.setattr(planner, "solve_policy_program", counting_solve)
+    report = planner.plan_exact_scenario(_scenario_with_entry_limit(), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(report.result, PacPlannerReadyInfeasibleResult)
+    assert len(calls) == 1
+
+
+def test_a_limit_a_thousandth_under_a_reachable_value_never_makes_the_run_fail():
+    """A3 fix: an Asset in USD bought by amount (FX 1.085) and an EUR maximum less than a thousandth under a value the plan can
+    reach. SCIP's relative row tolerance would let it buy the overshooting cents and the replay would raise
+    ``ExactReplayRejectedError`` (the user's «run failed»); the integer bound keeps it a plan, and a plan within the maximum."""
+    from backend.test_scripts.test_services.test_pac_planner_evaluator import _MAXIMUM_JUST_UNDER_IT, _usd_by_amount_scenario  # noqa: PLC0415 — scenario builders live with the evaluator suite
+
+    scenario = _usd_by_amount_scenario(_MAXIMUM_JUST_UNDER_IT)
+    report = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    assert isinstance(report.result, PacPlannerReadyIncumbentResult)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(report.result, mode="json", by_alias=True)
+    published = ref.wire_fraction(wire["primary_solution"]["asset_rows"][0]["final_value"])
+    assert published <= Fraction(_MAXIMUM_JUST_UNDER_IT.numerator, _MAXIMUM_JUST_UNDER_IT.denominator)
