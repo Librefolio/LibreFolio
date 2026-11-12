@@ -20,6 +20,16 @@ export const FIELD_ORDER = ['icon_url', 'user_url', 'asset_type', 'quote_base_qu
 
 export type BulkFieldKey = (typeof FIELD_ORDER)[number];
 
+/** The catalogue key of each field's label (the labels of the single asset's modal), for the summary and the toast. */
+export const FIELD_LABEL_KEYS: Readonly<Record<BulkFieldKey, string>> = {
+    icon_url: 'common.icon',
+    user_url: 'assets.provider.userUrl',
+    asset_type: 'common.type',
+    quote_base_quantity: 'assets.modal.quoteBaseQuantity',
+    active: 'common.active',
+    is_benchmark: 'assets.modal.benchmark',
+};
+
 /** The part of a list row the bulk edit reads (`AssetRow`, plus the benchmark flag and the user URL). */
 export interface BulkAsset {
     id: number;
