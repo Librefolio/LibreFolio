@@ -13,6 +13,7 @@ import {expect, test} from '../fixtures/playwright';
 import type {Locator, Page, Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 import {assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
@@ -2096,13 +2097,22 @@ test.describe('Assets list — a delete that transactions block opens already bl
     /** What the running test created; deleted after it, whatever its outcome. */
     let owned: Owned = {assetIds: [], brokerIds: []};
 
-    test.beforeEach(async ({page}) => {
+    /** The account the running test writes with: its own, so its broker and rows are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
         owned = {assetIds: [], brokerIds: []};
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, 'alx');
+        await prepareOnboardingAccount(page, account, []);
     });
 
-    test.afterEach(async ({page}) => {
-        await deleteOwned(page, owned);
+    test.afterEach(async ({page, request}) => {
+        try {
+            await deleteOwned(page, owned);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     for (const entry of ['card', 'list row'] as const) {
