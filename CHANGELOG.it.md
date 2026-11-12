@@ -21,6 +21,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Le coppie di valute si scrivono allo stesso modo ovunque, con simboli e bandiere: `$ 🇺🇸 USD / EUR 🇪🇺 €` per una coppia, `$ 🇺🇸 USD → EUR 🇪🇺 €` per una conversione, nel suo verso.
 - Analisi del rischio: quando un asset resta fuori perché manca un cambio, il messaggio ora nomina la coppia di valute e dice da quale data c'è un cambio salvato, oppure che non ce n'è nessuno.
 - Liste Asset e Cambi, vista Rolling Return: le card ora confrontano anche l'altro tipo, come già le pagine di dettaglio. La card di un asset può mostrare coppie di cambi e la card di una coppia può mostrare asset, scelti da «Impostazioni Grafico» della card.
+- Analisi dei lotti: nello stesso giorno gli acquisti e le rettifiche in entrata ora vengono prima delle vendite e delle rettifiche in uscita. Una vendita registrata prima dell'acquisto dello stesso giorno non fa più fallire l'analisi; su un broker che permette le vendite allo scoperto, uno scoperto aperto e chiuso nello stesso giorno ora appare come un lotto long, con lo stesso guadagno realizzato.
 
 ### 🐛 Corretto
 

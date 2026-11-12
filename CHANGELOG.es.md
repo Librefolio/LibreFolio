@@ -21,6 +21,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Los pares de divisas se escriben igual en todas partes, con símbolos y banderas: `$ 🇺🇸 USD / EUR 🇪🇺 €` para un par, `$ 🇺🇸 USD → EUR 🇪🇺 €` para una conversión, en su sentido.
 - Análisis de riesgo: cuando un activo queda fuera porque falta un tipo de cambio, el mensaje ahora nombra el par de divisas y dice desde qué fecha hay un tipo guardado, o que no hay ninguno.
 - Listas de Activos y Divisas, vista Rolling Return: las tarjetas ahora comparan también el otro tipo, como las páginas de detalle. La tarjeta de un activo puede mostrar pares de divisas y la de un par puede mostrar activos, elegidos en «Ajustes del Gráfico» de la tarjeta.
+- Análisis de lotes: dentro de un mismo día, las compras y los ajustes de entrada ahora van antes que las ventas y los ajustes de salida. Una venta registrada antes de la compra del mismo día ya no hace fallar el análisis; en un bróker que permite ventas en corto, un corto abierto y cubierto en el mismo día ahora aparece como un lote largo, con la misma ganancia realizada.
 
 ### 🐛 Corregido
 

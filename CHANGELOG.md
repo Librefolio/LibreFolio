@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Currency pairs are written the same way everywhere, with symbols and flags: `$ 🇺🇸 USD / EUR 🇪🇺 €` for a pair, `$ 🇺🇸 USD → EUR 🇪🇺 €` for a conversion, in its direction.
 - Risk analysis: when an asset is left out because an exchange rate is missing, the message now names the currency pair and says from which date a rate is stored, or that none is.
 - Assets and FX lists, Rolling Return view: the cards now compare across types, as the detail pages do. An asset card can chart FX pairs and an FX card can chart assets, set from the card's «Chart Settings».
+- Lots analysis: within one day, purchases and incoming adjustments now come before sales and outgoing adjustments. A sale recorded before the purchase of the same day no longer makes the analysis fail; on a broker that allows short selling, a short opened and covered within one day now shows as a long lot, with the same realized gain.
 
 ### 🐛 Fixed
 
