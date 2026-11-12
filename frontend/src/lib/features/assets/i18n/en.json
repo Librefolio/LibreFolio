@@ -465,7 +465,20 @@
       "warnOk": "That's fine",
       "blocked": "blocked",
       "blockedFor": "Not allowed for {count} of {total}",
-      "verifyFailed": "⛔ The check could not be run"
+      "verifyFailed": "⛔ The check could not be run",
+      "titleSummary": "{count, plural, one {Edit # asset} other {Edit # assets}} · Summary",
+      "subtitleSummary": "Check what changes before saving. Nothing else is touched.",
+      "summaryAssets": "Assets that change",
+      "summaryOf": "{changing} of {selected} selected",
+      "summaryAsset": "Asset",
+      "already": "already",
+      "iconNone": "no icon",
+      "iconHas": "has an icon",
+      "summaryNote": "One request, all or nothing; for each asset only the fields that really change.",
+      "save": "{count, plural, one {Save # asset} other {Save # assets}}",
+      "saveFailedTitle": "⛔ Save failed: no asset was changed",
+      "saveFailedBody": "The save is all or nothing: an asset did not pass, so nothing changed. The summary stays here: remove the asset or go back.",
+      "savedToast": "{count, plural, one {# asset updated} other {# assets updated}}: {fields}"
     }
   },
   "events": {

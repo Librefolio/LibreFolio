@@ -465,7 +465,20 @@
       "warnOk": "Está bien así",
       "blocked": "bloqueado",
       "blockedFor": "No permitido para {count} de {total}",
-      "verifyFailed": "⛔ No se pudo ejecutar la verificación"
+      "verifyFailed": "⛔ No se pudo ejecutar la verificación",
+      "titleSummary": "{count, plural, one {Editar # activo} other {Editar # activos}} · Resumen",
+      "subtitleSummary": "Revisa qué cambia antes de guardar. No se toca nada más.",
+      "summaryAssets": "Activos que cambian",
+      "summaryOf": "{changing} de {selected} seleccionados",
+      "summaryAsset": "Activo",
+      "already": "ya",
+      "iconNone": "sin icono",
+      "iconHas": "tiene un icono",
+      "summaryNote": "Un solo envío, todo o nada; para cada activo solo los campos que cambian de verdad.",
+      "save": "{count, plural, one {Guardar # activo} other {Guardar # activos}}",
+      "saveFailedTitle": "⛔ Guardado fallido: no se ha modificado ningún activo",
+      "saveFailedBody": "El guardado es todo o nada: un activo no pasó, así que no ha cambiado nada. El resumen se queda aquí: quita el activo o vuelve atrás.",
+      "savedToast": "{count, plural, one {# activo actualizado} other {# activos actualizados}}: {fields}"
     }
   },
   "events": {

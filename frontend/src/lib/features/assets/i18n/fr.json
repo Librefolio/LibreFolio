@@ -465,7 +465,20 @@
       "warnOk": "C'est bon",
       "blocked": "bloqué",
       "blockedFor": "Non autorisé pour {count} sur {total}",
-      "verifyFailed": "⛔ La vérification n'a pas pu être exécutée"
+      "verifyFailed": "⛔ La vérification n'a pas pu être exécutée",
+      "titleSummary": "{count, plural, one {Modifier # actif} other {Modifier # actifs}} · Récapitulatif",
+      "subtitleSummary": "Vérifiez ce qui change avant d'enregistrer. Rien d'autre n'est touché.",
+      "summaryAssets": "Actifs qui changent",
+      "summaryOf": "{changing} sur {selected} sélectionnés",
+      "summaryAsset": "Actif",
+      "already": "déjà",
+      "iconNone": "aucune icône",
+      "iconHas": "a une icône",
+      "summaryNote": "Un seul envoi, tout ou rien ; pour chaque actif, seulement les champs qui changent vraiment.",
+      "save": "{count, plural, one {Enregistrer # actif} other {Enregistrer # actifs}}",
+      "saveFailedTitle": "⛔ Échec de l'enregistrement : aucun actif n'a été modifié",
+      "saveFailedBody": "L'enregistrement est tout ou rien : un actif n'est pas passé, donc rien n'a changé. Le récapitulatif reste ici : retirez l'actif ou revenez en arrière.",
+      "savedToast": "{count, plural, one {# actif mis à jour} other {# actifs mis à jour}} : {fields}"
     }
   },
   "events": {
