@@ -50,6 +50,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 - Les endpoints de requête des prix, de requête des événements et de conversion ne signalent plus les taux de change manquants comme texte dans `errors` : ils arrivent dans une nouvelle liste `fx_issues` de `{code, from_currency, to_currency, first_date, last_date, count}`, dans le sens de la conversion.
 - `PATCH /api/v1/assets` enregistre tout ou rien : si un élément pose problème, rien n'est enregistré. La réponse ajoute `committed`, `issues` et `warnings` (codes `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed` ; avertissement `assetFamilyChange`). Un nom déjà utilisé par un autre actif est signalé par `assetNameTaken` au lieu d'une erreur générique. Le nouveau `POST /api/v1/assets/validate` fait les mêmes contrôles et n'enregistre jamais.
+- `POST /api/v1/portfolio/lots/analysis` répond sous une nouvelle forme : les parties qui ne dépendent pas de la méthode d'appariement (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) restent en tête ; tout ce qui vient du rejeu des lots (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, les historiques de valeur, de rendement, de prix et de performance, `income_events`, `economic_allocation_groups`, les orphelins) passe sous `methods.FIFO` / `methods.LIFO`. La requête accepte `matching_methods` (par défaut `["FIFO"]`).
 
 ## [1.3.0] - 2026-11-10
 

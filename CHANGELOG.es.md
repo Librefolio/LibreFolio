@@ -50,6 +50,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 - Los endpoints de consulta de precios, de consulta de eventos y de conversión ya no informan los tipos de cambio que faltan como texto en `errors`: llegan en una nueva lista `fx_issues` de `{code, from_currency, to_currency, first_date, last_date, count}`, en el sentido de la conversión.
 - `PATCH /api/v1/assets` guarda todo o nada: si un elemento tiene un problema, no se guarda nada. La respuesta añade `committed`, `issues` y `warnings` (códigos `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; aviso `assetFamilyChange`). Un nombre ya usado por otro activo se indica como `assetNameTaken` en lugar de un error genérico. El nuevo `POST /api/v1/assets/validate` hace los mismos controles y nunca guarda.
+- `POST /api/v1/portfolio/lots/analysis` responde con una forma nueva: las partes que no dependen del método de emparejamiento (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) quedan arriba; todo lo que viene de la reproducción de los lotes (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, los historiales de valor, rentabilidad, precio y rendimiento, `income_events`, `economic_allocation_groups`, los huérfanos) pasa a `methods.FIFO` / `methods.LIFO`. La petición acepta `matching_methods` (por defecto `["FIFO"]`).
 
 ## [1.3.0] - 2026-11-10
 

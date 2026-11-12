@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Missing exchange rates are no longer reported as text in `errors` by the price query, event query and conversion endpoints: they come in a new `fx_issues` list of `{code, from_currency, to_currency, first_date, last_date, count}`, in the direction of the conversion.
 - `PATCH /api/v1/assets` is all or nothing: if any item has an issue, nothing is saved. The response gains `committed`, `issues` and `warnings` (codes `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; warning `assetFamilyChange`). A name already used by another asset is reported as `assetNameTaken` instead of a generic failure. The new `POST /api/v1/assets/validate` runs the same checks and never saves.
+- `POST /api/v1/portfolio/lots/analysis` answers in a new shape: the parts no matching method changes (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) stay at the top; everything read from the lot replay (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, the value, return, price and performance histories, `income_events`, `economic_allocation_groups`, the orphans) moves under `methods.FIFO` / `methods.LIFO`. The request takes `matching_methods` (default `["FIFO"]`).
 
 ## [1.3.0] - 2026-11-10
 
