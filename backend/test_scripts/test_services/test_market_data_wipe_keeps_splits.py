@@ -25,8 +25,8 @@ The contract of N68 (decided by the developer on 19/10, defaults confirmed on 24
   those linked to a SPLIT);
 * the currency PATCH always succeeds for such an asset, in the same call and the same transaction: it does what the wipe
   does (prices, non-split events gone, their transactions unlinked, SPLITs and their transactions kept), changes the
-  currency, and never produces the token. An unknown asset of the batch fails by itself (partial success); the same
-  currency changes nothing.
+  currency, and never produces the token. An unknown asset of the batch saves nothing, for every asset (all or nothing
+  since lane 65 B3); the same currency changes nothing.
 
 Each red says what the user faces before the cure («Red today»); a guard passes before and after.
 
@@ -725,13 +725,14 @@ async def test_the_currency_patch_keeps_the_split_removes_the_rest_and_changes_t
 
 
 @pytest.mark.asyncio
-async def test_the_currency_patch_of_a_batch_is_partial_and_touches_no_other_asset(owned):
+async def test_the_currency_patch_of_a_batch_is_all_or_nothing_and_touches_no_other_asset(owned):
     """Red today (N68): the unit's asset (a price, a SPLIT with a costless adjustment) is refused with the token; the other
     asset (a price, its own SPLIT with a costless adjustment) is refused too.
 
-    Contract: one batch with both assets and an id no asset has: the two assets succeed, the unknown one fails by itself
-    (a message naming it, no token), and each asset has done what the wipe does: its price gone, its SPLIT and its
-    adjustment kept and linked. A second batch for the unit's asset alone leaves the other asset's rows as they were."""
+    Contract: one batch with both assets and an id no asset has saves nothing (lane 65 B3, all or nothing): one
+    ``assetNotFound`` issue on the unknown id, no token, every row and both currencies as they were. The same batch
+    without the unknown id succeeds for both, and each asset has done what the wipe does: its price gone, its SPLIT and
+    its adjustment kept and linked."""
     split_id = await _event(owned.asset_id, 140, AssetEventType.SPLIT, "2")
     on_split = await _adjustment(owned.asset_id, owned.broker_a_id, split_id, 141)
     await _price(owned.asset_id, 139, "100")
@@ -742,12 +743,18 @@ async def test_the_currency_patch_of_a_batch_is_partial_and_touches_no_other_ass
     before = await _committed(owned)
     story = f"the currency PATCH of the assets {owned.asset_id} and {owned.other_asset_id}, each with a SPLIT and a costless adjustment, and of the unknown asset {owned.ghost_asset_id}"
 
-    response = await _patch_currency([owned.asset_id, owned.other_asset_id, owned.ghost_asset_id], "USD")
+    refused = await _patch_currency([owned.asset_id, owned.other_asset_id, owned.ghost_asset_id], "USD")
+
+    assert refused.committed is False and [(issue.code, issue.asset_id) for issue in refused.issues] == [("assetNotFound", owned.ghost_asset_id)], f"{story}: expected one assetNotFound issue and nothing committed, got committed={refused.committed}, issues={refused.issues}"
+    assert not any(result.success for result in refused.results) and not any(OLD_TOKEN in (result.message or "") for result in refused.results), f"{story}: {refused.results}"
+    unchanged = await _committed(owned)
+    assert unchanged == before, f"{story}: the refused batch changed rows: {_changes(before, unchanged)}"
+    assert (await _currency_of(owned.asset_id), await _currency_of(owned.other_asset_id)) == ("EUR", "EUR"), f"{story}: a currency changed although nothing was saved"
+
+    story = f"the currency PATCH of the assets {owned.asset_id} and {owned.other_asset_id}, each with a SPLIT and a costless adjustment"
+    response = await _patch_currency([owned.asset_id, owned.other_asset_id], "USD")
 
     _assert_patched(response, owned.asset_ids, story)
-    by_id = {result.asset_id: result for result in response.results}
-    ghost = by_id.get(owned.ghost_asset_id)
-    assert ghost is not None and ghost.success is False and OLD_TOKEN not in (ghost.message or ""), f"{story}: the unknown asset answers {ghost!r}: expected a plain failure of its own"
     after = await _committed(owned)
     assert sorted(_of(after.prices, owned.asset_id)) == [] and sorted(_of(after.prices, owned.other_asset_id)) == [], f"{story}: prices left: {_changes(before, after)}"
     assert sorted(_of(after.events, owned.asset_id)) == [split_id] and sorted(_of(after.events, owned.other_asset_id)) == [other_split], f"{story}: events left: {_changes(before, after)}"
