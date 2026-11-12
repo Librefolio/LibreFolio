@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lots analysis: within one day, purchases and incoming adjustments now come before sales and outgoing adjustments. A sale recorded before the purchase of the same day no longer makes the analysis fail; on a broker that allows short selling, a short opened and covered within one day now shows as a long lot, with the same realized gain.
 - Asset detail header: Transactions is now a badge with an icon and the number of transactions, so it reads as a link; the provider badge itself opens the asset's web page (the one you set, or else the provider's) in a new tab, and its tooltip says where it goes. The separate ↗ icon is gone.
 - Asset detail header on tablet and phone: below 1024 px the badges get a row of their own under the name; on a phone ← and ‹ n/N › share the top row, the name has the full width, and the badges follow in two groups (type and currency; Transactions and provider).
+- An asset that has transactions can no longer become an Index from the asset editor: the editor says how many transactions it has, and nothing is saved.
 
 ### 🐛 Fixed
 
@@ -43,10 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The backup command reads `--password-file` and `--instance-key-file` with a single open: a file swapped after the check can no longer be read in its place.
 
 - On an instance blocked by its hosting provider, the administrator also sees the «Backups already kept» and can download them, not only make a new one.
+- Importing a report no longer shows a success message when the change of an asset's identifiers was not saved.
 
 ### ⚠️ Breaking changes
 
 - Missing exchange rates are no longer reported as text in `errors` by the price query, event query and conversion endpoints: they come in a new `fx_issues` list of `{code, from_currency, to_currency, first_date, last_date, count}`, in the direction of the conversion.
+- `PATCH /api/v1/assets` is all or nothing: if any item has an issue, nothing is saved. The response gains `committed`, `issues` and `warnings` (codes `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; warning `assetFamilyChange`). A name already used by another asset is reported as `assetNameTaken` instead of a generic failure. The new `POST /api/v1/assets/validate` runs the same checks and never saves.
 
 ## [1.3.0] - 2026-11-10
 

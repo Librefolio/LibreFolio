@@ -24,6 +24,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Analyse des lots : dans une même journée, les achats et les ajustements entrants passent désormais avant les ventes et les ajustements sortants. Une vente enregistrée avant l'achat du même jour ne fait plus échouer l'analyse ; chez un courtier qui autorise la vente à découvert, un découvert ouvert et couvert dans la journée apparaît désormais comme un lot long, avec le même gain réalisé.
 - En-tête du détail d'un actif : Transactions est désormais un badge avec une icône et le nombre de transactions, pour qu'on le reconnaisse comme un lien ; le badge du fournisseur ouvre lui-même la page web de l'actif (celle que vous avez définie, sinon celle du fournisseur) dans un nouvel onglet, et son info-bulle indique où il mène. L'icône ↗ séparée disparaît.
 - En-tête du détail d'un actif sur tablette et téléphone : sous 1024 px, les badges ont leur propre ligne sous le nom ; sur téléphone, ← et ‹ n/N › partagent la première ligne, le nom prend toute la largeur et les badges suivent en deux groupes (type et devise ; Transactions et fournisseur).
+- Un actif qui a des transactions ne peut plus devenir un Indice depuis l'éditeur de l'actif : l'éditeur indique combien de transactions il a, et rien n'est enregistré.
 
 ### 🐛 Corrections
 
@@ -43,10 +44,12 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - La commande de sauvegarde lit `--password-file` et `--instance-key-file` en une seule ouverture : un fichier échangé après la vérification ne peut plus être lu à sa place.
 
 - Sur une instance bloquée par son hébergeur, l'administrateur voit aussi les «Sauvegardes déjà conservées» et peut les télécharger, pas seulement en faire une nouvelle.
+- L'import d'un relevé n'affiche plus de message de succès quand la modification des identifiants d'un actif n'a pas été enregistrée.
 
 ### ⚠️ Changements incompatibles
 
 - Les endpoints de requête des prix, de requête des événements et de conversion ne signalent plus les taux de change manquants comme texte dans `errors` : ils arrivent dans une nouvelle liste `fx_issues` de `{code, from_currency, to_currency, first_date, last_date, count}`, dans le sens de la conversion.
+- `PATCH /api/v1/assets` enregistre tout ou rien : si un élément pose problème, rien n'est enregistré. La réponse ajoute `committed`, `issues` et `warnings` (codes `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed` ; avertissement `assetFamilyChange`). Un nom déjà utilisé par un autre actif est signalé par `assetNameTaken` au lieu d'une erreur générique. Le nouveau `POST /api/v1/assets/validate` fait les mêmes contrôles et n'enregistre jamais.
 
 ## [1.3.0] - 2026-11-10
 
