@@ -298,11 +298,6 @@ export function planLookup(result: PacReadyResult, request: PacResolvedRequest, 
     };
 }
 
-/** Hard minimums of the request, listed next to a proven infeasibility (D12): the backend names no culprit. */
-export function requiredMinimumRoutes(request: PacResolvedRequest): PacResolvedOrderRoute[] {
-    return request.order_routes.filter((route) => route.required_minimum.kind !== 'none');
-}
-
 // -- operational plan (C10–C12) -------------------------------------------------------
 
 export type PlanStep = {kind: 'funding'; sequence: number; action: PacFundingAction} | {kind: 'conversion'; sequence: number; action: PacConversion};

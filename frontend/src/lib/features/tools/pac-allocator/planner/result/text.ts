@@ -47,7 +47,7 @@ export function economicQuantityText(quantity: PacOrderRow['economic_quantity'],
     return translate(`${DETAIL_KEY}.quantityEstimated`, {default: '{quantity} {count, plural, one {unit} other {units}} (estimated)', values});
 }
 
-type RouteMinimum = PacResolvedOrderRoute['required_minimum'];
+type RouteMinimum = PacResolvedOrderRoute['minimum_if_active'];
 type RouteCap = PacResolvedOrderRoute['cap'];
 
 function unitsText(quantity: string, translate: Translator): string {

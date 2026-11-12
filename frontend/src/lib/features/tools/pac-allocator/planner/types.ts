@@ -14,9 +14,9 @@
 import type {z} from 'zod';
 import type {ToolContractMap, ToolInput, ToolOutput} from '$lib/features/tools/contracts';
 
-export type PacPlannerRequest = ToolInput<'pac_allocator', '1.0.0'>;
-export type PacResolvedRequest = z.output<ToolContractMap['pac_allocator']['1.0.0']['input']>;
-export type PacPlannerResult = ToolOutput<'pac_allocator', '1.0.0'>;
+export type PacPlannerRequest = ToolInput<'pac_allocator', '2.0.0'>;
+export type PacResolvedRequest = z.output<ToolContractMap['pac_allocator']['2.0.0']['input']>;
+export type PacPlannerResult = ToolOutput<'pac_allocator', '2.0.0'>;
 export type PacResultState = PacPlannerResult['result_state'];
 
 export type PacFailureResult = Extract<PacPlannerResult, {result_state: 'needs_input' | 'invalid' | 'unsupported'}>;
@@ -33,7 +33,6 @@ export type PacIssueParam = PacIssue['params'][number];
 export type PacSolution = PacPlanResult['primary_solution'];
 export type PacAssetRow = PacSolution['asset_rows'][number];
 export type PacFundingAction = PacSolution['funding_actions'][number];
-export type PacFxAction = PacSolution['fx_actions'][number];
 export type PacConversion = PacSolution['conversions'][number];
 export type PacOrderRow = PacSolution['order_rows'][number];
 export type PacLedgerRow = PacSolution['ledger_rows'][number];
@@ -47,7 +46,7 @@ export type PacExactNumber = PacAssetRow['target_weight'];
 export type PacExactMoney = PacAssetRow['target_value'];
 export type PacNumberAvailability = PacAssetRow['final_weight'];
 export type PacExactPrice = PacOrderRow['mid_price'];
-export type PacExactFxRate = PacFxAction['spot_rate'];
+export type PacExactFxRate = PacConversion['spot_rate'];
 export type PacObjectiveUnit = PacObjectiveStage['unit'];
 
 export type PacCatalogs = PacReadyResult['catalogs'];

@@ -186,7 +186,8 @@
                                             <HelpTip
                                                 label={$t('tools.pacAllocator.planner.route.minimumIfActive', {default: 'Minimum purchase'})}
                                                 help={$t('tools.pacAllocator.planner.route.minimumHelp', {
-                                                    default: 'If the plan buys here, it buys at least this much. Empty = the Broker increment is enough. Useful when a small purchase would make the fee weigh too much.',
+                                                    default:
+                                                        'Applies only if the plan buys on this route: it then buys at least this much. Empty = the Broker increment is enough. Useful when a small purchase would make the fee weigh too much. To oblige a purchase, set a minimum on the Asset’s target.',
                                                 })}
                                             />
                                         </div>
@@ -198,28 +199,6 @@
                                                 placeholder={$t('tools.pacAllocator.planner.route.minimumNone', {default: 'no minimum'})}
                                                 className="{INPUT} {unit === '' ? '' : 'pr-20'}"
                                                 testid="pac-planner-route-minimum-if-active"
-                                            />
-                                            {#if unit !== ''}<span class={INPUT_ADORNMENT} aria-hidden="true">{unit}</span>{/if}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div class={LABEL_ROW}>
-                                            <label for="{ids}-{route.wireId}-min-required">{$t('tools.pacAllocator.planner.route.requiredMinimum', {default: 'Required purchase'})}</label>
-                                            <HelpTip
-                                                label={$t('tools.pacAllocator.planner.route.requiredMinimum', {default: 'Required purchase'})}
-                                                help={$t('tools.pacAllocator.planner.route.requiredHelp', {
-                                                    default: 'The plan buys at least this much here, whatever happens. If the resources are not enough, the plan becomes impossible. Empty = no obligation.',
-                                                })}
-                                            />
-                                        </div>
-                                        <div class="relative">
-                                            <ExactDecimalInput
-                                                id="{ids}-{route.wireId}-min-required"
-                                                bind:value={route.requiredMinimum}
-                                                step={unitStep(mode)}
-                                                placeholder={$t('tools.pacAllocator.planner.route.requiredNone', {default: 'no obligation'})}
-                                                className="{INPUT} {unit === '' ? '' : 'pr-20'}"
-                                                testid="pac-planner-route-required-minimum"
                                             />
                                             {#if unit !== ''}<span class={INPUT_ADORNMENT} aria-hidden="true">{unit}</span>{/if}
                                         </div>

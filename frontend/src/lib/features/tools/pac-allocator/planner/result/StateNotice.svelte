@@ -1,31 +1,27 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
     import {formatExactMoneyPlain, formatPlannerMoneyPlain, type CurrencyDigits} from '../format';
-    import type {PacReadyResult, PacResolvedRequest, PacRoundingTopUp, PlannerStep} from '../types';
+    import type {PacReadyResult, PacRoundingTopUp, PlannerStep} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
-    import {requiredMinimumRoutes, type ResultNames} from './model';
-    import {routeMinimumText} from './text';
+    import type {ResultNames} from './model';
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
         result: PacReadyResult;
-        request: PacResolvedRequest;
         names: ResultNames;
         digits: CurrencyDigits;
         ongoto: (step: PlannerStep) => void;
         onedit: () => void;
     }
 
-    let {result, request, names, digits, ongoto, onedit}: Props = $props();
+    let {result, names, digits, ongoto, onedit}: Props = $props();
 
     const KEY = 'tools.pacAllocator.planner.result.states';
     const limited = $derived(result.result_state === 'ready_incumbent' && result.stop_reason !== 'completed');
     const stages = $derived(result.solver_evidence.stages);
     const finished = $derived(stages.filter((stage) => stage.status === 'finished').length);
-    const minimums = $derived(result.result_state === 'ready_infeasible' ? requiredMinimumRoutes(request) : []);
     // Cash the plan still needs per pool because every posting rounds against the plan (QX1-b): computed by the backend.
     const topUps: PacRoundingTopUp[] = $derived('primary_solution' in result ? result.primary_solution.rounding_top_ups : []);
-    const assetLabel = (id: string) => [names.ticker(id), names.asset(id)].filter((part) => part).join(' ');
     const goToLabel = (step: PlannerStep, fallback: string) => $t(`${PLANNER_KEY}.actions.goTo`, {default: 'Go to {step}', values: {step: $t(`${PLANNER_KEY}.steps.${step}`, {default: fallback})}});
 </script>
 
@@ -64,17 +60,6 @@
         <div class="space-y-1">
             <p class="font-medium">{$t(`${KEY}.infeasible.constraints`, {default: 'Hard constraints involved (from the request; caps and minimums masked with privacy on):'})}</p>
             <ul class="space-y-1" data-testid="pac-planner-state-constraints">
-                {#each minimums as route (route.route_id)}
-                    <li class="flex flex-wrap items-center justify-between gap-2" data-testid="pac-planner-state-constraint" data-kind="required_minimum" data-route={route.route_id}>
-                        <span>
-                            {$t(`${KEY}.infeasible.minimum`, {
-                                default: '{asset} · {broker}: required minimum {minimum}',
-                                values: {asset: assetLabel(route.asset_id), broker: names.broker(route.broker_id), minimum: routeMinimumText(route.required_minimum, $t, digits)},
-                            })}
-                        </span>
-                        <button type="button" class={BUTTON_LINK} data-testid="pac-planner-state-goto" onclick={() => ongoto('routing')}>{goToLabel('routing', 'Routing')}</button>
-                    </li>
-                {/each}
                 <li class="flex flex-wrap items-center justify-between gap-2" data-testid="pac-planner-state-constraint" data-kind="reachable_funding">
                     <span>{$t(`${KEY}.infeasible.funding`, {default: 'Liquidity reachable: {amount}', values: {amount: formatExactMoneyPlain(result.scenario_basis.reachable_funding, {digits})}})}</span>
                     <button type="button" class={BUTTON_LINK} data-testid="pac-planner-state-goto" onclick={() => ongoto('liquidity')}>{goToLabel('liquidity', 'Liquidity')}</button>

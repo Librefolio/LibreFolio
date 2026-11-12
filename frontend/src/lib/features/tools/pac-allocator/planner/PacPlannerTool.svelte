@@ -1,6 +1,6 @@
 <script lang="ts">
     /**
-     * PAC allocator 1.0.0 renderer (C0 delta §3–§6, UiTarget §13–§16).
+     * PAC allocator 2.0.0 renderer (C0 delta §3–§6, UiTarget §13–§16).
      *
      * The Tool Host owns the h1, the back link, the docs link, Refresh and the
      * version line; this shell owns the nine-step wizard and the result view.

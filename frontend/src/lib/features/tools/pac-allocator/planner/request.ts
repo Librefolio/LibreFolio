@@ -237,9 +237,7 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
         }
         if (wireInteger(route.priority) === null) problems.add('routing', 'routePriorityInvalid', 'Route priority must be a whole number from 0.', label);
         if (route.cap.trim() !== '' && wireDecimal(route.cap) === null) problems.add('routing', 'routeCapInvalid', 'The route cap is not a number.', label);
-        for (const value of [route.minimumIfActive, route.requiredMinimum]) {
-            if (value.trim() !== '' && wireDecimal(value) === null) problems.add('routing', 'routeMinimumInvalid', 'A route minimum is not a number.', label);
-        }
+        if (route.minimumIfActive.trim() !== '' && wireDecimal(route.minimumIfActive) === null) problems.add('routing', 'routeMinimumInvalid', 'A route minimum is not a number.', label);
         if (wireFraction(route.marginPercent) === null) problems.add('routing', 'routeMarginInvalid', 'The execution margin is empty or not a number.', label);
     }
 
@@ -412,7 +410,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
             const route: DraftRoute | undefined = data.routes[routeKey(asset.key, broker.key)];
             if (!route?.enabled) continue;
             const mode = draft.modeFor(asset.key, broker.key) as DraftMode;
-            const minimum = (value: string): NonNullable<PacRequestOrderRoute['required_minimum']> | null =>
+            const minimum = (value: string): NonNullable<PacRequestOrderRoute['minimum_if_active']> | null =>
                 value.trim() === '' ? null : mode.kind === 'whole_quantity' ? {kind: 'whole_quantity', quantity: wireDecimal(value) as string, unit: 'asset_unit'} : {kind: 'monetary_amount', amount: {amount: wireDecimal(value) as string, currency: mode.currency}};
             const cap: NonNullable<PacRequestOrderRoute['cap']> | null =
                 route.cap.trim() === '' ? null : mode.kind === 'whole_quantity' ? {kind: 'quantity', quantity: wireDecimal(route.cap) as string, unit: 'asset_unit'} : {kind: 'notional', amount: {amount: wireDecimal(route.cap) as string, currency: mode.currency}};
@@ -427,7 +425,6 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
                 side: 'buy',
                 ...field('priority', priority === 0 ? null : priority),
                 ...field('minimum_if_active', minimum(route.minimumIfActive)),
-                ...field('required_minimum', minimum(route.requiredMinimum)),
                 ...field('cap', cap),
                 ...field('execution_margin_rate', nonZero(wireFraction(route.marginPercent) as string)),
                 ...field('fee_schedule_id', sentSchedules.has(scheduleId) ? scheduleId : null),
@@ -459,12 +456,12 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         ...field('existing_cash', nonEmpty(existingCash)),
         ...field('contributions', nonEmpty(contributions)),
         ...field('funding_routes', nonEmpty(fundingRoutes)),
-        target_weights: data.assets.map((asset) => ({asset_id: asset.key, weight: wireFraction(data.targets[asset.key]?.trim() ? data.targets[asset.key] : '0') as string})),
+        target_weights: data.assets.map((asset) => ({kind: 'asset' as const, asset_id: asset.key, weight: wireFraction(data.targets[asset.key]?.trim() ? data.targets[asset.key] : '0') as string})),
         order_routes: orderRoutes,
         policy: data.policy,
     } as PacPlannerRequest;
 
-    const parsed = toolContractMap.pac_allocator['1.0.0'].input.safeParse(request);
+    const parsed = toolContractMap.pac_allocator['2.0.0'].input.safeParse(request);
     if (!parsed.success) {
         const structural = new ProblemList();
         for (const issue of parsed.error.issues.slice(0, 20)) {

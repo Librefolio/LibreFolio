@@ -85,7 +85,11 @@ export function entityLabel(draft: PlannerDraft, entity: {kind: string; id: stri
             return draft.broker(entity.id)?.name ?? entity.id;
         case 'cash': {
             const cash = draft.cashRow(entity.id);
-            return cash ? `${draft.broker(cash.brokerKey)?.name ?? cash.brokerKey} · ${cash.currency}` : entity.id;
+            if (cash) return `${draft.broker(cash.brokerKey)?.name ?? cash.brokerKey} · ${cash.currency}`;
+            // A target entry for a cash cell is named «broker:CURRENCY» (contract 2.0.0).
+            const [brokerId, currency] = entity.id.split(':');
+            const broker = brokerId ? draft.broker(brokerId) : undefined;
+            return broker && currency ? `${broker.name} · ${currency}` : entity.id;
         }
         case 'contribution':
             return draft.contribution(entity.id)?.label || entity.id;

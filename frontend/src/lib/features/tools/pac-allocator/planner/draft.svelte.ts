@@ -153,7 +153,6 @@ export interface DraftRoute {
     priority: string;
     /** Empty = no minimum; the unit follows the Broker mode. */
     minimumIfActive: string;
-    requiredMinimum: string;
     /** Empty = no cap of its own: the order stays bounded by the money that can reach it. */
     cap: string;
     marginPercent: string;
@@ -609,7 +608,6 @@ export class PlannerDraft {
                         enabled: true,
                         priority: DEFAULT_ROUTE_PRIORITY,
                         minimumIfActive: '',
-                        requiredMinimum: '',
                         cap: '',
                         marginPercent: DEFAULT_EXECUTION_MARGIN_PERCENT,
                         enteredAt: nowTimestamp(),

@@ -114,12 +114,12 @@
             <dd data-testid="pac-planner-order-detail-minimums">
                 {#if !route}
                     —
-                {:else if route.minimum_if_active.kind === 'none' && route.required_minimum.kind === 'none'}
+                {:else if route.minimum_if_active.kind === 'none'}
                     {$t(`${PLANNER_KEY}.result.text.none`, {default: 'none'})}
                 {:else}
                     {$t(`${KEY}.minimumFacts`, {
-                        default: 'if active {ifActive} · required {required}',
-                        values: {ifActive: routeMinimumText(route.minimum_if_active, $t, digits), required: routeMinimumText(route.required_minimum, $t, digits)},
+                        default: 'if active {ifActive}',
+                        values: {ifActive: routeMinimumText(route.minimum_if_active, $t, digits)},
                     })}
                 {/if}
             </dd>

@@ -110,7 +110,7 @@
         <FailurePanel result={failure} {draft} ids={outcome.built.ids} {ongoto} {onedit} />
     {:else if ready && names && lookup && outcome.kind === 'result'}
         <OutcomeHeader result={ready} revision={outcome.built.revision} {apiVersion} {digits} disabled={busy} {onedit} {oncalculate} ongotoproof={gotoProof} />
-        <StateNotice result={ready} request={outcome.built.resolved} {names} {digits} {ongoto} {onedit} />
+        <StateNotice result={ready} {names} {digits} {ongoto} {onedit} />
 
         {#if notes.length > 0}
             <section class="{CARD} space-y-2" aria-labelledby="pac-planner-notes-title" data-testid="pac-planner-notes">
