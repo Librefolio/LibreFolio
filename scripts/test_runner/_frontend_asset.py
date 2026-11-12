@@ -102,6 +102,18 @@ def front_asset_list(verbose: bool = False, ui: bool = False, headed: bool = Fal
     return _run_playwright("assets/asset-list.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_bulk_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the asset bulk edit E2E tests (lane 65, E1)."""
+    print_section("Frontend Asset Bulk Edit Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-bulk-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_card_sync_confirm(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the asset card Sync confirmation E2E tests (X-R61)."""
     print_section("Frontend Asset Card Sync Confirmation Tests")
@@ -328,6 +340,14 @@ def populate_registry(registry: dict) -> None:
         name="Asset List Page",
         desc="List page navigation, cards/table, filters, the sync dialog's overwrite warning (C-66: sync all counts stored prices; the selection's sync over a past weekend filled backward does not warn, a control that stores a price does), the Δ columns from the backend (X-R53)",
         tests="assets/asset-list.spec.ts",
+    )
+    add_test(
+        cat,
+        "asset-bulk-edit",
+        front_asset_bulk_edit,
+        name="Asset Bulk Edit",
+        desc="Lane 65: the pencil of the selection toolbar opens the bulk edit; a type and a benchmark flag chosen once are saved for three assets (one all-or-nothing PATCH, toast event, selection cleared, list reloaded); Index on an asset with transactions is a block that saves nothing, not even the free asset, until the blocked one is taken out and the rest is re-checked; at 375 px the fields and the summary (the card list) do not scroll sideways; closing keeps the selection and changes nothing",
+        tests="assets/asset-bulk-edit.spec.ts",
     )
     add_test(
         cat,

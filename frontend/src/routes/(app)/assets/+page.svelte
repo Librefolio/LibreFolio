@@ -19,7 +19,7 @@
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
-    import {BarChart3, CalendarSync, ChartLine, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, CalendarSync, ChartLine, Check, Network, Pencil, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import PageBackButton from '$lib/components/layout/PageBackButton.svelte';
     import AssetCard from '$lib/features/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/features/assets/AssetTable.svelte';
@@ -42,6 +42,8 @@
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import AssetBulkEditModal from '$lib/features/assets/bulk/AssetBulkEditModal.svelte';
+    import type {BulkAsset} from '$lib/features/assets/bulk/assetBulkEdit';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import ChartSettingsModal from '$lib/features/signals/components/ChartSettingsModal.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -105,6 +107,8 @@
         /** Eligible as a comparison benchmark: the comparison picker lists these first (Y5-F4). */
         is_benchmark?: boolean;
         quote_base_quantity?: number | null;
+        /** The user's own link for the asset (notes, a dashboard): read by the bulk edit. */
+        user_url?: string | null;
         tx_count?: number;
         /** A positive quantity is held **now** in a broker the user owns (Risk, `FAinfoResponse`). */
         held_by_me?: boolean;
@@ -168,6 +172,9 @@
 
     // Bulk delete confirmation dialog
     let bulkDeleteDialogOpen = $state(false);
+    // Bulk edit of the selected assets (lane 65): a snapshot of the selection taken when the pencil is pressed.
+    let bulkEditOpen = $state(false);
+    let bulkEditAssets = $state<BulkAsset[]>([]);
     let deletingAssets = $state<AssetRow[]>([]);
     let bulkDeleteResults = $state<{label: string; success: boolean; detail?: string; action?: {href: string; label: string; testId?: string}}[]>([]);
 
@@ -621,6 +628,7 @@
                 asset_type: item.asset_type ?? null,
                 is_benchmark: item.is_benchmark === true,
                 quote_base_quantity: item.quote_base_quantity ?? 1,
+                user_url: item.user_url ?? null,
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
                 tx_count: item.tx_count ?? 0,
@@ -1491,6 +1499,24 @@
         clearAllTableSelections();
     }
 
+    /** The pencil: the selected assets, in the order of the selection, as the list holds them now. */
+    function handleBulkEditAssets() {
+        const byId = new Map(assets.map((a) => [a.id, a]));
+        bulkEditAssets = selectedAssetRows
+            .map((row) => byId.get(row.id))
+            .filter((a): a is AssetState => a !== undefined)
+            .map((a) => ({id: a.id, display_name: a.display_name, asset_type: a.asset_type, active: a.active, is_benchmark: a.is_benchmark, quote_base_quantity: a.quote_base_quantity, icon_url: a.icon_url, user_url: a.user_url}));
+        bulkEditOpen = true;
+    }
+
+    /** The bulk edit saved (all or nothing): drop the cached rows, clear the selection, reload the list. */
+    async function handleBulkEditSaved(saved: {ids: number[]}) {
+        bulkEditOpen = false;
+        invalidateAfterMutation(saved.ids);
+        clearAllTableSelections();
+        await pageBusy.track('assets-reload', () => loadAssets({soft: true}));
+    }
+
     function handleBulkDeleteAssets() {
         deletingAssets = [...selectedAssetRows];
         bulkDeleteDialogOpen = true;
@@ -1821,6 +1847,7 @@
                 <DataTableToolbar
                     selectedCount={selectedAssetRows.length}
                     bulkActions={[
+                        {id: 'edit', icon: Pencil, label: () => $t('assets.bulkEdit.action', {values: {count: selectedAssetRows.length}}), onClick: () => handleBulkEditAssets()},
                         {id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets()},
                         {id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets()},
                         {id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets()},
@@ -2391,6 +2418,7 @@
 </div>
 
 <AssetBrowseOrder view={viewMode} panels={assetPanels} />
+<AssetBulkEditModal open={bulkEditOpen} assets={bulkEditAssets} onclose={() => (bulkEditOpen = false)} onsaved={handleBulkEditSaved} />
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
     axisContext={settingsTargetId ? (assets.find((asset) => asset.id === Number(settingsTargetId))?.currency ?? '—') : $t('common.preview')}
