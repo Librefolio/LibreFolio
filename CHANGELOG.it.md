@@ -20,6 +20,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Un tasso di cambio vecchio di più di una settimana ora viene segnalato ovunque un valore ne dipende: l'analisi dei lotti mostra lo stesso avviso «tassi di cambio non aggiornati» della Dashboard, e il tooltip del Yield on Cost indica il tasso vecchio che ha usato. Nessun numero cambia, solo l'avviso.
 - Le coppie di valute si scrivono allo stesso modo ovunque, con simboli e bandiere: `$ 🇺🇸 USD / EUR 🇪🇺 €` per una coppia, `$ 🇺🇸 USD → EUR 🇪🇺 €` per una conversione, nel suo verso.
 - Analisi del rischio: quando un asset resta fuori perché manca un cambio, il messaggio ora nomina la coppia di valute e dice da quale data c'è un cambio salvato, oppure che non ce n'è nessuno.
+- Liste Asset e Cambi, vista Rolling Return: le card ora confrontano anche l'altro tipo, come già le pagine di dettaglio. La card di un asset può mostrare coppie di cambi e la card di una coppia può mostrare asset, scelti da «Impostazioni Grafico» della card.
 
 ### 🐛 Corretto
 
