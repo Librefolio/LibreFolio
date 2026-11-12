@@ -9,11 +9,12 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from backend.app.db.models import Asset, AssetType, Transaction, TransactionType
+from backend.app.db.models import Asset, Transaction, TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResultItem, TXPromoteBatchItem, TXPromoteResolvedFields, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.transactions import tags_to_csv, validate_transaction_business_rules
 from backend.app.schemas.transactions.type_metadata import cost_basis_allowed
+from backend.app.services.assets.type_rules import INDEX_TRANSACTIONS_ERROR, type_allows_transactions
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
 from backend.app.utils.datetime_utils import utcnow
 
@@ -30,8 +31,9 @@ async def apply_creates(
         try:
             if item.asset_id is not None:
                 asset_result = await service.session.execute(select(Asset.asset_type).where(Asset.id == item.asset_id))
-                if asset_result.scalar_one_or_none() == AssetType.INDEX:
-                    raise ValueError("Cannot create transactions for INDEX assets")
+                asset_type = asset_result.scalar_one_or_none()
+                if asset_type is not None and not type_allows_transactions(asset_type):
+                    raise ValueError(INDEX_TRANSACTIONS_ERROR)
             if item.asset_event_id is not None:
                 assert item.asset_id is not None
                 await service._validate_asset_event_link(

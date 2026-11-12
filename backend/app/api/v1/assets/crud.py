@@ -89,6 +89,38 @@ async def create_assets_bulk(
         raise HTTPException(status_code=500, detail="Internal error while creating assets") from e
 
 
+async def _run_asset_patch(assets: List[FAAssetPatchItem], session: AsyncSession, *, commit: bool) -> FABulkAssetPatchResponse:
+    """Shared by ``PATCH /assets`` and ``POST /assets/validate``: one service, ``commit`` tells the save from the dry run."""
+    try:
+        return await AssetCRUDService.patch_assets_bulk(assets, session, commit=commit)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error in bulk asset patch (commit={commit}): {e}")
+        raise HTTPException(status_code=500, detail="Internal error while updating assets") from e
+
+
+@crud_router.post("/validate", response_model=FABulkAssetPatchResponse, tags=["FA CRUD"])
+async def validate_assets_patch(
+    assets: List[FAAssetPatchItem],
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """
+    Check a bulk asset update without saving anything (dry run of ``PATCH /assets``).
+
+    Same payload and same service as the PATCH: every item is checked, then applied inside the transaction, and the
+    transaction is **always rolled back** (the prices and events a currency change would remove stay; no provider cache
+    is touched). Answers 200 with ``committed=false`` whether or not there are issues; a malformed JSON is a 422.
+
+    **Response Fields**:
+    - `issues`: blocking problems (the PATCH would save nothing). Every `results[i].success` is then false.
+    - `warnings`: remarks that never block (e.g. `assetFamilyChange`)
+    - `results`: with no issue, what the PATCH would save, per item (`updated_fields`)
+    """
+    return await _run_asset_patch(assets, session, commit=False)
+
+
 @crud_router.patch("", response_model=FABulkAssetPatchResponse, tags=["FA CRUD"])
 async def patch_assets_bulk(
     assets: List[FAAssetPatchItem],
@@ -96,7 +128,11 @@ async def patch_assets_bulk(
     _current_user: User = Depends(get_current_user),
 ):
     """
-    Update multiple assets in bulk (partial success allowed).
+    Update multiple assets in bulk: all or nothing.
+
+    Every item is checked before anything is written. If any item has an issue, nothing is saved: the answer is 200
+    with `committed=false`, the issue(s), and every `results[i].success` false. Otherwise all items are saved in one
+    transaction (`committed=true`). `POST /assets/validate` runs the same checks and never saves.
 
     **Merge Logic**:
     - Field present (even if None): UPDATE or BLANK value
@@ -126,17 +162,13 @@ async def patch_assets_bulk(
     - If present: Only non-null subfields saved to DB (JSON optimization)
 
     **Response Fields**:
-    - `updated_fields`: List of field names actually changed
+    - `committed`: true only when every item was saved
+    - `issues`: blocking problems (`assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`)
+    - `warnings`: remarks that never block (`assetFamilyChange`)
+    - `updated_fields`: the fields written, old and new (every field sent, even when the value does not change)
     - Per-item success/failure status
     """
-    try:
-        response = await AssetCRUDService.patch_assets_bulk(assets, session)
-        return response
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error in bulk asset patch: {e}")
-        raise HTTPException(status_code=500, detail="Internal error while updating assets") from e
+    return await _run_asset_patch(assets, session, commit=True)
 
 
 @crud_router.get("/query", response_model=List[FAinfoResponse], tags=["FA CRUD"])

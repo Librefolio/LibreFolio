@@ -221,6 +221,7 @@ ASSIGNMENTS = _Site(asset_provider_routes, lambda session: asset_provider_routes
 # api/v1/assets/crud.py
 CREATE_ASSETS = _Site(crud_routes, lambda session: crud_routes.create_assets_bulk(assets=[FAAssetCreateItem(display_name="X-R74 asset", currency="EUR")], session=session, _current_user=USER), AssetCRUDService, "create_assets_bulk")
 PATCH_ASSETS = _Site(crud_routes, lambda session: crud_routes.patch_assets_bulk(assets=[FAAssetPatchItem(asset_id=1, display_name="X-R74 asset")], session=session, _current_user=USER), AssetCRUDService, "patch_assets_bulk")
+VALIDATE_ASSETS = _Site(crud_routes, lambda session: crud_routes.validate_assets_patch(assets=[FAAssetPatchItem(asset_id=1, display_name="X-R74 asset")], session=session, _current_user=USER), AssetCRUDService, "patch_assets_bulk")
 QUERY_ASSETS = _Site(crud_routes, _list_assets, AssetCRUDService, "list_assets")
 DELETE_ASSETS = _Site(crud_routes, lambda session: crud_routes.delete_assets_bulk(asset_ids=[1, 2], session=session, _current_user=USER), AssetCRUDService, "delete_assets_bulk")
 MERGE_ASSETS = _Site(crud_routes, lambda session: crud_routes.merge_assets(payload=FAAssetMergeRequest(source_asset_id=1, target_asset_id=2, dry_run=True), session=session, _current_user=USER), AssetCRUDService, "merge_assets")
@@ -308,6 +309,7 @@ SITES_500 = [
     # api/v1/assets/crud.py
     pytest.param(CREATE_ASSETS, _sql_error, id="assets_crud-create_assets_bulk"),
     pytest.param(PATCH_ASSETS, _sql_error, id="assets_crud-patch_assets_bulk"),
+    pytest.param(VALIDATE_ASSETS, _sql_error, id="assets_crud-validate_assets_patch"),
     pytest.param(QUERY_ASSETS, _sql_error, id="assets_crud-list_assets"),
     pytest.param(DELETE_ASSETS, _sql_error, id="assets_crud-delete_assets_bulk"),
     pytest.param(MERGE_ASSETS, _sql_error, id="assets_crud-merge_assets"),

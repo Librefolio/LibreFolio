@@ -417,6 +417,13 @@
       "pricesSkipped": "{count, plural, one {# riga scartata (non valida)} other {# righe scartate (non valide)}}",
       "eventsSaved": "{count, plural, one {# evento salvato} other {# eventi salvati}}",
       "pricesRefused": "{count, plural, one {# prezzo rifiutato} other {# prezzi rifiutati}}"
+    },
+    "patchIssue": {
+      "assetNotFound": "L'asset non esiste più.",
+      "indexWithTransactions": "Un asset con transazioni non può diventare un Indice: ne ha {count, plural, one {# transazione} other {# transazioni}}.",
+      "assetNameTaken": "Il nome \"{name}\" è già usato da un altro asset.",
+      "assetFamilyChange": "Il tipo passa da {from} a {to}, un'altra famiglia di tipi.",
+      "patchFailed": "Non è stato possibile salvare l'asset. Non è stato modificato nulla."
     }
   },
   "events": {

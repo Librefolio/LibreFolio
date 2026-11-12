@@ -417,6 +417,13 @@
       "pricesSkipped": "{count, plural, one {# fila omitida (no válida)} other {# filas omitidas (no válidas)}}",
       "eventsSaved": "{count, plural, one {# evento guardado} other {# eventos guardados}}",
       "pricesRefused": "{count, plural, one {# precio rechazado} other {# precios rechazados}}"
+    },
+    "patchIssue": {
+      "assetNotFound": "El activo ya no existe.",
+      "indexWithTransactions": "Un activo con transacciones no puede convertirse en un Índice: tiene {count, plural, one {# transacción} other {# transacciones}}.",
+      "assetNameTaken": "El nombre \"{name}\" ya lo usa otro activo.",
+      "assetFamilyChange": "El tipo pasa de {from} a {to}, otra familia de tipos.",
+      "patchFailed": "No se pudo guardar el activo. No se ha modificado nada."
     }
   },
   "events": {

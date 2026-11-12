@@ -32,6 +32,7 @@
     import {loadAssetEditData, type AssetEditData} from '$lib/features/assets/assetEditData';
     import IdentifierPrimaryChooser from '$lib/features/assets/IdentifierPrimaryChooser.svelte';
     import {pendingIdentifier, needsPrimaryChoice, mergeOther, demotedValues} from '$lib/features/assets/identifierQuestions';
+    import {assertPatchCommitted} from '$lib/features/assets/assetPatchResult';
     import {clusterSignature, electPrimary, groupExtractedAssets, groupSignature, memberKey, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/features/assets/assetGrouping';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded, TX_TYPES} from '$lib/features/transactions/transactionTypeStore';
@@ -1257,7 +1258,8 @@
         const merged = mergeOther(currentOther, extra);
         if (merged.length === currentOther.length) return;
         try {
-            await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: assetId, identifier_other: merged}]);
+            // Lane 65: not `committed` means nothing was saved; the throw lands in the error toast below, never the success one.
+            assertPatchCommitted(await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: assetId, identifier_other: merged}]), $t, $t('importWizard.reuseExisting.error'));
             toasts.success($t('importWizard.reuseExisting.success'));
             await refreshAllAssets();
         } catch {
@@ -1290,7 +1292,7 @@
         const clearOnCancel = identifierPromptClearOnCancel;
         identifierPromptSaving = true;
         try {
-            await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: assetId, [field]: primary, identifier_other: other}]);
+            assertPatchCommitted(await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: assetId, [field]: primary, identifier_other: other}]), $t, $t('importWizard.addIdentifier.error'));
             toasts.success($t('importWizard.addIdentifier.success'));
             await refreshAllAssets();
             identifierPromptSaving = false;

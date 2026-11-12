@@ -1260,7 +1260,7 @@ describe('AssetModal provider lifecycle', () => {
                 identifier_other: [],
             },
         ];
-        const patchResult: PatchResponse = {results: [{asset_id: 8101, success: true, message: 'Synthetic patch accepted'}], success_count: 1, errors: []};
+        const patchResult: PatchResponse = {results: [{asset_id: 8101, success: true, message: 'Synthetic patch accepted'}], success_count: 1, errors: [], committed: true, issues: [], warnings: []};
         const patch = plan('save PATCH', routes.patch, [expectedPatch], patchResult);
         const expectedAssignment: AssignmentItem[] = [
             {
@@ -2085,7 +2085,7 @@ function scheduledPatch(): PatchItem[] {
 }
 
 function scheduledPatchAccepted(): PatchResponse {
-    return {results: [{asset_id: SCHEDULED_ASSET_ID, success: true, message: 'Synthetic patch accepted'}], success_count: 1, errors: []};
+    return {results: [{asset_id: SCHEDULED_ASSET_ID, success: true, message: 'Synthetic patch accepted'}], success_count: 1, errors: [], committed: true, issues: [], warnings: []};
 }
 
 /** Independent oracle of the assignment: the provider with the schedule the editor wrote, its initial value now 12000. */
@@ -2396,7 +2396,7 @@ function atlasPatch(): PatchItem[] {
 }
 
 function atlasPatchAccepted(): PatchResponse {
-    return {results: [{asset_id: ATLAS_ASSET_ID, success: true, message: 'Synthetic patch accepted'}], success_count: 1, errors: []};
+    return {results: [{asset_id: ATLAS_ASSET_ID, success: true, message: 'Synthetic patch accepted'}], success_count: 1, errors: [], committed: true, issues: [], warnings: []};
 }
 
 /** Independent oracle of the removal as the save sends it: no body, the asset in the query. */

@@ -417,6 +417,13 @@
       "pricesSkipped": "{count, plural, one {# ligne ignorée (non valide)} many {# lignes ignorées (non valides)} other {# lignes ignorées (non valides)}}",
       "eventsSaved": "{count, plural, one {# événement enregistré} many {# événements enregistrés} other {# événements enregistrés}}",
       "pricesRefused": "{count, plural, one {# prix refusé} many {# prix refusés} other {# prix refusés}}"
+    },
+    "patchIssue": {
+      "assetNotFound": "L'actif n'existe plus.",
+      "indexWithTransactions": "Un actif avec des transactions ne peut pas devenir un Indice : il en a {count, plural, one {# transaction} other {# transactions}}.",
+      "assetNameTaken": "Le nom « {name} » est déjà utilisé par un autre actif.",
+      "assetFamilyChange": "Le type passe de {from} à {to}, une autre famille de types.",
+      "patchFailed": "L'actif n'a pas pu être enregistré. Rien n'a été modifié."
     }
   },
   "events": {

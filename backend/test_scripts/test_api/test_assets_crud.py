@@ -5,7 +5,8 @@ Tests for asset creation, listing, and deletion endpoints.
 """
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -25,7 +26,9 @@ from backend.app.schemas import (
     FASectorArea,
 )
 from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.prices import FAPricePoint, FAUpsert
 from backend.app.schemas.provider import FAProviderAssignmentItem
+from backend.app.services.assets.type_rules import INDEX_TRANSACTIONS_ERROR
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 
@@ -1871,6 +1874,159 @@ async def test_patch_classification_full_null_clears_entire_block(test_server):
         finally:
             if asset_id is not None:
                 await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+# ============================================================================
+# Lane 65 B3: INDEX assets and transactions (all-or-nothing PATCH)
+# ============================================================================
+
+
+async def _create_typed_asset(client: httpx.AsyncClient, tag: str, asset_type: AssetType, currency: str = "EUR") -> tuple[int, str]:
+    """Create one asset under a unique name; (id, name)."""
+    name = f"B3 {tag} {unique_id(tag)}"
+    item = FAAssetCreateItem(display_name=name, currency=currency, asset_type=asset_type)
+    resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+    assert resp.status_code == 201, f"Create failed: {resp.status_code}: {resp.text}"
+    return FABulkAssetCreateResponse(**resp.json()).results[0].asset_id, name
+
+
+async def _patch_raw(client: httpx.AsyncClient, items: list[FAAssetPatchItem]) -> FABulkAssetPatchResponse:
+    resp = await client.patch(f"{API_BASE}/assets", json=[it.model_dump(mode="json", exclude_unset=True) for it in items], timeout=TIMEOUT)
+    assert resp.status_code == 200, f"PATCH failed: {resp.status_code}: {resp.text}"
+    return FABulkAssetPatchResponse(**resp.json())
+
+
+async def _listed(client: httpx.AsyncClient, asset_id: int) -> dict:
+    """The asset as GET /assets/query lists it, found by id."""
+    resp = await client.get(f"{API_BASE}/assets/query", timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return next(row for row in resp.json() if row["id"] == asset_id)
+
+
+async def _prices_stored(client: httpx.AsyncClient, asset_id: int, start: date, count: int) -> list[dict]:
+    """The prices stored on the ``count`` days from ``start`` (exactly the seeded range: a wider query is filled forward)."""
+    date_range = {"start": start.isoformat(), "end": (start + timedelta(days=count - 1)).isoformat()}
+    resp = await client.post(f"{API_BASE}/assets/prices/query", json=[{"asset_id": asset_id, "date_range": date_range}], timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return next(item for item in resp.json()["items"] if item["asset_id"] == asset_id)["prices"]
+
+
+@pytest.mark.asyncio
+async def test_patch_index_with_transactions_is_an_issue_and_saves_nothing(test_server):
+    """Lane 65 B3. Red today: the old service has no ``issues``/``committed`` and saved the other item. Contract: STOCK with a
+    transaction -> INDEX is an issue tied to that item; the whole batch is rolled back."""
+    print_section("B3: PATCH /assets - INDEX on an asset with transactions")
+
+    marker = unique_id("IDXTX")
+    broker_id = None
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            asset_a, _ = await _create_typed_asset(client, "IDXA", AssetType.STOCK)
+            asset_b, name_b = await _create_typed_asset(client, "IDXB", AssetType.STOCK)
+            broker_id = await _create_broker(client, f"B3 Broker {marker}")
+            await _commit_trade(client, broker_id, asset_a, "BUY", "2026-01-05", "1", "-100")
+
+            data = await _patch_raw(
+                client,
+                [
+                    FAAssetPatchItem(asset_id=asset_a, asset_type=AssetType.INDEX),
+                    FAAssetPatchItem(asset_id=asset_b, display_name=f"{name_b} renamed"),
+                ],
+            )
+
+            assert data.committed is False
+            assert data.success_count == 0
+            assert len(data.results) == 2 and all(r.success is False for r in data.results), data.results
+            assert len(data.issues) == 1, data.issues
+            issue = data.issues[0]
+            assert issue.code == "indexWithTransactions"
+            assert issue.asset_id == asset_a
+            assert issue.index == 0
+            assert issue.field == "asset_type"
+            assert issue.params is not None and issue.params["tx_count"] == 1
+            assert not [w for w in data.warnings if w.asset_id == asset_a], "a blocked asset gets no family warning"
+
+            assert (await _listed(client, asset_a))["asset_type"] == AssetType.STOCK.value
+            assert (await _listed(client, asset_b))["display_name"] == name_b
+            print_success("✓ indexWithTransactions issue, nothing saved")
+        finally:
+            if broker_id is not None:
+                await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_patch_currency_change_is_not_applied_when_another_asset_is_blocked(test_server):
+    """Lane 65 B3. Red today: the currency change of A (which deletes its prices) was saved although B was refused.
+    Contract: nothing is written, so A keeps its currency and its prices."""
+    print_section("B3: PATCH /assets - blocked batch leaves prices intact")
+
+    marker = unique_id("CURBLK")
+    broker_id = None
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            asset_a, _ = await _create_typed_asset(client, "CURA", AssetType.STOCK, currency="USD")
+            asset_b, _ = await _create_typed_asset(client, "CURB", AssetType.STOCK)
+            start = date.today() - timedelta(days=3)
+            points = [FAPricePoint(date=start + timedelta(days=i), close=Decimal("100.00") + Decimal(i)) for i in range(2)]
+            seed = await client.post(f"{API_BASE}/assets/prices", json=[FAUpsert(asset_id=asset_a, prices=points).model_dump(mode="json")], timeout=TIMEOUT)
+            assert seed.status_code == 200, seed.text
+            assert len(await _prices_stored(client, asset_a, start, 2)) == 2
+
+            broker_id = await _create_broker(client, f"B3 Broker {marker}")
+            await _commit_trade(client, broker_id, asset_b, "BUY", "2026-01-05", "1", "-100")
+
+            data = await _patch_raw(
+                client,
+                [
+                    FAAssetPatchItem(asset_id=asset_a, currency="EUR"),
+                    FAAssetPatchItem(asset_id=asset_b, asset_type=AssetType.INDEX),
+                ],
+            )
+
+            assert data.committed is False
+            assert data.success_count == 0
+            assert [(i.code, i.asset_id, i.index) for i in data.issues] == [("indexWithTransactions", asset_b, 1)]
+            assert (await _listed(client, asset_a))["currency"] == "USD"
+            assert len(await _prices_stored(client, asset_a, start, 2)) == 2, "the blocked batch must not wipe A's prices"
+            print_success("✓ A keeps USD and its two prices")
+        finally:
+            if broker_id is not None:
+                await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_transaction_on_index_asset_is_refused(test_server):
+    """Coverage gap, green today (existing behaviour): committing a BUY on an INDEX asset is refused with the INDEX message
+    and no transaction is stored."""
+    print_section("B3: POST /transactions/commit - INDEX asset refused")
+
+    marker = unique_id("IDXREF")
+    broker_id = None
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            index_id, _ = await _create_typed_asset(client, "IDXREF", AssetType.INDEX)
+            broker_id = await _create_broker(client, f"B3 Broker {marker}")
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={"creates": [{"broker_id": broker_id, "asset_id": index_id, "type": "BUY", "date": "2026-01-05", "quantity": "1", "cash": {"code": "EUR", "amount": "-100"}}]},
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["committed"] is False, body
+            assert any(INDEX_TRANSACTIONS_ERROR in issue["error"] for issue in body["issues"]), body["issues"]
+
+            listed = await client.get(f"{API_BASE}/transactions", params={"asset_id": index_id}, timeout=TIMEOUT)
+            assert listed.status_code == 200, listed.text
+            assert listed.json() == [], "no transaction may exist for the INDEX asset"
+            print_success("✓ transaction on INDEX refused, nothing stored")
+        finally:
+            if broker_id is not None:
+                await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
 
 
 if __name__ == "__main__":
