@@ -36,6 +36,7 @@
 
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
@@ -355,19 +356,28 @@ function expectUuid(value: string | null | undefined, what: string): string {
 
 test.describe('Import Wizard — upload batch', () => {
     let ownedBrokerId: number | undefined;
+    /** The account this block writes with: its own, so the broker and the files are seen by no other spec. */
+    let account: DisposableUser | null = null;
 
-    test.beforeEach(async ({page}) => {
+    test.beforeEach(async ({page, request}) => {
         ownedBrokerId = undefined;
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, 'upl');
+        await prepareOnboardingAccount(page, account, []);
     });
 
     // afterEach, not `finally`: a cleanup throwing from `finally` would replace the
     // assertion error it follows, and that assertion is the point of this block.
-    test.afterEach(async ({page}) => {
-        if (ownedBrokerId === undefined) return;
-        // Unmount the wizard first, so nothing on the page reacts while its files go away.
-        await page.goto('about:blank');
-        await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+    test.afterEach(async ({page, request}) => {
+        try {
+            if (ownedBrokerId !== undefined) {
+                // Unmount the wizard first, so nothing on the page reacts while its files go away.
+                await page.goto('about:blank');
+                await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+            }
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     test('C1 files uploaded together in step 1 share one batch id', async ({page}) => {

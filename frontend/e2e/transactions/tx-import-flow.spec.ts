@@ -31,7 +31,6 @@ import {expect, test as base, type APIRequestContext, type Page, type Request} f
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {uniqueSuffix} from '../fixtures/unique';
-import {TEST_USER} from '../fixtures/test-users';
 
 const test = base;
 test.setTimeout(90_000);
@@ -266,11 +265,26 @@ async function installTerminalOnboardingProgress(page: Page): Promise<void> {
     );
 }
 
-test.afterEach(async ({page}) => {
+/** The disposable account the analyze and review cases sign in with: the flow broker and its files are its own. */
+const flowAccounts = new WeakMap<Page, DisposableUser>();
+
+async function signInFlowAccount(page: Page, request: APIRequestContext): Promise<void> {
+    const user = await registerDisposableUser(request, 'flow');
+    flowAccounts.set(page, user);
+    await login(page, user);
+}
+
+test.afterEach(async ({page, request}) => {
     try {
         await cleanupOwnedFiles(page);
     } finally {
-        await cleanupFlowBroker(page);
+        try {
+            await cleanupFlowBroker(page);
+        } finally {
+            const user = flowAccounts.get(page);
+            flowAccounts.delete(page);
+            if (user) await deleteDisposableUser(request, user, []);
+        }
     }
 });
 
@@ -682,9 +696,9 @@ async function expectImportGuideChrome(page: Page, stepId: string, options: {fin
 // ---------------------------------------------------------------------------
 
 test.describe('Import Wizard — analyze step', () => {
-    test.beforeEach(async ({page}) => {
+    test.beforeEach(async ({page, request}) => {
         await installTerminalOnboardingProgress(page);
-        await login(page, TEST_USER);
+        await signInFlowAccount(page, request);
         await createFlowBroker(page);
         await goToTransactions(page);
         await openImportWizard(page);
@@ -748,9 +762,9 @@ test.describe('Import Wizard — analyze step', () => {
 });
 
 test.describe('Import Wizard — review step', () => {
-    test.beforeEach(async ({page}) => {
+    test.beforeEach(async ({page, request}) => {
         await installTerminalOnboardingProgress(page);
-        await login(page, TEST_USER);
+        await signInFlowAccount(page, request);
         await createFlowBroker(page);
         await goToTransactions(page);
         await openImportWizard(page);
