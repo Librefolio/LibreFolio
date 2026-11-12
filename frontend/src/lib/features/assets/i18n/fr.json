@@ -424,6 +424,33 @@
       "assetNameTaken": "Le nom « {name} » est déjà utilisé par un autre actif.",
       "assetFamilyChange": "Le type passe de {from} à {to}, une autre famille de types.",
       "patchFailed": "L'actif n'a pas pu être enregistré. Rien n'a été modifié."
+    },
+    "bulkEdit": {
+      "action": "Modifier la sélection ({count})",
+      "title": "{count, plural, one {Modifier # actif} other {Modifier # actifs}}",
+      "subtitle": "Seuls les champs que vous modifiez changent, identiques pour tous. Le reste de chaque actif n'est pas touché.",
+      "subtitleChanged": "{fields, plural, one {# champ modifié} other {# champs modifiés}} · {assets, plural, one {# actif change} other {# actifs changent}}",
+      "stepFields": "Champs",
+      "stepSummary": "Récapitulatif",
+      "selected": "Sélectionnés ({count})",
+      "showAll": "Tout afficher",
+      "showLess": "Afficher moins",
+      "zoneDetails": "Autres détails",
+      "zoneClassification": "Classification",
+      "zonePrice": "Prix et statut",
+      "leave": "Laisser tel quel",
+      "leaveDifferent": "Laisser tel quel · valeurs différentes",
+      "yes": "Oui",
+      "no": "Non",
+      "modified": "modifié",
+      "now": "Actuellement :",
+      "nowIcon": "{withIcon, plural, =0 {aucun avec icône} one {# avec icône} other {# avec icône}}, {without} sans",
+      "nowUrl": "{distinct, plural, =0 {aucune définie} one {# URL} other {# URL différentes}}{empty, plural, =0 {} other { · vide pour #}}",
+      "more": "+{count}",
+      "changesFor": "Change pour {changing} sur {total}",
+      "alreadyHave": "{already} l'ont déjà",
+      "iconPick": "Choisir une icône pour tous",
+      "continue": "Continuer vers le récapitulatif"
     }
   },
   "events": {

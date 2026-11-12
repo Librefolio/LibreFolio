@@ -424,6 +424,33 @@
       "assetNameTaken": "Il nome \"{name}\" è già usato da un altro asset.",
       "assetFamilyChange": "Il tipo passa da {from} a {to}, un'altra famiglia di tipi.",
       "patchFailed": "Non è stato possibile salvare l'asset. Non è stato modificato nulla."
+    },
+    "bulkEdit": {
+      "action": "Modifica selezionati ({count})",
+      "title": "{count, plural, one {Modifica # asset} other {Modifica # asset}}",
+      "subtitle": "Cambiano solo i campi che tocchi, uguali per tutti. Il resto di ogni asset non si tocca.",
+      "subtitleChanged": "{fields, plural, one {# campo modificato} other {# campi modificati}} · {assets, plural, one {# asset cambia} other {# asset cambiano}}",
+      "stepFields": "Campi",
+      "stepSummary": "Riepilogo",
+      "selected": "Selezionati ({count})",
+      "showAll": "Mostra tutti",
+      "showLess": "Mostra meno",
+      "zoneDetails": "Altri dettagli",
+      "zoneClassification": "Classificazione",
+      "zonePrice": "Prezzo e stato",
+      "leave": "Lascia com'è",
+      "leaveDifferent": "Lascia com'è · valori diversi",
+      "yes": "Sì",
+      "no": "No",
+      "modified": "modificato",
+      "now": "Ora:",
+      "nowIcon": "{withIcon, plural, =0 {nessuno con icona} one {# con icona} other {# con icona}}, {without} senza",
+      "nowUrl": "{distinct, plural, =0 {nessuno impostato} one {# URL} other {# URL diversi}}{empty, plural, =0 {} other { · vuoto per #}}",
+      "more": "+{count}",
+      "changesFor": "Cambia per {changing} su {total}",
+      "alreadyHave": "{already} ce l'hanno già",
+      "iconPick": "Scegli un'icona per tutti",
+      "continue": "Continua al riepilogo"
     }
   },
   "events": {

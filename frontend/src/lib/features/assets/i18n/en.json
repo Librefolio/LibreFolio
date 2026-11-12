@@ -424,6 +424,33 @@
       "assetNameTaken": "The name \"{name}\" is already used by another asset.",
       "assetFamilyChange": "The type moves from {from} to {to}, another type family.",
       "patchFailed": "The asset could not be saved. Nothing was changed."
+    },
+    "bulkEdit": {
+      "action": "Edit selected ({count})",
+      "title": "{count, plural, one {Edit # asset} other {Edit # assets}}",
+      "subtitle": "Only the fields you touch change, the same for all. The rest of each asset is left alone.",
+      "subtitleChanged": "{fields, plural, one {# field modified} other {# fields modified}} · {assets, plural, one {# asset changes} other {# assets change}}",
+      "stepFields": "Fields",
+      "stepSummary": "Summary",
+      "selected": "Selected ({count})",
+      "showAll": "Show all",
+      "showLess": "Show fewer",
+      "zoneDetails": "Other details",
+      "zoneClassification": "Classification",
+      "zonePrice": "Price and status",
+      "leave": "Leave as is",
+      "leaveDifferent": "Leave as is · different values",
+      "yes": "Yes",
+      "no": "No",
+      "modified": "modified",
+      "now": "Now:",
+      "nowIcon": "{withIcon, plural, =0 {none with an icon} one {# with an icon} other {# with an icon}}, {without} without",
+      "nowUrl": "{distinct, plural, =0 {none set} one {# URL} other {# different URLs}}{empty, plural, =0 {} other { · empty for #}}",
+      "more": "+{count}",
+      "changesFor": "Changes for {changing} of {total}",
+      "alreadyHave": "{already} already have it",
+      "iconPick": "Choose an icon for all",
+      "continue": "Continue to summary"
     }
   },
   "events": {
