@@ -32,7 +32,7 @@
  *
  * The transactions guides are not under test, and their coachmarks can sit over the controls
  * clicked here, so the page gets a terminal onboarding view (the
- * `tx-broker-icon-hydration.spec.ts` pattern): page-scoped, it never writes TEST_USER's
+ * `tx-broker-icon-hydration.spec.ts` pattern): page-scoped, it never writes the account's
  * onboarding rows.
  *
  * Runs on the desktop project, like every transactions spec the runner registers.
@@ -56,7 +56,7 @@ import {expect, test as base, type Locator, type Page} from '../fixtures/playwri
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
-import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
@@ -286,7 +286,7 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<void> {
 }
 
 const test = base.extend<{owned: Owned}>({
-    owned: async ({page}, use, testInfo) => {
+    owned: async ({page, request}, use, testInfo) => {
         const baseURL = testInfo.project.use.baseURL;
         if (!baseURL || new URL(baseURL).port !== TEST_PORT || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
             throw new Error(`Selection checks write owned rows and may only use the shared local test backend on port ${TEST_PORT}`);
@@ -295,12 +295,19 @@ const test = base.extend<{owned: Owned}>({
         page.on('request', (request) => {
             if (isCommitRequest(request)) owned.browserCommits += 1;
         });
+        // The brokers and rows are the account's own: a disposable one, deleted with them.
+        let user: DisposableUser | null = null;
         try {
             await installTerminalOnboardingProgress(page);
-            await login(page, TEST_USER);
+            user = await registerDisposableUser(request, 'sab');
+            await login(page, user);
             await use(owned);
         } finally {
-            await cleanupOwned(page, owned);
+            try {
+                await cleanupOwned(page, owned);
+            } finally {
+                if (user) await deleteDisposableUser(request, user);
+            }
         }
     },
 });
