@@ -16,7 +16,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE} from '$lib/features/signals/calendarReturn';
-import {buildAssetComparisonQuery, buildFxPairComparisonQuery, buildListFxPairComparisonQuery, fxPairComparisonViews, listFxPairComparisonViews, estimateListFxPairDays} from '../crossTypeCalendar';
+import {buildAssetComparisonQuery, buildFxPairComparisonQuery, buildListAssetComparisonQuery, buildListFxPairComparisonQuery, estimateListAssetDays, listAssetComparisonViews, fxPairComparisonViews, listFxPairComparisonViews, estimateListFxPairDays} from '../crossTypeCalendar';
 
 const signal = (windowDays: number) => ({instance_id: CALENDAR_RETURN_INSTANCE_ID, signal_code: CALENDAR_RETURN_SIGNAL_CODE, params: {window_days: windowDays}});
 const target = (configId: string, pairSlug: string, inverted = false) => ({configId, pairSlug, inverted});
@@ -146,5 +146,68 @@ describe('listFxPairComparisonViews: the views by card, then by signal id', () =
 
     it('an answer that is no object gives no view', () => {
         expect(listFxPairComparisonViews([{entries, answer: null}]).size).toBe(0);
+    });
+});
+
+describe('buildListAssetComparisonQuery: one request for the assets compared by every card of a list (FB-11 follow-up, FX list)', () => {
+    const card = (cardKey: string, windowDays: number, assetIds: number[], extra: Partial<{start: string; end: string}> = {}) => ({cardKey, ...range, ...extra, windowDays, assetIds});
+    const item = (assetId: number, windowDays: number, dateRange = range) => ({asset_id: assetId, date_range: dateRange, include_price: false, include_events: false, signals: [signal(windowDays)]});
+
+    it('asks an asset once for cards that compare it over the same range and window, and lists every owner', () => {
+        const entries = buildListAssetComparisonQuery([card('eur-usd', 30, [7, 8]), card('eur-gbp', 30, [7])]);
+
+        expect(entries.map((entry) => entry.item)).toEqual([item(7, 30), item(8, 30)]);
+        expect(entries[0].owners).toEqual(['eur-usd', 'eur-gbp']);
+        expect(entries[1].owners).toEqual(['eur-usd']);
+        expect(entries.every((entry) => entry.round === 0)).toBe(true);
+    });
+
+    it('asks an asset again for a card with another window, in a later round (an answer is read by asset id)', () => {
+        const entries = buildListAssetComparisonQuery([card('a', 30, [7]), card('b', 90, [7]), card('c', 30, [7], {end: '2026-05-31'})]);
+
+        expect(entries.map((entry) => [entry.assetId, entry.round])).toEqual([
+            [7, 0],
+            [7, 1],
+            [7, 2],
+        ]);
+        expect(entries[1].item).toEqual(item(7, 90));
+    });
+
+    it('asks nothing when no card compares an asset', () => {
+        expect(buildListAssetComparisonQuery([card('a', 30, [])])).toEqual([]);
+        expect(buildListAssetComparisonQuery([])).toEqual([]);
+    });
+
+    it('estimates an entry by its range, for the batches', () => {
+        const [entry] = buildListAssetComparisonQuery([card('a', 30, [7])]);
+        expect(estimateListAssetDays(entry, '2026-07-01')).toBeGreaterThan(170);
+    });
+});
+
+describe('listAssetComparisonViews: the views by card, then by asset', () => {
+    const entries = buildListAssetComparisonQuery([
+        {cardKey: 'a', ...range, windowDays: 30, assetIds: [7, 8]},
+        {cardKey: 'b', ...range, windowDays: 30, assetIds: [7]},
+    ]);
+
+    it('gives each owner of an answered entry its view; an entry the answer lacks is an error', () => {
+        const views = listAssetComparisonViews([{entries, answer: {items: [{asset_id: 7, signals: []}]}}]);
+
+        expect([...views.get('a')!.keys()]).toEqual([7, 8]);
+        expect([...views.get('b')!.keys()]).toEqual([7]);
+        expect(views.get('a')!.get(8)!.state).toBe('error');
+    });
+
+    it('reads each batch against its own entries', () => {
+        const views = listAssetComparisonViews([{entries: [entries[1]], answer: {items: [{asset_id: 8, signals: []}]}}]);
+
+        expect([...views.get('a')!.keys()]).toEqual([8]);
+        expect(views.has('b')).toBe(false);
+    });
+
+    it('an answer that is no object marks the entries it carried as errors', () => {
+        const views = listAssetComparisonViews([{entries, answer: null}]);
+
+        expect(views.get('b')!.get(7)!.state).toBe('error');
     });
 });
