@@ -69,6 +69,8 @@ type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: strin
 type ReportBody = {summary?: {net_worth?: {code: string}; holdings?: ReportHolding[]; data_quality?: {issues?: ReportIssue[]} | null} | null};
 type LotsRequestBody = {asset_id?: number; requested_analyses?: string[]};
 type LotsBody = {lots?: Array<{lot_id: number}> | null; data_quality?: {issues?: ReportIssue[]} | null; calculation_status?: string | null};
+/** The lots analysis answer: the panel shows the FIFO block (project 69, D11). */
+type LotsAnswer = {methods: {FIFO: LotsBody}};
 type TxRead = {id: number; broker_id: number; asset_id?: number | null; type: string; date: string; quantity: string; cash?: unknown; related_transaction_id?: number | null; description?: string | null; cost_basis_override?: unknown; asset_event_id?: number | null};
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
 
@@ -358,7 +360,7 @@ test.describe('MISSING_COST_BASIS from legacy rows — dashboard (item 22)', () 
         const panel = page.getByTestId('positions-panel');
         await expect(lotsPanel).toBeVisible({timeout: 15_000});
         await expect(panel, 'the lot detail opens below the positions: the panel stays (FB-12b)').toBeVisible();
-        const lots = await jsonFrom<LotsBody>(lotsResponse, 'lots analysis of the transferred asset');
+        const lots = (await jsonFrom<LotsAnswer>(lotsResponse, 'lots analysis of the transferred asset')).methods.FIFO;
         const lotIssues = (lots.data_quality?.issues ?? []).filter((issue) => issue.code === 'MISSING_COST_BASIS');
         // The analysis covers one asset of this test's own: one issue is a count it created.
         expect(lotIssues, `the lots analysis must carry MISSING_COST_BASIS; it carries ${JSON.stringify((lots.data_quality?.issues ?? []).map((issue) => issue.code))}`).toHaveLength(1);
