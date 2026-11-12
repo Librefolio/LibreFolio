@@ -99,10 +99,12 @@ def _total_resource_bound(
 ) -> ExactRatio:
     current = current_invested(scenario, index, checkpoint)
     selected = selected_funding(scenario, index, checkpoint)
-    # Postings round against the plan, so no rounding adds resources any more.
-    # The half-quantum margin below predates that rule: it only widens the
-    # decision boxes by a few quanta, and keeping it keeps them, and the
-    # oracle's enumeration domains, stable.
+    # Postings round against the plan, so no rounding adds resources any more:
+    # this margin no longer protects against rounding. It predates that rule
+    # and stays only to keep the decision boxes, and the oracle's enumeration
+    # domains, exactly as they were (A2, D5 a). For that reason it still
+    # counts one half-quantum per buy route and pool currency, as the FX
+    # decisions did before they became one per Broker and pair.
     favorable_rounding_bound = _EXACT_ZERO
     for route in scenario.order_routes:
         check_budget(checkpoint)
