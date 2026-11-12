@@ -23,7 +23,8 @@ schemas are in ``backend/app/schemas/prices.py``.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from enum import StrEnum
+from typing import Any, Dict, List, Optional
 
 from pydantic import ConfigDict, Field, field_validator
 
@@ -269,6 +270,8 @@ class FABulkAssetDeleteResponse(BaseBulkResponse[FAAssetDeleteResult]):
 class FAAssetPatchItem(StrictModel):
     """Single asset patch item for bulk update operations.
 
+    Each item carries its own fields: one request may set a different configuration on every asset.
+
     Merge logic:
     - Field present in patch (even if None): UPDATE or BLANK
     - Field absent in patch: IGNORE (keep existing value)
@@ -359,8 +362,38 @@ class FAAssetPatchResult(StrictModel):
     updated_fields: Optional[List[OldNew[str | None]]] = Field(None, description="List of fields updated: [{info: field, old: old_value, new: new_value}]")
 
 
+class FAAssetPatchCode(StrEnum):
+    """Codes of the issues and warnings of an asset patch batch; the frontend translates them."""
+
+    ASSET_NOT_FOUND = "assetNotFound"
+    INDEX_WITH_TRANSACTIONS = "indexWithTransactions"
+    ASSET_FAMILY_CHANGE = "assetFamilyChange"
+    PATCH_FAILED = "patchFailed"
+
+
+class FAAssetPatchIssue(StrictModel):
+    """One issue (blocking) or warning (never blocking) of an asset patch batch, tied to one item of the request."""
+
+    asset_id: int = Field(..., description="Asset ID of the item")
+    index: int = Field(..., ge=0, description="Position of the item in the request list")
+    code: FAAssetPatchCode = Field(..., description="Code the frontend translates")
+    message: str = Field(..., description="English description, for logs and API clients")
+    params: Optional[Dict[str, Any]] = Field(None, description="Values for the translated message (indexWithTransactions: tx_count; assetFamilyChange: from, to)")
+    field: Optional[str] = Field(None, description="Patch field that caused it (e.g. 'asset_type'), None when the whole item is concerned")
+
+
 class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
-    """Bulk asset patch response (partial success allowed)."""
+    """Bulk asset patch response: all or nothing.
+
+    - ``committed``: True only when every item was saved. Any issue saves nothing, and then every ``results[i].success``
+      is False.
+    - ``issues``: blocking problems; ``warnings``: remarks that never stop a save and correct nothing.
+    - A dry run (``POST /assets/validate``) answers ``committed=False`` and the results it would have saved.
+    """
+
+    committed: bool = Field(..., description="Whether the batch was committed to the DB")
+    issues: List[FAAssetPatchIssue] = Field(default_factory=list, description="Blocking issues: any of them saves nothing")
+    warnings: List[FAAssetPatchIssue] = Field(default_factory=list, description="Non-blocking warnings: they never stop a save, nothing is corrected")
 
 
 # ============================================================================
