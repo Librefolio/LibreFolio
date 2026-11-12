@@ -268,6 +268,62 @@ def fx_conversion_request(
     return payload
 
 
+def _held_cash(payload: dict, balances: list[tuple[str, str]], *, broker_ids: tuple[str, ...] = ("broker-one",)) -> dict:
+    """``payload`` with no external contribution: every broker in ``broker_ids`` holds each ``(amount, currency)`` balance as spendable cash.
+
+    The cash id is ``cash-{broker}-{currency}``, as the compact fixture names its own.
+    """
+    payload.pop("contributions", None)
+    payload.pop("funding_routes", None)
+    payload["existing_cash"] = [
+        {
+            "cash_id": f"cash-{broker_id}-{currency.lower()}",
+            "broker_id": broker_id,
+            "available": {"amount": amount, "currency": currency},
+            "selected": {"amount": amount, "currency": currency},
+            "provenance_id": "prov-manual",
+        }
+        for broker_id in broker_ids
+        for amount, currency in balances
+    ]
+    return payload
+
+
+def fx_two_assets_one_pair_request() -> dict:
+    """N1: two Assets quoted in USD bought with EUR at one Broker, so two routes share the single EUR to USD pair.
+
+    The plan of today carries one FX decision per route and currency, hence two for the one pair; the broker's
+    pair is what a conversion really is.
+    """
+    return fx_conversion_request("n1-two-usd-assets", funding_currency="EUR", assets=[("USD", "50.00"), ("USD", "30.00")], fx_rates={"EUR/USD": "1.085"}, fx_spread_rate="0.01", amount="200.00")
+
+
+def fx_two_way_request() -> dict:
+    """N2: one Broker holding EUR and USD cash, one Asset quoted in EUR and one in USD: both directions of the EUR/USD pair exist."""
+    payload = fx_conversion_request("n2-two-way", funding_currency="EUR", assets=[("EUR", "10.00"), ("USD", "10.00")], fx_rates={"EUR/USD": "1.085"}, fx_spread_rate="0.01")
+    return _held_cash(payload, [("30.00", "EUR"), ("70.00", "USD")])
+
+
+def fx_two_brokers_request() -> dict:
+    """N3: two Brokers, each holding EUR cash and each able to buy the one USD Asset: each needs its own conversion, and none may mix."""
+    payload = fx_conversion_request("n3-two-brokers", funding_currency="EUR", assets=[("USD", "50.00")], fx_rates={"EUR/USD": "1.085"}, fx_spread_rate="0.01")
+    first_broker, first_route = payload["brokers"][0], payload["order_routes"][0]
+    second_broker, second_route = copy.deepcopy(first_broker), copy.deepcopy(first_route)
+    second_broker["broker_id"] = "broker-two"
+    second_broker["identity"]["name"] = "Synthetic Broker Two"
+    second_broker["capabilities"][0]["capability_id"] = "cap-broker-two-eur-whole"
+    second_route.update(route_id="route-asset-1-broker-two-buy", broker_id="broker-two", capability_id="cap-broker-two-eur-whole", priority=2)
+    payload["brokers"].append(second_broker)
+    payload["order_routes"].append(second_route)
+    return _held_cash(payload, [("60.00", "EUR")], broker_ids=("broker-one", "broker-two"))
+
+
+def fx_two_sources_request() -> dict:
+    """N4: one USD Asset at one Broker holding EUR and CHF cash: two pairs, EUR to USD and CHF to USD, toward the same currency."""
+    payload = fx_conversion_request("n4-two-sources", funding_currency="EUR", assets=[("USD", "50.00")], fx_rates={**FX_TRIANGLE, "CHF/USD": "1.1501"}, fx_spread_rate="0.01")
+    return _held_cash(payload, [("40.00", "EUR"), ("40.00", "CHF")])
+
+
 def scenario_of(payload: dict) -> tuple[ExactPlannerScenario, ExactPolicyView]:
     """Normalize ``payload`` (it must be ready) and build its primary exact policy view."""
     outcome = normalize_pac_plan(PacPlannerRequest.model_validate(payload))
