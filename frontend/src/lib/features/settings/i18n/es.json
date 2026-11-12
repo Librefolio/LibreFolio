@@ -462,6 +462,19 @@
       "globalHint": "No has elegido esta preferencia: sigue el valor predeterminado fijado por el administrador",
       "auto": "Auto",
       "autoHint": "Decide tu navegador: claro u oscuro, según el ajuste del sistema"
+    },
+    "emailPending": {
+      "title": "Pendiente de confirmación:",
+      "body": "Hemos enviado un enlace a esta dirección. El correo de la cuenta cambia cuando lo confirmas desde allí; hasta entonces sigue siendo el de arriba.",
+      "expires": "El enlace es válido hasta el",
+      "resend": "Enviar de nuevo",
+      "cancel": "Cancelar la solicitud",
+      "sent": "Te hemos enviado un enlace a {email}. La dirección cambia cuando lo confirmas.",
+      "resent": "Un nuevo enlace va de camino a {email}.",
+      "cancelled": "El cambio de correo se ha cancelado: la dirección sigue siendo la misma.",
+      "rateLimited": "Demasiadas solicitudes: vuelve a intentarlo en unos minutos.",
+      "deliveryFailed": "No se ha podido enviar el correo: tu dirección no ha cambiado. Inténtalo más tarde.",
+      "unavailable": "Esta instancia no puede enviar correos ahora: el cambio no se puede confirmar."
     }
   }
 }

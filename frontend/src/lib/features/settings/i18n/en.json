@@ -462,6 +462,19 @@
       "globalHint": "You have not chosen this preference: it follows the default set by the administrator",
       "auto": "Auto",
       "autoHint": "Your browser decides: light or dark, as your system is set"
+    },
+    "emailPending": {
+      "title": "Waiting for confirmation:",
+      "body": "We sent a link to this address. Your account's email changes when you confirm it from there; until then it stays the one above.",
+      "expires": "The link is valid until",
+      "resend": "Send again",
+      "cancel": "Cancel the request",
+      "sent": "We sent a link to {email}. The address changes when you confirm it.",
+      "resent": "A new link is on its way to {email}.",
+      "cancelled": "The change of email was cancelled: the address stays as it is.",
+      "rateLimited": "Too many requests: try again in a few minutes.",
+      "deliveryFailed": "The email could not be sent: your address has not changed. Try again later.",
+      "unavailable": "This instance cannot send emails right now: the change cannot be confirmed."
     }
   }
 }

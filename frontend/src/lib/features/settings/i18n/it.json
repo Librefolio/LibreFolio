@@ -462,6 +462,19 @@
       "globalHint": "Non hai scelto questa preferenza: segue il valore predefinito impostato dall'amministratore",
       "auto": "Auto",
       "autoHint": "Decide il browser: chiaro o scuro, come è impostato il sistema"
+    },
+    "emailPending": {
+      "title": "In attesa di conferma:",
+      "body": "Abbiamo mandato un link a questo indirizzo. L'email dell'account cambia quando lo confermi da lì; fino ad allora resta quella qui sopra.",
+      "expires": "Il link vale fino al",
+      "resend": "Invia di nuovo",
+      "cancel": "Annulla la richiesta",
+      "sent": "Ti abbiamo mandato un link a {email}. L'indirizzo cambia quando lo confermi.",
+      "resent": "Un nuovo link sta arrivando a {email}.",
+      "cancelled": "Il cambio di email è annullato: l'indirizzo resta quello di prima.",
+      "rateLimited": "Troppe richieste: riprova tra qualche minuto.",
+      "deliveryFailed": "Non è stato possibile inviare l'email: l'indirizzo non è cambiato. Riprova più tardi.",
+      "unavailable": "Questa istanza ora non può inviare email: il cambio non può essere confermato."
     }
   }
 }
