@@ -442,6 +442,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/AssetModal.currencyChange.test.ts",
             "src/lib/features/assets/bulk/AssetBulkEditModal.test.ts",
             "src/lib/features/assets/bulk/AssetBulkEditModal.verify.test.ts",
+            "src/lib/features/assets/bulk/AssetBulkEditModal.summary.test.ts",
             "src/lib/features/transactions/EventReconciliationModal.test.ts",
             "src/lib/features/assets/AssetDataEditorSection.test.ts",
             "src/lib/features/assets/ProviderComparisonModal.test.ts",
