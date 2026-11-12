@@ -1501,6 +1501,15 @@ def services_asset_event_store(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Asset Event Store tests", verbose=verbose)
 
 
+def services_asset_type_rules(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the asset type rules: the family of a type and the INDEX rule (lane 65, lot B1)."""
+    print_section("Services: Asset Type Rules")
+    print_info("Testing: backend/app/services/assets/type_rules.py")
+    print_info("Tests: every AssetType has a family, ETF_*/CROWDFUND_* roll up, family change, INDEX with and without transactions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_type_rules.py", test_names)
+    return run_command(cmd, "Asset type rules tests", verbose=verbose)
+
+
 def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
     """Run the C-97a digit limits: manual prices and events refused beyond them, provider prices truncated."""
     print_section("Services: Asset Digit Limits")
@@ -3528,6 +3537,15 @@ Note: No backend server required.
         # every event and transaction written against them are visible to all concurrent tests.
         # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
         isolation="write-global",
+    )
+    add_test(
+        cat,
+        "asset-type-rules",
+        services_asset_type_rules,
+        name="Asset Type Rules",
+        desc="Lane 65 B1: asset_type_family (every AssetType member has a family; ETF_* -> ETF, CROWDFUND_* -> CROWDFUND, any other its own), family_changed, classify_type_change (ETF -> ETF_STOCK ok; CROWDFUND_REAL_ESTATE -> ETF_STOCK and STOCK -> BOND warn; ETF -> INDEX warns without transactions and is blocked with them, with no warning on top; an INDEX already holding transactions is left alone), only INDEX forbids transactions",
+        # PURE: functions over the enum, no session, no server.
+        isolation="pure",
     )
     add_test(
         cat,
