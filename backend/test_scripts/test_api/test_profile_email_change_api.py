@@ -17,6 +17,12 @@ contract pinned here:
    ``Retry-After`` and ``retry_after`` — and on such a refusal a username sent with it is NOT saved; then the username
    saved; then the link: 502 ``EMAIL_DELIVERY_FAILED`` without ``smtp_code`` when the server refuses — nothing waits, the
    username stays saved (two saves, plan §8.4).
+5. (step 2.5) ``POST /email/email-change/confirm`` routes a Profile link with the session: with the cookie of the link's
+   account 200 ``{username}``, the address moved, the emails of a completed change scheduled with ``by_host=False``;
+   without a cookie, with a cookie no longer valid or with another account's: 403
+   ``{"error_code": "EMAIL_CHANGE_SIGN_IN_REQUIRED", …}``, the same body in the three cases, the link still working for its
+   account; a dead link 400 ``TOKEN_INVALID`` with the keys of the owner flow, even without a cookie. The owner's link
+   still needs no session.
 4. ``DELETE`` 204 always, idempotent, no email. ``resend``: 200 with a new expiry once 60 seconds passed; 404
    ``EMAIL_CHANGE_NOT_PENDING``; 409 ``EMAIL_TAKEN`` (the waiting link revoked); 429 within 60 seconds.
 
@@ -34,21 +40,23 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from backend.app.api.v1 import auth as auth_api
+from backend.app.api.v1 import email as email_api
 from backend.app.config import API_V1_PREFIX
 from backend.app.db.base import SQLModel
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
-from backend.app.services.accounts import auth_service, email_change, user_service
+from backend.app.services.accounts import auth_service, email_change, token_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.email import delivery, flows, smtp
 from backend.app.services.email.delivery import EmailDeliveryError
@@ -62,6 +70,7 @@ CANCEL = f"{API_V1_PREFIX}/auth/profile/email-change"
 RESEND = f"{API_V1_PREFIX}/auth/profile/email-change/resend"
 LOGIN = f"{API_V1_PREFIX}/auth/login"
 ME = f"{API_V1_PREFIX}/auth/me"
+CONFIRM = f"{API_V1_PREFIX}/email/email-change/confirm"
 BASE_URL = "http://test"
 TIMEOUT = 30.0
 
@@ -113,6 +122,7 @@ class World:
     failure: Optional[BaseException] = None
     requested: list[tuple[int, str]] = field(default_factory=list)
     changed: list[tuple[int, str, str]] = field(default_factory=list)
+    changed_by_host: list[bool] = field(default_factory=list)
     clock: Clock = field(default_factory=Clock)
 
 
@@ -130,6 +140,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
 
     async def changed(user_id: int, old_address: str, new_address: str, *, engine: Any = None, by_host: bool = False) -> None:
         state.changed.append((user_id, old_address, new_address))
+        state.changed_by_host.append(by_host)
 
     def refuse(_server: object, _message: object) -> None:
         raise AssertionError("a Profile email-change API test reached the SMTP transport")
@@ -154,7 +165,8 @@ class _Private:
 
 def _app(engine: AsyncEngine) -> FastAPI:
     app = FastAPI()
-    app.include_router(auth_api.router, prefix=API_V1_PREFIX)
+    for router in (auth_api.router, email_api.router):
+        app.include_router(router, prefix=API_V1_PREFIX)
 
     async def private_session() -> AsyncIterator[AsyncSession]:
         async with AsyncSession(engine, expire_on_commit=False) as session:
@@ -512,3 +524,122 @@ async def test_email_turned_off_while_a_change_waits_applies_the_next_one_and_re
     assert "set-cookie" in response.headers
     assert _live(await _links(private.engine, user.id)) == []
     print_success("applied, the waiting link revoked")
+
+
+# =============================================================================
+# 4. THE CLICK (step 2.5: POST /email/email-change/confirm routed with the session)
+# =============================================================================
+
+#: The keys of a refused confirmation, as the owner flow answers them (OWNAPI ``INVALID_MESSAGE_KEYS``).
+INVALID_MESSAGE_KEYS = {"error_code", "status", "message"}
+
+
+def _anonymous(private: _Private) -> httpx.AsyncClient:
+    transport = httpx.ASGITransport(app=private.app, client=("198.51.100.11", 40004))
+    return httpx.AsyncClient(transport=transport, base_url=BASE_URL, timeout=TIMEOUT)
+
+
+def _token_of(content: EmailContent) -> str:
+    """The token of the confirmation email: the fragment of the link on its own line of the plain text."""
+    link = next(line for line in content.text.splitlines() if line.startswith(PUBLIC_URL))
+    return parse_qs(urlsplit(link).fragment)["token"][0]
+
+
+async def _requested(private: _Private, world: World, user: User) -> str:
+    """A change of ``user`` to ``NEW_EMAIL`` asked from Profile; the token its confirmation carries."""
+    async with _signed_in(private, user) as browser:
+        assert (await _put_email(browser)).status_code == 200
+    return _token_of(world.sent[-1][1])
+
+
+@pytest.mark.asyncio
+async def test_a_profile_link_clicked_with_the_accounts_session_completes_the_change(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """PEC-020 — the Profile link clicked in a browser signed in as its account: 200 ``{username}``, the address moved and verified, the emails of a completed change scheduled once with ``by_host=False``."""
+    print_section("PEC-020: the click with the account's session")
+    _email_on(monkeypatch)
+    user = await _add_user(private.engine)
+    token = await _requested(private, world, user)
+
+    async with _signed_in(private, user) as browser:
+        response = await browser.post(CONFIRM, json={"token": token})
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"username": user.username}
+    row = await _row(private.engine, user.id)
+    assert (row.email, row.email_verified_at is not None) == (NEW_EMAIL, True)
+    assert (world.changed, world.changed_by_host) == ([(user.id, user.email, NEW_EMAIL)], [False])
+    print_success("200, moved and verified, emails scheduled by_host=False")
+
+
+@pytest.mark.asyncio
+async def test_a_profile_link_without_the_accounts_session_is_403_and_stays_live(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """PEC-021 — D10: the Profile link clicked without a cookie, with a cookie no longer valid (the account's session version raised since) and with another account's cookie: 403 ``EMAIL_CHANGE_SIGN_IN_REQUIRED``, the same body in the three cases, nothing changed, no email scheduled; the link then works with the account's own session."""
+    print_section("PEC-021: 403 without the account's session")
+    _email_on(monkeypatch)
+    user, other = await _add_user(private.engine), await _add_user(private.engine)
+    token = await _requested(private, world, user)
+
+    async with _anonymous(private) as anonymous:
+        without = await anonymous.post(CONFIRM, json={"token": token})
+    async with _signed_in(private, other) as browser:
+        another = await browser.post(CONFIRM, json={"token": token})
+    async with _signed_in(private, user) as browser:
+        async with private.engine.begin() as connection:
+            await connection.execute(text("UPDATE users SET session_version = session_version + 1 WHERE id = :id"), {"id": user.id})
+        stale = await browser.post(CONFIRM, json={"token": token})
+
+    bodies = [response.json() for response in (without, another, stale)]
+    assert [response.status_code for response in (without, another, stale)] == [403, 403, 403], [response.text for response in (without, another, stale)]
+    assert bodies[0]["detail"]["error_code"] == "EMAIL_CHANGE_SIGN_IN_REQUIRED" and bodies.count(bodies[0]) == 3, bodies
+    assert ((await _row(private.engine, user.id)).email, world.changed) == (user.email, [])
+    assert len(_live(await _links(private.engine, user.id))) == 1, "the link is neither spent nor revoked"
+
+    async with _signed_in(private, user) as browser:
+        response = await browser.post(CONFIRM, json={"token": token})
+    assert response.status_code == 200, response.text
+    print_success("403 three times, one body; then 200 with the account's session")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("how", ["consumed", "revoked", "expired", "unknown"])
+async def test_a_dead_profile_link_is_400_even_without_a_session(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch, how: str) -> None:
+    """PEC-022 — a dead link answers 400 ``TOKEN_INVALID`` with its ``status`` and the keys of the owner flow, to a browser with no session: a Profile link already clicked, cancelled, past its 24 hours, or a token never issued."""
+    print_section(f"PEC-022: a dead link, {how}")
+    _email_on(monkeypatch)
+    user = await _add_user(private.engine)
+    token = await _requested(private, world, user) if how != "unknown" else "zq-never-issued-profile-change-0123456789"
+    if how == "consumed":
+        async with _signed_in(private, user) as browser:
+            assert (await browser.post(CONFIRM, json={"token": token})).status_code == 200
+    elif how == "revoked":
+        async with _signed_in(private, user) as browser:
+            assert (await browser.delete(CANCEL)).status_code == 204
+    elif how == "expired":
+        world.clock.now += timedelta(hours=24, seconds=1)
+
+    async with _anonymous(private) as anonymous:
+        response = await anonymous.post(CONFIRM, json={"token": token})
+
+    assert response.status_code == 400, response.text
+    detail = _detail(response)
+    assert (set(detail), detail["error_code"], detail["status"]) == (INVALID_MESSAGE_KEYS, "TOKEN_INVALID", how)
+    print_success(f"400 {how}")
+
+
+@pytest.mark.asyncio
+async def test_the_owners_link_still_needs_no_session(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """PEC-023 — the host's link of the managed instance's owner (no creator), clicked with no session: 200 as before (A5-1b), the emails scheduled with ``by_host=True``."""
+    print_section("PEC-023: the owner's link, no session")
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
+    monkeypatch.setenv(f"{ADMIN_PREFIX}EMAIL", NEW_EMAIL)
+    owner = await _add_user(private.engine, instance_owner=True)
+    async with AsyncSession(private.engine, expire_on_commit=False) as session:
+        issued = await token_service.issue_token(session, CHANGE, user_id=owner.id, email=NEW_EMAIL)
+        await session.commit()
+
+    async with _anonymous(private) as anonymous:
+        response = await anonymous.post(CONFIRM, json={"token": issued.token})
+
+    assert response.status_code == 200, response.text
+    assert ((await _row(private.engine, owner.id)).email, world.changed_by_host) == (NEW_EMAIL, [True])
+    print_success("200 without a session, by_host=True")
