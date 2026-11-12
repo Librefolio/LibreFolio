@@ -88,7 +88,7 @@ import {expect, test as base, type Locator, type Page} from '../fixtures/playwri
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {validateRuns, waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
-import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {samplePath} from '../fixtures/brimSamples';
 import {uniqueSuffix} from '../fixtures/unique';
 import {readFileSync} from 'fs';
@@ -207,7 +207,7 @@ const TERMINAL_ONBOARDING_PROGRESS = {
 /**
  * The import guide is not under test, and its coachmark can sit over the controls clicked here.
  * Installed before login, so the app's first onboarding read already sees a terminal state; it
- * never writes TEST_USER's onboarding rows.
+ * never writes the account's onboarding rows.
  */
 async function installTerminalOnboardingProgress(page: Page): Promise<void> {
     await page.route(
@@ -283,14 +283,21 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<void> {
 }
 
 const test = base.extend<{owned: Owned}>({
-    owned: async ({page}, use) => {
+    owned: async ({page, request}, use) => {
         const owned: Owned = {brokerId: null, since: Date.now(), fileIds: new Set()};
         await installTerminalOnboardingProgress(page);
-        await login(page, TEST_USER);
+        // The broker and its files are the account's own: a disposable one, deleted with them.
+        let user: DisposableUser | null = null;
         try {
+            user = await registerDisposableUser(request, 'dgr');
+            await login(page, user);
             await use(owned);
         } finally {
-            await cleanupOwned(page, owned);
+            try {
+                await cleanupOwned(page, owned);
+            } finally {
+                if (user) await deleteDisposableUser(request, user);
+            }
         }
     },
 });

@@ -12,10 +12,10 @@
  */
 import type {Route} from '@playwright/test';
 import {expect, test as base, type Locator, type Page} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {navigateTo} from '../fixtures/auth-helpers';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
-import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
@@ -77,7 +77,7 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<void> {
 }
 
 const test = base.extend<{owned: Owned}>({
-    owned: async ({page}, use, testInfo) => {
+    owned: async ({page, request}, use, testInfo) => {
         const baseURL = testInfo.project.use.baseURL;
         if (!baseURL || new URL(baseURL).port !== TEST_PORT || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
             throw new Error(`File-selection regressions require the shared local test backend on port ${TEST_PORT}`);
@@ -92,11 +92,19 @@ const test = base.extend<{owned: Owned}>({
             await route.fallback();
         });
         const owned: Owned = {suffix: `w${testInfo.workerIndex}-${uniqueSuffix()}`, brokerIds: [], fileIds: new Set()};
+        // The brokers and uploads are the account's own: a disposable one, so no other spec sees them and the
+        // test deletes the account with them.
+        let user: DisposableUser | null = null;
         try {
-            await login(page, TEST_USER);
+            user = await registerDisposableUser(request, 'fsel');
+            await prepareOnboardingAccount(page, user, []);
             await use(owned);
         } finally {
-            await cleanupOwned(page, owned);
+            try {
+                await cleanupOwned(page, owned);
+            } finally {
+                if (user) await deleteDisposableUser(request, user);
+            }
         }
     },
 });
