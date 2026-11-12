@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {ArrowLeft, ExternalLink} from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, ExternalLink} from 'lucide-svelte';
     import AssetBrowseNav from '$lib/features/assets/AssetBrowseNav.svelte';
     import AssetIcon from '$lib/features/assets/AssetIcon.svelte';
     import LiveUpdatesStatus from '$lib/features/live-updates/LiveUpdatesStatus.svelte';
@@ -33,10 +33,13 @@
     }
 
     let {assetId, assetInfo, loading, currencyFlag, providerIconUrl, assetProviderName, userUrl, providerExternalUrl, transactionsHref, liveUpdatesState}: Props = $props();
+
+    /** Layout of the header pills; the colour roles stay literal in the markup. */
+    const badgeBase = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium';
 </script>
 
 <div class="flex items-center gap-3" data-testid="asset-detail-header" use:guideAnchor={'asset.detail.header'}>
-    <button class="p-2 rounded-lg hover:bg-lf-hover text-lf-muted transition-colors" data-testid="asset-detail-back-btn" onclick={() => goBack('/assets')} title={$t('assetDetail.backToList')}>
+    <button class="p-2 rounded-lg hover:bg-lf-hover text-lf-muted transition-colors focus-visible:outline-lf-focus" data-testid="asset-detail-back-btn" onclick={() => goBack('/assets')} title={$t('assetDetail.backToList')} aria-label={$t('assetDetail.backToList')}>
         <ArrowLeft size={20} />
     </button>
 
@@ -62,8 +65,10 @@
                 <span class="text-lg emoji-flag">{currencyFlag}</span>
                 <span class="text-sm font-mono text-lf-muted">{assetInfo.currency}</span>
                 {#if (assetInfo.tx_count ?? 0) > 0}
-                    <a href={transactionsHref} data-testid="asset-detail-transactions-link" class="text-xs font-medium text-lf-link hover:underline">
-                        {$t('transactions.title')} ({assetInfo.tx_count})
+                    <a href={transactionsHref} data-testid="asset-detail-transactions-link" class="{badgeBase} border border-lf-focus text-lf-link hover:bg-lf-selected focus-visible:outline-lf-focus">
+                        <ArrowRightLeft size={12} />
+                        {$t('transactions.title')}
+                        <span class="font-bold" data-testid="asset-detail-transactions-count">{assetInfo.tx_count}</span>
                     </a>
                 {/if}
 

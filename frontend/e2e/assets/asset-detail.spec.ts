@@ -183,7 +183,7 @@ test.describe('Asset Detail Page', () => {
         const link = page.getByTestId('asset-detail-transactions-link');
         await expect(link).toBeVisible();
         await expect(link).toHaveAttribute('href', `/transactions?asset_id=${assetId}`);
-        await expect(link).toContainText(`(${globalCount})`);
+        await expect(link.getByTestId('asset-detail-transactions-count')).toHaveText(String(globalCount));
         // The label itself must come from the real transactions.title catalogue
         // entry, not a hardcoded English guess and not a missing key like the old
         // `nav.transactions` (svelte-i18n renders a missing key as the literal key
