@@ -92,10 +92,20 @@ def uses_required_minimum(request: dict) -> bool:
     return any(route.get("required_minimum", {"kind": "none"}).get("kind", "none") != "none" for route in request.get("order_routes", []))
 
 
+def _named_currencies(request: dict) -> set[str]:
+    """Every currency a request holds money in: Asset quotes, cash, contributions, funding routes."""
+    named = {asset["quote"]["currency"] for asset in request.get("assets", [])}
+    named |= {cash["selected"]["currency"] for cash in request.get("existing_cash", [])}
+    named |= {contribution["amount"]["currency"] for contribution in request.get("contributions", [])}
+    named |= {route["currency"] for route in request.get("funding_routes", [])}
+    return named
+
+
 def valuation_rates(request: dict) -> dict[str, str]:
     """Units of the valuation currency per unit of each currency the request names, at the stored (mid) rate: the 'average rate' of R5.
 
-    A currency with no direct pair to the valuation currency is left out; R5 then values it at zero, which only loosens its bound.
+    A named currency with no direct pair to the valuation currency raises ``ValueError``: valued at zero, its cells' differences would
+    drop out of R5's sum and pass with no cap, so the recorder stops instead of weakening the rule.
     """
     valuation = request["valuation_currency"]
     rates = {valuation: Fraction(1)}
@@ -105,6 +115,9 @@ def valuation_rates(request: dict) -> dict[str, str]:
             rates[base] = Fraction(rate)
         elif base == valuation:
             rates[quote] = 1 / Fraction(rate)
+    missing = sorted(_named_currencies(request) - set(rates))
+    if missing:
+        raise ValueError(f"no direct rate to {valuation} for {missing}: R5 could not value their cells")
     return {currency: text_of(rate) for currency, rate in sorted(rates.items())}
 
 
@@ -183,8 +196,23 @@ def _flat_quantities(record: Record) -> dict[str, str]:
     return flat
 
 
+def _same_value(left: str, right: str) -> bool:
+    """Two spellings of one figure are the same: ``"0.01"`` and ``"1/100"``, or two JSON lists of such figures (the vector)."""
+    try:
+        left_value, right_value = json.loads(left), json.loads(right)
+    except json.JSONDecodeError:
+        left_value, right_value = left, right
+    if isinstance(left_value, list) and isinstance(right_value, list):
+        return len(left_value) == len(right_value) and all(_same_value(str(a), str(b)) for a, b in zip(left_value, right_value, strict=True))
+    try:
+        return Fraction(str(left_value)) == Fraction(str(right_value))
+    except (ValueError, ZeroDivisionError):
+        return left == right
+
+
 def _is_accepted(accepted: list[dict], quantity: str, before: str, after: str) -> bool:
-    return any(entry["quantity"] == quantity and entry["before"] == before and entry["after"] == after for entry in accepted)
+    """An accepted entry matches by quantity and by value: its ``before`` and ``after`` may use any exact spelling of the figures."""
+    return any(entry["quantity"] == quantity and _same_value(entry["before"], before) and _same_value(entry["after"], after) for entry in accepted)
 
 
 def merge_allowance(recorded: Record) -> Fraction:
@@ -195,7 +223,7 @@ def merge_allowance(recorded: Record) -> Fraction:
     for key, count in recorded.get("fx_actions_per_pair", {}).items():
         if count > 1:
             _, source, destination = key.split("|")
-            allowance += (count - 1) * (units.get(destination, Fraction(0)) * rates.get(destination, Fraction(0)) + units.get(source, Fraction(0)) * rates.get(source, Fraction(0)))
+            allowance += (count - 1) * (units[destination] * rates[destination] + units[source] * rates[source])
     return allowance
 
 
@@ -205,7 +233,7 @@ def _vector_problems(recorded: Record, current: Record, accepted: list[dict]) ->
     if after > before:
         return [f"R3 objective vector worse: {recorded['objective_vector']} -> {current['objective_vector']}"], False
     if after < before and not _is_accepted(accepted, "objective_vector", json.dumps(recorded["objective_vector"]), json.dumps(current["objective_vector"])):
-        return [f"R7 objective vector strictly better and not in the accepted differences: {recorded['objective_vector']} -> {current['objective_vector']}"], True
+        return [f"R7 objective vector strictly better and not in the accepted differences: before {json.dumps(recorded['objective_vector'])} after {json.dumps(current['objective_vector'])}"], True
     return [], after < before
 
 
@@ -236,7 +264,7 @@ def _difference_problems(recorded: Record, current: Record, accepted: list[dict]
             problems.append(f"R5 {quantity}: {old} -> {new} is not in the accepted differences")
         if quantity.startswith("cells.") and quantity.endswith(".final_spendable"):
             currency = quantity.split(".")[1].split("|")[1]
-            moved += abs(Fraction(new if new != "-" else "0") - Fraction(old if old != "-" else "0")) * rates.get(currency, Fraction(0))
+            moved += abs(Fraction(new if new != "-" else "0") - Fraction(old if old != "-" else "0")) * rates[currency]
     allowance = merge_allowance(recorded)
     if moved > allowance:
         problems.append(f"R5 cells' final spendable moved {text_of(moved)} > bound {text_of(allowance)} (valuation currency)")

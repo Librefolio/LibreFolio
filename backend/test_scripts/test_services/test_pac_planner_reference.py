@@ -249,3 +249,33 @@ def test_the_new_corpus_cases_open_the_conversions_they_are_built_for(build, exp
         (currency,) = [entity for kind, entity in refs if kind == "currency"]
         found.setdefault(route, set()).add(currency)
     assert found == expected_from_currencies_by_route
+
+
+def test_no_recorded_case_has_more_than_one_fx_action_per_pair():
+    """Today's PAC never splits a conversion between two routes: each FX decision is bounded by all the resources, splitting never pays
+    under rounding against the plan, and the tie-break zeroes the first route's decision. So every recorded case is an R6 case."""
+    split = {name: case["fx_actions_per_pair"] for name, case in ref.load_reference()["cases"].items() if any(count > 1 for count in case.get("fx_actions_per_pair", {}).values())}
+    assert split == {}
+
+
+def test_valuation_rates_refuse_a_currency_with_no_direct_rate():
+    """Valued at zero, a currency without a direct rate would drop its cells from R5's sum and pass uncapped: the record stops instead."""
+    request = {"valuation_currency": "EUR", "fx_rates": {"EUR/USD": "1.085"}, "assets": [{"quote": {"currency": "JPY"}}]}
+    with pytest.raises(ValueError, match="JPY"):
+        ref.valuation_rates(request)
+    assert ref.valuation_rates({**request, "assets": [{"quote": {"currency": "USD"}}]}) == {"EUR": "1", "USD": "200/217"}
+
+
+@pytest.mark.parametrize("spelling", ["0.01", "1/100", "0.010"])
+def test_an_accepted_entry_matches_by_value_whatever_its_spelling(spelling):
+    accepted = [_entry("cells.broker-one|USD.final_spendable", "0", spelling)]
+    assert ref.reference_violations(_merged(), _cell_moved("0.01"), accepted) == []
+
+
+def test_an_accepted_vector_entry_matches_the_text_the_failure_prints():
+    """The R7 line prints the vectors as JSON, so its text can be pasted into the accepted file; the match is by value anyway."""
+    better = _with(_record(), ("objective_vector",), ["1000", "19", "9", "9", "9"])
+    (line,) = ref.reference_violations(_record(), better, [])
+    before, after = line.split("before ", 1)[1].split(" after ")
+    assert ref.reference_violations(_record(), better, [_entry("objective_vector", before, after)]) == []
+    assert ref.reference_violations(_record(), better, [_entry("objective_vector", '["1000.0", "20", "5", "3", "1"]', '["1000", "38/2", "9", "9", "9"]')]) == []
