@@ -16,6 +16,8 @@
  * Responsive layout is not checked here (jsdom has no layout): the E2E at 375 px does it (lot E1).
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
+import {_} from '$lib/i18n';
 import {fireEvent, render, screen, setupI18n, within} from '$test/component';
 import AssetBulkEditModal from './AssetBulkEditModal.svelte';
 import type {BulkAsset} from './assetBulkEdit';
@@ -211,6 +213,22 @@ describe('AssetBulkEditModal — the type', () => {
         await fireEvent.click(screen.getByTestId('asset-bulk-reset-asset_type'));
         expect(screen.getByTestId('asset-bulk-field-asset_type')).toHaveAttribute('data-modified', 'false');
         expect(cont()).toBeDisabled();
+    });
+});
+
+describe('AssetBulkEditModal — the type placeholder', () => {
+    // The text is read back from the catalogue, never written here.
+    const triggerText = () => screen.getByTestId('asset-bulk-type-button').textContent ?? '';
+
+    it('says «Leave as is» alone when every asset has the same type', () => {
+        mount({assets: [asset(1), asset(2)]});
+        expect(triggerText()).toContain(get(_)('assets.bulkEdit.leave'));
+        expect(triggerText()).not.toContain(get(_)('assets.bulkEdit.leaveDifferent'));
+    });
+
+    it('adds «different values» when the types differ', () => {
+        mount();
+        expect(triggerText()).toContain(get(_)('assets.bulkEdit.leaveDifferent'));
     });
 });
 
