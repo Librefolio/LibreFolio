@@ -94,10 +94,9 @@ async function createAssetAndOpenEdit(page: import('@playwright/test').Page, nam
     // Navigate to the new asset via search
     await waitForSettled(page.getByTestId('assets-page'), 20_000);
     const searchInput = page.getByTestId('assets-search-input');
-    if (await searchInput.isVisible({timeout: 3000}).catch(() => false)) {
-        await searchInput.fill(name);
-        await waitForSettled(page.getByTestId('assets-page'), 20_000);
-    }
+    await expect(searchInput).toBeVisible({timeout: 5_000});
+    await searchInput.fill(name);
+    await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
     // Click *our* card, not whatever happens to be first: other workers create
     // assets too, and the search filter is debounced, so `.first()` can still be
@@ -118,10 +117,12 @@ async function expandMoreInfo(page: import('@playwright/test').Page) {
     // AssetModal opens this section by itself when the asset already carries
     // identifiers (`moreInfoExpanded = identifierRows.length > 0`), so clicking
     // unconditionally would *close* it. Ask for the end state, not the click.
-    const editor = page.getByTestId('distribution-editor-geographic');
-    if (await editor.isVisible({timeout: 1500}).catch(() => false)) return;
-    await page.getByTestId('asset-modal-more-info').click();
-    await expect(editor).toBeVisible({timeout: 5000});
+    // The state is read from the header, after the modal has filled its form from the asset (the section opens in the
+    // same pass): `data-expanded` is the section's own state, not a probe of its content.
+    await expect(page.getByTestId('asset-modal-display-name')).not.toHaveValue('', {timeout: 5_000});
+    const header = page.getByTestId('asset-modal-more-info');
+    if ((await header.getAttribute('data-expanded')) !== 'true') await header.click();
+    await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 5000});
 }
 
 test.describe('Asset Classification Round-Trip', () => {
@@ -252,10 +253,10 @@ test.describe('Asset Classification Round-Trip', () => {
         // DataTable.svelte / ContextMenu.svelte; same pattern as brokers-detail.spec.ts).
         const geoEditor = page.getByTestId('distribution-editor-geographic');
         const rowActionsBtn = geoEditor.getByTestId(/^row-actions-/).first();
-        if (await rowActionsBtn.isVisible({timeout: 2000}).catch(() => false)) {
-            await rowActionsBtn.click();
-            await page.getByTestId('context-menu-action-delete').click();
-        }
+        // The total badge above proves the entry is there: its row has its actions.
+        await expect(rowActionsBtn).toBeVisible({timeout: 5_000});
+        await rowActionsBtn.click();
+        await page.getByTestId('context-menu-action-delete').click();
 
         // Save (now empty)
         await page.getByTestId('asset-modal-save').click();

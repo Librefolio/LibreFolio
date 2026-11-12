@@ -250,9 +250,10 @@ test.describe('Asset Modal', () => {
     // ========================================================================
     test('edit modal shows additional fields (currency, type)', async ({page}) => {
         await goToAssetsPage(page);
-        const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        await expect(firstCard).toBeVisible({timeout: 5_000});
-        await firstCard.click();
+        // The seeded Apple, found by its name: a neighbour adding an asset changes what is first.
+        const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
+        await expect(appleCard).toBeVisible({timeout: 5_000});
+        await appleCard.click();
         await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
 
         // Open edit modal
@@ -267,12 +268,7 @@ test.describe('Asset Modal', () => {
         await expect(nameInput).not.toHaveValue('', {timeout: 3000});
 
         // Should have currency selector (combobox or select with currency code)
-        const hasCurrency = await form
-            .locator('[role="combobox"], select')
-            .first()
-            .isVisible()
-            .catch(() => false);
-        expect(hasCurrency).toBeTruthy();
+        await expect(form.locator('[role="combobox"], select').first()).toBeVisible({timeout: 5_000});
 
         await page.getByTestId('asset-modal-cancel').click();
     });
@@ -485,9 +481,9 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
         await page.getByTestId(`provider-option-${provider!.code}`).click();
 
         const identifier = page.getByTestId('provider-identifier');
-        if (await identifier.isVisible().catch(() => false)) {
-            await identifier.fill('E2E-BUGK');
-        }
+        // The provider chosen above is a parametric-less one (asserted at its pick): it always asks for an identifier.
+        await expect(identifier).toBeVisible({timeout: 5_000});
+        await identifier.fill('E2E-BUGK');
 
         // Save is gated on a passing connection test whenever a provider is set
         // (AssetModal.svelte:1212), so the gate is driven rather than bypassed.
@@ -670,9 +666,8 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
                 await page.getByTestId('provider-code-select-button').click();
                 await page.getByTestId(`provider-option-${target!.code}`).click();
                 const identifier = page.getByTestId('provider-identifier');
-                if (await identifier.isVisible().catch(() => false)) {
-                    await identifier.fill('E2E-PARAM');
-                }
+                await expect(identifier).toBeVisible({timeout: 5_000});
+                await identifier.fill('E2E-PARAM');
                 await page.getByTestId('provider-test-config').click();
                 await expect(page.getByTestId('asset-modal-provider-status')).toHaveAttribute('data-status', 'passed', {timeout: 20_000});
             };
