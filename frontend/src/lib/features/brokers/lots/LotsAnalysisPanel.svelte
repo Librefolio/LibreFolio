@@ -47,7 +47,7 @@
     import {_} from '$lib/i18n';
     import {ExternalLink, X} from 'lucide-svelte';
     import {schemas} from '$lib/api';
-    import {fetchLotsAnalysis, peekLotsAnalysis, type LotsAnalysisResponse} from '$lib/features/brokers/lots/lotsAnalysisStore.svelte';
+    import {fetchLotsAnalysis, methodAnalysis, peekLotsAnalysis, type LotMatchingMethod, type LotsAnalysisMethodsResponse} from '$lib/features/brokers/lots/lotsAnalysisStore.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import type {z} from 'zod';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -187,13 +187,17 @@
 
     const MAIN_ANALYSES = ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'MARKET_PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const;
     const SELECTION_ANALYSES = ['VALUE_HISTORY', 'RETURN_HISTORY'] as const;
+    /** The matching method on screen (project 69): FIFO until the panel gets its selector (L4). */
+    const ACTIVE_METHOD: LotMatchingMethod = 'FIFO';
     /** The answers last put on screen: a reload that finds the same cached answer leaves the charts alone. */
-    let shownMain: LotsAnalysisResponse | null = null;
-    let shownSelection: LotsAnalysisResponse | null = null;
+    let shownMain: LotsAnalysisMethodsResponse | null = null;
+    let shownSelection: LotsAnalysisMethodsResponse | null = null;
 
-    function applyMain(response: LotsAnalysisResponse) {
+    function applyMain(response: LotsAnalysisMethodsResponse) {
         shownMain = response;
-        calculationStatus = typeof response.calculation_status === 'string' ? response.calculation_status : null;
+        // D11: the parts no method changes sit on the answer, the lots and everything read from them in the method's block.
+        const block = methodAnalysis(response, ACTIVE_METHOD);
+        calculationStatus = typeof block?.calculation_status === 'string' ? block.calculation_status : null;
         // J-12 (N81, option A): a FAILED analysis has no reliable lot. The backend sends its lot-derived sections null;
         // the panel takes none of them either (an answer cached before that change may still hold them), so nothing
         // below can draw a lot and the selection empties.
@@ -201,13 +205,13 @@
         function lotSection<T>(value: unknown): T[] {
             return failed ? [] : asArray<T>(value);
         }
-        lots = lotSection<LotSummarySchema>(response.lots);
-        ganttSegments = lotSection<GanttSegmentSchema>(response.gantt_segments);
+        lots = lotSection<LotSummarySchema>(block?.lots);
+        ganttSegments = lotSection<GanttSegmentSchema>(block?.gantt_segments);
         // EVENT_HISTORY is a superset of the old CUSTODY_HISTORY filter (backend computes the
         // full per-lot event list unconditionally either way — see lots_analysis_service.py
         // _build_lot_event_rows/_CUSTODY_KINDS) — fetching it once here feeds both the WAC
         // chart's transaction markers and the Custody modal's full chronology, no double fetch.
-        lotEvents = lotSection<LotTimelineEventSchema>(response.lot_events);
+        lotEvents = lotSection<LotTimelineEventSchema>(block?.lot_events);
         // Y-30: the asset's price, one point a day whatever lots are open — not a lot section, so it stays with FAILED,
         // as the average-cost lines do.
         marketPriceHistory = asArray<MarketPriceHistoryPoint>(response.market_price_history);
@@ -215,7 +219,7 @@
         cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
         mainRange = asObject<{start: string; end: string}>(response.range);
         quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
-        incomeEvents = lotSection<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(response.income_events).map((event) => ({
+        incomeEvents = lotSection<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(block?.income_events).map((event) => ({
             type: event.type,
             date: event.date,
             broker_id: event.broker_id ?? null,
@@ -223,7 +227,7 @@
             lot_ids: event.lot_ids ?? [],
         }));
         // The report's own issues, plus one row for the rates it read from an old stored row (`stale_fx_pairs`): a notice, the values stay.
-        const quality = asObject<{issues?: unknown; stale_fx_pairs?: StaleFxPairLike[]}>(response.data_quality);
+        const quality = asObject<{issues?: unknown; stale_fx_pairs?: StaleFxPairLike[]}>(block?.data_quality);
         const staleFx = staleFxIssue(quality?.stale_fx_pairs, todayIso());
         dataQualityIssues = [...asArray<DataQualityIssue>(quality?.issues), ...(staleFx ? [staleFx] : [])];
 
@@ -258,6 +262,7 @@
             broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
             target_currency: currentCurrency,
             requested_analyses: MAIN_ANALYSES,
+            matching_methods: [ACTIVE_METHOD],
         };
         // What the cache holds goes on screen at once; only a stale or missing answer is asked.
         const cached = peekLotsAnalysis(body);
@@ -289,10 +294,11 @@
         }
     }
 
-    function applySelection(response: LotsAnalysisResponse) {
+    function applySelection(response: LotsAnalysisMethodsResponse) {
         shownSelection = response;
-        valueHistory = asArray<LotValueHistoryPoint>(response.value_history);
-        returnHistory = asArray<LotReturnHistoryPoint>(response.return_history);
+        const block = methodAnalysis(response, ACTIVE_METHOD);
+        valueHistory = asArray<LotValueHistoryPoint>(block?.value_history);
+        returnHistory = asArray<LotReturnHistoryPoint>(block?.return_history);
         selectionRange = asObject<{start: string; end: string}>(response.range);
     }
 
@@ -311,6 +317,7 @@
             target_currency: currentCurrency,
             selected_lot_ids: ids,
             requested_analyses: SELECTION_ANALYSES,
+            matching_methods: [ACTIVE_METHOD],
         };
         const cached = peekLotsAnalysis(body);
         if (cached) {

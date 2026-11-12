@@ -33,10 +33,11 @@ import backend.app.schemas.portfolio.lots as portfolio_module
 import backend.app.services.financial_math.lots.conversions as conversions_module
 import backend.app.services.financial_math.lots.histories as histories_module
 import backend.app.services.financial_math.lots.prices as prices_module
+import backend.app.services.portfolio.lots_analysis_service as lots_service_module
 from backend.app.db.models import PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio.data_quality import IssueCode
-from backend.app.schemas.portfolio.lots import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType, LotsAnalysisResponse, LotTimelineEventKind
+from backend.app.schemas.portfolio.lots import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType, LotsAnalysisCommon, LotsAnalysisResponse, LotsMethodAnalysis, LotTimelineEventKind
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
@@ -48,7 +49,7 @@ from backend.app.services.financial_math.average_cost import (
     _ResolvedConversion,
 )
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
+from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, LotMatchingMethod
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, average_cost_points, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs
 from backend.app.services.financial_math.lots.economic_events import build_cost_economic_events, build_engine_transactions, build_income_economic_events
@@ -2304,7 +2305,7 @@ class TestWacHistoryBuilders:
 class TestEmptyResponse:
     def test_an_empty_response_still_carries_the_request_metadata(self):
         """Returned when the user has no brokers in scope, or the asset was never traded."""
-        response = _svc()._empty_response(
+        empty = _svc()._empty_response(
             asset_id=7,
             target_currency="EUR",
             requested_analyses=[LotAnalysisType.LOT_SUMMARY],
@@ -2316,6 +2317,7 @@ class TestEmptyResponse:
             computed_date_to=date(2024, 6, 1),
             status="COMPLETE",
         )
+        response = empty.reading(LotMatchingMethod.FIFO)
         assert (response.asset_id, response.calculation_status, response.calculation_metadata.broker_ids) == (7, "COMPLETE", [])
         assert response.data_quality.issues == []
 
@@ -4310,3 +4312,233 @@ class TestGapFlowsInThePerformanceHistory:
         assert (contract[1][1], contract[1][2]) == (D("0"), D("0")), "precondition: the oracle gives the stated figures"
 
         assert _e2_history(_e2_engine_book(rows, {1: False}), days, ["100", None, "100"]) == [contract[0], (days[1], None, None), contract[1]]
+
+
+# --------------------------------------------------------------------------- #
+# Project 69, L3a — both matching methods in one request (D1b, D11)
+# --------------------------------------------------------------------------- #
+
+
+class _StepsWithAHole:
+    """A unit-rate reader with one flat rate from the first day of the calendar on, except on ``hole``: no rate that day.
+
+    A stored rate is carried forward from its first row (``unit_rate_steps``), so a day with no rate after a day with one
+    cannot come from the database. The hole stands for a conversion one method asks and the other never does."""
+
+    def __init__(self, rate: Decimal, hole: date | None = None) -> None:
+        self.rate = rate
+        self.hole = hole
+        self.days = (date(1, 1, 1),)
+        self.values = (rate,)
+
+    def at(self, day: date) -> Decimal | None:
+        return None if day == self.hole else self.rate
+
+
+def _stub_rate_readers(monkeypatch, readers: dict[str, _StepsWithAHole]) -> list[dict[tuple[str, str], list[tuple[date, date]]]]:
+    """``conversions.unit_rate_steps`` replaced by the readers given, by source currency; the list it fills with each call."""
+    calls: list[dict[tuple[str, str], list[tuple[date, date]]]] = []
+
+    async def unit_rate_steps(_session, requests):
+        calls.append({pair: list(windows) for pair, windows in requests.items()})
+        return {pair: readers[pair[0]] for pair in requests if pair[0] in readers}
+
+    monkeypatch.setattr(conversions_module, "unit_rate_steps", unit_rate_steps)
+    return calls
+
+
+def _gap_dates(resolver: FxRateResolver) -> list[tuple[str, list[date]]]:
+    return [(gap.pair, sorted(gap.dates)) for gap in resolver.missing_pairs()]
+
+
+class TestFxRateResolverReadOnlyCopy:
+    """L3a (consultant's opinion on L3, (c)): one load on the union of what the methods ask, then one read-only copy per
+    method. The copy reads the rates already loaded, starts with the gaps already recorded and keeps its own; it asks and
+    loads nothing. ``need_days`` reads an identical window once: the market series asks it once per method."""
+
+    _DAY = date(2024, 1, 10)
+
+    @pytest.mark.asyncio
+    async def test_an_identical_window_asked_twice_is_read_once(self, monkeypatch):
+        calls = _stub_unit_rate_steps(monkeypatch, {"USD": D("1.25")})
+        resolver = FxRateResolver("EUR")
+        resolver.need_days("USD", self._DAY, self._DAY + timedelta(days=9))
+        resolver.need_days("USD", self._DAY, self._DAY + timedelta(days=9))
+        resolver.need_days("USD", self._DAY, self._DAY + timedelta(days=10))
+        await resolver.load(None)
+        assert calls == [{("USD", "EUR"): [(self._DAY, self._DAY + timedelta(days=9)), (self._DAY, self._DAY + timedelta(days=10))]}]
+
+    @pytest.mark.asyncio
+    async def test_a_copy_reads_the_loaded_rates_and_keeps_its_own_gaps(self, monkeypatch):
+        """The base resolver loads USD and GBP (GBP has no rate) and records the GBP gap of the 10th: both copies start with
+        it. One copy converts on a day nobody asked: its gap is its own, the other copy and the base never see it."""
+        _stub_unit_rate_steps(monkeypatch, {"USD": D("1.25"), "GBP": None})
+        base = FxRateResolver("EUR")
+        base.need("USD", self._DAY)
+        base.need("GBP", self._DAY)
+        await base.load(None)
+        assert base.convert(D("1"), "GBP", self._DAY) is None, "precondition: GBP has no rate"
+        first, second = base.read_only_copy(), base.read_only_copy()
+
+        assert first.convert(D("100"), "USD", self._DAY) == D("125.00")
+        assert first.convert(D("100"), "USD", self._DAY + timedelta(days=1)) is None
+        assert _gap_dates(first) == [("GBP/EUR", [self._DAY]), ("USD/EUR", [self._DAY + timedelta(days=1)])]
+        assert _gap_dates(second) == [("GBP/EUR", [self._DAY])]
+        assert _gap_dates(base) == [("GBP/EUR", [self._DAY])]
+
+    @pytest.mark.asyncio
+    async def test_a_copy_asks_and_loads_nothing(self, monkeypatch):
+        _stub_unit_rate_steps(monkeypatch, {"USD": D("1.25")})
+        base = FxRateResolver("EUR")
+        base.need("USD", self._DAY)
+        await base.load(None)
+        copy = base.read_only_copy()
+        with pytest.raises(RuntimeError):
+            copy.need("USD", self._DAY + timedelta(days=1))
+        with pytest.raises(RuntimeError):
+            copy.need_days("USD", self._DAY, self._DAY + timedelta(days=1))
+        with pytest.raises(RuntimeError):
+            await copy.load(None)
+
+    def test_a_copy_is_made_after_the_load(self):
+        """A rate asked and not loaded yet would be missing in every copy: the copy is refused until the load."""
+        base = FxRateResolver("EUR")
+        base.need("USD", self._DAY)
+        with pytest.raises(RuntimeError):
+            base.read_only_copy()
+
+
+def _service_on_rows(monkeypatch, rows: list[Transaction], *, shorting: bool = False) -> LotsAnalysisService:
+    """The service on in-memory rows: asset 7 in EUR, broker 1 alone in scope, no price, split, income or cost."""
+    service = LotsAnalysisService(db=_SessionWithTheAsset(SimpleNamespace(id=7, display_name="X", currency="EUR", quote_base_quantity=1)))
+    loaded = {
+        "_get_scope_broker_ids": [1],
+        "_load_transactions": sorted(rows, key=lambda row: (row.date, row.id)),
+        "_load_split_ratios": {},
+        "_load_broker_shorting": {1: shorting},
+        "_load_prices": [],
+        "_load_income_transactions": [],
+        "_load_cost_transactions": [],
+    }
+    for name, value in loaded.items():
+        monkeypatch.setattr(service, name, _loader_returning(value))
+    # The gap report classifies a missing rate by the configured pairs: none here (a read of the session otherwise).
+    monkeypatch.setattr(lots_service_module, "load_configured_fx_pair_sets", _loader_returning((set(), set())))
+    return service
+
+
+class TestBothMatchingMethods:
+    """L3a: one request computes the methods asked for (D1b) and answers them side by side (D11): the common parts once,
+    ``methods[method]`` with everything the replay decides, each with its own status and data quality."""
+
+    _JAN_10, _FEB_10, _MAR_1 = date(2024, 1, 10), date(2024, 2, 10), date(2024, 3, 1)
+
+    @pytest.mark.asyncio
+    async def test_a_rate_only_one_method_asks_degrades_that_method_only(self, monkeypatch):
+        """Lot 1 is bought in USD, lot 2 in GBP; 5 units are sold on 1 Mar. FIFO closes part of lot 1, LIFO part of lot 2, so
+        the Gantt asks the USD rate of 1 Mar in FIFO only. With no USD rate that day FIFO is DEGRADED with that gap, and
+        LIFO, which never asked it, stays COMPLETE (opinion on L3, (b): the conversion gaps are per method)."""
+        rows = [
+            _tx(1, tx_date=self._JAN_10, quantity=D("10"), amount=D("-1000"), currency="USD"),
+            _tx(2, tx_date=self._FEB_10, quantity=D("10"), amount=D("-900"), currency="GBP"),
+            _tx(3, tx_type=TransactionType.SELL, tx_date=self._MAR_1, quantity=D("-5"), amount=D("600"), currency="EUR"),
+        ]
+        _stub_rate_readers(monkeypatch, {"USD": _StepsWithAHole(D("0.9"), hole=self._MAR_1), "GBP": _StepsWithAHole(D("1.1"))})
+        response = await _service_on_rows(monkeypatch, rows).get_lots_analysis_methods(
+            user_id=1,
+            asset_id=7,
+            broker_ids=[1],
+            date_from=None,
+            date_to=_MAR_20,
+            target_currency="EUR",
+            selected_lot_ids=None,
+            requested_analyses=[LotAnalysisType.GANTT_TOPOLOGY],
+            matching_methods=[LotMatchingMethod.FIFO, LotMatchingMethod.LIFO],
+        )
+
+        fifo, lifo = response.methods[LotMatchingMethod.FIFO], response.methods[LotMatchingMethod.LIFO]
+        fifo_starts = {(segment.lot_id, segment.start_date) for segment in fifo.gantt_segments or []}
+        lifo_starts = {(segment.lot_id, segment.start_date) for segment in lifo.gantt_segments or []}
+        assert (1, self._MAR_1) in fifo_starts and (1, self._MAR_1) not in lifo_starts, f"precondition: only FIFO splits lot 1 on 1 Mar: {fifo_starts} / {lifo_starts}"
+        assert (fifo.calculation_status, [(gap.pair, sorted(gap.dates)) for gap in fifo.data_quality.missing_fx_pairs]) == ("DEGRADED", [("USD/EUR", [self._MAR_1])])
+        assert (lifo.calculation_status, lifo.data_quality.missing_fx_pairs) == ("COMPLETE", [])
+
+    def test_an_empty_scope_answers_every_method_asked(self):
+        """No broker in scope or no transaction: each method asked has its block, COMPLETE with an empty report, in the order
+        asked; the common parts carry the methods in the metadata."""
+        response = _svc()._empty_response(
+            asset_id=7,
+            target_currency="EUR",
+            requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            broker_ids=[],
+            selected_lot_ids=None,
+            requested_date_from=None,
+            requested_date_to=date(2024, 6, 1),
+            computed_date_from=None,
+            computed_date_to=date(2024, 6, 1),
+            status="COMPLETE",
+            matching_methods=[LotMatchingMethod.LIFO, LotMatchingMethod.FIFO],
+        )
+        assert list(response.methods) == [LotMatchingMethod.LIFO, LotMatchingMethod.FIFO]
+        assert response.calculation_metadata.matching_methods == [LotMatchingMethod.LIFO, LotMatchingMethod.FIFO]
+        for block in response.methods.values():
+            assert (block.calculation_status, block.data_quality.issues, block.lots, block.asset_orphan_income) == ("COMPLETE", [], None, D("0"))
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("methods", "message"),
+        [
+            pytest.param([], "matching_methods must not be empty", id="empty"),
+            pytest.param([LotMatchingMethod.FIFO, LotMatchingMethod.FIFO], "matching_methods must not repeat a method", id="repeated"),
+        ],
+    )
+    async def test_an_empty_or_repeated_method_list_is_rejected_before_any_query(self, methods, message):
+        with pytest.raises(ValueError, match=message):
+            await _svc().get_lots_analysis_methods(
+                user_id=1,
+                asset_id=7,
+                broker_ids=None,
+                date_from=None,
+                date_to=None,
+                target_currency="EUR",
+                selected_lot_ids=None,
+                requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+                matching_methods=methods,
+            )
+
+    def test_the_single_method_reading_is_the_common_parts_and_one_block(self):
+        """The flat reading the Python callers keep (AI Export stays FIFO, D7) is derived, never a second model kept by
+        hand: its fields are the common ones and a block's, each once, and ``reading`` fills them from the two."""
+        common, block = set(LotsAnalysisCommon.model_fields), set(LotsMethodAnalysis.model_fields)
+        assert not common & block
+        assert set(LotsAnalysisResponse.model_fields) == common | block
+        response = _svc()._empty_response(
+            asset_id=7,
+            target_currency="EUR",
+            requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            broker_ids=[3],
+            selected_lot_ids=None,
+            requested_date_from=None,
+            requested_date_to=date(2024, 6, 1),
+            computed_date_from=None,
+            computed_date_to=date(2024, 6, 1),
+            status="COMPLETE",
+            matching_methods=[LotMatchingMethod.FIFO, LotMatchingMethod.LIFO],
+        )
+        reading = response.reading(LotMatchingMethod.LIFO)
+        assert isinstance(reading, LotsAnalysisResponse)
+        assert (reading.asset_id, reading.calculation_metadata.broker_ids, reading.calculation_status) == (7, [3], "COMPLETE")
+        with pytest.raises(KeyError):
+            _svc()._empty_response(
+                asset_id=7,
+                target_currency="EUR",
+                requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+                broker_ids=[],
+                selected_lot_ids=None,
+                requested_date_from=None,
+                requested_date_to=None,
+                computed_date_from=None,
+                computed_date_to=None,
+                status="COMPLETE",
+                matching_methods=[LotMatchingMethod.FIFO],
+            ).reading(LotMatchingMethod.LIFO)

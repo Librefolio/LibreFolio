@@ -317,11 +317,13 @@ async function pickPosition(page: Page): Promise<Position> {
 /** A priced position whose FIFO lots, scoped to its broker as the broker page scopes them, include a partially closed one. */
 async function pickPartialLot(page: Page): Promise<{position: Position; lot: LotSummary}> {
     for (const position of await pricedPositions(page)) {
-        const analysis = await postJson<{lots: LotSummary[]}>(page, '/api/v1/portfolio/lots/analysis', {
+        const answer = await postJson<{methods: {FIFO: {lots: LotSummary[]}}}>(page, '/api/v1/portfolio/lots/analysis', {
             asset_id: position.assetId,
             broker_ids: [position.brokerId],
             requested_analyses: ['LOT_SUMMARY'],
         });
+        // The FIFO block (project 69, D11): the lots the panel shows.
+        const analysis = answer.methods.FIFO;
         const lot = analysis.lots.find((candidate) => candidate.states.includes('PARTIALLY_CLOSED') && Number(candidate.original_quantity) > 0);
         if (lot) return {position, lot};
     }

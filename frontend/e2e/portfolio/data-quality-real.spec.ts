@@ -96,6 +96,8 @@ type ReportBody = {
 type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: string; end?: string} | null};
 type LotsRequestBody = {asset_id?: number; requested_analyses?: string[]};
 type LotsBody = {lots?: Array<{lot_id: number}> | null; data_quality?: {issues?: ReportIssue[]; stale_fx_pairs?: unknown[] | null} | null};
+/** The lots analysis answer: the panel shows the FIFO block (project 69, D11). */
+type LotsAnswer = {methods: {FIFO: LotsBody}};
 type CommitBody = {committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index: number; ids: number[]}>};
 type TransactionRead = {id: number; asset_event_id?: number | null; cost_basis_override?: Money | null};
 /** A refused events save: the code and where it is, never only a sentence (decision 22). */
@@ -397,7 +399,7 @@ async function openDashboard(page: Page, url: string, lotsAssetId: number | null
     const reportAnswer = await reportResponse;
     const range = (reportAnswer.request().postDataJSON() as ReportRequestBody).date_range;
     const report = await jsonFrom<ReportBody>(reportAnswer, 'dashboard report');
-    const lots = lotsResponse ? await jsonFrom<LotsBody>(await lotsResponse, 'first answer of the lots panel') : null;
+    const lots = lotsResponse ? (await jsonFrom<LotsAnswer>(await lotsResponse, 'first answer of the lots panel')).methods.FIFO : null;
     return {range, report, lots};
 }
 
@@ -701,7 +703,7 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
             expect(refreshed, 'the open lots panel did not ask again after «Sync rates»: no POST /portfolio/lots/analysis for this asset once the sync had answered').not.toBeNull();
             const refreshedAnswer = await refreshed!.response();
             if (!refreshedAnswer) throw new Error('The lots analysis asked again after the sync got no answer');
-            const lotsAfter = await jsonFrom<LotsBody>(refreshedAnswer, 'lots analysis asked again after the sync');
+            const lotsAfter = (await jsonFrom<LotsAnswer>(refreshedAnswer, 'lots analysis asked again after the sync')).methods.FIFO;
             const lotIssuesAfter = lotIssues(lotsAfter);
             expect(
                 lotIssuesAfter.filter((issue) => issue.code === 'MISSING_FX_RATES'),

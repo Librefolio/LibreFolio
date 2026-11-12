@@ -49,6 +49,7 @@ from backend.app.services.ai_export.components.resources import LotsResultsResou
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, ResourceKey
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
+from backend.app.services.financial_math.fifo.models import LotMatchingMethod
 from backend.app.services.financial_math.lots.summary import residual_cost
 from backend.app.services.financial_math.returns import price_return
 from backend.app.services.financial_math.series_steps import points_between
@@ -992,6 +993,8 @@ async def load_lots_results(
                 target_currency=scope.target_currency,
                 selected_lot_ids=None,
                 requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+                # The AI Export reads the lots in FIFO and says so (project 69, D7).
+                matching_method=LotMatchingMethod.FIFO,
             )
         return LotsResultsResource.from_mapping(results)
 

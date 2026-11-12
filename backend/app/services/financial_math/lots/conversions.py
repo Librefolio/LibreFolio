@@ -1,4 +1,5 @@
-"""Conversions of the lots analysis: the FX resolver loaded once per request, and the conversions each view needs."""
+"""Conversions of the lots analysis: the FX resolver loaded once per request, its read-only copy per matching method, and
+the conversions each view needs."""
 
 from __future__ import annotations
 
@@ -53,6 +54,10 @@ class FxRateResolver:
 
     ``convert`` turns an amount at the rate of its day, or gives None and records the day as a gap of its pair
     (``missing_pairs``).
+
+    One analysis may replay its lots in several matching methods (project 69, D1b): each method asks its rates on the one
+    resolver, which loads them all at once, then reads them through its own ``read_only_copy`` so that a gap one method
+    meets is not reported by the other.
     """
 
     def __init__(self, target_currency: str) -> None:
@@ -71,9 +76,31 @@ class FxRateResolver:
         self._missing: dict[str, set[date_type]] = defaultdict(set)
         #: The stretches of valuation days with no rate (``convert_through``), by pair.
         self._missing_spans: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
+        #: A copy (``read_only_copy``) reads the rates loaded and records its own gaps: it asks and loads nothing.
+        self._read_only = False
+
+    def read_only_copy(self) -> FxRateResolver:
+        """A resolver that reads the rates this one has loaded and the windows it was asked, read-only, and starts with a
+        copy of the gaps recorded so far: what it fails to convert from now on is its own gap, not this resolver's nor
+        another copy's. ``need``, ``need_days`` and ``load`` raise on it. Refused while a rate asked is not loaded yet:
+        every copy would miss it."""
+        if self._needs_loaded != len(self._needs) or any(self._pending_windows.values()):
+            raise RuntimeError("FxRateResolver.read_only_copy: rates are asked and not loaded yet")
+        copy = FxRateResolver(self.target_currency)
+        copy._needs, copy._seen, copy._windows, copy._needs_loaded = self._needs, self._seen, self._windows, self._needs_loaded
+        copy._rates = self._rates
+        copy._missing = defaultdict(set, {pair: set(days) for pair, days in self._missing.items()})
+        copy._missing_spans = defaultdict(list, {pair: list(spans) for pair, spans in self._missing_spans.items()})
+        copy._read_only = True
+        return copy
+
+    def _refuse_on_a_copy(self, action: str) -> None:
+        if self._read_only:
+            raise RuntimeError(f"FxRateResolver.{action}: a read-only copy asks and loads nothing")
 
     def need(self, currency: str | None, as_of_date: date_type) -> None:
         """Ask the rate of ``currency`` on one day."""
+        self._refuse_on_a_copy("need")
         if not currency or currency == self.target_currency:
             return
         key = (currency, as_of_date)
@@ -83,14 +110,17 @@ class FxRateResolver:
         self._needs.append(key)
 
     def need_days(self, currency: str | None, first: date_type, last: date_type) -> None:
-        """Ask the rate of ``currency`` on every day of ``[first, last]``; nothing when the window ends before it starts."""
-        if not currency or currency == self.target_currency or last < first:
+        """Ask the rate of ``currency`` on every day of ``[first, last]``; nothing when the window ends before it starts, or
+        when that very window was asked already (the market series asks the same window in every matching method)."""
+        self._refuse_on_a_copy("need_days")
+        if not currency or currency == self.target_currency or last < first or (first, last) in self._windows.get(currency, ()):
             return
         self._windows[currency].append((first, last))
         self._pending_windows[currency].append((first, last))
 
     async def load(self, session: AsyncSession) -> None:
         """Read the rates asked since the previous load: one ``unit_rate_steps`` call, none when nothing is asked."""
+        self._refuse_on_a_copy("load")
         windows: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
         for currency, asked in self._pending_windows.items():
             windows[currency].extend(asked)

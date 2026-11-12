@@ -4,7 +4,7 @@ Portfolio API endpoints for LibreFolio.
 Provides read-only portfolio calculations on committed data:
 - POST /portfolio/report        — UNIFIED: summary+history+allocation+contribution+data_quality
 - POST /portfolio/positions-series — the daily P&L / value series of the chosen positions (#48)
-- POST /portfolio/lots/analysis — FifoLotEngine bulk multi-analysis (lots, Gantt, histories, WAC)
+- POST /portfolio/lots/analysis — lot engine bulk multi-analysis (lots, Gantt, histories, WAC), in FIFO and/or LIFO
 
 Legacy standalone endpoints (/summary, /history, /allocation-history) removed —
 all data is available via /report with include_* flags.
@@ -17,7 +17,7 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.portfolio.lots import LotsAnalysisQuery, LotsAnalysisResponse
+from backend.app.schemas.portfolio.lots import LotsAnalysisMethodsResponse, LotsAnalysisQuery
 from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceRequest, PortfolioPlannerSourceResponse
 from backend.app.schemas.portfolio.positions_series import PositionsSeriesQuery, PositionsSeriesResponse
 from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
@@ -138,22 +138,23 @@ async def get_positions_series(
 
 @portfolio_router.post(
     "/lots/analysis",
-    response_model=LotsAnalysisResponse,
-    summary="Bulk FIFO lots analysis",
+    response_model=LotsAnalysisMethodsResponse,
+    summary="Bulk lots analysis, in one or more matching methods",
     description=(
-        "Run the FifoLotEngine once for one asset and return all requested analyses "
-        "(lot summary, Gantt topology, custody/event history, value/return/price history, "
-        "broker and cumulative WAC history) in a single response, converted to target_currency. "
-        "Supersedes GET /portfolio/lots for the new lots UI (Gantt, unified table, custody modal, "
-        "comparison chart) — the frontend performs no FX conversion, FIFO attribution, or WAC math."
+        "Load one asset's data once, replay its lots in each matching method asked (matching_methods: FIFO, LIFO; "
+        "default FIFO) and return all requested analyses (lot summary, Gantt topology, custody/event history, "
+        "value/return/price history, broker and cumulative WAC history) converted to target_currency. The parts no "
+        "method changes (market price line, WAC lines, range, metadata) come once; everything read from a replay comes "
+        "in methods[method], with its own status and data quality. The frontend performs no FX conversion, lot "
+        "attribution, or WAC math."
     ),
 )
 async def get_lots_analysis(
     body: LotsAnalysisQuery,
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
-) -> LotsAnalysisResponse:
-    """Return a bulk FIFO lots analysis from a single FifoLotEngine run."""
+) -> LotsAnalysisMethodsResponse:
+    """Return a bulk lots analysis: the common parts once, one block per matching method asked."""
     from backend.app.services.platform.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
 
     # Resolve min/max sentinels before passing to service
@@ -165,7 +166,7 @@ async def get_lots_analysis(
 
     service = LotsAnalysisService(session)
     try:
-        return await service.get_lots_analysis(
+        return await service.get_lots_analysis_methods(
             user_id=current_user.id,
             asset_id=body.asset_id,
             broker_ids=body.broker_ids,
@@ -174,6 +175,7 @@ async def get_lots_analysis(
             target_currency=body.target_currency,
             selected_lot_ids=body.selected_lot_ids,
             requested_analyses=body.requested_analyses,
+            matching_methods=body.matching_methods,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

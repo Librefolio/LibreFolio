@@ -907,11 +907,13 @@ function collectPageErrors(page: Page): PageErrorLog {
     };
 }
 
-/** One `POST /portfolio/lots/analysis`, read-only, failing loudly on a non-2xx. */
+/** One `POST /portfolio/lots/analysis`, read-only, failing loudly on a non-2xx: its FIFO block, what the panel shows (project 69, D11). */
 async function lotsAnalysis(page: Page, body: {asset_id: number; broker_ids: number[]; selected_lot_ids?: number[]; requested_analyses: string[]}): Promise<Record<string, unknown>> {
     const response = await page.request.post('/api/v1/portfolio/lots/analysis', {data: body});
     expect(response.ok(), `lots analysis ${body.requested_analyses.join('+')} for asset ${body.asset_id} answered ${response.status()}`).toBe(true);
-    return (await response.json()) as Record<string, unknown>;
+    const answer = (await response.json()) as {methods?: Record<string, Record<string, unknown>>};
+    expect(answer.methods?.FIFO, `lots analysis for asset ${body.asset_id} has no FIFO block`).toBeTruthy();
+    return answer.methods!.FIFO;
 }
 
 /**
