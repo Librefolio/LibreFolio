@@ -473,7 +473,6 @@
       "summaryAsset": "Asset",
       "already": "già",
       "iconNone": "nessuna icona",
-      "iconHas": "ha un'icona",
       "summaryNote": "Un solo invio, tutto o niente; per ogni asset solo i campi che cambiano davvero.",
       "save": "{count, plural, one {Salva # asset} other {Salva # asset}}",
       "saveFailedTitle": "⛔ Salvataggio non riuscito: nessun asset è stato modificato",

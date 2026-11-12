@@ -473,7 +473,6 @@
       "summaryAsset": "Asset",
       "already": "already",
       "iconNone": "no icon",
-      "iconHas": "has an icon",
       "summaryNote": "One request, all or nothing; for each asset only the fields that really change.",
       "save": "{count, plural, one {Save # asset} other {Save # assets}}",
       "saveFailedTitle": "⛔ Save failed: no asset was changed",

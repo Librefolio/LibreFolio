@@ -473,7 +473,6 @@
       "summaryAsset": "Activo",
       "already": "ya",
       "iconNone": "sin icono",
-      "iconHas": "tiene un icono",
       "summaryNote": "Un solo envío, todo o nada; para cada activo solo los campos que cambian de verdad.",
       "save": "{count, plural, one {Guardar # activo} other {Guardar # activos}}",
       "saveFailedTitle": "⛔ Guardado fallido: no se ha modificado ningún activo",

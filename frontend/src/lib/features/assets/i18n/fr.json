@@ -473,7 +473,6 @@
       "summaryAsset": "Actif",
       "already": "déjà",
       "iconNone": "aucune icône",
-      "iconHas": "a une icône",
       "summaryNote": "Un seul envoi, tout ou rien ; pour chaque actif, seulement les champs qui changent vraiment.",
       "save": "{count, plural, one {Enregistrer # actif} other {Enregistrer # actifs}}",
       "saveFailedTitle": "⛔ Échec de l'enregistrement : aucun actif n'a été modifié",
