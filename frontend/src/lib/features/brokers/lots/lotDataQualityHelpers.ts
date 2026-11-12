@@ -24,6 +24,7 @@
 
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 import {resolveBrokerName} from './lotChartShared';
+import {STALE_FX_ACTION} from '$lib/features/dashboard/staleFxIssue';
 
 /** The three severities a data-quality issue can carry. */
 export type IssueSeverity = 'error' | 'warning' | 'info';
@@ -46,9 +47,10 @@ export interface IssueMessage<I extends DataQualityIssueLike = DataQualityIssueL
 
 /**
  * The actions the lots banner offers (project 69, L4): the Dashboard's pair actions, «add the pair» and «sync the pair»,
- * named by the developer. Another action an issue carries draws no control here.
+ * named by the developer, and since L4b the sync of the old-rate row (`STALE_FX_ACTION`, a pair sync too). Another
+ * action an issue carries draws no control here: `navigate_asset` would open the asset the panel is already on.
  */
-export const LOT_BANNER_ACTIONS: ReadonlySet<string> = new Set(['add_fx_pair', 'sync_fx_pair']);
+export const LOT_BANNER_ACTIONS: ReadonlySet<string> = new Set(['add_fx_pair', 'sync_fx_pair', STALE_FX_ACTION]);
 
 /**
  * One issue category after grouping: its message lines and the lots it touches. The lines are, in first-occurrence

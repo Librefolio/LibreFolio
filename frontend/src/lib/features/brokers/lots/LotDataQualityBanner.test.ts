@@ -46,6 +46,7 @@ import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/compo
 import {_} from '$lib/i18n';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 import LotDataQualityBanner from './LotDataQualityBanner.svelte';
+import {STALE_FX_ACTION, STALE_FX_CODE, staleFxIssue} from '$lib/features/dashboard/staleFxIssue';
 
 const INCOME = 'ASSET_INCOME_NO_ELIGIBLE_LOTS';
 const FALLBACK = 'REFERENCE_PRICE_FALLBACK';
@@ -257,8 +258,9 @@ describe('LotDataQualityBanner — the banner in the tone of its worst group, ea
  *   issue's code the button is disabled.
  * - `add_fx_pair` works on one pair at a time: one chip `data-quality-fx-pair-{slug}` per pair, after the message, each
  *   handing its own pair; no aggregate button.
- * - Only those two: the developer named the pair actions. An issue with another action (`navigate_asset` on a cost basis
- *   it cannot know) draws its message and no control — a question for the developer, in the checkpoint.
+ * - Since L4b also `sync_stale_fx`, the old-rate row's sync (a pair sync too). Nothing else: an issue with another
+ *   action (`navigate_asset` on a cost basis it cannot know) draws its message and no control — the panel is already
+ *   on that asset (coordinator, 12/11).
  *
  * The fixtures are the issues `_report_gaps` → `build_data_quality_report` sends (`financial_math/portfolio/data_quality.py`):
  * no lot, the pair slugs sorted, the sync's target its first pair, the add with none. Red before L4: the banner drew no
@@ -344,5 +346,22 @@ describe('LotDataQualityBanner — the FX actions of the Dashboard banner (proje
         const block = blockOf(banner, 'MISSING_COST_BASIS');
         expect(messagesIn(block), 'presence barrier: the issue writes its message').toHaveLength(1);
         expect(within(block).queryAllByRole('button')).toEqual([]);
+    });
+
+    // L4b (coordinator, 12/11, on the developer's request): «sync the pair» on the old-rate row too. The panel builds
+    // that row from its block's `stale_fx_pairs` with the Dashboard's own `staleFxIssue`; the button is the Dashboard's.
+    it('draws the old-rate row’s sync button before its message, and hands the parent its action and its pair', async () => {
+        const stale = staleFxIssue([{pair: 'EUR/ISK', last_rate_date: '2024-03-01', stale_days: 30}], '2024-03-31');
+        expect(stale, 'precondition: one old rate makes one row').not.toBeNull();
+        const calls: Array<[string, string | null, DataQualityIssue]> = [];
+        render(LotDataQualityBanner, {issues: [stale!], lotDates: LOT_DATES, onaction: (action: string, target: string | null, issue: DataQualityIssue) => calls.push([action, target, issue])});
+        const banner = screen.getByTestId('lot-data-quality-banner');
+        await unfold(within(banner).getByTestId('lot-data-quality-toggle'));
+        const block = blockOf(banner, STALE_FX_CODE);
+        const button = within(block).getByTestId(`data-quality-cta-${STALE_FX_CODE}`);
+        const [message] = messagesIn(block);
+        expect(button.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING, 'the button comes before what it fixes').toBeTruthy();
+        await fireEvent.click(button);
+        expect(calls).toEqual([[STALE_FX_ACTION, stale!.cta_target, stale]]);
     });
 });
