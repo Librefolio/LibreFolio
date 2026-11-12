@@ -51,11 +51,11 @@ import {expect, test, type Page} from '../fixtures/playwright';
 import {randomUUID} from 'crypto';
 import {readFileSync} from 'fs';
 import {resolve} from 'path';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {navigateTo} from '../fixtures/auth-helpers';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears, optionsClosed} from '../fixtures/probe';
 import {continueToReview, continueToStep, parseSelectedSet, selectReportSet, type ParseResponse} from '../fixtures/import-wizard';
-import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 import {samplePath} from '../fixtures/brimSamples';
 
@@ -189,20 +189,8 @@ async function goToTransactions(page: Page) {
 }
 
 async function openImportWizard(page: Page) {
-    const firstRow = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first();
-    await firstRow.hover();
-    const kebab = firstRow.getByTestId(/^row-actions-/);
-    await expect(kebab).toBeVisible({timeout: 3_000});
-    await kebab.click();
-    await page.getByTestId('context-menu-action-edit').click();
-    await page.getByTestId('tx-bulk-modal-root').waitFor({state: 'visible', timeout: 6_000});
-
-    const formClose = page.getByTestId('tx-form-close');
-    if (await appears(formClose, 3_000)) {
-        await formClose.click();
-    }
-
-    await page.getByTestId('tx-bulk-import').click();
+    // The account is the test's own and holds no transaction to edit: the import button opens the wizard in a fresh bulk editor.
+    await page.getByTestId('tx-import-button').click();
     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 5_000});
 }
 
@@ -231,15 +219,24 @@ test.describe('Import Wizard — plugin contract', () => {
     /** Every broker the running test created — the one below, CAC-012's late one: afterEach deletes them and empties the list. */
     const ownedBrokers: OwnedBroker[] = [];
 
-    test.beforeEach(async ({page}) => {
-        await login(page, TEST_USER);
+    /** The account the running test signs in with: its own, so the brokers and files below are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
+        account = await registerDisposableUser(request, 'cac');
+        await prepareOnboardingAccount(page, account, []);
         // Broker and file first: the wizard reads the broker list when it opens.
         fixture = await createBrokerWithFixture(page, ownedBrokers, {label: 'CA Contract', filePrefix: 'ca-contract', openedAt: '2020-01-01'});
         await goToTransactions(page);
     });
 
-    test.afterEach(async ({page}) => {
-        await deleteOwnedBrokers(page, ownedBrokers);
+    test.afterEach(async ({page, request}) => {
+        try {
+            await deleteOwnedBrokers(page, ownedBrokers);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     // -----------------------------------------------------------------------
