@@ -148,9 +148,7 @@ test.describe('Asset List Page', () => {
         // Wait for either card grid or table view
         const cards = page.locator('[data-testid^="asset-card-"]');
         const table = page.locator('[data-testid="assets-table"]');
-        const cardCount = await cards.count();
-        const tableVisible = await table.isVisible().catch(() => false);
-        expect(cardCount > 0 || tableVisible).toBeTruthy();
+        await expect(cards.first().or(table)).toBeVisible({timeout: 10_000});
     });
 
     // ========================================================================

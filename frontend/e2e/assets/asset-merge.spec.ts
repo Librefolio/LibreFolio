@@ -116,15 +116,16 @@ async function openMergeModal(page: Page, pair: Pair) {
     await search.fill(pair.sourceName);
     await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
-    const card = page.locator(`[data-testid="asset-card-${pair.sourceId}"]`).first();
-    if (await card.isVisible({timeout: 3_000}).catch(() => false)) {
-        await card.hover();
-        await card.getByTestId('asset-card-merge').click();
+    const card = page.locator(`[data-testid="asset-card-${pair.sourceId}"]`);
+    const row = page.locator(`[data-testid="asset-row-${pair.sourceId}"]`);
+    // The asset is on screen as a card or as a row, by the view the page opens in: wait for it, then read which.
+    await expect(card.or(row).first()).toBeVisible({timeout: 8_000});
+    if ((await card.count()) > 0) {
+        await card.first().hover();
+        await card.first().getByTestId('asset-card-merge').click();
     } else {
         // Table view: the same verb lives in the row's context menu.
-        const row = page.locator(`[data-testid="asset-row-${pair.sourceId}"]`).first();
-        await expect(row).toBeVisible({timeout: 5_000});
-        await row.click({button: 'right'});
+        await row.first().click({button: 'right'});
         await page.getByTestId('context-menu-action-merge').click();
     }
 
