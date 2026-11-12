@@ -356,20 +356,10 @@ async function cleanupOwnedRows(page: Page, owned: OwnedRows): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe('Single-row delete via bulk workspace (T4)', () => {
-    // Only A1-error writes in this block; the others read the seed and record nothing.
-    let ownedRows: OwnedRows = noOwnedRows();
-
+    // The tests here read the seed and write nothing; A1-error writes, in the block below.
     test.beforeEach(async ({page}) => {
-        ownedRows = noOwnedRows();
         await login(page, TEST_USER);
         await goToTransactions(page);
-    });
-
-    // afterEach, not `finally`: it runs after a timeout too, while the page can still
-    // reach the API, and an error of its own is reported beside the test's instead of
-    // replacing it.
-    test.afterEach(async ({page}) => {
-        await cleanupOwnedRows(page, ownedRows);
     });
 
     // === A1: standalone delete ===
@@ -459,6 +449,29 @@ test.describe('Single-row delete via bulk workspace (T4)', () => {
     });
 
     // === committed:false → inline error banner ===
+});
+
+// A1-error writes — a broker, an asset and an ADJUSTMENT pair — so it signs in as an account of its own,
+// not as the shared user; deleting the account takes whatever the cleanup missed.
+test.describe('Single-row delete via bulk workspace (T4)', () => {
+    let ownedRows: OwnedRows = noOwnedRows();
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
+        ownedRows = noOwnedRows();
+        account = await registerDisposableUser(request, 'tdl');
+        await prepareOnboardingAccount(page, account, []);
+        await goToTransactions(page);
+    });
+
+    test.afterEach(async ({page, request}) => {
+        try {
+            await cleanupOwnedRows(page, ownedRows);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
+    });
 
     test('A1-error: refused delete keeps the workspace open and shows the issue inline', async ({page}) => {
         // Own the data: a refusal needs a delete that makes a balance negative,

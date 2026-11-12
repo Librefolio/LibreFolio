@@ -51,8 +51,8 @@
  * 2) leave nothing behind and skip cleanup entirely.
  */
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
-import {TEST_USER} from '../fixtures/test-users';
+import {navigateTo} from '../fixtures/auth-helpers';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
@@ -221,12 +221,21 @@ async function deleteTx(page: Page, ids: number[]): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe('FX_CONVERSION dual-form completeness', () => {
-    test.beforeEach(async ({page}) => {
-        await login(page, TEST_USER);
+    /** The account the running test writes with: its own, so its brokers and rows are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
+        account = await registerDisposableUser(request, 'txf');
+        await prepareOnboardingAccount(page, account, []);
     });
 
-    test.afterEach(async ({page}) => {
-        await cleanupOwnedBrokers(page);
+    test.afterEach(async ({page, request}) => {
+        try {
+            await cleanupOwnedBrokers(page);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     test('broker chosen before FX type, decimal formats normalize, and Apply stages a linked local pair with no network commit', async ({page}) => {
