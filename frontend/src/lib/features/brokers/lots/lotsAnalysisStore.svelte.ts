@@ -10,25 +10,39 @@
  * asks again. A failure rejects and leaves the previous answer where it was; a session change
  * forgets everything.
  *
+ * The answer holds the parts no matching method changes once, and one block per method asked under
+ * `methods` (project 69, D11): `methodAnalysis` reads a block.
+ *
  * @module features/brokers/lots/lotsAnalysisStore
  */
 
-import {zodiosApi} from '$lib/api';
+import type {z} from 'zod';
+import {schemas, zodiosApi} from '$lib/api';
 import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
 import {registerPortfolioMutationListener} from '../../../stores/portfolio/portfolioMutation';
 
 type LotsAnalysisEndpoint = typeof zodiosApi.get_lots_analysis_api_v1_portfolio_lots_analysis_post;
 export type LotsAnalysisRequest = Parameters<LotsAnalysisEndpoint>[0];
-export type LotsAnalysisResponse = Awaited<ReturnType<LotsAnalysisEndpoint>>;
+export type LotsAnalysisMethodsResponse = Awaited<ReturnType<LotsAnalysisEndpoint>>;
+export type LotMatchingMethod = z.infer<typeof schemas.LotMatchingMethod>;
+export type LotsMethodAnalysis = z.infer<typeof schemas.LotsMethodAnalysis>;
+
+/**
+ * The block of one matching method, or null when it was not asked. The generated type reads the
+ * `methods` dict as `{}`; its runtime schema is a record of `LotsMethodAnalysis`, keyed by method.
+ */
+export function methodAnalysis(response: LotsAnalysisMethodsResponse, method: LotMatchingMethod): LotsMethodAnalysis | null {
+    return (response.methods as Partial<Record<LotMatchingMethod, LotsMethodAnalysis>>)[method] ?? null;
+}
 
 interface Entry {
-    response: LotsAnalysisResponse;
+    response: LotsAnalysisMethodsResponse;
     /** The mark the question was asked under: asked before the last mark = stale. */
     seq: number;
 }
 
 interface Flight {
-    promise: Promise<LotsAnalysisResponse | null>;
+    promise: Promise<LotsAnalysisMethodsResponse | null>;
     seq: number;
 }
 
@@ -66,7 +80,7 @@ function lotsKey(body: LotsAnalysisRequest): string {
 }
 
 /** What the cache holds for this question, read synchronously: `{response, stale}`, or null. */
-export function peekLotsAnalysis(body: LotsAnalysisRequest): {response: LotsAnalysisResponse; stale: boolean} | null {
+export function peekLotsAnalysis(body: LotsAnalysisRequest): {response: LotsAnalysisMethodsResponse; stale: boolean} | null {
     const entry = cache.get(lotsKey(body));
     return entry ? {response: entry.response, stale: entry.seq < markSeq} : null;
 }
@@ -77,7 +91,7 @@ export function peekLotsAnalysis(body: LotsAnalysisRequest): {response: LotsAnal
  * Resolves the answer; resolves `null` when a session change discarded it; rejects when the request
  * fails, leaving any previous answer cached (stale) and remembering nothing, so the next call asks again.
  */
-export function fetchLotsAnalysis(body: LotsAnalysisRequest, force = false): Promise<LotsAnalysisResponse | null> {
+export function fetchLotsAnalysis(body: LotsAnalysisRequest, force = false): Promise<LotsAnalysisMethodsResponse | null> {
     const key = lotsKey(body);
     const entry = cache.get(key);
     if (!force && entry && entry.seq >= markSeq) return Promise.resolve(entry.response);
