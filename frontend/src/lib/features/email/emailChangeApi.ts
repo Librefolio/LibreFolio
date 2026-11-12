@@ -1,6 +1,7 @@
 /**
- * The change of the paying administrator's email address, started by the hosting provider (lot A5-1b): spend the link
- * the instance emailed to the NEW address.
+ * A change of email address, confirmed from the NEW address: spend the link the instance emailed there. Two flows use it:
+ * the paying administrator's, started by the hosting provider (lot A5-1b), and the one of any account that asked for a
+ * new address from its profile (release 1.4, project 71). The route tells them apart, not this wrapper.
  *
  * A thin wrapper over the generated client, so that the page and its tests share one seam. The refusals are the
  * verification link's: `readLinkRefusal` of `verificationApi.ts` reads them.

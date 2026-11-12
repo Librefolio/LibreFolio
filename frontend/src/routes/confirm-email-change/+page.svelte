@@ -1,8 +1,10 @@
 <script lang="ts">
     /**
-     * The page of the link that confirms the new email address of the paying administrator of a managed instance,
-     * `/confirm-email-change#token=…` (lot A5-1b). The hosting provider changes the address; the instance emails this link
-     * to the NEW one, and the address changes only after the click.
+     * The page of the link that confirms a new email address, `/confirm-email-change#token=…`. Two flows share it: the
+     * paying administrator of a managed instance, whose address the hosting provider changes (lot A5-1b), and any account
+     * that asked for a new address from its profile (release 1.4, project 71). The instance emails the link to the NEW
+     * address, and the address changes only after the click. The page cannot tell the flows apart, and its texts do not:
+     * the answer of the server does not say which one a link belongs to.
      *
      * Like `/verify-email` (E-25): the token leaves the address bar at once, but only its owner's click spends it (a mail
      * filter that opens the links of a message must not confirm in place of its owner). Confirmed, the owner's sessions
