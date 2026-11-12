@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from backend.app.services.financial_math.fees import calculate_fee
 from backend.app.services.pac_allocator.evaluation.bounds import current_invested, selected_funding
 from backend.app.services.pac_allocator.evaluation.errors import ExactScenarioContractError
-from backend.app.services.pac_allocator.evaluation.keys import entity_refs, exact_decision_id, fx_debit_key, source_key
-from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies, source_reachability
+from backend.app.services.pac_allocator.evaluation.keys import entity_refs, exact_decision_id, source_key
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, source_reachability
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, convert_currency, fx_rate, order_prices, to_valuation, valuation_rate_of
 from backend.app.services.pac_allocator.ledger import (
@@ -265,88 +265,71 @@ def _evaluate_fx(
     checkpoint: Checkpoint | None,
 ) -> tuple[ExactFxEvaluation, ...]:
     result = []
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
+        decision_quanta = quanta[spec.decision_id]
+        if decision_quanta == 0:
+            continue
+        currency, quote_currency = spec.source_currency, spec.destination_currency
+        source_debit = index.currency_quantum[currency] * decision_quanta
+        approved_rate = fx_rate(index.fx_rate_by_pair, currency, quote_currency)
+        # The planning rate: the spread rate, capped at the triangle through
+        # the valuation currency, so no conversion creates value.
+        source_valuation_rate = valuation_rate_of(index, currency)
+        destination_valuation_rate = valuation_rate_of(index, quote_currency)
+        effective_rate = calculate_planning_fx_rate(
+            approved_rate=approved_rate,
+            spread=scenario.fx_spread_rate,
+            source_valuation_rate=source_valuation_rate,
+            destination_valuation_rate=destination_valuation_rate,
+        )
+        exact_credit = calculate_fx_credit(
+            source_debit=source_debit,
+            approved_rate=approved_rate,
+            spread=scenario.fx_spread_rate,
+            source_valuation_rate=source_valuation_rate,
+            destination_valuation_rate=destination_valuation_rate,
+        )
+        _append_exact_flow(
+            postings,
+            posting_id=f"fx-debit:{spec.key}",
+            family="fx_debit",
+            broker_id=spec.broker_id,
+            currency=currency,
+            amount=source_debit,
+            entity_refs=spec.entity_refs,
+        )
+        posted_credit = _append_rounded_posting(
+            postings,
+            posting_id=f"fx-credit:{spec.key}",
+            family="fx_credit",
+            broker_id=spec.broker_id,
+            currency=quote_currency,
+            exact_amount=exact_credit,
+            quantum=index.currency_quantum[quote_currency],
+            entity_refs=spec.entity_refs,
+        )
+        spread_loss = to_valuation(index, source_debit, currency) - to_valuation(
             index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            decision_id = exact_decision_id(
-                "fx_debit",
-                fx_debit_key(route.route_id, currency),
-            )
-            decision_quanta = quanta[decision_id]
-            if decision_quanta == 0:
-                continue
-            source_debit = index.currency_quantum[currency] * decision_quanta
-            approved_rate = fx_rate(index.fx_rate_by_pair, currency, quote_currency)
-            # The planning rate: the spread rate, capped at the triangle through
-            # the valuation currency, so no conversion creates value.
-            source_valuation_rate = valuation_rate_of(index, currency)
-            destination_valuation_rate = valuation_rate_of(index, quote_currency)
-            effective_rate = calculate_planning_fx_rate(
-                approved_rate=approved_rate,
-                spread=scenario.fx_spread_rate,
-                source_valuation_rate=source_valuation_rate,
-                destination_valuation_rate=destination_valuation_rate,
-            )
-            exact_credit = calculate_fx_credit(
+            exact_credit,
+            quote_currency,
+        )
+        result.append(
+            ExactFxEvaluation(
+                decision_id=spec.decision_id,
+                order_route_id=spec.representative_route_id,
+                broker_id=spec.broker_id,
+                source_currency=currency,
+                destination_currency=quote_currency,
+                quanta=decision_quanta,
                 source_debit=source_debit,
                 approved_rate=approved_rate,
-                spread=scenario.fx_spread_rate,
-                source_valuation_rate=source_valuation_rate,
-                destination_valuation_rate=destination_valuation_rate,
+                effective_rate=effective_rate,
+                exact_destination_credit=exact_credit,
+                posted_destination_credit=posted_credit,
+                spread_loss=spread_loss,
             )
-            posting_refs = entity_refs(
-                ("order_route", route.route_id),
-                ("currency", currency),
-            )
-            _append_exact_flow(
-                postings,
-                posting_id=f"fx-debit:{route.route_id}:{currency}",
-                family="fx_debit",
-                broker_id=route.broker_id,
-                currency=currency,
-                amount=source_debit,
-                entity_refs=posting_refs,
-            )
-            posted_credit = _append_rounded_posting(
-                postings,
-                posting_id=f"fx-credit:{route.route_id}:{currency}",
-                family="fx_credit",
-                broker_id=route.broker_id,
-                currency=quote_currency,
-                exact_amount=exact_credit,
-                quantum=index.currency_quantum[quote_currency],
-                entity_refs=posting_refs,
-            )
-            spread_loss = to_valuation(index, source_debit, currency) - to_valuation(
-                index,
-                exact_credit,
-                quote_currency,
-            )
-            result.append(
-                ExactFxEvaluation(
-                    decision_id=decision_id,
-                    order_route_id=route.route_id,
-                    broker_id=route.broker_id,
-                    source_currency=currency,
-                    destination_currency=quote_currency,
-                    quanta=decision_quanta,
-                    source_debit=source_debit,
-                    approved_rate=approved_rate,
-                    effective_rate=effective_rate,
-                    exact_destination_credit=exact_credit,
-                    posted_destination_credit=posted_credit,
-                    spread_loss=spread_loss,
-                )
-            )
+        )
     return tuple(sorted(result, key=lambda item: (item.order_route_id, item.source_currency)))
 
 

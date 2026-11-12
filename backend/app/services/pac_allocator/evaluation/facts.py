@@ -8,8 +8,8 @@ from dataclasses import dataclass
 
 from backend.app.services.pac_allocator.evaluation.economics import EconomicState, evaluate_economic_state
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
-from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, fx_debit_key, is_quantum_multiple
-from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies
+from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, is_quantum_multiple
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, valuation_rate_of
 from backend.app.services.pac_allocator.ledger import (
@@ -134,74 +134,64 @@ def _fx_constraint_facts(
     checkpoint: Checkpoint | None,
 ) -> dict[str, _ConstraintFact]:
     facts: dict[str, _ConstraintFact] = {}
-    fx_actions = {(item.order_route_id, item.source_currency): item for item in state.fx}
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
+    fx_actions = {item.decision_id: item for item in state.fx}
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
-            index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            key = fx_debit_key(route.route_id, currency)
-            action = fx_actions.get((route.route_id, currency))
-            source_debit = action.source_debit if action is not None else _EXACT_ZERO
-            exact_credit = action.exact_destination_credit if action is not None else _EXACT_ZERO
-            posted_credit = action.posted_destination_credit if action is not None else _EXACT_ZERO
-            approved_rate = fx_rate(index.fx_rate_by_pair, currency, quote_currency)
-            expected_exact = calculate_fx_credit(
-                source_debit=source_debit,
-                approved_rate=approved_rate,
-                spread=scenario.fx_spread_rate,
-                source_valuation_rate=valuation_rate_of(index, currency),
-                destination_valuation_rate=valuation_rate_of(index, quote_currency),
-            )
-            expected_posted = (
-                rounded_money_posting(
-                    posting_id="constraint-only",
-                    family="fx_credit",
-                    broker_id=route.broker_id,
-                    currency=quote_currency,
-                    exact_amount=expected_exact,
-                    quantum=index.currency_quantum[quote_currency],
-                ).posted_amount
-                if expected_exact != _EXACT_ZERO
-                else _EXACT_ZERO
-            )
-            coupling_delta = posted_credit - expected_posted
-            facts[_constraint_id("FX_DEBIT_CREDIT_COUPLED", key)] = _ConstraintFact(
-                value=coupling_delta,
-                lower_bound=_EXACT_ZERO,
-                upper_bound=_EXACT_ZERO,
-                satisfied=(exact_credit == expected_exact and coupling_delta == _EXACT_ZERO),
-            )
-            facts[_constraint_id("FX_CREDIT_POSITIVE", key)] = _ConstraintFact(
-                value=posted_credit,
-                lower_bound=_EXACT_ZERO,
-                upper_bound=None,
-                satisfied=(action is None or posted_credit > _EXACT_ZERO),
-            )
-            native_quantized = is_quantum_multiple(
-                source_debit,
-                index.currency_quantum[currency],
-            )
-            facts[_constraint_id("FX_NATIVE_QUANTUM", key)] = _ConstraintFact(
-                value=source_debit,
-                lower_bound=_EXACT_ZERO,
-                upper_bound=None,
-                satisfied=native_quantized,
-            )
-            source_ledger = ledger_rows[(route.broker_id, currency)]
-            facts[_constraint_id("FX_SOURCE_CASH", key)] = _ConstraintFact(
-                value=source_ledger.final_spendable,
-                lower_bound=_EXACT_ZERO,
-                upper_bound=None,
-                satisfied=source_ledger.final_spendable >= _EXACT_ZERO,
-            )
+        currency, quote_currency, key = spec.source_currency, spec.destination_currency, spec.key
+        action = fx_actions.get(spec.decision_id)
+        source_debit = action.source_debit if action is not None else _EXACT_ZERO
+        exact_credit = action.exact_destination_credit if action is not None else _EXACT_ZERO
+        posted_credit = action.posted_destination_credit if action is not None else _EXACT_ZERO
+        approved_rate = fx_rate(index.fx_rate_by_pair, currency, quote_currency)
+        expected_exact = calculate_fx_credit(
+            source_debit=source_debit,
+            approved_rate=approved_rate,
+            spread=scenario.fx_spread_rate,
+            source_valuation_rate=valuation_rate_of(index, currency),
+            destination_valuation_rate=valuation_rate_of(index, quote_currency),
+        )
+        expected_posted = (
+            rounded_money_posting(
+                posting_id="constraint-only",
+                family="fx_credit",
+                broker_id=spec.broker_id,
+                currency=quote_currency,
+                exact_amount=expected_exact,
+                quantum=index.currency_quantum[quote_currency],
+            ).posted_amount
+            if expected_exact != _EXACT_ZERO
+            else _EXACT_ZERO
+        )
+        coupling_delta = posted_credit - expected_posted
+        facts[_constraint_id("FX_DEBIT_CREDIT_COUPLED", key)] = _ConstraintFact(
+            value=coupling_delta,
+            lower_bound=_EXACT_ZERO,
+            upper_bound=_EXACT_ZERO,
+            satisfied=(exact_credit == expected_exact and coupling_delta == _EXACT_ZERO),
+        )
+        facts[_constraint_id("FX_CREDIT_POSITIVE", key)] = _ConstraintFact(
+            value=posted_credit,
+            lower_bound=_EXACT_ZERO,
+            upper_bound=None,
+            satisfied=(action is None or posted_credit > _EXACT_ZERO),
+        )
+        native_quantized = is_quantum_multiple(
+            source_debit,
+            index.currency_quantum[currency],
+        )
+        facts[_constraint_id("FX_NATIVE_QUANTUM", key)] = _ConstraintFact(
+            value=source_debit,
+            lower_bound=_EXACT_ZERO,
+            upper_bound=None,
+            satisfied=native_quantized,
+        )
+        source_ledger = ledger_rows[(spec.broker_id, currency)]
+        facts[_constraint_id("FX_SOURCE_CASH", key)] = _ConstraintFact(
+            value=source_ledger.final_spendable,
+            lower_bound=_EXACT_ZERO,
+            upper_bound=None,
+            satisfied=source_ledger.final_spendable >= _EXACT_ZERO,
+        )
     return facts
 
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, entity_refs, fx_debit_key
-from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies
+from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, entity_refs
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex
 from backend.app.services.pac_allocator.models import (
     Checkpoint,
@@ -154,71 +154,57 @@ def _fx_constraint_refs(
     checkpoint: Checkpoint | None,
 ) -> list[ConstraintRef]:
     refs: list[ConstraintRef] = []
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
-            index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            key = fx_debit_key(route.route_id, currency)
-            route_refs = entity_refs(
-                ("order_route", route.route_id),
-                ("currency", currency),
+        currency, quote_currency, key, route_refs = spec.source_currency, spec.destination_currency, spec.key, spec.entity_refs
+        refs.extend(
+            (
+                _constraint_ref(
+                    code="FX_DEBIT_CREDIT_COUPLED",
+                    key=key,
+                    scope=spec.scope,
+                    entity_refs=route_refs,
+                    unit=ExactUnit(
+                        kind="native_money",
+                        currency_code=quote_currency,
+                    ),
+                    bound_source="approved rate and global spread",
+                ),
+                _constraint_ref(
+                    code="FX_CREDIT_POSITIVE",
+                    key=key,
+                    scope=spec.scope,
+                    entity_refs=route_refs,
+                    unit=ExactUnit(
+                        kind="native_money",
+                        currency_code=quote_currency,
+                    ),
+                    bound_source="posted destination credit",
+                ),
+                _constraint_ref(
+                    code="FX_NATIVE_QUANTUM",
+                    key=key,
+                    scope=spec.scope,
+                    entity_refs=route_refs,
+                    unit=ExactUnit(
+                        kind="native_money",
+                        currency_code=currency,
+                    ),
+                    bound_source="source currency minor unit",
+                ),
+                _constraint_ref(
+                    code="FX_SOURCE_CASH",
+                    key=key,
+                    scope=spec.scope,
+                    entity_refs=route_refs,
+                    unit=ExactUnit(
+                        kind="native_money",
+                        currency_code=currency,
+                    ),
+                    bound_source="Broker source-currency ledger",
+                ),
             )
-            refs.extend(
-                (
-                    _constraint_ref(
-                        code="FX_DEBIT_CREDIT_COUPLED",
-                        key=key,
-                        scope="order_route",
-                        entity_refs=route_refs,
-                        unit=ExactUnit(
-                            kind="native_money",
-                            currency_code=quote_currency,
-                        ),
-                        bound_source="approved rate and global spread",
-                    ),
-                    _constraint_ref(
-                        code="FX_CREDIT_POSITIVE",
-                        key=key,
-                        scope="order_route",
-                        entity_refs=route_refs,
-                        unit=ExactUnit(
-                            kind="native_money",
-                            currency_code=quote_currency,
-                        ),
-                        bound_source="posted destination credit",
-                    ),
-                    _constraint_ref(
-                        code="FX_NATIVE_QUANTUM",
-                        key=key,
-                        scope="order_route",
-                        entity_refs=route_refs,
-                        unit=ExactUnit(
-                            kind="native_money",
-                            currency_code=currency,
-                        ),
-                        bound_source="source currency minor unit",
-                    ),
-                    _constraint_ref(
-                        code="FX_SOURCE_CASH",
-                        key=key,
-                        scope="order_route",
-                        entity_refs=route_refs,
-                        unit=ExactUnit(
-                            kind="native_money",
-                            currency_code=currency,
-                        ),
-                        bound_source="Broker source-currency ledger",
-                    ),
-                )
-            )
+        )
     return refs
 
 
