@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -19,7 +20,7 @@ from backend.app.services.accounts.settings_service import get_effective_base_cu
 from backend.app.services.financial_math import fx_rates
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, ReferencePriceResolution, fails_the_replay
+from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, LotMatchingMethod, ReferencePriceLookup, ReferencePriceResolution, fails_the_replay
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.change_days import DayRange, analysis_event_dates, history_steps, lot_change_days, price_candidate_days
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, convert_closure, needs_market_series, unconvertible_ids
@@ -76,11 +77,63 @@ _NO_FRAGMENT_BROKERS: Mapping[str, int | None] = MappingProxyType({})
 _NO_TRANSFER_BROKERS: Mapping[int, tuple[int | None, int | None]] = MappingProxyType({})
 
 
+@dataclass(frozen=True, slots=True)
+class PerformanceScopeInputs:
+    """The rows of every broker the user can see, for the performance history of a broker filter (read at their edge)."""
+
+    boundary: ScopeBoundaryReading
+    late_legs: list[FifoInputTransaction]
+    split_ratios_by_tx_id: dict[int, Decimal]
+    broker_shorting: dict[int, bool]
+
+
+@dataclass(frozen=True, slots=True)
+class LotsAnalysisInputs:
+    """What ``LotsAnalysisService._load_inputs`` reads once, for every replay ``_derive_from_replay`` makes of it.
+
+    Nothing here depends on the matching method. ``fx_resolver`` is the one part that keeps changing: it holds the
+    rates of the income and cost rows, and the derive step asks it, then loads, the rates of the replay's lots and
+    records in it the conversions it could not make.
+    """
+
+    asset_id: int
+    asset: Asset
+    date_from: date_type | None
+    selected_lot_ids: list[int] | None
+    normalized_analyses: list[LotAnalysisType]
+    target_currency: str
+    actual_to: date_type
+    scope_broker_ids: list[int]
+    computed_from: date_type
+    #: The scope's rows, each transfer leg whose partner is outside the scope read at its edge (J-10).
+    transactions: list[Transaction | FifoInputTransaction]
+    boundary: ScopeBoundaryReading
+    late_legs: list[FifoInputTransaction]
+    split_ratios_by_tx_id: dict[int, Decimal]
+    broker_shorting: dict[int, bool]
+    prices: list[PriceHistory]
+    quote_base_quantity: int
+    price_series: AssetPriceSeries
+    reference_price_lookup: ReferencePriceLookup
+    income_transactions: list[Transaction]
+    cost_transactions: list[Transaction]
+    fx_resolver: FxRateResolver
+    needs_income_alloc: bool
+    #: ``transactions`` with each trade's target controvalue when a cost row is weighted on the trades (FEE weights).
+    engine_transactions: Sequence[Transaction | FifoInputTransaction]
+    income_events_input: list[EconomicEvent]
+    cost_events_input: list[EconomicEvent]
+    unconvertible_event_ids: set[int]
+    unconvertible_trade_ids: set[int]
+    average_cost_lines: dict[int | str, AverageCost]
+    performance_scope: PerformanceScopeInputs | None
+
+
 class LotsAnalysisService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def get_lots_analysis(  # noqa: C901 — TODO(P2-refactor): long orchestrator; extract per-analysis stage helpers
+    async def get_lots_analysis(
         self,
         user_id: int,
         asset_id: int,
@@ -91,10 +144,48 @@ class LotsAnalysisService:
         selected_lot_ids: list[int] | None,
         requested_analyses: list[str | LotAnalysisType],
     ) -> LotsAnalysisResponse:
+        """The analysis of one asset's lots in a broker scope, in two steps (project 69, L2).
+
+        ``_load_inputs`` reads, once, what does not depend on the order in which outflows are matched to lots;
+        ``_derive_from_replay`` replays the lots in one matching method and builds every section from that replay.
+        """
         normalized_analyses = [analysis if isinstance(analysis, LotAnalysisType) else LotAnalysisType(str(analysis)) for analysis in requested_analyses]
         if not normalized_analyses:
             raise ValueError("requested_analyses must not be empty")
 
+        inputs = await self._load_inputs(
+            user_id=user_id,
+            asset_id=asset_id,
+            broker_ids=broker_ids,
+            date_from=date_from,
+            date_to=date_to,
+            target_currency=target_currency,
+            selected_lot_ids=selected_lot_ids,
+            normalized_analyses=normalized_analyses,
+        )
+        if isinstance(inputs, LotsAnalysisResponse):
+            return inputs
+        return await self._derive_from_replay(inputs)
+
+    async def _load_inputs(  # noqa: C901 — one load per input of the analysis, each behind the analyses that read it
+        self,
+        *,
+        user_id: int,
+        asset_id: int,
+        broker_ids: list[int] | None,
+        date_from: date_type | None,
+        date_to: date_type | None,
+        target_currency: str | None,
+        selected_lot_ids: list[int] | None,
+        normalized_analyses: list[LotAnalysisType],
+    ) -> LotsAnalysisInputs | LotsAnalysisResponse:
+        """Step 1, «load once»: every input of the analysis that the replay's matching method does not change.
+
+        The transactions in the scope (read at its edge), the splits, the prices and the asset's price series, the
+        income and cost rows with the rates they are converted at, the average-cost lines and, for the performance
+        history, the rows of every broker the user can see. A scope with no broker or no transaction answers at once
+        with the empty response.
+        """
         target_currency = target_currency or await self._get_base_currency(user_id)
         # R13-SEC7-1: the histories walk every day to actual_to, so it ends by latest_range_end()
         actual_to = min(date_to or date_type.today(), latest_range_end())
@@ -182,7 +273,7 @@ class LotsAnalysisService:
         # aware (Option B), so it needs each event's pre-converted target amount and each trade's
         # target controvalue (FEE weights, §3.5). Eligibility (D-1 open quantity, broker-scoped,
         # transfer-aware) and matching are computed inside the engine from the replayed fragments.
-        # Valuation FX is resolved after the run (below).
+        # Valuation FX is resolved after the run (``_derive_from_replay``).
         fx_resolver = FxRateResolver(target_currency)
         needs_income_alloc = any(analysis in normalized_analyses for analysis in (LotAnalysisType.LOT_SUMMARY, LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.INCOME_EVENTS))
         income_events_input: list[EconomicEvent] = []
@@ -220,14 +311,116 @@ class LotsAnalysisService:
                 engine_transactions = build_engine_transactions(transactions, fx_resolver, asset.currency, target_currency)
                 unconvertible_trade_ids = unconvertible_ids([tx for tx in transactions if tx.type in (TransactionType.BUY, TransactionType.SELL)], fx_resolver, asset.currency)
 
-        engine_result = run_fifo_lot_engine(
-            transactions=[*engine_transactions, *late_legs],
+        # The average-cost lines come from the transactions, not from the replay (J-12): both are replay-free analyses,
+        # so a FAILED replay still shows them and asking ``normalized_analyses`` is asking what the replay will show.
+        average_cost_lines: dict[int | str, AverageCost] = {}
+        if LotAnalysisType.BROKER_WAC_HISTORY in normalized_analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in normalized_analyses:
+            average_cost_lines = await self._compute_average_cost_lines(
+                transactions=transactions,
+                split_ratios_by_tx_id=split_ratios_by_tx_id,
+                asset_currency=asset.currency,
+                target_currency=target_currency,
+            )
+
+        # The performance history of a broker filter is the position's, over every broker the user can see: its rows are
+        # loaded here, and replayed beside the scope's (``_derive_from_replay``). A FAILED replay of the scope then does
+        # not draw it, but its rows were read: the load does not wait for the replay.
+        performance_scope: PerformanceScopeInputs | None = None
+        if LotAnalysisType.PERFORMANCE_HISTORY in normalized_analyses and broker_ids is not None:
+            accessible_broker_ids = await self._get_scope_broker_ids(user_id=user_id, broker_ids=None)
+            if accessible_broker_ids != scope_broker_ids:
+                accessible_transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
+                performance_split_ratios = await self._load_split_ratios(accessible_transactions)
+                # The brokers the user can see have an edge too, for a partner at a broker the user cannot see.
+                performance_boundary = await self._read_at_scope_boundary(accessible_transactions, scope_broker_ids=accessible_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
+                performance_late_legs = await self._load_late_transfer_legs(performance_boundary.transactions, asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
+                performance_broker_shorting = await self._load_broker_shorting(accessible_broker_ids)
+                performance_scope = PerformanceScopeInputs(
+                    boundary=performance_boundary,
+                    late_legs=performance_late_legs,
+                    split_ratios_by_tx_id=performance_split_ratios,
+                    broker_shorting=performance_broker_shorting,
+                )
+
+        return LotsAnalysisInputs(
+            asset_id=asset_id,
+            asset=asset,
+            date_from=date_from,
+            selected_lot_ids=selected_lot_ids,
+            normalized_analyses=normalized_analyses,
+            target_currency=target_currency,
+            actual_to=actual_to,
+            scope_broker_ids=scope_broker_ids,
+            computed_from=computed_from,
+            transactions=transactions,
+            boundary=boundary,
+            late_legs=late_legs,
+            split_ratios_by_tx_id=split_ratios_by_tx_id,
             broker_shorting=broker_shorting,
+            prices=prices,
+            quote_base_quantity=quote_base_quantity,
+            price_series=price_series,
+            reference_price_lookup=reference_price_lookup,
+            income_transactions=income_transactions,
+            cost_transactions=cost_transactions,
+            fx_resolver=fx_resolver,
+            needs_income_alloc=needs_income_alloc,
+            engine_transactions=engine_transactions,
+            income_events_input=income_events_input,
+            cost_events_input=cost_events_input,
+            unconvertible_event_ids=unconvertible_event_ids,
+            unconvertible_trade_ids=unconvertible_trade_ids,
+            average_cost_lines=average_cost_lines,
+            performance_scope=performance_scope,
+        )
+
+    async def _derive_from_replay(  # noqa: C901 — TODO(P2-refactor): long orchestrator; extract per-analysis stage helpers
+        self,
+        inputs: LotsAnalysisInputs,
+        *,
+        matching_method: LotMatchingMethod = LotMatchingMethod.FIFO,
+    ) -> LotsAnalysisResponse:
+        """Step 2, «derive from a replay»: replay the lots in ``matching_method`` and build every section from them.
+
+        Nothing is read from the database but the rates the replay's lots, fragments and closures ask for, through the
+        resolver the load step filled, and the configured pairs of a conversion gap (``_report_gaps``).
+        """
+        asset = inputs.asset
+        asset_id = inputs.asset_id
+        date_from = inputs.date_from
+        selected_lot_ids = inputs.selected_lot_ids
+        normalized_analyses = inputs.normalized_analyses
+        target_currency = inputs.target_currency
+        actual_to = inputs.actual_to
+        scope_broker_ids = inputs.scope_broker_ids
+        computed_from = inputs.computed_from
+        transactions = inputs.transactions
+        boundary = inputs.boundary
+        late_legs = inputs.late_legs
+        split_ratios_by_tx_id = inputs.split_ratios_by_tx_id
+        prices = inputs.prices
+        quote_base_quantity = inputs.quote_base_quantity
+        price_series = inputs.price_series
+        reference_price_lookup = inputs.reference_price_lookup
+        income_transactions = inputs.income_transactions
+        cost_transactions = inputs.cost_transactions
+        fx_resolver = inputs.fx_resolver
+        needs_income_alloc = inputs.needs_income_alloc
+        income_events_input = inputs.income_events_input
+        cost_events_input = inputs.cost_events_input
+        unconvertible_event_ids = inputs.unconvertible_event_ids
+        unconvertible_trade_ids = inputs.unconvertible_trade_ids
+        average_cost_lines = inputs.average_cost_lines
+
+        engine_result = run_fifo_lot_engine(
+            transactions=[*inputs.engine_transactions, *late_legs],
+            broker_shorting=inputs.broker_shorting,
             split_ratios_by_tx_id=split_ratios_by_tx_id,
             reference_price_lookup=reference_price_lookup,
             economic_events=[*income_events_input, *cost_events_input],
             target_currency=target_currency,
             replay_until=actual_to,
+            matching_method=matching_method,
         )
         # J-12 (N81): a FAILED replay is unreliable as a whole, so no lot figure leaves the analysis: only the failure, the
         # row to fix, the average-cost lines and the market price line (Y-30), which do not come from the replay. From here
@@ -264,34 +457,29 @@ class LotsAnalysisService:
             tx_by_id=tx_by_id,
             boundary_legs=boundary.legs,
         )
-        if LotAnalysisType.PERFORMANCE_HISTORY in shown_analyses and broker_ids is not None:
-            accessible_broker_ids = await self._get_scope_broker_ids(user_id=user_id, broker_ids=None)
-            if accessible_broker_ids != scope_broker_ids:
-                accessible_transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
-                performance_split_ratios = await self._load_split_ratios(accessible_transactions)
-                # The brokers the user can see have an edge too, for a partner at a broker the user cannot see.
-                performance_boundary = await self._read_at_scope_boundary(accessible_transactions, scope_broker_ids=accessible_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
-                performance_transactions = performance_boundary.transactions
-                performance_late_legs = await self._load_late_transfer_legs(performance_transactions, asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
-                performance_broker_shorting = await self._load_broker_shorting(accessible_broker_ids)
-                performance_engine_result = run_fifo_lot_engine(
-                    transactions=[*performance_transactions, *performance_late_legs],
-                    broker_shorting=performance_broker_shorting,
-                    split_ratios_by_tx_id=performance_split_ratios,
-                    reference_price_lookup=reference_price_lookup,
-                    target_currency=target_currency,
-                    replay_until=actual_to,
-                )
-                performance_lots_by_id = {lot.lot_id: lot for lot in performance_engine_result.lots}
-                performance_context = PerformanceSourceContext(
-                    transactions=performance_transactions,
-                    engine_result=performance_engine_result,
-                    lots_by_id=performance_lots_by_id,
-                    fragments_by_lot=group_fragments(performance_engine_result.fragment_intervals),
-                    closures_by_lot=group_closures(performance_engine_result.closures),
-                    tx_by_id={tx.id: tx for tx in performance_transactions if tx.id is not None},
-                    boundary_legs=performance_boundary.legs,
-                )
+        performance_scope = inputs.performance_scope
+        if LotAnalysisType.PERFORMANCE_HISTORY in shown_analyses and performance_scope is not None:
+            # The rows of every broker the user can see, replayed in the same matching method as the scope's.
+            performance_transactions = performance_scope.boundary.transactions
+            performance_engine_result = run_fifo_lot_engine(
+                transactions=[*performance_transactions, *performance_scope.late_legs],
+                broker_shorting=performance_scope.broker_shorting,
+                split_ratios_by_tx_id=performance_scope.split_ratios_by_tx_id,
+                reference_price_lookup=reference_price_lookup,
+                target_currency=target_currency,
+                replay_until=actual_to,
+                matching_method=matching_method,
+            )
+            performance_lots_by_id = {lot.lot_id: lot for lot in performance_engine_result.lots}
+            performance_context = PerformanceSourceContext(
+                transactions=performance_transactions,
+                engine_result=performance_engine_result,
+                lots_by_id=performance_lots_by_id,
+                fragments_by_lot=group_fragments(performance_engine_result.fragment_intervals),
+                closures_by_lot=group_closures(performance_engine_result.closures),
+                tx_by_id={tx.id: tx for tx in performance_transactions if tx.id is not None},
+                boundary_legs=performance_scope.boundary.legs,
+            )
 
         collect_fx_needs(
             fx_resolver=fx_resolver,
@@ -344,15 +532,6 @@ class LotsAnalysisService:
                     message_params={"asset_id": asset_id, "date_from": computed_from.isoformat(), "date_to": at_cost_until.isoformat()},
                 )
             )
-        average_cost_lines: dict[int | str, AverageCost] = {}
-        if LotAnalysisType.BROKER_WAC_HISTORY in shown_analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in shown_analyses:
-            average_cost_lines = await self._compute_average_cost_lines(
-                transactions=transactions,
-                split_ratios_by_tx_id=split_ratios_by_tx_id,
-                asset_currency=asset.currency,
-                target_currency=target_currency,
-            )
-
         # D-P4: no series is read on every calendar day. The days one of its inputs can change on are known without
         # walking the window: an observation (``AssetPriceSeries.observation_dates``), a rate step, an event, the end of
         # the days valued at cost, each with the day after it; everything between two of them repeats the day before.
