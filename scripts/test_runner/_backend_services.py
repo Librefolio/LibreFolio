@@ -760,8 +760,8 @@ def services_owner_email_change(verbose: bool = False, test_names: list = None) 
 def services_email_change(verbose: bool = False, test_names: list = None) -> bool:
     """Test project 71, block 2: the change of address a user asks for from Profile."""
     print_section("Services: Profile Email Change (project 71)")
-    print_info("Testing: services/accounts/user_service.py (revoke_pending_email_change, email_refusal, move_email), api/v1/auth.py change_password")
-    print_info("Tests: the Profile link revoked by a password change, a reset (link or command line) and a deactivation, the host link kept; the helpers extracted from update_profile")
+    print_info("Testing: services/accounts/email_change.py, user_service.py (revoke_pending_email_change, email_refusal, move_email), api/v1/auth.py change_password")
+    print_info("Tests: the revocations and the helpers; the request, resend, cancel, limits, the click with the account's session (D10), two clicks, refusals at the click, link_flow, pending_ids, the logs")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_change.py", test_names)
     return run_command(cmd, "Profile email change tests", verbose=verbose)
@@ -2929,7 +2929,7 @@ Note: No backend server required.
         "email-change",
         services_email_change,
         name="Profile Email Change (project 71)",
-        desc="A change of address asked from Profile waits for a link the account issued for itself (created_by_user_id): a password change (route), a password reset (link or command line) and a deactivation (administrator, user limit, command line) revoke it, an activation does not, and the host's link of the same account stays valid; email_refusal (another account's address or username, the owner's reserved address unless reserve_owner_address=False) and move_email (moved, verified, sessions ended, links revoked) extracted from update_profile",
+        desc="A change of address asked from Profile waits for a link the account issued for itself (created_by_user_id): a password change (route), a password reset (link or command line) and a deactivation (administrator, user limit, command line) revoke it, an activation does not, and the host's link of the same account stays valid; email_refusal and move_email extracted from update_profile; email_change.py: a request issues one 24-hour link and changes nothing, confirmation to the new address and notice to the old, a refused send leaves nothing waiting, limits (5 an hour per account, resend after 60 s, 3 an hour per new mailbox, the instance budget) refuse before any write, a taken address refused, resend revokes the old link only after its email, cancel; the click: a dead link says why to anyone, a live one needs the account's session (D10) and without it nothing is written, the address moves verified and the sessions end, of two clicks one wins, a condition failed at the click revokes the link; link_flow, pending_ids, verification_mode; the owner flow untouched; no address or token in the log",
         # PURE: every database is a private file under tmp_path built with create_all; the change-password route is called
         # in this process on that file; profile and variables set with monkeypatch. No lane DB, no server, no email.
         isolation="pure",
