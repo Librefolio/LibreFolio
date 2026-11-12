@@ -95,6 +95,7 @@ from backend.app.services.pac_allocator.constraints.facts import (
 )
 from backend.app.services.pac_allocator.constraints.fees import add_fee_epigraph_constraints
 from backend.app.services.pac_allocator.constraints.funding import add_funding_activation_constraints, add_funding_pool_constraints
+from backend.app.services.pac_allocator.constraints.fx import add_fx_single_direction_constraints
 from backend.app.services.pac_allocator.constraints.orders import add_order_activation_constraints, add_order_required_minimum_constraints
 from backend.app.services.pac_allocator.models import ExactPlannerScenario
 
@@ -132,3 +133,4 @@ def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts
     add_order_activation_constraints(model, scenario, facts, variables)
     add_funding_activation_constraints(model, scenario, facts, variables)
     add_fee_epigraph_constraints(model, scenario, facts, variables)
+    add_fx_single_direction_constraints(model, scenario, facts, variables)

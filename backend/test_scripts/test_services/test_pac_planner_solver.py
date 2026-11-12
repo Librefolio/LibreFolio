@@ -71,7 +71,7 @@ from backend.app.services.pac_allocator.solver import (
 )
 from backend.test_scripts.test_services._pac_exhaustive_oracle import run_exhaustive_oracle
 from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scenario_of
-from backend.test_scripts.test_services.test_pac_planner_evaluator import ONE, ZERO, R, _pac_scenario, _shared_pair_scenario, _transfer_lane_scenario, _with_lane
+from backend.test_scripts.test_services.test_pac_planner_evaluator import ONE, ZERO, R, _pac_scenario, _shared_pair_scenario, _transfer_lane_scenario, _two_way_scenario, _with_lane
 from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _credit_tie_fx_scenario, _two_asset_pac_scenario
 
 # --------------------------------------------------------------------------
@@ -800,3 +800,13 @@ def test_solver_matches_oracle_with_a_broker_transfer() -> None:
     (transfer,) = [access.decision_id for access in view.decisions if access.family == "broker_transfer"]
     assert quanta[transfer] > 0
     assert quanta[transfer] == 10 * quanta[exact_decision_id("buy_quantum", "route:buy:b")]
+
+
+def test_solver_matches_oracle_when_both_directions_exist() -> None:
+    """V7, N2 in small: both directions of EUR/USD exist at one Broker. SCIP and the exhaustive oracle agree exactly, and the
+    plan converts in one direction at most."""
+    test_solver_incumbent_equals_exhaustive_oracle_optimum(_two_way_scenario)
+    view, result = _run(_two_way_scenario())
+    fx_quanta = [value for decision_id, value in _quanta(result.candidate).items() if decision_id.startswith("fx:")]
+    assert len(fx_quanta) == 2
+    assert min(fx_quanta) == 0

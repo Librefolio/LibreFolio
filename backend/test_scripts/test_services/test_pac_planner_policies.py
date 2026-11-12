@@ -115,6 +115,7 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _pac_scenario,
     _scenario,
     _shared_pair_scenario,
+    _two_way_scenario,
 )
 from backend.test_scripts.test_services.test_pac_planner_oracle import (
     _coarse_funding_fx_scenario,
@@ -1311,3 +1312,19 @@ def test_compiled_model_has_one_fx_variable_and_credit_row_per_broker_pair() -> 
     assert sorted(name for name in variable_names if name.startswith("fx:")) == [fx_id(scenario, source="EUR", destination="USD")]
     assert sorted(name for name in variable_names if name.startswith("posted_fx_credit:")) == [f"posted_fx_credit:{key}"]
     assert f"posted_fx_credit:{key}:active" in constraint_names
+
+
+def test_compiled_model_forbids_both_directions_of_a_pair() -> None:
+    """V7 in SCIP: one binary per Broker and pair that has both directions; pinning both debits above zero is infeasible,
+    pinning either alone is not."""
+    scenario = _two_way_scenario()
+    view = build_exact_policy_view(scenario)
+    to_usd = fx_id(scenario, source="EUR", destination="USD")
+    to_eur = fx_id(scenario, source="USD", destination="EUR")
+
+    assert _pinned_status(scenario, view, quanta={to_usd: 1, to_eur: 2}) == "infeasible"
+    assert _pinned_status(scenario, view, quanta={to_usd: 1, to_eur: 0}) == "optimal"
+    assert _pinned_status(scenario, view, quanta={to_usd: 0, to_eur: 2}) == "optimal"
+    program = _fresh_program(scenario, view)  # kept alive: a SCIP variable's name is read through its model
+    variable_names = {variable.name for variable in program.model.getVars()}
+    assert [name for name in variable_names if name.startswith("fx_direction:")] == ["fx_direction:10:broker:hub:EUR/USD"]
