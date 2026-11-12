@@ -2621,6 +2621,13 @@ test.describe('Asset Detail Page', () => {
         expect(fxConvertRequestCount).toBe(firstLoadFxConversionsBeforeSync);
         expect(fxRouteMutationRequestCount).toBe(0);
         await expect(page.getByTestId('toast-error')).toHaveCount(2);
+        // Both are this step's (the failed asset sync and the failed FX sync): closed here, as the user would, so that a
+        // later count of error toasts reads only what follows. Left open they live 15 s, and whether they are gone by the
+        // next count would depend on how fast the steps between run.
+        for (let open = 2; open > 0; open--) {
+            await page.getByTestId('toast-error').first().getByTestId('toast-dismiss').click();
+            await expect(page.getByTestId('toast-error')).toHaveCount(open - 1);
+        }
 
         initialComparisonGate.release();
         const initialComparisonResponse = await initialComparisonResponsePromise;
