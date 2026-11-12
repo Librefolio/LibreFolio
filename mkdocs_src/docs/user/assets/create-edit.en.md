@@ -101,6 +101,13 @@ search both levels, by name or code (for example `etf_bond`).
     <img class="gallery-img" data-category="assets" data-name="type-picker-open" alt="Type menu with the ETF family expanded, each specific ETF type showing its composite icon">
 </div>
 
+!!! note "An asset with transactions cannot become an Index"
+
+    **Index** is for a benchmark you follow, not one you trade: a transaction cannot be recorded
+    against an Index. An asset that already has transactions therefore cannot be changed to that
+    type, in this form or in [the editor for several assets](#bulk-edit): the save is refused and
+    says why. An Index that already holds transactions is left alone.
+
 **Search Online** usually sets a general type such as **ETF**. If you know what the fund holds,
 refine it, for example to **Equity ETF**: its badge and icon then show what it holds. A later
 [check against the provider's data](#provider-data-comparison) keeps your choice.
@@ -326,6 +333,79 @@ Italy,40
     The separator, `,` or `;`, is read from the header. With `,`, the row `Italy,12,5` is silently
     read as `12`. Use `;` throughout (`name;weight`, then `Italy;12,5`), quote the value
     (`Italy,"12,5"`), or write `Italy,12.5`.
+
+## 🧺 Edit several assets at once {: #bulk-edit }
+
+To give the same type, status or link to a whole group of assets, select them instead of opening
+each one.
+
+1. On the **Assets** page, switch to the **table** view and tick the assets. They can sit in any of
+   the three tables (yours, other users' and watched ones); the selection adds them up. The card
+   view has no selection.
+2. In the toolbar that appears, click the pencil, **Edit selected (N)**. The **Edit N assets**
+   window opens on the **Fields** step.
+
+### 🧩 Step 1: Fields {: #bulk-edit-fields }
+
+Every field starts on **Leave as is** and says what the selected assets hold now, with counts: the
+types as badges (*ETF ×3*, *Equity ETF ×1*…, the first three and **+N** when there are more than
+four), the units, **Active** and **Benchmark** as *Yes ×4* and *No ×1*, how many assets have an
+icon and how many different links. The fields are in three groups:
+
+- **Other details**: **Icon** (click the circle to pick one) and **User URL**.
+- **Classification**: **Type**, the same menu as in [the asset form](#choosing-the-asset-type).
+- **Price and status**: **Units per single price** (a whole number from 1), **Active** and
+  **Benchmark**, the last two with three choices: **Leave as is**, **Yes**, **No**.
+
+A field you touch gets a **modified** chip, a line telling for how many assets it changes
+(*Changes for 4 of 5 · 1 already have it*) and its own **Undo**, which puts it back to **Leave as
+is**; **Undo All**, in the title bar, does it for every field. The value you choose is the same for
+all the assets, and **only what changes is sent**: an asset that already has it is left out.
+
+!!! note "Nothing is cleared from here"
+
+    An empty **User URL**, or no icon chosen, means **Leave as is**. To remove a link or an icon,
+    use the [asset's own form](#editing-an-asset). The same goes for the name, the currency, the
+    identifiers and the provider, which are not in this window, and for the description and the
+    sector and country distributions.
+
+**Continue to summary** turns on as soon as at least one asset would change. A units value that is
+not a whole number from 1 shows an error and keeps it off.
+
+### ⚡ Validate now {: #bulk-edit-validate }
+
+**⚡ Validate now** is optional: it asks LibreFolio what would happen, without saving anything, and
+shows the answer at the top of the window. When it finds nothing, nothing appears.
+
+- 🟥 **Blocks** come first. The one that exists today: **"Index" does not accept transactions**,
+  with the assets that have them and how many. The field gets a **blocked** chip. While a block
+  stands, nothing can be saved.
+- 🟧 **Warnings** never stop the save. The one that exists today is a **family change**, for
+  example crowdfunding → ETF: it is allowed, but unusual. An asset that is blocked does not also
+  get a warning.
+
+Each banner offers **Remove from the edit**, which takes those assets out of this change (their
+chips stay in the list, crossed out, and the table behind the window is not touched), and a
+warning also **That's fine**, which closes it for good. Changing any field, or the assets, discards
+the answer, because it was about something else.
+
+### 📋 Step 2: Summary {: #bulk-edit-summary }
+
+**Continue to summary** runs the same check by itself and shows what will change: how many assets
+change, how many per field, and a table, one row per asset, **before → after**, with *already …*
+where the asset has the value already. A warning still open turns its row amber; a block, red,
+and turns **Save** off. On a phone, each asset is a card instead of a table row.
+
+**Back** returns to the fields as you left them. **Save N assets** sends everything at once, and
+the save is **all or nothing**:
+
+- If every asset passes, the window closes, a message tells how many assets and which fields were
+  updated, the selection is cleared and the list reloads.
+- If one does not (it was deleted meanwhile, for example), **nothing is saved**: the summary stays,
+  a red banner says *no asset was changed* and names the one that stopped it. Take it out of the edit
+  and save the rest, or go back.
+
+Closing the window without saving changes nothing and keeps your selection.
 
 ## 🧲 Merge duplicate assets
 
