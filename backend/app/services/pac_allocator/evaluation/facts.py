@@ -9,9 +9,10 @@ from dataclasses import dataclass
 from backend.app.services.pac_allocator.evaluation.economics import EconomicState, evaluate_economic_state
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, is_quantum_multiple
+from backend.app.services.pac_allocator.evaluation.limits import resolve_scenario_limits, uninvested_maximum
 from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_two_way_pairs
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
-from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, valuation_rate_of
+from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, to_valuation, valuation_rate_of
 from backend.app.services.pac_allocator.ledger import (
     rounded_money_posting,
 )
@@ -218,6 +219,42 @@ def _fx_direction_constraint_facts(
             upper_bound=ExactRatio(1),
             satisfied=count <= ExactRatio(1),
         )
+    return facts
+
+
+def _limit_constraint_facts(
+    *,
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    state: EconomicState,
+    checkpoint: Checkpoint | None,
+) -> dict[str, _ConstraintFact]:
+    """V5 for every limited entry and V10 where it applies (A3), on limits resolved against ``fixed_reference``.
+
+    The final value of an Asset is ``ExactAssetEvaluation.final_value``; of a cash cell, its final spendable cash valued in
+    the valuation currency. V10: what the plan leaves uninvested (``shortfall``) may not exceed the sum of the cash maxima.
+    A violation is never a rounding deficit: neither code is among the four ``evaluator`` accepts for a top-up (D9).
+    """
+    facts: dict[str, _ConstraintFact] = {}
+    resolved = resolve_scenario_limits(scenario, state.accounting.fixed_reference)
+    final_value = {item.asset_id: item.final_value for item in state.assets}
+    final_cash = {(row.broker_id, row.currency): to_valuation(index, row.final_spendable, row.currency) for row in state.ledgers}
+    for entry, bounds in resolved.by_entry.items():
+        check_budget(checkpoint)
+        value = final_value[entry.asset_id] if entry.kind == "asset" else final_cash[(entry.broker_id, entry.currency)]
+        satisfied = (bounds.minimum is None or value >= bounds.minimum) and (bounds.maximum is None or value <= bounds.maximum)
+        contradictory = bounds.minimum is not None and bounds.maximum is not None and bounds.minimum > bounds.maximum
+        # A minimum above its maximum is refused before the calculation (``limits.check_minimum_above_maximum``); a replay that
+        # meets one anyway reports it unsatisfiable, and publishes the minimum alone: a fact's bounds must be ordered.
+        facts[_constraint_id("ENTRY_VALUE_WITHIN_LIMITS", entry.key)] = _ConstraintFact(
+            value=value,
+            lower_bound=bounds.minimum,
+            upper_bound=None if contradictory else bounds.maximum,
+            satisfied=satisfied and not contradictory,
+        )
+    maximum = uninvested_maximum(scenario, tuple(final_cash), resolved)
+    if maximum is not None:
+        facts[_constraint_id("UNINVESTED_WITHIN_CASH_MAXIMA", "global")] = _ConstraintFact(value=state.accounting.shortfall, lower_bound=_EXACT_ZERO, upper_bound=maximum, satisfied=state.accounting.shortfall <= maximum)
     return facts
 
 
@@ -556,6 +593,7 @@ def constraint_facts(
         )
     )
     facts.update(_fx_direction_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
+    facts.update(_limit_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
     facts.update(
         _order_constraint_facts(
             scenario,
