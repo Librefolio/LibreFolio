@@ -13,7 +13,7 @@ import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
-import {CATALOG_SCHEMA, CATEGORY_FILE, categoryLines, FRONTEND_DIR, isTestPath, LAB_DIRS, listSourceFiles, scanColors, scanSource, scriptTestidValues, STATIC_SOURCES, testidValues} from '../../../../scripts/designer-lab/scan-colors.mjs';
+import {CATALOG_SCHEMA, CATEGORY_FILE, categoryLines, FRONTEND_DIR, isTestPath, LAB_DIRS, listSourceFiles, maskComments, scanColors, scanSource, scriptTestidValues, STATIC_SOURCES, testidValues} from '../../../../scripts/designer-lab/scan-colors.mjs';
 import {CATEGORY_BUCKETS, CATEGORY_KEYS, CATEGORY_ROLES, categoryColor as chartCategoryColor} from '$lib/theme/chartCategories';
 import {categoryRows, isInlineAlias} from './catalogView';
 import type {CatalogLiteral, ColorCatalog, TestidVia, ThemeContext, Zone} from './types';
@@ -90,6 +90,45 @@ describe('scanSource — zones', () => {
     });
 });
 
+describe('maskComments — a colour in a comment is not a colour of the app (L6-1)', () => {
+    /** The same lines with the comments blanked: nothing moves, so a line and a column mean what they meant. */
+    const same = (rel: string, text: string) => {
+        const masked = maskComments(rel, text);
+        expect(masked).toHaveLength(text.length);
+        expect(masked.split('\n').length).toBe(text.split('\n').length);
+        return masked;
+    };
+
+    it('blanks `/* … */` in a stylesheet over several lines, and keeps the rule around it', () => {
+        const masked = same('src/app.css', ['.a { color: #111111; } /* was #222222,', ' then #333333 */ .b { color: #444444; }'].join('\n'));
+        expect(masked).toContain('#111111');
+        expect(masked).toContain('#444444');
+        expect(masked).not.toMatch(/#222222|#333333/);
+    });
+
+    it('blanks `//` and `/* */` of a script, but not a `//` inside a string or a template literal', () => {
+        const masked = same('src/lib/thing.ts', ["const a = 'https://x.test/#aaaaaa'; // was #bbbbbb", 'const b = `${"//"}#cccccc ${`//`}`; /* #dddddd */ const c = "#eeeeee";'].join('\n'));
+        expect(masked).toContain('#aaaaaa');
+        expect(masked).toContain('#cccccc');
+        expect(masked).toContain('#eeeeee');
+        expect(masked).not.toMatch(/#bbbbbb|#dddddd/);
+    });
+
+    it('treats a svelte file by region: `<!-- -->` in the markup, `//` in the script, `/* */` in the style — and `//` in the markup is text', () => {
+        const text = ['<script>', '    const a = 1; // #111111', '</script>', '<!-- #222222 -->', '<a href="https://x.test/#333333">go</a>', '<style>', '    .a { color: #444444; /* #555555 */ }', '</style>'].join('\n');
+        const masked = same('src/lib/Thing.svelte', text);
+        expect(masked).toContain('#333333');
+        expect(masked).toContain('#444444');
+        expect(masked).not.toMatch(/#111111|#222222|#555555/);
+    });
+
+    it('leaves the counts of the scanner to the code: only the colour outside the comments is a literal', () => {
+        const result = scan('src/lib/Thing.svelte', ['<script>', '    const x = "#aa0001"; // was #aa0002', '</script>', '<!-- bg-red-500 -->', '<div class="bg-blue-500"></div>']);
+        expect(result.literals.map((l) => l.raw)).toEqual(['#aa0001']);
+        expect(result.counts.tw).toBe(1);
+    });
+});
+
 describe('scanSource — the CSS rule of a stylesheet colour', () => {
     it('records the selector, property, at-rules and theme of a colour in a component <style>', () => {
         const result = scan('src/lib/components/table/DataTable.svelte', [
@@ -149,7 +188,7 @@ describe('scanSource — the CSS rule of a stylesheet colour', () => {
             'html.light .card {',
             '    border-color: #e5e7eb;',
             '}',
-            '/* #ff0000 in a comment: counted, as color_inventory.py counts it, but in no rule */',
+            '/* #ff0000 in a comment: counted by nobody (L6-1) */',
         ]);
         expect(literal(result, 3, '#1a4031')).toMatchObject({zone: 'css-file', selector: '@theme', property: '--color-libre-green', theme: 'both'});
         expect(literal(result, 6, '#6b7280')).toMatchObject({selector: ':root', property: '--theme-text-muted', theme: 'both'});
@@ -158,7 +197,10 @@ describe('scanSource — the CSS rule of a stylesheet colour', () => {
         expect(literal(result, 17, '#f1f5f9')).toMatchObject({selector: '.auto', at: ['@media (prefers-color-scheme: dark)'], property: 'color', theme: 'dark'});
         expect(literal(result, 22, '#0f172a')).toMatchObject({selector: '.auto', at: ['@media (prefers-color-scheme: light)'], property: 'color', theme: 'light'});
         expect(literal(result, 26, '#e5e7eb')).toMatchObject({selector: 'html.light .card', property: 'border-color', theme: 'light'});
-        expect(literal(result, 28, '#ff0000')).toMatchObject({zone: 'css-file', layer: 'css-literal', selector: null, property: null, theme: 'both'});
+        expect(
+            result.literals.filter((l) => l.raw === '#ff0000'),
+            'a colour in a comment is not one',
+        ).toEqual([]);
     });
 
     it('reads a rule under `:not(.dark)` as light-theme only', () => {
