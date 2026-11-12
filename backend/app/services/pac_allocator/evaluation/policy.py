@@ -7,8 +7,8 @@ from hashlib import sha256
 
 from backend.app.services.pac_allocator.evaluation.economics import EconomicState, evaluate_economic_state
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
-from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id, fx_debit_key
-from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies
+from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
@@ -219,33 +219,9 @@ def _canonical_tie_decision_ids(
                 decision_id,
             )
         )
-    for route in scenario.order_routes:
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        if route.side != "buy":
-            continue
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
-            index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            decision_id = exact_decision_id("fx_debit", fx_debit_key(route.route_id, currency))
-            rows.append(
-                (
-                    (
-                        "",
-                        route.broker_id,
-                        currency,
-                        "fx",
-                        quote_currency,
-                        route.route_id,
-                        decision_id,
-                    ),
-                    decision_id,
-                )
-            )
+        rows.append((spec.tie_break, spec.decision_id))
     for route in scenario.order_routes:
         check_budget(checkpoint)
         quote_currency = index.assets[route.asset_id].quote.price.currency

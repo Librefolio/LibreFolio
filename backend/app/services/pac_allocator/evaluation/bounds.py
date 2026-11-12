@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
-from backend.app.services.pac_allocator.evaluation.keys import candidate_quanta, entity_refs, exact_decision_id, floor_units, fx_debit_key
-from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies
+from backend.app.services.pac_allocator.evaluation.keys import candidate_quanta, entity_refs, exact_decision_id, floor_units
+from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies, fx_decision_specs
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, order_prices, source_broker, source_selected, to_valuation
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
@@ -139,23 +139,10 @@ def _fx_upper_bounds(
     checkpoint: Checkpoint | None,
 ) -> dict[str, int]:
     bounds = {}
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
-            index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            native_bound = resource_bound / index.valuation_rate[currency]
-            bounds[exact_decision_id("fx_debit", fx_debit_key(route.route_id, currency))] = floor_units(
-                native_bound,
-                index.currency_quantum[currency],
-            )
+        native_bound = resource_bound / index.valuation_rate[spec.source_currency]
+        bounds[spec.decision_id] = floor_units(native_bound, index.currency_quantum[spec.source_currency])
     return bounds
 
 
@@ -240,28 +227,9 @@ def expected_decision_rows(
                 ),
             )
         )
-    for route in scenario.order_routes:
+    for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
-        if route.side != "buy":
-            continue
-        quote_currency = index.assets[route.asset_id].quote.price.currency
-        for currency in buy_pool_currencies(
-            scenario,
-            index,
-            broker_id=route.broker_id,
-            quote_currency=quote_currency,
-            checkpoint=checkpoint,
-        ):
-            rows.append(
-                (
-                    exact_decision_id("fx_debit", fx_debit_key(route.route_id, currency)),
-                    "fx_debit",
-                    entity_refs(
-                        ("order_route", route.route_id),
-                        ("currency", currency),
-                    ),
-                )
-            )
+        rows.append((spec.decision_id, "fx_debit", spec.entity_refs))
     for route in scenario.order_routes:
         check_budget(checkpoint)
         family: DecisionFamily = "buy_quantum" if route.side == "buy" else "sell_quantum"
