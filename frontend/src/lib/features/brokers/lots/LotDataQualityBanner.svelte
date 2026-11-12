@@ -8,7 +8,9 @@
    - folds behind a "N warning(s)" header, collapsed by default (like the dashboard banner);
    - lists the affected lots per category as clickable chips (lot label + opening date, plus a
      #index when several lots share the same opening day);
-   - clicking a chip calls onLotClick(lotId) → the parent pulses that lot's bubble in the price chart.
+   - clicking a chip calls onLotClick(lotId) → the parent pulses that lot's bubble in the price chart;
+   - offers the Dashboard's pair actions on an FX issue (project 69, L4: «add the pair», «sync the pair»), drawn by the
+     Dashboard banner's own `DataQualityIssueActions` on the issue's own line and handed to the parent (`onaction`).
 
   Svelte 5 runes, dark mode, data-testid selectors.
 -->
@@ -20,6 +22,7 @@
     import {buildIssueGroups, groupedSeverity, type IssueGroup, type IssueSeverity} from './lotDataQualityHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {DATA_QUALITY_TONE, STATUS_TONES} from '$lib/theme/toneClasses';
+    import DataQualityIssueActions from '$lib/components/ui/feedback/DataQualityIssueActions.svelte';
 
     interface Props {
         /** Raw FIFO data-quality issues (one per lot for lot-scoped codes). */
@@ -29,9 +32,13 @@
         lotDates: Map<number, string>;
         /** Click on a lot chip → pulse that lot's bubble in the price chart. */
         onLotClick?: (lotId: number) => void;
+        /** An issue's pair action pressed (L4): the parent syncs, or opens the pair dialog. */
+        onaction?: (action: string, target: string | null, issue: DataQualityIssue) => void;
+        /** The issue code whose action is running: its button shows a spinner and is disabled. */
+        busyCode?: string | null;
     }
 
-    let {issues, lotDates, onLotClick}: Props = $props();
+    let {issues, lotDates, onLotClick, onaction, busyCode = null}: Props = $props();
 
     let expanded = $state(false);
 
@@ -41,7 +48,7 @@
 
     /** Group issues by code (dedup the repeated per-lot banners), resolving each issue's lot_id into a
      *  chip. Within a group, lots opened on the same day get a #index suffix to disambiguate them. */
-    let groups = $derived.by((): IssueGroup[] => buildIssueGroups(issues, lotDates, (iso) => $_('brokers.lots.lotLabel', {values: {date: formatDate(iso)}})));
+    let groups = $derived.by((): IssueGroup<DataQualityIssue>[] => buildIssueGroups(issues, lotDates, (iso) => $_('brokers.lots.lotLabel', {values: {date: formatDate(iso)}})));
 
     let errorCount = $derived(groups.filter((group) => group.severity === 'error').length);
     let warningCount = $derived(groups.filter((group) => group.severity === 'warning').length);
@@ -95,10 +102,16 @@
                     {@const groupStyles = severityStyles(group.severity)}
                     <div class="flex flex-col gap-1.5 text-xs" data-testid="lot-data-quality-issue-{group.code}" data-severity={group.severity} data-tone={groupStyles.tone}>
                         {#each group.messages as message (message.key)}
+                            {#if message.action}
+                                <DataQualityIssueActions issue={message.action} placement="head" chipClass={groupStyles.chip} {onaction} {busyCode} />
+                            {/if}
                             <div class="flex items-center gap-2 flex-wrap min-w-0" data-testid="lot-data-quality-message">
                                 <Icon size={13} class="shrink-0 {groupStyles.icon}" />
                                 <span>{$_(message.messageKey, {values: message.params})}</span>
                             </div>
+                            {#if message.action}
+                                <DataQualityIssueActions issue={message.action} placement="items" chipClass={groupStyles.chip} {onaction} {busyCode} />
+                            {/if}
                         {/each}
                         {#if group.lots.length > 0}
                             <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
