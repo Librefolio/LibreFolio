@@ -1,16 +1,17 @@
-"""Bulk lots analysis (``POST /portfolio/lots``): the query, the lots, their timelines and histories, and the economic allocation of a position."""
+"""Bulk lots analysis (``POST /portfolio/lots/analysis``): the query, the lots, their timelines and histories, and the economic allocation of a position, in one or more matching methods."""
 
 from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
 from enum import StrEnum
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 from backend.app.schemas.common import Currency, DateSpan, OpenDateRangeModel, SafeDecimal, StepSpan, StrictModel
 from backend.app.schemas.portfolio.data_quality import DataQualityReport
+from backend.app.services.financial_math.fifo.models import LotMatchingMethod  # a plain enum of the layer, no service
 
 LotDirection = Literal["LONG", "SHORT"]
 
@@ -60,6 +61,10 @@ class LotsAnalysisQuery(BaseModel):
     target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217).")
     selected_lot_ids: Optional[List[int]] = Field(None, description="Optional subset of lot_ids to project in lot-scoped analyses.")
     requested_analyses: List[LotAnalysisType] = Field(..., description="Non-empty list of analyses to compute.")
+    matching_methods: List[LotMatchingMethod] = Field(
+        default_factory=lambda: [LotMatchingMethod.FIFO],
+        description="The orders in which outflows close lots, each answered in its own block of methods: FIFO (oldest lot first), LIFO (most recent first). Default FIFO.",
+    )
 
     @field_validator("target_currency")
     @classmethod
@@ -74,6 +79,15 @@ class LotsAnalysisQuery(BaseModel):
         deduped = list(dict.fromkeys(v))
         if len(deduped) != len(v):
             raise ValueError("requested_analyses must not contain duplicates")
+        return v
+
+    @field_validator("matching_methods")
+    @classmethod
+    def validate_matching_methods(cls, v: List[LotMatchingMethod]) -> List[LotMatchingMethod]:
+        if not v:
+            raise ValueError("matching_methods must contain at least one method")
+        if len(set(v)) != len(v):
+            raise ValueError("matching_methods must not repeat a method")
         return v
 
 
@@ -358,6 +372,7 @@ class LotsAnalysisMetadata(StrictModel):
     broker_ids: Optional[List[int]] = None
     selected_lot_ids: Optional[List[int]] = None
     requested_analyses: List[LotAnalysisType]
+    matching_methods: List[LotMatchingMethod] = Field(default_factory=lambda: [LotMatchingMethod.FIFO], description="The matching methods computed, in the order asked: the keys of methods.")
     requested_date_from: Optional[date_type] = None
     requested_date_to: Optional[date_type] = None
     computed_date_from: Optional[date_type] = None
@@ -365,11 +380,9 @@ class LotsAnalysisMetadata(StrictModel):
     generated_at: date_type
 
 
-class LotsAnalysisResponse(StrictModel):
-    """Response for POST /portfolio/lots/analysis.
-
-    Sections are None unless explicitly requested via requested_analyses.
-    """
+class LotsAnalysisCommon(StrictModel):
+    """The parts of a lots analysis that the matching method does not change (project 69, D11): the scope, the window
+    and the three replay-free analyses (market price line, average-cost lines). Sections are None unless requested."""
 
     asset_id: int
     target_currency: str
@@ -377,12 +390,29 @@ class LotsAnalysisResponse(StrictModel):
         1,
         description="Asset quote_base_quantity (e.g. 100 for bonds priced per 100 nominal). Lets the frontend rescale per-quote unit prices (opening_unit_price) to the per-unit axis used by WAC/value lines.",
     )
-    calculation_status: LotAnalysisStatus
     calculation_metadata: LotsAnalysisMetadata
     range: Optional[DateSpan] = Field(
         None,
         description="The days the histories cover: the first day of the window with data (the later of the requested start and the scope's first transaction) to its last day. None when the window holds no day. Every history point holds from its `date` to its `through`, both inside it.",
     )
+    market_price_history: Optional[List[MarketPriceHistoryPoint]] = Field(
+        None,
+        description="MARKET_PRICE_HISTORY payload — the asset's market price on each day of the window that has a mark convertible to target_currency, independent of the lots and of selected_lot_ids; kept with FAILED.",
+    )
+    broker_wac_history: Optional[List[BrokerWACHistoryPoint]] = Field(None, description="BROKER_WAC_HISTORY payload.")
+    cumulative_wac_history: Optional[List[CumulativeWACHistoryPoint]] = Field(None, description="CUMULATIVE_WAC_HISTORY payload.")
+
+    @field_validator("target_currency")
+    @classmethod
+    def validate_target_currency(cls, v: str) -> str:
+        return Currency.validate_code(v)
+
+
+class LotsMethodAnalysis(StrictModel):
+    """What one matching method's replay decides (project 69, D11): its status, its complete data quality (the replay's
+    issues, its conversion gaps and those of the common parts), the lots and every section read from them."""
+
+    calculation_status: LotAnalysisStatus
     data_quality: Optional[DataQualityReport] = None
     lots: Optional[List[LotSummarySchema]] = Field(None, description="LOT_SUMMARY payload.")
     gantt_segments: Optional[List[GanttSegmentSchema]] = Field(None, description="GANTT_TOPOLOGY payload.")
@@ -391,12 +421,6 @@ class LotsAnalysisResponse(StrictModel):
     value_history: Optional[List[LotValueHistoryPoint]] = Field(None, description="Flat per-lot VALUE_HISTORY points.")
     return_history: Optional[List[LotReturnHistoryPoint]] = Field(None, description="Flat per-lot RETURN_HISTORY points.")
     price_history: Optional[List[LotPriceHistoryPoint]] = Field(None, description="Flat per-lot PRICE_HISTORY points.")
-    market_price_history: Optional[List[MarketPriceHistoryPoint]] = Field(
-        None,
-        description="MARKET_PRICE_HISTORY payload — the asset's market price on each day of the window that has a mark convertible to target_currency, independent of the lots and of selected_lot_ids; kept with FAILED.",
-    )
-    broker_wac_history: Optional[List[BrokerWACHistoryPoint]] = Field(None, description="BROKER_WAC_HISTORY payload.")
-    cumulative_wac_history: Optional[List[CumulativeWACHistoryPoint]] = Field(None, description="CUMULATIVE_WAC_HISTORY payload.")
     performance_history: Optional[List[PerformanceHistoryPoint]] = Field(
         None,
         description="PERFORMANCE_HISTORY payload — asset-wide ROI/TWRR, ignores selected_lot_ids.",
@@ -413,7 +437,24 @@ class LotsAnalysisResponse(StrictModel):
     asset_orphan_fees: Optional[SafeDecimal] = Field(default=Decimal("0"), description="FEE with no eligible lot, in target_currency; None when an orphan FEE pool has no rate.")
     asset_orphan_taxes: Optional[SafeDecimal] = Field(default=Decimal("0"), description="TAX with no eligible lot, in target_currency; None when an orphan TAX pool has no rate.")
 
-    @field_validator("target_currency")
-    @classmethod
-    def validate_target_currency(cls, v: str) -> str:
-        return Currency.validate_code(v)
+
+class LotsAnalysisResponse(LotsAnalysisCommon, LotsMethodAnalysis):
+    """One matching method's lots analysis, read flat: the common parts and that method's block, each field once.
+
+    Not an API response since project 69 (D11): it is the reading the Python callers keep (AI Export stays FIFO, D7),
+    derived from the response with ``LotsAnalysisMethodsResponse.reading``, never built by hand.
+    """
+
+
+class LotsAnalysisMethodsResponse(LotsAnalysisCommon):
+    """Response for POST /portfolio/lots/analysis (project 69, D11): the common parts once, then ``methods``, one block
+    per matching method asked, in the order asked."""
+
+    methods: Dict[LotMatchingMethod, LotsMethodAnalysis] = Field(..., description="One block per matching method asked, in the order of matching_methods.")
+
+    def reading(self, method: LotMatchingMethod) -> LotsAnalysisResponse:
+        """The analysis in ``method`` read flat: the common parts and that method's block (KeyError when not asked)."""
+        block = self.methods[method]
+        common = {name: getattr(self, name) for name in LotsAnalysisCommon.model_fields if name in self.model_fields_set}
+        own = {name: getattr(block, name) for name in LotsMethodAnalysis.model_fields if name in block.model_fields_set}
+        return LotsAnalysisResponse(**common, **own)
