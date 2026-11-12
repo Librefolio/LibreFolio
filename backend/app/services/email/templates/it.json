@@ -63,5 +63,16 @@
     "action": "Conferma questo indirizzo",
     "expiry": "Il link funziona una sola volta e scade tra $duration. Dopo la conferma l'account accede con questo indirizzo e le sue sessioni aperte terminano.",
     "ignore": "Se non aspettavi questa email puoi ignorarla: non cambia nulla."
+  },
+  "email_change_request": {
+    "subject": "Conferma il nuovo indirizzo email del tuo account LibreFolio",
+    "intro": "Qualcuno ha chiesto di usare questo indirizzo email per un account su $instance. Confermalo per completare il cambio: fino ad allora non cambia nulla e l'account mantiene il suo indirizzo attuale.",
+    "action": "Conferma questo indirizzo",
+    "expiry": "Il link funziona una sola volta e scade tra $duration. Dopo la conferma l'account accede con questo indirizzo e le sue sessioni aperte terminano.",
+    "signin": "Per confermare devi essere entrato nel tuo account: se non lo sei, la pagina ti chiede prima di accedere.",
+    "ignore": "Se non sei stato tu, puoi ignorare questa email: non cambia nulla, e senza accedere a quell'account nessuno può confermare.",
+    "requested_subject": "È stato chiesto di cambiare l'indirizzo email del tuo account LibreFolio",
+    "requested_intro": "Qualcuno ha chiesto di cambiare l'indirizzo email del tuo account su $instance. Per ora non è cambiato nulla: il nuovo indirizzo va prima confermato da dentro l'account.",
+    "requested_advice": "Se l'hai chiesto tu, non devi fare niente. Se no, qualcuno potrebbe usare il tuo account: cambia subito la password, cosa che annulla anche la richiesta, e avvisa l'amministratore di $instance."
   }
 }

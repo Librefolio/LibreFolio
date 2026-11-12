@@ -63,5 +63,16 @@
     "action": "Confirm this address",
     "expiry": "The link works only once and expires in $duration. Once confirmed, the account signs in with this address and its open sessions end.",
     "ignore": "If you were not expecting this email, you can ignore it: nothing changes."
+  },
+  "email_change_request": {
+    "subject": "Confirm the new email address of your LibreFolio account",
+    "intro": "Someone asked to use this email address for an account on $instance. Confirm it to complete the change: until then nothing changes and the account keeps its current address.",
+    "action": "Confirm this address",
+    "expiry": "The link works only once and expires in $duration. Once confirmed, the account signs in with this address and its open sessions end.",
+    "signin": "To confirm you must be signed in to your account: if you are not, the page asks you to sign in first.",
+    "ignore": "If this was not you, you can ignore this email: nothing changes, and nobody can confirm without signing in to that account.",
+    "requested_subject": "A change of the email address of your LibreFolio account was requested",
+    "requested_intro": "Someone asked to change the email address of your account on $instance. Nothing has changed yet: the new address must be confirmed from inside the account first.",
+    "requested_advice": "If you asked for it, there is nothing to do. If you did not, someone may be using your account: change your password at once, which also cancels the request, and tell the administrator of $instance."
   }
 }
