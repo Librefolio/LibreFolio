@@ -13,6 +13,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 - Trade Republic: importa il nuovo CSV «Esportazione transazioni» (profilo › Estratti conto › Esportazione transazioni), anche quando è stato risalvato da Excel: acquisti e vendite di fondi, azioni e crypto con commissioni e imposte, interessi con la ritenuta, imposta di bollo, rimborsi d'imposta come interessi, dividendi e bonifici. L'importatore non è più in beta, e la sua guida mostra come scaricare il file. Le righe di un altro conto, come quello di un figlio, restano fuori con una nota: quel conto va esportato dal suo accesso.
 - Modifica di più asset insieme: selezionali nella tabella Asset e usa «Modifica selezionati» per cambiare a tutti il tipo, il benchmark, lo stato attivo, le unità per singolo prezzo, l'icona o l'URL personale. «Verifica ora» mostra cosa blocca il salvataggio (un asset con transazioni non può diventare un Indice) e cosa merita un'occhiata (un tipo che passa a un'altra famiglia, come crowdfunding → ETF), e un riepilogo mostra ogni modifica prima del salvataggio, che è tutto o niente.
+- Analisi dei lotti in FIFO e in LIFO: il pannello dei lotti calcola i due metodi in una sola richiesta e passa dall'uno all'altro con un selettore nell'intestazione (FIFO all'apertura, non salvato). I lotti selezionati restano selezionati; cambiano col metodo il lotto chiuso da una vendita e le cifre che ne seguono. Le pagine di teoria spiegano la regola italiana (LIFO nel regime dichiarativo, costo medio nell'amministrato) e i limiti del calcolo.
+- Il banner della qualità dei dati del pannello dei lotti offre «Aggiungi coppia FX» e «Sincronizza tassi» su un cambio mancante o vecchio, come il banner della Dashboard.
 
 ### 🔄 Modifiche
 
