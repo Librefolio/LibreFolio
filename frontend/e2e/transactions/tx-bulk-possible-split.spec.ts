@@ -35,11 +35,11 @@
  */
 
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {t as catalogueText} from '../fixtures/i18n-data';
 import {continueToReview, deleteOwnedReports, parseSelectedFile, selectBrokerFile, type OwnedReport, type ParseResponse} from '../fixtures/import-wizard';
-import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {readFileSync} from 'fs';
 import path from 'path';
@@ -274,24 +274,32 @@ async function expectLinkedEvent(gridRow: Locator, eventId: number) {
 
 test.describe('Bulk editor — a possible stock split of an import (W-B87)', () => {
     let owned: Owned | undefined;
+    /** The account the running test writes with: its own, so its broker, asset and file are seen by no other spec. */
+    let account: DisposableUser | null = null;
 
-    test.beforeEach(async ({page}) => {
+    test.beforeEach(async ({page, request}) => {
         owned = undefined;
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, 'bps');
+        await prepareOnboardingAccount(page, account, []);
     });
 
     // afterEach, not `finally`: a cleanup throwing from `finally` would replace the assertion error it follows.
-    test.afterEach(async ({page}) => {
-        if (ownedReports.length === 0 && ownedBrokerIds.length === 0 && ownedAssetIds.length === 0) return;
-        await page.goto('about:blank');
-        const failures: string[] = [];
+    test.afterEach(async ({page, request}) => {
         try {
-            await deleteOwnedReports(page, ownedReports);
-        } catch (error) {
-            failures.push(String(error));
+            if (ownedReports.length === 0 && ownedBrokerIds.length === 0 && ownedAssetIds.length === 0) return;
+            await page.goto('about:blank');
+            const failures: string[] = [];
+            try {
+                await deleteOwnedReports(page, ownedReports);
+            } catch (error) {
+                failures.push(String(error));
+            }
+            failures.push(...(await deleteOwnedBrokers(page)), ...(await deleteOwnedAssets(page)));
+            expect(failures, 'cleanup removes the file, the broker and the asset this test created').toEqual([]);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
         }
-        failures.push(...(await deleteOwnedBrokers(page)), ...(await deleteOwnedAssets(page)));
-        expect(failures, 'cleanup removes the file, the broker and the asset this test created').toEqual([]);
     });
 
     test('SC1: «create the SPLIT event and link it» opens the mini modal on SPLIT; a ratio creates the event and links it to the row', async ({page}) => {

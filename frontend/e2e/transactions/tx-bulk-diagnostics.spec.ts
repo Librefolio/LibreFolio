@@ -14,9 +14,9 @@
  */
 
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {navigateTo} from '../fixtures/auth-helpers';
 import {eventSeq, waitForEvent, waitForParseVerdict, waitForSettled, validateRuns} from '../fixtures/app-events';
-import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
@@ -326,8 +326,18 @@ async function expectActionsScrollWithTable(body: Locator, rowId: string): Promi
 test.setTimeout(120_000);
 
 test.describe('Transaction bulk diagnostics', () => {
-    test.beforeEach(async ({page}) => {
-        await login(page, TEST_USER);
+    /** The account the running test writes with: its own, so its brokers and files are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
+        account = await registerDisposableUser(request, 'bdg');
+        await prepareOnboardingAccount(page, account, []);
+    });
+
+    // The brokers and files go in `withOwnedCsv`'s own cleanup; the account goes last.
+    test.afterEach(async ({request}) => {
+        if (account) await deleteDisposableUser(request, account);
+        account = null;
     });
 
     test('E7: balanceCashNegative highlights all four contributors and navigates by current sort across pages without selecting them', async ({page}) => {
