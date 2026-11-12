@@ -67,6 +67,9 @@ const patchSuccessResponse = {
     results: [{asset_id: 42, success: true, message: 'Synthetic patch accepted', updated_fields: null}],
     success_count: 1,
     errors: [],
+    committed: true,
+    issues: [],
+    warnings: [],
 };
 
 /** The dry run's answer as the modal receives it. Every count distinct, so a swapped pair reads otherwise. */
@@ -259,11 +262,14 @@ describe('AssetCurrencyChangeModal — the confirm sequence', () => {
         expect(screen.getByTestId('currency-change-confirm'), 'the buttons are unlocked for a retry').toBeEnabled();
     });
 
-    it('keeps the modal open when the per-item patch result reports success false', async () => {
+    it('keeps the modal open when the patch answers committed=false (lane 65: all or nothing, 200 either way)', async () => {
         patch.mockResolvedValueOnce({
             results: [{asset_id: 42, success: false, message: 'Asset patch rejected by API', updated_fields: null}],
             success_count: 0,
             errors: [],
+            committed: false,
+            issues: [{asset_id: 42, index: 0, code: 'patchFailed', message: 'Asset patch rejected by API'}],
+            warnings: [],
         } as never);
         const {onconfirmed} = mount({providerAssigned: true});
         await fireEvent.click(screen.getByTestId('currency-change-confirm'));

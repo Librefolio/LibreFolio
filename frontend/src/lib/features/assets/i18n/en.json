@@ -70,7 +70,8 @@
     "notFound": "Asset #{id} not found",
     "loadFailed": "Failed to load asset info",
     "pricesLoadFailed": "Failed to load prices",
-    "manualChip": "Manual"
+    "manualChip": "Manual",
+    "externalLinkHint": "{name}: open {site} in a new tab"
   },
   "assets": {
     "create": "New asset",
@@ -416,6 +417,13 @@
       "pricesSkipped": "{count, plural, one {# row skipped (invalid)} other {# rows skipped (invalid)}}",
       "eventsSaved": "{count, plural, one {# event saved} other {# events saved}}",
       "pricesRefused": "{count, plural, one {# price refused} other {# prices refused}}"
+    },
+    "patchIssue": {
+      "assetNotFound": "The asset no longer exists.",
+      "indexWithTransactions": "An asset with transactions cannot become an Index: it has {count, plural, one {# transaction} other {# transactions}}.",
+      "assetNameTaken": "The name \"{name}\" is already used by another asset.",
+      "assetFamilyChange": "The type moves from {from} to {to}, another type family.",
+      "patchFailed": "The asset could not be saved. Nothing was changed."
     }
   },
   "events": {

@@ -22,6 +22,9 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Análisis de riesgo: cuando un activo queda fuera porque falta un tipo de cambio, el mensaje ahora nombra el par de divisas y dice desde qué fecha hay un tipo guardado, o que no hay ninguno.
 - Listas de Activos y Divisas, vista Rolling Return: las tarjetas ahora comparan también el otro tipo, como las páginas de detalle. La tarjeta de un activo puede mostrar pares de divisas y la de un par puede mostrar activos, elegidos en «Ajustes del Gráfico» de la tarjeta.
 - Análisis de lotes: dentro de un mismo día, las compras y los ajustes de entrada ahora van antes que las ventas y los ajustes de salida. Una venta registrada antes de la compra del mismo día ya no hace fallar el análisis; en un bróker que permite ventas en corto, un corto abierto y cubierto en el mismo día ahora aparece como un lote largo, con la misma ganancia realizada.
+- Cabecera del detalle de un activo: Transacciones ahora es una insignia con un icono y el número de transacciones, para que se lea como un enlace; la insignia del proveedor abre directamente la página web del activo (la que configuraste o, si no, la del proveedor) en una pestaña nueva, y su descripción indica adónde lleva. El icono ↗ aparte desaparece.
+- Cabecera del detalle de un activo en tableta y teléfono: por debajo de 1024 px las insignias tienen su propia fila bajo el nombre; en el teléfono ← y ‹ n/N › comparten la primera fila, el nombre ocupa todo el ancho y las insignias siguen en dos grupos (tipo y divisa; Transacciones y proveedor).
+- Un activo con transacciones ya no puede convertirse en un Índice desde el editor del activo: el editor indica cuántas transacciones tiene y no se guarda nada.
 
 ### 🐛 Corregido
 
@@ -41,10 +44,12 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - El comando de copia de seguridad lee `--password-file` y `--instance-key-file` con una sola apertura: un archivo cambiado después de la comprobación ya no puede leerse en su lugar.
 
 - En una instancia bloqueada por su proveedor de alojamiento, el administrador también ve las «Copias de seguridad ya guardadas» y puede descargarlas, no solo hacer una nueva.
+- La importación de un informe ya no muestra un mensaje de éxito cuando el cambio de los identificadores de un activo no se ha guardado.
 
 ### ⚠️ Cambios incompatibles
 
 - Los endpoints de consulta de precios, de consulta de eventos y de conversión ya no informan los tipos de cambio que faltan como texto en `errors`: llegan en una nueva lista `fx_issues` de `{code, from_currency, to_currency, first_date, last_date, count}`, en el sentido de la conversión.
+- `PATCH /api/v1/assets` guarda todo o nada: si un elemento tiene un problema, no se guarda nada. La respuesta añade `committed`, `issues` y `warnings` (códigos `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; aviso `assetFamilyChange`). Un nombre ya usado por otro activo se indica como `assetNameTaken` en lugar de un error genérico. El nuevo `POST /api/v1/assets/validate` hace los mismos controles y nunca guarda.
 
 ## [1.3.0] - 2026-11-10
 
