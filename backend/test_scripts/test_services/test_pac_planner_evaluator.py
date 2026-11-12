@@ -39,6 +39,7 @@ from backend.app.services.pac_allocator.ledger import (
     reconcile_broker_ledgers,
     rounded_money_posting,
 )
+from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, fixed_reference_of
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -5483,3 +5484,249 @@ def test_both_directions_of_a_pair_fail_the_exact_replay() -> None:
         (fact,) = [item for item in evaluation.constraints if item.ref_id == fact_id]
         assert fact.satisfied is True, one_way
         assert evaluation.feasible is True, one_way
+
+
+# ---------------------------------------------------------------------------
+# A3 step 1 (project 67): entry limits (V5) in the exact scenario
+# ---------------------------------------------------------------------------
+
+
+def test_entry_limits_default_to_absent_and_a_scenario_carries_them() -> None:
+    """Minimum and maximum of an Asset and of a cash cell are each absent, an amount (valuation currency) or a share of the
+    reference (D10, M17). Absent by default: every scenario built before A3 keeps its meaning."""
+    scenario = _two_pool_scenario(R(100), R(100))
+    assert all((item.minimum, item.maximum) == (None, None) for item in scenario.target_weights)
+    assert scenario.cash_limits == ()
+
+    limited = replace(
+        scenario,
+        target_weights=(replace(scenario.target_weights[0], minimum=pac_models.ExactLimit("amount", R(10)), maximum=pac_models.ExactLimit("share", R(1, 2))),),
+        cash_limits=(pac_models.ExactCashLimit(broker_id="broker:a", currency="EUR", minimum=None, maximum=pac_models.ExactLimit("amount", R(30))),),
+    )
+    assert limited.target_weights[0].maximum == pac_models.ExactLimit("share", R(1, 2))
+    assert limited.cash_limits[0].maximum.value == R(30)
+
+
+@pytest.mark.parametrize(
+    ("kind", "value"),
+    [
+        pytest.param("amount", R(-1), id="negative-amount"),
+        pytest.param("share", R(-1, 100), id="negative-share"),
+        pytest.param("share", R(101, 100), id="share-above-one"),
+        pytest.param("ratio", R(1, 2), id="unknown-kind"),
+    ],
+)
+def test_an_entry_limit_refuses_a_negative_value_a_share_above_one_and_an_unknown_kind(kind: str, value: ExactRatio) -> None:
+    with pytest.raises(ValueError):
+        pac_models.ExactLimit(kind, value)
+
+
+def test_a_cash_limit_names_a_known_broker_and_a_covered_currency_and_is_unique() -> None:
+    scenario = _two_pool_scenario(R(100), R(100))
+    limit = pac_models.ExactCashLimit(broker_id="broker:a", currency="EUR", minimum=None, maximum=pac_models.ExactLimit("amount", R(30)))
+
+    build_exact_policy_view(replace(scenario, cash_limits=(limit,)))  # known broker and currency: builds
+    with pytest.raises(ExactScenarioContractError, match="unknown Broker"):
+        build_exact_policy_view(replace(scenario, cash_limits=(replace(limit, broker_id="broker:zzz"),)))
+    with pytest.raises(ExactScenarioContractError, match="JPY"):
+        build_exact_policy_view(replace(scenario, cash_limits=(replace(limit, currency="JPY"),)))
+    with pytest.raises(ValueError, match="canonical sorted order|duplicate"):
+        replace(scenario, cash_limits=(limit, limit))
+    with pytest.raises(ValueError, match="no limit"):
+        pac_models.ExactCashLimit(broker_id="broker:a", currency="EUR", minimum=None, maximum=None)
+
+
+# ---------------------------------------------------------------------------
+# A3 step 2 (project 67): the three checks before the calculation, pure, naming the entries (T12)
+# ---------------------------------------------------------------------------
+
+_LIMIT_A = pac_models.ExactLimit
+
+
+def _limited_scenario(
+    *,
+    asset_a: tuple[pac_models.ExactLimit | None, pac_models.ExactLimit | None] = (None, None),
+    asset_b: tuple[pac_models.ExactLimit | None, pac_models.ExactLimit | None] = (None, None),
+    cash: tuple[pac_models.ExactCashLimit, ...] = (),
+) -> ExactPlannerScenario:
+    """Two Assets (50% each) bought at two Brokers holding EUR100 and EUR50: the reference of the plan is EUR150."""
+    base = _two_pool_scenario(R(100), R(50))
+    capability = _capability("capability:b2")
+    fee = _fee("fee:buy:b2", capability.capability_id, "buy")
+    broker_b = replace(base.brokers[1], capabilities=(*base.brokers[1].capabilities, capability), fee_schedules=(*base.brokers[1].fee_schedules, fee))
+    second_asset = _asset("asset:b", price=R(10))
+    route_b = _order_route("route:buy:asset-b", broker_id="broker:b", asset_id="asset:b", capability=capability, fee_id=fee.fee_schedule_id, side="buy")
+    weights = (
+        pac_models.ExactTargetWeight("asset:a", R(1, 2), minimum=asset_a[0], maximum=asset_a[1]),
+        pac_models.ExactTargetWeight("asset:b", R(1, 2), minimum=asset_b[0], maximum=asset_b[1]),
+    )
+    return replace(
+        base,
+        assets=tuple(sorted((*base.assets, second_asset), key=lambda item: item.asset_id)),
+        brokers=(base.brokers[0], broker_b),
+        order_routes=tuple(sorted((*base.order_routes, route_b), key=lambda item: item.route_id)),
+        target_weights=weights,
+        cash_limits=cash,
+    )
+
+
+def test_sum_of_minimums_above_the_reference_names_the_entries() -> None:
+    """T12: minimums of EUR100 and 60% of the reference (EUR90) add up to EUR190 > EUR150. The check names every entry with a
+    minimum, the Assets and the cash cells alike, on the base of D7: ``fixed_reference``."""
+    scenario = _limited_scenario(asset_a=(_LIMIT_A("amount", R(100)), None), asset_b=(_LIMIT_A("share", R(3, 5)), None))
+    reference = fixed_reference_of(scenario)
+    assert reference == R(150)
+
+    (problem,) = check_minimums_exceed_reference(scenario, reference)
+    assert problem.code == "bounds_min_sum_exceeds_reference"
+    assert [entry.key for entry in problem.entries] == ["asset:asset:a", "asset:asset:b"]
+
+    fine = _limited_scenario(asset_a=(_LIMIT_A("amount", R(100)), None), asset_b=(_LIMIT_A("share", R(1, 3)), None))
+    assert check_minimums_exceed_reference(fine, reference) == ()  # 100 + 50 = 150 is not above 150
+    cash_pushes_over = _limited_scenario(asset_a=(_LIMIT_A("amount", R(100)), None), cash=(pac_models.ExactCashLimit(broker_id="broker:a", currency="EUR", minimum=_LIMIT_A("amount", R(51)), maximum=None),))
+    (problem,) = check_minimums_exceed_reference(cash_pushes_over, reference)
+    assert [entry.key for entry in problem.entries] == ["asset:asset:a", "cash:broker:a:EUR"]
+
+
+def test_minimum_above_maximum_names_the_entry() -> None:
+    """Check 1: one problem per entry whose minimum exceeds its maximum, forms mixed: a share is resolved on the reference."""
+    scenario = _limited_scenario(
+        asset_a=(_LIMIT_A("amount", R(80)), _LIMIT_A("amount", R(70))),
+        asset_b=(_LIMIT_A("share", R(1, 2)), _LIMIT_A("amount", R(74))),
+        cash=(pac_models.ExactCashLimit(broker_id="broker:a", currency="EUR", minimum=_LIMIT_A("amount", R(10)), maximum=_LIMIT_A("amount", R(10))),),
+    )
+    problems = check_minimum_above_maximum(scenario, fixed_reference_of(scenario))
+    assert [(problem.code, [entry.key for entry in problem.entries]) for problem in problems] == [
+        ("bound_min_above_max", ["asset:asset:a"]),
+        ("bound_min_above_max", ["asset:asset:b"]),
+    ]  # asset b: 50% of EUR150 = 75 > 74; the cash cell's equal bounds are fine
+
+
+def test_asset_maximum_below_current_value_cannot_fire_in_a_pac() -> None:
+    """Check 3 needs a holding: a PAC has none (``ExactPlannerScenario`` refuses them), so the check names nothing there,
+    even with a maximum of zero. It fires in a scenario that holds the Asset and cannot sell it (block B)."""
+    scenario = _limited_scenario(asset_a=(None, _LIMIT_A("amount", R(0))))
+    assert check_maximum_below_current(scenario, build_scenario_index(scenario), fixed_reference_of(scenario)) == ()
+    with pytest.raises(ValueError, match="holdings"):
+        replace(scenario, holdings=(object(),))
+
+
+# ---------------------------------------------------------------------------
+# A3 step 3 (project 67): V5 and V10 in the exact replay
+# ---------------------------------------------------------------------------
+
+
+def _limit_plan_scenario(
+    *,
+    weights: tuple[ExactRatio, ExactRatio] = (R(1, 2), R(1, 2)),
+    asset_a: tuple[pac_models.ExactLimit | None, pac_models.ExactLimit | None] = (None, None),
+    asset_b: tuple[pac_models.ExactLimit | None, pac_models.ExactLimit | None] = (None, None),
+    cash: tuple[pac_models.ExactCashLimit, ...] = (),
+) -> ExactPlannerScenario:
+    """One Broker holding EUR100, two EUR Assets at EUR10 a unit (at most 10 units each), whole-euro quanta: the reference is EUR100."""
+    capability = _capability("capability:whole")
+    fee = _fee("fee:buy", capability.capability_id, "buy")
+    broker = _broker("broker:hub", (capability,), (fee,))
+
+    def buy(asset_id: str) -> ExactOrderRoute:
+        return _order_route(f"route:buy:{asset_id[-1]}", broker_id=broker.broker_id, asset_id=asset_id, capability=capability, fee_id=fee.fee_schedule_id, side="buy", cap=R(10))
+
+    return replace(
+        _scenario(
+            "scenario:limit-plan",
+            product="pac",
+            policy="proportional",
+            assets=(_asset("asset:a", price=R(10)), _asset("asset:b", price=R(10))),
+            brokers=(broker,),
+            existing_cash=(_cash("cash:hub", broker.broker_id, R(100)),),
+            order_routes=(buy("asset:a"), buy("asset:b")),
+            currency_quantums=(("EUR", ONE),),
+        ),
+        target_weights=(
+            pac_models.ExactTargetWeight("asset:a", weights[0], minimum=asset_a[0], maximum=asset_a[1]),
+            pac_models.ExactTargetWeight("asset:b", weights[1], minimum=asset_b[0], maximum=asset_b[1]),
+        ),
+        cash_limits=cash,
+    )
+
+
+def _buys(scenario: ExactPlannerScenario, a: int = 0, b: int = 0) -> ExactEvaluation:
+    view = build_exact_policy_view(scenario)
+    return evaluate_exact_candidate(scenario, view, _candidate(view, {exact_decision_id("buy_quantum", "route:buy:a"): a, exact_decision_id("buy_quantum", "route:buy:b"): b}))
+
+
+def _failed(evaluation: ExactEvaluation) -> set[str]:
+    return {item.ref_id for item in evaluation.constraints if not item.satisfied}
+
+
+_CASH_MAX_40 = (pac_models.ExactCashLimit(broker_id="broker:hub", currency="EUR", minimum=None, maximum=pac_models.ExactLimit("amount", R(40))),)
+
+
+def test_cash_maximum_makes_the_plan_invest_the_excess() -> None:
+    """T11, PAC form, at the exact level: EUR100 of cash and a maximum of EUR40 on the cell. A plan that leaves more than 40 in
+    the cell fails V5 (and V10: every cell has a maximum and there is no contribution, so nothing may be left uninvested beyond
+    the maxima); one that invests at least 60 passes both."""
+    scenario = _limit_plan_scenario(cash=_CASH_MAX_40)
+    entry, uninvested = "constraint:entry_value_within_limits:cash:broker:hub:EUR", "constraint:uninvested_within_cash_maxima:global"
+
+    nothing = _buys(scenario)
+    assert {entry, uninvested} <= _failed(nothing)
+    assert nothing.feasible is False
+    five = _buys(scenario, a=3, b=2)  # invests 50: 50 left in the cell, one unit short
+    assert {entry, uninvested} <= _failed(five)
+    six = _buys(scenario, a=3, b=3)
+    assert not ({entry, uninvested} & _failed(six))
+    assert six.feasible is True
+
+
+def test_asset_maximum_caps_the_final_value() -> None:
+    scenario = _limit_plan_scenario(asset_a=(None, pac_models.ExactLimit("amount", R(30))))
+    ref = "constraint:entry_value_within_limits:asset:asset:a"
+    assert ref not in _failed(_buys(scenario, a=3, b=3))  # 30 is the maximum, not above it
+    assert ref in _failed(_buys(scenario, a=4, b=0))
+    (fact,) = [item for item in _buys(scenario, a=4).constraints if item.ref_id == ref]
+    assert (fact.value, fact.lower_bound, fact.upper_bound) == (R(40), None, R(30)), "the limits are published in the fact"
+
+
+def test_asset_minimum_forces_a_buy_at_zero_target() -> None:
+    """Absurdity n. 17: an Asset with a target of zero and a minimum of EUR20 is bought, not ignored; a share resolves on the
+    reference (a fifth of EUR100 is 20)."""
+    for minimum in (pac_models.ExactLimit("amount", R(20)), pac_models.ExactLimit("share", R(1, 5))):
+        scenario = _limit_plan_scenario(weights=(R(0), R(1)), asset_a=(minimum, None))
+        ref = "constraint:entry_value_within_limits:asset:asset:a"
+        assert ref in _failed(_buys(scenario, a=1, b=5)), minimum
+        assert ref not in _failed(_buys(scenario, a=2, b=5)), minimum
+
+
+def test_a_scenario_without_limits_has_no_limit_facts() -> None:
+    """Nothing is added to the view without limits: the replay of a limitless scenario is what it was in A2."""
+    scenario = _limit_plan_scenario()
+    view = build_exact_policy_view(scenario)
+    assert not [ref for ref in view.constraints if ref.code in {"ENTRY_VALUE_WITHIN_LIMITS", "UNINVESTED_WITHIN_CASH_MAXIMA"}]
+
+
+def test_uninvested_limit_waits_for_every_cell_to_have_a_maximum_and_no_contribution() -> None:
+    """D8: V10 applies only if every cell of the ledger has a maximum, and the scenario holds no contribution (money that is
+    not deposited stays outside every cell, so no maximum can oblige to waste it). One cell with a maximum, among two cells,
+    or a contribution, and there is no ``UNINVESTED_WITHIN_CASH_MAXIMA`` fact."""
+    base = _limit_plan_scenario(cash=_CASH_MAX_40)
+    assert any(ref.code == "UNINVESTED_WITHIN_CASH_MAXIMA" for ref in build_exact_policy_view(base).constraints)
+
+    usd_cell = _cash("cash:hub:usd", "broker:hub", R(5), currency="USD")
+    two_cells = replace(base, existing_cash=(*base.existing_cash, usd_cell), fx_rates=(_fx_rate("EUR", "USD", R(5, 4)),), currency_specs=tuple(sorted((*base.currency_specs, pac_models.ExactCurrencySpec(currency="USD", minor_unit=ONE)), key=lambda item: item.currency)))
+    assert not any(ref.code == "UNINVESTED_WITHIN_CASH_MAXIMA" for ref in build_exact_policy_view(two_cells).constraints)
+
+    contribution = pac_models.ExactContribution(contribution_id="contribution:x", label="x", amount=pac_models.ExactMoney(R(10), "EUR"), provenance_id=base.existing_cash[0].provenance_id)
+    with_contribution = replace(base, contributions=(contribution,))
+    assert not any(ref.code == "UNINVESTED_WITHIN_CASH_MAXIMA" for ref in build_exact_policy_view(with_contribution).constraints)
+
+
+def test_limit_violation_is_never_a_rounding_top_up() -> None:
+    """D9: a plan the replay finds outside a limit is an error of the model, not a cash a rounding left short; no top-up
+    repairs it, however small the excess. The classifier raises instead of proposing cash."""
+    scenario = _limit_plan_scenario(asset_a=(None, pac_models.ExactLimit("amount", R(30))))
+    evaluation = _buys(scenario, a=4, b=0)  # one unit above the maximum: the smallest excess there is
+    assert evaluation.feasible is False
+    assert "ENTRY_VALUE_WITHIN_LIMITS" in evaluation.conflict_codes
+    with pytest.raises(ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, evaluation)

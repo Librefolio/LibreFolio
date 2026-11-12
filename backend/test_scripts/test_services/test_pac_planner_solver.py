@@ -60,7 +60,7 @@ from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
-from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactPlannerScenario, ExactPolicyView
+from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactLimit, ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import (
     DEFAULT_SOLVER_TIME_BUDGET_SECONDS,
@@ -71,7 +71,7 @@ from backend.app.services.pac_allocator.solver import (
 )
 from backend.test_scripts.test_services._pac_exhaustive_oracle import run_exhaustive_oracle
 from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scenario_of
-from backend.test_scripts.test_services.test_pac_planner_evaluator import ONE, ZERO, R, _pac_scenario, _shared_pair_scenario, _transfer_lane_scenario, _two_way_scenario, _with_lane
+from backend.test_scripts.test_services.test_pac_planner_evaluator import _CASH_MAX_40, ONE, ZERO, R, _limit_plan_scenario, _pac_scenario, _shared_pair_scenario, _transfer_lane_scenario, _two_way_scenario, _with_lane
 from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _credit_tie_fx_scenario, _two_asset_pac_scenario
 
 # --------------------------------------------------------------------------
@@ -810,3 +810,21 @@ def test_solver_matches_oracle_when_both_directions_exist() -> None:
     fx_quanta = [value for decision_id, value in _quanta(result.candidate).items() if decision_id.startswith("fx:")]
     assert len(fx_quanta) == 2
     assert min(fx_quanta) == 0
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(lambda: _limit_plan_scenario(asset_a=(None, ExactLimit("amount", R(30)))), id="asset-maximum"),
+        pytest.param(lambda: _limit_plan_scenario(asset_a=(ExactLimit("amount", R(20)), None), weights=(R(0), R(1))), id="asset-minimum-at-zero-target"),
+        pytest.param(lambda: _limit_plan_scenario(cash=_CASH_MAX_40), id="cash-maximum-t11"),
+    ],
+)
+def test_solver_matches_oracle_with_entry_limits(build) -> None:
+    """A3: SCIP and the exhaustive oracle agree exactly with limits on entries (T11 in small). The plan honours every limit:
+    a maximum of EUR40 on the cash cell makes the plan invest at least EUR60."""
+    test_solver_incumbent_equals_exhaustive_oracle_optimum(build)
+    scenario = build()
+    view, result = _run(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, result.candidate)
+    assert evaluation.feasible is True

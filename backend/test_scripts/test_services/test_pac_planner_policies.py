@@ -66,6 +66,7 @@ from typing import Any
 import pytest
 
 from backend.app.services.financial_math.fx_rates import oriented_rate
+from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import numeric as NUM
 from backend.app.services.pac_allocator.compiler import (
     CompiledProgram,
@@ -90,16 +91,18 @@ from backend.app.services.pac_allocator.constraints import facts as constraints_
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.ledger import _ROUNDED_FAMILIES
-from backend.app.services.pac_allocator.models import ExactPlannerScenario, ExactPolicyView
+from backend.app.services.pac_allocator.models import ExactLimit, ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.objectives import build_canonical_tie_stages
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id, fx_spec
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
+    _CASH_MAX_40,
     CENT,
     ONE,
     ZERO,
     R,
     _asset,
     _broker,
+    _buys,
     _candidate,
     _capability,
     _cash,
@@ -109,6 +112,7 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _invest_and_sell_scenario,
     _invest_only_baseline,
     _invest_only_scenario,
+    _limit_plan_scenario,
     _min_fragmentation_scenario,
     _objective_map,
     _order_route,
@@ -1328,3 +1332,43 @@ def test_compiled_model_forbids_both_directions_of_a_pair() -> None:
     program = _fresh_program(scenario, view)  # kept alive: a SCIP variable's name is read through its model
     variable_names = {variable.name for variable in program.model.getVars()}
     assert [name for name in variable_names if name.startswith("fx_direction:")] == ["fx_direction:10:broker:hub:EUR/USD"]
+
+
+# --------------------------------------------------------------------------
+# A3 step 4 (project 67): the compiled limit rows (V5, V10) agree with the exact facts
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(lambda: _limit_plan_scenario(asset_a=(None, ExactLimit("amount", R(30)))), id="asset-maximum"),
+        pytest.param(lambda: _limit_plan_scenario(asset_a=(ExactLimit("amount", R(20)), None), weights=(R(0), R(1))), id="asset-minimum-at-zero-target"),
+        pytest.param(lambda: _limit_plan_scenario(asset_b=(ExactLimit("share", R(3, 10)), ExactLimit("share", R(1, 2)))), id="asset-window-as-shares"),
+        pytest.param(lambda: _limit_plan_scenario(cash=_CASH_MAX_40), id="cash-maximum-and-uninvested"),
+        pytest.param(lambda: _limit_plan_scenario(cash=(pac_models.ExactCashLimit(broker_id="broker:hub", currency="EUR", minimum=ExactLimit("amount", R(25)), maximum=None),)), id="cash-minimum"),
+    ],
+)
+def test_compiled_limit_rows_match_the_exact_facts_at_the_boundary(build) -> None:
+    """For every plan of a small grid (a to 6 units of each Asset), the compiled model with its decisions pinned is feasible exactly
+    when the exact replay finds the plan feasible: a unit inside the limit passes both, a unit outside fails both."""
+    scenario = build()
+    view = build_exact_policy_view(scenario)
+    buy_a, buy_b = exact_decision_id("buy_quantum", "route:buy:a"), exact_decision_id("buy_quantum", "route:buy:b")
+    seen = set()
+    for a in range(0, 7):
+        for b in range(0, 7):
+            exact = _buys(scenario, a, b).feasible
+            compiled = _pinned_status(scenario, view, quanta={buy_a: a, buy_b: b}) == "optimal"
+            assert compiled == exact, (a, b, exact, compiled)
+            seen.add(exact)
+    assert seen == {True, False}, "the grid crosses the boundary"
+
+
+def test_a_scenario_without_limits_compiles_to_the_model_of_a2() -> None:
+    """No limit, no row: the variables and constraints of a scenario without limits are exactly those of the same scenario
+    compiled with limit rows switched off (the check that ``pac-planner-reference`` makes at plan level)."""
+    scenario = _limit_plan_scenario()
+    program = _fresh_program(scenario, build_exact_policy_view(scenario))
+    names = {constraint.name for constraint in program.model.getConss()}
+    assert not [name for name in names if name.startswith("entry_limit") or name.startswith("uninvested")]
