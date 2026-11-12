@@ -10,6 +10,11 @@ coverage exists, and writes pure numbers. It lands in small steps, each pinned h
    ``_prepare_args(args)`` — the single place where a flag standing for other flags will be expanded (step 3.5,
    ``--quotable``) — runs first in both entries.
 
+2. ``TestUnitDirectories`` (step 3.2) — every Vitest run the consolidated pass makes under JS coverage writes into a directory the
+   runner names (``coverage-js/unit/<category>-<n>``, the environment variable ``LF_VITEST_COVERAGE_DIR``) and records in the
+   run's ledger (``_coverage.CoverageLedger``); and ``vitest.config.ts`` writes the coverage of a red run too
+   (``reportOnFailure``), so a failing test no longer hides a whole group's coverage.
+
 Pure: no database, no server, no network, no subprocess. The runner's heavy parts are stood in for with ``monkeypatch``; the
 source of ``_cli.py`` is read as text (``ast``), never executed beyond its import.
 """
@@ -24,9 +29,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.test_runner import _cli, _common
+from scripts.test_runner import _cli, _common, _consolidate, _coverage
 
 CLI_SOURCE = Path(_cli.__file__).read_text(encoding="utf-8")
+VITEST_CONFIG = Path(_common.PROJECT_ROOT, "frontend", "vitest.config.ts")
 
 #: The run flags both parsers carry: what ``_add_run_flags`` registers, by their destination.
 RUN_FLAG_DESTS = (
@@ -180,3 +186,72 @@ class TestOneCoverageTail:
         assert _cli._prepare_args(args) is args
         assert vars(args) == before
         assert "args" in inspect.signature(_cli._prepare_args).parameters
+
+
+class TestUnitDirectories:
+    """Step 3.2: each Vitest group has its own directory, named by the runner and written in the ledger."""
+
+    @pytest.fixture
+    def vitest_calls(self, monkeypatch: pytest.MonkeyPatch):
+        """``subprocess.run`` of the consolidated pass, replaced by a recorder of its command and environment; a ledger of its own;
+        the JS coverage on; the reports read back as empty."""
+        calls: list[SimpleNamespace] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(SimpleNamespace(cmd=cmd, env=kwargs.get("env"), cwd=kwargs.get("cwd")))
+            return SimpleNamespace(returncode=0)
+
+        ledger = _coverage.CoverageLedger()
+        monkeypatch.setattr(_consolidate.subprocess, "run", fake_run)
+        monkeypatch.setattr(_consolidate, "_vitest_results", lambda report, known: {})
+        monkeypatch.setattr(_coverage, "LEDGER", ledger)
+        monkeypatch.setattr(_common, "_COVERAGE_JS", True)
+        monkeypatch.delenv("LF_VITEST_COVERAGE_DIR", raising=False)
+        return SimpleNamespace(calls=calls, ledger=ledger)
+
+    def test_each_vitest_group_gets_its_directory_in_the_ledger(self, vitest_calls: SimpleNamespace) -> None:
+        """UD-01 — under JS coverage, every ``run_vitest_group`` runs vitest with ``LF_VITEST_COVERAGE_DIR`` set to
+        ``coverage-js/unit/<category>-<n>`` (n counting per category: ``front-fx-1``, ``front-fx-2``, ``front-user-1``) and the ledger
+        expects exactly those directories, in order; the variable is the child's alone, never the runner's own environment."""
+        _consolidate.run_vitest_group(["a.test.ts"], True, category="front-fx")
+        _consolidate.run_vitest_group(["b.test.ts"], True, category="front-user")
+        _consolidate.run_vitest_group(["c.test.ts"], True, category="front-fx")
+
+        directories = [call.env["LF_VITEST_COVERAGE_DIR"] for call in vitest_calls.calls]
+        assert directories == ["coverage-js/unit/front-fx-1", "coverage-js/unit/front-user-1", "coverage-js/unit/front-fx-2"]
+        assert vitest_calls.ledger.units == directories, "the ledger expects exactly the directories the runs were told to write"
+        assert "LF_VITEST_COVERAGE_DIR" not in _consolidate.os.environ
+
+    def test_without_js_coverage_nothing_is_named_and_nothing_is_expected(self, monkeypatch: pytest.MonkeyPatch, vitest_calls: SimpleNamespace) -> None:
+        """UD-02 — no ``--coverage``, or ``--coverage py``: no variable in the child, nothing in the ledger."""
+        _consolidate.run_vitest_group(["a.test.ts"], False, category="front-fx")
+        monkeypatch.setattr(_common, "_COVERAGE_JS", False)
+        _consolidate.run_vitest_group(["b.test.ts"], True, category="front-fx")
+
+        assert all("LF_VITEST_COVERAGE_DIR" not in (call.env or {}) for call in vitest_calls.calls)
+        assert vitest_calls.ledger.units == []
+
+    def test_a_group_without_a_category_still_has_a_directory(self, vitest_calls: SimpleNamespace) -> None:
+        """UD-03 — ``category=None`` (a direct call): the label is ``vitest``."""
+        _consolidate.run_vitest_group(["a.test.ts"], True)
+
+        assert vitest_calls.calls[0].env["LF_VITEST_COVERAGE_DIR"] == "coverage-js/unit/vitest-1"
+
+    def test_the_ledger_counts_per_label_and_returns_what_it_expects(self) -> None:
+        """UD-04 — ``CoverageLedger.expect_unit(label)`` returns the directory, relative to ``frontend/``, and keeps the list."""
+        ledger = _coverage.CoverageLedger()
+
+        first, second, other = ledger.expect_unit("front-fx"), ledger.expect_unit("front-fx"), ledger.expect_unit("front-user")
+
+        assert (first, second, other) == ("coverage-js/unit/front-fx-1", "coverage-js/unit/front-fx-2", "coverage-js/unit/front-user-1")
+        assert ledger.units == [first, second, other]
+
+    def test_vitest_config_reports_on_failure(self) -> None:
+        """UD-05 — contract on the text of ``frontend/vitest.config.ts``: ``reportOnFailure: true`` (without it Vitest 4 writes no
+        coverage for a run with a red test) and the directory read from ``LF_VITEST_COVERAGE_DIR``, the dated one only as the default
+        for a run no one named."""
+        text = VITEST_CONFIG.read_text(encoding="utf-8")
+
+        assert "reportOnFailure: true" in text
+        assert "process.env.LF_VITEST_COVERAGE_DIR" in text
+        assert "reportsDirectory: process.env.LF_VITEST_COVERAGE_DIR ?? `coverage-js/unit/${Date.now()" in text, "the variable first, and the dated directory as the default for a direct run, as it was"

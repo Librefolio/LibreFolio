@@ -25,6 +25,31 @@ from ._common import (
 )
 
 JS_COVERAGE_DIR = "coverage-js"
+
+
+class CoverageLedger:
+    """What a run tells the coverage to expect (project 71, block 3): the record the end of the run is checked against.
+
+    Every Vitest group the runner launches under JS coverage is told to write into its own directory
+    (``coverage-js/unit/<label>-<n>``, relative to ``frontend/``, through ``LF_VITEST_COVERAGE_DIR``), and the directory is noted
+    here the moment the group is launched. The runner used to leave the directory to Vitest (a dated name the runner never
+    saw), so a group that wrote nothing could not be told from a group that never ran.
+    """
+
+    def __init__(self) -> None:
+        self.units: list[str] = []
+        self._counts: dict[str, int] = {}
+
+    def expect_unit(self, label: str) -> str:
+        """Note a Vitest group launched under the name ``label`` and return the directory it must write: ``coverage-js/unit/<label>-<n>``, ``n`` counting per label from 1."""
+        self._counts[label] = self._counts.get(label, 0) + 1
+        directory = f"{JS_COVERAGE_DIR}/unit/{label}-{self._counts[label]}"
+        self.units.append(directory)
+        return directory
+
+
+#: The ledger of this process's run: one run per process.
+LEDGER = CoverageLedger()
 # coverage.py's final name for a parallel data file: the last step of its write() appends `.H<hash>h`.
 _FINISHED_PART = re.compile(r"\.H\w{10}h$")
 

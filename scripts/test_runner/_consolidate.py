@@ -43,7 +43,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from . import _common
+from . import _common, _coverage
 from ._archive import log_file_for
 from ._common import PROJECT_ROOT, Colors, print_error, print_info, print_success, print_warning
 
@@ -208,13 +208,14 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
         _common.apply_subprocess_coverage_env(env)
     if coverage and _common._COVERAGE_JS:
         env["COVERAGE_JS"] = "1"
-        # A consolidated worker keeps one V8-coverage accumulator alive across every
-        # spec of the category instead of throwing it away with the process after
-        # each file. The per-worker monocart instance keeps that bounded, but the
-        # raw entries still carry the full source of every script the run touched,
-        # so the peak is genuinely higher than it used to be. Node's default old
-        # space is not sized for it, and running out shows up as an unrelated test
-        # dying with SIGABRT — a failure that names the victim, never the cause.
+        # A consolidated worker keeps one istanbul coverage map alive across every
+        # spec of the category (the sink of e2e/fixtures/js-coverage-sink.ts) instead
+        # of throwing it away with the process after each file. The map carries the
+        # statement, function and branch tables of every file the run touched, so
+        # the peak is higher than with a process per spec (step 3.11 measures it).
+        # Node's default old space is not sized for it, and running out shows up as
+        # an unrelated test dying with SIGABRT — a failure that names the victim,
+        # never the cause.
         node_opts = env.get("NODE_OPTIONS", "")
         if "max-old-space-size" not in node_opts:
             env["NODE_OPTIONS"] = f"{node_opts} --max-old-space-size=8192".strip()
@@ -263,11 +264,20 @@ def run_vitest_group(paths: list[str], coverage: bool, category: str | None = No
 
     Coverage is *not* passed on the command line: ``vitest.config.ts`` reads
     ``COVERAGE_JS`` from the environment, which the CLI has already exported.
-    Adding ``--coverage`` here would turn the custom monocart provider on in
-    runs where that variable is absent, which is exactly the configuration it
-    does not support.
+    Adding ``--coverage`` here would turn the provider on in runs where that
+    variable is absent, which is exactly the configuration it does not support.
+
+    Under JS coverage the group is also told where to write: the ledger of the run
+    (``_coverage.LEDGER``) names its directory, ``coverage-js/unit/<category>-<n>``,
+    and hands it to the child as ``LF_VITEST_COVERAGE_DIR`` — the child's alone,
+    never the runner's own environment. ``vitest.config.ts`` writes the coverage of
+    a red run too (``reportOnFailure``), so the directory exists whatever the verdict.
     """
     report = Path(tempfile.mkdtemp(prefix="lf_vitest_")) / "report.json"
+    env = None
+    if coverage and _common._COVERAGE_JS:
+        env = os.environ.copy()
+        env["LF_VITEST_COVERAGE_DIR"] = _coverage.LEDGER.expect_unit(category or "vitest")
 
     cmd = ["npx", "vitest", "run", *paths, "--reporter=default", "--reporter=json", f"--outputFile.json={report}"]
 
@@ -275,7 +285,7 @@ def run_vitest_group(paths: list[str], coverage: bool, category: str | None = No
 
     try:
         with _group_log(category, "vitest"):
-            subprocess.run(cmd, cwd=FRONTEND_DIR, text=True)
+            subprocess.run(cmd, cwd=FRONTEND_DIR, text=True, env=env)
     except Exception as exc:
         print_error(f"vitest error: {exc}")
         return dict.fromkeys(paths, False)
