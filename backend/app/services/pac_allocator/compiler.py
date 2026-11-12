@@ -9,7 +9,7 @@ built). This module never calls ``model.optimize()`` itself — building and
 solving are deliberately separate responsibilities.
 
 Scope: PAC ``proportional`` policy, ``primary`` purpose only (see
-``constraints.py``/``objectives.py`` module docstrings and Step3 §16.6/
+``constraints``/``objectives.py`` module docstrings and Step3 §16.6/
 §16.9). ``compile_policy_program`` raises ``PolicyProgramScopeError`` for any
 other ``(product, policy, purpose)`` combination rather than silently
 building an incomplete or wrong model — this build only implements PAC
@@ -33,14 +33,14 @@ guaranteed-valid probe candidate returns the identical constants.
 Fee fidelity, stated here (not only in the plan and the regression tests) so
 a reader meets it where the code is: the fee epigraph
 ``constraints.add_fee_epigraph_constraints`` builds is exact. For every BUY
-route, the minimal fee a compiled model admits is ``calculate_fee`` at every
-notional, minimum and cap included. The minimum is in the bound since X2,
+route, the minimal fee a compiled model admits is ``financial_math.fees.calculate_fee`` at
+every notional, minimum and cap included. The minimum is in the bound since X2,
 and the cap has one ``fee_capped`` binary wherever it can bind, since QX1-a;
-the derivation is in ``constraints.py``'s module docstring. The fee
+the derivation is in the module docstring of the ``constraints`` package. The fee
 *variable* may still sit above that minimum where no stage presses it down,
 so it never feeds a reported number: every fee published or replayed comes
-from ``evaluate_exact_candidate``'s exact ``calculate_fee``, never from the
-SCIP variable. Locked by ``test_fee_epigraph_floor_above_linear_upper_boundary``,
+from ``evaluate_exact_candidate``'s exact ``financial_math.fees.calculate_fee``, never from
+the SCIP variable. Locked by ``test_fee_epigraph_floor_above_linear_upper_boundary``,
 ``test_fee_epigraph_cap_boundary`` and ``test_fee_epigraph_cap_exact``. If a
 solve ever produces an incumbent whose SCIP-internal objective disagrees
 with the exact replay in a way that changes the *lexicographic ranking*,

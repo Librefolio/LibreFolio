@@ -1254,8 +1254,8 @@ def services_brim_create_transaction(verbose: bool = False, test_names: list = N
 def services_financial_math(verbose: bool = False, test_names: list = None) -> bool:
     """Test the financial_math layer: average cost, native cash, returns, periods, ledger control totals, and the boundaries of the whole layer."""
     print_section("Services: Financial Math (average cost, native cash, returns, periods, ledger totals, layer boundaries)")
-    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py; imports and packages of every module)")
-    print_info("Tests: average costs and cost movements, native cash and cash movements, the first negative cash day (first_negative_cash), effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, layer boundaries")
+    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py, fees.py; imports and packages of every module)")
+    print_info("Tests: average costs and cost movements, native cash and cash movements, the first negative cash day (first_negative_cash), effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, fees, layer boundaries")
     print_info("Pure — convert_bulk is stubbed: no server, no shared DB (the ledger totals read private SQLite files under tmp_path)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)

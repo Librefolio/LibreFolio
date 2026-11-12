@@ -34,7 +34,7 @@ their floor and debits at their ceiling, and the compiled rows encode exactly
 that, so the model's feasible set is the exact replay's and the gate admits no
 slack on any fixture. Fixtures with a *binding* fee cap are no longer excluded
 from the agreement gate: since QX1-a (found 2026-09-24) the fee epigraph
-models the cap exactly (`constraints.py`), so a capped route that makes the
+models the cap exactly (the `constraints` package), so a capped route that makes the
 solver prefer another candidate is a disagreement like any other, and the
 gate polices it.
 

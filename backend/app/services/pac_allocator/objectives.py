@@ -1,7 +1,7 @@
 """Objective-stage builders for the PAC/Rebalancer SCIP compiler (Step 3).
 
 Scope: PAC ``proportional`` policy, ``primary`` purpose only — the same
-scope as ``constraints.py`` (see that module's docstring and Step3
+scope as the ``constraints`` package (see that module's docstring and Step3
 §16.6/§16.9). Builds the exact cascade ``evaluation/facts.py``'s ``objective_value_map``
 uses for this purpose, confirmed from ``evaluation/references.py``'s ``build_objective_refs``/
 ``_objective_codes``:
@@ -111,7 +111,7 @@ def build_fixed_l2_stage(model: Model, scenario: ExactPlannerScenario, facts: Sc
     holdings, so ``final_value_a`` reduces to the sum of this Asset's own BUY
     ``mid_value`` contributions). One continuous epigraph variable per Asset:
     the square of a real number is always convex, so — unlike the fee cap in
-    ``constraints.py`` — a plain ``>=`` epigraph row is exact here, not an
+    ``constraints`` — a plain ``>=`` epigraph row is exact here, not an
     approximation: minimizing pushes ``residual_sq_a`` down to precisely
     ``residual_a**2`` at optimality.
     """
