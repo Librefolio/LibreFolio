@@ -12,6 +12,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 ### ✨ Añadido
 
 - Trade Republic: importa el nuevo CSV «Exportación de transacciones» (perfil › Extractos › Exportación de transacciones), también cuando se ha vuelto a guardar con Excel: compras y ventas de fondos, acciones y cripto con sus comisiones e impuestos, intereses con su retención, impuesto de timbre, devoluciones de impuestos como intereses, dividendos y transferencias. El importador ya no está en beta, y su guía muestra cómo descargar el archivo. Las filas de otra cuenta, como la de un hijo, quedan fuera con una nota: esa cuenta se exporta desde su propio acceso.
+- Editar varios activos a la vez: selecciónalos en la tabla de Activos y usa «Editar seleccionados» para cambiar en todos el tipo, el índice de referencia, el estado activo, las unidades por precio unitario, el icono o la URL personal. «Validar ahora» muestra lo que bloquea el guardado (un activo con transacciones no puede convertirse en un Índice) y lo que merece un vistazo (un tipo que pasa a otra familia, como crowdfunding → ETF), y un resumen muestra cada cambio antes de guardar, que es todo o nada.
 
 ### 🔄 Cambios
 

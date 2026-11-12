@@ -12,6 +12,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 ### ✨ Ajouté
 
 - Trade Republic : importe le nouveau CSV « Export des transactions » (profil › Relevés de compte › Export des transactions), même lorsqu'il a été réenregistré par Excel : achats et ventes de fonds, d'actions et de crypto avec leurs frais et impôts, intérêts avec leur retenue, droit de timbre, remboursements d'impôt comptés comme intérêts, dividendes et virements. L'importateur n'est plus en bêta, et son guide montre comment télécharger le fichier. Les lignes d'un autre compte, comme celui d'un enfant, sont écartées avec une note : ce compte s'exporte depuis son propre accès.
+- Modifier plusieurs actifs à la fois : sélectionnez-les dans le tableau des actifs et utilisez « Modifier la sélection » pour changer pour tous le type, l'indice de référence, l'état actif, les unités par prix unitaire, l'icône ou l'URL personnelle. « Valider maintenant » montre ce qui bloque l'enregistrement (un actif avec des transactions ne peut pas devenir un Indice) et ce qui mérite un coup d'œil (un type qui passe à une autre famille, comme crowdfunding → ETF), et un récapitulatif montre chaque changement avant l'enregistrement, qui est tout ou rien.
 
 ### 🔄 Modifié
 

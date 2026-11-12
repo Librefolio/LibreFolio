@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 - Trade Republic: imports the new «Transaction export» CSV (profile › Account statements › Transaction export), also when re-saved by Excel: buys and sells of funds, stocks and crypto with their fee and tax, interest with its withholding tax, stamp duty, tax refunds as interest, dividends and transfers. The importer is no longer in beta, and its guide shows how to download the file. Rows of another account, such as a child's account, are left out with a note: export that account from its own login.
+- Edit several assets at once: select them in the Assets table and use «Edit selected» to change the type, benchmark, active state, units per single price, icon or personal URL of all of them. «Validate now» shows what blocks the save (an asset with transactions cannot become an Index) and what deserves a look (a type moving to another family, such as crowdfunding → ETF), and a summary shows every change before the save, which is all or nothing.
 
 ### 🔄 Changed
 
