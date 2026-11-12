@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal
 from backend.app.services.pac_allocator.constraints.facts import CompiledVariables, ScenarioFacts, as_float, order_notional, planning_fx_rate
 from backend.app.services.pac_allocator.constraints.fees import _fee_variable_upper
 from backend.app.services.pac_allocator.constraints.funding import _source_cash_cell
+from backend.app.services.pac_allocator.evaluation.bounds import transfer_decision_id
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.ledger import (
     _ROUNDED_FAMILIES as LEDGER_ROUNDED_FAMILIES,  # single source of truth for which families are rounded
@@ -241,6 +242,12 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
                 active_decision=fx_decision,
             )
         )
+
+    # Transfers between Brokers (A2): exact flows, as funding is, out of the source cell and into the destination cell.
+    for lane in scenario.transfer_lanes:
+        moved = facts.currency_quantum[lane.currency] * variables.quanta[transfer_decision_id(lane)]
+        cells[(lane.source_broker_id, lane.currency)].append(-moved)
+        cells[(lane.destination_broker_id, lane.currency)].append(moved)
 
     for (broker_id, currency), terms in cells.items():
         model.addCons(sum(terms) >= 0, name=f"ledger_nonnegative:{broker_id}:{currency}")

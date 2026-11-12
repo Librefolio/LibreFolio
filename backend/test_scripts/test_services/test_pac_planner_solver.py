@@ -59,6 +59,7 @@ from backend.app.services.pac_allocator import compiler as compiler_module
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import (
@@ -70,7 +71,7 @@ from backend.app.services.pac_allocator.solver import (
 )
 from backend.test_scripts.test_services._pac_exhaustive_oracle import run_exhaustive_oracle
 from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scenario_of
-from backend.test_scripts.test_services.test_pac_planner_evaluator import ZERO, R, _pac_scenario, _shared_pair_scenario
+from backend.test_scripts.test_services.test_pac_planner_evaluator import ONE, ZERO, R, _pac_scenario, _shared_pair_scenario, _transfer_lane_scenario, _with_lane
 from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _credit_tie_fx_scenario, _two_asset_pac_scenario
 
 # --------------------------------------------------------------------------
@@ -783,3 +784,19 @@ def test_solver_matches_oracle_on_two_buys_sharing_a_conversion() -> None:
     test_solver_incumbent_equals_exhaustive_oracle_optimum(_shared_pair_scenario)
     view = build_exact_policy_view(_shared_pair_scenario())
     assert len([access for access in view.decisions if access.family == "fx_debit"]) == 1
+
+
+def test_solver_matches_oracle_with_a_broker_transfer() -> None:
+    """A2 step 12 (D4 a): a PAC scenario with one transfer lane set by hand. The only cash is at broker:a, which can buy 3
+    units; the target (10 units) needs broker:b, so the plan moves cash: SCIP and the exhaustive oracle agree exactly, and
+    what is moved is exactly what broker:b spends."""
+
+    def build() -> ExactPlannerScenario:
+        return _with_lane(_transfer_lane_scenario(quantum=ONE), "broker:a", "broker:b")
+
+    test_solver_incumbent_equals_exhaustive_oracle_optimum(build)
+    view, result = _run(build())
+    quanta = _quanta(result.candidate)
+    (transfer,) = [access.decision_id for access in view.decisions if access.family == "broker_transfer"]
+    assert quanta[transfer] > 0
+    assert quanta[transfer] == 10 * quanta[exact_decision_id("buy_quantum", "route:buy:b")]
