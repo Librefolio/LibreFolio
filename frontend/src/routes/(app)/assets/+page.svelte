@@ -1509,6 +1509,14 @@
         bulkEditOpen = true;
     }
 
+    /** The bulk edit saved (all or nothing): drop the cached rows, clear the selection, reload the list. */
+    async function handleBulkEditSaved(saved: {ids: number[]}) {
+        bulkEditOpen = false;
+        invalidateAfterMutation(saved.ids);
+        clearAllTableSelections();
+        await pageBusy.track('assets-reload', () => loadAssets({soft: true}));
+    }
+
     function handleBulkDeleteAssets() {
         deletingAssets = [...selectedAssetRows];
         bulkDeleteDialogOpen = true;
@@ -2410,7 +2418,7 @@
 </div>
 
 <AssetBrowseOrder view={viewMode} panels={assetPanels} />
-<AssetBulkEditModal open={bulkEditOpen} assets={bulkEditAssets} onclose={() => (bulkEditOpen = false)} />
+<AssetBulkEditModal open={bulkEditOpen} assets={bulkEditAssets} onclose={() => (bulkEditOpen = false)} onsaved={handleBulkEditSaved} />
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
     axisContext={settingsTargetId ? (assets.find((asset) => asset.id === Number(settingsTargetId))?.currency ?? '—') : $t('common.preview')}
