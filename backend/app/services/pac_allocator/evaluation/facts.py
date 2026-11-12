@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from backend.app.services.pac_allocator.evaluation.economics import EconomicState, evaluate_economic_state
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, is_quantum_multiple
-from backend.app.services.pac_allocator.evaluation.limits import resolve_scenario_limits, uninvested_maximum
-from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_two_way_pairs
+from backend.app.services.pac_allocator.evaluation.limits import resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, to_valuation, valuation_rate_of
 from backend.app.services.pac_allocator.ledger import (
@@ -196,29 +196,25 @@ def _fx_constraint_facts(
     return facts
 
 
-def _fx_direction_constraint_facts(
+def _fx_relay_constraint_facts(
     *,
     scenario: ExactPlannerScenario,
     index: ScenarioIndex,
     state: EconomicState,
     checkpoint: Checkpoint | None,
 ) -> dict[str, _ConstraintFact]:
-    """V7: at most one of the two directions of a Broker's pair converts anything (``FX_SINGLE_DIRECTION``).
+    """V7: on a Broker a currency that receives a conversion does not give one (``FX_NO_RELAY``).
 
-    Converting ``x`` from ``c`` to ``c'`` and ``y`` back never leaves more than the net conversion alone: the planning
-    rate never beats the triangle and credits are floored. So the rule removes no optimum, only round trips.
+    The fact counts the sides in use, 0 to 2: some conversion into the currency, some conversion out of it. A relay, one of each,
+    burns cash and no optimum needs it: the planning rate never beats the triangle, credits are floored, and a buy is never paid
+    through a chain. Converting back and forth in one pair is the shortest relay.
     """
     active = {item.decision_id for item in state.fx if item.quanta > 0}
     facts: dict[str, _ConstraintFact] = {}
-    for pair in fx_two_way_pairs(fx_decision_specs(scenario, index, checkpoint)):
+    for group in fx_relay_groups(fx_decision_specs(scenario, index, checkpoint)):
         check_budget(checkpoint)
-        count = ExactRatio(sum(1 for spec in (pair.low_to_high, pair.high_to_low) if spec.decision_id in active))
-        facts[_constraint_id("FX_SINGLE_DIRECTION", pair.key)] = _ConstraintFact(
-            value=count,
-            lower_bound=_EXACT_ZERO,
-            upper_bound=ExactRatio(1),
-            satisfied=count <= ExactRatio(1),
-        )
+        sides = ExactRatio(sum(1 for side in (group.receiving, group.giving) if any(spec.decision_id in active for spec in side)))
+        facts[_constraint_id("FX_NO_RELAY", group.key)] = _ConstraintFact(value=sides, lower_bound=_EXACT_ZERO, upper_bound=ExactRatio(1), satisfied=sides <= ExactRatio(1))
     return facts
 
 
@@ -229,11 +225,12 @@ def _limit_constraint_facts(
     state: EconomicState,
     checkpoint: Checkpoint | None,
 ) -> dict[str, _ConstraintFact]:
-    """V5 for every limited entry and V10 where it applies (A3), on limits resolved against ``fixed_reference``.
+    """V5 for every limited entry (A3), on limits resolved against ``fixed_reference``.
 
     The final value of an Asset is ``ExactAssetEvaluation.final_value``; of a cash cell, its final spendable cash valued in
-    the valuation currency. V10: what the plan leaves uninvested (``shortfall``) may not exceed the sum of the cash maxima.
-    A violation is never a rounding deficit: neither code is among the four ``evaluator`` accepts for a top-up (D9).
+    the valuation currency. A violation is never a rounding deficit: the code is not among the four ``evaluator`` accepts for a
+    top-up (D9). There is no cap on «uninvested» cash: fees a plan has to pay are not uninvested, and a cash maximum on a
+    cell already says how much may be left in it.
     """
     facts: dict[str, _ConstraintFact] = {}
     resolved = resolve_scenario_limits(scenario, state.accounting.fixed_reference)
@@ -252,9 +249,6 @@ def _limit_constraint_facts(
             upper_bound=None if contradictory else bounds.maximum,
             satisfied=satisfied and not contradictory,
         )
-    maximum = uninvested_maximum(scenario, tuple(final_cash), resolved)
-    if maximum is not None:
-        facts[_constraint_id("UNINVESTED_WITHIN_CASH_MAXIMA", "global")] = _ConstraintFact(value=state.accounting.shortfall, lower_bound=_EXACT_ZERO, upper_bound=maximum, satisfied=state.accounting.shortfall <= maximum)
     return facts
 
 
@@ -592,7 +586,7 @@ def constraint_facts(
             checkpoint=checkpoint,
         )
     )
-    facts.update(_fx_direction_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
+    facts.update(_fx_relay_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
     facts.update(_limit_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
     facts.update(
         _order_constraint_facts(

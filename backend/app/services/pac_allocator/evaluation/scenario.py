@@ -135,7 +135,7 @@ def _referenced_currencies(
         *(item.amount.currency for item in scenario.contributions),
         *(item.currency for item in scenario.funding_routes),
         *(item.currency for item in scenario.transfer_lanes),
-        *(item.currency for item in scenario.cash_limits),
+        *(item.currency for item in scenario.cash_entries),
         *(item.fixed_fee.currency for item in fees.values()),
     }
     if scenario.sell_context is not None:
@@ -204,12 +204,12 @@ def _validate_transfer_lanes(
                 raise ExactScenarioContractError(f"{label} references inactive Broker")
 
 
-def _validate_cash_limits(
+def _validate_cash_entries(
     scenario: ExactPlannerScenario,
     index: ScenarioIndex,
 ) -> None:
     """A cash limit names a known Broker (its currency is covered by ``_validate_currency_coverage``)."""
-    for limit in scenario.cash_limits:
+    for limit in scenario.cash_entries:
         if limit.broker_id not in index.brokers:
             raise ExactScenarioContractError(f"cash limit {limit.broker_id} {limit.currency} references unknown Broker")
 
@@ -360,7 +360,7 @@ def build_scenario_index(scenario: ExactPlannerScenario) -> ScenarioIndex:
     _validate_static_entity_refs(scenario, result)
     _validate_funding_route_refs(scenario, result)
     _validate_transfer_lanes(scenario, result)
-    _validate_cash_limits(scenario, result)
+    _validate_cash_entries(scenario, result)
     _validate_order_route_refs(scenario, result)
     return result
 

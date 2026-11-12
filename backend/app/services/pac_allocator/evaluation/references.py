@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, entity_refs
-from backend.app.services.pac_allocator.evaluation.limits import limited_entries, resolve_scenario_limits, uninvested_maximum
-from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_two_way_pairs
+from backend.app.services.pac_allocator.evaluation.limits import limited_entries
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex
 from backend.app.services.pac_allocator.models import (
     Checkpoint,
@@ -18,7 +18,6 @@ from backend.app.services.pac_allocator.models import (
     ObjectiveRef,
     check_budget,
 )
-from backend.app.services.pac_allocator.numeric import ExactRatio
 
 
 def ledger_keys(
@@ -30,7 +29,7 @@ def ledger_keys(
     keys.update((route.broker_id, index.assets[route.asset_id].quote.price.currency) for route in scenario.order_routes)
     for lane in scenario.transfer_lanes:
         keys.update(((lane.source_broker_id, lane.currency), (lane.destination_broker_id, lane.currency)))
-    keys.update((limit.broker_id, limit.currency) for limit in scenario.cash_limits)
+    keys.update((limit.broker_id, limit.currency) for limit in scenario.cash_entries)
     return tuple(sorted(keys))
 
 
@@ -213,22 +212,22 @@ def _fx_constraint_refs(
     return refs
 
 
-def _fx_direction_constraint_refs(
+def _fx_relay_constraint_refs(
     scenario: ExactPlannerScenario,
     index: ScenarioIndex,
     checkpoint: Checkpoint | None,
 ) -> list[ConstraintRef]:
-    """V7: one ref per Broker and pair that has an FX decision in each direction (``FX_SINGLE_DIRECTION``)."""
+    """V7: one ref per Broker and currency that both receives and gives a conversion (``FX_NO_RELAY``)."""
     return [
         _constraint_ref(
-            code="FX_SINGLE_DIRECTION",
-            key=pair.key,
+            code="FX_NO_RELAY",
+            key=group.key,
             scope="broker",
-            entity_refs=entity_refs(("broker", pair.broker_id), ("currency_pair", pair.key.rsplit(":", 1)[1])),
+            entity_refs=entity_refs(("broker", group.broker_id), ("currency", group.currency)),
             unit=ExactUnit(kind="count"),
-            bound_source="one conversion direction per Broker and pair (V7)",
+            bound_source="a currency that receives a conversion does not give one (V7)",
         )
-        for pair in fx_two_way_pairs(fx_decision_specs(scenario, index, checkpoint))
+        for group in fx_relay_groups(fx_decision_specs(scenario, index, checkpoint))
     ]
 
 
@@ -238,10 +237,9 @@ def _limit_constraint_refs(
     valuation_unit: ExactUnit,
     checkpoint: Checkpoint | None,
 ) -> list[ConstraintRef]:
-    """V5 (``ENTRY_VALUE_WITHIN_LIMITS``) for every entry that carries a limit, and V10 when it applies.
+    """V5 (``ENTRY_VALUE_WITHIN_LIMITS``) for every entry that carries a limit.
 
-    Nothing is added to a scenario without limits, so its view is what it was before A3. Whether V10 applies depends only on
-    which cells have a maximum (D8): the limits are resolved against a zero reference, which cannot change that.
+    Nothing is added to a scenario without limits, so its view is what it was before A3.
     """
     refs: list[ConstraintRef] = []
     for entry in limited_entries(scenario):
@@ -254,17 +252,6 @@ def _limit_constraint_refs(
                 entity_refs=entity_refs(("asset", entry.asset_id)) if entry.kind == "asset" else entity_refs(("broker", entry.broker_id), ("currency", entry.currency)),
                 unit=valuation_unit,
                 bound_source="limits of the entry, resolved on the reference",
-            )
-        )
-    if uninvested_maximum(scenario, ledger_keys(scenario, index), resolve_scenario_limits(scenario, ExactRatio(0))) is not None:
-        refs.append(
-            _constraint_ref(
-                code="UNINVESTED_WITHIN_CASH_MAXIMA",
-                key="global",
-                scope="scenario",
-                entity_refs=(),
-                unit=valuation_unit,
-                bound_source="sum of the cash maxima (V10)",
             )
         )
     return refs
@@ -553,7 +540,7 @@ def build_constraint_refs(
             checkpoint,
         )
     )
-    refs.extend(_fx_direction_constraint_refs(scenario, index, checkpoint))
+    refs.extend(_fx_relay_constraint_refs(scenario, index, checkpoint))
     refs.extend(_limit_constraint_refs(scenario, index, valuation_unit, checkpoint))
     refs.extend(
         _order_constraint_refs(

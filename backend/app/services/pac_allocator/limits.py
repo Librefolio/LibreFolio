@@ -23,8 +23,8 @@ from typing import Literal
 
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, ResolvedBounds, ResolvedLimits, entries_with_limits, limited_entries, resolve_limit, resolve_scenario_limits
-from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, to_valuation
-from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactPlannerScenario
+from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, build_scenario_index, to_valuation
+from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactEvaluation, ExactPlannerScenario
 from backend.app.services.pac_allocator.numeric import ExactRatio
 
 __all__ = [
@@ -39,6 +39,7 @@ __all__ = [
     "limited_entries",
     "resolve_limit",
     "resolve_scenario_limits",
+    "trapped_cash_by_cell",
 ]
 
 type ProblemCode = Literal["bound_min_above_max", "bounds_min_sum_exceeds_reference", "bound_max_below_current"]
@@ -52,12 +53,8 @@ class LimitProblem:
     entries: tuple[LimitEntry, ...]
 
 
-def fixed_reference_of(scenario: ExactPlannerScenario) -> ExactRatio:
-    """The reference of the PAC, ``accounting.fixed_reference``, read off the do-nothing plan's exact replay.
-
-    It does not depend on any decision (specification §15 n. 17): the money already invested plus the funding the plan can
-    reach, so the do-nothing candidate gives it whatever the limits say.
-    """
+def _zero_plan(scenario: ExactPlannerScenario) -> ExactEvaluation:
+    """The exact replay of the do-nothing candidate: the reference and the trapped cash do not depend on any decision."""
     view = build_exact_policy_view(scenario, purpose="primary")
     candidate = CandidateActionVector(
         view_id=view.view_id,
@@ -67,7 +64,32 @@ def fixed_reference_of(scenario: ExactPlannerScenario) -> ExactRatio:
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
     if evaluation.accounting is None:
         raise ValueError("the do-nothing plan was refused by the candidate contract: the reference is unknown")
-    return evaluation.accounting.fixed_reference
+    return evaluation
+
+
+def fixed_reference_of(scenario: ExactPlannerScenario) -> ExactRatio:
+    """The reference of the PAC, ``accounting.fixed_reference``, read off the do-nothing plan's exact replay.
+
+    It does not depend on any decision (specification §15 n. 17): the money already invested plus the funding the plan can
+    reach, so the do-nothing candidate gives it whatever the limits say.
+    """
+    return _zero_plan(scenario).accounting.fixed_reference
+
+
+def trapped_cash_by_cell(scenario: ExactPlannerScenario) -> dict[tuple[str, str], ExactRatio]:
+    """The cash that reaches no buy, per (Broker, currency) cell, in the valuation currency.
+
+    Trapped cash is outside ``fixed_reference`` (it cannot be spent) but it sits in its cell, so it counts toward that cell's
+    final cash and honours a minimum on it (specification §15 n. 4). Contributions are not in any cell.
+    """
+    evaluation = _zero_plan(scenario)
+    index = build_scenario_index(scenario)
+    trapped: dict[tuple[str, str], ExactRatio] = {}
+    for source in evaluation.funding_sources:
+        if source.source_kind == "existing_cash" and source.source_broker_id is not None and source.structurally_trapped_amount > ExactRatio(0):
+            key = (source.source_broker_id, source.currency)
+            trapped[key] = trapped.get(key, ExactRatio(0)) + to_valuation(index, source.structurally_trapped_amount, source.currency)
+    return trapped
 
 
 def check_minimum_above_maximum(scenario: ExactPlannerScenario, reference: ExactRatio) -> tuple[LimitProblem, ...]:
@@ -80,16 +102,26 @@ def check_minimum_above_maximum(scenario: ExactPlannerScenario, reference: Exact
     return tuple(problems)
 
 
-def check_minimums_exceed_reference(scenario: ExactPlannerScenario, reference: ExactRatio) -> tuple[LimitProblem, ...]:
+def check_minimums_exceed_reference(scenario: ExactPlannerScenario, reference: ExactRatio, trapped_by_cell: dict[tuple[str, str], ExactRatio] | None = None) -> tuple[LimitProblem, ...]:
     """Check 2 (M1, T12): the minimums of all entries, Assets and cash cells, add up to more than ``reference``.
 
-    One problem naming every entry with a minimum, or none. The base is ``fixed_reference`` (D7), so that money which cannot
-    reach a buy does not make the sum look smaller than the plan can honour.
+    One problem naming every entry that counts in the sum, or none. The base is ``fixed_reference`` (D7). Cash that reaches no
+    buy is outside it but sits in its cell (``trapped_cash_by_cell``), so for a cash cell only the part of the minimum above
+    its trapped cash counts, and a cell wholly covered by it is not named: a check before the calculation must never be
+    stricter than reality. Without ``trapped_by_cell`` nothing is deducted.
     """
-    named = [(entry, resolve_limit(minimum, reference)) for entry, minimum, _ in entries_with_limits(scenario) if minimum is not None]
-    total = sum((value for _, value in named), ExactRatio(0))
-    if total > reference:
-        return (LimitProblem("bounds_min_sum_exceeds_reference", tuple(entry for entry, _ in named)),)
+    trapped = trapped_by_cell or {}
+    counted = []
+    for entry, minimum, _ in entries_with_limits(scenario):
+        value = resolve_limit(minimum, reference)
+        if value is None:
+            continue
+        if entry.kind == "cash":
+            value = max(ExactRatio(0), value - trapped.get((entry.broker_id, entry.currency), ExactRatio(0)))
+        if value > ExactRatio(0):
+            counted.append((entry, value))
+    if sum((value for _, value in counted), ExactRatio(0)) > reference:
+        return (LimitProblem("bounds_min_sum_exceeds_reference", tuple(entry for entry, _ in counted)),)
     return ()
 
 

@@ -62,9 +62,8 @@ type ExactConstraintCode = Literal[
     "FX_RATE_ORDER_SAFE",
     "FX_SOURCE_CASH",
     "FX_NATIVE_QUANTUM",
-    "FX_SINGLE_DIRECTION",
+    "FX_NO_RELAY",
     "ENTRY_VALUE_WITHIN_LIMITS",
-    "UNINVESTED_WITHIN_CASH_MAXIMA",
     "ORDER_QUANTIZED",
     "ORDER_MIN_IF_ACTIVE",
     "ORDER_REQUIRED_MIN",
@@ -461,8 +460,12 @@ class ExactLimit:
 
 
 @dataclass(frozen=True, slots=True)
-class ExactCashLimit:
-    """Minimum and maximum of the final spendable cash of one Broker and currency cell (V5 on cash)."""
+class ExactCashEntry:
+    """An entry of the plan for one Broker and currency cell: its minimum and maximum final spendable cash (V5 on cash).
+
+    Named an entry, not a limit, so that block B (B1) can add the cell's weight beside its limits. Until then an entry
+    without a minimum and a maximum says nothing and is refused.
+    """
 
     broker_id: str
     currency: str
@@ -473,7 +476,7 @@ class ExactCashLimit:
         _require_text(self.broker_id, "cash limit broker_id")
         _require_currency(self.currency, "cash limit currency")
         if self.minimum is None and self.maximum is None:
-            raise ValueError("a cash limit needs a minimum or a maximum: no limit is no entry")
+            raise ValueError("a cash entry needs a minimum or a maximum: until it carries a weight (block B), no limit says nothing")
 
 
 @dataclass(frozen=True, slots=True)
@@ -578,7 +581,7 @@ class ExactPlannerScenario:
     target_weights: tuple[ExactTargetWeight, ...]
     sell_context: ExactSellContext | None
     transfer_lanes: tuple[ExactTransferLane, ...] = ()
-    cash_limits: tuple[ExactCashLimit, ...] = ()
+    cash_entries: tuple[ExactCashEntry, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.product == "pac") != (self.policy in {"proportional", "min_fragmentation"}):
@@ -607,7 +610,7 @@ class ExactPlannerScenario:
         _require_canonical_tuple(self.order_routes, lambda item: item.route_id, "order_routes")
         _require_canonical_tuple(self.target_weights, lambda item: item.asset_id, "target_weights")
         _require_canonical_tuple(self.transfer_lanes, lambda item: (item.source_broker_id, item.destination_broker_id, item.currency), "transfer_lanes")
-        _require_canonical_tuple(self.cash_limits, lambda item: (item.broker_id, item.currency), "cash_limits")
+        _require_canonical_tuple(self.cash_entries, lambda item: (item.broker_id, item.currency), "cash_entries")
         if self.valuation_currency not in {item.currency for item in self.currency_specs}:
             raise ValueError("valuation currency requires a currency spec")
         if sum((item.weight for item in self.target_weights), ExactRatio(0)) != ExactRatio(1):

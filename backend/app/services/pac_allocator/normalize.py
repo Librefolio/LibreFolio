@@ -1190,7 +1190,7 @@ class _PlannerV2Normalizer:
             # §15 n. 2); the Rebalancer's lanes are filled in block B.
             transfer_lanes=(),
             # Limits on entries (V5): the request carries none until contract 2.0.0 (A4), so none here.
-            cash_limits=(),
+            cash_entries=(),
         )
 
     def run(self) -> PlannerV2NormalizationResult:

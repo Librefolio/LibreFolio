@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from backend.app.services.pac_allocator.models import ExactLimit, ExactPlannerScenario
+from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, order_prices, to_valuation
+from backend.app.services.pac_allocator.models import ExactLimit, ExactOrderRoute, ExactPlannerScenario
 from backend.app.services.pac_allocator.numeric import ExactRatio
 
 
@@ -61,7 +62,7 @@ def resolve_limit(limit: ExactLimit | None, reference: ExactRatio) -> ExactRatio
 
 def entries_with_limits(scenario: ExactPlannerScenario) -> list[tuple[LimitEntry, ExactLimit | None, ExactLimit | None]]:
     rows = [(LimitEntry("asset", asset_id=item.asset_id), item.minimum, item.maximum) for item in scenario.target_weights if item.minimum is not None or item.maximum is not None]
-    rows += [(LimitEntry("cash", broker_id=item.broker_id, currency=item.currency), item.minimum, item.maximum) for item in scenario.cash_limits]
+    rows += [(LimitEntry("cash", broker_id=item.broker_id, currency=item.currency), item.minimum, item.maximum) for item in scenario.cash_entries]
     return sorted(rows, key=lambda row: row[0].key)
 
 
@@ -78,20 +79,14 @@ def resolve_scenario_limits(scenario: ExactPlannerScenario, reference: ExactRati
     )
 
 
-def uninvested_maximum(scenario: ExactPlannerScenario, ledger_cells: tuple[tuple[str, str], ...], resolved: ResolvedLimits) -> ExactRatio | None:
-    """V10's bound (decisioni D8): the sum of every cash cell's maximum in the valuation currency, or ``None`` when V10 is off.
+def buy_value_per_quantum(index: ScenarioIndex, route: ExactOrderRoute) -> ExactRatio:
+    """What one quantum of a buy route adds to its Asset's final value, in the valuation currency, exactly.
 
-    It applies only when every cell of the ledger has a maximum **and** the scenario holds no contribution: money that is not
-    deposited stays outside every cell, so no maximum can oblige a plan to waste it. A cash limit is an amount in the valuation
-    currency, whatever the cell's own currency, so the sum needs no rate.
+    The replay values an order's ``mid_value`` as the economic quantity at the mid price (``economics._evaluate_orders``): a
+    whole-quantity route buys ``step`` units per quantum, an amount route spends ``step`` of cash per quantum, which is
+    ``step / execution price`` units. A limit that depends on one decision turns into an integer bound on it with this number.
     """
-    if scenario.contributions or not ledger_cells:
-        return None
-    cash = resolved.cash()
-    total = ExactRatio(0)
-    for broker_id, currency in ledger_cells:
-        bounds = cash.get((broker_id, currency))
-        if bounds is None or bounds.maximum is None:
-            return None
-        total += bounds.maximum
-    return total
+    capability = index.capabilities[(route.broker_id, route.capability_id)]
+    prices = order_prices(index, route)
+    quantity = capability.order_step if capability.kind == "whole_quantity" else capability.order_step / prices.execution_native
+    return to_valuation(index, quantity * prices.mid_native, index.assets[route.asset_id].quote.price.currency)

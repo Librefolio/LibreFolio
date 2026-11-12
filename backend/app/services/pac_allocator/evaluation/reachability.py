@@ -191,31 +191,27 @@ def fx_decision_specs(
 
 
 @dataclass(frozen=True, slots=True)
-class FxTwoWayPair:
-    """A Broker and currency pair with an FX decision in each direction: V7 lets a plan use at most one of them.
+class FxRelayGroup:
+    """A currency of a Broker that both receives a conversion and gives one (V7).
 
-    ``low_to_high`` converts the pair's alphabetically first currency into the second, ``high_to_low`` the other way;
-    ``key`` is ``len(broker):broker:LOW/HIGH``.
+    ``receiving`` are the decisions that convert into ``currency`` at the Broker, ``giving`` those that convert out of it.
+    A plan may use one side at most: a conversion that lands in a currency and a second that leaves it again is a relay, which
+    only burns cash (EUR to USD, then USD to CHF, then CHF to EUR). The engine never pays a buy through a chain
+    (``buy_pool_currencies``), so no optimum needs one. ``key`` is ``len(broker):broker:CURRENCY``.
     """
 
     key: str
     broker_id: str
-    low_to_high: FxDecisionSpec
-    high_to_low: FxDecisionSpec
+    currency: str
+    receiving: tuple[FxDecisionSpec, ...]
+    giving: tuple[FxDecisionSpec, ...]
 
 
-def fx_two_way_pairs(specs: tuple[FxDecisionSpec, ...]) -> tuple[FxTwoWayPair, ...]:
-    """The pairs of ``specs`` (``fx_decision_specs``) that a Broker can convert both ways, in canonical (Broker, pair) order."""
-    by_direction = {(spec.broker_id, spec.source_currency, spec.destination_currency): spec for spec in specs}
-    pairs = []
-    for (broker_id, source, destination), spec in sorted(by_direction.items()):
-        if source < destination and (broker_id, destination, source) in by_direction:
-            pairs.append(
-                FxTwoWayPair(
-                    key=f"{len(broker_id)}:{broker_id}:{source}/{destination}",
-                    broker_id=broker_id,
-                    low_to_high=spec,
-                    high_to_low=by_direction[(broker_id, destination, source)],
-                )
-            )
-    return tuple(pairs)
+def fx_relay_groups(specs: tuple[FxDecisionSpec, ...]) -> tuple[FxRelayGroup, ...]:
+    """The relay groups of ``specs`` (``fx_decision_specs``), in canonical (Broker, currency) order."""
+    receiving: dict[tuple[str, str], list[FxDecisionSpec]] = {}
+    giving: dict[tuple[str, str], list[FxDecisionSpec]] = {}
+    for spec in specs:
+        receiving.setdefault((spec.broker_id, spec.destination_currency), []).append(spec)
+        giving.setdefault((spec.broker_id, spec.source_currency), []).append(spec)
+    return tuple(FxRelayGroup(key=f"{len(broker_id)}:{broker_id}:{currency}", broker_id=broker_id, currency=currency, receiving=tuple(receiving[(broker_id, currency)]), giving=tuple(giving[(broker_id, currency)])) for broker_id, currency in sorted(receiving.keys() & giving.keys()))
