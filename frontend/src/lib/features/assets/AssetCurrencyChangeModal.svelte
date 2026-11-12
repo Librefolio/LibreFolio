@@ -28,6 +28,7 @@
     import {buildAssetSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {extractErrorMessage} from '$lib/utils/trySave';
     import type {CurrencyChangeImpact} from './currencyImpact';
+    import {assertPatchCommitted} from './assetPatchResult';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
 
@@ -77,9 +78,8 @@
         try {
             // Step 1: one PATCH — it changes the currency and deletes what goes (prices, non-SPLIT events, links).
             progressStep = 'patch';
-            const patched = await zodiosApi.patch_assets_bulk_api_v1_assets_patch([patchPayload] as any);
-            const patchResult = patched.results.find((result) => result.asset_id === impact.assetId);
-            if (!patchResult?.success) throw new Error(patchResult?.message || tr('assetDetail.currencyChange.failed'));
+            // Lane 65: all or nothing, answered 200 either way; not `committed` means nothing changed (the first issue says why).
+            assertPatchCommitted(await zodiosApi.patch_assets_bulk_api_v1_assets_patch([patchPayload] as any), tr, tr('assetDetail.currencyChange.failed'));
             toasts.success(tr('assetDetail.currencyChange.changedTo', {values: {from: impact.from, to: impact.to}}));
 
             // Step 2: auto-sync (only if provider assigned AND we had prices to begin with).
