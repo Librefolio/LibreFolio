@@ -40,6 +40,7 @@ from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
 from backend.app.services.ai_export.components.resources import PriceResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.financial_math.fifo.models import LotMatchingMethod
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 
@@ -306,6 +307,8 @@ def load_asset_lots(scope: BuildScope):
             target_currency=scope.target_currency,
             selected_lot_ids=None,
             requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            # The AI Export reads the lots in FIFO and says so (project 69, D7).
+            matching_method=LotMatchingMethod.FIFO,
         )
 
     return _load
