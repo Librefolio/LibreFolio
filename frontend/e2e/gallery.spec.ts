@@ -5808,18 +5808,24 @@ test.describe('Gallery Screenshots', () => {
                     await expect(week).toHaveAttribute('data-active', 'true');
 
                     // The primary mode and the window are toggles: each is switched only when it is not on already.
+                    // A change reloads the series and, meanwhile, unmounts the selectors of the chart: the next toggle
+                    // is read once the page says it is idle again (G-19), never on the heels of the click before it.
                     const detail = page.getByTestId('asset-detail-page');
+                    const idle = () => expect(detail, 'the page is idle before the next toggle is read').toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+                    await idle();
                     const chart = detail.getByTestId('asset-detail-chart');
                     const rollingReturn = chart.getByTestId('asset-chart-primary-calendar-return');
                     await expect(rollingReturn).toBeVisible({timeout: 15_000});
                     if ((await rollingReturn.getAttribute('aria-pressed')) !== 'true') await rollingReturn.click();
                     await expect(rollingReturn).toHaveAttribute('aria-pressed', 'true');
                     await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+                    await idle();
                     const oneYear = chart.getByTestId('asset-calendar-window-controls').getByTestId('asset-calendar-window-1y');
                     await expect(oneYear).toBeVisible();
                     if ((await oneYear.getAttribute('aria-pressed')) !== 'true') await oneYear.click();
                     await expect(oneYear).toHaveAttribute('aria-pressed', 'true');
                     await expect(chart).toHaveAttribute('data-window-days', '365');
+                    await idle();
 
                     // One comparison asset, added the way a user adds it: Signals, Comparison, asset comparison, then
                     // the asset in the new card. In this mode the panel offers comparisons only.
