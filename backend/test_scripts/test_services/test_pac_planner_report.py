@@ -72,10 +72,10 @@ from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
-from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id, fx_debit_key
 from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactExposure
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import solve_policy_program
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     ONE,
     PROVENANCE_ID,
@@ -716,7 +716,7 @@ def _evaluate_multi_conversion(scenario):
     FX decision exists in the view and carried its quanta, so an override
     silently ignored by ``_evaluate`` cannot pass for a projection.
     """
-    fx_quanta = {exact_decision_id("fx_debit", fx_debit_key(route_id, "EUR")): debit for route_id, debit in _MULTI_CONVERSION_FX_DEBITS.items()}
+    fx_quanta = {fx_id(scenario, source="EUR", route_id=route_id): debit for route_id, debit in _MULTI_CONVERSION_FX_DEBITS.items()}
     view, evaluation = _evaluate(scenario, quanta={**_all_zero_quanta(scenario), **fx_quanta})
     assert evaluation.candidate_valid
     assert {(exact.order_route_id, exact.quanta) for exact in evaluation.fx} == set(_MULTI_CONVERSION_FX_DEBITS.items())

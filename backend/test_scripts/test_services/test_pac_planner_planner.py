@@ -130,6 +130,7 @@ from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, V, fx_conversion_request, make, scaled
 
 # The repository root: parents = [test_services, test_scripts, backend, <root>].
@@ -999,7 +1000,7 @@ def test_manual_conversion_reaching_an_exact_credit_tie_still_plans():
     tie_quanta = Fraction(Decimal("25.00")) / minor_unit["EUR"]
     assert tie_quanta.denominator == 1
     assert (tie_quanta * minor_unit["EUR"] * rate / minor_unit["USD"]) % 1 == Fraction(1, 2)
-    fx_decision_id = exact_decision_id("fx_debit", f"{_ASSET_ONE_ROUTE_ID}:EUR")
+    fx_decision_id = fx_id(scenario, source="EUR", route_id=_ASSET_ONE_ROUTE_ID)
     (fx_access,) = [access for access in build_exact_policy_view(scenario, purpose="primary").decisions if access.decision_id == fx_decision_id]
     assert fx_access.mode == "mutable"
     assert fx_access.lower_quanta <= tie_quanta <= fx_access.upper_quanta

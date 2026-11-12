@@ -76,6 +76,7 @@ from backend.test_scripts.test_services._pac_exhaustive_oracle import (
     estimate_oracle_domain_size,
     run_exhaustive_oracle,
 )
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     ONE,
     ZERO,
@@ -733,7 +734,7 @@ def test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one() -> None:
     scenario = _credit_tie_fx_scenario(price=R(2), cap=R(4))
     view = build_exact_policy_view(scenario)
     funding = exact_decision_id("funding_transfer", "route:funding:eur")
-    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    fx = fx_id(scenario, source="EUR", destination="USD")
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
 
     # The derivation's premises, read off the view: three free decisions, the
