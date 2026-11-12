@@ -110,6 +110,7 @@ PAC_PLANNER_PROOF_TEST_PATH = "backend/test_scripts/test_services/test_pac_plann
 PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_wire_numbers.py"
 PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
+PAC_PLANNER_REFERENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_reference.py"
 
 
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
@@ -175,6 +176,13 @@ def services_pac_planner_service(verbose: bool = False, test_names: list = None)
     print_section("Services: PAC/Rebalancer Plan Orchestration")
     cmd = _build_pytest_cmd(PAC_PLANNER_SERVICE_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer plan orchestration tests", verbose=verbose)
+
+
+def services_pac_planner_reference(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the PAC's reference values: the comparison rules R1-R7 and every corpus case planned against the recorded file."""
+    print_section("Services: PAC Reference Values")
+    cmd = _build_pytest_cmd(PAC_PLANNER_REFERENCE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC reference values tests", verbose=verbose)
 
 
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
@@ -2617,6 +2625,14 @@ Note: No backend server required.
         services_pac_planner_service,
         name="PAC/Rebalancer Plan Orchestration",
         desc="plan_pac_allocation end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-reference",
+        services_pac_planner_reference,
+        name="PAC Reference Values",
+        desc="The plans the PAC published before the planner became general, frozen in a file (written once by diagnostics/pac_reference_recorder.py), and the rules R1-R7 that hold later plans to them: no worse objective vector, no more conversions, no new pair, differences only in a file of accepted ones; every corpus case replanned in the Tool's engine window",
         isolation="pure",
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
