@@ -96,7 +96,9 @@ from backend.app.services.pac_allocator.constraints.facts import (
 from backend.app.services.pac_allocator.constraints.fees import add_fee_epigraph_constraints
 from backend.app.services.pac_allocator.constraints.funding import add_funding_activation_constraints, add_funding_pool_constraints
 from backend.app.services.pac_allocator.constraints.fx import add_fx_single_direction_constraints
+from backend.app.services.pac_allocator.constraints.limits import add_limit_constraints
 from backend.app.services.pac_allocator.constraints.orders import add_order_activation_constraints, add_order_required_minimum_constraints
+from backend.app.services.pac_allocator.evaluation.limits import ResolvedLimits
 from backend.app.services.pac_allocator.models import ExactPlannerScenario
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a hard pyscipopt import for readers
@@ -122,15 +124,19 @@ __all__ = [
 ]
 
 
-def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables) -> None:
+def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables, limits: ResolvedLimits | None = None) -> None:
     """Add every real cross-decision / semi-continuous constraint for one
     PAC ``proportional`` ``primary`` scenario. Box bounds are set on the
     variables themselves by ``compiler.py`` before this is called.
+
+    ``limits`` are the scenario's V5 limits resolved to amounts (``evaluation.limits.resolve_scenario_limits``): without
+    them, or without any limit, the model has no limit row (A3).
     """
     add_funding_pool_constraints(model, scenario, facts, variables)
-    add_ledger_balance_constraints(model, scenario, facts, variables)
+    cells = add_ledger_balance_constraints(model, scenario, facts, variables)
     add_order_required_minimum_constraints(model, scenario, facts, variables)
     add_order_activation_constraints(model, scenario, facts, variables)
     add_funding_activation_constraints(model, scenario, facts, variables)
     add_fee_epigraph_constraints(model, scenario, facts, variables)
     add_fx_single_direction_constraints(model, scenario, facts, variables)
+    add_limit_constraints(model, scenario, facts, variables, cells, limits)

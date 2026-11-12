@@ -62,6 +62,7 @@ from backend.app.services.pac_allocator.constraints import (
     compile_hard_constraints,
 )
 from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.limits import resolve_scenario_limits
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -69,6 +70,7 @@ from backend.app.services.pac_allocator.models import (
     ExactPlannerScenario,
     ExactPolicyView,
 )
+from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.objectives import (
     ObjectiveInputs,
     ObjectiveStage,
@@ -130,7 +132,7 @@ def _probe_quanta(access: DecisionAccess) -> int:
     return access.frozen_quanta if access.mode == "frozen_exact" else access.baseline_quanta
 
 
-def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyView) -> ObjectiveInputs:
+def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyView) -> tuple[ObjectiveInputs, ExactRatio]:
     probe_candidate = CandidateActionVector(
         view_id=view.view_id,
         candidate_id="__stage2_compiler_probe__",
@@ -140,7 +142,7 @@ def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyVie
     if evaluation.accounting is None:
         raise PolicyProgramContractError("compiler.py's internal probe candidate was rejected; the policy view is not well-formed")
     target_value_by_asset = {asset.asset_id: as_float(asset.target_value) for asset in evaluation.assets}
-    return compute_objective_inputs(target_value_by_asset, as_float(evaluation.accounting.fixed_reference))
+    return compute_objective_inputs(target_value_by_asset, as_float(evaluation.accounting.fixed_reference)), evaluation.accounting.fixed_reference
 
 
 def _create_variables(model: Model, scenario: ExactPlannerScenario, view: ExactPolicyView) -> CompiledVariables:
@@ -165,8 +167,9 @@ def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView
     model = Model(f"pac_allocator:{view.view_id}")
     model.hideOutput()
     variables = _create_variables(model, scenario, view)
-    compile_hard_constraints(model, scenario, facts, variables)
-    objective_inputs = _probe_objective_inputs(scenario, view)
+    # The probe first: V5 resolves shares of the reference, which only the exact do-nothing replay gives (specification §15 n. 17).
+    objective_inputs, reference = _probe_objective_inputs(scenario, view)
+    compile_hard_constraints(model, scenario, facts, variables, resolve_scenario_limits(scenario, reference))
     objective_stages = tuple(build_objective_cascade(model, scenario, facts, variables, objective_inputs, view))
     return CompiledProgram(
         model=model,

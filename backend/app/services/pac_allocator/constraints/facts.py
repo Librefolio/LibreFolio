@@ -8,7 +8,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from backend.app.services.financial_math.fx_rates import oriented_rate
+from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.evaluation.reachability import FxDecisionSpec, fx_decision_specs
+from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
 from backend.app.services.pac_allocator.models import ExactFeeSchedule, ExactOrderCapability, ExactOrderRoute, ExactPlannerScenario
 from backend.app.services.pac_allocator.numeric import ExactRatio
@@ -48,6 +50,7 @@ class ScenarioFacts:
     mid_native_by_asset: dict[str, float]
     capability_by_key: dict[tuple[str, str], ExactOrderCapability]
     fee_by_key: dict[tuple[str, str], ExactFeeSchedule]
+    ledger_cells: tuple[tuple[str, str], ...]  # the evaluator's ledger cells (``references.ledger_keys``), for V10
     fx_decisions: tuple[FxDecisionSpec, ...]  # the evaluator's one list (``reachability.fx_decision_specs``), never re-derived here
 
 
@@ -118,6 +121,7 @@ def build_scenario_facts(scenario: ExactPlannerScenario) -> ScenarioFacts:
             capability_by_key[(broker.broker_id, capability.capability_id)] = capability
         for fee in broker.fee_schedules:
             fee_by_key[(broker.broker_id, fee.fee_schedule_id)] = fee
+    scenario_index = build_scenario_index(scenario)
     return ScenarioFacts(
         valuation_currency=scenario.valuation_currency,
         currency_quantum=currency_quantum,
@@ -127,7 +131,8 @@ def build_scenario_facts(scenario: ExactPlannerScenario) -> ScenarioFacts:
         mid_native_by_asset=mid_native_by_asset,
         capability_by_key=capability_by_key,
         fee_by_key=fee_by_key,
-        fx_decisions=fx_decision_specs(scenario, build_scenario_index(scenario), None),
+        ledger_cells=ledger_keys(scenario, scenario_index),
+        fx_decisions=fx_decision_specs(scenario, scenario_index, None),
     )
 
 
@@ -146,3 +151,37 @@ def _minimum_value(route: ExactOrderRoute, field: str) -> float:
     # ``kind == "none"``, so the raw value is always the right magnitude to
     # compare against ``measure`` directly, exactly as evaluator.py does.
     return as_float(getattr(route, field).value)
+
+
+def buy_measure_expr(facts: ScenarioFacts, variables: CompiledVariables, route: ExactOrderRoute) -> LinearTerm:
+    capability = facts.capability_by_key[(route.broker_id, route.capability_id)]
+    order_step = as_float(capability.order_step)
+    decision = variables.quanta[exact_decision_id("buy_quantum", route.route_id)]
+    return order_step * decision
+
+
+def buy_mid_value_expr(facts: ScenarioFacts, route: ExactOrderRoute, measure: LinearTerm) -> LinearTerm:
+    """Mirrors evaluator.py's ``native_mid_value`` -> ``mid_value`` (valuation
+    currency) chain for one BUY route, as a function of its own ``measure``.
+    """
+    capability = facts.capability_by_key[(route.broker_id, route.capability_id)]
+    mid_native, execution_native = order_prices(facts, route)
+    if capability.kind == "whole_quantity":
+        native_mid_value = measure * mid_native
+    else:
+        native_mid_value = measure * (mid_native / execution_native)
+    quote_currency = facts.assets_by_id[route.asset_id]
+    return native_mid_value * valuation_rate(facts, quote_currency)
+
+
+def asset_final_value_exprs(scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables) -> dict[str, LinearTerm]:
+    """The final value of every Asset in the valuation currency, as a linear expression of the decisions.
+
+    A PAC has no holdings, so the final value of an Asset is the sum of the mid values of its own buy routes. It lived in
+    ``objectives.py``; V5 reads it too (A3, project 67), so it is here, shared.
+    """
+    values: dict[str, LinearTerm] = dict.fromkeys(facts.assets_by_id, 0.0)
+    for route in scenario.order_routes:
+        if route.side == "buy":
+            values[route.asset_id] = values[route.asset_id] + buy_mid_value_expr(facts, route, buy_measure_expr(facts, variables, route))
+    return values

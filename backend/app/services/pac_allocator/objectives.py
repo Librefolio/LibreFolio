@@ -30,14 +30,13 @@ from typing import TYPE_CHECKING
 from backend.app.services.pac_allocator.constraints import (
     CompiledVariables,
     ScenarioFacts,
-    as_float,
     order_notional,
     order_prices,
     planning_fx_rate,
     valuation_rate,
 )
-from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
-from backend.app.services.pac_allocator.models import ExactOrderRoute, ExactPlannerScenario, ExactPolicyView
+from backend.app.services.pac_allocator.constraints.facts import buy_measure_expr, buy_mid_value_expr
+from backend.app.services.pac_allocator.models import ExactPlannerScenario, ExactPolicyView
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a hard pyscipopt import for readers
     from pyscipopt import Expr, Model
@@ -80,27 +79,6 @@ class ObjectiveInputs:
     fixed_reference: float
 
 
-def _buy_measure_expr(facts: ScenarioFacts, variables: CompiledVariables, route: ExactOrderRoute) -> LinearTerm:
-    capability = facts.capability_by_key[(route.broker_id, route.capability_id)]
-    order_step = as_float(capability.order_step)
-    decision = variables.quanta[exact_decision_id("buy_quantum", route.route_id)]
-    return order_step * decision
-
-
-def _buy_mid_value_expr(facts: ScenarioFacts, route: ExactOrderRoute, measure: LinearTerm) -> LinearTerm:
-    """Mirrors evaluator.py's ``native_mid_value`` -> ``mid_value`` (valuation
-    currency) chain for one BUY route, as a function of its own ``measure``.
-    """
-    capability = facts.capability_by_key[(route.broker_id, route.capability_id)]
-    mid_native, execution_native = order_prices(facts, route)
-    if capability.kind == "whole_quantity":
-        native_mid_value = measure * mid_native
-    else:
-        native_mid_value = measure * (mid_native / execution_native)
-    quote_currency = facts.assets_by_id[route.asset_id]
-    return native_mid_value * valuation_rate(facts, quote_currency)
-
-
 def compute_objective_inputs(target_value_by_asset: dict[str, float], fixed_reference: float) -> ObjectiveInputs:
     return ObjectiveInputs(target_value_by_asset=dict(target_value_by_asset), fixed_reference=fixed_reference)
 
@@ -118,8 +96,8 @@ def build_fixed_l2_stage(model: Model, scenario: ExactPlannerScenario, facts: Sc
     for route in scenario.order_routes:
         if route.side != "buy":
             continue
-        measure = _buy_measure_expr(facts, variables, route)
-        buy_value_by_asset[route.asset_id] = buy_value_by_asset[route.asset_id] + _buy_mid_value_expr(facts, route, measure)
+        measure = buy_measure_expr(facts, variables, route)
+        buy_value_by_asset[route.asset_id] = buy_value_by_asset[route.asset_id] + buy_mid_value_expr(facts, route, measure)
 
     total: LinearTerm = 0.0
     for asset_id, target_value in inputs.target_value_by_asset.items():
@@ -141,8 +119,8 @@ def build_shortfall_stage(model: Model, scenario: ExactPlannerScenario, facts: S
     for route in scenario.order_routes:
         if route.side != "buy":
             continue
-        measure = _buy_measure_expr(facts, variables, route)
-        final_invested = final_invested + _buy_mid_value_expr(facts, route, measure)
+        measure = buy_measure_expr(facts, variables, route)
+        final_invested = final_invested + buy_mid_value_expr(facts, route, measure)
     return ObjectiveStage(code="shortfall", expression=inputs.fixed_reference - final_invested)
 
 
@@ -176,7 +154,7 @@ def build_explicit_cost_stage(model: Model, scenario: ExactPlannerScenario, fact
         quote_currency = facts.assets_by_id[route.asset_id]
         quote_valuation_rate = valuation_rate(facts, quote_currency)
         capability = facts.capability_by_key[(route.broker_id, route.capability_id)]
-        measure = _buy_measure_expr(facts, variables, route)
+        measure = buy_measure_expr(facts, variables, route)
         notional_expr = order_notional(facts, route, capability, measure)
 
         total = total + variables.buy_fee[route.route_id] * quote_valuation_rate

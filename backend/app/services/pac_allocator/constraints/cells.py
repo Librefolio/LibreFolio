@@ -152,7 +152,7 @@ def _posted_units_term(
     return quantum * units
 
 
-def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables) -> None:
+def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables) -> dict[tuple[str, str], list[LinearTerm]]:
     """``NO_SHORT_OR_LEVERAGE`` folding in ``FX_SOURCE_CASH``: every
     Broker×currency ledger cell's final spendable balance must stay >= 0.
 
@@ -174,6 +174,8 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
     rule of the time a 9.504 USD exact FX credit posted as 10 USD, and
     treating it as 9.504 wrongly pruned the true optimum; under the floor it
     posts 9, and 9.504 would admit plans the replay rejects.
+    Returns the terms of every cell (A3: V5 and V10 on cash read the same sums), by (Broker, currency).
+
     ``initial_selected``/``funding_in``/``funding_out``/``fx_debit``
     are exact-flow families (``ledger.py``'s ``_EXACT_FLOW_FAMILIES``) and are
     summed unrounded, which is correct.
@@ -251,3 +253,4 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
 
     for (broker_id, currency), terms in cells.items():
         model.addCons(sum(terms) >= 0, name=f"ledger_nonnegative:{broker_id}:{currency}")
+    return cells
