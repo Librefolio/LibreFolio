@@ -450,7 +450,22 @@
       "changesFor": "Cambia per {changing} su {total}",
       "alreadyHave": "{already} ce l'hanno già",
       "iconPick": "Scegli un'icona per tutti",
-      "continue": "Continua al riepilogo"
+      "continue": "Continua al riepilogo",
+      "blockIndexTitle": "⛔ «Indice» non accetta transazioni",
+      "blockIndexBody": "{count, plural, one {# asset selezionato ha già dei movimenti} other {# asset selezionati hanno già dei movimenti}}: con il tipo Indice non potrebbero più averne. Togli questi asset dalla modifica, oppure scegli un altro tipo. Finché il blocco resta, non si salva.",
+      "blockIndexRow": "{name} — {count, plural, one {# movimento} other {# movimenti}}",
+      "blockOtherTitle": "⛔ Il salvataggio verrebbe rifiutato",
+      "blockOtherBody": "Finché un blocco resta, non si salva.",
+      "removeBlocked": "{count, plural, one {Togli questo asset dalla modifica} other {Togli questi # dalla modifica}}",
+      "warnFamilyTitle": "⚠️ {count, plural, one {Cambio di famiglia per # asset} other {Cambio di famiglia per # asset}}",
+      "warnFamilyRow": "{name}: {from} → {to}",
+      "warnFamilyNote": "Non è un errore, ma un cambio così è raro.",
+      "warnOtherTitle": "⚠️ Qualcosa da controllare",
+      "removeFromEdit": "Togli dalla modifica",
+      "warnOk": "Va bene così",
+      "blocked": "bloccato",
+      "blockedFor": "Non ammesso per {count} su {total}",
+      "verifyFailed": "⛔ Non è stato possibile eseguire la verifica"
     }
   },
   "events": {

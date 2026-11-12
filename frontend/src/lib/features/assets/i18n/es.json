@@ -450,7 +450,22 @@
       "changesFor": "Cambia para {changing} de {total}",
       "alreadyHave": "{already} ya lo tienen",
       "iconPick": "Elegir un icono para todos",
-      "continue": "Continuar al resumen"
+      "continue": "Continuar al resumen",
+      "blockIndexTitle": "⛔ «Índice» no admite transacciones",
+      "blockIndexBody": "{count, plural, one {# activo seleccionado ya tiene transacciones} other {# activos seleccionados ya tienen transacciones}}: con el tipo Índice no podrían tenerlas. Quítalos de la edición, o elige otro tipo. No se guarda nada mientras el bloqueo siga.",
+      "blockIndexRow": "{name} — {count, plural, one {# transacción} other {# transacciones}}",
+      "blockOtherTitle": "⛔ El guardado sería rechazado",
+      "blockOtherBody": "No se guarda nada mientras un bloqueo siga.",
+      "removeBlocked": "{count, plural, one {Quitar este activo de la edición} other {Quitar estos # de la edición}}",
+      "warnFamilyTitle": "⚠️ {count, plural, one {Cambio de familia para # activo} other {Cambio de familia para # activos}}",
+      "warnFamilyRow": "{name}: {from} → {to}",
+      "warnFamilyNote": "No es un error, pero un cambio así es poco habitual.",
+      "warnOtherTitle": "⚠️ Algo que revisar",
+      "removeFromEdit": "Quitar de la edición",
+      "warnOk": "Está bien así",
+      "blocked": "bloqueado",
+      "blockedFor": "No permitido para {count} de {total}",
+      "verifyFailed": "⛔ No se pudo ejecutar la verificación"
     }
   },
   "events": {
