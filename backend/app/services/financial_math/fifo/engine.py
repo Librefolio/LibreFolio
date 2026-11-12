@@ -27,6 +27,7 @@ from backend.app.services.financial_math.fifo.models import (
     IssueCode,
     LotClosure,
     LotEconomicAccumulators,
+    LotMatchingMethod,
     ReferencePriceLookup,
     ReferencePriceResolution,
     SplitQuantitySnapshot,
@@ -47,6 +48,10 @@ from backend.app.utils.datetime_utils import day_before
 # would crash the engine on ordinary, common split ratios. Genuine logic errors
 # produce discrepancies many orders of magnitude larger than this tolerance.
 _COST_INVARIANT_TOLERANCE = Decimal("0.01")
+
+# The phase of each event kind within one day (``FifoLotEngine._event_sort_key``): transfers at the start of the day,
+# then splits, then the inflows, and last the outflows (SELL, ADJUSTMENT_OUT).
+_EVENT_PHASES: dict[str, int] = {"TRANSFER_DEPART": 0, "TRANSFER_ARRIVE": 1, "SPLIT": 2, "BUY": 3, "ADJUSTMENT_IN": 3, "SELL": 4, "ADJUSTMENT_OUT": 4}
 
 
 @dataclass(slots=True)
@@ -72,7 +77,11 @@ class _EconomicStageResult:
 
 
 class FifoLotEngine:
-    """Pure event-sourced FIFO engine for one asset across many brokers.
+    """Pure event-sourced lot engine for one asset across many brokers, replayed in FIFO or in LIFO.
+
+    ``matching_method`` (default FIFO) is the order in which every outflow of a broker — a sale, an outgoing adjustment,
+    a transfer departure, a buy covering a short — takes that broker's open lots (``_broker_fragments``): FIFO the
+    oldest lot first, LIFO the most recent, by opening date then lot id. The lots themselves are the same in both.
 
     Split scope judgement call: only fragments touched by broker with explicit split-linked
     transaction are transformed. Broker-custodied fragments match on `broker_id`; in-transit
@@ -95,6 +104,7 @@ class FifoLotEngine:
         economic_events: Sequence[EconomicEvent] = (),
         target_currency: str = "",
         replay_until: date | None = None,
+        matching_method: LotMatchingMethod = LotMatchingMethod.FIFO,
     ) -> None:
         normalized = [tx if isinstance(tx, FifoInputTransaction) else FifoInputTransaction.from_transaction(tx) for tx in transactions]
         if not normalized:
@@ -113,6 +123,7 @@ class FifoLotEngine:
         # J-47: the replay stops at this day. An event after it is neither applied nor reported: the arrival of a
         # transfer still in transit then, whose units stay in transit.
         self.replay_until = replay_until
+        self.matching_method = LotMatchingMethod(matching_method)
         self._tx_by_id = {tx.id: tx for tx in normalized}
         self._issues: list[FifoDataQualityIssue] = []
         self._lots: dict[int, FifoLot] = {}
@@ -284,7 +295,15 @@ class FifoLotEngine:
 
     @staticmethod
     def _event_sort_key(event: FifoEvent) -> tuple[date, int, int, int]:
-        phase = 0 if event.kind == "TRANSFER_DEPART" else 1 if event.kind == "TRANSFER_ARRIVE" else 2 if event.kind == "SPLIT" else 3
+        """The replay order: by day; within a day transfer departures, arrivals, splits, then the inflows (BUY,
+        ADJUSTMENT-in) and last the outflows (SELL, ADJUSTMENT-out); by id inside each phase.
+
+        Inflows before outflows (project 69, D4 and D4b, both methods): a transaction carries a day, not a time, and the
+        balance check reads the quantity at the end of the day. A sale recorded before the purchase of its day closes
+        that purchase instead of failing a broker without shorting; on a broker with shorting it no longer opens a short
+        of a few hours: the purchase opens a long lot and the sale closes it, with the same realized gain.
+        """
+        phase = _EVENT_PHASES[event.kind]
         return event.date, phase, event.transaction_id, event.pair_id or event.transaction_id
 
     def _apply_buy(self, event: FifoEvent) -> None:
@@ -628,7 +647,7 @@ class FifoLotEngine:
         close_currency: str | None = None,
         close_currency_of: Callable[[FragmentInterval], str | None] | None = None,
     ) -> Decimal:
-        """Close up to ``quantity`` of the broker's open fragments, oldest lot first; the quantity closed.
+        """Close up to ``quantity`` of the broker's open fragments, in the order of the replay's method; the quantity closed.
 
         Each fragment closes at ``close_unit_price``, or at the price ``close_unit_price_of`` gives it, in
         ``close_currency`` or in the one ``close_currency_of`` gives it.
@@ -798,10 +817,17 @@ class FifoLotEngine:
         )
 
     def _broker_fragments(self, broker_id: int, direction: Direction) -> list[FragmentInterval]:
-        return sorted(
-            [fragment for fragment in self._active_fragments.values() if fragment.custody_type == "BROKER" and fragment.broker_id == broker_id and fragment.direction == direction],
-            key=lambda fragment: (self._lots[fragment.lot_id].opening_date, fragment.lot_id, fragment.start_date, fragment.fragment_id),
-        )
+        """The broker's open fragments of ``direction``, in the order an outflow takes them: the one queue of the replay.
+
+        FIFO: the oldest lot first, by opening date then lot id. LIFO: the most recent first, both descending. A lot that
+        arrived by transfer keeps its purchase date here (D10). Within one lot, its fragments stay in the order they
+        started, in both methods.
+        """
+        fragments = [fragment for fragment in self._active_fragments.values() if fragment.custody_type == "BROKER" and fragment.broker_id == broker_id and fragment.direction == direction]
+        in_lot_order = sorted(fragments, key=lambda fragment: (fragment.start_date, fragment.fragment_id))
+        if self.matching_method is LotMatchingMethod.LIFO:
+            return sorted(in_lot_order, key=lambda fragment: (self._lots[fragment.lot_id].opening_date, fragment.lot_id), reverse=True)
+        return sorted(in_lot_order, key=lambda fragment: (self._lots[fragment.lot_id].opening_date, fragment.lot_id))
 
     def signed_quantity_for_broker(self, broker_id: int) -> Decimal:
         total = Decimal("0")
@@ -1291,7 +1317,9 @@ def run_fifo_lot_engine(
     economic_events: Sequence[EconomicEvent] = (),
     target_currency: str = "",
     replay_until: date | None = None,
+    matching_method: LotMatchingMethod = LotMatchingMethod.FIFO,
 ) -> FifoEngineResult:
+    """Replay ``transactions`` of one asset into lots, matching outflows in ``matching_method`` order (default FIFO)."""
     return FifoLotEngine(
         transactions=transactions,
         broker_shorting=broker_shorting,
@@ -1301,6 +1329,7 @@ def run_fifo_lot_engine(
         economic_events=economic_events,
         target_currency=target_currency,
         replay_until=replay_until,
+        matching_method=matching_method,
     ).run()
 
 

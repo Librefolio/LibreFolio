@@ -20,6 +20,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Un taux de change de plus d'une semaine est désormais signalé partout où une valeur en dépend : l'analyse des lots affiche le même avertissement « taux de change non à jour » que le Tableau de bord, et l'info-bulle du Yield on Cost indique l'ancien taux utilisé. Aucun chiffre ne change, seulement l'avertissement.
 - Les paires de devises s'écrivent partout de la même façon, avec symboles et drapeaux : `$ 🇺🇸 USD / EUR 🇪🇺 €` pour une paire, `$ 🇺🇸 USD → EUR 🇪🇺 €` pour une conversion, dans son sens.
 - Analyse du risque : quand un actif est écarté faute de taux de change, le message nomme désormais la paire de devises et indique depuis quelle date un taux est enregistré, ou qu'il n'y en a aucun.
+- Listes Actifs et Change, vue Rolling Return : les cartes comparent désormais aussi l'autre type, comme les pages de détail. La carte d'un actif peut afficher des paires de devises et celle d'une paire peut afficher des actifs, choisis dans « Paramètres du Graphique » de la carte.
+- Analyse des lots : dans une même journée, les achats et les ajustements entrants passent désormais avant les ventes et les ajustements sortants. Une vente enregistrée avant l'achat du même jour ne fait plus échouer l'analyse ; chez un courtier qui autorise la vente à découvert, un découvert ouvert et couvert dans la journée apparaît désormais comme un lot long, avec le même gain réalisé.
 
 ### 🐛 Corrections
 

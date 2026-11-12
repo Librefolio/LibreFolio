@@ -34,13 +34,14 @@
     import {DEFAULT_COMPACT_PLOT_WIDTH_PX} from '$lib/components/charts/timeSeriesAggregation';
     import {buildFxCalendarQuery, estimateFxCalendarDays, fxCalendarRequest, type FxCalendarCardInput, type FxCalendarEntry} from '$lib/utils/reducedFxQuery';
     import {MIN_START, sendBulkBatches} from '$lib/api/bulkBatches';
+    import {buildListAssetComparisonQuery, estimateListAssetDays, listAssetComparisonViews, type ListAssetEntry} from '$lib/features/signals/crossTypeCalendar';
     import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {comparisonTargetFromStore, ensureComparisonSeries} from '$lib/features/signals/comparisonSeries';
     import {comparisonTargetIds} from '$lib/utils/reducedPriceQuery';
     import {todayIso} from '$lib/utils/dateOnly';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
@@ -124,6 +125,11 @@
     /** The last request of each card's rolling return: an older answer arriving later is dropped. */
     const calendarRequestOfSlug = new Map<string, number>();
     let calendarRequestSeq = 0;
+    /** FB-11 follow-up: the rolling return of the assets each card in that view compares, by asset id, by pair. */
+    let calendarAssetsBySlug = $state(new Map<string, Map<number, CalendarReturnView>>());
+    const calendarAssetRequestOfSlug = new Map<string, number>();
+    let calendarAssetSeq = 0;
+    let calendarAssetsLoading = $state(0);
     let refreshing = $state(false);
 
     // View mode (grid/list)
@@ -523,6 +529,74 @@
      * The conversions' rates are not the cards' daily rates: they never reach the FX stores.
      */
     async function fetchCalendarReturns(only?: ReadonlySet<string>, silent = false) {
+        await Promise.all([fetchOwnCalendarReturns(only, silent), fetchCalendarAssets(only)]);
+    }
+
+    /**
+     * FB-11 follow-up: the rolling return of the assets the cards in that view compare, asked of `POST /assets/prices/query` in
+     * one request for the whole list (a round per repeat of an asset over another window, and the batches the caps need), as the
+     * FX detail asks them: no prices, no events, the asset's own currency, and no filter on the assets the Assets page lists.
+     * Never throws: a failure marks each compared asset `error`; an answer the page has moved past, or a session that ended, is dropped.
+     */
+    async function fetchCalendarAssets(only?: ReadonlySet<string>) {
+        void getSettingsVersion();
+        const sessionGeneration = getClientSessionGeneration();
+        const requestId = ++calendarAssetSeq;
+        const rangeDays = calendarReturnRangeDays(dateStart, dateEnd);
+        const cards: Array<{cardKey: string; start: string; end: string; windowDays: number; assetIds: number[]}> = [];
+        const next = new Map(calendarAssetsBySlug);
+        for (const pair of pairs) {
+            const slug = pair.config.slug;
+            if (only && !only.has(slug)) continue;
+            const settings = getSettingsForPair(slug, 'fx');
+            const assetIds = settings.primaryView === 'calendar-return' ? comparisonTargetIds(settings.signals, 0) : [];
+            if (assetIds.length === 0) {
+                next.delete(slug);
+                continue;
+            }
+            calendarAssetRequestOfSlug.set(slug, requestId);
+            cards.push({cardKey: slug, start: isMaxPending ? MIN_START : dateStart, end: dateEnd, windowDays: calendarReturnWindowDays(effectiveCalendarReturnWindow(settings, rangeDays)) ?? 30, assetIds});
+        }
+        calendarAssetsBySlug = next;
+        if (cards.length === 0) return;
+
+        const entries = buildListAssetComparisonQuery(cards);
+        const settle = (byCard: Map<string, Map<number, CalendarReturnView>> | null) => {
+            if (sessionGeneration !== getClientSessionGeneration() || !isClientSessionCurrent(sessionGeneration)) return;
+            const settled = new Map(calendarAssetsBySlug);
+            for (const card of cards) {
+                if (calendarAssetRequestOfSlug.get(card.cardKey) !== requestId) continue;
+                const views = new Map(card.assetIds.map((assetId) => [assetId, emptyCalendarReturnView('error')]));
+                for (const [assetId, view] of byCard?.get(card.cardKey) ?? []) views.set(assetId, view);
+                settled.set(card.cardKey, views);
+            }
+            calendarAssetsBySlug = settled;
+        };
+        calendarAssetsLoading += 1;
+        try {
+            const today = todayIso();
+            const rounds = new Map<number, ListAssetEntry[]>();
+            for (const entry of entries) rounds.set(entry.round, [...(rounds.get(entry.round) ?? []), entry]);
+            const answers: Array<{entries: readonly ListAssetEntry[]; answer: unknown}> = [];
+            for (const roundEntries of rounds.values()) {
+                const outcome = await sendBulkBatches(
+                    roundEntries,
+                    (entry) => estimateListAssetDays(entry, today),
+                    (batch) => zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(batch.map((entry) => entry.item)),
+                );
+                if (outcome.failed) console.error('Failed to fetch the compared assets of the cards:', outcome.error);
+                answers.push(...outcome.answers.map(({batch, answer}) => ({entries: batch.items, answer})));
+            }
+            settle(listAssetComparisonViews(answers));
+        } catch (requestError) {
+            console.error('Failed to fetch the compared assets of the cards:', requestError);
+            settle(null);
+        } finally {
+            calendarAssetsLoading -= 1;
+        }
+    }
+
+    async function fetchOwnCalendarReturns(only?: ReadonlySet<string>, silent = false) {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current()) return;
@@ -594,7 +668,22 @@
     /** A card's compared pairs in the rolling-return view (V-5 a): their returns. */
     function cardCalendarOverlays(slug: string): RenderedSignal[] {
         const views = calendarBySlug.get(slug)?.targets;
-        return views ? renderCalendarPairComparisons(getSettingsForPair(slug, 'fx').signals, views) : [];
+        const settings = getSettingsForPair(slug, 'fx').signals;
+        const assetViews = calendarAssetsBySlug.get(slug);
+        return [...(views ? renderCalendarPairComparisons(settings, views) : []), ...(assetViews ? calendarAssetLines(settings, assetViews) : [])];
+    }
+
+    /** The compared assets as lines: name and icon from the asset list, a fallback name for an asset it no longer holds (as the FX detail). */
+    function calendarAssetLines(configs: SignalConfig[], views: ReadonlyMap<number, CalendarReturnView>): RenderedSignal[] {
+        return renderCalendarComparisons(
+            configs,
+            views,
+            (assetId) => {
+                const asset = availableAssetsList.find((candidate) => candidate.id === assetId);
+                return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url ?? null, assetType: asset.asset_type ?? null} : null;
+            },
+            (assetId) => $_('chartSettings.signals.assetFallback', {values: {id: String(assetId)}}),
+        );
     }
 
     /** The plot width the settings preview asks its rolling return for (Y-40): about the preview chart's. */
@@ -620,7 +709,22 @@
         const views = calendarViewsOf([{batch: {items: entries}, answer}]);
         const own = views.own.get(slug);
         if (!own || (own.state !== 'ready' && own.state !== 'partial')) return null;
-        return {points: own.points, overlays: renderCalendarPairComparisons(configs, views.targets.get(slug) ?? new Map())};
+        const assetViews = await previewAssetViews(configs, windowDays);
+        return {points: own.points, overlays: [...renderCalendarPairComparisons(configs, views.targets.get(slug) ?? new Map()), ...calendarAssetLines(configs, assetViews)]};
+    }
+
+    /** The compared assets of the settings preview, asked as the card asks them; a failure draws none of them. */
+    async function previewAssetViews(configs: SignalConfig[], windowDays: number): Promise<Map<number, CalendarReturnView>> {
+        const assetIds = comparisonTargetIds(configs, 0);
+        if (assetIds.length === 0) return new Map();
+        try {
+            const entries = buildListAssetComparisonQuery([{cardKey: 'preview', start: dateStart, end: dateEnd, windowDays, assetIds}]);
+            const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(entries.map((entry) => entry.item));
+            return listAssetComparisonViews([{entries, answer: response}]).get('preview') ?? new Map();
+        } catch (error) {
+            console.error('Failed to fetch the compared assets of the preview:', error);
+            return new Map();
+        }
     }
 
     /** The Δ columns of every configured pair up to the end of the range, and each pair's Δ over the range, both ways, from the backend (X-R53, X-R59). */
@@ -1300,7 +1404,7 @@
      */
     // The cards' rolling returns are a load wave too (Y-40): `data-busy` holds until they are in.
     // The assets the cards compare are one too (Y-41).
-    let busy = $derived(loading || periodChangesLoading || comparisonSeriesLoading > 0 || pairs.some((p) => p.loading) || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
+    let busy = $derived(loading || periodChangesLoading || comparisonSeriesLoading > 0 || pairs.some((p) => p.loading) || calendarAssetsLoading > 0 || [...calendarBySlug.values()].some((entry) => entry.own.state === 'loading'));
 </script>
 
 <div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">

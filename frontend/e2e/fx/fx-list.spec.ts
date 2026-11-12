@@ -1380,6 +1380,42 @@ test.describe('FX list — a card draws its saved comparisons (Y-41)', () => {
     });
 });
 
+test.describe('FX list — a compared asset is drawn in the rolling-return view (FB-11)', () => {
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('two cards compare the same asset: one price request for the list, each card draws its line', async ({page}) => {
+        await goToFxPage(page);
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        await seedChartComparisons(page, [
+            ['EUR-USD', [assetComparison('e2e-fb11-asset-a', appleId)]],
+            ['EUR-GBP', [assetComparison('e2e-fb11-asset-b', appleId)]],
+        ]);
+
+        await goToFxPage(page);
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+        const asked: Array<Array<{asset_id?: number}>> = [];
+        page.on('request', (request) => {
+            if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return;
+            if ((request.postData() ?? '').includes('ASSET_CALENDAR_ROLLING_RETURN')) asked.push((request.postDataJSON() as Array<{asset_id?: number}>) ?? []);
+        });
+        await page.getByTestId('fx-global-view-calendar-return').click();
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+        await expect(page.getByTestId('fx-card-EUR-USD'), 'the asset is drawn in the rolling-return view').toHaveAttribute('data-overlay-count', '1', {timeout: 15_000});
+        await expect(page.getByTestId('fx-card-EUR-GBP')).toHaveAttribute('data-overlay-count', '1', {timeout: 15_000});
+        expect(asked, 'one price request for the whole list, not one per card').toHaveLength(1);
+        expect(
+            asked[0].map((item) => item.asset_id),
+            'it asks the shared asset once',
+        ).toEqual([appleId]);
+    });
+});
+
 /**
  * FX list — the grid toolbar: an icon for the absolute view, a tooltip on settings, sync all and refresh all (Y5-F1).
  *
