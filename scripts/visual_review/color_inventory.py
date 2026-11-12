@@ -49,6 +49,97 @@ def is_test(p) -> bool:
     return "__tests__" in s or "__mocks__" in s or ".test." in s or ".spec." in s
 
 
+_SVELTE_REGION_RE = re.compile(r"<(script|style)\b[^>]*>([\s\S]*?)</\1\s*>")
+
+
+def _blank(chars: list[str], start: int, stop: int) -> None:
+    for k in range(start, stop):
+        if chars[k] not in "\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029":
+            chars[k] = " "
+
+
+def mask_comments_in(text: str, mode: str, start: int = 0, end: int | None = None) -> str:  # noqa: C901 — one scanner, one loop over the characters
+    """``text`` with every character of a comment replaced by a space (newlines kept: lines and columns do not move).
+
+    ``mode`` ``css`` knows ``/* … */``; ``script`` knows that and ``// …``, and skips strings and template literals (with
+    their ``${…}``), so ``'https://x'`` is not a comment; ``markup`` knows ``<!-- … -->``. Mirrored by ``maskCommentsIn`` of
+    ``frontend/scripts/designer-lab/scan-colors.mjs``: change one, change the other.
+    """
+    end = len(text) if end is None else end
+    chars = list(text)
+    if mode == "markup":
+        i = start
+        while i < end:
+            if text.startswith("<!--", i):
+                close = text.find("-->", i + 4)
+                stop = end if close == -1 or close + 3 > end else close + 3
+                _blank(chars, i, stop)
+                i = stop
+            else:
+                i += 1
+        return "".join(chars)
+    # Template literals nest: each ``${`` opens a code context whose own braces are counted.
+    stack = [["code", 0]]
+    i = start
+    while i < end:
+        c = text[i]
+        top = stack[-1]
+        if top[0] == "tpl":
+            if c == "\\":
+                i += 1
+            elif c == "`":
+                stack.pop()
+            elif c == "$" and text[i + 1 : i + 2] == "{":
+                stack.append(["code", 0])
+                i += 1
+            i += 1
+            continue
+        if c == "/" and text[i + 1 : i + 2] == "*":
+            close = text.find("*/", i + 2)
+            stop = end if close == -1 or close + 2 > end else close + 2
+            _blank(chars, i, stop)
+            i = stop - 1
+        elif mode == "script" and c == "/" and text[i + 1 : i + 2] == "/":
+            stop = text.find("\n", i)
+            if stop == -1 or stop > end:
+                stop = end
+            _blank(chars, i, stop)
+            i = stop - 1
+        elif c in "\"'":
+            i += 1
+            while i < end and text[i] != c and text[i] != "\n":
+                if text[i] == "\\":
+                    i += 1
+                i += 1
+        elif mode == "script" and c == "`":
+            stack.append(["tpl", 0])
+        elif mode == "script" and c == "{":
+            top[1] += 1
+        elif mode == "script" and c == "}":
+            if top[1] == 0 and len(stack) > 1:
+                stack.pop()
+            else:
+                top[1] -= 1
+        i += 1
+    return "".join(chars)
+
+
+def mask_comments(rel: str, text: str) -> str:
+    """A source with its comments blanked out, by file kind: ``.css`` as CSS, ``.svelte`` per region (its ``<script>`` as
+    script, its ``<style>`` as CSS, the markup around them for ``<!-- -->``), anything else as script."""
+    if rel.endswith(".css"):
+        return mask_comments_in(text, "css")
+    if not rel.endswith(".svelte"):
+        return mask_comments_in(text, "script")
+    chars = list(mask_comments_in(text, "markup"))
+    for m in _SVELTE_REGION_RE.finditer(text):
+        start = m.start() + m.group(0).index(">") + 1
+        end = start + len(m.group(2))
+        part = mask_comments_in(text, "css" if m.group(1) == "style" else "script", start, end)
+        chars[start:end] = part[start:end]
+    return "".join(chars)
+
+
 @dataclass
 class Scan:
     """Everything collected from the sources; per_file counts production files only."""
@@ -74,29 +165,30 @@ def source_files() -> list[Path]:
     return sorted(p for p in files if not p.name.startswith("generated") and "openapi" not in p.name and "tool-contract-map" not in p.name and not p.relative_to(ROOT).as_posix().startswith(LAB_DIRS))
 
 
-def scan_line(s: Scan, rel: str, ln: int, line: str, test: bool) -> None:
-    for m in tw_re.finditer(line):
+def scan_line(s: Scan, rel: str, ln: int, line: str, code: str, test: bool) -> None:
+    """``line`` is what the CSVs quote; ``code`` is the same line with its comments blanked, and is what is matched."""
+    for m in tw_re.finditer(code):
         variants, prefix, fam, shade, op = m.groups()
         s.tw_rows.append((rel, ln, test, variants, prefix, fam, shade, op or "", m.group(0)))
         s.count(rel, test, "tw")
         if "dark:" in variants:
             s.count(rel, test, "tw_dark")
-    for m in tw_bw_re.finditer(line):
+    for m in tw_bw_re.finditer(code):
         variants, prefix, col, op = m.groups()
         s.tw_rows.append((rel, ln, test, variants, prefix, col, "", op or "", m.group(0)))
-    for m in tw_custom_re.finditer(line):
+    for m in tw_custom_re.finditer(code):
         s.custom_rows.append((rel, ln, test, m.group(0)))
         s.count(rel, test, "custom_token")
-    for m in tw_arbitrary_re.finditer(line):
+    for m in tw_arbitrary_re.finditer(code):
         s.arb_rows.append((rel, ln, test, m.group(0)))
         s.count(rel, test, "arbitrary")
-    for m in hex_re.finditer(line):
+    for m in hex_re.finditer(code):
         s.hex_rows.append((rel, ln, test, "#" + m.group(1).lower(), line.strip()[:160]))
         s.count(rel, test, "hex")
-    for m in func_re.finditer(line):
+    for m in func_re.finditer(code):
         s.func_rows.append((rel, ln, test, m.group(0)[:80], line.strip()[:160]))
         s.count(rel, test, "fn")
-    for m in var_use_re.finditer(line):
+    for m in var_use_re.finditer(code):
         s.var_uses[m.group(1)] += 1
         s.var_use_files[m.group(1)].add(rel)
         s.count(rel, test, "var")
@@ -111,10 +203,12 @@ def scan_sources(files: list[Path]) -> Scan:
             text = p.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        for ln, line in enumerate(text.splitlines(), 1):
-            scan_line(s, rel, ln, line, test)
-        for m in var_def_re.finditer(text):
-            s.var_defs.append((rel, text[: m.start()].count("\n") + 1, m.group(1), m.group(2).strip()))
+        # The colours counted are the code's: a colour written in a comment is not one (L6-1). Same lines, same columns.
+        code = mask_comments(rel, text)
+        for ln, (line, code_line) in enumerate(zip(text.splitlines(), code.splitlines(), strict=True), 1):
+            scan_line(s, rel, ln, line, code_line, test)
+        for m in var_def_re.finditer(code):
+            s.var_defs.append((rel, code[: m.start()].count("\n") + 1, m.group(1), m.group(2).strip()))
     return s
 
 
