@@ -915,25 +915,24 @@ def test_conversion_mode_changes_no_figure_of_the_plan(fx_plan_by_mode):
     assert manual["scenario_basis"] == automatic["scenario_basis"]
 
 
-def test_conversion_mode_conversion_aggregates_the_fx_actions(fx_plan_by_mode):
-    """The published conversion is the EUR→USD one at broker-one, built from every FX action.
+def test_conversion_mode_conversion_is_one_fx_action(fx_plan_by_mode):
+    """The published conversion is the EUR→USD one at broker-one, and it is one FX decision of the engine.
 
-    Its debit and spread are the exact sums of the actions', its credit the sum
-    of their posted credits, and each action names it — read off the live
-    result, in either mode.
+    Since A2 the engine decides FX once per Broker and pair, so the conversion carries exactly one action (the bridge of
+    contract 1.0.0) and publishes its figures: debit, posted credit and spread — read off the live result, in either mode.
     """
     for mode, wire in fx_plan_by_mode.items():
         solution = wire["primary_solution"]
         (conversion,) = solution["conversions"]
         assert conversion["conversion_id"] == f"conversion:{_BROKER_ONE_ID}:EUR:USD", mode
         assert (conversion["broker_id"], conversion["source_debit"]["currency"], conversion["destination_credit"]["currency"]) == (_BROKER_ONE_ID, "EUR", "USD")
-        actions = solution["fx_actions"]
-        assert conversion["fx_action_ids"] == [action["action_id"] for action in actions]
-        assert {action["conversion_id"] for action in actions} == {conversion["conversion_id"]}
-        assert all("sequence" not in action for action in actions), actions
-        assert Fraction(Decimal(conversion["source_debit"]["amount"])) == sum(Fraction(Decimal(action["source_debit"]["amount"])) for action in actions)
-        assert Fraction(Decimal(conversion["destination_credit"]["amount"])) == sum(Fraction(Decimal(action["destination_credit"]["amount"])) for action in actions)
-        assert _wire_exact(conversion["spread_loss"]["value"]) == sum(_wire_exact(action["spread_loss"]["value"]) for action in actions)
+        (action,) = solution["fx_actions"]
+        assert conversion["fx_action_ids"] == [action["action_id"]]
+        assert action["conversion_id"] == conversion["conversion_id"]
+        assert "sequence" not in action, action
+        assert conversion["source_debit"] == action["source_debit"]
+        assert conversion["destination_credit"] == action["destination_credit"]
+        assert _wire_exact(conversion["spread_loss"]["value"]) == _wire_exact(action["spread_loss"]["value"])
         assert _wire_exact(conversion["spread_loss"]["value"]) > 0, "a 4% spread must cost something"
 
 

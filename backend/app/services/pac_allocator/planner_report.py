@@ -493,7 +493,10 @@ def _conversion_id(action: ExactFxEvaluation) -> str:
 
 
 def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list[PlannerFxAction]:
-    """Project posted FX decisions, one per engine decision.
+    """Project posted FX decisions, one per engine decision: one per Broker and ordered pair since A2, so one per conversion.
+
+    The action names the decision's representative route (``order_route_id``, the first buy route of the Broker in the
+    destination currency): contract ``1.0.0`` requires one, and A4 removes the action.
 
     ``destination_credit`` publishes the **posted** credit, not the exact one:
     the ledger identity reconciles on posted amounts (an exact 9.504 USD
@@ -529,46 +532,33 @@ def build_fx_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
 
 
 def build_conversions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, fx_actions: list[PlannerFxAction], sequence: _SequenceAllocator) -> list[PlannerConversion]:
-    """Aggregate the FX actions into one conversion per Broker and currency pair.
+    """One conversion per engine FX decision: the engine decides FX once per Broker and ordered currency pair (A2).
 
-    The engine decides FX per order route, but no constraint ties a decision to
-    its route's BUY: the credit lands in the Broker's cash in the destination
-    currency, which every order of that Broker in that currency shares, and the
-    canonical tie-break picks the route. So the pair total is the figure the
-    plan can present; rate and spread are global per pair.
-
-    ``fx_actions`` is ``build_fx_actions``'s output for the same evaluation,
-    one row per ``evaluation.fx`` entry in the same order. Manual conversions
-    take the next sequences in (Broker, source, destination) order, which puts
-    them between funding and orders; automatic ones happen inside the orders
-    and carry none.
+    The credit lands in the Broker's cash in the destination currency, which every order of that Broker in that currency
+    shares, so the pair is what the plan presents. ``fx_actions`` is ``build_fx_actions``'s output for the same evaluation,
+    one row per ``evaluation.fx`` entry in the same order: under contract ``1.0.0`` each conversion keeps exactly one action
+    (the bridge of D1, removed in A4), and publishes that action's figures. ``evaluation.fx`` is already in canonical
+    (Broker, source, destination) order and holds each pair once (``ExactEvaluation`` refuses duplicates). Manual conversions
+    take the next sequences in that order, which puts them between funding and orders; automatic ones happen inside the
+    orders and carry none.
     """
     mode_by_broker = {broker.broker_id: broker.conversion_mode for broker in scenario.brokers}
-    groups: dict[tuple[str, str, str], list[tuple[ExactFxEvaluation, PlannerFxAction]]] = {}
-    for exact, row in zip(evaluation.fx, fx_actions, strict=True):
-        groups.setdefault((exact.broker_id, exact.source_currency, exact.destination_currency), []).append((exact, row))
     conversions: list[PlannerConversion] = []
-    for (broker_id, source_currency, destination_currency), members in sorted(groups.items()):
-        exacts = [exact for exact, _ in members]
-        rows = [row for _, row in members]
-        mode = mode_by_broker[broker_id]
+    for exact, row in zip(evaluation.fx, fx_actions, strict=True):
+        mode = mode_by_broker[exact.broker_id]
         conversions.append(
             PlannerConversion(
-                conversion_id=_conversion_id(exacts[0]),
+                conversion_id=_conversion_id(exact),
                 mode=mode,
                 sequence=sequence.next() if mode == "manual" else None,
-                broker_id=broker_id,
-                source_debit=_positive_money(sum((exact.source_debit for exact in exacts), _EXACT_ZERO), source_currency),
-                destination_credit=_positive_money(sum((exact.posted_destination_credit for exact in exacts), _EXACT_ZERO), destination_currency),
-                spot_rate=rows[0].spot_rate,
-                effective_rate=rows[0].effective_rate,
-                spread_loss=_money(sum((exact.spread_loss for exact in exacts), _EXACT_ZERO), scenario.valuation_currency),
-                fx_action_ids=[row.action_id for row in rows],
-                provenance_ids=_canonical_provenance_ids(
-                    {provenance_id for row in rows for provenance_id in row.provenance_ids},
-                    context=f"conversion {broker_id!r} {source_currency}->{destination_currency}",
-                    asset_ids=(),
-                ),
+                broker_id=exact.broker_id,
+                source_debit=row.source_debit,
+                destination_credit=row.destination_credit,
+                spot_rate=row.spot_rate,
+                effective_rate=row.effective_rate,
+                spread_loss=row.spread_loss,
+                fx_action_ids=[row.action_id],
+                provenance_ids=row.provenance_ids,
             )
         )
     return conversions

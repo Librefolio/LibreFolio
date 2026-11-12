@@ -1349,3 +1349,23 @@ def test_float_text_keeps_its_spelling_of_signed_and_absent_observations(value: 
 def test_tolerance_text_spells_a_float_tolerance_positionally() -> None:
     """A SCIP tolerance such as ``1e-06`` is published positionally, as the wire pattern requires."""
     assert PR._tolerance_text(1e-06) == "0.000001"
+
+
+def test_each_conversion_is_one_engine_decision() -> None:
+    """A2 step 8: one FX decision per Broker and pair, so one conversion per decision and one action per conversion.
+
+    Under contract 1.0.0 the action stays (the bridge of D1, removed in A4): it names the representative route, and the conversion
+    publishes exactly its figures, debit, posted credit, rates, spread and provenance.
+    """
+    scenario = _multi_conversion_scenario()
+    evaluation = _evaluate_multi_conversion(scenario)
+    fx_actions = PR.build_fx_actions(scenario, evaluation)
+    conversions = PR.build_conversions(scenario, evaluation, fx_actions, PR._SequenceAllocator())
+
+    assert len(conversions) == len(fx_actions) == len(evaluation.fx)
+    for exact, action, conversion in zip(evaluation.fx, fx_actions, conversions, strict=True):
+        assert conversion.fx_action_ids == [action.action_id]
+        assert action.conversion_id == conversion.conversion_id
+        assert action.order_route_id == exact.order_route_id
+        figures = ("source_debit", "destination_credit", "spot_rate", "effective_rate", "spread_loss", "provenance_ids")
+        assert {name: getattr(conversion, name) for name in figures} == {name: getattr(action, name) for name in figures}
