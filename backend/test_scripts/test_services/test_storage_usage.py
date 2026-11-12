@@ -209,7 +209,8 @@ def test_an_entry_that_vanishes_during_the_walk_counts_zero_and_nothing_raises(t
     def scandir(path="."):
         with real_scandir(path) as listing:
             entries = list(listing)
-        if Path(path) == victim.parent and victim.exists():
+        # An open directory (an int) is how ``shutil.rmtree`` scans on a disk temp folder: only a path can be the victim's folder
+        if not isinstance(path, int) and Path(path) == victim.parent and victim.exists():
             victim.unlink()
             fired.append(True)
         return Listing(entries)

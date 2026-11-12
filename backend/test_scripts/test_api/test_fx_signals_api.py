@@ -460,7 +460,9 @@ async def test_missing_rate_returns_grouped_unavailable(test_server):
     assert response.status_code == 200
     payload = response.json()
     assert payload["results"] == []
-    assert payload["errors"]
+    # CP-11d: the missing rate is data, in the direction of the conversion (BMD into CAD), not a text
+    assert [(issue["code"], issue["from_currency"], issue["to_currency"]) for issue in payload["fx_issues"]] == [("rate_not_found", "BMD", "CAD")]
+    assert payload["fx_issues"][0]["count"] >= 1
     assert payload["signal_results"][0]["signals"][0]["status"] == "unavailable"
 
 

@@ -725,7 +725,7 @@ def test_pqs_s05_the_answer_says_its_resolution():
     Red before Z-29a: ``FAPriceQueryResult`` has no ``resolution``.
     """
     result_fields = set(FAPriceQueryResult.model_fields)
-    assert result_fields == {"asset_id", "prices", "events", "errors", "signals", "resolution", "sample_bounds"}, sorted(result_fields)
+    assert result_fields == {"asset_id", "prices", "events", "errors", "fx_issues", "signals", "resolution", "sample_bounds"}, sorted(result_fields)
     assert FAPriceQueryResult(asset_id=1).resolution == "daily"
     for mode in ("validation", "serialization"):
         schema = FAPriceQueryResult.model_json_schema(mode=mode)

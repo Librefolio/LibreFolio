@@ -103,7 +103,7 @@ export function formatCurrencyCodeHtml(code: string): string {
  */
 export type CurrencyPairForm = 'pair' | 'conversion';
 
-const PAIR_SEPARATOR: Record<CurrencyPairForm, string> = {pair: '/', conversion: '→'};
+const pairSeparator = (form: CurrencyPairForm): string => (form === 'conversion' ? '→' : '/');
 
 /**
  * A currency pair, in the direction of the conversion, as HTML: `$ 🇺🇸 USD / EUR 🇪🇺 €` (form `pair`) or `$ 🇺🇸 USD → EUR 🇪🇺 €`
@@ -117,14 +117,14 @@ const PAIR_SEPARATOR: Record<CurrencyPairForm, string> = {pair: '/', conversion:
 export function formatCurrencyPairHtml(from: string, to: string, form: CurrencyPairForm = 'pair'): string {
     const arrival = currencyParts(to);
     const arrivalHtml = [`<span class="currency-code">${escapeHtml(to)}</span>`, arrival.flag ? `<span class="emoji-flag">${arrival.flag}</span>` : '', arrival.symbol ? `<span class="currency-symbol">${escapeHtml(arrival.symbol)}</span>` : ''].filter(Boolean).join(' ');
-    return `${formatCurrencyCodeHtml(from).trim()} ${PAIR_SEPARATOR[form]} ${arrivalHtml}`;
+    return `${formatCurrencyCodeHtml(from).trim()} ${pairSeparator(form)} ${arrivalHtml}`;
 }
 
 /** `formatCurrencyPairHtml` as plain text (tooltips, titles): `$ 🇺🇸 USD / EUR 🇪🇺 €`, or with `→` for a `conversion`. */
 export function formatCurrencyPairPlain(from: string, to: string, form: CurrencyPairForm = 'pair'): string {
     const start = currencyParts(from);
     const arrival = currencyParts(to);
-    return `${[start.symbol, start.flag, from].filter(Boolean).join(' ')} ${PAIR_SEPARATOR[form]} ${[to, arrival.flag, arrival.symbol].filter(Boolean).join(' ')}`;
+    return `${[start.symbol, start.flag, from].filter(Boolean).join(' ')} ${pairSeparator(form)} ${[to, arrival.flag, arrival.symbol].filter(Boolean).join(' ')}`;
 }
 
 /** The pair of a `FROM/TO` slug (`USD/EUR`, also `USD-EUR`), as `formatCurrencyPairHtml`; the text itself, escaped, when it is no pair. */

@@ -95,7 +95,7 @@ type ReportBody = {
 };
 type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: string; end?: string} | null};
 type LotsRequestBody = {asset_id?: number; requested_analyses?: string[]};
-type LotsBody = {lots?: Array<{lot_id: number}> | null; data_quality?: {issues?: ReportIssue[]} | null};
+type LotsBody = {lots?: Array<{lot_id: number}> | null; data_quality?: {issues?: ReportIssue[]; stale_fx_pairs?: unknown[] | null} | null};
 type CommitBody = {committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index: number; ids: number[]}>};
 type TransactionRead = {id: number; asset_event_id?: number | null; cost_basis_override?: Money | null};
 /** A refused events save: the code and where it is, never only a sentence (decision 22). */
@@ -707,8 +707,10 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
                 lotIssuesAfter.filter((issue) => issue.code === 'MISSING_FX_RATES'),
                 `the lots answer has no missing rate any more; it carries ${JSON.stringify(lotIssuesAfter)}`,
             ).toEqual([]);
-            // Decided by that answer, not by a probe of the page.
-            if (lotIssuesAfter.length === 0) {
+            // Decided by that answer, not by a probe of the page. The rates the sync stored end a week after the last movement,
+            // so today's valuation reads an old row: the panel adds a notice for it (CP-11a), which is not a missing rate.
+            const staleNotice = (lotsAfter.data_quality?.stale_fx_pairs?.length ?? 0) > 0;
+            if (lotIssuesAfter.length === 0 && !staleNotice) {
                 await expect(lotsPanel.getByTestId('lot-data-quality-banner'), 'nothing is left to report in the lots panel: its banner goes').toHaveCount(0, {timeout: 15_000});
             } else {
                 await expandStrict(lotsPanel.getByTestId('lot-data-quality-toggle'));
