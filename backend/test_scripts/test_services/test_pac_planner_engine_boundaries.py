@@ -273,7 +273,6 @@ CONSTRAINTS_IMPORT_SURFACE = (
     "add_funding_pool_constraints",
     "add_ledger_balance_constraints",
     "add_order_activation_constraints",
-    "add_order_required_minimum_constraints",
     "build_scenario_facts",
     "compile_hard_constraints",
     "fx_rate",

@@ -134,7 +134,7 @@ from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
 from backend.test_scripts.test_services import _pac_reference_values as ref
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id
-from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, V, fx_conversion_request, make, scaled
+from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, V, amount_limit, asset_entry, cash_entry, fx_conversion_request, make, scaled
 
 # The repository root: parents = [test_services, test_scripts, backend, <root>].
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -173,15 +173,13 @@ def _incumbent_payload(payload: dict | None = None) -> dict:
 
 
 def _forced_min_payload() -> dict:
-    """A provably-infeasible request: require ≥1 whole unit against €5 / €10 unit.
+    """A provably-infeasible request: a minimum of EUR10 on the Asset against EUR20 of cash and a unit that costs EUR30.
 
-    Normalizes cleanly (infeasibility is a *search* result, not a normalization
-    error). No oracle runs in production: SCIP closes the first, still-global
-    stage ``infeasible``, and that status is the proof.
+    The sum check passes (10 <= 20) so the request normalizes cleanly: infeasibility is a *search* result, not a normalization
+    error. No oracle runs in production: SCIP closes the first, still-global stage ``infeasible``, and that status is the
+    proof. The Asset's minimum obliges the buy that the route's «required minimum» used to oblige (M19).
     """
-    payload = _pac_request()
-    payload["order_routes"][0]["required_minimum"] = {"kind": "whole_quantity", "quantity": "1", "unit": "asset_unit"}
-    return payload
+    return _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("10")), cash="20.00", unit_price="30.00")
 
 
 def _empty_assets_payload() -> dict:
@@ -234,7 +232,7 @@ def _two_etf_contribution_payload() -> dict:
     route_two["asset_id"] = _ASSET_TWO_ID
     payload["order_routes"].append(route_two)
 
-    payload["target_weights"] = [{"asset_id": _ASSET_ONE_ID, "weight": "0.5"}, {"asset_id": _ASSET_TWO_ID, "weight": "0.5"}]
+    payload["target_weights"] = [asset_entry(_ASSET_ONE_ID, "0.5"), asset_entry(_ASSET_TWO_ID, "0.5")]
     payload["existing_cash"] = []
     payload["contributions"] = [{"contribution_id": "contribution-one", "label": "Monthly", "amount": {"amount": "100.00", "currency": "EUR"}, "provenance_id": "prov-manual"}]
     payload["funding_routes"] = [
@@ -294,7 +292,6 @@ def test_unmodified_fixture_is_no_op_optimal(noop_result):
     assert solution.validation == "decimal_verified"
     assert solution.order_rows == []
     assert solution.funding_actions == []
-    assert solution.fx_actions == []
     assert solution.conversions == []
     _revalidate(noop_result)
 
@@ -680,8 +677,8 @@ def test_ready_infeasible_result_type_pins_completed_and_infeasibility_proof():
 def test_forced_infeasible_returns_ready_infeasible_not_raise():
     """A provably-infeasible plan RETURNS ``ready_infeasible``, proven by SCIP's own status.
 
-    The input — ``required_minimum`` of one whole unit, €5 of cash against a
-    €10 unit price — cannot be satisfied at all, so SCIP reports the first,
+    The input — a minimum of €10 on the Asset, €20 of cash against a €30
+    unit price — cannot be satisfied at all, so SCIP reports the first,
     still-global stage ``infeasible``. Under D-X1 that status *is* the proof:
     ``infeasibility_proven`` from ``solver_status``, whose witness names exactly
     that first objective, and ``stop_reason="completed"`` because the search
@@ -788,7 +785,7 @@ def _action_sequences(solution) -> list[int]:
 
 
 def _referenced_provenance(solution) -> set[str]:
-    rows = (*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows)
+    rows = (*solution.funding_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows)
     return {provenance_id for row in rows for provenance_id in row.provenance_ids}
 
 
@@ -909,33 +906,27 @@ def test_conversion_mode_changes_no_figure_of_the_plan(fx_plan_by_mode):
     for mode, wire in fx_plan_by_mode.items():
         assert (wire["result_state"], wire["proof"]["kind"]) == ("ready_incumbent", "optimal_proven"), mode
         solution = wire["primary_solution"]
-        assert solution["funding_actions"] and solution["fx_actions"] and solution["order_rows"], f"{mode}: the scenario must fund, convert and buy"
+        assert solution["funding_actions"] and solution["conversions"] and solution["order_rows"], f"{mode}: the scenario must fund, convert and buy"
         assert [row["mode"] for row in solution["conversions"]] == [mode], solution["conversions"]
 
     manual, automatic = fx_plan_by_mode["manual"], fx_plan_by_mode["automatic"]
-    assert manual["primary_solution"]["fx_actions"] == automatic["primary_solution"]["fx_actions"]
     assert _without_numbering(manual["primary_solution"]) == _without_numbering(automatic["primary_solution"])
     assert manual["scenario_basis"] == automatic["scenario_basis"]
 
 
-def test_conversion_mode_conversion_is_one_fx_action(fx_plan_by_mode):
-    """The published conversion is the EUR→USD one at broker-one, and it is one FX decision of the engine.
+def test_conversion_mode_publishes_one_conversion_per_decision(fx_plan_by_mode):
+    """The published conversion is the EUR→USD one at broker-one, the engine's one FX decision for that pair, in either mode.
 
-    Since A2 the engine decides FX once per Broker and pair, so the conversion carries exactly one action (the bridge of
-    contract 1.0.0) and publishes its figures: debit, posted credit and spread — read off the live result, in either mode.
+    Since A2 the engine decides FX once per Broker and pair, and since contract 2.0.0 the conversion is that decision: its
+    debit, posted credit and spread are read straight off the live result.
     """
     for mode, wire in fx_plan_by_mode.items():
         solution = wire["primary_solution"]
+        assert "fx_actions" not in solution
         (conversion,) = solution["conversions"]
         assert conversion["conversion_id"] == f"conversion:{_BROKER_ONE_ID}:EUR:USD", mode
         assert (conversion["broker_id"], conversion["source_debit"]["currency"], conversion["destination_credit"]["currency"]) == (_BROKER_ONE_ID, "EUR", "USD")
-        (action,) = solution["fx_actions"]
-        assert conversion["fx_action_ids"] == [action["action_id"]]
-        assert action["conversion_id"] == conversion["conversion_id"]
-        assert "sequence" not in action, action
-        assert conversion["source_debit"] == action["source_debit"]
-        assert conversion["destination_credit"] == action["destination_credit"]
-        assert _wire_exact(conversion["spread_loss"]["value"]) == _wire_exact(action["spread_loss"]["value"])
+        assert "fx_action_ids" not in conversion
         assert _wire_exact(conversion["spread_loss"]["value"]) > 0, "a 4% spread must cost something"
 
 
@@ -1002,7 +993,7 @@ def test_manual_conversion_reaching_an_exact_credit_tie_still_plans():
     tie_quanta = Fraction(Decimal("25.00")) / minor_unit["EUR"]
     assert tie_quanta.denominator == 1
     assert (tie_quanta * minor_unit["EUR"] * rate / minor_unit["USD"]) % 1 == Fraction(1, 2)
-    fx_decision_id = fx_id(scenario, source="EUR", route_id=_ASSET_ONE_ROUTE_ID)
+    fx_decision_id = fx_id(scenario, source="EUR")
     (fx_access,) = [access for access in build_exact_policy_view(scenario, purpose="primary").decisions if access.decision_id == fx_decision_id]
     assert fx_access.mode == "mutable"
     assert fx_access.lower_quanta <= tie_quanta <= fx_access.upper_quanta
@@ -1015,9 +1006,9 @@ def test_manual_conversion_reaching_an_exact_credit_tie_still_plans():
 
     wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
     solution = wire["primary_solution"]
-    assert solution["funding_actions"] and solution["fx_actions"] and solution["order_rows"], "the plan must fund, convert and buy"
+    assert solution["funding_actions"] and solution["conversions"] and solution["order_rows"], "the plan must fund, convert and buy"
     usd_minor_unit = _published_minor_unit(wire, "USD")
-    for action in solution["fx_actions"]:
+    for action in solution["conversions"]:
         debit, credit = action["source_debit"], action["destination_credit"]
         assert (debit["currency"], credit["currency"]) == ("EUR", "USD"), action
         assert Decimal(credit["amount"]) == (Decimal(debit["amount"]) * Decimal("1.1298")).quantize(usd_minor_unit, rounding=ROUND_FLOOR), action
@@ -1080,8 +1071,8 @@ _FX_RATE_INCONSISTENT_CHF_USD = {
 
 
 def _fx_actions(wire: dict) -> list[tuple[str, str, str, str]]:
-    """Every published FX action as ``(source currency, debit, destination currency, credit)``."""
-    return [(action["source_debit"]["currency"], action["source_debit"]["amount"], action["destination_credit"]["currency"], action["destination_credit"]["amount"]) for action in wire["primary_solution"]["fx_actions"]]
+    """Every published conversion as ``(source currency, debit, destination currency, credit)``."""
+    return [(action["source_debit"]["currency"], action["source_debit"]["amount"], action["destination_credit"]["currency"], action["destination_credit"]["amount"]) for action in wire["primary_solution"]["conversions"]]
 
 
 def _fx_orders(wire: dict) -> list[tuple[str, str, str]]:
@@ -1107,7 +1098,7 @@ def _fx_eur_usd_residual(wire: dict, currency: str, spread: str) -> Fraction:
     """
     kept = 1 - Fraction(Decimal(spread))
     residual = Fraction(0)
-    for action in wire["primary_solution"]["fx_actions"]:
+    for action in wire["primary_solution"]["conversions"]:
         debit, credit = action["source_debit"], action["destination_credit"]
         if credit["currency"] == currency:
             exact = Fraction(Decimal(debit["amount"])) * kept * _FX_EUR_USD_RATES[(debit["currency"], credit["currency"])]
@@ -1374,7 +1365,7 @@ def _rd_rounding_violations(payload: dict, wire: dict) -> list[str]:
         return [*violations, "no primary solution"]
 
     val = _rd_value_in_valuation(payload)
-    for action in solution["fx_actions"]:
+    for action in solution["conversions"]:
         debit, credit = action["source_debit"], action["destination_credit"]
         debit_amount, credit_amount = Fraction(Decimal(debit["amount"])), Fraction(Decimal(credit["amount"]))
         minor = Fraction(_published_minor_unit(wire, credit["currency"]))
@@ -1518,7 +1509,7 @@ def test_rounding_direction_cross_rate_inside_the_coherence_band_converts_at_the
     assert (wire["proof"]["kind"], wire["stop_reason"]) == ("optimal_proven", "completed")
     assert _fx_actions(wire) == [("RON", "100", "USD", "21.83")]
     assert [_order_summary(row) for row in wire["primary_solution"]["order_rows"]] == [("buy", "whole_quantity", Fraction(1), "asset_unit")]
-    (action,) = wire["primary_solution"]["fx_actions"]
+    (action,) = wire["primary_solution"]["conversions"]
     spot, effective = action["spot_rate"], action["effective_rate"]
     assert (spot["source_currency"], spot["destination_currency"], _wire_exact(spot["value"])) == ("RON", "USD", rates["RON/USD"])
     assert (effective["source_currency"], effective["destination_currency"], _wire_exact(effective["value"])) == ("RON", "USD", Fraction(31, 142))
@@ -2098,8 +2089,8 @@ def test_zero_plan_passes_the_replay_without_limits_or_required_minimum(name):
 def test_infeasible_with_limits_lists_the_limited_entries_and_no_incumbent_never_does():
     """The planner reports which entries carry a limit only when SCIP proves there is no plan: ``ready_infeasible`` and at
     least one limit. A search that merely ran out of time (``ready_no_incumbent``) never gets the list, nor does a plan, nor
-    a scenario with no limit (here: a required minimum, still in the contract until A4). The list is internal: the wire result
-    is unchanged (``sc/``), and A4 turns it into ``allocation.bounds_unsatisfiable``."""
+    a scenario with no limit (which, with M19, is never ``ready_infeasible``). The list is the planner's own; the wire result
+    carries it as ``allocation.bounds_unsatisfiable``, one issue per entry."""
     scenario = _scenario_with_entry_limit(minimum="10000", cash_maximum="20")
     report = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
     assert isinstance(report.result, PacPlannerReadyInfeasibleResult)
@@ -2112,10 +2103,6 @@ def test_infeasible_with_limits_lists_the_limited_entries_and_no_incumbent_never
     feasible = planner.plan_exact_scenario(_scenario_with_entry_limit(minimum=None, cash_maximum="40"), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
     assert isinstance(feasible.result, (PacPlannerReadyIncumbentResult, PacPlannerReadyNoOpResult))
     assert feasible.limited_entries == ()
-
-    forced = planner.plan_exact_scenario(normalize_pac_plan(_validated(_forced_min_payload())).normalized, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
-    assert isinstance(forced.result, PacPlannerReadyInfeasibleResult)
-    assert forced.limited_entries == (), "an infeasible request with no limit is not the limits' doing"
 
 
 def test_planner_calls_the_solver_once_per_request(monkeypatch):
@@ -2146,3 +2133,98 @@ def test_a_limit_a_thousandth_under_a_reachable_value_never_makes_the_run_fail()
     wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(report.result, mode="json", by_alias=True)
     published = ref.wire_fraction(wire["primary_solution"]["asset_rows"][0]["final_value"])
     assert published <= Fraction(_MAXIMUM_JUST_UNDER_IT.numerator, _MAXIMUM_JUST_UNDER_IT.denominator)
+
+
+# --------------------------------------------------------------------------
+# A4 steps 3 and 5 (project 67): limits from the request, T11, T12, M20
+# --------------------------------------------------------------------------
+
+
+def _limited_request(*entries: dict, cash: str = "50.00", unit_price: str | None = None) -> dict:
+    """The incumbent payload (EUR50, one whole-unit Asset at EUR10) with ``entries`` as its target entries."""
+    payload = _incumbent_payload()
+    for row in payload["existing_cash"]:
+        row["available"]["amount"] = cash
+        row["selected"]["amount"] = cash
+    if unit_price is not None:
+        payload["assets"][0]["quote"]["amount"] = unit_price
+    payload["target_weights"] = list(entries)
+    return payload
+
+
+def _codes(result) -> list[str]:
+    return [issue.code for issue in result.issues]
+
+
+def test_sum_of_minimums_above_the_reference_is_refused_with_the_entry_names(monkeypatch):
+    """T12, from the request, before SCIP: a minimum of EUR100 on the Asset and one of EUR30 on the Broker's cash cell add up
+    to more than the EUR50 the plan can reach. The result is ``invalid``, one issue per entry that counts, each naming its
+    entry; the solver never runs."""
+    calls = []
+    monkeypatch.setattr(planner, "solve_policy_program", lambda *args, **kwargs: calls.append(args))
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("100")), cash_entry("broker-one", "EUR", minimum=amount_limit("30")))
+
+    result = plan_pac_allocation(_validated(payload))
+
+    assert isinstance(result, PacPlannerInvalidResult)
+    issues = [issue for issue in result.issues if issue.code == "allocation.bounds_min_sum_exceeds_reference"]
+    assert sorted((issue.path.entity_kind, issue.path.entity_id) for issue in issues) == [("asset", _ASSET_ONE_ID), ("cash", "broker-one:EUR")]
+    assert calls == []
+    _revalidate(result)
+
+
+def test_cash_maximum_request_invests_the_excess():
+    """T11, PAC form, from request to result: EUR50 of cash, a whole-unit Asset at EUR10 and a maximum of EUR10 on the cash cell.
+    The plan buys at least four units and leaves at most EUR10 in the cell."""
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1"), cash_entry("broker-one", "EUR", maximum=amount_limit("10")))
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyIncumbentResult), _codes(result)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)
+    (cell,) = [row for row in wire["primary_solution"]["ledger_rows"] if (row["broker_id"], row["currency"]) == ("broker-one", "EUR")]
+    assert Decimal(cell["final_spendable"]) <= Decimal("10")
+    assert sum(Decimal(row["cash_debit"]["amount"]) for row in wire["primary_solution"]["order_rows"]) >= Decimal("40")
+
+
+def test_infeasible_plan_lists_every_entry_with_a_limit():
+    """M20, §10.2: ``ready_infeasible`` with limits in the request carries one ``allocation.bounds_unsatisfiable`` per entry
+    that has a limit, severity ``warning``, kind ``constraint``, the path on the entry. EUR50 of cash and units of EUR20: a
+    minimum of EUR45 on the Asset passes the checks (45 <= 50) but cannot be bought (three units cost EUR60)."""
+    payload = _limited_request(
+        asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("45")),
+        cash_entry("broker-one", "EUR", maximum=amount_limit("5")),
+        unit_price="20.00",
+    )
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyInfeasibleResult), _codes(result)
+    listed = [issue for issue in result.issues if issue.code == "allocation.bounds_unsatisfiable"]
+    assert sorted((issue.path.entity_kind, issue.path.entity_id) for issue in listed) == [("asset", _ASSET_ONE_ID), ("cash", "broker-one:EUR")]
+    assert {(issue.severity, issue.kind) for issue in listed} == {("warning", "constraint")}
+    _revalidate(result)
+
+
+def test_no_incumbent_never_carries_bounds_unsatisfiable():
+    """M20: a search that ran out of time says nothing about the limits."""
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("45")), unit_price="20.00")
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=0.0)
+
+    assert isinstance(result, PacPlannerReadyNoIncumbentResult)
+    assert "allocation.bounds_unsatisfiable" not in _codes(result)
+
+
+def test_asset_minimum_obliges_a_buy_where_required_minimum_did():
+    """The case of ``_forced_min_payload`` redone with the Asset's minimum (M19): EUR5 of cash against a EUR10 unit, a minimum of
+    EUR10 on the Asset. Same ``ready_infeasible`` with the solver's proof, and the issue names the entry. (The sum check passes
+    only because the minimum is a share of nothing: a minimum of EUR10 over EUR5 of cash would be refused as a sum first, so
+    the cash is EUR20 and the unit EUR30.)"""
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("10")), cash="20.00", unit_price="30.00")
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyInfeasibleResult), _codes(result)
+    assert result.proof.kind == "infeasibility_proven" and result.proof.proof_source == "solver_status"
+    assert [(issue.path.entity_kind, issue.path.entity_id) for issue in result.issues if issue.code == "allocation.bounds_unsatisfiable"] == [("asset", _ASSET_ONE_ID)]

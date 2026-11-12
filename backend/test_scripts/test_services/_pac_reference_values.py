@@ -144,9 +144,11 @@ def extract_reference(wire: dict, request: dict) -> Record:
         return record
     accounting = solution["accounting"]
     stages = {stage["objective_code"]: stage for stage in solution["objectives"]["stages"]}
+    # Contract 2.0.0 (A4) has no FX action list: a conversion is the engine's decision, one per pair. The field keeps the name the
+    # frozen reference file wrote (one per pair, as A1 recorded) so that file does not change.
     actions_per_pair: dict[str, int] = {}
-    for action in solution["fx_actions"]:
-        key = _pair_key(action)
+    for conversion in solution["conversions"]:
+        key = _pair_key(conversion)
         actions_per_pair[key] = actions_per_pair.get(key, 0) + 1
     record.update(
         {

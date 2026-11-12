@@ -68,7 +68,7 @@ import pytest
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
-from backend.app.services.pac_allocator.models import DecisionAccess, ExactEvaluation, ExactPlannerScenario
+from backend.app.services.pac_allocator.models import DecisionAccess, ExactEvaluation, ExactLimit, ExactPlannerScenario, ExactTargetWeight
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.test_scripts.test_services._pac_exhaustive_oracle import (
     MAX_EXHAUSTIVE_ORACLE_CANDIDATES,
@@ -756,7 +756,7 @@ def test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one() -> None:
     assert _objective_map(view, best)["fixed_l2"] == R(1)
 
     # The optimum stands on no rounding at all: an exact 6 USD credit, posted 6.
-    fx_evaluation = next(item for item in best.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    fx_evaluation = next(item for item in best.fx if item.source_currency == "EUR")
     assert fx_evaluation.exact_destination_credit == R(6)
     assert fx_evaluation.posted_destination_credit == R(6)
     order_evaluation = next(item for item in best.orders if item.route_id == "route:buy:usd")
@@ -770,7 +770,7 @@ def test_exact_fx_credit_tie_optimum_matches_the_hand_derived_one() -> None:
     # the whole 5 EUR convert into the 7.5 USD tie, posted at its floor, 7,
     # one dollar short of the 8 USD that 4 units cost.
     tie_point = evaluate_exact_candidate(scenario, view, _candidate(view, {buy: 4, funding: 5, fx: 5}, candidate_id="credit-tie:cap"))
-    tie_fx = next(item for item in tie_point.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    tie_fx = next(item for item in tie_point.fx if item.source_currency == "EUR")
     assert (tie_fx.exact_destination_credit, tie_fx.posted_destination_credit) == (R(15, 2), R(7))
     tie_usd_cell = next(ledger for ledger in tie_point.ledgers if ledger.broker_id == "broker:destination" and ledger.currency == "USD")
     assert (tie_usd_cell.fx_credit, tie_usd_cell.buy_debit, tie_usd_cell.final_spendable) == (R(7), R(8), R(-1))
@@ -874,26 +874,21 @@ def test_no_op_scenario_best_candidate_is_all_zero() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_infeasible_exact_required_minimum_above_reachable_cap_rejects_every_candidate() -> None:
+def test_infeasible_exact_asset_minimum_above_reachable_cap_rejects_every_candidate() -> None:
     """Research question: can a PAC-`proportional` *primary* view ever be
     exhaustively infeasible — i.e. is the all-zero/baseline candidate
     always trivially feasible?
 
-    Answer: **no, it is not always trivially feasible.** `ORDER_REQUIRED_MIN`
-    (see `evaluator.py::_order_route_constraint_facts`) is a hard floor on
-    `measure = step * quanta` that, for a *buy* route on a `primary` view,
-    is **not** relaxed to zero the way it is for sell-side routes on
-    `primary`/`invest_only_baseline` purposes, and it is **not** gated by
-    "is this decision active" the way `ORDER_MIN_IF_ACTIVE` is. So setting
-    a route's `required_minimum` above the maximum measure the route can
-    ever reach (its cap, here 3 quanta at a step of 1 = a measure of 3)
-    makes every candidate in the domain infeasible, including zero -
-    this is a genuine, reproducible construction, not a fabricated one:
-    it reuses the exact same `_pac_scenario(required=..., route_cap=...)`
-    knobs the sibling suite's own
-    `test_order_minimum_required_and_cap_contracts` already exercises.
+    Answer: **no, it is not always trivially feasible.** A minimum on an
+    Asset's final value (V5, ``ENTRY_VALUE_WITHIN_LIMITS``) is a hard floor
+    that doing nothing does not meet. So setting the Asset's minimum above
+    the most the route can ever buy (its cap, here 3 units of EUR10 = EUR30,
+    against a minimum of EUR50) makes every candidate in the domain
+    infeasible, including zero. It is the construction the route's «required
+    minimum» used to give (M19 took that field out of the contract); the
+    entry's minimum is what obliges a buy now.
     """
-    scenario = _pac_scenario(required=R(5), route_cap=R(3))
+    scenario = replace(_pac_scenario(route_cap=R(3)), target_weights=(ExactTargetWeight("asset:a", R(1), minimum=ExactLimit("amount", R(50))),))
     view = build_exact_policy_view(scenario)
     assert view.purpose == "primary"
     assert scenario.policy == "proportional"
@@ -906,13 +901,13 @@ def test_infeasible_exact_required_minimum_above_reachable_cap_rejects_every_can
     assert domain_size == 4
 
     # Confirm, by direct replay, that every single candidate in the domain
-    # (including the all-zero one) fails specifically because of
-    # ORDER_REQUIRED_MIN - not some unrelated, incidental conflict.
+    # (including the all-zero one) fails specifically because of the Asset's
+    # limit - not some unrelated, incidental conflict.
     for quanta in range(0, 4):
         candidate = _candidate(view, {only_decision.decision_id: quanta}, candidate_id=f"manual:{quanta}")
         evaluation = evaluate_exact_candidate(scenario, view, candidate)
         assert evaluation.feasible is False
-        assert "ORDER_REQUIRED_MIN" in evaluation.conflict_codes
+        assert "ENTRY_VALUE_WITHIN_LIMITS" in evaluation.conflict_codes
 
     result = run_exhaustive_oracle(scenario, view)
     assert result.enumerated_candidates == 4

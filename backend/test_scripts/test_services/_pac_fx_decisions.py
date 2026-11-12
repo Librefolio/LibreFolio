@@ -13,15 +13,15 @@ from backend.app.services.pac_allocator.evaluation.scenario import build_scenari
 from backend.app.services.pac_allocator.models import ExactPlannerScenario
 
 
-def fx_spec(scenario: ExactPlannerScenario, *, source: str, destination: str | None = None, broker_id: str | None = None, route_id: str | None = None) -> FxDecisionSpec:
-    """The one FX decision of ``scenario`` that converts ``source`` (to ``destination``, at ``broker_id``, for ``route_id``, when given)."""
+def fx_spec(scenario: ExactPlannerScenario, *, source: str, destination: str | None = None, broker_id: str | None = None) -> FxDecisionSpec:
+    """The one FX decision of ``scenario`` that converts ``source`` (to ``destination``, at ``broker_id``, when given)."""
     specs = fx_decision_specs(scenario, build_scenario_index(scenario), None)
-    matches = [spec for spec in specs if spec.source_currency == source and (destination is None or spec.destination_currency == destination) and (broker_id is None or spec.broker_id == broker_id) and (route_id is None or spec.representative_route_id == route_id)]
+    matches = [spec for spec in specs if spec.source_currency == source and (destination is None or spec.destination_currency == destination) and (broker_id is None or spec.broker_id == broker_id)]
     if len(matches) != 1:
-        raise AssertionError(f"expected one FX decision {source}->{destination} (broker {broker_id}, route {route_id}), found {[spec.decision_id for spec in matches]}")
+        raise AssertionError(f"expected one FX decision {source}->{destination} (broker {broker_id}), found {[spec.decision_id for spec in matches]}")
     return matches[0]
 
 
-def fx_id(scenario: ExactPlannerScenario, *, source: str, destination: str | None = None, broker_id: str | None = None, route_id: str | None = None) -> str:
+def fx_id(scenario: ExactPlannerScenario, *, source: str, destination: str | None = None, broker_id: str | None = None) -> str:
     """The decision id of ``fx_spec``."""
-    return fx_spec(scenario, source=source, destination=destination, broker_id=broker_id, route_id=route_id).decision_id
+    return fx_spec(scenario, source=source, destination=destination, broker_id=broker_id).decision_id

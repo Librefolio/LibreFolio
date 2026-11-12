@@ -74,7 +74,7 @@ def make(
         asset["identity"].update(name=f"Synthetic ETF {i:02d}", ticker=f"SYN{i:02d}")
         asset["quote"]["amount"] = f"{20 + 7.5 * i:.2f}"
         assets.append(asset)
-        weights.append({"asset_id": asset["asset_id"], "weight": str(weight)})
+        weights.append({"kind": "asset", "asset_id": asset["asset_id"], "weight": str(weight)})
     for j in range(n_brokers):
         broker = copy.deepcopy(broker0)
         broker_id = f"broker-{j:02d}"
@@ -149,7 +149,7 @@ def realistic_make(n_assets: int, n_brokers: int) -> dict:
         asset["identity"].update(name=f"Realistic ETF {i:02d}", ticker=f"RLE{i:02d}")
         asset["quote"]["amount"] = PRICES[i]
         assets.append(asset)
-        weights.append({"asset_id": asset["asset_id"], "weight": str(shares[i])})
+        weights.append({"kind": "asset", "asset_id": asset["asset_id"], "weight": str(shares[i])})
     for j in range(n_brokers):
         broker = copy.deepcopy(broker0)
         broker_id = f"broker-{j:02d}"
@@ -242,7 +242,7 @@ def fx_conversion_request(
         route["asset_id"] = asset["asset_id"]
         route["cap"]["quantity"] = "100"
         routes.append(route)
-        target_weights.append({"asset_id": asset["asset_id"], "weight": weight})
+        target_weights.append({"kind": "asset", "asset_id": asset["asset_id"], "weight": weight})
     payload["assets"] = built_assets
     payload["order_routes"] = routes
     payload["target_weights"] = target_weights
@@ -330,3 +330,38 @@ def scenario_of(payload: dict) -> tuple[ExactPlannerScenario, ExactPolicyView]:
     assert outcome.ready, f"synthetic request must normalize: {[issue.code for issue in outcome.issues]}"
     scenario = outcome.normalized
     return scenario, build_exact_policy_view(scenario, purpose="primary")
+
+
+# ---------------------------------------------------------------------------
+# Target entries (contract 2.0.0, A4): asset and cash entries with minimum and maximum limits
+# ---------------------------------------------------------------------------
+
+
+def amount_limit(value: str, currency: str = "EUR") -> dict:
+    """A limit as an amount in the valuation currency."""
+    return {"kind": "amount", "amount": {"amount": value, "currency": currency}}
+
+
+def share_limit(value: str) -> dict:
+    """A limit as a share (a fraction) of the Tool's reference."""
+    return {"kind": "share", "share": value}
+
+
+def asset_entry(asset_id: str, weight: str, *, minimum: dict | None = None, maximum: dict | None = None) -> dict:
+    """An asset target entry; an absent limit is left out, as the compact wire does."""
+    entry: dict = {"kind": "asset", "asset_id": asset_id, "weight": weight}
+    if minimum is not None:
+        entry["minimum"] = minimum
+    if maximum is not None:
+        entry["maximum"] = maximum
+    return entry
+
+
+def cash_entry(broker_id: str, currency: str, *, weight: str = "0", minimum: dict | None = None, maximum: dict | None = None) -> dict:
+    """A cash target entry for one Broker and currency cell."""
+    entry: dict = {"kind": "cash", "broker_id": broker_id, "currency": currency, "weight": weight}
+    if minimum is not None:
+        entry["minimum"] = minimum
+    if maximum is not None:
+        entry["maximum"] = maximum
+    return entry

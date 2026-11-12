@@ -46,11 +46,15 @@ from backend.app.services.pac_allocator.normalize import (
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.test_scripts.test_services._pac_synthetic_requests import (
     FX_TRIANGLE,
+    amount_limit,
+    asset_entry,
+    cash_entry,
     fx_conversion_request,
     fx_two_assets_one_pair_request,
     fx_two_brokers_request,
     fx_two_sources_request,
     fx_two_way_request,
+    share_limit,
 )
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator"
@@ -962,8 +966,8 @@ def test_canonical_issue_universe_matches_schema_and_w1_map_is_explicit() -> Non
     schema_codes = tuple(get_args(PlannerIssueCode))
 
     assert schema_codes == CANONICAL_ISSUE_CODES
-    assert len(schema_codes) == 77
-    assert len(set(schema_codes)) == 77
+    assert len(schema_codes) == 82
+    assert len(set(schema_codes)) == 82
     # FX conversion fix: an incoherent cross rate is a closed code of its own.
     assert "allocation.fx_rate_inconsistent" in schema_codes
     # Contract compaction: the planner reads neither a quote date nor a freshness any more.
@@ -2297,3 +2301,66 @@ def test_normalizer_and_engine_agree_on_conversion_pairs(build):
     planned = {(spec.broker_id, spec.source_currency, spec.destination_currency) for spec in fx_decision_specs(scenario, build_scenario_index(scenario), None)}
     assert planned == checked
     assert planned, "every case converts"
+
+
+# ---------------------------------------------------------------------------
+# A4 step 3 (project 67): target entries with limits, read from the request
+# ---------------------------------------------------------------------------
+
+
+def _issues(result, code: str) -> list:
+    return [issue for issue in result.issues if issue.code == code]
+
+
+def test_minimum_above_maximum_is_invalid_and_names_the_entry() -> None:
+    """The check of M1 from the request: an Asset whose minimum is above its maximum is ``invalid``, and the issue names the
+    entry (its minimum), so the interface can mark that row. Amounts and shares may be mixed: a share is read against the reference."""
+    payload = _fixture(PAC_FIXTURE)
+    payload["target_weights"] = [asset_entry("asset-one", "1", minimum=amount_limit("4"), maximum=amount_limit("3"))]
+
+    result = _normalize_payload("pac", payload)
+
+    assert (result.availability, result.normalized) == ("invalid", None)
+    (issue,) = _issues(result, "allocation.bound_min_above_max")
+    assert issue.path.model_dump() == {"kind": "field", "section": "targets", "entity_kind": "asset", "entity_id": "asset-one", "field": "minimum"}
+    assert issue.severity == "error" and issue.kind == "invalid"
+
+    mixed = _fixture(PAC_FIXTURE)
+    mixed["target_weights"] = [asset_entry("asset-one", "1", minimum=share_limit("0.8"), maximum=amount_limit("3"))]  # 80% of EUR5 = 4 > 3
+    assert _issues(_normalize_payload("pac", mixed), "allocation.bound_min_above_max")
+
+
+def test_cash_entry_with_a_weight_is_unsupported_in_a_pac() -> None:
+    """Contract §5.2: a PAC cash entry may carry a minimum and a maximum; a weight other than zero is «unsupported» (it arrives
+    with the Rebalancer). A zero weight with no limit says nothing and is ignored."""
+    payload = _fixture(PAC_FIXTURE)
+    payload["target_weights"] = [asset_entry("asset-one", "1"), cash_entry("broker-one", "EUR", weight="0.5")]
+    result = _normalize_payload("pac", payload)
+    assert result.availability == "unsupported"
+    (issue,) = _issues(result, "pac_allocator.cash_weight_unsupported")
+    assert issue.path.model_dump() == {"kind": "field", "section": "targets", "entity_kind": "cash", "entity_id": "broker-one:EUR", "field": "weight"}
+
+    fine = _fixture(PAC_FIXTURE)
+    fine["target_weights"] = [asset_entry("asset-one", "1"), cash_entry("broker-one", "EUR", maximum=amount_limit("3")), cash_entry("broker-one", "USD")]
+    result = _normalize_payload("pac", fine)
+    assert result.availability == "ready", [issue.code for issue in result.issues]
+    assert [(entry.broker_id, entry.currency) for entry in result.normalized.cash_entries] == [("broker-one", "EUR")]
+
+
+def test_limit_values_are_checked_before_the_scenario_is_built() -> None:
+    """An amount in another currency than the valuation one, a negative amount and a share outside [0, 1] are refused with the
+    entry's field named; a cash entry at an unknown Broker is a missing reference."""
+    cases = {
+        "allocation.currency_mismatch": asset_entry("asset-one", "1", maximum=amount_limit("3", "USD")),
+        "allocation.target_weight_out_of_range": asset_entry("asset-one", "1", minimum=amount_limit("-1")),
+    }
+    for code, entry in cases.items():
+        payload = _fixture(PAC_FIXTURE)
+        payload["target_weights"] = [entry]
+        assert _issues(_normalize_payload("pac", payload), code), code
+    share = _fixture(PAC_FIXTURE)
+    share["target_weights"] = [asset_entry("asset-one", "1", maximum=share_limit("1.5"))]
+    assert _issues(_normalize_payload("pac", share), "allocation.target_weight_out_of_range")
+    unknown = _fixture(PAC_FIXTURE)
+    unknown["target_weights"] = [asset_entry("asset-one", "1"), cash_entry("broker-nowhere", "EUR", maximum=amount_limit("3"))]
+    assert _issues(_normalize_payload("pac", unknown), "allocation.reference_not_found")

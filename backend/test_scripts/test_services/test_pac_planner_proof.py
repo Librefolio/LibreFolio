@@ -62,7 +62,7 @@ from backend.app.services.pac_allocator.proof import (
     conclude_with_solver,
 )
 from backend.app.services.pac_allocator.solver import SolverRunResult, SolverStageReport, solve_policy_program
-from backend.test_scripts.test_services.test_pac_planner_evaluator import R, _candidate, _pac_scenario
+from backend.test_scripts.test_services.test_pac_planner_evaluator import R, _candidate, _pac_scenario_with_asset_minimum
 from backend.test_scripts.test_services.test_pac_planner_oracle import _two_asset_pac_scenario
 
 # The one legitimate reach into a module-private. A *valid* sealed witness can
@@ -173,8 +173,8 @@ def perfect_run() -> _Run:
 
 @pytest.fixture(scope="module")
 def infeasible_run() -> _Run:
-    """A required minimum of 50 on a route capped at 10: SCIP closes the first, global stage infeasible."""
-    run = _real_run(_pac_scenario(required=R(50), route_cap=R(10)))
+    """A minimum of EUR500 on an Asset whose route is capped at 10 units of EUR10: SCIP closes the first, global stage infeasible."""
+    run = _real_run(_pac_scenario_with_asset_minimum(R(500), route_cap=R(10)))
     result = run.result
     assert (result.outcome, result.anomaly, result.candidate) == ("reported_infeasible", None, None)
     assert [(stage.ordinal, stage.scope, stage.status, stage.scip_status) for stage in result.stages] == [(1, "global", "infeasible", "infeasible")]

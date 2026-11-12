@@ -49,7 +49,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 
 import pytest
@@ -60,7 +60,7 @@ from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
-from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactLimit, ExactPlannerScenario, ExactPolicyView
+from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactLimit, ExactPlannerScenario, ExactPolicyView, ExactTargetWeight
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import (
     DEFAULT_SOLVER_TIME_BUDGET_SECONDS,
@@ -387,10 +387,17 @@ def test_zero_time_budget_yields_no_incumbent_without_fabricated_observations() 
 # --------------------------------------------------------------------------
 
 
+def _asset_minimum_above_the_cap_scenario() -> ExactPlannerScenario:
+    """EUR100 of cash, units of EUR10, a route that stops at three units, and a minimum of EUR50 on the Asset: the plan cannot
+    reach it, and doing nothing does not meet it either (M19: the Asset's minimum is what obliges a buy)."""
+    scenario = _pac_scenario(route_cap=R(3))
+    return replace(scenario, target_weights=(ExactTargetWeight("asset:a", R(1), minimum=ExactLimit("amount", R(50))),))
+
+
 def test_infeasible_scenario_reports_only_the_first_global_stage_as_infeasible() -> None:
-    """A genuinely infeasible scenario (`ORDER_REQUIRED_MIN` above the route's
-    reachable cap -- the same construction the oracle suite proves infeasible)
-    closes the first, still-global stage `infeasible`: SCIP's verdict on the
+    """A genuinely infeasible scenario (a minimum of EUR50 on the Asset when the
+    route's cap reaches only three units of EUR10 -- the same construction the
+    oracle suite proves infeasible) closes the first, still-global stage `infeasible`: SCIP's verdict on the
     scenario itself, and the only stage that can deliver one.
 
     The run reports exactly that: `reported_infeasible`, one stage -- ordinal
@@ -402,7 +409,7 @@ def test_infeasible_scenario_reports_only_the_first_global_stage_as_infeasible()
     The exhaustive oracle corroborates, independently of SCIP, that the
     scenario has no feasible candidate, so the verdict is not a false claim.
     """
-    scenario = _pac_scenario(required=R(5), route_cap=R(3))
+    scenario = _asset_minimum_above_the_cap_scenario()
     view, result = _run(scenario)
 
     assert result.outcome == "reported_infeasible"

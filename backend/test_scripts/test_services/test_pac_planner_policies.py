@@ -508,20 +508,6 @@ def test_ledger_balance_constraint_boundary_matches_evaluator() -> None:
     assert _pinned_status(scenario, view, quanta=_quanta_map(infeasible_candidate)) == "infeasible"
 
 
-def test_order_required_minimum_constraint_boundary() -> None:
-    """`ORDER_REQUIRED_MIN`: an unconditional floor -- below it is
-    infeasible, exactly at it is feasible, and (unlike `ORDER_MIN_IF_ACTIVE`)
-    zero is *also* infeasible, since this floor is never gated by "active".
-    """
-    scenario = _pac_scenario(required=R(5), route_cap=R(10))
-    view = build_exact_policy_view(scenario)
-    decision_id = exact_decision_id("buy_quantum", "route:buy:a")
-
-    assert _pinned_status(scenario, view, quanta={decision_id: 4}) == "infeasible"
-    assert _pinned_status(scenario, view, quanta={decision_id: 5}) == "optimal"  # boundary
-    assert _pinned_status(scenario, view, quanta={decision_id: 0}) == "infeasible"  # unconditional, not "if active"
-
-
 def test_order_activation_constraint_boundary_both_disjunction_directions() -> None:
     """`ORDER_MIN_IF_ACTIVE`: the measure is either exactly zero or at least
     the active floor. A value strictly between the two is infeasible no
@@ -960,7 +946,7 @@ def test_fractional_fx_credit_floors_and_the_buy_it_cannot_cover_is_infeasible()
     assert evaluation.candidate_valid is True  # inside every box: only the cash rules can decide
 
     # The fractional FX credit: exact 9.504, posted at its floor, 9.
-    fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    fx_evaluation = next(item for item in evaluation.fx if item.source_currency == "EUR")
     assert fx_evaluation.exact_destination_credit == R(1188, 125)  # 9.504, NOT a quantum multiple
     assert fx_evaluation.posted_destination_credit == R(9)
     fx_posting = next(posting for posting in evaluation.postings if posting.family == "fx_credit" and posting.broker_id == "broker:destination" and posting.currency == "USD")
@@ -1000,7 +986,7 @@ def test_fractional_fx_credit_whose_floor_covers_the_buy_stays_feasible() -> Non
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
     assert evaluation.candidate_valid is True
 
-    fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    fx_evaluation = next(item for item in evaluation.fx if item.source_currency == "EUR")
     assert fx_evaluation.exact_destination_credit == R(2673, 250)  # 10.692, NOT a quantum multiple
     assert fx_evaluation.posted_destination_credit >= R(10)  # at least its floor, whatever the rounding
 
@@ -1063,7 +1049,7 @@ def test_exact_fx_credit_tie_posts_its_floor_and_not_one_quantum_more() -> None:
 
         # Precondition, verified rather than assumed: the conversion really is
         # an exact tie, posted at its floor.
-        fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+        fx_evaluation = next(item for item in evaluation.fx if item.source_currency == "EUR")
         assert fx_evaluation.exact_destination_credit == R(15, 2), units  # 7.5 USD, an exact tie
         assert fx_evaluation.posted_destination_credit == R(7), units
 
@@ -1244,7 +1230,7 @@ def test_fx_credit_that_posts_zero_is_rejected_by_the_exact_replay(source_eur: i
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
     assert evaluation.candidate_valid is True  # inside every box: only the posting rules can decide
 
-    fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    fx_evaluation = next(item for item in evaluation.fx if item.source_currency == "EUR")
     assert fx_evaluation.exact_destination_credit == exact_credit
     assert fx_evaluation.posted_destination_credit == ZERO
 
@@ -1272,7 +1258,7 @@ def test_active_fx_conversion_whose_credit_posts_zero_is_infeasible_in_the_compi
     # Precondition, verified rather than assumed: the exact credit (which no
     # rounding rule moves) is below one whole-USD quantum, so its floor is 0.
     evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta, candidate_id=f"candidate:fx-credit-zero-compiled:{source_eur}"))
-    fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    fx_evaluation = next(item for item in evaluation.fx if item.source_currency == "EUR")
     assert fx_evaluation.exact_destination_credit == exact_credit
     assert ZERO < exact_credit < ONE
 
@@ -1295,7 +1281,7 @@ def test_fx_credit_positive_admits_a_nonzero_floored_credit_and_no_conversion() 
 
     converting = {funding: 3, fx: 3, buy: 0}
     evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, converting, candidate_id="candidate:fx-credit-one"))
-    fx_evaluation = next(item for item in evaluation.fx if item.order_route_id == "route:buy:usd" and item.source_currency == "EUR")
+    fx_evaluation = next(item for item in evaluation.fx if item.source_currency == "EUR")
     assert (fx_evaluation.exact_destination_credit, fx_evaluation.posted_destination_credit) == (R(6, 5), R(1))
     positive = next(item for item in evaluation.constraints if item.ref_id == constraint_id)
     assert (positive.satisfied, positive.value) == (True, R(1))

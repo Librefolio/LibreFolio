@@ -541,6 +541,7 @@ def _planner_request_with_whole_step(
             "funding_routes": [],
             "target_weights": [
                 {
+                    "kind": "asset",
                     "asset_id": "asset:a",
                     "weight": "1",
                 }
@@ -644,6 +645,14 @@ def _pac_scenario(
         ),
         currency_quantums=((quote_currency, CENT),),
     )
+
+
+def _pac_scenario_with_asset_minimum(minimum: ExactRatio, **kwargs) -> ExactPlannerScenario:
+    """``_pac_scenario`` with a minimum, in EUR, on the final value of its one Asset (V5): the construction that makes a PAC
+    infeasible now that a route's «required minimum» is gone (M19). Doing nothing does not meet it, and a route cap below it
+    cannot either."""
+    scenario = _pac_scenario(**kwargs)
+    return replace(scenario, target_weights=(ExactTargetWeight("asset:a", ONE, minimum=pac_models.ExactLimit("amount", minimum)),))
 
 
 def _min_fragmentation_scenario(
@@ -2841,11 +2850,7 @@ def test_direct_fx_replay_preserves_direction_and_spread() -> None:
     )
 
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
-    action = _by_id(
-        evaluation.fx,
-        "order_route_id",
-        "route:buy:usd",
-    )
+    (action,) = evaluation.fx
     debit = _by_id(
         evaluation.postings,
         "posting_id",
@@ -2946,7 +2951,7 @@ def test_fx_replay_plans_a_cross_rate_just_above_the_triangle_at_the_triangle() 
     the conversion loses nothing, where the user's rate would have gained.
     """
     evaluation = _planning_rate_replay(R(2_183_098_592, 10**10))
-    action = _by_id(evaluation.fx, "order_route_id", "route:buy:usd")
+    (action,) = evaluation.fx
 
     assert evaluation.feasible is True, evaluation.conflict_codes
     assert action.source_currency == "RON"
@@ -2971,7 +2976,7 @@ def test_fx_replay_keeps_a_cross_rate_below_the_triangle() -> None:
     """
     approved_rate = R(2_183_098_591, 10**10)
     evaluation = _planning_rate_replay(approved_rate)
-    action = _by_id(evaluation.fx, "order_route_id", "route:buy:usd")
+    (action,) = evaluation.fx
 
     assert evaluation.feasible is True, evaluation.conflict_codes
     assert action.approved_rate == approved_rate
@@ -3645,11 +3650,10 @@ def test_buy_and_sell_same_asset_is_forbidden_even_when_cash_reconciles() -> Non
 
 
 @pytest.mark.parametrize(
-    ("minimum", "required", "cap", "quanta", "expected_code"),
+    ("minimum", "cap", "quanta", "expected_code"),
     [
         pytest.param(
             R(2),
-            ZERO,
             R(10),
             1,
             "ORDER_MIN_IF_ACTIVE",
@@ -3658,31 +3662,20 @@ def test_buy_and_sell_same_asset_is_forbidden_even_when_cash_reconciles() -> Non
         pytest.param(
             ZERO,
             R(3),
-            R(10),
-            2,
-            "ORDER_REQUIRED_MIN",
-            id="required-minimum",
-        ),
-        pytest.param(
-            ZERO,
-            ZERO,
-            R(3),
             3,
             None,
             id="cap-boundary",
         ),
     ],
 )
-def test_order_minimum_required_and_cap_contracts(
+def test_order_minimum_and_cap_contracts(
     minimum: ExactRatio,
-    required: ExactRatio,
     cap: ExactRatio,
     quanta: int,
     expected_code: str | None,
 ) -> None:
     scenario = _pac_scenario(
         minimum=minimum,
-        required=required,
         route_cap=cap,
     )
     view = build_exact_policy_view(scenario)
@@ -3698,38 +3691,28 @@ def test_order_minimum_required_and_cap_contracts(
     assert access.upper_quanta == cap.numerator // cap.denominator
     if expected_code is None:
         assert "ORDER_MIN_IF_ACTIVE" not in evaluation.conflict_codes
-        assert "ORDER_REQUIRED_MIN" not in evaluation.conflict_codes
         assert "ORDER_CAP" not in evaluation.conflict_codes
     else:
         assert expected_code in evaluation.conflict_codes
 
 
 @pytest.mark.parametrize(
-    ("minimum", "required", "constraint_code"),
+    ("minimum", "constraint_code"),
     [
         pytest.param(
             R(2),
-            ZERO,
             "ORDER_MIN_IF_ACTIVE",
             id="minimum-if-active",
-        ),
-        pytest.param(
-            ZERO,
-            R(3),
-            "ORDER_REQUIRED_MIN",
-            id="required-minimum",
         ),
     ],
 )
 def test_monetary_sell_enforces_native_minimums(
     minimum: ExactRatio,
-    required: ExactRatio,
     constraint_code: str,
 ) -> None:
     scenario = _invest_and_sell_scenario(
         monetary_sell=True,
         sell_minimum=minimum,
-        sell_required=required,
     )
     _baseline_view, baseline = _invest_only_baseline(scenario)
     view = _sell_extension(scenario, baseline)
@@ -3751,38 +3734,9 @@ def test_monetary_sell_enforces_native_minimums(
     )
 
     assert constraint.value == ONE
-    assert constraint.lower_bound == max(minimum, required)
+    assert constraint.lower_bound == minimum
     assert constraint.satisfied is False
     assert constraint_code in evaluation.conflict_codes
-
-
-def test_sell_required_minimum_is_neutral_in_baseline_and_hard_in_extension() -> None:
-    scenario = _invest_and_sell_scenario(sell_required=ONE)
-    baseline_view, baseline = _invest_only_baseline(scenario)
-    baseline_evaluation = evaluate_exact_candidate(
-        scenario,
-        baseline_view,
-        baseline,
-    )
-    assert baseline_evaluation.feasible is True
-    assert "ORDER_REQUIRED_MIN" not in baseline_evaluation.conflict_codes
-
-    extension = _sell_extension(scenario, baseline)
-    zero_sell = evaluate_exact_candidate(
-        scenario,
-        extension,
-        _candidate(extension),
-    )
-
-    assert "ORDER_REQUIRED_MIN" in zero_sell.conflict_codes
-    constraint = _by_id(
-        zero_sell.constraints,
-        "ref_id",
-        "constraint:order_required_min:route:sell:a",
-    )
-    assert constraint.value == ZERO
-    assert constraint.lower_bound == ONE
-    assert constraint.satisfied is False
 
 
 def test_active_sell_requires_strictly_positive_posted_net() -> None:
@@ -5264,7 +5218,6 @@ def test_fx_decisions_come_from_one_list_shared_by_view_and_replay(build) -> Non
     one_quantum_each = _candidate(view, {spec.decision_id: 1 for spec in specs})
     evaluation = evaluate_exact_candidate(scenario, view, one_quantum_each)
     assert {action.decision_id for action in evaluation.fx} <= {spec.decision_id for spec in specs}
-    assert {action.order_route_id for action in evaluation.fx} <= {spec.representative_route_id for spec in specs}
 
 
 # ---------------------------------------------------------------------------
@@ -5332,7 +5285,6 @@ def test_fx_decisions_are_one_per_broker_and_ordered_pair() -> None:
     assert spec.decision_id == "fx:10:broker:hub:EUR:USD"
     assert spec.scope == "broker"
     assert {(ref.kind, ref.entity_id) for ref in spec.entity_refs} == {("broker", "broker:hub"), ("source_currency", "EUR"), ("destination_currency", "USD")}
-    assert spec.representative_route_id == "route:buy:a"
 
     multi = _multi_source_buy_scenario()
     pairs = [(spec.broker_id, spec.source_currency, spec.destination_currency) for spec in fx_decision_specs(multi, build_scenario_index(multi), None)]
@@ -5362,7 +5314,6 @@ def test_fx_evaluations_are_ordered_by_broker_source_destination() -> None:
     evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, values))
 
     assert [(item.broker_id, item.source_currency, item.destination_currency) for item in evaluation.fx] == [("broker:a", "EUR", "USD"), ("broker:b", "EUR", "USD")]
-    assert [item.order_route_id for item in evaluation.fx] == ["route:2", "route:1"]
 
 
 # ---------------------------------------------------------------------------
