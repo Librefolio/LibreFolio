@@ -119,44 +119,12 @@ class PlannerFundingAction(AllocationStrictModel):
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
 
 
-class PlannerFxAction(AllocationStrictModel):
-    action_id: PlannerId
-    conversion_id: PlannerId = Field(description="The Broker x currency-pair conversion this engine decision belongs to; the conversion, not the action, is what gets executed.")
-    order_route_id: PlannerId = Field(description="Key of the engine decision. The credit is pooled in the Broker's cash in the destination currency and funds every order of that Broker in that currency, so this is not the order the conversion pays for.")
-    broker_id: PlannerId
-    source_debit: PlannerPositiveMoneyInput
-    destination_credit: PlannerPositiveMoneyInput
-    spot_rate: ExactFxRate
-    effective_rate: ExactFxRate
-    spread_loss: ExactMoney
-    provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
-
-    @model_validator(mode="after")
-    def validate_action_rates_and_costs(self) -> PlannerFxAction:
-        if (self.spot_rate.source_currency, self.spot_rate.destination_currency) != (
-            self.source_debit.currency,
-            self.destination_credit.currency,
-        ):
-            raise ValueError("FX action rates must follow the posted source-to-destination direction")
-        if (self.effective_rate.source_currency, self.effective_rate.destination_currency) != (
-            self.source_debit.currency,
-            self.destination_credit.currency,
-        ):
-            raise ValueError("Effective FX rate must follow the posted source-to-destination direction")
-        if exact_fraction(self.effective_rate.value) > exact_fraction(self.spot_rate.value):
-            raise ValueError("Effective FX rate cannot exceed the approved spot rate")
-        if exact_fraction(self.spread_loss.value) < 0:
-            raise ValueError("FX spread loss cannot be negative")
-        return self
-
-
 class PlannerConversion(AllocationStrictModel):
-    """One currency conversion per Broker and currency pair, aggregated from the engine's FX actions.
+    """One currency conversion per Broker and ordered currency pair: the engine's own decision.
 
-    The engine decides FX per order route, but the credit lands in a cash pool that every
-    order of that Broker in that currency shares, so only the pair total is a fact of the
-    plan. ``source_debit`` and ``spread_loss`` sum the exact action figures;
-    ``destination_credit`` sums the posted credits the ledger reconciles against.
+    The credit lands in a cash pool that every order of that Broker in that currency shares, so the pair is what the plan
+    executes. ``source_debit`` is the exact amount converted, ``destination_credit`` the posted credit the ledger reconciles
+    against, ``spread_loss`` the exact cost in the valuation currency.
     """
 
     conversion_id: PlannerId
@@ -168,7 +136,6 @@ class PlannerConversion(AllocationStrictModel):
     spot_rate: ExactFxRate
     effective_rate: ExactFxRate
     spread_loss: ExactMoney
-    fx_action_ids: Annotated[list[PlannerId], Field(min_length=1)]
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
 
     @model_validator(mode="after")
@@ -182,7 +149,6 @@ class PlannerConversion(AllocationStrictModel):
             raise ValueError("Effective conversion rate cannot exceed the approved spot rate")
         if exact_fraction(self.spread_loss.value) < 0:
             raise ValueError("Conversion spread loss cannot be negative")
-        require_unique(self.fx_action_ids, "Conversion FX action IDs")
         return self
 
 
@@ -251,7 +217,6 @@ class PlannerBuyOrderRow(AllocationStrictModel):
     execution_margin_cost: ExactMoney
     cash_debit: PlannerPositiveMoneyInput
     fee: PlannerNonNegativeMoneyInput
-    fx_cost: ExactMoney = Field(description="Always zero: a conversion funds a shared Broker x currency cash pool, so its spread is published on the conversion, not attributed to one order.")
     buffer: PlannerNonNegativeMoneyInput
     explanation_keys: list[PlannerMessageKey]
     provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
@@ -274,8 +239,6 @@ class PlannerBuyOrderRow(AllocationStrictModel):
             raise ValueError("BUY mid value must be positive")
         if exact_fraction(self.execution_margin_cost.value) < 0:
             raise ValueError("BUY execution-margin cost cannot be negative")
-        if exact_fraction(self.fx_cost.value) != 0:
-            raise ValueError("BUY FX cost must be zero: conversion spreads are published on the conversion")
         return self
 
 

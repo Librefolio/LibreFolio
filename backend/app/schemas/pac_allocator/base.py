@@ -123,6 +123,10 @@ PlannerCode = Annotated[str, StringConstraints(strict=True, min_length=3, max_le
 PlannerIssueCode = Literal[
     "allocation.asset_inactive_not_buyable",
     "allocation.asset_type_missing",
+    "allocation.bound_max_below_current",
+    "allocation.bound_min_above_max",
+    "allocation.bounds_min_sum_exceeds_reference",
+    "allocation.bounds_unsatisfiable",
     "allocation.broker_execution_profile_unsupported",
     "allocation.broker_inactive",
     "allocation.capacity_unsupported",
@@ -184,6 +188,7 @@ PlannerIssueCode = Literal[
     "allocation.valuation_currency_missing",
     "allocation.wac_missing",
     "allocation.zero_selected_funding",
+    "pac_allocator.cash_weight_unsupported",
     "pac_allocator.initial_holding_forbidden",
     "pac_allocator.sell_forbidden",
     "portfolio_rebalancer.baseline_incumbent_missing",

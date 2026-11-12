@@ -692,20 +692,32 @@
   ],
   "target_weights": [
     {
+      "kind": "asset",
       "asset_id": "asset-a",
-      "weight": "0.25"
+      "weight": "0.25",
+      "minimum": null,
+      "maximum": null
     },
     {
+      "kind": "asset",
       "asset_id": "asset-b",
-      "weight": "0.25"
+      "weight": "0.25",
+      "minimum": null,
+      "maximum": null
     },
     {
+      "kind": "asset",
       "asset_id": "asset-c",
-      "weight": "0.25"
+      "weight": "0.25",
+      "minimum": null,
+      "maximum": null
     },
     {
+      "kind": "asset",
       "asset_id": "asset-d",
-      "weight": "0.25"
+      "weight": "0.25",
+      "minimum": null,
+      "maximum": null
     }
   ],
   "policy": "invest_and_sell",

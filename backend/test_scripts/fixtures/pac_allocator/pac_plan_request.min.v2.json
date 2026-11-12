@@ -144,8 +144,11 @@
   ],
   "target_weights": [
     {
+      "kind": "asset",
       "asset_id": "asset-one",
-      "weight": "1"
+      "weight": "1",
+      "minimum": null,
+      "maximum": null
     }
   ],
   "policy": "proportional"

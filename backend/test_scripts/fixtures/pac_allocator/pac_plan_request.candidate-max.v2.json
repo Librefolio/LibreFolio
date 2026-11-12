@@ -116,22 +116,22 @@
     {"route_id": "route-16-jpy", "asset_id": "asset-16", "broker_id": "broker-jpy", "capability_id": "cap-jpy-money", "side": "buy", "priority": 2, "minimum_if_active": {"kind": "monetary_amount", "amount": {"amount": "0", "currency": "JPY"}}, "required_minimum": {"kind": "none"}, "cap": {"kind": "notional", "amount": {"amount": "10000", "currency": "JPY"}}, "execution_margin_rate": "0", "fee_schedule_id": "fee-jpy-buy", "provenance_id": "prov-candidate-max"}
   ],
   "target_weights": [
-    {"asset_id": "asset-01", "weight": "-0.25"},
-    {"asset_id": "asset-02", "weight": "0.0625"},
-    {"asset_id": "asset-03", "weight": "0.0625"},
-    {"asset_id": "asset-04", "weight": "0.0625"},
-    {"asset_id": "asset-05", "weight": "0.0625"},
-    {"asset_id": "asset-06", "weight": "0.0625"},
-    {"asset_id": "asset-07", "weight": "0.0625"},
-    {"asset_id": "asset-08", "weight": "0.0625"},
-    {"asset_id": "asset-09", "weight": "0.0625"},
-    {"asset_id": "asset-10", "weight": "0.0625"},
-    {"asset_id": "asset-11", "weight": "0.0625"},
-    {"asset_id": "asset-12", "weight": "0.0625"},
-    {"asset_id": "asset-13", "weight": "0.0625"},
-    {"asset_id": "asset-14", "weight": "0.0625"},
-    {"asset_id": "asset-15", "weight": "0.0625"},
-    {"asset_id": "asset-16", "weight": "0.0625"}
+    {"kind": "asset", "asset_id": "asset-01", "weight": "-0.25", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-02", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-03", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-04", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-05", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-06", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-07", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-08", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-09", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-10", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-11", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-12", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-13", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-14", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-15", "weight": "0.0625", "minimum": null, "maximum": null},
+    {"kind": "asset", "asset_id": "asset-16", "weight": "0.0625", "minimum": null, "maximum": null}
   ],
   "policy": "proportional"
 }

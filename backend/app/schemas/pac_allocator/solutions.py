@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
@@ -18,7 +17,6 @@ from backend.app.schemas.pac_allocator.rows import (
     PlannerConversion,
     PlannerCostTotals,
     PlannerFundingAction,
-    PlannerFxAction,
     PlannerLedgerRow,
     PlannerObjectiveResults,
     PlannerRoundingTopUp,
@@ -33,13 +31,10 @@ from backend.app.schemas.pac_allocator.rows import (
 def _validate_action_ids_and_sequences(solution: PacPlanSolution | RebalancerPlanSolution, label: str) -> None:
     """IDs unique across every action section; sequences unique across the sequenced ones.
 
-    FX actions carry no sequence: they are engine decisions, executed through their
-    conversion. A manual conversion is a step of its own; an automatic one happens
-    inside the orders, so it has no sequence either.
+    A manual conversion is a step of its own; an automatic one happens inside the orders, so it has no sequence.
     """
     ids = [
         *(row.action_id for row in solution.funding_actions),
-        *(row.action_id for row in solution.fx_actions),
         *(row.conversion_id for row in solution.conversions),
         *(row.order_id for row in solution.order_rows),
     ]
@@ -55,40 +50,19 @@ def _validate_action_ids_and_sequences(solution: PacPlanSolution | RebalancerPla
 
 
 def _validate_conversions(solution: PacPlanSolution | RebalancerPlanSolution, label: str) -> None:
-    """Bind every FX action to its Broker x currency-pair conversion.
+    """The conversions are the engine's decisions: unique ids, one per Broker and ordered pair, one mode per Broker, and V7.
 
-    A conversion is a pure aggregate: it covers exactly the actions that reference it,
-    repeats their Broker, currency pair and rates, and carries their exact sums. One
-    conversion per pair, and one mode per Broker, because the mode is a Broker input.
+    V7: on a Broker a currency that receives a conversion gives none. A conversion into a currency followed by one out of it
+    (EUR to USD then USD to CHF, or the same pair both ways) only burns cash through a relay, and the engine never plans one.
     """
     require_unique([row.conversion_id for row in solution.conversions], f"{label} conversion IDs")
     require_unique([(row.broker_id, row.source_debit.currency, row.destination_credit.currency) for row in solution.conversions], f"{label} conversion pairs")
     modes: dict[str, str] = {}
     if any(modes.setdefault(row.broker_id, row.mode) != row.mode for row in solution.conversions):
         raise ValueError(f"{label} conversions must use one mode per Broker")
-    conversions = {row.conversion_id: row for row in solution.conversions}
-    members: dict[str, list[PlannerFxAction]] = {conversion_id: [] for conversion_id in conversions}
-    for action in solution.fx_actions:
-        conversion = conversions.get(action.conversion_id)
-        if conversion is None:
-            raise ValueError(f"{label} FX actions must reference a published conversion")
-        if (action.broker_id, action.source_debit.currency, action.destination_credit.currency) != (conversion.broker_id, conversion.source_debit.currency, conversion.destination_credit.currency):
-            raise ValueError(f"{label} FX actions must match their conversion's Broker and currency pair")
-        if exact_fraction(action.spot_rate.value) != exact_fraction(conversion.spot_rate.value) or exact_fraction(action.effective_rate.value) != exact_fraction(conversion.effective_rate.value):
-            raise ValueError(f"{label} FX actions must use their conversion's rates")
-        members[action.conversion_id].append(action)
-    for conversion_id, conversion in conversions.items():
-        actions = members[conversion_id]
-        if set(conversion.fx_action_ids) != {action.action_id for action in actions}:
-            raise ValueError(f"{label} conversions must list exactly the FX actions that reference them")
-        if (
-            fixed_fraction(conversion.source_debit.amount) != sum((fixed_fraction(action.source_debit.amount) for action in actions), Fraction())
-            or fixed_fraction(conversion.destination_credit.amount) != sum((fixed_fraction(action.destination_credit.amount) for action in actions), Fraction())
-            or money_fraction(conversion.spread_loss) != sum((money_fraction(action.spread_loss) for action in actions), Fraction())
-        ):
-            raise ValueError(f"{label} conversion totals must equal the exact sums of their FX actions")
-        if set(conversion.provenance_ids) != {provenance_id for action in actions for provenance_id in action.provenance_ids}:
-            raise ValueError(f"{label} conversion provenance must be the union of its FX actions' provenance")
+    receiving = {(row.broker_id, row.destination_credit.currency) for row in solution.conversions}
+    if any((row.broker_id, row.source_debit.currency) in receiving for row in solution.conversions):
+        raise ValueError(f"{label} conversions: a currency that receives a conversion cannot give one at the same Broker")
 
 
 def _validate_pac_rounding_top_ups(solution: PacPlanSolution) -> None:
@@ -96,7 +70,7 @@ def _validate_pac_rounding_top_ups(solution: PacPlanSolution) -> None:
 
     One top-up per negative pool, for exactly the missing amount; its rounded
     postings can be no more than the pool's own rows carry: a BUY debit and a
-    fee per order paying from the pool, a credit per FX action into it. It is
+    fee per order paying from the pool, a credit per conversion into it. It is
     only a cap: a fee that rounds to zero is not posted, and still counts in
     the order row. The minor-unit bound needs the catalogue, so it lives in
     ``_validate_ready_solution``.
@@ -108,7 +82,7 @@ def _validate_pac_rounding_top_ups(solution: PacPlanSolution) -> None:
     for top_up in solution.rounding_top_ups:
         scope = (top_up.broker_id, top_up.currency)
         orders = sum(1 for row in solution.order_rows if (row.broker_id, row.cash_debit.currency) == scope)
-        fx_credits = sum(1 for row in solution.fx_actions if (row.broker_id, row.destination_credit.currency) == scope)
+        fx_credits = sum(1 for row in solution.conversions if (row.broker_id, row.destination_credit.currency) == scope)
         if top_up.rounded_postings > 2 * orders + fx_credits:
             raise ValueError("A PAC rounding top-up cannot count more rounded postings than its ledger scope carries")
 
@@ -119,8 +93,7 @@ class PacPlanSolution(AllocationStrictModel):
     validation: Literal["decimal_verified"]
     asset_rows: list[PacAssetPlanRow]
     funding_actions: list[PlannerFundingAction]
-    fx_actions: list[PlannerFxAction]
-    conversions: list[PlannerConversion] = Field(description="One conversion per Broker x currency pair, aggregating the FX actions; manual ones are numbered steps.")
+    conversions: list[PlannerConversion] = Field(description="One conversion per Broker x ordered currency pair, the engine's own decision; manual ones are numbered steps.")
     order_rows: list[PlannerBuyOrderRow]
     ledger_rows: list[PlannerLedgerRow]
     rounding_top_ups: list[PlannerRoundingTopUp] = Field(description="One top-up per ledger pool left short by rounding against the plan; empty when every pool balances.")
@@ -146,8 +119,7 @@ class RebalancerPlanSolution(AllocationStrictModel):
     validation: Literal["decimal_verified"]
     asset_rows: list[RebalancerAssetPlanRow]
     funding_actions: list[PlannerFundingAction]
-    fx_actions: list[PlannerFxAction]
-    conversions: list[PlannerConversion] = Field(description="One conversion per Broker x currency pair, aggregating the FX actions; manual ones are numbered steps.")
+    conversions: list[PlannerConversion] = Field(description="One conversion per Broker x ordered currency pair, the engine's own decision; manual ones are numbered steps.")
     order_rows: list[RebalancerOrderRow]
     sell_irreducibility: list[SellIrreducibilityEvidence]
     ledger_rows: list[PlannerLedgerRow]
@@ -218,7 +190,6 @@ def _validate_rebalancer_no_op(solution: RebalancerPlanSolution) -> None:
 
 class PacNoOpSolution(PacPlanSolution):
     funding_actions: Annotated[list[PlannerFundingAction], Field(max_length=0)]
-    fx_actions: Annotated[list[PlannerFxAction], Field(max_length=0)]
     conversions: Annotated[list[PlannerConversion], Field(max_length=0)]
     order_rows: Annotated[list[PlannerBuyOrderRow], Field(max_length=0)]
     rounding_top_ups: Annotated[list[PlannerRoundingTopUp], Field(max_length=0)]
@@ -232,7 +203,6 @@ class PacNoOpSolution(PacPlanSolution):
 
 class RebalancerNoOpSolution(RebalancerPlanSolution):
     funding_actions: Annotated[list[PlannerFundingAction], Field(max_length=0)]
-    fx_actions: Annotated[list[PlannerFxAction], Field(max_length=0)]
     conversions: Annotated[list[PlannerConversion], Field(max_length=0)]
     order_rows: Annotated[list[RebalancerOrderRow], Field(max_length=0)]
     sell_irreducibility: Annotated[list[SellIrreducibilityEvidence], Field(max_length=0)]

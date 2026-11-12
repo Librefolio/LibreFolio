@@ -12,7 +12,7 @@ from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof,
 from backend.app.schemas.pac_allocator.exact import ExactMoney, ExactNumberAvailability, available_fraction, exact_fraction, fixed_fraction, money_fraction, validate_weight_availability
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, PlannerProvenance, RebalancerPlannerRequest
-from backend.app.schemas.pac_allocator.rows import PacAssetPlanRow, PacExposurePlanRow, PlannerAccountingSummary, PlannerBuyOrderRow, PlannerCatalogs, PlannerScenarioBasis, PlannerSellOrderRow, RebalancerAssetPlanRow, RebalancerExposurePlanRow
+from backend.app.schemas.pac_allocator.rows import PacAssetPlanRow, PacExposurePlanRow, PlannerAccountingSummary, PlannerCatalogs, PlannerScenarioBasis, PlannerSellOrderRow, RebalancerAssetPlanRow, RebalancerExposurePlanRow
 from backend.app.schemas.pac_allocator.solutions import DeploymentCoincident, DeploymentUnavailable, PacDistinctDeployment, PacIncumbentSolution, PacNoOpSolution, PacPlanSolution, RebalancerDistinctDeployment, RebalancerIncumbentSolution, RebalancerNoOpSolution, RebalancerPlanSolution
 
 
@@ -202,10 +202,8 @@ def _validate_solution_financials(
         if isinstance(row, RebalancerAssetPlanRow):
             fields = ("before_value", *fields, "sell_mid_value")
         valuation_money.extend(getattr(row, name) for name in fields)
-    valuation_money.extend(row.spread_loss for row in solution.fx_actions)
     valuation_money.extend(row.spread_loss for row in solution.conversions)
     valuation_money.extend(row.execution_margin_cost for row in solution.order_rows)
-    valuation_money.extend(row.fx_cost for row in solution.order_rows if isinstance(row, PlannerBuyOrderRow))
     top_ups = solution.rounding_top_ups if isinstance(solution, PacPlanSolution) else []
     valuation_money.extend(row.valuation_amount for row in top_ups)
     if any(money.currency != valuation_currency for money in valuation_money):
@@ -253,17 +251,17 @@ def _validate_ready_solution(
         raise ValueError("Ledger rows must reference catalog Broker and currency IDs")
     if any(row.destination_broker_id not in broker_ids for row in solution.funding_actions):
         raise ValueError("Funding rows must reference catalog Broker IDs")
-    if any(row.broker_id not in broker_ids for row in solution.fx_actions):
-        raise ValueError("FX rows must reference catalog Broker IDs")
+    if any(row.broker_id not in broker_ids for row in solution.conversions):
+        raise ValueError("Conversion rows must reference catalog Broker IDs")
     if any(row.asset_id not in asset_ids or row.broker_id not in broker_ids for row in solution.order_rows):
         raise ValueError("Order rows must reference catalog Asset and Broker IDs")
     if not collect_currency_codes(solution.model_dump(mode="python")) <= currencies:
         raise ValueError("Solution rows must reference catalog currencies")
     _validate_pac_top_up_minor_units(catalogs, solution)
-    referenced_provenance = {provenance_id for row in [*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows] for provenance_id in row.provenance_ids}
+    referenced_provenance = {provenance_id for row in [*solution.funding_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows] for provenance_id in row.provenance_ids}
     if not referenced_provenance <= provenance_ids:
         raise ValueError("Solution rows must reference top-level provenance IDs")
-    for row in [*solution.funding_actions, *solution.fx_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows]:
+    for row in [*solution.funding_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows]:
         require_unique(row.provenance_ids, "Result-row provenance IDs")
     _validate_solution_financials(solution, valuation_currency)
 

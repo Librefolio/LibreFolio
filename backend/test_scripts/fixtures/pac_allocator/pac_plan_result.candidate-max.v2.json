@@ -122,7 +122,6 @@
       {"asset_id": "asset-16", "target_weight": {"kind": "finite_decimal", "value": "0.0625"}, "target_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "residual": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}, "final_weight": {"kind": "unavailable", "reason": "zero_final_invested"}, "buy_mid_value": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}}
     ],
     "funding_actions": [],
-    "fx_actions": [],
     "conversions": [],
     "order_rows": [],
     "ledger_rows": [

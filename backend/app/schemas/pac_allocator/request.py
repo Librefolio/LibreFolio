@@ -310,9 +310,51 @@ class PacOrderRouteInput(PlannerBuyOrderRouteInput):
     pass
 
 
-class PlannerTargetWeightInput(AllocationStrictModel):
+class PlannerAmountLimitInput(AllocationStrictModel):
+    """A limit as an amount in the valuation currency (the normalizer checks the currency)."""
+
+    kind: Literal["amount"]
+    amount: PlannerMoneyInput
+
+
+class PlannerShareLimitInput(AllocationStrictModel):
+    """A limit as a share of the Tool's reference, a fraction from 0 to 1 (the normalizer checks the range).
+
+    The reference is the money the plan works with: in the PAC the funding it can reach, which the plan page shows as its total.
+    """
+
+    kind: Literal["share"]
+    share: PlannerFixedDecimal
+
+
+type PlannerEntryLimitInput = Annotated[Union[PlannerAmountLimitInput, PlannerShareLimitInput], Field(discriminator="kind")]
+
+
+class PlannerAssetTargetInput(AllocationStrictModel):
+    """The target of an Asset: its weight and, each optional, a minimum and a maximum on its final value."""
+
+    kind: Literal["asset"]
     asset_id: PlannerId
     weight: PlannerFixedDecimal
+    minimum: PlannerEntryLimitInput | None = None
+    maximum: PlannerEntryLimitInput | None = None
+
+
+class PlannerCashTargetInput(AllocationStrictModel):
+    """The target of a Broker's cash in one currency: a weight and optional limits on its final spendable cash.
+
+    The PAC accepts limits only; a weight other than zero is «unsupported» there (contract §5.2).
+    """
+
+    kind: Literal["cash"]
+    broker_id: PlannerId
+    currency: CurrencyCode
+    weight: PlannerFixedDecimal
+    minimum: PlannerEntryLimitInput | None = None
+    maximum: PlannerEntryLimitInput | None = None
+
+
+type PlannerTargetEntryInput = Annotated[Union[PlannerAssetTargetInput, PlannerCashTargetInput], Field(discriminator="kind")]
 
 
 class PlannerCostBasisInput(AllocationStrictModel):
@@ -361,7 +403,7 @@ class _PlannerRequestBase(AllocationStrictModel):
     existing_cash: list[PlannerExistingCashInput] = []
     contributions: list[PlannerContributionInput] = []
     funding_routes: list[PlannerFundingRouteInput] = []
-    target_weights: list[PlannerTargetWeightInput]
+    target_weights: list[PlannerTargetEntryInput]
 
     @model_validator(mode="after")
     def _validate_fx_rate_pair_keys(self) -> _PlannerRequestBase:
