@@ -497,11 +497,21 @@ def api_transactions_wac_inline(verbose: bool = False, test_names: list = None) 
 def api_assets_patch_fields(verbose: bool = False, test_names: list = None) -> bool:
     """Run asset PATCH fields tests."""
     print_section("Assets Patch Fields Tests")
-    print_info("Testing PATCH /assets/{id} field-level updates")
+    print_info("Testing PATCH /assets field-level updates, all or nothing batches, assetNameTaken")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_patch_fields.py", test_names)
     return run_command(cmd, "Assets patch fields tests", verbose=verbose)
+
+
+def api_assets_validate(verbose: bool = False, test_names: list = None) -> bool:
+    """Run POST /assets/validate (dry run of the asset PATCH) tests."""
+    print_section("Assets Validate (lane 65 B4) API Tests")
+    print_info("Testing POST /assets/validate: never writes, a currency change keeps prices and events, same issues and warnings as PATCH")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_validate.py", test_names)
+    return run_command(cmd, "Assets validate tests", verbose=verbose)
 
 
 def api_ohlc_sentinel(verbose: bool = False, test_names: list = None) -> bool:
@@ -534,7 +544,7 @@ def api_prices_currency_coherence(verbose: bool = False, test_names: list = None
 def api_asset_currency_change(verbose: bool = False, test_names: list = None) -> bool:
     """Run asset currency-change flow tests."""
     print_section("Asset Currency Change (N68) API Tests")
-    print_info("Testing PATCH /assets currency change: never blocked, prices + non-split events removed, SPLITs and their transactions kept, mixed batch partial")
+    print_info("Testing PATCH /assets currency change: never blocked, prices + non-split events removed, SPLITs and their transactions kept, mixed batch with a missing asset saves nothing")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_currency_change.py", test_names)
     return run_command(cmd, "Asset currency change tests", verbose=verbose)
@@ -1474,7 +1484,8 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "broker-overdraft-off-refused", api_broker_overdraft_off_refused, name="Broker Overdraft Off Refused", desc="PATCH allow_cash_overdraft=false over a negative cash is refused and the stored flag stays on (own user and broker)")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
-    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets/{id} field-level updates")
+    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken")
+    add_test(api, "assets-validate", api_assets_validate, name="Assets Validate", desc="POST /assets/validate dry run of the all-or-nothing asset PATCH: never writes, a currency change keeps prices and events, same issues and warnings as PATCH")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
     add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard reject on currency mismatch; X-R71: 422 price_currency_mismatch (items per asset at fault, count), the whole upload refused, no asset written; an unknown asset still reported")
@@ -1483,7 +1494,7 @@ Tests for REST API endpoints (server auto-started):
         "asset-currency-change",
         api_asset_currency_change,
         name="Asset Currency Change",
-        desc="N68 policy A: the currency PATCH is never blocked; prices and non-split events go, their transactions are unlinked, SPLITs and their transactions stay; same currency and nothing-to-lose unchanged; mixed batch 200 partial",
+        desc="N68 policy A: the currency PATCH is never blocked; prices and non-split events go, their transactions are unlinked, SPLITs and their transactions stay; same currency and nothing-to-lose unchanged; mixed batch with a missing asset: 200, committed=false, nothing saved",
     )
     add_test(api, "asset-prices-export", api_asset_prices_export, name="Asset Prices Export", desc="CSV/JSON export + round-trip")
     add_test(api, "prices-sync-delta", api_prices_sync_delta, name="Prices Sync Delta", desc="changed_points payload")
