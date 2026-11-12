@@ -22,6 +22,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Analisi del rischio: quando un asset resta fuori perché manca un cambio, il messaggio ora nomina la coppia di valute e dice da quale data c'è un cambio salvato, oppure che non ce n'è nessuno.
 - Liste Asset e Cambi, vista Rolling Return: le card ora confrontano anche l'altro tipo, come già le pagine di dettaglio. La card di un asset può mostrare coppie di cambi e la card di una coppia può mostrare asset, scelti da «Impostazioni Grafico» della card.
 - Analisi dei lotti: nello stesso giorno gli acquisti e le rettifiche in entrata ora vengono prima delle vendite e delle rettifiche in uscita. Una vendita registrata prima dell'acquisto dello stesso giorno non fa più fallire l'analisi; su un broker che permette le vendite allo scoperto, uno scoperto aperto e chiuso nello stesso giorno ora appare come un lotto long, con lo stesso guadagno realizzato.
+- Intestazione del dettaglio asset: Transazioni ora è un badge con un'icona e il numero di transazioni, così si capisce che è un link; il badge del provider apre direttamente la pagina web dell'asset (quella impostata da te, altrimenti quella del provider) in una nuova scheda, e il suo suggerimento dice dove porta. L'icona ↗ separata non c'è più.
+- Intestazione del dettaglio asset su tablet e telefono: sotto i 1024 px i badge hanno una riga loro sotto il nome; sul telefono ← e ‹ n/N › stanno sulla prima riga, il nome ha tutta la larghezza e i badge seguono in due gruppi (tipo e valuta; Transazioni e provider).
 
 ### 🐛 Corretto
 

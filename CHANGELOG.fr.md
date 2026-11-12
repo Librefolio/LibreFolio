@@ -22,6 +22,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Analyse du risque : quand un actif est écarté faute de taux de change, le message nomme désormais la paire de devises et indique depuis quelle date un taux est enregistré, ou qu'il n'y en a aucun.
 - Listes Actifs et Change, vue Rolling Return : les cartes comparent désormais aussi l'autre type, comme les pages de détail. La carte d'un actif peut afficher des paires de devises et celle d'une paire peut afficher des actifs, choisis dans « Paramètres du Graphique » de la carte.
 - Analyse des lots : dans une même journée, les achats et les ajustements entrants passent désormais avant les ventes et les ajustements sortants. Une vente enregistrée avant l'achat du même jour ne fait plus échouer l'analyse ; chez un courtier qui autorise la vente à découvert, un découvert ouvert et couvert dans la journée apparaît désormais comme un lot long, avec le même gain réalisé.
+- En-tête du détail d'un actif : Transactions est désormais un badge avec une icône et le nombre de transactions, pour qu'on le reconnaisse comme un lien ; le badge du fournisseur ouvre lui-même la page web de l'actif (celle que vous avez définie, sinon celle du fournisseur) dans un nouvel onglet, et son info-bulle indique où il mène. L'icône ↗ séparée disparaît.
+- En-tête du détail d'un actif sur tablette et téléphone : sous 1024 px, les badges ont leur propre ligne sous le nom ; sur téléphone, ← et ‹ n/N › partagent la première ligne, le nom prend toute la largeur et les badges suivent en deux groupes (type et devise ; Transactions et fournisseur).
 
 ### 🐛 Corrections
 
