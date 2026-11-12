@@ -18,6 +18,7 @@ from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPr
 from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet
 from backend.app.services.assets.market_calendar import is_market_closed_repeat
 from backend.app.services.financial_math.returns import float_price_return, observed_annualization
+from backend.app.services.fx.conversion_issues import split_fx_issues
 from backend.app.services.platform.data_quality_thresholds import is_stale
 from backend.app.utils.day_spans import merged_spans
 
@@ -324,7 +325,8 @@ def prepare_asset_series_set_from_readings(  # noqa: C901 — one pass per stage
         wanted = set(observed) | {day - timedelta(days=1) for day in observed if day > load_start}
         stored = {day: point for day in sorted(wanted) if (point := reading.point_on(day)) is not None}
         marked = mark_market_closed_carries(stored, market_holidays)
-        warnings.update(reading.errors)
+        reading_errors, _fx_issues = split_fx_issues(reading.errors)  # a missing rate is data quality (`missing_fx`), not a warning text (CP-11d)
+        warnings.update(reading_errors)
         # A day of the range on which the asset has a point that is not in the target currency: its rate is missing until
         # it starts, so the days run from the first row to the day before its first converted point.
         probes = [requested_range.start, *observed[:1]] if requested_range.start <= requested_end else []
@@ -372,7 +374,7 @@ def prepare_asset_series_set_from_readings(  # noqa: C901 — one pass per stage
                 asset_id=reading.asset_id,
                 all_points=all_points,
                 target_points=target_points,
-                warnings=tuple(reading.errors),
+                warnings=tuple(reading_errors),
                 quote_dates=tuple(day for day, point in target_points.items() if requested_range.start <= day <= requested_end and _price_is_fresh(point)),
             )
         )
