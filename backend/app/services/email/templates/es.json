@@ -63,5 +63,16 @@
     "action": "Confirmar esta dirección",
     "expiry": "El enlace funciona una sola vez y caduca en $duration. Una vez confirmado, la cuenta inicia sesión con esta dirección y sus sesiones abiertas terminan.",
     "ignore": "Si no esperabas este correo, puedes ignorarlo: no cambia nada."
+  },
+  "email_change_request": {
+    "subject": "Confirma la nueva dirección de correo de tu cuenta de LibreFolio",
+    "intro": "Alguien ha pedido usar esta dirección de correo para una cuenta en $instance. Confírmala para completar el cambio: hasta entonces no cambia nada y la cuenta conserva su dirección actual.",
+    "action": "Confirmar esta dirección",
+    "expiry": "El enlace funciona una sola vez y caduca en $duration. Una vez confirmado, la cuenta inicia sesión con esta dirección y sus sesiones abiertas terminan.",
+    "signin": "Para confirmar tienes que haber iniciado sesión en tu cuenta: si no la has iniciado, la página te pide primero que lo hagas.",
+    "ignore": "Si no has sido tú, puedes ignorar este correo: no cambia nada, y nadie puede confirmar sin iniciar sesión en esa cuenta.",
+    "requested_subject": "Se ha pedido cambiar la dirección de correo de tu cuenta de LibreFolio",
+    "requested_intro": "Alguien ha pedido cambiar la dirección de correo de tu cuenta en $instance. Todavía no ha cambiado nada: la nueva dirección debe confirmarse antes desde dentro de la cuenta.",
+    "requested_advice": "Si lo pediste tú, no tienes que hacer nada. Si no, puede que alguien esté usando tu cuenta: cambia tu contraseña enseguida, lo que también anula la petición, y avisa al administrador de $instance."
   }
 }

@@ -1084,6 +1084,16 @@ def api_email_verification(verbose: bool = False, test_names: list[str] | None =
     return run_command(cmd, "Email verification API tests", verbose=verbose)
 
 
+def api_profile_email_change(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the API tests of the Profile routes of a verified change of address (project 71), in-process."""
+    print_section("Profile Email Change API Tests")
+    print_info("Testing PUT /auth/profile (pending with email on: no cookie, nothing changed; applied without links), DELETE /auth/profile/email-change, POST /auth/profile/email-change/resend, pending_email_change in the answer, /auth/me and the sign-in; 400, 409, 429, 502, 404")
+    print_info("In-process: the real auth router on a private SQLite, the confirmation sent to an outbox, the background emails recorded; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_profile_email_change_api.py", test_names)
+    return run_command(cmd, "Profile email change API tests", verbose=verbose)
+
+
 def api_owner_email_change(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the API tests of the owner's email-change confirmation: POST /email/email-change/confirm, in-process."""
     print_section("Owner Email Change API Tests")
@@ -1769,6 +1779,16 @@ Tests for REST API endpoints (server auto-started):
         # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
         # SMTP and LIBREFOLIO_PUBLIC_URL variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "profile-email-change",
+        api_profile_email_change,
+        name="Profile Email Change API",
+        desc="PUT /auth/profile with email on: 200 email_change pending, the address unchanged, no Set-Cookie, pending_email_change {email, expires_at} in the answer, /auth/me and the sign-in, the confirmation to the new address and the notice to the old one scheduled; without links (email off, SMTP without LIBREFOLIO_PUBLIC_URL) applied as before; a username alone null; a taken address 400 and a spent budget 429 (Retry-After) save no username; 502 EMAIL_DELIVERY_FAILED without smtp_code keeps the username and leaves nothing waiting; the owner 409 before the password; DELETE /auth/profile/email-change 204 twice; resend 429 / 200 / 409 EMAIL_TAKEN / 404 / 409 EMAIL_UNAVAILABLE; route names and models agreed with the web app",
+        # PURE: the real auth router runs in-process on a private SQLite file under tmp_path; the confirmation goes to an
+        # outbox, the background emails to recorders, the service's clock is the test's; the lane's backend is never called.
         isolation="pure",
     )
     add_test(

@@ -157,15 +157,17 @@
       "page": {
         "ready": "Confirm the new email address of your account. From now on you will sign in and receive emails with it.",
         "checking": "Checking the link…",
-        "expired": "This link has expired. A new one is sent the next time the host restarts your instance with the new address: ask the host if you need it now.",
+        "expired": "This link has expired. If you asked for the change in your profile, ask for it again there; if the host of this instance changed the address, ask the host for a new link.",
         "consumed": "This link has already been used: if your address was changed, sign in with the new one.",
-        "revoked": "This link no longer works: the address was changed again, or another account already uses it. Ask the host of this instance.",
-        "unknown": "This link is not valid: open it again, whole, from the email. If it still fails, ask the host of this instance.",
+        "revoked": "This link no longer works: the request was cancelled or replaced, or the address already belongs to another account. Ask for the change again, or ask the host of this instance.",
+        "unknown": "This link is not valid: open it again, whole, from the email. If it still fails, ask for the change again or ask the host of this instance.",
         "blocked": "This instance is blocked by its hosting provider, so the link cannot be checked now. Open it again once the instance is unblocked.",
         "missing": "This link is incomplete: open it again from the email.",
         "error": "The link could not be checked: try again.",
         "confirm": "Confirm the new address",
-        "notExpected": "If you did not expect this change, close this page: nothing happens."
+        "notExpected": "If you did not expect this change, close this page: nothing happens.",
+        "signin": "To confirm the new address, sign in to the account that asked for the change. You then come back here, and one click is enough.",
+        "signinAction": "Sign in to confirm"
       },
       "changed": "Your email address was changed: sign in again."
     }

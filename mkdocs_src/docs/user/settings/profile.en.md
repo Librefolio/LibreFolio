@@ -29,7 +29,7 @@ Since the other users see your avatar, its picture is **shared**: an image you u
 
 ## ✏️ Username, Email, Account Created
 
-- **Username** and **Email** are editable (unlocked tab required). Changes apply to your login credentials straight away. Changing the email also asks for your current password: see [Changing Your Email](#email-change) below.
+- **Username** and **Email** are editable (unlocked tab required). A new username applies to your login credentials straight away. A new email also asks for your current password and, when your instance can send emails, waits until you confirm it from the new address: see [Changing Your Email](#email-change) below.
 - **Account Created** is a read-only field showing your registration date.
 
 ### 📧 Changing Your Email {: #email-change }
@@ -39,9 +39,24 @@ As soon as the email in the field is another address than your current one, a **
 - **Wrong password**: the tab says *Current password is incorrect*. Your new email stays in its field and only the password is emptied: type it again, then save.
 - **Wrong password, again and again**: wrong passwords here and failed sign-ins with your username count together. After 10 in 15 minutes, the change is refused even with the right password, and so is signing in with your username, for up to 15 minutes. The tab then says *Too many wrong passwords: wait a few minutes and try again.*, and keeps both your new email and the password you typed: save again once the wait is over.
 - **Email refused for another reason**, for example because another account already uses it, as its email or as its username, even with other capitals: the tab shows the reason, and your current email comes back.
-- **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and needs to sign in again. Any password-reset link sent to you before the change stops working, even one still waiting in your old mailbox.
+- **Email saved** (on an instance that cannot send emails with links: when it can, see [Confirming the New Address](#email-change-verified) below, where the address waits for your confirmation): you stay signed in on this device. Every other device signed in to your account is signed out, and needs to sign in again. Any password-reset link sent to you before the change stops working, even one still waiting in your old mailbox.
 - **An email to each address**: when your instance can send emails, LibreFolio writes to the address you had before, to tell you of the change, and to your new address, to confirm that it is now your account's. The first shows nothing of the new address and says what to do if you did not make the change; the second shows nothing of the old one. If one does not arrive, check the spam folder too.
 - **Only the capitals changed**, such as `Anna@example.com` for `anna@example.com`: it is still your address, so the tab asks for no password, you save it straight away, no device is signed out and it stays verified. Only the letters A to Z are matched this way, accented letters are not: `Émile@example.com` and `émile@example.com` are two different addresses.
+
+#### ✅ Confirming the New Address {: #email-change-verified }
+
+When your instance can send emails with links, a new address is **not used until you confirm it**: whoever types an address, it must be reachable, and you must be the one who opens it. (Without email set up, the address changes at once, as described above.)
+
+1. Save the new address with your current password, as above. Your account keeps its current email, and you stay signed in on every device. A blue box appears under the **Email** row with the address waiting, **written in full** (so a typo shows), when its link expires, and two buttons: **Send again** and **Cancel the request**. A toast says where the link went.
+2. LibreFolio emails a link, valid **24 hours**, to the **new** address, and a notice that a change was requested to the address you have now. The notice says nothing of the new address, and says to change your password if it was not you.
+3. Open the link and press **Confirm**. The address becomes the one the link went to, already verified; every device signed in to your account is signed out, and you sign in again with the new address.
+
+**The link confirms only from inside your account.** If you are already signed in to LibreFolio in that browser, one click on **Confirm** is enough. If not, the page says *Sign in to confirm*: sign in with the account that asked for the change, and you come back to the page, where one click confirms. The button also signs out any other account open in that browser, so the right one can sign in. Someone who gets the link by mistake cannot do anything with it: without your account it confirms nothing, and the link stays valid for you.
+
+- **Send again**: a new link to the same address, with a new expiry; the earlier link stops working once the new email has gone. At least 60 seconds apart, and 5 confirmation emails an hour at most.
+- **Cancel the request**: the link stops working and your address stays as it is. The request is also cancelled by changing or resetting your password, by deactivating the account, by asking for another address, and when an administrator revokes the link from the Users tab.
+- **If it does not go**: the tab says so (*The email could not be sent*, or that the instance cannot send emails now, or that too many were asked) and your address is unchanged, with nothing waiting. LibreFolio never falls back to changing the address without the confirmation.
+- **If the address was taken meanwhile**: the link stops working, and *This link no longer works* shows when it is opened.
 
 Changing only your username asks for no password and signs no device out. The new username cannot contain `@`, because when you log in, LibreFolio reads anything with an `@` as an email address: the tab says *The username cannot contain @: to sign in, you can always use your email address.*, and your current username comes back. Spaces, accented letters and signs such as `.`, `_`, `-` or `+` are fine.
 

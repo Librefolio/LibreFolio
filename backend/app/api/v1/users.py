@@ -38,7 +38,7 @@ from backend.app.schemas.users import (
     UserSearchResponse,
     UserUsageRead,
 )
-from backend.app.services.accounts import account_links, address_probe, registration_service, token_service, user_limit_service, user_service
+from backend.app.services.accounts import account_links, address_probe, email_change, registration_service, token_service, user_limit_service, user_service
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.user_service import search_users
@@ -95,7 +95,16 @@ def _invite_read(invite: AccountToken) -> InviteRead:
     return InviteRead(id=invite.id, grants_admin=invite.grants_admin, email=invite.email, created_at=invite.created_at, expires_at=invite.expires_at, created_by_user_id=invite.created_by_user_id)
 
 
-def _admin_user_read(user: User, *, protection: Optional[user_service.ProtectionContext] = None, holds_place: bool = False, pending_setup: bool = False, pending_verification: bool = False, avatar_url: Optional[str] = None) -> AdminUserRead:
+def _admin_user_read(
+    user: User,
+    *,
+    protection: Optional[user_service.ProtectionContext] = None,
+    holds_place: bool = False,
+    pending_setup: bool = False,
+    pending_verification: bool = False,
+    pending_email_change: bool = False,
+    avatar_url: Optional[str] = None,
+) -> AdminUserRead:
     return AdminUserRead(
         id=user.id,
         username=user.username,
@@ -107,6 +116,7 @@ def _admin_user_read(user: User, *, protection: Optional[user_service.Protection
         holds_place=holds_place,
         pending_setup=pending_setup,
         pending_verification=pending_verification,
+        pending_email_change=pending_email_change,
         avatar_url=avatar_url,
     )
 
@@ -170,13 +180,15 @@ def _account_link_read(view: account_links.AccountLinkView) -> AccountLinkRead:
 @router.get("/account-links", response_model=AccountLinkListResponse, summary="List every account link with its state (admin)")
 async def list_account_links(admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> AccountLinkListResponse:
     """Every account link — invitations, password resets, email verifications, the setup link, the owner's email
-    change —, newest first, each with its state: ``open``, ``used``, ``expired`` or ``revoked``. Never a token."""
+    change, the changes of address asked from Profile —, newest first, each with its state: ``open``, ``used``,
+    ``expired`` or ``revoked``. Never a token."""
     return AccountLinkListResponse(items=[_account_link_read(view) for view in await account_links.list_links(session)])
 
 
 @router.delete("/account-links/{link_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Revoke an open account link (admin)")
 async def revoke_account_link(link_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> Response:
-    """Revoke an open link: it stops working at once; an invitation frees its place.
+    """Revoke an open link: it stops working at once; an invitation frees its place; a change of address asked from
+    Profile stops waiting (the account keeps its address).
 
     404 when no such link is open (unknown, used, expired or revoked); 409 ``LINK_NOT_REVOCABLE`` for the setup link of
     the initial administrator (cancelled from its account) and the owner's email change (driven by the host).
@@ -253,12 +265,14 @@ async def list_accounts(admin: Annotated[User, Depends(require_admin)], session:
     pending = await registration_service.pending_admin_ids(session)
     # The accounts waiting for their email verification, live link or expired: the tab badges them (E-7)
     waiting = await email_verification.waiting_ids(session)
+    # The accounts whose change of address asked from Profile waits for its link (project 71): the tab badges them
+    changing = await email_change.pending_ids(session)
     # Each account's avatar, drawn after the row's chevron (N69-4): one query for the whole list
     avatars = await user_service.avatar_urls(session, [user.id for user in users])
     # The profile and the owner's address, read once for the whole list (A-63 (c)): not once per row
     protection = await asyncio.to_thread(user_service.protection_context)
     return AdminUserListResponse(
-        items=[_admin_user_read(user, protection=protection, holds_place=user.id in holders, pending_setup=user.id in pending, pending_verification=user.id in waiting, avatar_url=avatars.get(user.id)) for user in users],
+        items=[_admin_user_read(user, protection=protection, holds_place=user.id in holders, pending_setup=user.id in pending, pending_verification=user.id in waiting, pending_email_change=user.id in changing, avatar_url=avatars.get(user.id)) for user in users],
         usage=_usage_read(await registration_service.user_usage(session)),
     )
 
@@ -321,6 +335,7 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
         holds_place=await email_verification.holds_place(session, user),
         pending_setup=await registration_service.is_pending_admin(session, user),
         pending_verification=await email_verification.awaiting_verification(session, user),
+        pending_email_change=await email_change.pending(session, user.id) is not None,
         avatar_url=avatars.get(user.id),
     )
 

@@ -252,7 +252,8 @@
         "inactive": "Désactivé",
         "protected": "Protégé",
         "pendingSetup": "En attente de configuration",
-        "pendingVerification": "En attente de vérification"
+        "pendingVerification": "En attente de vérification",
+        "pendingEmailChange": "Changement d'e-mail en attente"
       },
       "actions": {
         "deactivate": "Désactiver",
@@ -462,6 +463,19 @@
       "globalHint": "Vous n'avez pas choisi cette préférence : elle suit la valeur par défaut définie par l'administrateur",
       "auto": "Auto",
       "autoHint": "Votre navigateur décide : clair ou sombre, selon le réglage du système"
+    },
+    "emailPending": {
+      "title": "En attente de confirmation :",
+      "body": "Nous avons envoyé un lien à cette adresse. L'e-mail du compte change quand vous le confirmez depuis celle-ci ; d'ici là, il reste celui ci-dessus.",
+      "expires": "Le lien est valable jusqu'au",
+      "resend": "Renvoyer",
+      "cancel": "Annuler la demande",
+      "sent": "Nous vous avons envoyé un lien à {email}. L'adresse change quand vous le confirmez.",
+      "resent": "Un nouveau lien est en route vers {email}.",
+      "cancelled": "Le changement d'e-mail est annulé : l'adresse reste celle d'avant.",
+      "rateLimited": "Trop de demandes : réessayez dans quelques minutes.",
+      "deliveryFailed": "L'e-mail n'a pas pu être envoyé : votre adresse n'a pas changé. Réessayez plus tard.",
+      "unavailable": "Cette instance ne peut pas envoyer d'e-mails pour le moment : le changement ne peut pas être confirmé."
     }
   }
 }

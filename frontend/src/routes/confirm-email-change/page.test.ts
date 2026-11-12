@@ -15,7 +15,15 @@
  *     `unknown`) and the way back to the sign-in; a blocked instance (401 / 423 `instance_blocked`) shows `blocked`; any other
  *     failure is `error`, whose retry asks again for the same token;
  *   - a link pasted into the tab already on the page (`hashchange`) replaces the token and brings the page back to `ready`;
- *   - the root `email-change-page`, `<meta name="referrer" content="no-referrer">`.
+ *   - the root `email-change-page`, `<meta name="referrer" content="no-referrer">`;
+ *   - (release 1.4, project 71, D10) a link asked from Profile is confirmed only with the session of its account: the
+ *     server answers 403 `EMAIL_CHANGE_SIGN_IN_REQUIRED` otherwise. The card says `signin` (`email-change-signin`, the
+ *     button `email-change-signin-action`, no «back to the sign-in»); the token goes into the tab's `sessionStorage`
+ *     (`lf-email-change-link`), never into the address bar; the button signs out first (`POST /auth/logout`, which only
+ *     clears the cookie) and then opens the sign-in with `?redirect=/confirm-email-change`. Back on the page without a
+ *     `#token`, the kept token makes it `ready` and leaves the storage at once; a token in the address wins over a kept
+ *     one. A confirmation or a dead link leaves nothing kept. A 200 at the first click (already signed in) never passes
+ *     through the sign-in. 401 and 423 `instance_blocked` stay `blocked`; a 403 with another code is no `signin`.
  *
  * What runs for real: the page, `linkToken.ts`, `addressBar.ts`, the API wrapper `emailChangeApi.ts`, `AuthPageFrame`
  * and `EmailChangeCard`. Replaced: the generated client's confirm alias, `authFlash.ts` (spies), `$app/navigation`
@@ -25,6 +33,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 const mocks = vi.hoisted(() => ({
     confirm: vi.fn().mockName('zodiosApi.confirm_owner_email_change_api_v1_email_email_change_confirm_post'),
+    logout: vi.fn().mockName('zodiosApi.logout_api_v1_auth_logout_post'),
     goto: vi.fn((..._args: unknown[]) => Promise.resolve()).mockName('goto'),
     replaceState: vi.fn((..._args: unknown[]) => {}).mockName('replaceState'),
     setAuthFlash: vi.fn((_message: string) => {}).mockName('setAuthFlash'),
@@ -47,7 +56,7 @@ vi.mock('$app/navigation', () => ({
 }));
 vi.mock('$lib/api', async (importOriginal) => ({
     ...(await importOriginal<typeof import('$lib/api')>()),
-    zodiosApi: {confirm_owner_email_change_api_v1_email_email_change_confirm_post: mocks.confirm},
+    zodiosApi: {confirm_owner_email_change_api_v1_email_email_change_confirm_post: mocks.confirm, logout_api_v1_auth_logout_post: mocks.logout},
 }));
 vi.mock('$lib/features/auth/authFlash', () => ({setAuthFlash: mocks.setAuthFlash, takeAuthFlash: mocks.takeAuthFlash}));
 vi.mock('$lib/i18n', async (importOriginal) => {
@@ -115,8 +124,13 @@ async function confirmOnPage(): Promise<void> {
 beforeEach(() => {
     assertEffectsRun();
     for (const spy of [mocks.goto, mocks.replaceState, mocks.setAuthFlash, mocks.takeAuthFlash]) spy.mockClear();
+    // A test may give `goto` an implementation of its own (ECP-12): every test starts from the plain one
+    mocks.goto.mockImplementation((..._args: unknown[]) => Promise.resolve());
     mocks.confirm.mockReset();
     mocks.confirm.mockResolvedValue({username: 'owner_admin'});
+    mocks.logout.mockReset();
+    mocks.logout.mockResolvedValue({message: 'Logged out successfully'});
+    window.sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -262,5 +276,144 @@ describe('/confirm-email-change — the page itself (ECP-10)', () => {
         await expectStatus('ready');
         expect(pageRoot()).toBeInTheDocument();
         expect(document.head.querySelector('meta[name="referrer"]')?.getAttribute('content')).toBe('no-referrer');
+    });
+});
+
+describe('/confirm-email-change — sign in to confirm a change asked from Profile (D10, ECP-11…19)', () => {
+    const KEPT = 'lf-email-change-link';
+    const signInRequired = (): Error => refusal(403, {error_code: 'EMAIL_CHANGE_SIGN_IN_REQUIRED', message: 'Sign in'});
+    const LOGIN = '/?redirect=%2Fconfirm-email-change';
+
+    async function reachSignIn(): Promise<void> {
+        mocks.confirm.mockRejectedValueOnce(signInRequired());
+        openAt(`/confirm-email-change#token=${TOKEN}`);
+        render(EmailChangePage);
+        await confirmOnPage();
+        await expectStatus('signin');
+    }
+
+    it('ECP-11: a 403 EMAIL_CHANGE_SIGN_IN_REQUIRED → signin, with its button and no way back to the sign-in; the token kept in the tab, never in the address bar', async () => {
+        await reachSignIn();
+
+        expect(within(card()).getByTestId('email-change-message')).toHaveTextContent('email.emailChange.page.signin');
+        expect(within(card()).getByTestId('email-change-signin')).toBeInTheDocument();
+        expect(within(card()).getByTestId('email-change-signin-action')).toBeInTheDocument();
+        expect(within(card()).queryByTestId('email-change-goto-login')).toBeNull();
+        expect(within(card()).queryByTestId('email-change-retry')).toBeNull();
+        expect(window.sessionStorage.getItem(KEPT)).toBe(TOKEN);
+        // The address bar: the only writer is replaceState (mocked here), always with the bare path
+        expect(mocks.replaceState.mock.calls.map((call) => call[0])).toEqual(['/confirm-email-change']);
+        expect(mocks.goto).not.toHaveBeenCalled();
+        expect(mocks.setAuthFlash).not.toHaveBeenCalled();
+    });
+
+    it('ECP-11b: the same 403 carried by an ApiError (the client wraps some refusals) is signin too', async () => {
+        const {ApiError} = await import('$lib/api');
+        mocks.confirm.mockRejectedValueOnce(new ApiError(403, 'Forbidden', {detail: {error_code: 'EMAIL_CHANGE_SIGN_IN_REQUIRED', message: 'Sign in'}}));
+        openAt(`/confirm-email-change#token=${TOKEN}`);
+        render(EmailChangePage);
+
+        await confirmOnPage();
+
+        await expectStatus('signin');
+        expect(window.sessionStorage.getItem(KEPT)).toBe(TOKEN);
+    });
+
+    it('ECP-12: the button signs out first, then opens the sign-in that comes back to this page', async () => {
+        await reachSignIn();
+        const order: string[] = [];
+        mocks.logout.mockImplementation(async () => void order.push('logout'));
+        mocks.goto.mockImplementation(async (path: unknown) => void order.push(`goto ${String(path)}`));
+
+        await fireEvent.click(within(card()).getByTestId('email-change-signin-action'));
+
+        await waitFor(() => expect(order).toEqual(['logout', `goto ${LOGIN}`]));
+        expect(mocks.logout).toHaveBeenCalledTimes(1);
+        expect(window.sessionStorage.getItem(KEPT)).toBe(TOKEN);
+    });
+
+    it('ECP-13: a sign-out that fails (no session to end, no answer) still opens the sign-in', async () => {
+        await reachSignIn();
+        mocks.logout.mockRejectedValue(refusal(500, 'boom'));
+
+        await fireEvent.click(within(card()).getByTestId('email-change-signin-action'));
+
+        await waitFor(() => expect(mocks.goto).toHaveBeenCalledWith(LOGIN));
+    });
+
+    it('ECP-14: back on the page without a #token, the kept token makes it ready and leaves the tab at once; the click spends it', async () => {
+        window.sessionStorage.setItem(KEPT, TOKEN);
+        openAt('/confirm-email-change');
+
+        render(EmailChangePage);
+
+        await expectStatus('ready');
+        expect(window.sessionStorage.getItem(KEPT)).toBeNull();
+        await settle();
+        expect(mocks.confirm, 'coming back never spends the link by itself').not.toHaveBeenCalled();
+        await fireEvent.click(within(card()).getByTestId('email-change-confirm'));
+        await waitFor(() => expect(mocks.confirm).toHaveBeenCalledWith({token: TOKEN}));
+        await waitFor(() => expect(mocks.goto).toHaveBeenCalledWith('/'));
+        expect(window.sessionStorage.getItem(KEPT)).toBeNull();
+    });
+
+    it('ECP-15: a token in the address wins over a kept one, which is forgotten', async () => {
+        window.sessionStorage.setItem(KEPT, 'chg-OLD_kept');
+        openAt(`/confirm-email-change#token=${NEW_TOKEN}`);
+        render(EmailChangePage);
+
+        await confirmOnPage();
+
+        await waitFor(() => expect(mocks.confirm).toHaveBeenCalledWith({token: NEW_TOKEN}));
+        expect(window.sessionStorage.getItem(KEPT)).toBeNull();
+    });
+
+    it.each(['expired', 'consumed', 'revoked', 'unknown'])('ECP-16: back from the sign-in, a dead link (%s) leaves nothing kept', async (status) => {
+        window.sessionStorage.setItem(KEPT, TOKEN);
+        mocks.confirm.mockRejectedValue(tokenInvalid(status));
+        openAt('/confirm-email-change');
+        render(EmailChangePage);
+
+        await confirmOnPage();
+
+        await expectStatus(status);
+        expect(window.sessionStorage.getItem(KEPT)).toBeNull();
+    });
+
+    it('ECP-17: already signed in with the account (200 at the first click): as before, never through the sign-in, nothing kept', async () => {
+        openAt(`/confirm-email-change#token=${TOKEN}`);
+        render(EmailChangePage);
+
+        await confirmOnPage();
+
+        await waitFor(() => expect(mocks.goto).toHaveBeenCalledWith('/'));
+        expect(mocks.goto).not.toHaveBeenCalledWith(LOGIN);
+        expect(mocks.logout).not.toHaveBeenCalled();
+        expect(window.sessionStorage.getItem(KEPT)).toBeNull();
+    });
+
+    it.each([
+        ['a 403 with another error_code', () => refusal(403, {error_code: 'SOMETHING_ELSE', message: 'no'}), 'error'],
+        ['a 403 with a bare detail', () => refusal(403, 'Forbidden'), 'error'],
+        ['a 401 to a visitor', () => refusal(401, 'Not authenticated'), 'blocked'],
+        ['a 423 instance_blocked', () => refusal(423, {code: 'instance_blocked', message: 'blocked'}), 'blocked'],
+    ])('ECP-18: %s is no signin (%s), and keeps nothing', async (_label, make, expected) => {
+        mocks.confirm.mockRejectedValue(make());
+        openAt(`/confirm-email-change#token=${TOKEN}`);
+        render(EmailChangePage);
+
+        await confirmOnPage();
+
+        await expectStatus(expected);
+        expect(within(card()).queryByTestId('email-change-signin')).toBeNull();
+        expect(window.sessionStorage.getItem(KEPT)).toBeNull();
+    });
+
+    it('ECP-19: the two keys of the sign-in state are sentences in the four catalogues', async () => {
+        const catalogues = await Promise.all([import('$lib/i18n/en.json'), import('$lib/i18n/it.json'), import('$lib/i18n/fr.json'), import('$lib/i18n/es.json')]);
+        for (const catalogue of catalogues) {
+            const page = (catalogue.default as {email: {emailChange: {page: Record<string, string>}}}).email.emailChange.page;
+            for (const key of ['signin', 'signinAction']) expect(typeof page[key] === 'string' && page[key].trim().length > 0, key).toBe(true);
+        }
     });
 });

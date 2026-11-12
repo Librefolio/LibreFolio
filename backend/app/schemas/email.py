@@ -107,13 +107,13 @@ class EmailVerificationConfirmResponse(StrictModel):
 
 
 class EmailChangeConfirmRequest(StrictModel):
-    """POST /email/email-change/confirm: the token of the link emailed to the owner's new address, from its fragment."""
+    """POST /email/email-change/confirm: the token of the link emailed to a new address, from its fragment: the owner's of a managed instance, or the one an account asked for from its profile."""
 
     token: str = Field(..., min_length=1, max_length=256, description="The token of the link, read from #token= in the address")
 
 
 class EmailChangeConfirmResponse(StrictModel):
-    """The owner's address is now the one the link went to; its sessions have ended: it signs in again with the new address."""
+    """The address of the account is now the one the link went to; its sessions have ended: it signs in again with the new address."""
 
     username: str = Field(..., description="The username of the account, to fill in the sign-in form")
 

@@ -1,12 +1,14 @@
 """The emails LibreFolio sends: their texts in the four languages of the interface, and the message with its headers.
 
 Each kind of email has a builder (``build_password_reset``, ``build_password_reset_after_restore``, ``build_invite``, ``build_verification``,
-``build_admin_setup``, ``build_test_message``, ``build_email_changed``, ``build_email_changed_new_address``, ``build_email_change_confirmation``) that returns an ``EmailContent``: a subject, a plain-text part and an
+``build_admin_setup``, ``build_test_message``, ``build_email_changed``, ``build_email_changed_new_address``, ``build_email_change_confirmation``,
+``build_email_change_request_confirmation``, ``build_email_change_requested``) that returns an ``EmailContent``: a subject, a plain-text part and an
 HTML part, in the language asked for (``email_language``: an unknown one is English). The texts live in
 ``templates/<language>.json``, one file per language with the same keys and the same ``$placeholders``; the HTML layout
 in ``templates/layout.html``, whose green header shows the logo (``templates/logo.png``, attached inline by ``compose_message``). Every value that comes from a person — a user name, the name of the instance, who sent an
 invitation — is escaped in the HTML part, and none goes into a subject. The emails a stranger can have sent to an
-address of their choice (a password reset, an email verification, the notice and the confirmation of an email change) carry no text of
+address of their choice (a password reset, an email verification, the notice and the confirmation of an email change, the
+confirmation and the notice of a change asked from Profile) carry no text of
 theirs: their builders take no user name and nothing of the other address (night decision N62). ``compose_message`` adds
 the headers.
 
@@ -48,6 +50,7 @@ class EmailKind(StrEnum):
     TEST = "test"
     EMAIL_CHANGED = "email_changed"
     EMAIL_CHANGE_CONFIRMATION = "email_change_confirmation"
+    EMAIL_CHANGE_REQUEST = "email_change_request"
 
 
 @dataclass(frozen=True)
@@ -256,6 +259,26 @@ def build_email_change_confirmation(*, language: str | None, username: str, link
     lang = email_language(language)
     values = {"username": username, "instance": instance, "duration": _duration(ttl, lang)}
     return _render(EmailKind.EMAIL_CHANGE_CONFIRMATION, lang, greeting="greeting", before=["intro"], after=["expiry", "ignore"], values=values, link=_checked_link(link))
+
+
+def build_email_change_request_confirmation(*, language: str | None, link: str, ttl: timedelta, instance: str) -> EmailContent:
+    """The link that completes a change of address a user asked for from Profile, sent to the NEW address.
+
+    Whoever asks chooses this recipient, so a stranger may read it: no user name and nothing of the old address (N62).
+    It says that the link confirms only from inside the account that asked (D10): a stranger who clicks it can do nothing.
+    """
+    lang = email_language(language)
+    values = {"instance": instance, "duration": _duration(ttl, lang)}
+    return _render(EmailKind.EMAIL_CHANGE_REQUEST, lang, greeting="greeting_anonymous", before=["intro"], after=["expiry", "signin", "ignore"], values=values, link=_checked_link(link))
+
+
+def build_email_change_requested(*, language: str | None, instance: str) -> EmailContent:
+    """The notice to the address an account has now, when a change of address is asked from Profile (D5.1): nothing has
+    changed yet, and changing the password cancels the request. No link, no user name and nothing of the new address (N62).
+    """
+    lang = email_language(language)
+    values = {"instance": instance}
+    return _render(EmailKind.EMAIL_CHANGE_REQUEST, lang, greeting="greeting_anonymous", before=["requested_intro"], after=["requested_advice"], values=values, subject_key="requested_subject")
 
 
 class EmailRecipientError(ValueError):

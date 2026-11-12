@@ -582,6 +582,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/AccountDeletionDialog.test.ts",
             "src/lib/features/settings/tabs/PreferencesTab.test.ts",
             "src/lib/features/settings/tabs/ProfileTab.test.ts",
+            "src/lib/features/settings/PendingEmailChangeBox.test.ts",
             "src/lib/features/settings/ProtectedEmailModal.test.ts",
             "src/lib/features/settings/tabs/AboutTab.test.ts",
             "src/lib/features/settings/tabs/AboutTab.legal.test.ts",
@@ -609,6 +610,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/tabs/GlobalSettingsTab.verification.test.ts",
             "src/lib/features/settings/users/UserRow.verification.test.ts",
             "src/lib/features/settings/users/UserRow.pendingSetup.test.ts",
+            "src/lib/features/settings/users/UserRow.pendingEmailChange.test.ts",
             "src/lib/features/settings/users/UserRow.avatar.test.ts",
             "src/lib/features/settings/users/UserRow.selfHint.test.ts",
             "src/routes/(app)/settings/[...path]/page.tabs.test.ts",
@@ -1290,6 +1292,16 @@ def front_email_send_link(verbose: bool = False, ui: bool = False, headed: bool 
     return _run_playwright("settings/email-send-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_profile_email_change(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the E2E tests of a change of address asked from Profile (project 71): the Profile box, the Users badge, the link page's sign-in."""
+    print_section("Frontend Profile Email Change Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/profile-email-change.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_forgot_password_email(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the «forgot password» by email E2E tests (the sign-in page's card, GET /system/instance and POST /email/password-reset simulated)."""
     print_section("Frontend Forgot Password by Email Tests")
@@ -1752,6 +1764,15 @@ def populate_registry(registry: dict) -> None:
         desc="«Send by email» in Settings › Users (workstream E, lots E4b and E-8): the invitation and reset dialogs on the lane's backend, GET /system/instance answered with the real response and email.links true or false, POST /email/links on a simulated server: offered only with links, an invitation prefilled with its address posting {purpose, token, to} with no language by default, or with language: it chosen in its select, a reset link posting {purpose, token} without to or language, no select, «sent» and email.link.sent, a 429 with its wait in email.link.sendFailed; every invitation and disposable account it creates removed after it",
         prereq="Admin user + test users; registration open on the lane; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
         tests="settings/email-send-link.spec.ts",
+    )
+    add_test(
+        cat,
+        "profile-email-change",
+        front_profile_email_change,
+        name="Profile Email Change E2E",
+        desc="A change of address asked from Profile (project 71), every route simulated per test with page.route and checked against the generated schemas, the fixture user's address never changed: saving a new address gives settings.profile.email.pending, an info toast and the pending box, the field keeping the account's address; Send again and Cancel the request call their routes, cancelled the box goes; on a 375 px phone the box's buttons go under its text; the administrator sees the pending badge on the account and revokes its open link (DELETE /users/account-links/{id}, accounts.link.revoked); the link page answered 403 EMAIL_CHANGE_SIGN_IN_REQUIRED shows signin, its button opens the sign-in with the way back, and after the fixture user signs in the page is back ready and sends the same token",
+        prereq="Test users created; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
+        tests="settings/profile-email-change.spec.ts",
     )
     add_test(
         cat,

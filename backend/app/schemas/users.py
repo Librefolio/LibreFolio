@@ -60,6 +60,7 @@ class AdminUserRead(StrictModel):
         default=False,
         description="Inactive and waiting for its email verification (E-7): a verification link neither used nor revoked, live or expired; holds_place says whether it still holds a place",
     )
+    pending_email_change: bool = Field(default=False, description="A change of address asked from Profile waits for its link: the address is not the account's yet, and the link can be revoked in the account links")
     avatar_url: Optional[str] = Field(default=None, description="The account's avatar from its user settings (an uploaded image or an address); null without one (N69-4)")
 
 
@@ -104,12 +105,12 @@ class AccountLinkRead(StrictModel):
     id: int
     purpose: Literal["invite", "password_reset", "email_verification", "admin_setup", "email_change"] = Field(..., description="What the link is for")
     state: Literal["open", "used", "expired", "revoked"] = Field(..., description="Revoked, used, expired or open, read in that order (a retired link reads as revoked)")
-    revocable: bool = Field(..., description="Open, and of a purpose an administrator revokes from the Users tab (invitation, password reset, email verification)")
+    revocable: bool = Field(..., description="Open, and of a kind an administrator revokes from the Users tab: an invitation, a password reset, an email verification, or a change of address asked from Profile")
     user_id: Optional[int] = Field(None, description="The account the link acts on; null for an invitation")
     username: Optional[str] = Field(None, description="That account's username")
     email: Optional[str] = Field(None, description="The address the link carries, if any: an invitation's, the new address of an email change or of a verification")
     grants_admin: bool = Field(..., description="An invitation that creates an administrator")
-    created_by_user_id: Optional[int] = Field(None, description="The administrator who issued it; null when the instance or the account itself did, or for a deleted account")
+    created_by_user_id: Optional[int] = Field(None, description="Who issued it: an administrator, or the account itself for a change of address asked from Profile; null when the instance did, or for a deleted account")
     created_by_username: Optional[str] = None
     created_at: UTCDateTime
     expires_at: UTCDateTime

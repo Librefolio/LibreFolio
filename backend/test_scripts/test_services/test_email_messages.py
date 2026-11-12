@@ -4,8 +4,8 @@ Every e-mail of release 1.3 — password reset, invitation, e-mail verification,
 test message — is built by one typed builder from the texts of ``templates/{en,it,fr,es}.json`` and the HTML layout
 ``templates/layout.html``, then composed into a ``multipart/alternative`` message. The contract pinned here:
 
-1. ``EMAIL_LANGUAGES`` are the four languages ``default_language`` accepts; ``EmailKind`` has six values (lot E4a adds
-   ``email_changed``);
+1. ``EMAIL_LANGUAGES`` are the four languages ``default_language`` accepts; ``EmailKind`` has eight values (lot E4a adds
+   ``email_changed``, A5-1b ``email_change_confirmation``, project 71 ``email_change_request``);
    ``email_language`` reduces any language tag to one of them (``it-IT``, ``IT``, ``it_IT`` → ``it``), English when it
    is unknown, empty or missing.
 2. ``EmailContent(kind, language, subject, text, html)`` is frozen.
@@ -44,13 +44,23 @@ test message — is built by one typed builder from the texts of ``templates/{en
    receive a username, the old address nor the new one, and every ``new_*`` text names ``$instance`` at most.
 9. No email an untrusted party can address carries text they chose (decision N62, E-9 b and c):
    ``build_password_reset(*, language, link, ttl, instance)``, ``build_verification(*, language, link, ttl,
-   instance)``, ``build_email_changed(*, language, instance)`` and ``build_email_changed_new_address(*, language,
-   instance)`` take no ``username`` — a crafted one, with markup, a
+   instance)``, ``build_email_changed(*, language, instance)``, ``build_email_changed_new_address(*, language,
+   instance)``, ``build_email_change_request_confirmation(*, language, link, ttl, instance)`` and
+   ``build_email_change_requested(*, language, instance)`` take no ``username`` — a crafted one, with markup, a
    link to a site of its writer's, a CR LF, cannot even be passed: a ``TypeError`` — and open with
    ``common.greeting_anonymous`` («Hello,», «Ciao,», «Bonjour,», «Hola:»), as the invitation does; no text of those
-   three sections holds ``$username``, and ``email_changed.intro`` holds ``$instance`` and no ``$address``.
+   sections (``password_reset``, ``email_verification``, ``email_changed``, ``email_change_request``) holds ``$username``, and ``email_changed.intro`` holds ``$instance`` and no ``$address``.
    ``build_admin_setup`` and ``build_test_message`` keep ``username`` and ``common.greeting``: their sender is trusted,
    the operator, or an administrator writing to themselves.
+10. The change of address a user asks for from Profile (project 71, step 2.1; decisions D5.1 and D10): kind
+   ``email_change_request``, two builders. ``build_email_change_request_confirmation(*, language, link, ttl, instance)``
+   goes to the NEW address, which whoever asks chooses, so it greets nobody and shows no username and no address: the
+   anonymous greeting, the intro, the button, then the expiry, the sign-in rule (the link confirms only from inside the
+   account) and what to do when it is not yours. Its link is in it three times: the button, written in full under the
+   button in the HTML, and on a line of its own in the plain text, for mail clients that strip links from buttons.
+   ``build_email_change_requested(*, language, instance)`` goes to the address the account has now, at the request: no
+   link and nothing of the new address, under ``requested_subject``; its advice says that changing the password cancels
+   the request.
 
 Pure: no database, no server, no network; the catalogue is read from the package, never written. The autouse fixture
 that removes inherited ``LIBREFOLIO_SMTP_*`` variables is here as in every module of the e-mail lot, though nothing
@@ -87,6 +97,8 @@ from backend.app.services.email.messages import (
     EmailKind,
     build_admin_setup,
     build_email_change_confirmation,
+    build_email_change_request_confirmation,
+    build_email_change_requested,
     build_email_changed,
     build_email_changed_new_address,
     build_invite,
@@ -122,7 +134,7 @@ OLD_ADDRESS = "zq.old-alice.secret@zq-old-home.example.net"
 #: What may never reach a subject, in any case: the cores of the user's values, and any trace of the link.
 NOT_IN_A_SUBJECT = ("zq-alice", "zq family", "brien", "://", "folio.example.com", TOKEN.lower(), "example.org")
 
-PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED, EMAIL_CHANGE_CONFIRMATION = (
+PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED, EMAIL_CHANGE_CONFIRMATION, EMAIL_CHANGE_REQUEST = (
     EmailKind.PASSWORD_RESET,
     EmailKind.INVITE,
     EmailKind.EMAIL_VERIFICATION,
@@ -130,12 +142,20 @@ PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED, EM
     EmailKind.TEST,
     EmailKind.EMAIL_CHANGED,
     EmailKind.EMAIL_CHANGE_CONFIRMATION,
+    EmailKind.EMAIL_CHANGE_REQUEST,
 )
-ALL_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED, EMAIL_CHANGE_CONFIRMATION)
-LINK_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, EMAIL_CHANGE_CONFIRMATION)
-TTL = {PASSWORD_RESET: timedelta(minutes=30), INVITE: timedelta(days=7), EMAIL_VERIFICATION: timedelta(hours=24), ADMIN_SETUP: timedelta(hours=72), EMAIL_CHANGE_CONFIRMATION: timedelta(days=7)}
+ALL_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED, EMAIL_CHANGE_CONFIRMATION, EMAIL_CHANGE_REQUEST)
+LINK_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, EMAIL_CHANGE_CONFIRMATION, EMAIL_CHANGE_REQUEST)
+TTL = {
+    PASSWORD_RESET: timedelta(minutes=30),
+    INVITE: timedelta(days=7),
+    EMAIL_VERIFICATION: timedelta(hours=24),
+    ADMIN_SETUP: timedelta(hours=72),
+    EMAIL_CHANGE_CONFIRMATION: timedelta(days=7),
+    EMAIL_CHANGE_REQUEST: timedelta(hours=24),
+}
 
-#: Each builder with the arguments this module gives it, the language aside: exactly the keywords it takes. The three
+#: Each builder with the arguments this module gives it, the language aside: exactly the keywords it takes. The
 #: kinds an untrusted party can address take no username, and the notice no new address (decision N62, contract 9).
 BUILDERS = {
     PASSWORD_RESET: (build_password_reset, {"link": LINK, "ttl": TTL[PASSWORD_RESET], "instance": INSTANCE}),
@@ -146,6 +166,8 @@ BUILDERS = {
     EMAIL_CHANGED: (build_email_changed, {"instance": INSTANCE}),
     # A5-1b: the confirmation of the owner's new address goes to an address the HOST chose (an env variable), never to one a user chose: its sender is trusted, like the setup link's
     EMAIL_CHANGE_CONFIRMATION: (build_email_change_confirmation, {"username": USERNAME, "link": LINK, "ttl": TTL[EMAIL_CHANGE_CONFIRMATION], "instance": INSTANCE}),
+    # Project 71: the confirmation of a change asked from Profile goes to an address the USER chose — a stranger may read it (N62)
+    EMAIL_CHANGE_REQUEST: (build_email_change_request_confirmation, {"link": LINK, "ttl": TTL[EMAIL_CHANGE_REQUEST], "instance": INSTANCE}),
 }
 #: The user's values each kind shows.
 SHOWN_VALUES = {
@@ -156,6 +178,7 @@ SHOWN_VALUES = {
     TEST: (USERNAME, INSTANCE),
     EMAIL_CHANGED: (INSTANCE,),
     EMAIL_CHANGE_CONFIRMATION: (USERNAME, INSTANCE),
+    EMAIL_CHANGE_REQUEST: (INSTANCE,),
 }
 #: The parameters of each builder, all keyword-only, and the defaults of the optional ones.
 SIGNATURES = {
@@ -167,8 +190,10 @@ SIGNATURES = {
     "build_email_changed": ({"language", "instance", "by_host"}, {"by_host": False}),
     "build_email_changed_new_address": ({"language", "instance", "by_host"}, {"by_host": False}),
     "build_email_change_confirmation": ({"language", "username", "link", "ttl", "instance"}, {}),
+    "build_email_change_request_confirmation": ({"language", "link", "ttl", "instance"}, {}),
+    "build_email_change_requested": ({"language", "instance"}, {}),
 }
-#: The arguments of each builder that an e-mail shows to its reader (the three kinds an untrusted party can address
+#: The arguments of each builder that an e-mail shows to its reader (the kinds an untrusted party can address
 #: show no username, and the notice no part of the new address: EMM-036 to EMM-041).
 SHOWN_FIELDS = {
     PASSWORD_RESET: ("instance",),
@@ -178,6 +203,7 @@ SHOWN_FIELDS = {
     TEST: ("username", "instance"),
     EMAIL_CHANGED: ("instance",),
     EMAIL_CHANGE_CONFIRMATION: ("username", "instance"),
+    EMAIL_CHANGE_REQUEST: ("instance",),
 }
 SHOWN_FIELD_CASES = [pytest.param(kind, field, id=f"{kind.value}-{field}") for kind, fields in SHOWN_FIELDS.items() for field in fields]
 #: Characters that would break a line of the plain-text part, or hide in it: control characters (Cc), the line and
@@ -286,7 +312,7 @@ def test_the_email_languages_are_those_of_default_language() -> None:
 
 
 def test_the_kinds_of_email_have_their_values() -> None:
-    """EMM-002 — contract 1: seven kinds, a StrEnum of lowercase values (``email_changed`` since lot E4a, ``email_change_confirmation`` since A5-1b)."""
+    """EMM-002 — contract 1: eight kinds, a StrEnum of lowercase values (``email_changed`` since lot E4a, ``email_change_confirmation`` since A5-1b, ``email_change_request`` since project 71)."""
     print_section("EMM-002: EmailKind")
 
     assert issubclass(EmailKind, StrEnum)
@@ -298,8 +324,9 @@ def test_the_kinds_of_email_have_their_values() -> None:
         "TEST": "test",
         "EMAIL_CHANGED": "email_changed",
         "EMAIL_CHANGE_CONFIRMATION": "email_change_confirmation",
+        "EMAIL_CHANGE_REQUEST": "email_change_request",
     }
-    print_success("7 kinds")
+    print_success("8 kinds")
 
 
 @pytest.mark.parametrize(
@@ -944,8 +971,8 @@ def test_a_new_address_cannot_reach_the_notice(new_address: str) -> None:
 CRAFTED_USERNAME = '<a href="http://zq-spam.example/x">zq-claim-your-prize</a>\r\nBcc: zq-spy@zq-spam.example'
 #: Its pieces: any of them in an e-mail would be text its writer chose.
 CRAFTED_PIECES = ("zq-spam.example", "zq-claim-your-prize", "zq-spy")
-#: The kinds an untrusted party can address — a stranger's «forgot password», a sign-up, an email change —: no username.
-UNTRUSTED_KINDS = (PASSWORD_RESET, EMAIL_VERIFICATION, EMAIL_CHANGED)
+#: The kinds an untrusted party can address — a stranger's «forgot password», a sign-up, an email change, a change asked from Profile —: no username.
+UNTRUSTED_KINDS = (PASSWORD_RESET, EMAIL_VERIFICATION, EMAIL_CHANGED, EMAIL_CHANGE_REQUEST)
 #: The kinds whose sender is trusted — the operator, an administrator writing to themselves —: they keep the username.
 TRUSTED_KINDS = (ADMIN_SETUP, TEST)
 #: A paragraph of the HTML body; the first one is where the greeting goes.
@@ -990,7 +1017,7 @@ def test_the_admin_setup_and_the_test_email_still_greet_by_name(kind: EmailKind,
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_no_text_of_the_three_kinds_has_a_place_for_a_username_or_the_new_address(language: str) -> None:
-    """EMM-041 — contract 9: in each catalogue, no text of the sections an untrusted party can address — ``password_reset``, ``email_verification``, ``email_changed`` — holds ``$username``; ``email_changed.intro`` holds no ``$address`` and still holds ``$instance``; and the greeting they open with, ``common.greeting_anonymous``, holds no placeholder at all."""
+    """EMM-041 — contract 9: in each catalogue, no text of the sections an untrusted party can address — ``password_reset``, ``email_verification``, ``email_changed``, ``email_change_request`` — holds ``$username``; ``email_changed.intro`` holds no ``$address`` and still holds ``$instance``; and the greeting they open with, ``common.greeting_anonymous``, holds no placeholder at all."""
     print_section(f"EMM-041: placeholders of {language}.json")
     catalogue = _catalogue(language)
     identifiers = {f"{kind}.{key}": set(string.Template(text).get_identifiers()) for kind in UNTRUSTED_KINDS for key, text in catalogue[kind.value].items()}
@@ -1085,3 +1112,126 @@ def test_the_email_to_the_new_address_carries_no_username_and_no_address(languag
     names = {key: set(string.Template(section[key]).get_identifiers()) for key in NEW_ADDRESS_KEYS}
     assert {key: found for key, found in names.items() if not found <= {"instance"}} == {}, "a new_* text has a place for something else than the instance"
     print_success("no username, no address can be passed; anonymous greeting; $instance alone")
+
+
+# =============================================================================
+# 11. THE CHANGE ASKED FROM PROFILE (project 71, step 2.1)
+# =============================================================================
+
+#: A long link with an ``&``, as an instance behind a proxy path writes it: escaped in the HTML, verbatim in the text.
+LONG_LINK = f"https://folio.example.com/apps/zq-librefolio/confirm-email-change?source=email&lang=fr&utm=zq-{'x' * 60}#token={TOKEN}"
+#: The section of the change asked from Profile, and the keys the confirmation and the notice read.
+REQUEST_SECTION = "email_change_request"
+REQUEST_KEYS = {"subject", "intro", "action", "expiry", "signin", "ignore", "requested_subject", "requested_intro", "requested_advice"}
+#: The visible text of the fallback line's link: what a reader copies when the button does not work.
+_ANCHOR_TEXT = re.compile(r"<a\b[^>]*>(.*?)</a>", re.DOTALL)
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_request_section_has_its_keys_and_names_only_the_instance_and_the_duration(language: str) -> None:
+    """EMM-046 — contract 10: the section ``email_change_request`` holds exactly the keys the two builders read, and its texts have a place for ``$instance`` and ``$duration`` at most — never ``$username`` nor an address: whoever asks for the change chooses the recipient of the confirmation."""
+    print_section(f"EMM-046: the section email_change_request of {language}.json")
+    section = _catalogue(language)[REQUEST_SECTION]
+
+    assert set(section) == REQUEST_KEYS
+    names = {key: set(string.Template(text).get_identifiers()) for key, text in section.items()}
+    assert {key: found for key, found in names.items() if not found <= {"instance", "duration"}} == {}, "a text has a place for something else than the instance and the duration"
+    assert "duration" in names["expiry"] and "instance" in names["intro"], "the intro names the instance, the expiry the duration"
+    print_success(f"{len(section)} keys; $instance and $duration at most")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_profile_confirmation_is_the_greeting_the_intro_the_button_the_expiry_the_signin_rule_and_the_footer(language: str) -> None:
+    """EMM-047 — contract 10: ``build_email_change_request_confirmation`` in each language: kind ``email_change_request``, its language, the section's subject; the text is the anonymous greeting, the intro, the action and the link, the expiry, the sign-in rule (D10), what to do when it is not yours, then the footer — nothing else; the HTML holds each block escaped."""
+    print_section(f"EMM-047: the Profile confirmation in {language}")
+    catalogue = _catalogue(language)
+    section, common = catalogue[REQUEST_SECTION], catalogue["common"]
+    ttl = TTL[EMAIL_CHANGE_REQUEST]
+
+    content = build_email_change_request_confirmation(language=language, link=LINK, ttl=ttl, instance=INSTANCE)
+
+    values = {"instance": INSTANCE, "duration": format_timedelta(ttl, locale=language)}
+    before = [string.Template(text).substitute(values) for text in (common["greeting_anonymous"], section["intro"])]
+    after = [string.Template(section[key]).substitute(values) for key in ("expiry", "signin", "ignore")]
+    footer = string.Template(common["footer"]).substitute(values)
+    assert (content.kind, content.language, content.subject) == (EMAIL_CHANGE_REQUEST, language, section["subject"])
+    assert content.text == "\n\n".join([*before, f"{section['action']}\n{LINK}", *after]) + f"\n\n-- \n{footer}\n"
+    assert all(html.escape(block) in content.html for block in (*before, *after)), "each block, escaped, in the HTML"
+    print_success("anonymous greeting, intro, button, expiry, sign-in rule, ignore, footer")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_profile_confirmation_shows_no_username_and_no_address(language: str) -> None:
+    """EMM-048 — contract 10 (N62): whoever asks for the change chooses the recipient, so a stranger may read the confirmation. ``build_email_change_request_confirmation`` takes no ``username``, no ``old_address`` and no ``new_address`` — a ``TypeError`` naming each —, opens with ``common.greeting_anonymous``, and no part of either address is in its subject, its text or its HTML."""
+    print_section(f"EMM-048: no username and no address in the Profile confirmation, {language}")
+    arguments = {"language": language, "link": LINK, "ttl": TTL[EMAIL_CHANGE_REQUEST], "instance": INSTANCE}
+    for name, value in (("username", CRAFTED_USERNAME), ("old_address", OLD_ADDRESS), ("new_address", NEW_ADDRESS)):
+        with pytest.raises(TypeError, match=name):
+            build_email_change_request_confirmation(**arguments, **{name: value})
+
+    content = build_email_change_request_confirmation(**arguments)
+
+    anonymous = _catalogue(language)["common"]["greeting_anonymous"]
+    assert content.text.split("\n\n", 1)[0] == anonymous, f"the text does not open with {anonymous!r}"
+    assert _PARAGRAPH_HTML.search(content.html).group(1) == html.escape(anonymous), "the HTML does not open with the anonymous greeting"
+    pieces = (OLD_ADDRESS, "zq.old-alice.secret", "zq-old-home.example.net", NEW_LOCAL_PART, NEW_DOMAIN, "***")
+    for name, part in (("subject", content.subject), ("text", content.text), ("html", content.html)):
+        shown = [piece for piece in pieces if piece.casefold() in part.casefold()]
+        assert shown == [], f"the {name} of the Profile confirmation shows {shown}"
+    print_success("no username, no address; anonymous greeting")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_profile_confirmation_carries_its_link_three_times(language: str) -> None:
+    """EMM-049 — contract 10 (developer, 11/11: «some mail providers strip links from buttons»): the link of the Profile confirmation is in it three times — as the button's ``href``, written in full under the button in the HTML (the fallback line: an ``href`` and the visible text of its anchor, both the escaped link), and on a line of its own in the plain text, character for character. Sought by equality, a long link with an ``&``, never by translated text."""
+    print_section(f"EMM-049: the link three times in the Profile confirmation, {language}")
+    escaped = html.escape(LONG_LINK, quote=True)
+
+    content = build_email_change_request_confirmation(language=language, link=LONG_LINK, ttl=TTL[EMAIL_CHANGE_REQUEST], instance=INSTANCE)
+
+    assert _hrefs(content.html).count(LONG_LINK) == 2, f"the button and the fallback line both open the link: {_hrefs(content.html)}"
+    anchors = _ANCHOR_TEXT.findall(content.html)
+    assert anchors.count(escaped) == 1, f"the link is written in full, once, as the text of the fallback line's anchor: {anchors}"
+    assert content.html.count(escaped) == 3, "two hrefs and the written link: the escaped link three times in the HTML"
+    assert LONG_LINK not in content.html, "the link reached the HTML unescaped"
+    assert LONG_LINK in content.text.splitlines(), "the plain text has the link on a line of its own"
+    print_success("button, written under it, own line in the text")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_requested_notice_is_the_greeting_its_intro_its_advice_and_the_footer(language: str) -> None:
+    """EMM-050 — contract 10 (D5.1): ``build_email_change_requested`` in each language: kind ``email_change_request``, its language, the subject ``requested_subject`` (another than the confirmation's); the text is the anonymous greeting, ``requested_intro`` and ``requested_advice`` with the instance, then the footer — nothing else, no link —; the HTML holds each block escaped and no ``href``, no button, not the button's fallback line."""
+    print_section(f"EMM-050: the requested notice in {language}")
+    catalogue = _catalogue(language)
+    section, common = catalogue[REQUEST_SECTION], catalogue["common"]
+
+    content = build_email_change_requested(language=language, instance=INSTANCE)
+
+    values = {"instance": INSTANCE}
+    blocks = [string.Template(text).substitute(values) for text in (common["greeting_anonymous"], section["requested_intro"], section["requested_advice"])]
+    footer = string.Template(common["footer"]).substitute(values)
+    assert (content.kind, content.language, content.subject) == (EMAIL_CHANGE_REQUEST, language, section["requested_subject"])
+    assert content.subject != section["subject"], "the notice has its own subject, not the confirmation's"
+    assert content.text == "\n\n".join(blocks) + f"\n\n-- \n{footer}\n"
+    assert all(html.escape(block) in content.html for block in blocks), "each block, escaped, in the HTML"
+    assert _hrefs(content.html) == [] and "<a " not in content.html, "no link and no button in the HTML"
+    assert common["button_fallback"] not in content.text and html.escape(common["button_fallback"]) not in content.html
+    assert "://" not in content.text
+    assert build_email_change_requested(language="de-DE", instance=INSTANCE) == build_email_change_requested(language="en", instance=INSTANCE)
+    print_success("anonymous greeting, its intro, its advice, footer; no link")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_requested_notice_carries_no_part_of_the_new_address(language: str) -> None:
+    """EMM-051 — contract 10 (N62): the notice to the address the account has now cannot receive the new address — ``new_address`` is no parameter, nor ``username``: a ``TypeError`` naming each — and carries no part of it, in any letter case, nor a mask (``***``), in its subject, its text or its HTML: the new address is a host name its writer chose, which mail clients make a link."""
+    print_section(f"EMM-051: no part of the new address in the requested notice, {language}")
+    for name, value in (("new_address", NEW_ADDRESS), ("username", CRAFTED_USERNAME)):
+        with pytest.raises(TypeError, match=name):
+            build_email_change_requested(language=language, instance=INSTANCE, **{name: value})
+
+    content = build_email_change_requested(language=language, instance=INSTANCE)
+
+    for name, part in (("subject", content.subject), ("text", content.text), ("html", content.html)):
+        shown = [piece for piece in (NEW_LOCAL_PART, NEW_DOMAIN, "***", *CRAFTED_PIECES) if piece.casefold() in part.casefold()]
+        assert shown == [], f"the {name} of the requested notice shows {shown}"
+    print_success("no part of the new address, no username")

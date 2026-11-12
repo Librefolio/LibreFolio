@@ -15,6 +15,8 @@ export interface AdminAccount {
     pending_setup?: boolean;
     /** Inactive and waiting for its email verification, its link live or expired (E-7): badged instead of «Deactivated». */
     pending_verification?: boolean;
+    /** A change of address asked from Profile waits for its link (project 71): the address is not the account's yet; the link is in the account links. */
+    pending_email_change?: boolean;
     /** The account's avatar (an uploaded image or an address), drawn after the row's chevron (N69-4); null without one. */
     avatar_url?: string | null;
 }
