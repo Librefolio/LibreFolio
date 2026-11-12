@@ -28,8 +28,9 @@ from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator.evaluation import evaluator as EV
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactPolicyContractError, ExactScenarioContractError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
-from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, fx_debit_key
-from backend.app.services.pac_allocator.evaluation.scenario import exact_scenario_fingerprint
+from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
 from backend.app.services.pac_allocator.ledger import (
     DuplicatePostingError,
     ExactLedgerError,
@@ -76,6 +77,7 @@ from backend.app.services.pac_allocator.models import (
 )
 from backend.app.services.pac_allocator.normalize import normalize_planner_request
 from backend.app.services.pac_allocator.numeric import ExactRatio
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id, fx_spec
 
 R = ExactRatio
 ZERO = R(0)
@@ -1162,7 +1164,7 @@ def test_policy_view_exposes_complete_exact_vector_with_stable_ids() -> None:
 
     view = build_exact_policy_view(scenario)
 
-    fx_debit_id = exact_decision_id("fx_debit", fx_debit_key("route:buy:usd", "EUR"))
+    fx_debit_id = fx_id(scenario, source="EUR", destination="USD")
     expected = {
         exact_decision_id("funding_transfer", "route:funding:eur"),
         fx_debit_id,
@@ -2028,7 +2030,7 @@ def test_evaluation_tie_ids_and_quanta_align_with_policy_vector() -> None:
         # so a zero fx_debit avoids the confirmed
         # ExactFxEvaluation.route_id models.py bug entirely (no row is
         # ever produced for a zero-quanta pool currency).
-        exact_decision_id("fx_debit", fx_debit_key("route:buy:usd", "EUR")): 0,
+        fx_id(scenario, source="EUR", destination="USD"): 0,
         exact_decision_id("buy_quantum", "route:buy:usd"): 1,
     }
     evaluation = evaluate_exact_candidate(
@@ -2819,10 +2821,7 @@ def test_active_order_applies_fixed_and_bounded_variable_fee_once(
 def test_direct_fx_replay_preserves_direction_and_spread() -> None:
     scenario = _funding_fx_scenario()
     view = build_exact_policy_view(scenario)
-    fx_debit_id = exact_decision_id(
-        "fx_debit",
-        fx_debit_key("route:buy:usd", "EUR"),
-    )
+    fx_debit_id = fx_id(scenario, source="EUR", destination="USD")
     candidate = _candidate(
         view,
         {
@@ -2844,12 +2843,12 @@ def test_direct_fx_replay_preserves_direction_and_spread() -> None:
     debit = _by_id(
         evaluation.postings,
         "posting_id",
-        "fx-debit:route:buy:usd:EUR",
+        f"fx-debit:{fx_spec(scenario, source='EUR', destination='USD').key}",
     )
     credit = _by_id(
         evaluation.postings,
         "posting_id",
-        "fx-credit:route:buy:usd:EUR",
+        f"fx-credit:{fx_spec(scenario, source='EUR', destination='USD').key}",
     )
 
     assert action.source_currency == "EUR"
@@ -2923,10 +2922,7 @@ def _planning_rate_replay(cross_rate: ExactRatio) -> ExactEvaluation:
         _candidate(
             view,
             {
-                exact_decision_id(
-                    "fx_debit",
-                    fx_debit_key("route:buy:usd", "RON"),
-                ): 10_000,
+                fx_id(scenario, source="RON", destination="USD"): 10_000,
                 exact_decision_id("buy_quantum", "route:buy:usd"): 1,
             },
         ),
@@ -2982,19 +2978,8 @@ def test_fx_replay_keeps_a_cross_rate_below_the_triangle() -> None:
     assert _pool_ledger(evaluation, "broker:a", "USD").final_spendable == ZERO
 
 
-def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
-    """A single BUY (route:buy:1) draws from two currency pools (GBP and USD
-    existing cash) at the same Broker, each converting to its own EUR quote
-    currency via a distinct direct fx_rate. A second BUY (route:buy:2)
-    shares the same GBP pool. Asserts one ExactFxEvaluation per (route,
-    source currency) with spread applied once each, and that the shared GBP
-    ledger row nets the combined draw from both BUYs correctly
-    (SPENDABLE_CASH_NONNEGATIVE across combined postings -- already covered
-    by the existing ledger-level check, no separate constraint code needed).
-    A pure BUY-only (PAC) scenario is used deliberately: SELL requires the
-    invest_and_sell two-phase baseline/extension flow, which is orthogonal to
-    what this regression is about (multi-currency pool sharing).
-    """
+def _multi_source_buy_scenario() -> ExactPlannerScenario:
+    """One Broker with GBP and USD cash; route:buy:1 can convert both to EUR, route:buy:2 (the same Broker) shares GBP to EUR."""
     buy_capability = _capability("capability:buy")
     buy_fee = _fee("fee:buy", buy_capability.capability_id, "buy")
     broker = _broker("broker:hub", (buy_capability,), (buy_fee,))
@@ -3040,18 +3025,35 @@ def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
         fx_spread_rate=R(1, 100),
         currency_quantums=(("EUR", CENT), ("GBP", CENT), ("USD", CENT)),
     )
+    return scenario
+
+
+def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
+    """A single BUY (route:buy:1) draws from two currency pools (GBP and USD
+    existing cash) at the same Broker, each converting to its own EUR quote
+    currency via a distinct direct fx_rate. A second BUY (route:buy:2)
+    shares the same GBP pool. Asserts one ExactFxEvaluation per (route,
+    source currency) with spread applied once each, and that the shared GBP
+    ledger row nets the combined draw from both BUYs correctly
+    (SPENDABLE_CASH_NONNEGATIVE across combined postings -- already covered
+    by the existing ledger-level check, no separate constraint code needed).
+    A pure BUY-only (PAC) scenario is used deliberately: SELL requires the
+    invest_and_sell two-phase baseline/extension flow, which is orthogonal to
+    what this regression is about (multi-currency pool sharing).
+    """
+    scenario = _multi_source_buy_scenario()
     view = build_exact_policy_view(scenario)
     candidate = _candidate(
         view,
         {
             # route:buy:1 (2 units @ EUR99 = EUR198): GBP50 -> EUR99 +
             # USD25 -> EUR99, exactly covering its EUR198 cost.
-            exact_decision_id("fx_debit", fx_debit_key("route:buy:1", "GBP")): 5_000,
-            exact_decision_id("fx_debit", fx_debit_key("route:buy:1", "USD")): 2_500,
+            fx_id(scenario, source="GBP", destination="EUR", route_id="route:buy:1"): 5_000,
+            fx_id(scenario, source="USD", destination="EUR", route_id="route:buy:1"): 2_500,
             exact_decision_id("buy_quantum", "route:buy:1"): 2,
             # route:buy:2 (1 unit @ EUR99): GBP50 -> EUR99, sharing the same
             # GBP cash row already partly drawn by route:buy:1.
-            exact_decision_id("fx_debit", fx_debit_key("route:buy:2", "GBP")): 5_000,
+            fx_id(scenario, source="GBP", destination="EUR", route_id="route:buy:2"): 5_000,
             exact_decision_id("buy_quantum", "route:buy:2"): 1,
         },
     )
@@ -4150,10 +4152,7 @@ def test_posted_fee_can_make_native_cash_negative_and_raise_leverage_conflicts()
 def test_native_ledgers_and_accounting_identity_reconcile_all_fx_columns() -> None:
     scenario = _funding_fx_scenario()
     view = build_exact_policy_view(scenario)
-    fx_debit_id = exact_decision_id(
-        "fx_debit",
-        fx_debit_key("route:buy:usd", "EUR"),
-    )
+    fx_debit_id = fx_id(scenario, source="EUR", destination="USD")
     evaluation = evaluate_exact_candidate(
         scenario,
         view,
@@ -4756,10 +4755,7 @@ def test_cancellation_propagates_from_nontrivial_exact_loops(
                         "funding_transfer",
                         "route:funding:eur",
                     ): 15_000,
-                    exact_decision_id(
-                        "fx_debit",
-                        fx_debit_key("route:buy:usd", "EUR"),
-                    ): 100,
+                    fx_id(scenario, source="EUR", destination="USD"): 100,
                     exact_decision_id(
                         "buy_quantum",
                         "route:buy:usd",
@@ -4806,7 +4802,7 @@ _TIE_PRICE = R(33335, 1000)  # 3 x 33.335 = 100.005, a buy debit posted at its c
 _BUY_A = exact_decision_id("buy_quantum", "route:buy:a")
 _BUY_B = exact_decision_id("buy_quantum", "route:buy:b")
 _FUND_EUR = exact_decision_id("funding_transfer", "route:funding:eur")
-_FX_EUR_TO_USD = exact_decision_id("fx_debit", fx_debit_key("route:buy:usd", "EUR"))
+_FX_EUR_TO_USD = fx_id(_funding_fx_scenario(), source="EUR", destination="USD")
 _BUY_USD = exact_decision_id("buy_quantum", "route:buy:usd")
 
 
@@ -5243,3 +5239,37 @@ def test_exact_rounding_top_up_rejects_an_impossible_top_up(override: dict[str, 
 
     with pytest.raises(ValueError):
         pac_models.ExactRoundingTopUp(**{**_VALID_TOP_UP, **override})
+
+
+# ---------------------------------------------------------------------------
+# A2 (project 67): which FX decisions exist is one list, ``reachability.fx_decision_specs``
+# ---------------------------------------------------------------------------
+
+_FX_CONSTRAINT_CODES = frozenset({"FX_DEBIT_CREDIT_COUPLED", "FX_CREDIT_POSITIVE", "FX_NATIVE_QUANTUM", "FX_SOURCE_CASH"})
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(_funding_fx_scenario, id="one-buy-one-pool"),
+        pytest.param(_multi_source_buy_scenario, id="two-buys-share-a-pool"),
+        pytest.param(lambda: _two_pool_scenario(R(10), R(10)), id="no-fx-at-all"),
+    ],
+)
+def test_fx_decisions_come_from_one_list_shared_by_view_and_replay(build) -> None:
+    """Step 1: the view's ``fx_debit`` decisions, the FX constraint refs and the FX evaluations of the replay all name the
+    entries of one list, and only them: no consumer derives an FX decision on its own."""
+    scenario = build()
+    specs = fx_decision_specs(scenario, build_scenario_index(scenario), None)
+    view = build_exact_policy_view(scenario)
+
+    assert len({spec.decision_id for spec in specs}) == len(specs)
+    assert sorted(spec.decision_id for spec in specs) == sorted(item.decision_id for item in view.decisions if item.family == "fx_debit")
+    fx_refs = [ref for ref in view.constraints if ref.code in _FX_CONSTRAINT_CODES]
+    assert {ref.ref_id for ref in fx_refs} == {f"constraint:{code.lower()}:{spec.key}" for spec in specs for code in _FX_CONSTRAINT_CODES}
+    assert all(ref.scope == next(spec.scope for spec in specs if ref.ref_id.endswith(f":{spec.key}")) for ref in fx_refs)
+
+    one_quantum_each = _candidate(view, {spec.decision_id: 1 for spec in specs})
+    evaluation = evaluate_exact_candidate(scenario, view, one_quantum_each)
+    assert {action.decision_id for action in evaluation.fx} <= {spec.decision_id for spec in specs}
+    assert {action.order_route_id for action in evaluation.fx} <= {spec.representative_route_id for spec in specs}
