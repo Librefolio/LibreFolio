@@ -62,7 +62,7 @@ GENERATED_CONTRACT = ROOT / "frontend" / "src" / "lib" / "api" / "tool-contracts
 PLANNER_PARAMETER_BYTES = 131_072
 from backend.app.schemas.pac_allocator.base import AllocationStrictModel, NotProvenReasonCode, PlannerIntegerText, PlannerIssueCode, PlannerPositiveWholeDecimal, PlannerWholeQuantityStep
 from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, ObjectiveSense, OptimalProvenProof, ReadyPlanProof, ReportedFloatingSolverEvidence, SolverStatusWitness
-from backend.app.schemas.pac_allocator.request import NoFeeCap, NoOrderCap, NoOrderMinimum, PlannerSellOrderRouteInput, QuantityOrderCap, WholeQuantityCapability, WholeQuantityMinimum
+from backend.app.schemas.pac_allocator.request import NoFeeCap, NoOrderCap, NoOrderMinimum, PlannerOrderRouteInput, PlannerSellOrderRouteInput, QuantityOrderCap, WholeQuantityCapability, WholeQuantityMinimum
 from backend.app.schemas.pac_allocator.rows import PlannerCatalogAsset, PlannerFundingAction
 from backend.app.schemas.pac_allocator.solutions import DeploymentCoincident, DeploymentUnavailable
 
@@ -377,7 +377,7 @@ def _rebalancer_no_op_result() -> JsonObject:
     for objective_code, value in {
         "fixed_l2": "3500",
         "shortfall": "50",
-        "turnover": "0",
+        "wealth_loss": "0",
         "explicit_cost": "0",
         "active_order_rows": "0",
     }.items():
@@ -796,7 +796,6 @@ def test_six_authoritative_fixtures_strict_roundtrip_with_byte_headroom(
         assert all("gross_amount_requested" not in route for route in wire["order_routes"])
     if name == "rebalancer_plan_result.medium.v2.json":
         blocking_codes = {code for evidence in wire["primary_solution"]["sell_irreducibility"] for check in evidence["checks"] for code in check["blocking_issue_codes"]}
-        assert blocking_codes == {"portfolio_rebalancer.sell_irreducibility_unresolved"}
         assert blocking_codes <= set(EXPECTED_PLANNER_ISSUE_CODES)
 
 
@@ -1111,7 +1110,6 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.fee_floor_exceeds_cap",
     "allocation.fee_rate_out_of_range",
     "allocation.fee_schedule_missing",
-    "allocation.fiscal_currency_missing",
     "allocation.funding_cap_negative",
     "allocation.fx_rate_inconsistent",
     "allocation.fx_rate_missing",
@@ -1140,36 +1138,41 @@ EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.provenance_stale_confirmed",
     "allocation.quote_base_quantity_missing",
     "allocation.reference_not_found",
-    "allocation.required_buy_sell_conflict",
-    "allocation.required_min_notional_unfunded",
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
     "allocation.solver_limit_no_incumbent",
     "allocation.target_total_not_one",
     "allocation.target_weight_missing",
     "allocation.target_weight_out_of_range",
-    "allocation.tax_netting_unsupported",
     "allocation.valuation_currency_missing",
     "allocation.wac_missing",
     "allocation.zero_selected_funding",
     "pac_allocator.cash_weight_unsupported",
     "pac_allocator.initial_holding_forbidden",
     "pac_allocator.sell_forbidden",
-    "portfolio_rebalancer.baseline_incumbent_missing",
     "portfolio_rebalancer.carried_loss_negative",
     "portfolio_rebalancer.cost_basis_negative",
     "portfolio_rebalancer.holdings_missing",
     "portfolio_rebalancer.nonpositive_current_portfolio",
     "portfolio_rebalancer.sell_fee_missing",
     "portfolio_rebalancer.sell_inventory_exceeded",
-    "portfolio_rebalancer.sell_irreducibility_unresolved",
-    "portfolio_rebalancer.sell_to_idle_forbidden",
+    "portfolio_rebalancer.tax_basket_unknown",
+    "portfolio_rebalancer.tax_data_missing",
     "portfolio_rebalancer.tax_rate_missing",
     "portfolio_rebalancer.tax_rate_out_of_range",
     "portfolio_rebalancer.withholding_missing",
 )
 
 SUPERSEDED_PLANNER_ISSUE_CODES = (
+    # Contract 2.0.0 (A4, project 67): M19 takes the route's «required minimum» out; D14 takes out the codes of the two-phase
+    # SELL and of the old fiscal rows (a fiscal currency per Asset, netting across currencies), which B3 and C2 rebuild.
+    "allocation.required_min_notional_unfunded",
+    "allocation.required_buy_sell_conflict",
+    "allocation.tax_netting_unsupported",
+    "allocation.fiscal_currency_missing",
+    "portfolio_rebalancer.baseline_incumbent_missing",
+    "portfolio_rebalancer.sell_irreducibility_unresolved",
+    "portfolio_rebalancer.sell_to_idle_forbidden",
     "allocation.target_weights_not_one",
     "allocation.reference_unknown",
     "allocation.selected_cash_exceeds_available",
@@ -1217,7 +1220,7 @@ def _catalogue_issue_specimen(code: str) -> JsonObject:
 
 
 def test_planner_issue_code_catalogue_is_exact_closed_and_sorted() -> None:
-    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 82
+    assert len(EXPECTED_PLANNER_ISSUE_CODES) == 77
     assert EXPECTED_PLANNER_ISSUE_CODES == tuple(sorted(EXPECTED_PLANNER_ISSUE_CODES))
     assert get_args(PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
     assert PLANNER_ISSUE_CODE_ADAPTER.json_schema()["enum"] == list(EXPECTED_PLANNER_ISSUE_CODES)
@@ -1232,6 +1235,12 @@ def test_every_closed_planner_issue_code_strictly_roundtrips_with_typed_path(cod
 
 def test_well_shaped_future_planner_issue_code_is_rejected() -> None:
     _reject(PLANNER_ISSUE_ADAPTER, _catalogue_issue_specimen("allocation.future_code"))
+
+
+def test_required_min_notional_unfunded_is_not_a_code() -> None:
+    """M19: the route's «required minimum» is gone, so the code that said it could not be funded is gone with it."""
+    assert "allocation.required_min_notional_unfunded" not in get_args(PlannerIssueCode)
+    _reject(PLANNER_ISSUE_ADAPTER, _catalogue_issue_specimen("allocation.required_min_notional_unfunded"))
 
 
 @pytest.mark.parametrize("code", SUPERSEDED_PLANNER_ISSUE_CODES)
@@ -1262,10 +1271,7 @@ NON_ISSUE_REASON_CATALOGUE_CASES = (
     ),
     pytest.param(
         "NotProvenReasonCode",
-        (
-            "allocation.exact_proof_not_established",
-            "portfolio_rebalancer.sell_irreducibility_unresolved",
-        ),
+        ("allocation.exact_proof_not_established",),
         ((NotProvenProof, "reason_code"),),
         id="not-proven",
     ),
@@ -1664,7 +1670,6 @@ DOWNSTREAM_NORMALIZER_ISSUE_CASES = (
     _normalizer_issue_case("allocation.fx_spread_rate_out_of_range", "invalid"),
     _normalizer_issue_case("portfolio_rebalancer.tax_rate_missing", "needs_input", TAX_RATE_ISSUE_PATH),
     _normalizer_issue_case("portfolio_rebalancer.tax_rate_out_of_range", "invalid", TAX_RATE_ISSUE_PATH),
-    _normalizer_issue_case("allocation.fiscal_currency_missing", "needs_input"),
     _normalizer_issue_case("allocation.wac_missing", "needs_input"),
     _normalizer_issue_case("allocation.fx_rate_missing", "needs_input", FX_RATE_ISSUE_PATH),
     # FX conversion fix: once every needed pair is present, the rates are checked for coherence.
@@ -1822,7 +1827,6 @@ def test_compact_pac_request_fills_every_omitted_default_as_a_model_instance() -
     assert model.funding_routes == []
     assert _select(model, ("brokers", ("broker_id", "broker-one"))).fee_schedules == []
     route = _select(model, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")))
-    assert type(route.required_minimum) is NoOrderMinimum
     assert route.execution_margin_rate == "0"
     assert route.fee_schedule_id is None
     # What the twin does say is kept as sent.
@@ -1856,7 +1860,6 @@ def test_compact_pac_request_fills_every_omitted_default_as_a_model_instance() -
     filled_route = _select(model, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")))
     assert filled_route.priority == 0
     assert type(filled_route.minimum_if_active) is NoOrderMinimum
-    assert type(filled_route.required_minimum) is NoOrderMinimum
     assert type(filled_route.cap) is NoOrderCap
     assert filled_route.execution_margin_rate == "0"
 
@@ -1993,7 +1996,6 @@ def test_input_defaults_are_optional_in_validation_schema_and_required_in_serial
 _ROUTE_SCHEMA_DEFAULTS: dict[str, Any] = {
     "priority": 0,
     "minimum_if_active": {"kind": "none"},
-    "required_minimum": {"kind": "none"},
     "cap": {"kind": "none"},
     "execution_margin_rate": "0",
 }
@@ -2068,7 +2070,7 @@ def test_compact_twin_is_min_without_its_defaults_and_a_fixed_point_of_the_compa
         expected.pop(key)
     _find(expected["brokers"], "broker_id", "broker-one").pop("fee_schedules")
     route = _find(expected["order_routes"], "route_id", "route-asset-one-broker-one-buy")
-    for key in ("required_minimum", "execution_margin_rate", "fee_schedule_id"):
+    for key in ("execution_margin_rate", "fee_schedule_id"):
         route.pop(key)
     for entry in expected["target_weights"]:
         for key in ("minimum", "maximum"):
@@ -2117,6 +2119,19 @@ def test_target_entry_shapes_the_contract_does_not_define_are_rejected(entry: Js
 
     with pytest.raises(ValidationError):
         PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+
+
+@pytest.mark.parametrize(("adapter", "request_factory"), [pytest.param(PAC_PLAN_INPUT_ADAPTER, _pac_request, id="pac"), pytest.param(REBALANCER_PLAN_INPUT_ADAPTER, _rebalancer_invest_and_sell_request, id="rebalancer")])
+def test_pac_request_refuses_required_minimum(adapter: TypeAdapter[Any], request_factory: Callable[[], JsonObject]) -> None:
+    """M19: a route no longer carries a «required minimum» (the field of «Acquisto obbligatorio»). Anyone who wants a buy obliged
+    uses the minimum of the entry (A3), so the schema, which forbids unknown fields, refuses the old one."""
+    payload = request_factory()
+    payload["order_routes"][0]["required_minimum"] = {"kind": "none"}
+
+    with pytest.raises(ValidationError):
+        adapter.validate_json(_wire(payload), strict=True)
+
+    assert "required_minimum" not in PlannerOrderRouteInput.model_fields
 
 
 def test_pac_request_excludes_holdings_sell_context_and_sell_routes() -> None:
@@ -2274,13 +2289,16 @@ INFEASIBILITY_PROOF_ADAPTER = TypeAdapter(InfeasibilityProvenProof)
 
 VALUATION_OBJECTIVE_CASES = (
     pytest.param("fixed_l2", {"kind": "valuation_money_squared", "currency_code": "EUR"}, id="fixed-l2"),
-    pytest.param("turnover", {"kind": "valuation_money", "currency_code": "EUR"}, id="turnover"),
+    pytest.param("plan_score", {"kind": "valuation_money", "currency_code": "EUR"}, id="plan-score"),
+    pytest.param("target_distance", {"kind": "valuation_money_squared", "currency_code": "EUR"}, id="target-distance"),
+    pytest.param("wealth_loss", {"kind": "valuation_money", "currency_code": "EUR"}, id="wealth-loss"),
     pytest.param("explicit_cost", {"kind": "valuation_money", "currency_code": "EUR"}, id="explicit-cost"),
     pytest.param("incremental_cost", {"kind": "valuation_money", "currency_code": "EUR"}, id="incremental-cost"),
 )
 
 DISCRETE_OBJECTIVE_CASES = (
     pytest.param("split_asset_count", {"kind": "count"}, id="split-asset-count"),
+    pytest.param("operation_count", {"kind": "count"}, id="operation-count"),
     pytest.param("active_order_rows", {"kind": "count"}, id="active-order-rows"),
     pytest.param("incremental_order_rows", {"kind": "count"}, id="incremental-order-rows"),
     pytest.param("route_priority", {"kind": "ordinal_penalty"}, id="route-priority"),
@@ -2474,91 +2492,8 @@ def test_objective_sense_schema_explicitly_preserves_min_and_max() -> None:
         assert get_args(model_type.model_fields["sense"].annotation) == expected
 
 
-SELL_IRREDUCIBILITY_UNRESOLVED = "portfolio_rebalancer.sell_irreducibility_unresolved"
-
-
-def _sell_irreducibility_issue(code: str, *, kind: str = "proof", severity: str = "warning") -> JsonObject:
-    issue = _catalogue_issue_specimen(code)
-    issue["severity"] = severity
-    issue["kind"] = kind
-    return issue
-
-
-def _sell_irreducibility_not_proven_result(
-    factory: PayloadFactory,
-    *,
-    policy: str | None = None,
-    issue_code: str | None = SELL_IRREDUCIBILITY_UNRESOLVED,
-    issue_kind: str = "proof",
-    issue_severity: str = "warning",
-    stop_reason: str = "completed",
-) -> JsonObject:
-    payload = factory()
-    if policy is not None:
-        payload["scenario_basis"]["policy"] = policy
-    payload["proof"] = {
-        "kind": "not_proven",
-        "reason_code": SELL_IRREDUCIBILITY_UNRESOLVED,
-    }
-    payload["issues"] = [] if issue_code is None else [_sell_irreducibility_issue(issue_code, kind=issue_kind, severity=issue_severity)]
-    payload["stop_reason"] = stop_reason
-    if stop_reason != "completed":
-        payload["solver_evidence"] = {"kind": "reported_floating", "stages": [_reported_solver_stage(status="unfinished")]}
-    return payload
-
-
-@pytest.mark.parametrize("stop_reason", ("completed", "time_limit", "node_limit"))
-def test_rebalancer_sell_irreducibility_not_proven_binding_is_orthogonal_to_valid_stop_reason(stop_reason: str) -> None:
-    payload = _sell_irreducibility_not_proven_result(_rebalancer_incumbent_result, stop_reason=stop_reason)
-    model, _emitted = _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, payload)
-    wire = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
-
-    reason_code = wire["proof"]["reason_code"]
-    assert reason_code == SELL_IRREDUCIBILITY_UNRESOLVED
-    assert [issue["code"] for issue in wire["issues"]] == [reason_code]
-    assert wire["issues"][0]["kind"] == "proof"
-    assert wire["issues"][0]["severity"] == "warning"
-    assert wire["stop_reason"] == stop_reason
-    assert wire["solver_evidence"]["kind"] == "reported_floating"
-    statuses = {stage["status"] for stage in wire["solver_evidence"]["stages"]}
-    assert statuses == ({"finished"} if stop_reason == "completed" else {"unfinished"})
-
-
-SELL_IRREDUCIBILITY_BINDING_REJECTION_CASES = (
-    pytest.param(PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result, None, SELL_IRREDUCIBILITY_UNRESOLVED, "proof", "warning", id="pac"),
-    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_no_op_result, "invest_only", SELL_IRREDUCIBILITY_UNRESOLVED, "proof", "warning", id="rebalancer-invest-only"),
-    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result, None, None, "proof", "warning", id="missing-issue"),
-    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result, None, "allocation.no_positive_order_fundable", "proof", "warning", id="wrong-code"),
-    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result, None, SELL_IRREDUCIBILITY_UNRESOLVED, "constraint", "warning", id="wrong-kind"),
-    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result, None, SELL_IRREDUCIBILITY_UNRESOLVED, "proof", "error", id="error-severity"),
-    pytest.param(REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result, None, SELL_IRREDUCIBILITY_UNRESOLVED, "proof", "info", id="info-severity"),
-)
-
-
-@pytest.mark.parametrize(
-    ("adapter", "factory", "policy", "issue_code", "issue_kind", "issue_severity"),
-    SELL_IRREDUCIBILITY_BINDING_REJECTION_CASES,
-)
-def test_sell_irreducibility_not_proven_reason_rejects_invalid_product_policy_or_issue_binding(
-    adapter: TypeAdapter[Any],
-    factory: PayloadFactory,
-    policy: str | None,
-    issue_code: str | None,
-    issue_kind: str,
-    issue_severity: str,
-) -> None:
-    payload = _sell_irreducibility_not_proven_result(
-        factory,
-        policy=policy,
-        issue_code=issue_code,
-        issue_kind=issue_kind,
-        issue_severity=issue_severity,
-    )
-    _reject(adapter, payload)
-
-
 OPTIMAL_PROOF_PRODUCT_CASES = (
-    pytest.param("PAC", PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result, "turnover", id="pac"),
+    pytest.param("PAC", PAC_PLAN_OUTPUT_ADAPTER, _pac_no_op_result, "wealth_loss", id="pac"),
     pytest.param("Rebalancer", REBALANCER_PLAN_OUTPUT_ADAPTER, _rebalancer_incumbent_result, "route_priority", id="rebalancer"),
 )
 OPTIMAL_PROOF_MUTATION_CASES = (
@@ -3761,18 +3696,21 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
     _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
 
 
+# Contract 2.0.0 (A4, project 67), refrozen after step 4 and the fingerprint fix (5b): conversions without fx actions, target entries with limits,
+# no required minimum, the new issue and objective codes, and an empty request_fingerprint on a failure. The columns of step 5 (transfers, foreign
+# withholding) move it once more.
 # Rounding direction fix: recomputed for description-only changes (``PlannerRoundingTopUp`` docstring, ``rounding_top_ups`` description, new ``rounding_bound`` description).
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "cd7e7ef70cc5df5141299eb4be6489d83b80e9df8533509bfe9e3896c2e2c365",
+        "890ab8b6b3d8f53f1c2b76c598c9e9937161bfd0f530b9ea78eb65e4a714dd1b",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "9440a5e6986846e30c4b96225f0701a84fd4edac093c5664ba9b5089110debba",
+        "126781596e0a74fe7894aaf26517ae672b3626fd053acf0a5089c615762b530c",
         id="rebalancer",
     ),
 )

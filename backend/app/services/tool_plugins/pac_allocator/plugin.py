@@ -134,8 +134,8 @@ def _log_engine_failure(exc: Exception, execution_id: str) -> None:
 
 @register_plugin(ToolPluginRegistry)
 class PacAllocatorTool(ToolPlugin):
-    contract_version = "1.0.0"
-    implementation_version = "1.0.0"
+    contract_version = "2.0.0"
+    implementation_version = "2.0.0"
 
     services = (
         ToolService(
@@ -149,7 +149,7 @@ class PacAllocatorTool(ToolPlugin):
             ui=ToolUIDescriptor(
                 kind="custom",
                 component_key="pac-allocator",
-                version="1.0.0",
+                version="2.0.0",
             ),
             documentation=ToolDocumentation(
                 path="user/tools/pac-allocator/",
