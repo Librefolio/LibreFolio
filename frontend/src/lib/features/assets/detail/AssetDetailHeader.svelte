@@ -52,63 +52,68 @@
     const hint = $derived(externalHref ? $t('assetDetail.externalLinkHint', {values: {name: badgeName, site: siteOf(externalHref)}}) : undefined);
 </script>
 
-<div class="flex items-center gap-3" data-testid="asset-detail-header" use:guideAnchor={'asset.detail.header'}>
+<div class="flex flex-wrap sm:flex-nowrap items-start lg:items-center gap-x-3 gap-y-2" data-testid="asset-detail-header" use:guideAnchor={'asset.detail.header'}>
     <button class="p-2 rounded-lg hover:bg-lf-hover text-lf-muted transition-colors focus-visible:outline-lf-focus" data-testid="asset-detail-back-btn" onclick={() => goBack('/assets')} title={$t('assetDetail.backToList')} aria-label={$t('assetDetail.backToList')}>
         <ArrowLeft size={20} />
     </button>
 
     {#if assetInfo}
         <!-- min-w-0 on both wrappers: without it their minimum width is the whole title on one
-             line, so a long name widened the page (below ~341 px, and just above 1024 px where
-             the title loses its max width); the title itself scrolls (scrollOnOverflow). -->
-        <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0" data-testid="asset-detail-info">
-            <div class="flex items-center gap-3 min-w-0">
+             line, so a long name widened the page; the title itself scrolls (scrollOnOverflow).
+             Below lg the badges sit on a row of their own under the icon and name, and the name
+             may use the whole width (max-w-full); from lg up it is one row, as it always was. -->
+        <div class="flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-3 min-w-0" data-testid="asset-detail-info">
+            <div class="flex items-center gap-3 min-w-0" data-testid="asset-detail-identity">
                 <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
                 <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-lf-success' : 'bg-lf-danger'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('common.active') : $t('assets.status.archived')}></span>
-                <h2 use:scrollOnOverflow class="{overflowScrollTextClass} text-xl font-bold text-lf-primary max-w-[15ch] sm:max-w-[30ch] lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
+                <h2 use:scrollOnOverflow data-testid="asset-detail-name" class="{overflowScrollTextClass} text-xl font-bold text-lf-primary max-w-full lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
             </div>
 
-            <div class="flex items-center gap-2 flex-wrap ml-0 sm:ml-0">
-                {#if assetInfo.asset_type}
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-lf-neutral text-lf-secondary">
-                        <img src={getAssetTypeIconUrl(assetInfo.asset_type)} alt="" class="w-3.5 h-3.5" />
-                        {$t(`assets.types.${assetInfo.asset_type}`)}
-                    </span>
-                {/if}
+            <div class="flex items-center gap-2 flex-wrap">
+                <div class="flex items-center gap-2 flex-nowrap" data-testid="asset-detail-badges-what">
+                    {#if assetInfo.asset_type}
+                        <span data-testid="asset-detail-type-badge" class="{badgeBase} bg-lf-neutral text-lf-secondary">
+                            <img src={getAssetTypeIconUrl(assetInfo.asset_type)} alt="" class="w-3.5 h-3.5" />
+                            {$t(`assets.types.${assetInfo.asset_type}`)}
+                        </span>
+                    {/if}
 
-                <span class="text-lg emoji-flag">{currencyFlag}</span>
-                <span class="text-sm font-mono text-lf-muted">{assetInfo.currency}</span>
-                {#if (assetInfo.tx_count ?? 0) > 0}
-                    <a href={transactionsHref} data-testid="asset-detail-transactions-link" class="{badgeBase} border border-lf-focus text-lf-link hover:bg-lf-selected focus-visible:outline-lf-focus">
-                        <ArrowRightLeft size={12} />
-                        {$t('transactions.title')}
-                        <span class="font-bold" data-testid="asset-detail-transactions-count">{assetInfo.tx_count}</span>
-                    </a>
-                {/if}
+                    <span class="text-lg emoji-flag">{currencyFlag}</span>
+                    <span class="text-sm font-mono text-lf-muted" data-testid="asset-detail-currency">{assetInfo.currency}</span>
+                </div>
+                <div class="flex items-center gap-2 flex-nowrap max-w-full min-w-0" data-testid="asset-detail-badges-where">
+                    {#if (assetInfo.tx_count ?? 0) > 0}
+                        <a href={transactionsHref} data-testid="asset-detail-transactions-link" class="{badgeBase} border border-lf-focus text-lf-link hover:bg-lf-selected focus-visible:outline-lf-focus">
+                            <ArrowRightLeft size={12} />
+                            {$t('transactions.title')}
+                            <span class="font-bold" data-testid="asset-detail-transactions-count">{assetInfo.tx_count}</span>
+                        </a>
+                    {/if}
 
-                <svelte:element
-                    this={externalHref ? 'a' : 'span'}
-                    data-testid="asset-detail-provider-badge"
-                    data-linked={externalHref ? 'true' : 'false'}
-                    href={externalHref ?? undefined}
-                    target={externalHref ? '_blank' : undefined}
-                    rel={externalHref ? 'noopener noreferrer' : undefined}
-                    title={hint}
-                    aria-label={hint}
-                    class="{badgeBase} min-w-0 max-w-full {assetInfo.provider_code ? 'bg-lf-success-soft text-lf-success-on-soft' : 'bg-lf-warning-soft text-lf-warning-on-soft'} {externalHref ? 'hover:underline focus-visible:outline-lf-focus' : ''}"
-                >
-                    {#if assetInfo.provider_code}
-                        {#if providerIconUrl}
-                            <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
+                    <svelte:element
+                        this={externalHref ? 'a' : 'span'}
+                        data-testid="asset-detail-provider-badge"
+                        data-linked={externalHref ? 'true' : 'false'}
+                        href={externalHref ?? undefined}
+                        target={externalHref ? '_blank' : undefined}
+                        rel={externalHref ? 'noopener noreferrer' : undefined}
+                        title={hint}
+                        aria-label={hint}
+                        class="{badgeBase} min-w-0 max-w-full {assetInfo.provider_code ? 'bg-lf-success-soft text-lf-success-on-soft' : 'bg-lf-warning-soft text-lf-warning-on-soft'} {externalHref ? 'hover:underline focus-visible:outline-lf-focus' : ''}"
+                    >
+                        {#if assetInfo.provider_code}
+                            {#if providerIconUrl}
+                                <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
+                            {/if}
+                            {badgeName}
+                        {:else}
+                            ✏️ {badgeName}
                         {/if}
-                        {badgeName}
-                    {:else}
-                        ✏️ {badgeName}
-                    {/if}
-                    {#if externalHref}
-                        <ExternalLink size={12} class="shrink-0" />
-                    {/if}
-                </svelte:element>
+                        {#if externalHref}
+                            <ExternalLink size={12} class="shrink-0" />
+                        {/if}
+                    </svelte:element>
+                </div>
                 <LiveUpdatesStatus state={liveUpdatesState} />
             </div>
         </div>

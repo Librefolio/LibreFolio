@@ -382,7 +382,7 @@ def populate_registry(registry: dict) -> None:
         "asset-browse",
         front_asset_browse,
         name="Asset Browse",
-        desc="Asset detail ‹ n/N › prev/next: follows the list left behind (searched grid in DOM order, table sorted by name), the default order on a direct entry, one Back to the list (header and browser), disabled at the edges, the query kept; at 390/360 px the nav fits and the page does not scroll sideways — K step 16, item 2",
+        desc="Asset detail ‹ n/N › prev/next: follows the list left behind (searched grid in DOM order, table sorted by name), the default order on a direct entry, one Back to the list (header and browser), disabled at the edges, the query kept; at 390/360 px the nav fits and the page does not scroll sideways — K step 16, item 2; header rows at 768 (badges under the name) and 1280 (one row) — project 71 block 1",
         tests="assets/asset-browse.spec.ts",
     )
     add_test(

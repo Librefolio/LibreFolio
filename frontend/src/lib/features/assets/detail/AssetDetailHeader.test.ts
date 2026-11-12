@@ -153,3 +153,20 @@ describe('AssetDetailHeader — provider badge as the link', () => {
         expect(badge().getAttribute('aria-label')).toContain('not a url');
     });
 });
+
+describe('AssetDetailHeader — the two badge groups', () => {
+    it('H-11 "what it is" and "where it goes" hold their badges; the pause pill and the name stand apart', () => {
+        mount(info({tx_count: 4, provider_code: 'synthprov'}), {liveUpdatesState: 'paused-idle'});
+        const what = screen.getByTestId('asset-detail-badges-what');
+        const where = screen.getByTestId('asset-detail-badges-where');
+        expect(what).toContainElement(screen.getByTestId('asset-detail-type-badge'));
+        expect(what).toContainElement(screen.getByTestId('asset-detail-currency'));
+        expect(where).toContainElement(screen.getByTestId('asset-detail-transactions-link'));
+        expect(where).toContainElement(screen.getByTestId('asset-detail-provider-badge'));
+        const pill = screen.getByTestId('live-updates-status');
+        expect(what.contains(pill)).toBe(false);
+        expect(where.contains(pill)).toBe(false);
+        expect(screen.getByTestId('asset-detail-name').tagName).toBe('H2');
+        expect(screen.getByTestId('asset-detail-identity')).toContainElement(screen.getByTestId('asset-detail-name'));
+    });
+});
