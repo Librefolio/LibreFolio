@@ -298,34 +298,6 @@ def ceil_to_quantum_units(value: ExactRatio, quantum: ExactRatio) -> int:
     return -((-scaled_numerator) // scaled_denominator)
 
 
-def calculate_fee(
-    *,
-    notional: ExactRatio,
-    fixed: ExactRatio,
-    rate: ExactRatio,
-    floor: ExactRatio,
-    cap: ExactRatio | None,
-) -> ExactRatio:
-    """Return the exact pre-posting fee for a caller-supplied fee schedule."""
-    _require_nonnegative("notional", notional)
-    _require_nonnegative("fixed", fixed)
-    _require_nonnegative("rate", rate)
-    _require_nonnegative("floor", floor)
-    if cap is not None:
-        _require_nonnegative("cap", cap)
-        if floor > cap:
-            raise InvalidEconomicInputError("fee floor must not exceed fee cap")
-    if notional == _EXACT_ZERO:
-        return _EXACT_ZERO
-
-    variable = rate * notional
-    if variable < floor:
-        variable = floor
-    if cap is not None and variable > cap:
-        variable = cap
-    return fixed + variable
-
-
 def calculate_effective_fx_rate(
     *,
     approved_rate: ExactRatio,
@@ -446,15 +418,6 @@ def decimal_text(value: Decimal) -> str:
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return "0" if text in ("0", "-0") else text
-
-
-def exact_holding_value(
-    quantity: Decimal,
-    raw_price: Decimal,
-    quote_base_quantity: int,
-) -> Decimal:
-    """Preserve exact products before applying the integer quote basis."""
-    return quantity * raw_price / Decimal(quote_base_quantity)
 
 
 def ratio_approximation(numerator: Decimal, denominator: Decimal) -> tuple[str, bool]:

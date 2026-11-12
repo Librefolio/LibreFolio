@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from backend.app.services.financial_math.fees import calculate_fee
 from backend.app.services.pac_allocator.evaluation.bounds import current_invested, selected_funding
 from backend.app.services.pac_allocator.evaluation.errors import ExactScenarioContractError
 from backend.app.services.pac_allocator.evaluation.keys import entity_refs, exact_decision_id, fx_debit_key, source_key
@@ -38,7 +39,6 @@ from backend.app.services.pac_allocator.models import (
 )
 from backend.app.services.pac_allocator.numeric import (
     ExactRatio,
-    calculate_fee,
     calculate_fx_credit,
     calculate_planning_fx_rate,
     calculate_tax_reserve,

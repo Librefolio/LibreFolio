@@ -7,6 +7,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast, get_args
 
 import pytest
@@ -16,6 +17,8 @@ from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
 from backend.app.schemas.pac_allocator.exact import FiniteDecimal
 from backend.app.schemas.pac_allocator.issues import PlannerIssue, PlannerIssuePath
 from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER
+from backend.app.services.financial_math.fx_rates import oriented_rate
+from backend.app.services.pac_allocator import normalize
 from backend.app.services.pac_allocator.issues import (
     CANONICAL_ISSUE_CODES,
     W1_NORMALIZER_ISSUE_DEFINITIONS,
@@ -2218,3 +2221,33 @@ def test_fx_rate_inconsistent_has_an_explicit_w1_definition() -> None:
     assert definition.kind == "invalid"
     assert definition.severity == "error"
     assert definition.producer == "w1_normalizer"
+
+
+# ---------------------------------------------------------------------------
+# A0 (project 67): the normalizer reads a stored FX rate through the house's ``oriented_rate``
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("source", "destination"), [pytest.param("EUR", "USD", id="stored-direction"), pytest.param("USD", "EUR", id="inverse-direction")])
+def test_normalizer_fx_rate_is_the_oriented_rate(monkeypatch, source, destination):
+    """``fx_rate`` and ``_stored_fx_rate`` give what ``financial_math.fx_rates.oriented_rate`` gives, in both directions:
+    no inversion of their own. ``oriented_rate`` is replaced in the module by a recorder that delegates; before A0 the
+    module has no such name, so ``monkeypatch.setattr`` is the red."""
+    calls: list[tuple] = []
+
+    def recorder(rate, from_currency, to_currency):
+        calls.append((rate, from_currency, to_currency))
+        return oriented_rate(rate, from_currency, to_currency)
+
+    monkeypatch.setattr(normalize, "oriented_rate", recorder)
+    normalizer_class = normalize._PlannerV2Normalizer
+    stub = SimpleNamespace(request=SimpleNamespace(fx_rates={"EUR/USD": "1.25"}), _fx_pair_key=normalizer_class._fx_pair_key)
+    stored = ExactRatio(5, 4)
+
+    read = normalizer_class.fx_rate(stub, source, destination)
+    assert read == oriented_rate(stored, source, destination)
+    assert calls == [(stored, source, destination)]
+
+    calls.clear()
+    assert normalizer_class._stored_fx_rate(read, source, destination) == stored
+    assert calls and calls[0][1:] == (source, destination)

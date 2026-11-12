@@ -32,6 +32,7 @@ from backend.app.schemas.pac_allocator.request import (
     WholeQuantityCapability,
     WholeQuantityMinimum,
 )
+from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.pac_allocator.issues import (
     PlannerAvailability,
     canonicalize_issues,
@@ -607,7 +608,7 @@ class _PlannerV2Normalizer:
     @staticmethod
     def _stored_fx_rate(rate: ExactRatio, source: str, destination: str) -> ExactRatio:
         """Return the stored value behind ``rate`` (source → destination): the key "A/B" with A < B stores B per A."""
-        return rate if source < destination else ExactRatio(1) / rate
+        return oriented_rate(rate, source, destination)
 
     def fx_rate(self, source: str, destination: str) -> ExactRatio | None:
         if source == destination:
@@ -621,7 +622,7 @@ class _PlannerV2Normalizer:
             # treat it as unusable here too instead of dividing by zero/negative on
             # the reciprocal branch. Callers already handle a ``None`` return.
             return None
-        return rate if source < destination else ExactRatio(1) / rate
+        return oriented_rate(rate, source, destination)
 
     def require_fx_pair(self, first: str, second: str) -> None:
         if first == second:

@@ -32,14 +32,12 @@ from backend.app.services.pac_allocator.numeric import (
     NonTerminatingDecimalError,
     PostedAmount,
     calculate_effective_fx_rate,
-    calculate_fee,
     calculate_fx_credit,
     calculate_tax_reserve,
     calculate_taxable_gain,
     ceil_to_quantum_units,
     decimal_context,
     decimal_text,
-    exact_holding_value,
     post_half_up,
     ratio_approximation,
 )
@@ -69,14 +67,6 @@ def test_p1_decimal_constants_context_and_text_api_remain_stable():
     assert decimal_text(Decimal("-0.000")) == "0"
     with pytest.raises(ArithmeticError):
         decimal_text(Decimal("NaN"))
-
-
-def test_p1_exact_holding_value_api_remains_unquantized():
-    assert exact_holding_value(
-        Decimal("3.25"),
-        Decimal("98.5"),
-        100,
-    ) == Decimal("3.20125")
 
 
 def test_p1_ratio_approximation_api_remains_stable():
@@ -508,97 +498,6 @@ def test_ceil_to_quantum_units_rejects_invalid_inputs(value, quantum, error):
         ceil_to_quantum_units(value, quantum)
 
     assert type(raised.value) is error
-
-
-def test_fee_is_zero_for_zero_notional_even_with_nonzero_schedule():
-    assert calculate_fee(
-        notional=ExactRatio(0),
-        fixed=ExactRatio(5),
-        rate=ExactRatio(1, 10),
-        floor=ExactRatio(2),
-        cap=ExactRatio(4),
-    ) == ExactRatio(0)
-
-
-@pytest.mark.parametrize(
-    ("rate", "floor", "cap", "expected"),
-    [
-        pytest.param(ExactRatio(1, 200), ExactRatio(1), ExactRatio(3), ExactRatio(2), id="below-floor"),
-        pytest.param(ExactRatio(1, 100), ExactRatio(1), ExactRatio(3), ExactRatio(2), id="at-floor"),
-        pytest.param(ExactRatio(1, 50), ExactRatio(1), ExactRatio(3), ExactRatio(3), id="between-bounds"),
-        pytest.param(ExactRatio(3, 100), ExactRatio(1), ExactRatio(3), ExactRatio(4), id="at-cap"),
-        pytest.param(ExactRatio(1, 20), ExactRatio(1), ExactRatio(3), ExactRatio(4), id="above-cap"),
-        pytest.param(ExactRatio(1, 20), ExactRatio(1), None, ExactRatio(6), id="cap-absent"),
-    ],
-)
-def test_fee_applies_rate_floor_cap_then_fixed(rate, floor, cap, expected):
-    assert (
-        calculate_fee(
-            notional=ExactRatio(100),
-            fixed=ExactRatio(1),
-            rate=rate,
-            floor=floor,
-            cap=cap,
-        )
-        == expected
-    )
-
-
-def test_fee_minimum_binds_active_zero_rate_order_and_free_schedule_is_explicit():
-    assert calculate_fee(
-        notional=ExactRatio(10),
-        fixed=ExactRatio(0),
-        rate=ExactRatio(0),
-        floor=ExactRatio(2),
-        cap=None,
-    ) == ExactRatio(2)
-    assert calculate_fee(
-        notional=ExactRatio(10),
-        fixed=ExactRatio(0),
-        rate=ExactRatio(0),
-        floor=ExactRatio(0),
-        cap=None,
-    ) == ExactRatio(0)
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        pytest.param("notional", ExactRatio(-1), id="negative-notional"),
-        pytest.param("fixed", ExactRatio(-1), id="negative-fixed"),
-        pytest.param("rate", ExactRatio(-1), id="negative-rate"),
-        pytest.param("floor", ExactRatio(-1), id="negative-floor"),
-        pytest.param("cap", ExactRatio(-1), id="negative-cap"),
-        pytest.param("notional", Decimal("1"), id="non-ratio-notional"),
-    ],
-)
-def test_fee_rejects_invalid_inputs(field, value):
-    schedule = {
-        "notional": ExactRatio(100),
-        "fixed": ExactRatio(1),
-        "rate": ExactRatio(1, 100),
-        "floor": ExactRatio(1),
-        "cap": ExactRatio(3),
-    }
-    schedule[field] = value
-
-    with pytest.raises(InvalidEconomicInputError) as raised:
-        calculate_fee(**schedule)
-
-    assert type(raised.value) is InvalidEconomicInputError
-
-
-def test_fee_rejects_floor_above_cap():
-    with pytest.raises(InvalidEconomicInputError) as raised:
-        calculate_fee(
-            notional=ExactRatio(100),
-            fixed=ExactRatio(0),
-            rate=ExactRatio(1, 100),
-            floor=ExactRatio(4),
-            cap=ExactRatio(3),
-        )
-
-    assert type(raised.value) is InvalidEconomicInputError
 
 
 @pytest.mark.parametrize(
