@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
-from backend.app.services.pac_allocator.evaluation.keys import candidate_quanta, entity_refs, exact_decision_id, floor_units
+from backend.app.services.pac_allocator.evaluation.keys import broker_transfer_key, candidate_quanta, entity_refs, exact_decision_id, floor_units
 from backend.app.services.pac_allocator.evaluation.reachability import buy_pool_currencies, fx_decision_specs
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, order_prices, source_broker, source_selected, to_valuation
 from backend.app.services.pac_allocator.models import (
@@ -14,6 +14,7 @@ from backend.app.services.pac_allocator.models import (
     DecisionFamily,
     EntityRef,
     ExactPlannerScenario,
+    ExactTransferLane,
     check_budget,
 )
 from backend.app.services.pac_allocator.numeric import (
@@ -146,6 +147,26 @@ def _fx_upper_bounds(
     return bounds
 
 
+def _transfer_upper_bounds(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    resource_bound: ExactRatio,
+    checkpoint: Checkpoint | None,
+) -> dict[str, int]:
+    """A transfer moves at most what can reach its source cell: the same resource bound as an FX debit (specification P5)."""
+    bounds = {}
+    for lane in scenario.transfer_lanes:
+        check_budget(checkpoint)
+        native_bound = resource_bound / index.valuation_rate[lane.currency]
+        bounds[transfer_decision_id(lane)] = floor_units(native_bound, index.currency_quantum[lane.currency])
+    return bounds
+
+
+def transfer_decision_id(lane: ExactTransferLane) -> str:
+    """The decision id of a transfer lane: ``transfer:<broker_transfer_key>``."""
+    return exact_decision_id("broker_transfer", broker_transfer_key(lane.source_broker_id, lane.destination_broker_id, lane.currency))
+
+
 def _order_upper_bounds(
     scenario: ExactPlannerScenario,
     index: ScenarioIndex,
@@ -198,6 +219,7 @@ def decision_upper_bounds(
             checkpoint,
         )
     )
+    bounds.update(_transfer_upper_bounds(scenario, index, resource_bound, checkpoint))
     bounds.update(
         _order_upper_bounds(
             scenario,
@@ -230,6 +252,15 @@ def expected_decision_rows(
     for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
         rows.append((spec.decision_id, "fx_debit", spec.entity_refs))
+    for lane in scenario.transfer_lanes:
+        check_budget(checkpoint)
+        rows.append(
+            (
+                transfer_decision_id(lane),
+                "broker_transfer",
+                entity_refs(("source_broker", lane.source_broker_id), ("destination_broker", lane.destination_broker_id), ("currency", lane.currency)),
+            )
+        )
     for route in scenario.order_routes:
         check_budget(checkpoint)
         family: DecisionFamily = "buy_quantum" if route.side == "buy" else "sell_quantum"

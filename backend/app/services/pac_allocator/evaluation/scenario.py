@@ -134,6 +134,7 @@ def _referenced_currencies(
         *(item.available.currency for item in scenario.existing_cash),
         *(item.amount.currency for item in scenario.contributions),
         *(item.currency for item in scenario.funding_routes),
+        *(item.currency for item in scenario.transfer_lanes),
         *(item.fixed_fee.currency for item in fees.values()),
     }
     if scenario.sell_context is not None:
@@ -183,6 +184,23 @@ def _validate_funding_route_refs(
             != route.currency
         ):
             raise ExactScenarioContractError(f"funding route {route.route_id} changes source currency")
+
+
+def _validate_transfer_lanes(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+) -> None:
+    """A transfer lane moves one currency from a known, active Broker to another one (A2, project 67)."""
+    for lane in scenario.transfer_lanes:
+        label = f"transfer lane {lane.source_broker_id}->{lane.destination_broker_id} {lane.currency}"
+        if lane.source_broker_id == lane.destination_broker_id:
+            raise ExactScenarioContractError(f"{label} moves cash within the same Broker")
+        for broker_id in (lane.source_broker_id, lane.destination_broker_id):
+            broker = index.brokers.get(broker_id)
+            if broker is None:
+                raise ExactScenarioContractError(f"{label} references unknown Broker")
+            if broker.active is False:
+                raise ExactScenarioContractError(f"{label} references inactive Broker")
 
 
 def _validate_order_route_units(
@@ -330,6 +348,7 @@ def build_scenario_index(scenario: ExactPlannerScenario) -> ScenarioIndex:
     )
     _validate_static_entity_refs(scenario, result)
     _validate_funding_route_refs(scenario, result)
+    _validate_transfer_lanes(scenario, result)
     _validate_order_route_refs(scenario, result)
     return result
 

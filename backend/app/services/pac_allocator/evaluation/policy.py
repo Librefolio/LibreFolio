@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from hashlib import sha256
 
+from backend.app.services.pac_allocator.evaluation.bounds import transfer_decision_id
 from backend.app.services.pac_allocator.evaluation.economics import EconomicState, evaluate_economic_state
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
@@ -113,7 +114,7 @@ def _decision_mode_for_purpose(
     if purpose in {"primary", "invest_only_baseline"}:
         return "disabled" if family == "sell_quantum" else "mutable"
     if purpose == "sell_extension":
-        if family in {"funding_transfer", "fx_debit"}:
+        if family in {"funding_transfer", "fx_debit", "broker_transfer"}:
             return "frozen_exact"
         if family == "buy_quantum":
             return "additive_only"
@@ -222,6 +223,10 @@ def _canonical_tie_decision_ids(
     for spec in fx_decision_specs(scenario, index, checkpoint):
         check_budget(checkpoint)
         rows.append((spec.tie_break, spec.decision_id))
+    for lane in scenario.transfer_lanes:
+        check_budget(checkpoint)
+        decision_id = transfer_decision_id(lane)
+        rows.append((("", lane.source_broker_id, lane.currency, "transfer", lane.destination_broker_id, "", decision_id), decision_id))
     for route in scenario.order_routes:
         check_budget(checkpoint)
         quote_currency = index.assets[route.asset_id].quote.price.currency
@@ -276,7 +281,7 @@ def sell_gate_refs(
     if purpose != "sell_extension":
         return (), ()
     additive_buys = tuple(item.decision_id for item in decisions if item.family == "buy_quantum" and item.mode == "additive_only")
-    reopened = tuple(item.decision_id for item in decisions if item.family in {"funding_transfer", "fx_debit"})
+    reopened = tuple(item.decision_id for item in decisions if item.family in {"funding_transfer", "fx_debit", "broker_transfer"})
     gates = tuple(
         SellIrreducibilityGateRef(
             gate_id=f"sell-irreducibility:{item.decision_id}",

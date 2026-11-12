@@ -1186,6 +1186,9 @@ class _PlannerV2Normalizer:
             order_routes=order_routes,
             target_weights=tuple(ExactTargetWeight(asset_id=item.asset_id, weight=ExactRatio.from_decimal(Decimal(item.weight))) for item in sorted(self.request.target_weights, key=lambda value: value.asset_id)),
             sell_context=self.build_sell_context(),
+            # Transfers between Brokers: none in the PAC, whose funding routes stay as the user declares them (specification
+            # §15 n. 2); the Rebalancer's lanes are filled in block B.
+            transfer_lanes=(),
         )
 
     def run(self) -> PlannerV2NormalizationResult:

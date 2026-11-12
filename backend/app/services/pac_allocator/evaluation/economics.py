@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from backend.app.services.financial_math.fees import calculate_fee
-from backend.app.services.pac_allocator.evaluation.bounds import current_invested, selected_funding
+from backend.app.services.pac_allocator.evaluation.bounds import current_invested, selected_funding, transfer_decision_id
 from backend.app.services.pac_allocator.evaluation.errors import ExactScenarioContractError
 from backend.app.services.pac_allocator.evaluation.keys import entity_refs, exact_decision_id, source_key
 from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, source_reachability
@@ -331,6 +331,28 @@ def _evaluate_fx(
             )
         )
     return tuple(sorted(result, key=lambda item: (item.broker_id, item.source_currency, item.destination_currency)))
+
+
+def _evaluate_transfers(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    quanta: Mapping[str, int],
+    postings: list[ExactLedgerPosting],
+    checkpoint: Checkpoint | None,
+) -> None:
+    """Post every transfer between Brokers: exact out of the source cell and into the destination cell (A2, project 67).
+
+    A transfer is free and instant (``decisioni-REB.md`` §11.1), so the two postings carry the same amount and the scenario's
+    wealth does not move (property P4). No rounding: the amount is a whole number of the currency's minor unit.
+    """
+    for lane in scenario.transfer_lanes:
+        check_budget(checkpoint)
+        decision_id = transfer_decision_id(lane)
+        amount = index.currency_quantum[lane.currency] * quanta[decision_id]
+        refs = entity_refs(("source_broker", lane.source_broker_id), ("destination_broker", lane.destination_broker_id), ("currency", lane.currency))
+        key = decision_id.removeprefix("transfer:")
+        _append_exact_flow(postings, posting_id=f"transfer-out:{key}", family="transfer_out", broker_id=lane.source_broker_id, currency=lane.currency, amount=amount, entity_refs=refs)
+        _append_exact_flow(postings, posting_id=f"transfer-in:{key}", family="transfer_in", broker_id=lane.destination_broker_id, currency=lane.currency, amount=amount, entity_refs=refs)
 
 
 def _sell_tax_facts(
@@ -681,6 +703,7 @@ def evaluate_economic_state(
         postings,
         checkpoint,
     )
+    _evaluate_transfers(scenario, index, quanta, postings, checkpoint)
     fx = _evaluate_fx(
         scenario,
         index,

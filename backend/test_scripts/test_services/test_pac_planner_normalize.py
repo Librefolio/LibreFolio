@@ -19,6 +19,7 @@ from backend.app.schemas.pac_allocator.issues import PlannerIssue, PlannerIssueP
 from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER
 from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.pac_allocator import normalize
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view
 from backend.app.services.pac_allocator.issues import (
     CANONICAL_ISSUE_CODES,
     W1_NORMALIZER_ISSUE_DEFINITIONS,
@@ -2251,3 +2252,12 @@ def test_normalizer_fx_rate_is_the_oriented_rate(monkeypatch, source, destinatio
     calls.clear()
     assert normalizer_class._stored_fx_rate(read, source, destination) == stored
     assert calls and calls[0][1:] == (source, destination)
+
+
+def test_normalized_pac_scenario_has_no_broker_transfer() -> None:
+    """A2 step 10 (specification §15 n. 2): in the PAC the funding routes stay as the user declares them; the transfers between
+    Brokers belong to the Rebalancer. A normalized PAC scenario has no transfer lane, and its view no ``broker_transfer`` decision."""
+    for payload in (_fixture(PAC_FIXTURE), fx_conversion_request("no-transfer", funding_currency="EUR", assets=[("USD", "10.00")], fx_rates={"EUR/USD": "1.085"})):
+        scenario = _normalize_payload("pac", payload).normalized
+        assert scenario.transfer_lanes == ()
+        assert not [access for access in build_exact_policy_view(scenario).decisions if access.family == "broker_transfer"]

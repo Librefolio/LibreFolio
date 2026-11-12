@@ -2091,6 +2091,8 @@ def test_permuted_source_rows_canonicalize_to_identical_exact_results() -> None:
         pytest.param("funding_in", "credit", id="funding-in"),
         pytest.param("funding_out", "debit", id="funding-out"),
         pytest.param("fx_debit", "debit", id="fx-debit"),
+        pytest.param("transfer_in", "credit", id="transfer-in"),
+        pytest.param("transfer_out", "debit", id="transfer-out"),
     ],
 )
 def test_exact_flow_posting_families_have_zero_raw_delta(
@@ -2218,6 +2220,8 @@ def test_native_ledger_aggregates_all_columns_without_double_counting() -> None:
         ("funding-in", "funding_in", R(5)),
         ("funding-out", "funding_out", R(2)),
         ("fx-debit", "fx_debit", ONE),
+        ("transfer-in", "transfer_in", R(3)),
+        ("transfer-out", "transfer_out", R(2)),
     )
     rounded_specs = (
         ("fx-credit", "fx_credit", R(3)),
@@ -2267,10 +2271,11 @@ def test_native_ledger_aggregates_all_columns_without_double_counting() -> None:
     assert row.sell_fees == ONE
     assert row.broker_withheld_tax == ONE
     assert row.self_reserved_tax == ONE
+    assert (row.transfer_in, row.transfer_out) == (R(3), R(2))
     assert row.raw_rounding_delta == ZERO
     assert row.accounting_rounding_adjustment == ZERO
-    assert row.final_spendable == R(9)
-    assert row.final_physical == R(10)
+    assert row.final_spendable == R(10)
+    assert row.final_physical == R(11)
     assert row.final_physical == (row.final_spendable + row.self_reserved_tax)
 
 
@@ -5357,3 +5362,71 @@ def test_fx_evaluations_are_ordered_by_broker_source_destination() -> None:
 
     assert [(item.broker_id, item.source_currency, item.destination_currency) for item in evaluation.fx] == [("broker:a", "EUR", "USD"), ("broker:b", "EUR", "USD")]
     assert [item.order_route_id for item in evaluation.fx] == ["route:2", "route:1"]
+
+
+# ---------------------------------------------------------------------------
+# A2 steps 9-11 (project 67): the transfer family between Brokers, at the exact level
+# ---------------------------------------------------------------------------
+
+
+def _transfer_lane_scenario(*, quantum: ExactRatio = CENT) -> ExactPlannerScenario:
+    """A PAC scenario with one transfer lane set by hand (D4 a: the normalizer never sets one in the PAC).
+
+    broker:a holds EUR100 and can buy the Asset (EUR10 a unit) at most 3 times, so its cash is reachable and the reference is
+    EUR100; broker:b holds nothing and can buy it at most 10 times. Reaching the target takes moving cash from a to b.
+    ``quantum`` is EUR's minor unit: a whole euro keeps the transfer's domain small enough for the exhaustive oracle. The lane
+    is added by ``_with_lane``.
+    """
+    capability_a = _capability("capability:a")
+    capability_b = _capability("capability:b")
+    fee_a = _fee("fee:buy:a", capability_a.capability_id, "buy")
+    fee_b = _fee("fee:buy:b", capability_b.capability_id, "buy")
+    return _scenario(
+        "scenario:transfer-lane",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:a", price=R(10)),),
+        brokers=(_broker("broker:a", (capability_a,), (fee_a,)), _broker("broker:b", (capability_b,), (fee_b,))),
+        existing_cash=(_cash("cash:a", "broker:a", R(100)),),
+        order_routes=(
+            _order_route("route:buy:a", broker_id="broker:a", asset_id="asset:a", capability=capability_a, fee_id=fee_a.fee_schedule_id, side="buy", cap=R(3)),
+            _order_route("route:buy:b", broker_id="broker:b", asset_id="asset:a", capability=capability_b, fee_id=fee_b.fee_schedule_id, side="buy", cap=R(10)),
+        ),
+        currency_quantums=(("EUR", quantum),),
+    )
+
+
+def _with_lane(scenario: ExactPlannerScenario, source: str, destination: str) -> ExactPlannerScenario:
+    return replace(scenario, transfer_lanes=(pac_models.ExactTransferLane(source_broker_id=source, destination_broker_id=destination, currency="EUR"),))
+
+
+def test_broker_transfer_posts_exact_in_and_out_and_keeps_the_total() -> None:
+    """Property P4: moving money between Brokers is free and keeps the total. One decision per lane, quantum the currency's
+    minor unit; two exact postings (out of the source cell, into the destination cell), and the scenario's wealth unchanged."""
+    scenario = _with_lane(_transfer_lane_scenario(), "broker:a", "broker:b")
+    view = build_exact_policy_view(scenario)
+    (transfer,) = [access for access in view.decisions if access.family == "broker_transfer"]
+    assert {(item.kind, item.entity_id) for item in transfer.entity_refs} == {("source_broker", "broker:a"), ("destination_broker", "broker:b"), ("currency", "EUR")}
+    assert transfer.decision_id == "transfer:8:broker:a8:broker:b:EUR"
+
+    idle = evaluate_exact_candidate(scenario, view, _candidate(view, {}))
+    moved = evaluate_exact_candidate(scenario, view, _candidate(view, {transfer.decision_id: 4_000}))
+
+    assert moved.feasible is True
+    postings = {(item.family, item.broker_id, item.currency): item for item in moved.postings if item.family in {"transfer_in", "transfer_out"}}
+    assert set(postings) == {("transfer_out", "broker:a", "EUR"), ("transfer_in", "broker:b", "EUR")}
+    assert all(item.posted_amount == item.exact_amount == R(40) for item in postings.values())
+    ledgers = {(row.broker_id, row.currency): row for row in moved.ledgers}
+    assert (ledgers[("broker:a", "EUR")].transfer_out, ledgers[("broker:a", "EUR")].final_spendable) == (R(40), R(60))
+    assert (ledgers[("broker:b", "EUR")].transfer_in, ledgers[("broker:b", "EUR")].final_spendable) == (R(40), R(40))
+    total = sum((row.final_spendable for row in moved.ledgers), ZERO)
+    assert total == sum((row.final_spendable for row in idle.ledgers), ZERO) == R(100)
+    assert moved.accounting.identity_delta == idle.accounting.identity_delta == ZERO
+    assert moved.accounting.fixed_reference == idle.accounting.fixed_reference
+
+
+def test_a_transfer_lane_to_the_same_broker_is_refused() -> None:
+    """A transfer moves money between two Brokers in one currency: a lane from a Broker to itself is not a scenario."""
+    looping = _with_lane(_transfer_lane_scenario(), "broker:a", "broker:a")
+    with pytest.raises(ExactScenarioContractError, match="same Broker"):
+        build_exact_policy_view(looping)

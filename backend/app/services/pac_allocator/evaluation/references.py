@@ -26,6 +26,8 @@ def ledger_keys(
     keys = {(cash.broker_id, cash.selected.currency) for cash in scenario.existing_cash}
     keys.update((route.broker_id, route.currency) for route in scenario.funding_routes)
     keys.update((route.broker_id, index.assets[route.asset_id].quote.price.currency) for route in scenario.order_routes)
+    for lane in scenario.transfer_lanes:
+        keys.update(((lane.source_broker_id, lane.currency), (lane.destination_broker_id, lane.currency)))
     return tuple(sorted(keys))
 
 
