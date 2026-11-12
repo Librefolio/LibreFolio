@@ -2957,7 +2957,7 @@ test.describe('Asset Detail Page', () => {
         await conversionGapIssue.click();
         // The sentence is worded from the issue: the pair in the direction of the conversion and the day
         await expect(page.getByTestId('tooltip-content')).toHaveText(/USD.*→.*EUR.*2026-08-01/);
-        await page.getByTestId('asset-detail-header').click();
+        await page.getByTestId('asset-detail-name').click();
         await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
 
         // An event-only FX miss is not evidence that the peer's price series

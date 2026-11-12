@@ -820,7 +820,7 @@ test.describe('Asset detail ‹ n/N › — a move carries the date range the pa
 });
 
 // =============================================================================
-// AB-009..AB-010 — the header rows: tablet and desktop
+// AB-009..AB-012 — the header rows: tablet, desktop and phone
 // =============================================================================
 
 /** The viewport-space box of a test id on the page. */
@@ -882,4 +882,37 @@ test.describe('Asset detail header rows (project 71, block 1)', () => {
             }
         }).toPass({timeout: 5_000});
     });
+
+    for (const [id, width, height] of [
+        ['AB-011', 390, 844],
+        ['AB-012', 360, 780],
+    ] as const) {
+        test(`${id} ${width}×${height}: four rows — ← and ‹ n/N ›; the name; type and currency; Transactions and provider — and no sideways scroll`, async ({page, owned, baseURL}) => {
+            await openMiddleOn(page, owned, baseURL, {width, height});
+            await expect(async () => {
+                const back = await boxOf(page, 'asset-detail-back-btn');
+                const nav = await boxOf(page, 'asset-browse-nav');
+                const name = await boxOf(page, 'asset-detail-name');
+                // Row 1: ← and ‹ n/N › on one line, ← on the left; both end above the name
+                expect(Math.abs(back.centerY - nav.centerY), 'row 1: ← and ‹ n/N › on one line').toBeLessThanOrEqual(4);
+                expect(back.left, 'row 1: ← sits left of ‹ n/N ›').toBeLessThan(nav.left);
+                expect(back.bottom, 'row 1 ends above the name').toBeLessThanOrEqual(name.top);
+                expect(nav.bottom, 'row 1 ends above the name').toBeLessThanOrEqual(name.top);
+                // Row 3: type and currency side by side, under the name
+                const type = await boxOf(page, 'asset-detail-type-badge');
+                const currency = await boxOf(page, 'asset-detail-currency');
+                expect(Math.abs(type.centerY - currency.centerY), 'row 3: type and currency on one line').toBeLessThanOrEqual(4);
+                expect(type.top, 'row 3 is below the name').toBeGreaterThanOrEqual(name.bottom);
+                // Row 4: Transactions and the provider badge side by side, under the first group
+                const what = await boxOf(page, 'asset-detail-badges-what');
+                const transactions = await boxOf(page, 'asset-detail-transactions-link');
+                const provider = await boxOf(page, 'asset-detail-provider-badge');
+                expect(Math.abs(transactions.centerY - provider.centerY), 'row 4: Transactions and provider on one line').toBeLessThanOrEqual(4);
+                expect(transactions.top, 'row 4 is below row 3').toBeGreaterThanOrEqual(what.bottom);
+                expect(provider.top, 'row 4 is below row 3').toBeGreaterThanOrEqual(what.bottom);
+            }).toPass({timeout: 5_000});
+            const reading = await readEdges(page, []);
+            expect(reading.pageOverflow, `at ${width} px the page does not scroll sideways: its furthest box ends ${px(reading.pageOverflow)} past the layout's right edge`).toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
+        });
+    }
 });

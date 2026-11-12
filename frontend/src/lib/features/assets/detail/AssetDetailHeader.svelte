@@ -61,15 +61,17 @@
         <!-- min-w-0 on both wrappers: without it their minimum width is the whole title on one
              line, so a long name widened the page; the title itself scrolls (scrollOnOverflow).
              Below lg the badges sit on a row of their own under the icon and name, and the name
-             may use the whole width (max-w-full); from lg up it is one row, as it always was. -->
-        <div class="flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-3 min-w-0" data-testid="asset-detail-info">
+             may use the whole width (max-w-full); from lg up it is one row, as it always was.
+             Below sm the block takes a full row after the back button and the nav (order-last
+             basis-full): row 1 ← and ‹ n/N ›, row 2 the name, rows 3-4 the two badge groups. -->
+        <div class="order-last basis-full sm:order-none sm:basis-auto flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-3 min-w-0" data-testid="asset-detail-info">
             <div class="flex items-center gap-3 min-w-0" data-testid="asset-detail-identity">
                 <AssetIcon iconUrl={assetInfo.icon_url} assetType={assetInfo.asset_type} altText={assetInfo.display_name} size="md" />
                 <span class="w-2.5 h-2.5 rounded-full shrink-0 {assetInfo.active !== false ? 'bg-lf-success' : 'bg-lf-danger'}" data-testid="asset-status-dot" title={assetInfo.active !== false ? $t('common.active') : $t('assets.status.archived')}></span>
                 <h2 use:scrollOnOverflow data-testid="asset-detail-name" class="{overflowScrollTextClass} text-xl font-bold text-lf-primary max-w-full lg:max-w-none" title={assetInfo.display_name}>{assetInfo.display_name}</h2>
             </div>
 
-            <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:flex-wrap min-w-0">
                 <div class="flex items-center gap-2 flex-nowrap" data-testid="asset-detail-badges-what">
                     {#if assetInfo.asset_type}
                         <span data-testid="asset-detail-type-badge" class="{badgeBase} bg-lf-neutral text-lf-secondary">
@@ -103,11 +105,11 @@
                     >
                         {#if assetInfo.provider_code}
                             {#if providerIconUrl}
-                                <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
+                                <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain shrink-0" />
                             {/if}
-                            {badgeName}
+                            <span class="truncate">{badgeName}</span>
                         {:else}
-                            ✏️ {badgeName}
+                            <span class="truncate">✏️ {badgeName}</span>
                         {/if}
                         {#if externalHref}
                             <ExternalLink size={12} class="shrink-0" />
@@ -118,7 +120,7 @@
             </div>
         </div>
     {:else if loading}
-        <div class="h-8 w-48 bg-lf-neutral rounded animate-pulse"></div>
+        <div class="order-last basis-full sm:order-none sm:basis-auto h-8 w-48 bg-lf-neutral rounded animate-pulse"></div>
     {/if}
     <AssetBrowseNav {assetId} />
 </div>
