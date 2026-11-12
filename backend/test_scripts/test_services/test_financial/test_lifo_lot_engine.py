@@ -29,7 +29,7 @@ import pytest
 
 from backend.app.db.models import TransactionType
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import EconomicEvent, FifoEngineResult, FifoInputTransaction, LotMatchingMethod, ReferencePriceResolution
+from backend.app.services.financial_math.fifo.models import EconomicEvent, FifoEngineResult, FifoInputTransaction, LotMatchingMethod, ReferencePriceResolution, fails_the_replay
 from backend.app.services.financial_math.lots.scope_boundary import TransferPartner, read_transfers_at_scope_boundary
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 
@@ -474,3 +474,33 @@ def test_a_position_closed_in_full_realizes_the_same_total_in_both_methods():
     assert _closed(fifo) != _closed(lifo)
     assert _total_realized(fifo) == _total_realized(lifo) == D("580")
     assert all(quantity == D("0") for quantity in _open(fifo).values()) and all(quantity == D("0") for quantity in _open(lifo).values())
+
+
+# --------------------------------------------------------------------------- #
+# L3a — what the lots analysis shares between the two methods
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("rows", "shorting", "code"),
+    [
+        pytest.param([_buy(1, "10", "100", on="2025-01-01"), _buy(2, "5", "110", on="2025-02-01"), _sell(3, "20", "120", on="2025-03-01")], {}, "FIFO_SOURCE_QUANTITY_MISSING", id="oversell"),
+        pytest.param([_buy(1, "10", "100", on="2025-01-01"), _sell(2, "15", "90", on="2025-02-01"), _adjustment(3, "-1", on="2025-03-01")], {BROKER_A: True}, "SHORT_ADJUSTMENT_NOT_SUPPORTED", id="adjustment-out-on-a-short"),
+        pytest.param(
+            [_buy(1, "10", "100", on="2025-01-01"), _sell(2, "15", "90", on="2025-02-01"), *_transfer(3, 4, "2", out_on="2025-03-01", in_on="2025-03-02", out_broker=BROKER_A, in_broker=BROKER_B)],
+            {BROKER_A: True},
+            "SHORT_TRANSFER_NOT_SUPPORTED",
+            id="transfer-out-of-a-short",
+        ),
+        pytest.param([_buy(1, "10", "100", on="2025-01-01"), _buy(2, "5", "110", on="2025-02-01"), _tx(3, "TRANSFER", "-4", on="2025-03-01", related=99)], {}, "TRANSFER_PAIR_MISSING", id="transfer-without-its-pair"),
+    ],
+)
+def test_a_failed_replay_fails_in_both_methods_with_the_same_codes(rows, shorting, code):
+    """The four codes that fail a replay (``fails_the_replay``) read the quantity of a broker, which does not depend on
+    which lot an outflow closes: a book that fails in one method fails in the other, with the same failing issues. The
+    analysis still keeps a status per method (opinion on L3, (b)); this pins why the two never differ today."""
+    fifo, lifo = _run(rows, FIFO, shorting=shorting), _run(rows, LIFO, shorting=shorting)
+    failing = [[(issue.code, issue.transaction_id) for issue in result.issues if fails_the_replay(issue.code)] for result in (fifo, lifo)]
+    assert code in {failed_code for failed_code, _tx_id in failing[0]}, f"precondition: the book fails with {code}: {failing[0]}"
+    assert (fifo.analysis_status, lifo.analysis_status) == ("FAILED", "FAILED")
+    assert failing[0] == failing[1]
