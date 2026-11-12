@@ -58,9 +58,9 @@ SOLE_ADMIN_DELETE_DETAIL = {"error_code": "LAST_ADMIN", "message": "Cannot delet
 
 TOOL_CODE = "pac_allocator"
 IDENTITY_KEYS = ("tool_code", "contract_version", "implementation_version", "schema_fingerprint")
-MIN_REQUEST_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.min.v2.json"
+MIN_REQUEST_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.min.2-0-0.json"
 # The same request as the UI sends it: every default omitted, no fee schedule (contract compaction).
-COMPACT_REQUEST_FIXTURE = MIN_REQUEST_FIXTURE.with_name("pac_plan_request.compact.v2.json")
+COMPACT_REQUEST_FIXTURE = MIN_REQUEST_FIXTURE.with_name("pac_plan_request.compact.2-0-0.json")
 
 
 @pytest.fixture(scope="module")

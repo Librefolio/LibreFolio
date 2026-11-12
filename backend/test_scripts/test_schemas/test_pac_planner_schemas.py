@@ -160,16 +160,16 @@ def _available_ratio(numerator: str, denominator: str, display_decimal: str) -> 
 
 
 def _pac_request() -> JsonObject:
-    return _fixture("pac_plan_request.min.v2.json")
+    return _fixture("pac_plan_request.min.2-0-0.json")
 
 
 def _compact_pac_request() -> JsonObject:
     """`min` in the form the UI sends: every default omitted, the all-zero fee schedule too."""
-    return _fixture("pac_plan_request.compact.v2.json")
+    return _fixture("pac_plan_request.compact.2-0-0.json")
 
 
 def _rebalancer_invest_and_sell_request() -> JsonObject:
-    return _fixture("rebalancer_plan_request.medium.v2.json")
+    return _fixture("rebalancer_plan_request.medium.2-0-0.json")
 
 
 def _rebalancer_invest_only_request() -> JsonObject:
@@ -181,11 +181,11 @@ def _rebalancer_invest_only_request() -> JsonObject:
 
 
 def _pac_no_op_result() -> JsonObject:
-    return _fixture("pac_plan_result.min.v2.json")
+    return _fixture("pac_plan_result.min.2-0-0.json")
 
 
 def _rebalancer_incumbent_result() -> JsonObject:
-    return _fixture("rebalancer_plan_result.medium.v2.json")
+    return _fixture("rebalancer_plan_result.medium.2-0-0.json")
 
 
 def _failure_result(product: str, state: str) -> JsonObject:
@@ -640,12 +640,12 @@ RESULT_CASES = (
 )
 
 FIXTURE_CASES = (
-    pytest.param("pac_plan_request.min.v2.json", PAC_PLAN_INPUT_ADAPTER, PLANNER_PARAMETER_BYTES, False, id="pac-request-min"),
-    pytest.param("pac_plan_result.min.v2.json", PAC_PLAN_OUTPUT_ADAPTER, PLANNER_RESULT_BYTES, False, id="pac-result-min"),
-    pytest.param("pac_plan_request.candidate-max.v2.json", PAC_PLAN_INPUT_ADAPTER, PLANNER_PARAMETER_BYTES, True, id="pac-request-candidate"),
-    pytest.param("pac_plan_result.candidate-max.v2.json", PAC_PLAN_OUTPUT_ADAPTER, PLANNER_RESULT_BYTES, True, id="pac-result-candidate"),
-    pytest.param("rebalancer_plan_request.medium.v2.json", REBALANCER_PLAN_INPUT_ADAPTER, PLANNER_PARAMETER_BYTES, False, id="rebalancer-request-medium"),
-    pytest.param("rebalancer_plan_result.medium.v2.json", REBALANCER_PLAN_OUTPUT_ADAPTER, PLANNER_RESULT_BYTES, False, id="rebalancer-result-medium"),
+    pytest.param("pac_plan_request.min.2-0-0.json", PAC_PLAN_INPUT_ADAPTER, PLANNER_PARAMETER_BYTES, False, id="pac-request-min"),
+    pytest.param("pac_plan_result.min.2-0-0.json", PAC_PLAN_OUTPUT_ADAPTER, PLANNER_RESULT_BYTES, False, id="pac-result-min"),
+    pytest.param("pac_plan_request.candidate-max.2-0-0.json", PAC_PLAN_INPUT_ADAPTER, PLANNER_PARAMETER_BYTES, True, id="pac-request-candidate"),
+    pytest.param("pac_plan_result.candidate-max.2-0-0.json", PAC_PLAN_OUTPUT_ADAPTER, PLANNER_RESULT_BYTES, True, id="pac-result-candidate"),
+    pytest.param("rebalancer_plan_request.medium.2-0-0.json", REBALANCER_PLAN_INPUT_ADAPTER, PLANNER_PARAMETER_BYTES, False, id="rebalancer-request-medium"),
+    pytest.param("rebalancer_plan_result.medium.2-0-0.json", REBALANCER_PLAN_OUTPUT_ADAPTER, PLANNER_RESULT_BYTES, False, id="rebalancer-result-medium"),
 )
 
 
@@ -794,7 +794,7 @@ def test_six_authoritative_fixtures_strict_roundtrip_with_byte_headroom(
         source_wire = json.loads(source)
         assert all("gross_amount_requested" not in route for route in source_wire["order_routes"])
         assert all("gross_amount_requested" not in route for route in wire["order_routes"])
-    if name == "rebalancer_plan_result.medium.v2.json":
+    if name == "rebalancer_plan_result.medium.2-0-0.json":
         blocking_codes = {code for evidence in wire["primary_solution"]["sell_irreducibility"] for check in evidence["checks"] for code in check["blocking_issue_codes"]}
         assert blocking_codes <= set(EXPECTED_PLANNER_ISSUE_CODES)
 
@@ -980,7 +980,7 @@ def test_backend_and_exported_numeric_text_regexes_have_identical_canonical_zero
 
 
 def test_option_b_shape_layer_accepts_economically_invalid_but_lexically_valid_strings() -> None:
-    payload = _fixture("pac_plan_request.candidate-max.v2.json")
+    payload = _fixture("pac_plan_request.candidate-max.2-0-0.json")
     model, _emitted = _strict_roundtrip(PAC_PLAN_INPUT_ADAPTER, payload)
     wire = PAC_PLAN_INPUT_ADAPTER.dump_python(model, mode="json")
 
@@ -2043,9 +2043,9 @@ def test_input_schema_defaults_exactly_the_compaction_fields(adapter: TypeAdapte
 
 
 EXPLICIT_REQUEST_FIXTURE_CASES = (
-    pytest.param("pac_plan_request.min.v2.json", PAC_PLAN_INPUT_ADAPTER, id="pac-min"),
-    pytest.param("pac_plan_request.candidate-max.v2.json", PAC_PLAN_INPUT_ADAPTER, id="pac-candidate-max"),
-    pytest.param("rebalancer_plan_request.medium.v2.json", REBALANCER_PLAN_INPUT_ADAPTER, id="rebalancer-medium"),
+    pytest.param("pac_plan_request.min.2-0-0.json", PAC_PLAN_INPUT_ADAPTER, id="pac-min"),
+    pytest.param("pac_plan_request.candidate-max.2-0-0.json", PAC_PLAN_INPUT_ADAPTER, id="pac-candidate-max"),
+    pytest.param("rebalancer_plan_request.medium.2-0-0.json", REBALANCER_PLAN_INPUT_ADAPTER, id="rebalancer-medium"),
 )
 
 
@@ -2132,6 +2132,85 @@ def test_pac_request_refuses_required_minimum(adapter: TypeAdapter[Any], request
         adapter.validate_json(_wire(payload), strict=True)
 
     assert "required_minimum" not in PlannerOrderRouteInput.model_fields
+
+
+# ---------------------------------------------------------------------------
+# A4 step 5 (project 67): the ledger's new columns, the cost line, the limits on the rows
+# ---------------------------------------------------------------------------
+
+
+def test_ledger_row_reconciles_with_the_transfer_columns() -> None:
+    """Contract 2.0.0 §6.5: a ledger row carries ``transfer_in`` and ``transfer_out`` (between Brokers) and ``foreign_withholding_tax``.
+    The schema still checks the identity: spendable = initial + inflows - outflows, the three new columns included."""
+    payload = _pac_incumbent_result()
+    ledger = _find(payload["primary_solution"]["ledger_rows"], "broker_id", "broker-one")
+    ledger.update({"transfer_in": "1", "transfer_out": "1"})  # a round trip changes nothing
+    _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+
+    broken = _pac_incumbent_result()
+    _find(broken["primary_solution"]["ledger_rows"], "broker_id", "broker-one").update({"transfer_in": "1"})
+    _reject(PAC_PLAN_OUTPUT_ADAPTER, broken)
+
+    withheld = _pac_incumbent_result()
+    _find(withheld["primary_solution"]["ledger_rows"], "broker_id", "broker-one")["foreign_withholding_tax"] = "1"
+    _reject(PAC_PLAN_OUTPUT_ADAPTER, withheld)
+
+    negative = _pac_incumbent_result()
+    _find(negative["primary_solution"]["ledger_rows"], "broker_id", "broker-one")["transfer_out"] = "-1"
+    _reject(PAC_PLAN_OUTPUT_ADAPTER, negative)
+
+
+@pytest.mark.parametrize("column", ("transfer_in", "transfer_out", "foreign_withholding_tax"))
+def test_ledger_row_requires_the_new_columns(column: str) -> None:
+    payload = _pac_incumbent_result()
+    del _find(payload["primary_solution"]["ledger_rows"], "broker_id", "broker-one")[column]
+    _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
+
+
+def test_cost_totals_carry_the_foreign_withholding_tax_line_and_a_no_op_publishes_none() -> None:
+    payload = _pac_incumbent_result()
+    assert payload["primary_solution"]["costs"]["foreign_withholding_tax"] == _money("0")
+    del payload["primary_solution"]["costs"]["foreign_withholding_tax"]
+    _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
+
+    no_op = _pac_no_op_result()
+    no_op["primary_solution"]["costs"]["foreign_withholding_tax"] = _money("1")
+    _reject(PAC_PLAN_OUTPUT_ADAPTER, no_op)
+
+
+def test_pac_asset_row_and_cash_row_publish_their_limits() -> None:
+    """Contract §6.2: an Asset row says its minimum and maximum when they are set (amounts in the valuation currency, ``null``
+    otherwise), and a PAC cash entry with a limit has a row of its own: the Broker, the currency, its final spendable cash in
+    the valuation currency and its limits."""
+    payload = _pac_incumbent_result()
+    solution = payload["primary_solution"]
+    asset = _find(solution["asset_rows"], "asset_id", "asset-one")
+    asset["minimum"] = _money("2")
+    asset["maximum"] = _money("5")
+    solution["cash_rows"] = [{"broker_id": "broker-one", "currency": "EUR", "final_value": _money("0"), "minimum": None, "maximum": _money("1")}]
+
+    model, _emitted = _strict_roundtrip(PAC_PLAN_OUTPUT_ADAPTER, payload)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")["primary_solution"]
+    assert (wire["asset_rows"][0]["minimum"], wire["asset_rows"][0]["maximum"]) == (_money("2"), _money("5"))
+    assert [(row["broker_id"], row["currency"]) for row in wire["cash_rows"]] == [("broker-one", "EUR")]
+
+    for mutate in (
+        lambda solution: solution["cash_rows"].append(deepcopy(solution["cash_rows"][0])),  # one row per cell
+        lambda solution: solution["cash_rows"][0].update({"broker_id": "broker-nowhere"}),  # the Broker must be in the catalogue
+        lambda solution: solution["cash_rows"][0].update({"minimum": _money("2"), "maximum": _money("1")}),  # a minimum above its maximum
+        lambda solution: solution["cash_rows"][0].pop("final_value"),
+    ):
+        broken = deepcopy(payload)
+        mutate(broken["primary_solution"])
+        _reject(PAC_PLAN_OUTPUT_ADAPTER, broken)
+
+
+def test_pac_asset_row_limits_are_never_absent() -> None:
+    payload = _pac_incumbent_result()
+    asset = _find(payload["primary_solution"]["asset_rows"], "asset_id", "asset-one")
+    assert "minimum" in asset and "maximum" in asset
+    del asset["minimum"]
+    _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
 
 
 def test_pac_request_excludes_holdings_sell_context_and_sell_routes() -> None:
@@ -3696,21 +3775,21 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
     _reject(PAC_PLAN_OUTPUT_ADAPTER, payload)
 
 
-# Contract 2.0.0 (A4, project 67), refrozen after step 4 and the fingerprint fix (5b): conversions without fx actions, target entries with limits,
-# no required minimum, the new issue and objective codes, and an empty request_fingerprint on a failure. The columns of step 5 (transfers, foreign
-# withholding) move it once more.
+# Contract 2.0.0 (A4, project 67), final: conversions without fx actions, target entries with limits, no required minimum, the closed issue and
+# objective codes, an empty request_fingerprint on a failure, the ledger columns (transfers, foreign withholding), the cost line, the limit rows.
+# The PAC fingerprint is the gate of blocks B and C: it does not move again in A4.
 # Rounding direction fix: recomputed for description-only changes (``PlannerRoundingTopUp`` docstring, ``rounding_top_ups`` description, new ``rounding_bound`` description).
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "890ab8b6b3d8f53f1c2b76c598c9e9937161bfd0f530b9ea78eb65e4a714dd1b",
+        "fa1cdae9b2b2554f875a4000fba44234a3cf2920fc725f68638836a3483f935b",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "126781596e0a74fe7894aaf26517ae672b3626fd053acf0a5089c615762b530c",
+        "d0008bd3c736d9383d0536cdd29a1f204b958d9a4b7c448f82a5f335ac0bd8c2",
         id="rebalancer",
     ),
 )

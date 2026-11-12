@@ -58,8 +58,8 @@ from backend.test_scripts.test_services._pac_synthetic_requests import (
 )
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator"
-PAC_FIXTURE = "pac_plan_request.min.v2.json"
-REBALANCER_FIXTURE = "rebalancer_plan_request.medium.v2.json"
+PAC_FIXTURE = "pac_plan_request.min.2-0-0.json"
+REBALANCER_FIXTURE = "rebalancer_plan_request.medium.2-0-0.json"
 
 JsonObject = dict[str, Any]
 
@@ -1698,8 +1698,8 @@ def test_normalized_scenario_derives_every_referenced_currency_quantum_from_babe
 # (no transfer cap = the whole selected source; F1-extended fee instances).
 # ---------------------------------------------------------------------------
 
-COMPACT_PAC_FIXTURE = "pac_plan_request.compact.v2.json"
-CANDIDATE_MAX_PAC_FIXTURE = "pac_plan_request.candidate-max.v2.json"
+COMPACT_PAC_FIXTURE = "pac_plan_request.compact.2-0-0.json"
+CANDIDATE_MAX_PAC_FIXTURE = "pac_plan_request.candidate-max.2-0-0.json"
 PAC_ROUTE_ID = "route-asset-one-broker-one-buy"
 PAC_CAPABILITY_ID = "cap-broker-one-eur-whole"
 PAC_FEE_SCHEDULE_ID = "fee-broker-one-eur-buy"

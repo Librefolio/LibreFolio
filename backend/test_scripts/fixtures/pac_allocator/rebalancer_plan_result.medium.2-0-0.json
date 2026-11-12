@@ -1061,7 +1061,10 @@
           "value": "0"
         },
         "final_spendable": "0",
-        "final_physical": "0"
+        "final_physical": "0",
+        "transfer_in": "0",
+        "transfer_out": "0",
+        "foreign_withholding_tax": "0"
       },
       {
         "broker_id": "broker-beta",
@@ -1082,7 +1085,10 @@
           "value": "0"
         },
         "final_spendable": "0",
-        "final_physical": "0"
+        "final_physical": "0",
+        "transfer_in": "0",
+        "transfer_out": "0",
+        "foreign_withholding_tax": "0"
       },
       {
         "broker_id": "broker-beta",
@@ -1103,7 +1109,10 @@
           "value": "0"
         },
         "final_spendable": "0",
-        "final_physical": "0"
+        "final_physical": "0",
+        "transfer_in": "0",
+        "transfer_out": "0",
+        "foreign_withholding_tax": "0"
       }
     ],
     "exposure_rows": [
@@ -1376,12 +1385,55 @@
       }
     },
     "costs": {
-      "buy_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "sell_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "fx_spread_loss": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "execution_margin_cost": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "broker_withheld_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
-      "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+      "buy_fees": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "sell_fees": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "fx_spread_loss": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "execution_margin_cost": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "broker_withheld_tax": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "self_reserved_tax": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "foreign_withholding_tax": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      }
     },
     "objectives": {
       "stages": [
@@ -1389,41 +1441,72 @@
           "objective_code": "fixed_l2",
           "ordinal": 1,
           "sense": "min",
-          "unit": {"kind": "valuation_money_squared", "currency_code": "EUR"},
-          "value": {"kind": "finite_decimal", "value": "0"}
+          "unit": {
+            "kind": "valuation_money_squared",
+            "currency_code": "EUR"
+          },
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          }
         },
         {
           "objective_code": "shortfall",
           "ordinal": 2,
           "sense": "min",
-          "unit": {"kind": "valuation_money", "currency_code": "EUR"},
-          "value": {"kind": "finite_decimal", "value": "0"}
+          "unit": {
+            "kind": "valuation_money",
+            "currency_code": "EUR"
+          },
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          }
         },
         {
           "objective_code": "wealth_loss",
           "ordinal": 3,
           "sense": "min",
-          "unit": {"kind": "valuation_money", "currency_code": "EUR"},
-          "value": {"kind": "finite_decimal", "value": "110"}
+          "unit": {
+            "kind": "valuation_money",
+            "currency_code": "EUR"
+          },
+          "value": {
+            "kind": "finite_decimal",
+            "value": "110"
+          }
         },
         {
           "objective_code": "explicit_cost",
           "ordinal": 4,
           "sense": "min",
-          "unit": {"kind": "valuation_money", "currency_code": "EUR"},
-          "value": {"kind": "finite_decimal", "value": "0"}
+          "unit": {
+            "kind": "valuation_money",
+            "currency_code": "EUR"
+          },
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          }
         },
         {
           "objective_code": "active_order_rows",
           "ordinal": 5,
           "sense": "min",
-          "unit": {"kind": "count"},
-          "value": {"kind": "finite_decimal", "value": "4"}
+          "unit": {
+            "kind": "count"
+          },
+          "value": {
+            "kind": "finite_decimal",
+            "value": "4"
+          }
         }
       ],
       "tie_break": {
         "code": "canonical_key",
-        "unit": {"kind": "canonical_key"},
+        "unit": {
+          "kind": "canonical_key"
+        },
         "ordered_keys": [
           "order-sell-a-alpha",
           "order-buy-b-beta",

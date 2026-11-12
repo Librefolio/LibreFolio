@@ -29,9 +29,9 @@ from backend.app.services.pac_allocator.models import ExactPlannerScenario, Exac
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 
 # Resolved from this file, not from the working directory: parents = [test_services, test_scripts].
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.min.v2.json"
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.min.2-0-0.json"
 # The min fixture's compact twin (every default omitted, no fee schedule): the base of ``fx_conversion_request``.
-COMPACT_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.compact.v2.json"
+COMPACT_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator" / "pac_plan_request.compact.2-0-0.json"
 
 
 def _equal_weights(n_assets: int) -> list[Decimal]:

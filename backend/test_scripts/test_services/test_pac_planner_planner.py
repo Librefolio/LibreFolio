@@ -1,7 +1,7 @@
 """Orchestration tests for ``plan_pac_allocation`` (PAC planner v2).
 
 This suite is the durable form of the Stage-5b smoke harness, driven from the
-*same real wire fixture* (``_pac_request`` → ``pac_plan_request.min.v2.json``)
+*same real wire fixture* (``_pac_request`` → ``pac_plan_request.min.2-0-0.json``)
 and validated through ``PAC_PLAN_INPUT_ADAPTER`` before it ever reaches the
 service. Variants are built with ``copy.deepcopy`` plus targeted edits, never
 hand-rolled.
@@ -1831,7 +1831,7 @@ def test_exhaustive_oracle_is_test_only():
 # A field equal to its default may be omitted; a fee schedule without money
 # takes the route's quote currency (F1-extended, plan §3).
 # --------------------------------------------------------------------------
-_CANDIDATE_MAX_FIXTURE = "pac_plan_request.candidate-max.v2.json"
+_CANDIDATE_MAX_FIXTURE = "pac_plan_request.candidate-max.2-0-0.json"
 _BROKER_ONE_CAPABILITY_ID = "cap-broker-one-eur-whole"
 _RATE_SCHEDULE_ID = "fee-broker-one-rate-buy"
 # SCIP's own floats: compared with a tolerance, never exactly.
@@ -2242,3 +2242,34 @@ def test_asset_minimum_obliges_a_buy_where_required_minimum_did():
     assert isinstance(result, PacPlannerReadyInfeasibleResult), _codes(result)
     assert result.proof.kind == "infeasibility_proven" and result.proof.proof_source == "solver_status"
     assert [(issue.path.entity_kind, issue.path.entity_id) for issue in result.issues if issue.code == "allocation.bounds_unsatisfiable"] == [("asset", _ASSET_ONE_ID)]
+
+
+def test_result_publishes_the_limit_rows_and_the_new_ledger_columns():
+    """Contract §6.2, §6.5: the Asset row says its minimum and maximum (amounts, ``null`` when unset), a cash entry with a limit has
+    a row of its own with its final spendable cash in the valuation currency, and the ledger rows carry the transfer and foreign
+    withholding columns, all zero in a PAC (it has no transfers and no foreign tax)."""
+    payload = _limited_request(asset_entry(_ASSET_ONE_ID, "1", minimum=amount_limit("20")), cash_entry("broker-one", "EUR", maximum=amount_limit("10")))
+
+    result = plan_pac_allocation(_validated(payload), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyIncumbentResult), _codes(result)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)["primary_solution"]
+    (asset,) = wire["asset_rows"]
+    assert asset["minimum"]["currency"] == "EUR" and Decimal(asset["minimum"]["value"]["value"]) == Decimal("20")
+    assert asset["maximum"] is None
+    (cash,) = wire["cash_rows"]
+    assert (cash["broker_id"], cash["currency"], cash["minimum"]) == ("broker-one", "EUR", None)
+    assert Decimal(cash["maximum"]["value"]["value"]) == Decimal("10")
+    assert Decimal(cash["final_value"]["value"]["value"]) <= Decimal("10")
+    assert all((row["transfer_in"], row["transfer_out"], row["foreign_withholding_tax"]) == ("0", "0", "0") for row in wire["ledger_rows"])
+    assert Decimal(wire["costs"]["foreign_withholding_tax"]["value"]["value"]) == 0
+    _revalidate(result)
+
+
+def test_result_without_limits_has_no_cash_rows_and_null_asset_limits():
+    result = plan_pac_allocation(_validated(_incumbent_payload()), solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+
+    assert isinstance(result, PacPlannerReadyIncumbentResult), _codes(result)
+    wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)["primary_solution"]
+    assert wire["cash_rows"] == []
+    assert all((row["minimum"], row["maximum"]) == (None, None) for row in wire["asset_rows"])
