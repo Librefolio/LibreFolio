@@ -93,6 +93,13 @@ UNCATEGORISED_EXPOSURE_LABEL = "Uncategorised"
 _EXPOSURE_DIMENSIONS = ("asset_type", "sector", "geography")
 
 
+class TransferColumnsUnpublishableError(ValueError):
+    """A ledger cell posted a transfer between Brokers, which contract ``1.0.0`` has no column for (A2, project 67).
+
+    The transfer columns arrive with contract ``2.0.0`` (A4); until then such a row is an error, never a row that drops them.
+    """
+
+
 class ExposureProvenanceError(ValueError):
     """Raised when a residual exposure row would have no provenance at all.
 
@@ -624,6 +631,8 @@ def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
     """
     rows: list[PlannerLedgerRow] = []
     for ledger in evaluation.ledgers:
+        if ledger.transfer_in or ledger.transfer_out:
+            raise TransferColumnsUnpublishableError(f"ledger cell {ledger.broker_id!r} {ledger.currency} posted a transfer between Brokers: contract 1.0.0 has no column for it")
         rows.append(
             PlannerLedgerRow(
                 broker_id=ledger.broker_id,

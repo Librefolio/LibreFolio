@@ -35,7 +35,7 @@ type OrderCapKind = Literal["quantity", "notional"]
 type ConstraintPhase = Literal["normalization", "exact", "solver", "publication"]
 type ConstraintEnforcement = Literal["normalizer", "exact_only", "solver_and_exact", "publication_gate"]
 type ObjectiveSense = Literal["min"]
-type DecisionFamily = Literal["funding_transfer", "fx_debit", "buy_quantum", "sell_quantum"]
+type DecisionFamily = Literal["funding_transfer", "fx_debit", "buy_quantum", "sell_quantum", "broker_transfer"]
 type DecisionMode = Literal["disabled", "mutable", "frozen_exact", "additive_only"]
 type ExactPolicyPurpose = Literal["primary", "invest_only_baseline", "sell_extension", "deployment"]
 type ExactUnitKind = Literal["boolean", "count", "ratio", "asset_quantity", "native_money", "valuation_money", "valuation_money_squared", "ordinal_penalty", "canonical_key"]
@@ -98,6 +98,8 @@ type LedgerPostingFamily = Literal[
     "sell_fee",
     "broker_withheld_tax",
     "self_reserved_tax",
+    "transfer_in",
+    "transfer_out",
 ]
 
 
@@ -497,6 +499,24 @@ class ExactSellContext:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactTransferLane:
+    """A lane for moving cash between two Brokers in one currency (A2, project 67): one ``broker_transfer`` decision.
+
+    Free and instant (``decisioni-REB.md`` §11.1). The normalizer fills the lanes for the Rebalancer only (block B); a PAC
+    scenario has none (specification §15 n. 2), except one a test builds by hand (D4 a).
+    """
+
+    source_broker_id: str
+    destination_broker_id: str
+    currency: str
+
+    def __post_init__(self) -> None:
+        _require_text(self.source_broker_id, "transfer source_broker_id")
+        _require_text(self.destination_broker_id, "transfer destination_broker_id")
+        _require_currency(self.currency, "transfer currency")
+
+
+@dataclass(frozen=True, slots=True)
 class ExactPlannerScenario:
     snapshot: ExactSnapshot
     product: PlannerProduct
@@ -516,6 +536,7 @@ class ExactPlannerScenario:
     order_routes: tuple[ExactOrderRoute, ...]
     target_weights: tuple[ExactTargetWeight, ...]
     sell_context: ExactSellContext | None
+    transfer_lanes: tuple[ExactTransferLane, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.product == "pac") != (self.policy in {"proportional", "min_fragmentation"}):
@@ -543,6 +564,7 @@ class ExactPlannerScenario:
         _require_canonical_tuple(self.funding_routes, lambda item: item.route_id, "funding_routes")
         _require_canonical_tuple(self.order_routes, lambda item: item.route_id, "order_routes")
         _require_canonical_tuple(self.target_weights, lambda item: item.asset_id, "target_weights")
+        _require_canonical_tuple(self.transfer_lanes, lambda item: (item.source_broker_id, item.destination_broker_id, item.currency), "transfer_lanes")
         if self.valuation_currency not in {item.currency for item in self.currency_specs}:
             raise ValueError("valuation currency requires a currency spec")
         if sum((item.weight for item in self.target_weights), ExactRatio(0)) != ExactRatio(1):
@@ -780,7 +802,7 @@ def _validate_sell_gate_references(
             raise ValueError("SELL gates must reference one SELL decision")
         if any(decision_by_id.get(decision_id) is None or decision_by_id[decision_id].family != "buy_quantum" for decision_id in gate.fixed_incremental_buy_decision_ids):
             raise ValueError("SELL gates can freeze only declared BUY decisions")
-        if any(decision_by_id.get(decision_id) is None or decision_by_id[decision_id].family not in {"funding_transfer", "fx_debit"} for decision_id in gate.reopened_decision_ids):
+        if any(decision_by_id.get(decision_id) is None or decision_by_id[decision_id].family not in {"funding_transfer", "fx_debit", "broker_transfer"} for decision_id in gate.reopened_decision_ids):
             raise ValueError("SELL gates can reopen only funding and FX decisions")
 
 
@@ -1124,6 +1146,9 @@ class ExactBrokerLedgerEvaluation:
     accounting_rounding_adjustment: ExactRatio
     final_spendable: ExactRatio
     final_physical: ExactRatio
+    # A2 (project 67): money moved between Brokers, exact both ways. Defaults keep every hand-built row valid.
+    transfer_in: ExactRatio = ExactRatio(0)
+    transfer_out: ExactRatio = ExactRatio(0)
 
     def __post_init__(self) -> None:
         _require_text(self.broker_id, "ledger broker_id")
@@ -1140,9 +1165,11 @@ class ExactBrokerLedgerEvaluation:
             "sell_fees",
             "broker_withheld_tax",
             "self_reserved_tax",
+            "transfer_in",
+            "transfer_out",
         ):
             _require_nonnegative(getattr(self, field), field)
-        expected_spendable = self.initial_selected + self.funding_in + self.fx_credit + self.gross_sell_credit - self.funding_out - self.fx_debit - self.buy_debit - self.buy_fees - self.sell_fees - self.broker_withheld_tax - self.self_reserved_tax
+        expected_spendable = self.initial_selected + self.funding_in + self.fx_credit + self.gross_sell_credit + self.transfer_in - self.funding_out - self.fx_debit - self.buy_debit - self.buy_fees - self.sell_fees - self.broker_withheld_tax - self.self_reserved_tax - self.transfer_out
         if self.final_spendable != expected_spendable:
             raise ValueError("ledger final_spendable does not reconcile")
         if self.final_physical != self.final_spendable + self.self_reserved_tax:

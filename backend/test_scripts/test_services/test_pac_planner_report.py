@@ -58,6 +58,7 @@ import random
 from dataclasses import replace
 from decimal import ROUND_HALF_EVEN, Context, Decimal
 from fractions import Fraction
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -72,7 +73,7 @@ from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
-from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactExposure
+from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactBrokerLedgerEvaluation, ExactExposure
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import solve_policy_program
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id
@@ -1369,3 +1370,19 @@ def test_each_conversion_is_one_engine_decision() -> None:
         assert action.order_route_id == exact.order_route_id
         figures = ("source_debit", "destination_credit", "spot_rate", "effective_rate", "spread_loss", "provenance_ids")
         assert {name: getattr(conversion, name) for name in figures} == {name: getattr(action, name) for name in figures}
+
+
+def test_ledger_projection_refuses_a_posted_transfer_under_contract_1_0_0() -> None:
+    """A2 step 9: the ledger of contract 1.0.0 has no transfer columns (they arrive in A4), so a cell that posted a transfer
+    between Brokers is an error of the report, never a row that silently drops it."""
+    zero = R(0)
+    figures = dict.fromkeys(
+        ("initial_selected", "funding_in", "funding_out", "fx_debit", "fx_credit", "buy_debit", "gross_sell_credit", "buy_fees", "sell_fees", "broker_withheld_tax", "self_reserved_tax", "raw_rounding_delta", "accounting_rounding_adjustment"),
+        zero,
+    )
+    quiet = ExactBrokerLedgerEvaluation(broker_id="broker:a", currency="EUR", **figures, final_spendable=zero, final_physical=zero)
+    received = ExactBrokerLedgerEvaluation(broker_id="broker:b", currency="EUR", **figures, transfer_in=R(5), final_spendable=R(5), final_physical=R(5))
+
+    assert len(PR.build_ledger_rows(SimpleNamespace(ledgers=(quiet,)))) == 1
+    with pytest.raises(PR.TransferColumnsUnpublishableError, match="broker:b"):
+        PR.build_ledger_rows(SimpleNamespace(ledgers=(quiet, received)))
