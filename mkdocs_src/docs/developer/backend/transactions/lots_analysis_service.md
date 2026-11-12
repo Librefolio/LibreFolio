@@ -2,7 +2,7 @@
 
 `backend/app/services/portfolio/lots_analysis_service.py` is the orchestration layer behind `POST /portfolio/lots/analysis`.
 
-It runs `FifoLotEngine` once, then converts engine output into `LotsAnalysisResponse`: FX-normalized values, qbq-aware valuations from the unified price resolver, lot/event histories, WAC series, income allocation, and valuation at cost on the days the asset has no price yet. Frontend consumer: `LotsAnalysisPanel.svelte`.
+It loads the asset's data once, runs `FifoLotEngine` once per matching method asked — FIFO, LIFO or both (project 69) — then converts the engine output into `LotsAnalysisMethodsResponse`: FX-normalized values, qbq-aware valuations from the unified price resolver, lot/event histories, WAC series, income allocation, and valuation at cost on the days the asset has no price yet. Frontend consumer: `LotsAnalysisPanel.svelte`.
 
 ---
 
@@ -13,7 +13,7 @@ The service keeps the orchestration (`get_lots_analysis()`), the database loader
 | Module | What it holds |
 |--------|---------------|
 | `prices.py` | What the lots read from the asset's `AssetPriceSeries`: `opening_reference_price()`, a lot's reference price at its opening (see [Reference Price](#reference-price)), and `last_day_without_observation()`, the last day valued at cost, found by bisection (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)) |
-| `conversions.py` | `FxRateResolver`; `convert_closure()` → `ConvertedClosure`, a closure's two legs each in its own currency at its own date, and `need_closure_rates()`, the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); the conversions each view needs: `collect_fx_needs()`, `collect_performance_fx_needs()`, `needs_market_series()`, `unconvertible_ids()` |
+| `conversions.py` | `FxRateResolver`, and its `read_only_copy()`, one per matching method (see [Two Methods, One Load](#two-methods)); `convert_closure()` → `ConvertedClosure`, a closure's two legs each in its own currency at its own date, and `need_closure_rates()`, the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); the conversions each view needs: `collect_fx_needs()`, `collect_performance_fx_needs()`, `needs_market_series()`, `unconvertible_ids()` |
 | `economic_events.py` | The engine's income and FEE/TAX inputs (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`), their outputs (`extract_income_outputs()`, `extract_cost_outputs()`), `WithheldEconomics` / `withheld_economics()` and `map_economic_groups()` |
 | `histories.py` | The value, return, price, market price and performance histories (`build_value_history()`, `build_return_history()`, `build_price_history()`, `build_market_price_history()`, `build_performance_history()`) with their per-day snapshot helpers, `lot_history_end_date()`, `known_realized_pnl()`, `known_cumulative_proceeds()` |
 | `change_days.py` | The days the daily series can change on: `lot_change_days()`, over the dates `analysis_event_dates()` gathers, and `expand_to_days()`, which fills every day of the window from them (see [Change Days](#change-days)) |
@@ -35,10 +35,10 @@ POST /portfolio/lots/analysis
 Router entrypoint:
 
 ```python
-@portfolio_router.post("/lots/analysis", response_model=LotsAnalysisResponse)
+@portfolio_router.post("/lots/analysis", response_model=LotsAnalysisMethodsResponse)
 async def get_lots_analysis(body: LotsAnalysisQuery, ...):
     ...
-    return await service.get_lots_analysis(
+    return await service.get_lots_analysis_methods(
         user_id=current_user.id,
         asset_id=body.asset_id,
         broker_ids=body.broker_ids,
@@ -47,6 +47,7 @@ async def get_lots_analysis(body: LotsAnalysisQuery, ...):
         target_currency=body.target_currency,
         selected_lot_ids=body.selected_lot_ids,
         requested_analyses=body.requested_analyses,
+        matching_methods=body.matching_methods,
     )
 ```
 
@@ -62,6 +63,7 @@ If `date_range` contains min/max sentinels, router resolves them before calling 
 | `target_currency` | `str \| None` | No | Defaults to global base currency |
 | `selected_lot_ids` | `list[int] \| None` | No | Lot subset for lot-scoped analyses |
 | `requested_analyses` | `list[LotAnalysisType]` | Yes | Non-empty, duplicates rejected |
+| `matching_methods` | `list[LotMatchingMethod]` | No | `FIFO`, `LIFO`; default `["FIFO"]`. An unknown method, a repeated one or an empty list is a 422. Each method gets its block in `methods`, in the order asked |
 
 ### 🧩 `LotAnalysisType`
 
@@ -80,22 +82,39 @@ If `date_range` contains min/max sentinels, router resolves them before calling 
 | `PERFORMANCE_HISTORY` | `performance_history` | Asset-wide ROI/TWRR, ignores lot selection |
 | `INCOME_EVENTS` | `income_events` | Dividend/interest markers allocated to open LONG lots |
 
-### 📦 Response Shape — `LotsAnalysisResponse`
+### 📦 Response Shape — `LotsAnalysisMethodsResponse` {: #response-shape }
 
-Top-level fields always present:
+The answer is **symmetric** (decision D11, a Breaking change of 1.4): what no matching method changes comes once, at the
+top; everything read from a replay comes in `methods[<method>]`, one block per method asked.
+
+**Common parts** (`LotsAnalysisCommon`):
 
 | Field | Meaning |
 |-------|---------|
 | `asset_id` | Requested asset |
 | `target_currency` | Final response currency |
 | `quote_base_quantity` | Asset qbq, needed by frontend price/WAC axis |
-| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`). A `COMPLETE` engine run becomes `DEGRADED` when a conversion is missing — in a WAC line or in any other figure of the analysis — or a WAC line misses a cost basis (see [FX Conversion](#fx-conversion) and [WAC Lines](#wac-lines)). With `FAILED` the lot figures are withheld (see [A Failed Reconstruction](#failed-reconstruction)) |
-| `calculation_metadata` | Broker scope, selection, requested/computed date bounds, generation date |
-| `data_quality` | FIFO/data-quality issues mapped to UI-friendly DTOs |
+| `calculation_metadata` | Broker scope, selection (one for every method: the lots are the same, D12), requested/computed date bounds, `matching_methods`, generation date |
+| `range` | The days the histories cover |
+| `market_price_history`, `broker_wac_history`, `cumulative_wac_history` | The three replay-free analyses (`_REPLAY_FREE_ANALYSES`): the market price line and the average-cost lines, kept with `FAILED` |
+
+**A method's block** (`LotsMethodAnalysis`, in `methods["FIFO"]` / `methods["LIFO"]`):
+
+| Field | Meaning |
+|-------|---------|
+| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` for that method's replay (an empty-but-valid analysis is `COMPLETE`). A `COMPLETE` run becomes `DEGRADED` when a conversion is missing — in a WAC line or in any other figure of the method — or a WAC line misses a cost basis (see [FX Conversion](#fx-conversion) and [WAC Lines](#wac-lines)). With `FAILED` the lot figures are withheld (see [A Failed Reconstruction](#failed-reconstruction)) |
+| `data_quality` | The method's **complete** report: its replay's issues, its conversion gaps, and those of the common parts (price assumed at cost, the WAC lines' gaps, the market price's gaps). `stale_fx_pairs` is computed on every currency either method asked |
+| `lots`, `gantt_segments`, `custody_history`, `lot_events`, `value_history`, `return_history`, `price_history`, `performance_history`, `income_events` | The lot sections, as requested |
 | `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) mapped from the engine, `None` unless `LOT_SUMMARY` requested |
 | `asset_orphan_income` / `asset_orphan_fees` / `asset_orphan_taxes` | Amounts that belonged to no eligible lot, kept at asset level (never dropped, never double-counted) |
 
 All analysis payload sections are `None` unless explicitly requested — and, with `FAILED`, every section but the WAC lines and the market price series (see [A Failed Reconstruction](#failed-reconstruction)).
+
+**The flat reading for Python callers.** `LotsAnalysisResponse(LotsAnalysisCommon, LotsMethodAnalysis)` is one method
+read flat: the common fields and one block's, each declared once. It is not an API response; it is derived from the
+answer by `LotsAnalysisMethodsResponse.reading(method)`, never built by hand.
+`LotsAnalysisService.get_lots_analysis(..., matching_method=FIFO)` returns it: the AI Export reads the lots through it,
+in FIFO explicitly (decision D7), and so do the Python tests.
 
 ---
 
@@ -104,8 +123,9 @@ All analysis payload sections are `None` unless explicitly requested — and, wi
 Service entrypoint:
 
 ```python
-async def get_lots_analysis(
+async def get_lots_analysis_methods(
     self,
+    *,
     user_id: int,
     asset_id: int,
     broker_ids: list[int] | None,
@@ -114,22 +134,66 @@ async def get_lots_analysis(
     target_currency: str | None,
     selected_lot_ids: list[int] | None,
     requested_analyses: list[str | LotAnalysisType],
-) -> LotsAnalysisResponse:
+    matching_methods: Sequence[LotMatchingMethod] = (LotMatchingMethod.FIFO,),
+) -> LotsAnalysisMethodsResponse:
 ```
 
-High-level flow:
+It works in two steps (project 69, L2–L3): `_load_inputs()` reads once what no matching method changes and returns
+`LotsAnalysisInputs`; `_derive()` replays the lots once per method and builds the answer (see
+[Two Methods, One Load](#two-methods)).
+
+High-level flow — steps 1–3 are the load, 4–11 the derive:
 
 1. Load accessible brokers, asset transactions, split ratios, broker shorting flags, `price_history`, asset income and FEE / TAX transactions. A split whose stored ratio fails `is_valid_split_ratio()` stays in the ratio map, so its row is still split-linked and the WAC lines still treat it as a split, but the FIFO engine skips it: no lot is rescaled, `lot_events` has no `SPLIT` row for it, and the analysis reports no issue (lot MF-D4).
 2. Build one qbq-aware resolver series with `build_asset_price_series()`, from the `price_history` rows and the loaded transactions — before the engine, which reads it for reference prices (see [Unified Price Resolver](#unified-price-resolver)). Then read the transfer legs that cross the scope's edge with `read_transfers_at_scope_boundary()`: every later step reads the list it returns (see [Transfers Across the Scope's Edge](#scope-edge-transfers)).
-3. When a requested analysis reads income, fees or taxes, build the engine's economic inputs first — income and FEE / TAX events and the BUY / SELL amounts that weight the FEE / TAX split, each converted at its own date (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`). Then build `reference_price_lookup()` over the series (see [Reference Price](#reference-price)) and run `run_fifo_lot_engine(...)`.
+3. When a requested analysis reads income, fees or taxes, build the engine's economic inputs first — income and FEE / TAX events and the BUY / SELL amounts that weight the FEE / TAX split, each converted at its own date (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`). Then build `reference_price_lookup()` over the series (see [Reference Price](#reference-price)) and run `run_fifo_lot_engine(...)` once per method (`_replay()`), each replay with its own performance scope.
 4. Resolve selected lots, and the days valued at cost: `at_cost_until = last_day_without_observation(price_series, history_dates)` (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)).
-5. Collect needed FX pairs with `collect_fx_needs()` / `collect_performance_fx_needs()`, then batch-load rates through `FxRateResolver`.
+5. Collect needed FX pairs with `collect_fx_needs()` / `collect_performance_fx_needs()` for every replay on the one resolver, then batch-load them all in **one** `FxRateResolver.load()`.
 6. Extract the engine's **economic stage** outputs — income, FEE/TAX and net metrics — with `extract_income_outputs()` and `extract_cost_outputs()` (allocation itself happens inside the engine, not here).
-7. Convert the marks of the days the requested analyses read into the two valuation maps, `market_prices` and `estimated_market_prices`, both from the same series.
+7. Convert the marks of the days the replays' analyses read into the two valuation maps, `market_prices` and `estimated_market_prices`, both from the same series, once, on the base resolver.
 8. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call (see [WAC Lines](#wac-lines)); their gaps — missing rates, unknown costs — are reported in step 11.
 9. Compute the change days once, with `lot_change_days()`: the days of `history_dates` on which a daily series can change. The seven daily builders run on those days only, and `expand_to_days()` fills every day of the window, `[display_from, actual_to]`, from the last change day on or before it (see [Change Days](#change-days)).
-10. Emit only requested DTO sections.
-11. Once every builder has run, report the gaps once, for the whole analysis: `_report_gaps()` adds to `data_quality` the WAC lines' gaps and every conversion `FxRateResolver` could not make (see [FX Conversion](#fx-conversion)).
+10. Emit only requested DTO sections: the common ones once, each method's own in its block (`_method_analysis()`), through that method's read-only copy of the resolver.
+11. Once every builder of a method has run, report its gaps once: `_report_gaps()` adds to its `data_quality` the WAC lines' gaps and every conversion its copy could not make (see [FX Conversion](#fx-conversion)). The configured FX pairs it classifies them with are read at most once per request (`_ConfiguredFxPairs`).
+
+### 🔀 Two Methods, One Load {: #two-methods }
+
+The developer's decision D1b: one request, and the backend never runs the same query twice for the second method.
+
+```mermaid
+flowchart LR
+  L[_load_inputs<br/>once] --> R1[_replay FIFO]
+  L --> R2[_replay LIFO]
+  R1 & R2 --> N[needs of both<br/>on one resolver]
+  N --> O[one load]
+  O --> C[common parts<br/>market price maps,<br/>change days, WAC]
+  C --> M1[FIFO block<br/>its read-only copy]
+  C --> M2[LIFO block<br/>its read-only copy]
+```
+
+- **What is common** follows the code's own rule: the `_REPLAY_FREE_ANALYSES` (market price line, average-cost lines)
+  come once; everything that reads `engine_result` goes in the method's block.
+- **The grid of days** is drawn once, on the event dates of every replay together (`_event_dates()`). The two sets are
+  the same: every date a replay derives is the date of a row the analysis reads anyway (pinned by
+  `test_the_event_dates_are_the_same_in_both_methods`). The price maps follow the analyses the replays **show**, so a
+  FAILED replay, which shows only the replay-free ones, asks and reports no more than before.
+- **One load of rates** on the union of what the methods ask. `need_days()` skips a window already asked whole: the
+  market series asks the same window in every method.
+- **Gaps per method.** After the load each method converts through `fx_resolver.read_only_copy()`: it reads the rates
+  loaded and the windows asked (shared, read-only), starts with a copy of the gaps recorded so far (the load step's and
+  the price maps'), and keeps its own. `need`, `need_days` and `load` raise on a copy, and a copy is refused while a rate
+  asked is not loaded yet. So a rate only one method asks degrades that method alone. With stored rates this shows as
+  different gap dates per method only before a pair's first row (a stored rate is carried forward), and then both
+  methods are `DEGRADED`.
+- **`stale_fx_pairs`** is read on the base resolver, on every currency either method asked: the union may list in one
+  block a pair read on the last day only by the other method (lots in two currencies, a movement on the last day, and a
+  request without a market-series analysis — only a hand-made call with both methods meets all three).
+- **FAILED** is the same in both methods: the four codes that fail a replay read a broker's quantity, which no matching
+  method changes; the status still stays per method.
+
+The proof that FIFO alone answers as before (L3): a pytest plugin replayed every call of the test suites on a copy of
+the service before the change and compared the JSON byte for byte, and each method asked beside the other against the
+same method asked alone.
 
 Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the user can access, in any role, intersected with `broker_ids` when given. No owner share is applied anywhere in the analysis — quantities, values and P&L are each broker's full figures, unlike the portfolio summary, which scales an OWNER's brokers by their `share_percentage`. The lot modal says so next to its quantities (`brokers.lots.modal.absoluteQuantityTooltip`).
 
@@ -722,6 +786,18 @@ Still read on every day of `history_dates`: the two valuation maps, for the hist
 - `test_services/test_financial/test_lots_change_days_parity.py` (`./dev.py test services roi-fifo-utils`): the service against itself with every day a change day (`lot_change_days` replaced by «every day»): the same JSON, `generated_at` aside, on 13 books × their windows × their scopes, 178 cases; and the two reds on the 1900 book — at most 400 calls of the two snapshot helpers, and one call of `lot_change_days()`.
 - `test_services/test_financial/test_lots_fx_steps_parity.py` (`./dev.py test services roi-fifo-utils`): the rates read as steps against a verbatim copy of the old resolver (one `convert_bulk()` unit per need) — the same JSON, `generated_at` aside, over the books of the change-days parity test and their windows and scopes, read in EUR, plus `fx-daily` read in HUF and the 1900 book read in USD; the resolver alone, asked the same needs as the old one over seeded rates, answers alike on every asked day and on the days around, digits and exponent included (`Decimal.as_tuple()`), and reports the same `missing_pairs()`; and the two reds on the 1900 book read in USD — at most 400 conversions handed to `convert_bulk()` and one or two `unit_rate_steps()` calls.
 - `test_services/test_lots_analysis_pure.py` (`./dev.py test services lots-analysis-pure`, pure): `TestFxRateResolverLoad` and `TestFxRateResolverNeedDays` stub `unit_rate_steps` where `conversions` reads it — the pending windows of each load, the days a window answers and the days around it that it does not, nothing asked for a blank code, the target or a reversed window — and `collect_fx_needs()` asks the market currencies as windows, not a `need()` a day.
+
+**Tests of the two methods** (project 69, L3):
+
+- `test_lots_analysis_pure.py`: `TestFxRateResolverReadOnlyCopy` (an identical window read once, a copy's own gaps, a
+  copy that asks and loads nothing, no copy before the load) and `TestBothMatchingMethods` (a rate only one method asks
+  degrades that method only, with a reader that has a hole; the empty scope answers every method; the flat reading is
+  the common parts and one block).
+- `test_financial/test_lots_analysis_service.py` (`services roi-fifo-utils`): a method alone answers as the same method
+  beside the other, in both orders; the event dates are the same in both methods; two methods read what one method reads
+  (with and without conversion gaps, the FX actions kept on each block's issues).
+- `test_financial/test_lifo_lot_engine.py`: a failed replay fails in both methods with the same codes.
+- `test_api/test_portfolio_api.py` (`api portfolio`): the default, the order of `methods`, and the 422s.
 
 ---
 

@@ -79,11 +79,11 @@ backend/app/services/financial_math/
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices (none on a sum ≤ 0), gross weights, concentration (largest weight, HHI)
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan, the split a share change implies (`implied_split_ratio`)
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits, the move that closed it (`closing_move`)
-├── fifo/                    FIFO lots
+├── fifo/                    the lots, matched in FIFO or LIFO (the name stays fifo/, D5)
 │   ├── __init__.py          docstring only
-│   ├── models.py            input transactions, events, lots, fragments, closures, result
+│   ├── models.py            input transactions, events, lots, fragments, closures, result; LotMatchingMethod (FIFO, LIFO)
 │   ├── eligibility.py       eligible_income_quantity(): D-1 eligibility, shared with Yield on Cost
-│   └── engine.py            FifoLotEngine, run_fifo_lot_engine()
+│   └── engine.py            FifoLotEngine, run_fifo_lot_engine(matching_method=…): one queue per broker, inflows before outflows within a day
 ├── portfolio/               daily portfolio state and the views derived from it
 │   ├── __init__.py          docstring only
 │   ├── models.py            classified transactions, daily states, contributions, results (PortfolioCalculationResult.marks: the result's AssetMarks)
@@ -98,7 +98,7 @@ backend/app/services/financial_math/
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
     ├── prices.py            from the asset's AssetPriceSeries: a lot's reference price at its opening, the last day valued at cost
-    ├── conversions.py       FxRateResolver (its rates read as steps), a closure's legs at their own dates, and the conversions each view needs
+    ├── conversions.py       FxRateResolver (its rates read as steps; read_only_copy(): one per matching method, the loaded rates shared, its own gaps), a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price, market price and performance histories
     ├── change_days.py       the days the lots' series can change on (`price_candidate_days`, `lot_change_days`, through the top-level `with_next_days`), a lazy calendar (`DayRange`) and the series as steps (`history_steps`, D-P4)
