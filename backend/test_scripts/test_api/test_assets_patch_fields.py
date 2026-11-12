@@ -605,22 +605,25 @@ async def test_patch_batch_three_configurations_are_saved(test_server):
 
 @pytest.mark.asyncio
 async def test_patch_batch_failing_item_rolls_back_the_flushed_ones(test_server):
-    """Lane 65 B3. The only path where «nothing saved» undoes rows already flushed: item 0 renames its asset, item 1 takes
-    the name of another asset (``uq_assets_display_name``) and fails at its flush. Contract: ``patchFailed`` on item 1,
-    ``committed`` false, and item 0's rename is rolled back."""
+    """Lane 65 B3. The only path where «nothing saved» undoes rows already flushed: item 0 renames its asset, item 1 sends
+    an empty name, which the apply step stores as NULL and the flush refuses (NOT NULL). Contract: ``patchFailed`` on
+    item 1, ``committed`` false, and item 0's rename is rolled back.
+
+    Lane 65 B4 changed this test: it used to make item 1 take the name of another asset (``uq_assets_display_name``), but
+    that is now caught by the check step as ``assetNameTaken``, before anything is written; an empty name is the one
+    failure left that only the flush reveals through the API."""
     print_section("B3: PATCH /assets - a failing item rolls back the items already applied")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         first_id, first_name = await _create_owned_asset(client, "RBK1", AssetType.STOCK)
         second_id, second_name = await _create_owned_asset(client, "RBK2", AssetType.STOCK)
-        _taken_id, taken_name = await _create_owned_asset(client, "RBK3", AssetType.STOCK)
 
         data = await _patch_batch(
             client,
             [
                 FAAssetPatchItem(asset_id=first_id, display_name=f"{first_name} renamed"),
-                FAAssetPatchItem(asset_id=second_id, display_name=taken_name),
+                FAAssetPatchItem(asset_id=second_id, display_name=""),
             ],
         )
 
@@ -630,3 +633,102 @@ async def test_patch_batch_failing_item_rolls_back_the_flushed_ones(test_server)
         assert (await _info_of(client, first_id)).display_name == first_name, "the flushed rename of item 0 must be rolled back"
         assert (await _info_of(client, second_id)).display_name == second_name
         print_success("✓ patchFailed on item 1, item 0 rolled back")
+
+
+# ============================================================
+# Lane 65 B4: a name another asset has is caught by the check, before any write
+# ============================================================
+@pytest.mark.asyncio
+async def test_patch_batch_name_taken_by_another_asset_is_an_issue(test_server):
+    """Lane 65 B4 (coordinator's decision: protect the input where an error can really happen). Red today: the clash only
+    shows as a generic ``patchFailed`` at the flush. Contract: ``assetNameTaken`` on the item, ``field`` display_name,
+    ``params.name``, found by the check, nothing saved (the other item keeps its old name too)."""
+    print_section("B4: PATCH /assets - a name taken by another asset is assetNameTaken")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        first_id, first_name = await _create_owned_asset(client, "NMT1", AssetType.STOCK)
+        second_id, second_name = await _create_owned_asset(client, "NMT2", AssetType.STOCK)
+        _holder_id, taken_name = await _create_owned_asset(client, "NMT3", AssetType.STOCK)
+
+        data = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=first_id, display_name=f"{first_name} renamed"),
+                FAAssetPatchItem(asset_id=second_id, display_name=taken_name),
+            ],
+        )
+
+        assert data.committed is False and data.success_count == 0
+        assert all(r.success is False for r in data.results), data.results
+        assert len(data.issues) == 1, data.issues
+        issue = data.issues[0]
+        assert (issue.code, issue.asset_id, issue.index, issue.field, issue.params) == ("assetNameTaken", second_id, 1, "display_name", {"name": taken_name})
+        assert (await _info_of(client, first_id)).display_name == first_name
+        assert (await _info_of(client, second_id)).display_name == second_name
+        print_success("✓ assetNameTaken with params.name, nothing saved")
+
+
+@pytest.mark.asyncio
+async def test_patch_batch_two_items_taking_the_same_name_is_an_issue(test_server):
+    """Lane 65 B4. Two items of one batch take the same new name: the second one is the clash (the first is the one that
+    holds the name by then), nothing is saved."""
+    print_section("B4: PATCH /assets - two items taking the same new name")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        id_a, name_a = await _create_owned_asset(client, "SAM1", AssetType.STOCK)
+        id_b, name_b = await _create_owned_asset(client, "SAM2", AssetType.STOCK)
+        shared = f"B4 shared {unique_id('SAM')}"
+
+        data = await _patch_batch(client, [FAAssetPatchItem(asset_id=id_a, display_name=shared), FAAssetPatchItem(asset_id=id_b, display_name=shared)])
+
+        assert data.committed is False
+        assert [(i.code, i.asset_id, i.index, i.params) for i in data.issues] == [("assetNameTaken", id_b, 1, {"name": shared})], data.issues
+        assert (await _info_of(client, id_a)).display_name == name_a
+        assert (await _info_of(client, id_b)).display_name == name_b
+        print_success("✓ the second item of the pair is the assetNameTaken")
+
+
+@pytest.mark.asyncio
+async def test_patch_batch_name_checks_follow_the_batch_order(test_server):
+    """Lane 65 B4. The check judges the names as the apply step meets them, item after item: an asset that keeps its own
+    name is not a clash, and a name that an earlier item of the batch has just left is free for a later one. The other
+    way round (taking a name before its holder leaves it) is a clash, because the flush would refuse it."""
+    print_section("B4: PATCH /assets - name checks follow the batch order")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        id_a, name_a = await _create_owned_asset(client, "ORD1", AssetType.STOCK)
+        id_b, name_b = await _create_owned_asset(client, "ORD2", AssetType.STOCK)
+        fresh = f"B4 fresh {unique_id('ORD')}"
+
+        # A moves away, then B takes A's old name.
+        data = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=id_a, display_name=fresh),
+                FAAssetPatchItem(asset_id=id_b, display_name=name_a),
+            ],
+        )
+        assert data.committed is True and data.issues == [], data.issues
+        assert (await _info_of(client, id_a)).display_name == fresh
+        assert (await _info_of(client, id_b)).display_name == name_a
+
+        # Own current name: no clash.
+        same = await _patch_batch(client, [FAAssetPatchItem(asset_id=id_a, display_name=fresh, active=False)])
+        assert same.committed is True and same.issues == [], same.issues
+
+        # The wrong order: B takes A's name while A still holds it.
+        wrong = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=id_b, display_name=fresh),
+                FAAssetPatchItem(asset_id=id_a, display_name=f"{fresh} moved"),
+            ],
+        )
+        assert wrong.committed is False
+        assert [(i.code, i.asset_id, i.index) for i in wrong.issues] == [("assetNameTaken", id_b, 0)], wrong.issues
+        assert (await _info_of(client, id_a)).display_name == fresh
+        assert (await _info_of(client, id_b)).display_name == name_a
+        print_success("✓ moved-away names are free for later items, held names are not, own name is fine")
