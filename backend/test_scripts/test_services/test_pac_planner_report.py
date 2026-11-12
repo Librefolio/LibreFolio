@@ -658,21 +658,22 @@ def test_each_action_section_is_internally_ascending() -> None:
 _ALPHA_BROKER_ID = "broker:alpha"
 _BETA_BROKER_ID = "broker:beta"
 _SECOND_ALPHA_USD_PROVENANCE_ID = "provenance:route:c:alpha"
-# EUR debited per BUY route, in whole EUR (the scenario's EUR quantum is one).
-_MULTI_CONVERSION_FX_DEBITS = {"route:a:beta": 4, "route:b:alpha": 4, "route:c:alpha": 4, "route:d:alpha": 5}
+# EUR debited per FX decision, one per (Broker, destination currency) since A2, in whole EUR (the scenario's EUR quantum
+# is one). Alpha's USD decision serves its two USD routes, b and c.
+_MULTI_CONVERSION_FX_DEBITS = {(_BETA_BROKER_ID, "USD"): 4, (_ALPHA_BROKER_ID, "USD"): 8, (_ALPHA_BROKER_ID, "GBP"): 5}
 
 
 def _multi_conversion_scenario(*, alpha_mode: str = "manual", beta_mode: str = "manual"):
-    """Four EUR-funded FX decisions that make three conversions.
+    """Three EUR-funded FX decisions, one per conversion (A2: one decision per Broker and pair).
 
-    Broker alpha converts EUR into USD on two BUY routes (assets a and b) and
-    into GBP on a third (asset c); Broker beta converts EUR into USD on its
-    own route for asset a. Route IDs sort beta's route first, so the engine's
-    (route, currency) order meets the pairs in the *reverse* of their canonical
-    (Broker, source, destination) order. A whole-unit quantum makes a posted
-    credit visibly differ from the exact one, and the second alpha USD route
-    cites its own (published) provenance record so a conversion's provenance
-    is a real union.
+    Broker alpha converts EUR into USD for two BUY routes (assets a and b), one decision for both, and
+    into GBP for a third (asset c); Broker beta converts EUR into USD on its
+    own route for asset a. Route IDs sort beta's route first; the engine's FX
+    evaluations come in canonical (Broker, source, destination) order all the
+    same. A whole-unit quantum makes a posted credit visibly differ from the
+    exact one where it is not whole. The second alpha USD route cites its own
+    (published) provenance record: under contract 1.0.0 the action names the
+    representative route (the first in id order, b), so its provenance is b's.
     """
     capability = _capability("capability:whole")
     usd_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")
@@ -716,10 +717,10 @@ def _evaluate_multi_conversion(scenario):
     FX decision exists in the view and carried its quanta, so an override
     silently ignored by ``_evaluate`` cannot pass for a projection.
     """
-    fx_quanta = {fx_id(scenario, source="EUR", route_id=route_id): debit for route_id, debit in _MULTI_CONVERSION_FX_DEBITS.items()}
+    fx_quanta = {fx_id(scenario, source="EUR", destination=destination, broker_id=broker_id): debit for (broker_id, destination), debit in _MULTI_CONVERSION_FX_DEBITS.items()}
     view, evaluation = _evaluate(scenario, quanta={**_all_zero_quanta(scenario), **fx_quanta})
     assert evaluation.candidate_valid
-    assert {(exact.order_route_id, exact.quanta) for exact in evaluation.fx} == set(_MULTI_CONVERSION_FX_DEBITS.items())
+    assert {((exact.broker_id, exact.destination_currency), exact.quanta) for exact in evaluation.fx} == set(_MULTI_CONVERSION_FX_DEBITS.items())
     return evaluation
 
 
@@ -747,17 +748,16 @@ def test_fx_actions_carry_no_sequence_and_name_their_conversion() -> None:
 
 
 def test_conversions_group_fx_actions_by_broker_and_currency_pair() -> None:
-    """One conversion per (Broker, source, destination), in that canonical
-    order whatever order the engine met the pairs in.
+    """One conversion per (Broker, source, destination), in that canonical order.
 
-    A conversion's debit and spread are the exact sums of its actions; its
-    credit sums the *posted* credits the ledger reconciles against. Alpha's
-    two USD actions each credit an exact 4.5 USD that posts its floor, 4 (a
-    credit is rounded against the plan), so the conversion credits 8 USD —
-    not the 9 exact sum, a whole quantum that posting it as one sum would
-    keep — while beta's single 4.5 USD credit posts 4 and alpha's 3.6 GBP
-    posts 3. Rates are the pair's (global per pair), member IDs keep the
-    action order, and the provenance is the canonical union of the members'.
+    Since A2 the engine itself has one FX decision per Broker and pair, so each
+    conversion has exactly one action. A conversion's debit and spread are its
+    action's exact figures; its credit is the *posted* credit the ledger
+    reconciles against. Alpha's USD decision serves two routes and converts 8
+    EUR at once: an exact 9 USD that posts 9, where the two halves of before
+    posted 4 + 4 (each 4.5 floored, a credit is rounded against the plan).
+    Beta's 4.5 USD credit posts 4 and alpha's 3.6 GBP posts 3. Rates are the
+    pair's (global per pair), and the provenance is the representative route's.
     """
     scenario = _multi_conversion_scenario()
     evaluation = _evaluate_multi_conversion(scenario)
@@ -766,8 +766,8 @@ def test_conversions_group_fx_actions_by_broker_and_currency_pair() -> None:
     conversions = PR.build_conversions(scenario, evaluation, fx_actions, PR._SequenceAllocator())
 
     canonical_pairs = [(_ALPHA_BROKER_ID, "EUR", "GBP"), (_ALPHA_BROKER_ID, "EUR", "USD"), (_BETA_BROKER_ID, "EUR", "USD")]
-    engine_pairs = list(dict.fromkeys((exact.broker_id, exact.source_currency, exact.destination_currency) for exact in evaluation.fx))
-    assert engine_pairs == list(reversed(canonical_pairs)), "precondition: the engine meets the pairs in reverse canonical order"
+    engine_pairs = [(exact.broker_id, exact.source_currency, exact.destination_currency) for exact in evaluation.fx]
+    assert engine_pairs == canonical_pairs, "the engine's FX evaluations are one per pair, in canonical order"
     assert [(row.broker_id, row.source_debit.currency, row.destination_credit.currency) for row in conversions] == canonical_pairs
     assert [row.conversion_id for row in conversions] == [f"conversion:{broker}:{source}:{destination}" for broker, source, destination in canonical_pairs]
 
@@ -775,7 +775,7 @@ def test_conversions_group_fx_actions_by_broker_and_currency_pair() -> None:
     expected = {
         # conversion_id: (fx_action_ids, debit EUR, posted credit, spread EUR)
         "conversion:broker:alpha:EUR:GBP": (["fx:route:d:alpha:EUR"], R(5), R(3), R(1, 2)),
-        "conversion:broker:alpha:EUR:USD": (["fx:route:b:alpha:EUR", "fx:route:c:alpha:EUR"], R(8), R(8), R(4, 5)),
+        "conversion:broker:alpha:EUR:USD": (["fx:route:b:alpha:EUR"], R(8), R(9), R(4, 5)),
         "conversion:broker:beta:EUR:USD": (["fx:route:a:beta:EUR"], R(4), R(4), R(2, 5)),
     }
     for conversion_id, (action_ids, debit, credit, spread) in expected.items():
@@ -801,9 +801,9 @@ def test_conversions_group_fx_actions_by_broker_and_currency_pair() -> None:
         assert (row.spot_rate.source_currency, row.spot_rate.destination_currency) == (row.source_debit.currency, row.destination_credit.currency)
         assert row.provenance_ids == sorted({provenance_id for _, action in members for provenance_id in action.provenance_ids})
 
-    alpha_usd = members_by_id["conversion:broker:alpha:EUR:USD"]
-    assert sum((exact.exact_destination_credit for exact, _ in alpha_usd), R(0)) == R(9), "precondition: the exact credits do not sum to the posted ones"
-    assert by_id["conversion:broker:alpha:EUR:USD"].provenance_ids == sorted({PROVENANCE_ID, _SECOND_ALPHA_USD_PROVENANCE_ID})
+    ((alpha_usd, _),) = members_by_id["conversion:broker:alpha:EUR:USD"]
+    assert (alpha_usd.exact_destination_credit, alpha_usd.posted_destination_credit) == (R(9), R(9))
+    assert by_id["conversion:broker:alpha:EUR:USD"].provenance_ids == [PROVENANCE_ID]
 
 
 @pytest.mark.parametrize(

@@ -330,7 +330,7 @@ def _evaluate_fx(
                 spread_loss=spread_loss,
             )
         )
-    return tuple(sorted(result, key=lambda item: (item.order_route_id, item.source_currency)))
+    return tuple(sorted(result, key=lambda item: (item.broker_id, item.source_currency, item.destination_currency)))
 
 
 def _sell_tax_facts(

@@ -1327,7 +1327,7 @@ class ExactEvaluation:
             lambda item: (item.source_kind, item.source_id),
             "funding sources",
         )
-        _require_canonical_tuple(self.fx, lambda item: (item.order_route_id, item.source_currency), "FX evaluations")
+        _require_canonical_tuple(self.fx, lambda item: (item.broker_id, item.source_currency, item.destination_currency), "FX evaluations")
         _require_canonical_tuple(self.orders, lambda item: item.route_id, "order evaluations")
         _require_canonical_tuple(
             self.ledgers,

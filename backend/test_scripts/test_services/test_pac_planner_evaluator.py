@@ -76,7 +76,7 @@ from backend.app.services.pac_allocator.models import (
     LedgerPostingFamily,
 )
 from backend.app.services.pac_allocator.normalize import normalize_planner_request
-from backend.app.services.pac_allocator.numeric import ExactRatio
+from backend.app.services.pac_allocator.numeric import ExactRatio, post_floor
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id, fx_spec
 
 R = ExactRatio
@@ -3032,8 +3032,9 @@ def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
     """A single BUY (route:buy:1) draws from two currency pools (GBP and USD
     existing cash) at the same Broker, each converting to its own EUR quote
     currency via a distinct direct fx_rate. A second BUY (route:buy:2)
-    shares the same GBP pool. Asserts one ExactFxEvaluation per (route,
-    source currency) with spread applied once each, and that the shared GBP
+    shares the same GBP pool. Asserts one ExactFxEvaluation per (Broker,
+    source, destination) -- since A2 the two buys share one GBP -> EUR
+    decision -- with spread applied once each, and that the shared GBP
     ledger row nets the combined draw from both BUYs correctly
     (SPENDABLE_CASH_NONNEGATIVE across combined postings -- already covered
     by the existing ledger-level check, no separate constraint code needed).
@@ -3046,55 +3047,40 @@ def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
     candidate = _candidate(
         view,
         {
-            # route:buy:1 (2 units @ EUR99 = EUR198): GBP50 -> EUR99 +
-            # USD25 -> EUR99, exactly covering its EUR198 cost.
-            fx_id(scenario, source="GBP", destination="EUR", route_id="route:buy:1"): 5_000,
-            fx_id(scenario, source="USD", destination="EUR", route_id="route:buy:1"): 2_500,
+            # route:buy:1 (2 units @ EUR99 = EUR198) and route:buy:2 (1 unit @
+            # EUR99) draw on the hub's one GBP -> EUR decision (A2: one per
+            # Broker and pair) and its one USD -> EUR decision: GBP100 ->
+            # EUR198 + USD25 -> EUR99 cover the EUR297 of the three units.
+            fx_id(scenario, source="GBP", destination="EUR"): 10_000,
+            fx_id(scenario, source="USD", destination="EUR"): 2_500,
             exact_decision_id("buy_quantum", "route:buy:1"): 2,
-            # route:buy:2 (1 unit @ EUR99): GBP50 -> EUR99, sharing the same
-            # GBP cash row already partly drawn by route:buy:1.
-            fx_id(scenario, source="GBP", destination="EUR", route_id="route:buy:2"): 5_000,
             exact_decision_id("buy_quantum", "route:buy:2"): 1,
         },
     )
 
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
 
-    fx_by_key = {(item.order_route_id, item.source_currency): item for item in evaluation.fx}
-    assert set(fx_by_key) == {
-        ("route:buy:1", "GBP"),
-        ("route:buy:1", "USD"),
-        ("route:buy:2", "GBP"),
-    }
+    fx_by_key = {(item.broker_id, item.source_currency, item.destination_currency): item for item in evaluation.fx}
+    assert set(fx_by_key) == {("broker:hub", "GBP", "EUR"), ("broker:hub", "USD", "EUR")}
 
     # GBP -> EUR: 1 GBP = 2 EUR official; effective = 2 * (1 - 1/100) = 99/50.
-    buy1_gbp = fx_by_key[("route:buy:1", "GBP")]
-    assert buy1_gbp.destination_currency == "EUR"
-    assert buy1_gbp.source_debit == R(50)
-    assert buy1_gbp.approved_rate == R(2)
-    assert buy1_gbp.effective_rate == R(99, 50)
-    assert buy1_gbp.exact_destination_credit == R(99)
-    assert buy1_gbp.posted_destination_credit == R(99)
-    assert buy1_gbp.spread_loss == R(1)
+    # The two buys' GBP50 + GBP50 are one conversion of GBP100: 99 + 99 EUR.
+    hub_gbp = fx_by_key[("broker:hub", "GBP", "EUR")]
+    assert hub_gbp.source_debit == R(100)
+    assert hub_gbp.approved_rate == R(2)
+    assert hub_gbp.effective_rate == R(99, 50)
+    assert hub_gbp.exact_destination_credit == R(198)
+    assert hub_gbp.posted_destination_credit == R(198)
+    assert hub_gbp.spread_loss == R(2)
 
     # USD -> EUR: 1 USD = 4 EUR official; effective = 4 * (1 - 1/100) = 99/25.
-    buy1_usd = fx_by_key[("route:buy:1", "USD")]
-    assert buy1_usd.destination_currency == "EUR"
-    assert buy1_usd.source_debit == R(25)
-    assert buy1_usd.approved_rate == R(4)
-    assert buy1_usd.effective_rate == R(99, 25)
-    assert buy1_usd.exact_destination_credit == R(99)
-    assert buy1_usd.posted_destination_credit == R(99)
-    assert buy1_usd.spread_loss == R(1)
-
-    buy2_gbp = fx_by_key[("route:buy:2", "GBP")]
-    assert buy2_gbp.destination_currency == "EUR"
-    assert buy2_gbp.source_debit == R(50)
-    assert buy2_gbp.approved_rate == R(2)
-    assert buy2_gbp.effective_rate == R(99, 50)
-    assert buy2_gbp.exact_destination_credit == R(99)
-    assert buy2_gbp.posted_destination_credit == R(99)
-    assert buy2_gbp.spread_loss == R(1)
+    hub_usd = fx_by_key[("broker:hub", "USD", "EUR")]
+    assert hub_usd.source_debit == R(25)
+    assert hub_usd.approved_rate == R(4)
+    assert hub_usd.effective_rate == R(99, 25)
+    assert hub_usd.exact_destination_credit == R(99)
+    assert hub_usd.posted_destination_credit == R(99)
+    assert hub_usd.spread_loss == R(1)
 
     ledger_rows = {(row.broker_id, row.currency): row for row in evaluation.ledgers}
     gbp_row = ledger_rows[("broker:hub", "GBP")]
@@ -5273,3 +5259,101 @@ def test_fx_decisions_come_from_one_list_shared_by_view_and_replay(build) -> Non
     evaluation = evaluate_exact_candidate(scenario, view, one_quantum_each)
     assert {action.decision_id for action in evaluation.fx} <= {spec.decision_id for spec in specs}
     assert {action.order_route_id for action in evaluation.fx} <= {spec.representative_route_id for spec in specs}
+
+
+# ---------------------------------------------------------------------------
+# A2 step 7 (project 67): one FX decision per Broker and ordered currency pair
+# ---------------------------------------------------------------------------
+
+
+def _shared_pair_scenario(*, cap: ExactRatio = R(2)) -> ExactPlannerScenario:
+    """N1 in small: one Broker holding EUR, two USD Assets on two buy routes, so both routes need the one EUR to USD pair.
+
+    Whole-unit quanta make the floor of a credit visible: at 5/4 USD per EUR with a 10% spread, 4 EUR credit an exact 4.5 USD.
+    """
+    capability = _capability("capability:whole")
+    usd_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")
+    broker = _broker("broker:hub", (capability,), (usd_fee,))
+
+    def buy(route_id: str, asset_id: str) -> ExactOrderRoute:
+        return _order_route(route_id, broker_id=broker.broker_id, asset_id=asset_id, capability=capability, fee_id=usd_fee.fee_schedule_id, side="buy", cap=cap)
+
+    return _scenario(
+        "scenario:shared-pair",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:a", price=R(5), currency="USD"), _asset("asset:b", price=R(10), currency="USD")),
+        brokers=(broker,),
+        existing_cash=(_cash("cash:hub", broker.broker_id, R(20)),),
+        order_routes=(buy("route:buy:a", "asset:a"), buy("route:buy:b", "asset:b")),
+        fx_rates=(_fx_rate("EUR", "USD", R(5, 4)),),
+        fx_spread_rate=R(1, 10),
+        currency_quantums=(("EUR", ONE), ("USD", ONE)),
+    )
+
+
+def _reverse_order_pairs_scenario() -> ExactPlannerScenario:
+    """Two Brokers, each converting EUR to USD; route ids sort broker b's route first, the canonical order puts broker a first."""
+    capability = _capability("capability:whole")
+    usd_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")
+    brokers = (_broker("broker:a", (capability,), (usd_fee,)), _broker("broker:b", (capability,), (usd_fee,)))
+    return _scenario(
+        "scenario:reverse-order-pairs",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:a", price=R(5), currency="USD"),),
+        brokers=brokers,
+        existing_cash=(_cash("cash:a", "broker:a", R(20)), _cash("cash:b", "broker:b", R(20))),
+        order_routes=(
+            _order_route("route:1", broker_id="broker:b", asset_id="asset:a", capability=capability, fee_id=usd_fee.fee_schedule_id, side="buy", cap=R(2)),
+            _order_route("route:2", broker_id="broker:a", asset_id="asset:a", capability=capability, fee_id=usd_fee.fee_schedule_id, side="buy", cap=R(2)),
+        ),
+        fx_rates=(_fx_rate("EUR", "USD", R(5, 4)),),
+        currency_quantums=(("EUR", ONE), ("USD", ONE)),
+    )
+
+
+def test_fx_decisions_are_one_per_broker_and_ordered_pair() -> None:
+    """Two buy routes on one pair share one decision; a Broker with two source currencies has one decision per pair.
+
+    The decision is keyed by Broker, source and destination (``len(broker):broker:SRC:DST``), scoped to the Broker, and names the
+    first buy route of that Broker in the destination currency (canonical order) as the route the published action names until A4.
+    """
+    shared = fx_decision_specs(_shared_pair_scenario(), build_scenario_index(_shared_pair_scenario()), None)
+    assert [(spec.broker_id, spec.source_currency, spec.destination_currency) for spec in shared] == [("broker:hub", "EUR", "USD")]
+    (spec,) = shared
+    assert spec.key == "10:broker:hub:EUR:USD"
+    assert spec.decision_id == "fx:10:broker:hub:EUR:USD"
+    assert spec.scope == "broker"
+    assert {(ref.kind, ref.entity_id) for ref in spec.entity_refs} == {("broker", "broker:hub"), ("source_currency", "EUR"), ("destination_currency", "USD")}
+    assert spec.representative_route_id == "route:buy:a"
+
+    multi = _multi_source_buy_scenario()
+    pairs = [(spec.broker_id, spec.source_currency, spec.destination_currency) for spec in fx_decision_specs(multi, build_scenario_index(multi), None)]
+    assert pairs == [("broker:hub", "GBP", "EUR"), ("broker:hub", "USD", "EUR")]
+
+
+def test_two_buys_on_one_pair_post_one_floored_credit() -> None:
+    """The rule of 09/10, on one decision: a pair posts the floor of its whole credit, never less than the floors of its parts.
+
+    8 EUR credit an exact 9 USD and post 9; split over the two routes as 4 + 4, each part would credit 4.5 and post 4, 8 in all.
+    """
+    scenario = _shared_pair_scenario()
+    view = build_exact_policy_view(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, {fx_id(scenario, source="EUR", destination="USD"): 8}))
+
+    (action,) = evaluation.fx
+    assert (action.source_debit, action.exact_destination_credit, action.posted_destination_credit) == (R(8), R(9), R(9))
+    split_floors = 2 * post_floor(R(9, 2), ONE).posted
+    assert action.posted_destination_credit >= split_floors == R(8)
+
+
+def test_fx_evaluations_are_ordered_by_broker_source_destination() -> None:
+    """The canonical order of the FX evaluations is (Broker, source, destination), whatever the order of the routes."""
+    scenario = _reverse_order_pairs_scenario()
+    view = build_exact_policy_view(scenario)
+    values = {spec.decision_id: 4 for spec in fx_decision_specs(scenario, build_scenario_index(scenario), None)}
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, values))
+
+    assert [(item.broker_id, item.source_currency, item.destination_currency) for item in evaluation.fx] == [("broker:a", "EUR", "USD"), ("broker:b", "EUR", "USD")]
+    assert [item.order_route_id for item in evaluation.fx] == ["route:2", "route:1"]

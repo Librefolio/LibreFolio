@@ -216,39 +216,39 @@ def test_reference_case_matches_the_recorded_plan(name):
     print_success(f"{name}: {current['state']} {current['proof_kind']} {current['stop_reason']}")
 
 
-def test_two_buys_on_one_pair_have_two_fx_decisions():
-    """N1, today: two buy routes on the one EUR to USD pair of broker-one give two ``fx_debit`` decisions.
+def test_two_buys_on_one_pair_have_one_fx_decision():
+    """N1, rewritten by A2 (step 7): two buy routes on the one EUR to USD pair of broker-one share one ``fx_debit`` decision.
 
-    The plan of today ties an FX decision to the route that spends it. A2 changes it to one decision per broker and pair, and rewrites
-    this test to expect one: it is the signal that the exchange happened. This test does not say how many FX actions the plan publishes.
+    A1 recorded two (one per route and currency): this test turning from two to one is the signal that the exchange happened.
     """
     _, view = synthetic.scenario_of(synthetic.fx_two_assets_one_pair_request())
-    refs_of = {decision.decision_id: {(item.kind, item.entity_id) for item in decision.entity_refs} for decision in view.decisions if decision.family == "fx_debit"}
-    from_eur = [refs for refs in refs_of.values() if ("currency", "EUR") in refs]
-    assert len(from_eur) == 2, refs_of
-    assert {entity for refs in from_eur for kind, entity in refs if kind == "order_route"} == {"route-asset-1-buy", "route-asset-2-buy"}
+    fx_decisions = [decision for decision in view.decisions if decision.family == "fx_debit"]
+    assert len(fx_decisions) == 1
+    (decision,) = fx_decisions
+    assert {(item.kind, item.entity_id) for item in decision.entity_refs} == {("broker", "broker-one"), ("source_currency", "EUR"), ("destination_currency", "USD")}
 
 
 @pytest.mark.parametrize(
-    ("build", "expected_from_currencies_by_route"),
+    ("build", "expected_pairs"),
     [
-        pytest.param(synthetic.fx_two_way_request, {"route-asset-1-buy": {"USD"}, "route-asset-2-buy": {"EUR"}}, id="N2-both-directions-of-one-pair"),
-        pytest.param(synthetic.fx_two_brokers_request, {"route-asset-1-buy": {"EUR"}, "route-asset-1-broker-two-buy": {"EUR"}}, id="N3-one-conversion-per-broker"),
-        pytest.param(synthetic.fx_two_sources_request, {"route-asset-1-buy": {"EUR", "CHF"}}, id="N4-two-pairs-toward-one-currency"),
+        pytest.param(synthetic.fx_two_way_request, {("broker-one", "USD", "EUR"), ("broker-one", "EUR", "USD")}, id="N2-both-directions-of-one-pair"),
+        pytest.param(synthetic.fx_two_brokers_request, {("broker-one", "EUR", "USD"), ("broker-two", "EUR", "USD")}, id="N3-one-conversion-per-broker"),
+        pytest.param(synthetic.fx_two_sources_request, {("broker-one", "EUR", "USD"), ("broker-one", "CHF", "USD")}, id="N4-two-pairs-toward-one-currency"),
     ],
 )
-def test_the_new_corpus_cases_open_the_conversions_they_are_built_for(build, expected_from_currencies_by_route):
-    """N2-N4 are only worth recording if the view offers the conversions V7 and the broker split act on: read from the engine's own view."""
+def test_the_new_corpus_cases_open_the_conversions_they_are_built_for(build, expected_pairs):
+    """N2-N4 are only worth recording if the view offers the conversions V7 and the broker split act on: read from the engine's own view.
+
+    Since A2 (step 7) an FX decision is one per Broker and ordered pair, named by the refs ``broker``, ``source_currency`` and ``destination_currency``.
+    """
     _, view = synthetic.scenario_of(build())
-    found: dict[str, set[str]] = {}
+    found = set()
     for decision in view.decisions:
         if decision.family != "fx_debit":
             continue
-        refs = {(item.kind, item.entity_id) for item in decision.entity_refs}
-        (route,) = [entity for kind, entity in refs if kind == "order_route"]
-        (currency,) = [entity for kind, entity in refs if kind == "currency"]
-        found.setdefault(route, set()).add(currency)
-    assert found == expected_from_currencies_by_route
+        refs = {item.kind: item.entity_id for item in decision.entity_refs}
+        found.add((refs["broker"], refs["source_currency"], refs["destination_currency"]))
+    assert found == expected_pairs
 
 
 def test_no_recorded_case_has_more_than_one_fx_action_per_pair():

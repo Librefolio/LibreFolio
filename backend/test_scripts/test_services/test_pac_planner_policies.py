@@ -114,6 +114,7 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _order_route,
     _pac_scenario,
     _scenario,
+    _shared_pair_scenario,
 )
 from backend.test_scripts.test_services.test_pac_planner_oracle import (
     _coarse_funding_fx_scenario,
@@ -1291,3 +1292,22 @@ def test_fx_credit_positive_admits_a_nonzero_floored_credit_and_no_conversion() 
     assert positive.satisfied is True
     assert evaluation.feasible is True
     assert _pinned_status(scenario, view, quanta=idle) == "optimal"
+
+
+# --------------------------------------------------------------------------
+# A2 step 7 (project 67): the compiled model has one FX variable per Broker pair
+# --------------------------------------------------------------------------
+
+
+def test_compiled_model_has_one_fx_variable_and_credit_row_per_broker_pair() -> None:
+    """Two buy routes on one pair: one FX decision variable, one posted credit, one active row, keyed by the pair."""
+    scenario = _shared_pair_scenario()
+    view = build_exact_policy_view(scenario)
+    program = _fresh_program(scenario, view)
+    variable_names = {variable.name for variable in program.model.getVars()}
+    constraint_names = {constraint.name for constraint in program.model.getConss()}
+    key = fx_spec(scenario, source="EUR", destination="USD").key
+
+    assert sorted(name for name in variable_names if name.startswith("fx:")) == [fx_id(scenario, source="EUR", destination="USD")]
+    assert sorted(name for name in variable_names if name.startswith("posted_fx_credit:")) == [f"posted_fx_credit:{key}"]
+    assert f"posted_fx_credit:{key}:active" in constraint_names

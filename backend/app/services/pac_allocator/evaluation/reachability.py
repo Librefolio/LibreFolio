@@ -149,12 +149,14 @@ def fx_decision_specs(
     index: ScenarioIndex,
     checkpoint: Checkpoint | None,
 ) -> tuple[FxDecisionSpec, ...]:
-    """Every FX decision of ``scenario``, in canonical order: one per buy route and pool currency.
+    """Every FX decision of ``scenario``: one per Broker and ordered currency pair, sorted by (Broker, source, destination).
 
-    The pool currencies of a buy are ``buy_pool_currencies``: other currencies with cash possible on the route's Broker and a
-    direct pair to the route's quote currency. Order: the scenario's buy routes, each with its pool currencies sorted.
+    A pair exists where a buy route of the Broker is quoted in the destination currency and the source is one of that buy's pool
+    currencies (``buy_pool_currencies``: other currencies with cash possible on the Broker and a direct pair to the quote). Two buy
+    routes on the same pair share the decision. Its representative route, the one the published FX action names under contract
+    ``1.0.0``, is the first such buy route of the Broker in canonical (route id) order.
     """
-    specs: list[FxDecisionSpec] = []
+    routes_by_pair: dict[tuple[str, str, str], list[str]] = {}
     for route in scenario.order_routes:
         if route.side != "buy":
             continue
@@ -167,19 +169,22 @@ def fx_decision_specs(
             quote_currency=quote_currency,
             checkpoint=checkpoint,
         ):
-            key = fx_debit_key(route.route_id, currency)
-            decision_id = exact_decision_id("fx_debit", key)
-            specs.append(
-                FxDecisionSpec(
-                    decision_id=decision_id,
-                    key=key,
-                    broker_id=route.broker_id,
-                    source_currency=currency,
-                    destination_currency=quote_currency,
-                    entity_refs=entity_refs(("order_route", route.route_id), ("currency", currency)),
-                    scope="order_route",
-                    tie_break=("", route.broker_id, currency, "fx", quote_currency, route.route_id, decision_id),
-                    representative_route_id=route.route_id,
-                )
+            routes_by_pair.setdefault((route.broker_id, currency, quote_currency), []).append(route.route_id)
+    specs: list[FxDecisionSpec] = []
+    for (broker_id, source_currency, destination_currency), route_ids in sorted(routes_by_pair.items()):
+        key = fx_debit_key(broker_id, source_currency, destination_currency)
+        decision_id = exact_decision_id("fx_debit", key)
+        specs.append(
+            FxDecisionSpec(
+                decision_id=decision_id,
+                key=key,
+                broker_id=broker_id,
+                source_currency=source_currency,
+                destination_currency=destination_currency,
+                entity_refs=entity_refs(("broker", broker_id), ("source_currency", source_currency), ("destination_currency", destination_currency)),
+                scope="broker",
+                tie_break=("", broker_id, source_currency, "fx", destination_currency, "", decision_id),
+                representative_route_id=min(route_ids),
             )
+        )
     return tuple(specs)

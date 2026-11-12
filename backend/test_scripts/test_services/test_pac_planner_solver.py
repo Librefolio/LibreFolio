@@ -70,7 +70,7 @@ from backend.app.services.pac_allocator.solver import (
 )
 from backend.test_scripts.test_services._pac_exhaustive_oracle import run_exhaustive_oracle
 from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scenario_of
-from backend.test_scripts.test_services.test_pac_planner_evaluator import ZERO, R, _pac_scenario
+from backend.test_scripts.test_services.test_pac_planner_evaluator import ZERO, R, _pac_scenario, _shared_pair_scenario
 from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _credit_tie_fx_scenario, _two_asset_pac_scenario
 
 # --------------------------------------------------------------------------
@@ -776,3 +776,10 @@ def test_stage_one_resume_that_finds_nothing_is_still_no_incumbent(monkeypatch: 
 
     assert result.outcome == "no_incumbent"
     assert lever.optimize_calls == 2, lever.log
+
+
+def test_solver_matches_oracle_on_two_buys_sharing_a_conversion() -> None:
+    """A2 step 7: N1 in small. Two buy routes share one EUR to USD decision; SCIP and the exhaustive oracle agree exactly."""
+    test_solver_incumbent_equals_exhaustive_oracle_optimum(_shared_pair_scenario)
+    view = build_exact_policy_view(_shared_pair_scenario())
+    assert len([access for access in view.decisions if access.family == "fx_debit"]) == 1
