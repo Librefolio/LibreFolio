@@ -15,6 +15,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Modifica di più asset insieme: selezionali nella tabella Asset e usa «Modifica selezionati» per cambiare a tutti il tipo, il benchmark, lo stato attivo, le unità per singolo prezzo, l'icona o l'URL personale. «Verifica ora» mostra cosa blocca il salvataggio (un asset con transazioni non può diventare un Indice) e cosa merita un'occhiata (un tipo che passa a un'altra famiglia, come crowdfunding → ETF), e un riepilogo mostra ogni modifica prima del salvataggio, che è tutto o niente.
 - Analisi dei lotti in FIFO e in LIFO: il pannello dei lotti calcola i due metodi in una sola richiesta e passa dall'uno all'altro con un selettore nell'intestazione (FIFO all'apertura, non salvato). I lotti selezionati restano selezionati; cambiano col metodo il lotto chiuso da una vendita e le cifre che ne seguono. Le pagine di teoria spiegano la regola italiana (LIFO nel regime dichiarativo, costo medio nell'amministrato) e i limiti del calcolo.
 - Il banner della qualità dei dati del pannello dei lotti offre «Aggiungi coppia FX» e «Sincronizza tassi» su un cambio mancante o vecchio, come il banner della Dashboard.
+- Cambio email in attesa nel Profilo: l'indirizzo che aspetta la conferma, scritto per intero, la scadenza del link, «Invia di nuovo» e «Annulla la richiesta».
+- Gli amministratori vedono i cambi email in attesa: un badge «Cambio email in attesa» sull'account, e il link in «Link degli account» si può revocare.
 
 ### 🔄 Modifiche
 
@@ -28,6 +30,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Intestazione del dettaglio asset: Transazioni ora è un badge con un'icona e il numero di transazioni, così si capisce che è un link; il badge del provider apre direttamente la pagina web dell'asset (quella impostata da te, altrimenti quella del provider) in una nuova scheda, e il suo suggerimento dice dove porta. L'icona ↗ separata non c'è più.
 - Intestazione del dettaglio asset su tablet e telefono: sotto i 1024 px i badge hanno una riga loro sotto il nome; sul telefono ← e ‹ n/N › stanno sulla prima riga, il nome ha tutta la larghezza e i badge seguono in due gruppi (tipo e valuta; Transazioni e provider).
 - Un asset con transazioni non può più diventare un Indice dall'editor dell'asset: l'editor dice quante transazioni ha e non salva niente.
+- Il cambio di email aspetta la conferma quando l'email funziona: con l'email configurata e `LIBREFOLIO_PUBLIC_URL` impostato, un nuovo indirizzo nel Profilo non vale finché non clicchi il link mandato a quell'indirizzo (valido 24 ore) mentre sei dentro il tuo account. Se sei già dentro basta un clic; altrimenti la pagina ti chiede prima di accedere e poi ti riporta lì. Il vecchio indirizzo viene avvisato subito. Senza email non cambia nulla: il nuovo indirizzo vale subito.
 
 ### 🐛 Corretto
 

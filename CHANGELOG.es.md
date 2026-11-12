@@ -15,6 +15,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Editar varios activos a la vez: selecciónalos en la tabla de Activos y usa «Editar seleccionados» para cambiar en todos el tipo, el índice de referencia, el estado activo, las unidades por precio unitario, el icono o la URL personal. «Validar ahora» muestra lo que bloquea el guardado (un activo con transacciones no puede convertirse en un Índice) y lo que merece un vistazo (un tipo que pasa a otra familia, como crowdfunding → ETF), y un resumen muestra cada cambio antes de guardar, que es todo o nada.
 - Análisis de lotes en FIFO y LIFO: el panel de lotes calcula los dos métodos en una sola petición y pasa de uno a otro con un selector en su cabecera (FIFO al abrir, no guardado). Los lotes seleccionados siguen seleccionados; cambian con el método el lote que cierra una venta y las cifras que se derivan. Las páginas de teoría explican la regla italiana (LIFO en el régimen declarativo, coste medio en el administrado) y los límites del cálculo.
 - El aviso de calidad de datos del panel de lotes ofrece «Añadir par FX» y «Sincronizar tipos de cambio» ante un tipo de cambio que falta o es antiguo, como el aviso del panel principal.
+- Cambio de correo pendiente en el Perfil: la dirección que espera la confirmación, escrita completa, la caducidad del enlace, «Enviar de nuevo» y «Cancelar la solicitud».
+- Los administradores ven los cambios de correo pendientes: una insignia «Cambio de correo pendiente» en la cuenta, y el enlace en «Enlaces de cuenta» se puede revocar.
 
 ### 🔄 Cambios
 
@@ -28,6 +30,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Cabecera del detalle de un activo: Transacciones ahora es una insignia con un icono y el número de transacciones, para que se lea como un enlace; la insignia del proveedor abre directamente la página web del activo (la que configuraste o, si no, la del proveedor) en una pestaña nueva, y su descripción indica adónde lleva. El icono ↗ aparte desaparece.
 - Cabecera del detalle de un activo en tableta y teléfono: por debajo de 1024 px las insignias tienen su propia fila bajo el nombre; en el teléfono ← y ‹ n/N › comparten la primera fila, el nombre ocupa todo el ancho y las insignias siguen en dos grupos (tipo y divisa; Transacciones y proveedor).
 - Un activo con transacciones ya no puede convertirse en un Índice desde el editor del activo: el editor indica cuántas transacciones tiene y no se guarda nada.
+- El cambio de correo espera una confirmación cuando el correo funciona: con el correo configurado y `LIBREFOLIO_PUBLIC_URL` definido, una dirección nueva en el Perfil no se usa hasta que pulses el enlace enviado a ella (válido 24 horas) con la sesión de tu cuenta iniciada. Si ya has iniciado sesión basta un clic; si no, la página te pide primero que inicies sesión y luego te devuelve allí. Tu dirección anterior recibe un aviso enseguida. Sin correo no cambia nada: la dirección nueva se aplica al momento.
 
 ### 🐛 Corregido
 

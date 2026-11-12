@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Edit several assets at once: select them in the Assets table and use «Edit selected» to change the type, benchmark, active state, units per single price, icon or personal URL of all of them. «Validate now» shows what blocks the save (an asset with transactions cannot become an Index) and what deserves a look (a type moving to another family, such as crowdfunding → ETF), and a summary shows every change before the save, which is all or nothing.
 - Lots analysis in FIFO and LIFO: the lots panel computes both methods in one request and switches between them with a selector in its header (FIFO first, not saved). The lots you picked stay picked; which lot a sale closes, and the figures that follow from it, change with the method. The theory pages explain the Italian rule (LIFO in the self-declared regime, average cost in the managed one) and the limits of the calculation.
 - The lots panel's data-quality banner offers «Add FX pair» and «Sync rates» on a missing or old exchange rate, as the Dashboard banner does.
+- Pending email change in Profile: the address waiting for confirmation, written in full, when its link expires, «Send again» and «Cancel the request».
+- Administrators see pending email changes: an «Email change pending» badge on the account, and the link in «Account links» can be revoked.
 
 ### 🔄 Changed
 
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Asset detail header: Transactions is now a badge with an icon and the number of transactions, so it reads as a link; the provider badge itself opens the asset's web page (the one you set, or else the provider's) in a new tab, and its tooltip says where it goes. The separate ↗ icon is gone.
 - Asset detail header on tablet and phone: below 1024 px the badges get a row of their own under the name; on a phone ← and ‹ n/N › share the top row, the name has the full width, and the badges follow in two groups (type and currency; Transactions and provider).
 - An asset that has transactions can no longer become an Index from the asset editor: the editor says how many transactions it has, and nothing is saved.
+- Changing your email waits for confirmation when email works: with email set up and `LIBREFOLIO_PUBLIC_URL` set, a new address in Profile is not used until you click the link sent to it (valid for 24 hours) while signed in to your account. Already signed in, one click is enough; otherwise the page asks you to sign in first and brings you back. Your old address is told at once. Without email nothing changes: the new address applies straight away.
 
 ### 🐛 Fixed
 

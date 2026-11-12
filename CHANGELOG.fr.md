@@ -15,6 +15,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Modifier plusieurs actifs à la fois : sélectionnez-les dans le tableau des actifs et utilisez « Modifier la sélection » pour changer pour tous le type, l'indice de référence, l'état actif, les unités par prix unitaire, l'icône ou l'URL personnelle. « Valider maintenant » montre ce qui bloque l'enregistrement (un actif avec des transactions ne peut pas devenir un Indice) et ce qui mérite un coup d'œil (un type qui passe à une autre famille, comme crowdfunding → ETF), et un récapitulatif montre chaque changement avant l'enregistrement, qui est tout ou rien.
 - Analyse des lots en FIFO et en LIFO : le panneau des lots calcule les deux méthodes en une seule requête et passe de l'une à l'autre avec un sélecteur dans son en-tête (FIFO à l'ouverture, non enregistré). Les lots sélectionnés le restent ; le lot clôturé par une vente, et les chiffres qui en découlent, changent avec la méthode. Les pages de théorie expliquent la règle italienne (LIFO dans le régime déclaratif, coût moyen dans le régime administré) et les limites du calcul.
 - Le bandeau de qualité des données du panneau des lots propose « Ajouter paire FX » et « Synchroniser les taux » sur un taux de change manquant ou ancien, comme le bandeau du tableau de bord.
+- Changement d'e-mail en attente dans le Profil : l'adresse qui attend la confirmation, écrite en entier, l'expiration du lien, « Renvoyer » et « Annuler la demande ».
+- Les administrateurs voient les changements d'e-mail en attente : un badge « Changement d'e-mail en attente » sur le compte, et le lien dans « Liens de compte » peut être révoqué.
 
 ### 🔄 Modifié
 
@@ -28,6 +30,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - En-tête du détail d'un actif : Transactions est désormais un badge avec une icône et le nombre de transactions, pour qu'on le reconnaisse comme un lien ; le badge du fournisseur ouvre lui-même la page web de l'actif (celle que vous avez définie, sinon celle du fournisseur) dans un nouvel onglet, et son info-bulle indique où il mène. L'icône ↗ séparée disparaît.
 - En-tête du détail d'un actif sur tablette et téléphone : sous 1024 px, les badges ont leur propre ligne sous le nom ; sur téléphone, ← et ‹ n/N › partagent la première ligne, le nom prend toute la largeur et les badges suivent en deux groupes (type et devise ; Transactions et fournisseur).
 - Un actif qui a des transactions ne peut plus devenir un Indice depuis l'éditeur de l'actif : l'éditeur indique combien de transactions il a, et rien n'est enregistré.
+- Le changement d'e-mail attend une confirmation quand l'e-mail fonctionne : avec l'e-mail configuré et `LIBREFOLIO_PUBLIC_URL` défini, une nouvelle adresse dans le Profil n'est utilisée qu'après un clic sur le lien envoyé à cette adresse (valable 24 heures) en étant connecté à votre compte. Déjà connecté, un clic suffit ; sinon la page vous demande d'abord de vous connecter puis vous y ramène. Votre ancienne adresse est prévenue aussitôt. Sans e-mail rien ne change : la nouvelle adresse s'applique tout de suite.
 
 ### 🐛 Corrections
 
