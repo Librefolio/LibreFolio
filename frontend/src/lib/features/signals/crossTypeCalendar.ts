@@ -8,7 +8,7 @@
  * @module charts/crossTypeCalendar
  */
 
-import {CALENDAR_RETURN_INSTANCE_ID, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
+import {CALENDAR_RETURN_INSTANCE_ID, extractCalendarReturnView, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
 import {bulkRangeDays, BULK_SIGNAL_MARGIN_DAYS} from '$lib/api/bulkBatches';
 import {fxCalendarRequest, type FxCalendarRequest, type FxCalendarSignalRequest} from '$lib/utils/reducedFxQuery';
 
@@ -147,6 +147,74 @@ export function listFxPairComparisonViews(answers: ReadonlyArray<{entries: reado
             for (const {cardKey, configId} of entry.owners) {
                 if (!byCard.has(cardKey)) byCard.set(cardKey, new Map());
                 byCard.get(cardKey)!.set(configId, view);
+            }
+        }
+    }
+    return byCard;
+}
+
+/** A card of a list that compares assets in the rolling-return view (the FX list, FB-11 follow-up). */
+export interface ListAssetCard extends AssetComparisonInput {
+    cardKey: string;
+}
+
+export interface ListAssetEntry {
+    item: AssetComparisonItem;
+    assetId: number;
+    /**
+     * An answer of `POST /assets/prices/query` is read by asset id, so one request must hold an asset once: the same asset
+     * asked over another range or window goes to the next round, and a round is a request (or several batches of one).
+     */
+    round: number;
+    /** Every card the item answers: cards that compare the asset over the same range and window share it. */
+    owners: string[];
+}
+
+/** The items for the compared assets of all the cards of a list, identical items asked once, in rounds. */
+export function buildListAssetComparisonQuery(cards: readonly ListAssetCard[]): ListAssetEntry[] {
+    const entries: ListAssetEntry[] = [];
+    const byItem = new Map<string, ListAssetEntry>();
+    const roundsOfAsset = new Map<number, number>();
+    for (const card of cards) {
+        for (const item of buildAssetComparisonQuery(card)) {
+            const key = JSON.stringify(item);
+            const shared = byItem.get(key);
+            if (shared) {
+                if (!shared.owners.includes(card.cardKey)) shared.owners.push(card.cardKey);
+                continue;
+            }
+            const round = roundsOfAsset.get(item.asset_id) ?? 0;
+            roundsOfAsset.set(item.asset_id, round + 1);
+            const entry = {item, assetId: item.asset_id, round, owners: [card.cardKey]};
+            byItem.set(key, entry);
+            entries.push(entry);
+        }
+    }
+    return entries;
+}
+
+/** The days an item weighs for the batch caps: its range plus the signal's margin. */
+export function estimateListAssetDays(entry: ListAssetEntry, today: string): number {
+    return bulkRangeDays(entry.item.date_range.start, entry.item.date_range.end, today) + BULK_SIGNAL_MARGIN_DAYS;
+}
+
+/**
+ * The rolling-return view of each compared asset, by card and then by asset id, from the answers of the batches (each with
+ * the entries it carried, all of one round). An entry the answer lacks, or an answer that is no object, is an `error` view.
+ */
+export function listAssetComparisonViews(answers: ReadonlyArray<{entries: readonly ListAssetEntry[]; answer: unknown}>): Map<string, Map<number, CalendarReturnView>> {
+    const byCard = new Map<string, Map<number, CalendarReturnView>>();
+    for (const {entries, answer} of answers) {
+        const items = answer && typeof answer === 'object' ? (answer as {items?: unknown}).items : null;
+        const views = extractCalendarReturnViewsByAsset(
+            items,
+            entries.map((entry) => entry.assetId),
+        );
+        for (const entry of entries) {
+            const view = views.get(entry.assetId)!;
+            for (const cardKey of entry.owners) {
+                if (!byCard.has(cardKey)) byCard.set(cardKey, new Map());
+                byCard.get(cardKey)!.set(entry.assetId, view);
             }
         }
     }
