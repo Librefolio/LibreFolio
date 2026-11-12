@@ -4323,7 +4323,9 @@ class _StepsWithAHole:
     """A unit-rate reader with one flat rate from the first day of the calendar on, except on ``hole``: no rate that day.
 
     A stored rate is carried forward from its first row (``unit_rate_steps``), so a day with no rate after a day with one
-    cannot come from the database. The hole stands for a conversion one method asks and the other never does."""
+    cannot come from the database: there, «one method COMPLETE, the other DEGRADED» does not happen. Different gaps per
+    method do, when a pair has no row before the dates the methods ask: both are DEGRADED, with different dates. The hole
+    stands for a conversion one method asks and the other never does."""
 
     def __init__(self, rate: Decimal, hole: date | None = None) -> None:
         self.rate = rate
@@ -4437,7 +4439,9 @@ class TestBothMatchingMethods:
     async def test_a_rate_only_one_method_asks_degrades_that_method_only(self, monkeypatch):
         """Lot 1 is bought in USD, lot 2 in GBP; 5 units are sold on 1 Mar. FIFO closes part of lot 1, LIFO part of lot 2, so
         the Gantt asks the USD rate of 1 Mar in FIFO only. With no USD rate that day FIFO is DEGRADED with that gap, and
-        LIFO, which never asked it, stays COMPLETE (opinion on L3, (b): the conversion gaps are per method)."""
+        LIFO, which never asked it, stays COMPLETE (opinion on L3, (b): the conversion gaps are per method). A reader with
+        a hole stands in for the database, where a later day always carries an earlier rate: there the gaps can differ by
+        method only before a pair's first row, and then both methods are DEGRADED (see ``_StepsWithAHole``)."""
         rows = [
             _tx(1, tx_date=self._JAN_10, quantity=D("10"), amount=D("-1000"), currency="USD"),
             _tx(2, tx_date=self._FEB_10, quantity=D("10"), amount=D("-900"), currency="GBP"),

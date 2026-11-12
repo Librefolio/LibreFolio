@@ -2442,3 +2442,176 @@ test.describe('Broker detail: the return chart of the positions (Y5-2, #48)', ()
         expect(sent.length, 'unticking asked the series again').toBe(asked);
     });
 });
+
+/**
+ * Project 69, L4 — the lots panel switches between FIFO and LIFO (D1, D12).
+ *
+ * The analysis answers both methods at once (D1b): the header's selector picks the block on screen, FIFO first. The lots
+ * are the same in both methods — a lot is born of a purchase — so the lots the user picked stay picked across a switch
+ * (D12), while what the method decides changes: which lot a sale closed, so its open quantity. The histories of the
+ * picked lots are asked for the method on screen only.
+ *
+ * The data is the test's own: two purchases and one sale of half the first, on a broker and an asset of a disposable
+ * account (the J-12 helpers). What each method closes is read from the API's answer for both methods, never written
+ * here; the panel publishes the method whose block is on screen (`data-matching-method`), and the test waits on it.
+ */
+test.describe('Broker detail — the lots panel switches between FIFO and LIFO (project 69)', () => {
+    test.describe.configure({timeout: 90_000});
+
+    let owned: UnbuildableOwned = {};
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
+        owned = {};
+        account = await registerDisposableUser(request, 'bdl');
+        await prepareOnboardingAccount(page, account, []);
+    });
+
+    test.afterEach(async ({page, request}) => {
+        try {
+            await deleteUnbuildableOwned(page, owned);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
+    });
+
+    test('LIFO-1 the selector shows the other method’s closes on the same picked lots, and asks the picked lots’ histories in that method', async ({page}) => {
+        const days = {first: daysAgoIso(40), second: daysAgoIso(30), sale: daysAgoIso(20)};
+        const broker = await createShortingBroker(page, owned);
+        const asset = await createPricedAsset(page, owned, [
+            {date: days.first, close: 100},
+            {date: days.second, close: 120},
+            {date: days.sale, close: 130},
+            {date: daysAgoIso(5), close: 125},
+        ]);
+        const [firstId, secondId] = await commitCreates(
+            page,
+            [
+                {broker_id: broker.id, asset_id: asset.id, type: 'BUY', date: days.first, quantity: '10', cash: {code: UNBUILDABLE_CURRENCY, amount: '-1000'}},
+                {broker_id: broker.id, asset_id: asset.id, type: 'BUY', date: days.second, quantity: '10', cash: {code: UNBUILDABLE_CURRENCY, amount: '-1200'}},
+                {broker_id: broker.id, asset_id: asset.id, type: 'SELL', date: days.sale, quantity: '-5', cash: {code: UNBUILDABLE_CURRENCY, amount: '650'}},
+            ],
+            'commit two purchases of 10 and a sale of 5',
+        );
+        const lotIds = [firstId, secondId];
+
+        // What each method closes, from the API's own answer for both.
+        const answer = await page.request.post(`${API}/portfolio/lots/analysis`, {data: {asset_id: asset.id, broker_ids: [broker.id], requested_analyses: ['LOT_SUMMARY'], matching_methods: ['FIFO', 'LIFO']}});
+        expect(answer.ok(), `the lots analysis for both methods answered ${answer.status()}`).toBe(true);
+        const methods = ((await answer.json()) as {methods: Record<string, {lots?: Array<{lot_id: number; open_quantity: string}> | null}>}).methods;
+        const openOf = (method: string) => Object.fromEntries((methods[method]?.lots ?? []).map((lot) => [lot.lot_id, Number(lot.open_quantity)]));
+        expect(openOf('FIFO'), 'premise: FIFO sells half of the first lot').toEqual({[firstId]: 5, [secondId]: 10});
+        expect(openOf('LIFO'), 'premise: LIFO sells half of the second lot').toEqual({[firstId]: 10, [secondId]: 5});
+
+        await openOwnedLotsPanel(page, {broker, asset, days: {buy: days.first, sell: days.sale, adjustment: days.sale}, buyId: firstId, sellId: secondId});
+        const panel = page.getByTestId('lots-analysis-panel');
+        const table = panel.getByTestId('unified-lots-table');
+        const openCell = (lotId: number) => table.locator(`tbody tr[data-row-id="${lotId}"] td[data-column-id="open-quantity"]`);
+        await expect(panel, 'the panel opens in FIFO').toHaveAttribute('data-matching-method', 'FIFO');
+        await expect(panel.getByTestId('lots-method-FIFO')).toHaveAttribute('aria-pressed', 'true');
+        await expect(panel.getByTestId('lots-method-LIFO')).toHaveAttribute('aria-pressed', 'false');
+
+        // Both lots picked in FIFO.
+        for (const lotId of lotIds) {
+            const row = table.locator(`tbody tr[data-row-id="${lotId}"]`);
+            await expect(row, `lot ${lotId} has its row`).toBeVisible({timeout: 10_000});
+            await expect(row, `lot ${lotId} starts unpicked`).toHaveAttribute('data-selected', 'false');
+            await row.getByTestId(`dt-row-checkbox-${lotId}`).click();
+            await expect(row, `lot ${lotId} is picked`).toHaveAttribute('data-selected', 'true');
+        }
+        const fifoTexts = await Promise.all(lotIds.map((lotId) => openCell(lotId).innerText()));
+
+        // To LIFO: the picked lots stay picked, their open quantities change, the histories are asked in LIFO only.
+        const lifoHistories = page.waitForRequest((request) => {
+            if (request.method() !== 'POST' || !request.url().endsWith('/portfolio/lots/analysis')) return false;
+            const body = request.postDataJSON() as {asset_id?: number; selected_lot_ids?: number[]; matching_methods?: string[]} | null;
+            return body?.asset_id === asset.id && JSON.stringify(body?.matching_methods) === JSON.stringify(['LIFO']) && JSON.stringify([...(body?.selected_lot_ids ?? [])].sort((a, b) => a - b)) === JSON.stringify([...lotIds].sort((a, b) => a - b));
+        });
+        await panel.getByTestId('lots-method-LIFO').click();
+        await expect(panel, 'the LIFO block is on screen').toHaveAttribute('data-matching-method', 'LIFO');
+        await expect(panel.getByTestId('lots-method-LIFO')).toHaveAttribute('aria-pressed', 'true');
+        await lifoHistories;
+        for (const [index, lotId] of lotIds.entries()) {
+            await expect(table.locator(`tbody tr[data-row-id="${lotId}"]`), `lot ${lotId} is still picked in LIFO (D12)`).toHaveAttribute('data-selected', 'true');
+            await expect(openCell(lotId), `lot ${lotId}: LIFO closes another lot, so its open quantity reads otherwise`).not.toHaveText(fifoTexts[index]);
+        }
+
+        // Back to FIFO: the same lots, picked, with the figures FIFO had.
+        await panel.getByTestId('lots-method-FIFO').click();
+        await expect(panel).toHaveAttribute('data-matching-method', 'FIFO');
+        for (const [index, lotId] of lotIds.entries()) {
+            await expect(table.locator(`tbody tr[data-row-id="${lotId}"]`), `lot ${lotId} is still picked back in FIFO`).toHaveAttribute('data-selected', 'true');
+            await expect(openCell(lotId), `lot ${lotId}: back in FIFO, FIFO's open quantity`).toHaveText(fifoTexts[index]);
+        }
+    });
+
+    test('LIFO-2 a lot closed in one method and open in the other stays picked while the Open filter hides it, across a switch (D12)', async ({page}) => {
+        const days = {first: daysAgoIso(40), second: daysAgoIso(30), sale: daysAgoIso(20)};
+        const broker = await createShortingBroker(page, owned);
+        const asset = await createPricedAsset(page, owned, [
+            {date: days.first, close: 100},
+            {date: days.second, close: 120},
+            {date: days.sale, close: 130},
+            {date: daysAgoIso(5), close: 125},
+        ]);
+        const [firstId, secondId] = await commitCreates(
+            page,
+            [
+                {broker_id: broker.id, asset_id: asset.id, type: 'BUY', date: days.first, quantity: '10', cash: {code: UNBUILDABLE_CURRENCY, amount: '-1000'}},
+                {broker_id: broker.id, asset_id: asset.id, type: 'BUY', date: days.second, quantity: '10', cash: {code: UNBUILDABLE_CURRENCY, amount: '-1200'}},
+                {broker_id: broker.id, asset_id: asset.id, type: 'SELL', date: days.sale, quantity: '-10', cash: {code: UNBUILDABLE_CURRENCY, amount: '1300'}},
+            ],
+            'commit two purchases of 10 and a sale of 10',
+        );
+        const lotIds = [firstId, secondId];
+
+        // What each method closes, from the API's own answer: one whole lot each, not the same one.
+        const answer = await page.request.post(`${API}/portfolio/lots/analysis`, {data: {asset_id: asset.id, broker_ids: [broker.id], requested_analyses: ['LOT_SUMMARY'], matching_methods: ['FIFO', 'LIFO']}});
+        expect(answer.ok(), `the lots analysis for both methods answered ${answer.status()}`).toBe(true);
+        const methods = ((await answer.json()) as {methods: Record<string, {lots?: Array<{lot_id: number; open_quantity: string}> | null}>}).methods;
+        const openOf = (method: string) => Object.fromEntries((methods[method]?.lots ?? []).map((lot) => [lot.lot_id, Number(lot.open_quantity)]));
+        expect(openOf('FIFO'), 'premise: FIFO closes the first lot whole').toEqual({[firstId]: 0, [secondId]: 10});
+        expect(openOf('LIFO'), 'premise: LIFO closes the second lot whole').toEqual({[firstId]: 10, [secondId]: 0});
+
+        await openOwnedLotsPanel(page, {broker, asset, days: {buy: days.first, sell: days.sale, adjustment: days.sale}, buyId: firstId, sellId: secondId});
+        const panel = page.getByTestId('lots-analysis-panel');
+        const table = panel.getByTestId('unified-lots-table');
+        const row = (lotId: number) => table.locator(`tbody tr[data-row-id="${lotId}"]`);
+        await expect(panel).toHaveAttribute('data-matching-method', 'FIFO');
+
+        // Both lots picked in FIFO, both shown.
+        for (const lotId of lotIds) {
+            await expect(row(lotId), `lot ${lotId} has its row`).toBeVisible({timeout: 10_000});
+            await row(lotId).getByTestId(`dt-row-checkbox-${lotId}`).click();
+            await expect(row(lotId), `lot ${lotId} is picked`).toHaveAttribute('data-selected', 'true');
+        }
+
+        // Open only: in FIFO the first lot is closed, so its row goes; the second stays picked.
+        await panel.getByTestId('lot-gantt-filter-closed').click();
+        await expect(panel.getByTestId('lot-gantt-filter-closed')).toHaveAttribute('aria-pressed', 'false');
+        await expect(row(firstId), 'FIFO, Open only: the closed first lot is hidden').toHaveCount(0);
+        await expect(row(secondId)).toHaveAttribute('data-selected', 'true');
+
+        // To LIFO: the first lot is open there, so its row comes back — picked, as before the filter hid it (D12). The
+        // histories are asked for both lots, in LIFO.
+        const lifoHistories = page.waitForRequest((request) => {
+            if (request.method() !== 'POST' || !request.url().endsWith('/portfolio/lots/analysis')) return false;
+            const body = request.postDataJSON() as {asset_id?: number; selected_lot_ids?: number[]; matching_methods?: string[]} | null;
+            return body?.asset_id === asset.id && JSON.stringify(body?.matching_methods) === JSON.stringify(['LIFO']) && Array.isArray(body?.selected_lot_ids);
+        });
+        await panel.getByTestId('lots-method-LIFO').click();
+        await expect(panel).toHaveAttribute('data-matching-method', 'LIFO');
+        await expect(row(secondId), 'LIFO, Open only: the closed second lot is hidden').toHaveCount(0);
+        await expect(row(firstId), 'LIFO: the first lot is back, and still picked').toHaveAttribute('data-selected', 'true');
+        const asked = (await lifoHistories).postDataJSON() as {selected_lot_ids: number[]};
+        expect(
+            [...asked.selected_lot_ids].sort((a, b) => a - b),
+            'the LIFO histories are asked for both picked lots, the hidden one included',
+        ).toEqual([...lotIds].sort((a, b) => a - b));
+
+        // Every lot shown again: both still picked.
+        await panel.getByTestId('lot-gantt-filter-closed').click();
+        for (const lotId of lotIds) await expect(row(lotId), `lot ${lotId} is still picked with every lot shown`).toHaveAttribute('data-selected', 'true');
+    });
+});

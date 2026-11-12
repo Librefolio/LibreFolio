@@ -36,11 +36,66 @@ When you've bought the same asset multiple times at different prices, which purc
 |--------|------|--------|
 | **FIFO** (First In, First Out) | Oldest shares sold first | Most common default |
 | **LIFO** (Last In, First Out) | Newest shares sold first | May minimize/maximize gains |
+| **Weighted average cost** | No lot is matched: every unit carries the average cost of the pool | Smooths the result over the purchases |
 | **Specific Identification** | You choose which lot to sell | Maximum tax optimization |
 
-!!! info "LibreFolio uses FIFO"
+A small example. Bought 10 units at 100 in January and 10 at 120 in March; 10 sold at 130 in June:
 
-    LibreFolio computes capital gains using **FIFO** matching at runtime. The matching is calculated on-demand, not stored in the database.
+| Method | Lot closed | Realized | What stays |
+|--------|-----------|----------|------------|
+| FIFO | January | $10 \times (130 - 100) = 300$ | 10 at 120 |
+| LIFO | March | $10 \times (130 - 120) = 100$ | 10 at 100 |
+| Average cost (110) | none | $10 \times (130 - 110) = 200$ | 10 at 110 |
+
+Over the whole life of a position the methods realize the same total; they differ in **when** the gain is realized, and
+so in which tax year it falls.
+
+!!! info "LibreFolio matches in FIFO and in LIFO"
+
+    The lots analysis computes both matchings at runtime, in one request, and the lots panel switches between them (FIFO
+    first, not saved). The matching is calculated on demand, never stored in the database. The rest of the app — the
+    Dashboard, the broker pages — realizes on the **weighted average cost**, which is not a matching method: the
+    [weighted average cost](../technical-analysis/performance-metrics/weighted-average-cost.md) lines exist beside the
+    lots. Specific identification (choosing the lot) is not offered.
+
+### 🇮🇹 Italy: which method the law names { #italy }
+
+Italian law names a different method for each of its two tax regimes for individuals:
+
+| Regime | Who computes the tax | Method | Source |
+|--------|----------------------|--------|--------|
+| **Dichiarativo** (self-declared) | You, in your tax return | **LIFO**: the units sold first are the ones acquired most recently | Art. 67, paragraph 1-bis, TUIR (d.P.R. 917/1986), for the income of 2026; from 1 January 2027 art. 76, paragraph 2, of the new TUIR (d.lgs. 19 June 2026, no. 117), unchanged in substance. The Agenzia delle Entrate calls it the «metodo L.I.F.O.» (Risposta no. 204/2023) |
+| **Amministrato** (managed by the broker) | The intermediary, as withholding agent | **Weighted average cost** of each homogeneous category: no lot is matched | Art. 6, paragraph 4, d.lgs. 461/1997; from 2027 art. 306, paragraph 5, of the new TUIR |
+
+FIFO is the method of neither regime. So, for someone who declares in Italy, the **LIFO view** of the lots panel is the
+one close to the law; for someone in the managed regime, the closest figure is the realized gain on the average cost
+that the Dashboard and the broker pages show.
+
+!!! warning "Three limits of LibreFolio's matching"
+
+    1. **A lot is dated with the data LibreFolio has.** With every broker of a transfer in the analysis, a transferred lot
+       keeps its purchase date and the arrival broker's queue orders it by that date. Seen from one broker only, the
+       units arrive with no purchase date, so the lot is born on the day it arrives. The Dashboard and a broker's page
+       can therefore date a lot differently, and close a different one, in either method.
+    2. **The queue is per broker.** A sale closes the lots held at the broker that sells, in FIFO as in LIFO. The rule
+       on LIFO does not name the account: the sources disagree on whether it applies per account (the Agenzia, on
+       foreign-currency accounts: «per ciascun conto», Risposta no. 204/2023) or across all the taxpayer's accounts (a
+       commentary in Il Sole 24 Ore, 8 December 2018).
+    3. **The managed regime does not match lots.** There the law uses the weighted average cost: read the realized gain
+       on the average cost, not a lot view.
+
+!!! info "Points the sources leave open"
+
+    - **ETFs and funds**: a gain is income from capital, a loss a «reddito diverso»; the withholding rule speaks of the
+      weighted average cost of subscription or purchase, while the loss follows art. 67. In the self-declared regime
+      the guides disagree, and no document of the Agenzia settles it.
+    - **Crypto-assets**: paragraph 1-bis does not name them; LIFO for them in the self-declared regime is practice
+      reported by secondary sources, not the text of the law.
+
+    Sources: [Agenzia delle Entrate, Risposta no. 204/2023](https://www.agenziaentrate.gov.it/portale/documents/20143/4988698/Risposta+n.+204_2023.pdf/5189c15d-4fe7-f043-606b-2843bc00df74);
+    [art. 67 TUIR](https://www.brocardi.it/testo-unico-imposte-redditi/titolo-i/capo-vii/art67.html);
+    [d.lgs. 117/2026, new TUIR (Gazzetta Ufficiale)](https://www.gazzettaufficiale.it/eli/id/2026/07/03/26G00131/sg);
+    [art. 6 d.lgs. 461/1997 (Normattiva)](https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:decreto.legislativo:1997-11-21;461~art6).
 
 ---
 
@@ -134,7 +189,7 @@ Every country has its own tax framework. Key parameters that vary:
 
 !!! abstract "LibreFolio's role"
 
-    LibreFolio tracks your transactions and computes realized gains/losses using FIFO matching. It provides the **data foundation** for tax reporting, but does not generate tax declarations or apply jurisdiction-specific rules. Export your transaction data and consult a tax professional.
+    LibreFolio tracks your transactions and computes realized gains/losses on the weighted average cost, and per lot in FIFO and in LIFO. It provides the **data foundation** for tax reporting, but does not generate tax declarations or apply jurisdiction-specific rules. Export your transaction data and consult a tax professional.
 
 ---
 

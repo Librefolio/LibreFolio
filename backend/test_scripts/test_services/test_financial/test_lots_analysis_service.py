@@ -3202,7 +3202,12 @@ def _common_parts(response) -> dict:
 async def test_a_method_alone_answers_as_the_same_method_beside_the_other(session, test_user, asset, broker):
     """Opinion on L3, test 2: the block of a method asked with the other, in either order, is the block of that method asked
     alone, byte for byte; the common parts too. Read in USD, so every figure goes through a rate. The two methods do differ
-    on this book: the test compares something."""
+    on this book: the test compares something.
+
+    One known exception, outside this book: ``stale_fx_pairs`` is the union of what both methods asked (Q4). A block can
+    then list a pair read on the last day by the other method only. That takes three things together: lots in two
+    currencies, a movement on the last day, and a request with no market-series analysis (the series asks every currency
+    on every day). Only a hand-made API call with both methods and only Gantt, custody or events meets them."""
     book = await _two_method_book(session, test_user, asset, broker)
     fifo_alone = await _methods(session, test_user, asset, book, [FIFO], target_currency="USD")
     lifo_alone = await _methods(session, test_user, asset, book, [LIFO], target_currency="USD")

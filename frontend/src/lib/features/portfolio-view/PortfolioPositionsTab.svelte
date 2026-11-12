@@ -48,9 +48,35 @@
         onAnalyze: (assetId: number) => void;
         onCloseAnalysis: () => void;
         refreshVersion: number;
+        /** The lots panel synced rates or added a pair from its banner (project 69, L4): the view's report is asked again. */
+        onLotsRatesChanged?: () => void;
     }
 
-    let {testId, snapshot, brokers, brokerIds, canAsk, assetsHref, onRequestContribution, positionsSeries, positionsSeriesLoading, positionsSeriesFailed, onRequestPositionsSeries, positionsRolling, onRequestPositionsRolling, rollingSelection, rollingAutoPreset, onRollingSelectionChange, activeAssetId, activeAsset, displayCurrency, onAnalyze, onCloseAnalysis, refreshVersion}: Props = $props();
+    let {
+        testId,
+        snapshot,
+        brokers,
+        brokerIds,
+        canAsk,
+        assetsHref,
+        onRequestContribution,
+        positionsSeries,
+        positionsSeriesLoading,
+        positionsSeriesFailed,
+        onRequestPositionsSeries,
+        positionsRolling,
+        onRequestPositionsRolling,
+        rollingSelection,
+        rollingAutoPreset,
+        onRollingSelectionChange,
+        activeAssetId,
+        activeAsset,
+        displayCurrency,
+        onAnalyze,
+        onCloseAnalysis,
+        refreshVersion,
+        onLotsRatesChanged,
+    }: Props = $props();
 
     const summaryLoading = $derived(snapshot.reportLoading && !snapshot.summary);
 </script>
@@ -91,5 +117,6 @@
         onClose={onCloseAnalysis}
         ready={canAsk}
         {refreshVersion}
+        onRatesChanged={onLotsRatesChanged}
     />
 </div>

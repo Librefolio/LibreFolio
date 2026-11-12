@@ -4,7 +4,7 @@ FIFO lot analysis is the **per-lot** complement to [Weighted Average Cost (WAC)]
 
 WAC answers: _"What is my blended average cost for this position?"_ FIFO lot analysis answers a different question: _"How is each individual purchase batch performing through time?"_
 
-Instead of merging all acquisitions into one pool, LibreFolio tracks each lot through its own lifecycle — **open**, **partially closed**, **fully closed** — and matches sells in **FIFO** order (first in, first out).
+Instead of merging all acquisitions into one pool, LibreFolio tracks each lot through its own lifecycle — **open**, **partially closed**, **fully closed** — and matches sells in **FIFO** order (first in, first out) or in **LIFO** order (last in, first out): the lots panel computes both and switches between them (see [FIFO or LIFO](#fifo-or-lifo)).
 
 !!! info "Complement, not replacement"
 
@@ -16,7 +16,7 @@ Instead of merging all acquisitions into one pool, LibreFolio tracks each lot th
 
 A **lot** is one acquisition batch: for example, one BUY of 100 shares, or one transfer-in that preserves historical cost basis.
 
-When a SELL occurs, the oldest still-open lots are closed first. This creates a lot-by-lot history:
+When a SELL occurs, the still-open lots are closed in the order of the method: in FIFO the oldest first, in LIFO the most recent first. This creates a lot-by-lot history:
 
 - how much of each lot is still open
 - how much has already been sold
@@ -31,6 +31,39 @@ This makes FIFO lot analysis especially useful when two positions in the same as
 </div>
 
 The **Lot Life & Custody** timeline above makes the lifecycle visual: each bar is one lot, colored by the broker currently holding it, with thickness proportional to the quantity still held in that segment. A bar that ends mid-chart is a fully closed lot; a bar reaching "today" is still open.
+
+---
+
+## 🔀 FIFO or LIFO { #fifo-or-lifo }
+
+A matching method decides **which open lot an outflow closes**: a sale, an outgoing adjustment, the purchase that
+covers a short, a transfer to another broker. It never decides which lots exist.
+
+| | FIFO | LIFO |
+|---|---|---|
+| An outflow closes | the oldest open lot first | the most recent open lot first |
+| Order of the queue | opening date, then lot id, ascending | opening date, then lot id, descending |
+
+**The lots are the same in both methods.** A lot is born of an inflow — a purchase, an incoming adjustment — so its
+opening date, quantity and cost do not depend on the method. What changes is how much of each lot is still open, what
+each closure realizes, and when. A position closed in full realizes the same total in both methods; while it is open,
+the realized share and the open cost differ. With the example of [Taxation](../../../fundamentals/taxation.md#italy) —
+10 units at 100, 10 at 120, 10 sold at 130 — FIFO realizes $10 \times (130 - 100) = 300$ and keeps the lot at 120 open;
+LIFO realizes $10 \times (130 - 120) = 100$ and keeps the lot at 100.
+
+Three rules hold in both methods:
+
+- **The queue is per broker.** A sale closes the lots held at the broker that sells.
+- **Within one day, inflows come before outflows.** Transaction dates carry no time: a purchase and a sale of the same
+  day are applied purchase first, whatever order they were recorded in. Selling and buying back the same day on a
+  broker that allows short selling therefore draws a long lot, opened and closed that day, with the same realized
+  result a short would have had.
+- **A transferred lot keeps its purchase date** in the queue of the broker it reaches, when both brokers are in the
+  analysis. Seen from one broker only, the units arrive without a purchase date and the lot is born on the day they
+  arrive, so the Dashboard and a broker's page can close a different lot.
+
+Italian law names LIFO for the self-declared regime and the weighted average cost for the managed one; see
+[Taxation](../../../fundamentals/taxation.md#italy) for the sources and the limits of LibreFolio's matching.
 
 ---
 
@@ -325,8 +358,8 @@ A cost pool (same broker, same day, same type) is matched to the first non-empty
 | `TAX` | same-day income → same-day trades → previous-day income → previous-day trades → open holdings → asset orphan |
 
 Within a matched trade the cost **crosses to the very lots that trade touched** — a BUY's cost lands on the
-lot it opened, a SELL's cost lands on the FIFO-consumed lots — so cost attribution never contradicts the FIFO
-matching itself. Amounts are converted to the target currency and stored as positive magnitudes.
+lot it opened, a SELL's cost lands on the lots it consumed in the method on screen — so cost attribution never
+contradicts the matching itself. Amounts are converted to the target currency and stored as positive magnitudes.
 
 !!! tip "Conservation"
 
@@ -483,5 +516,5 @@ The **Unified Lots Table** lists exactly the per-lot rows $i$ that the aggregate
 - 📊 **[Weighted Average Cost (WAC)](../weighted-average-cost.md)** — blended cost basis view
 - 🔁 **[Buy & Sell](../../../instruments/transaction-types/buy-sell.md#fifo-matching)** — brief FIFO matching overview
 - 💸 **[Dividend & Interest](../../../instruments/transaction-types/dividend-interest.md)** — source of asset-linked income events
-- 💰 **[Taxation](../../../fundamentals/taxation.md)** — capital gains and lot matching context
+- 💰 **[Taxation](../../../fundamentals/taxation.md)** — capital gains, matching methods, and the Italian rule (LIFO in the self-declared regime)
 - ⚙️ **[Lots Analysis Service](../../../../developer/backend/transactions/lots_analysis_service.md)** — developer implementation deep-dive

@@ -705,7 +705,8 @@ class LotsAnalysisService:
             )
 
         # The rates read on the last day of the analysis that are old: a notice, no value changes (CP-11a); on every
-        # currency asked, by either method.
+        # currency asked, by either method. The union may list in one block a pair read on the last day only by the other
+        # method (opinion on L3, Q4: a copy shares the needs, so a per-method list would read the same union).
         stale_fx_pairs = fx_resolver.stale_pairs(actual_to)
         configured_pairs = _ConfiguredFxPairs(self.db)
         methods: dict[LotMatchingMethod, LotsMethodAnalysis] = {}

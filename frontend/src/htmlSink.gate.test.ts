@@ -68,6 +68,8 @@ const REVIEWED_SINKS: readonly ReviewedSink[] = [
     {file: 'src/lib/features/transactions/wac/WacPreviewSection.svelte', expr: 'formatCurrencyPairHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/features/transactions/bulk/TxBulkBanners.svelte', expr: 'formatCurrencyPairHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/ui/feedback/DataQualityBanner.svelte', expr: 'formatPairSlugHtml(…)', why: CURRENCY_HTML},
+    // The pair chips moved out of DataQualityBanner with the banner's actions (project 69, L4): the same formatter, the same review.
+    {file: 'src/lib/components/ui/feedback/DataQualityIssueActions.svelte', expr: 'formatPairSlugHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/table/DataTableColumnFilter.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/features/files/FilePreviewModal.svelte', expr: 'renderedMarkdown', why: 'DOMPurify-sanitised marked output; the KaTeX pass that follows renders the text content of $$…$$ paragraphs, and KaTeX escapes its input (trust off).'},
     {file: 'src/lib/features/signals/components/SignalOptionContent.svelte', expr: 'renderedSubtitle', why: 'renderInlineMathText(subtitle): the server signal-catalog subtitle is escaped by escapeHtml before KaTeX renders its $…$ spans.'},

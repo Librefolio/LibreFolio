@@ -564,6 +564,7 @@
                 onAnalyze={openAssetPanel}
                 onCloseAnalysis={closeAssetPanel}
                 {refreshVersion}
+                onLotsRatesChanged={() => void loadAll(true)}
             />
         {:else if activeTab === 'rischio'}
             <PortfolioRiskTab

@@ -1,8 +1,8 @@
 /**
  * lotsAnalysisStore — session cache for `POST /portfolio/lots/analysis` (page cache, phase 1, E5).
  *
- * One entry per question: the user, the asset, the brokers, the currency, the analyses and the
- * selected lots — the three lists in any order. A fresh answer is served without asking, identical
+ * One entry per question: the user, the asset, the brokers, the currency, the analyses, the
+ * selected lots and the matching methods — the four lists in any order. A fresh answer is served without asking, identical
  * questions in flight share one request, and `force` («Aggiorna») asks again.
  *
  * A portfolio mutation, or «Aggiorna» (`requestPortfolioRefresh`), marks every answer stale and
@@ -54,7 +54,7 @@ let generation = 0;
 /** Bumped by a portfolio mutation or «Aggiorna»: answers asked before it are stale, and kept. */
 let markSeq = 0;
 
-const UNORDERED_LISTS = ['broker_ids', 'requested_analyses', 'selected_lot_ids'] as const;
+const UNORDERED_LISTS = ['broker_ids', 'requested_analyses', 'selected_lot_ids', 'matching_methods'] as const;
 
 function canonical(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(canonical);
@@ -69,7 +69,7 @@ function canonical(value: unknown): unknown {
     return value;
 }
 
-/** The user, then the question with its object keys sorted and its three unordered lists sorted. */
+/** The user, then the question with its object keys sorted and its four unordered lists sorted. */
 function lotsKey(body: LotsAnalysisRequest): string {
     const question: Record<string, unknown> = {...(body as Record<string, unknown>)};
     for (const name of UNORDERED_LISTS) {
