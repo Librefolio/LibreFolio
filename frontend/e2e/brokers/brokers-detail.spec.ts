@@ -3,6 +3,7 @@ import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {expectChartCanvas, showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 import {daysAgoIso} from '../fixtures/dates';
 import {commitCreates} from '../fixtures/owned-pair';
@@ -1490,15 +1491,24 @@ async function deleteOwnedBrokerAndFiles(page: Page, brokerId: number): Promise<
 test.describe('Broker detail — import history upload', () => {
     let ownedBrokerId: number | undefined;
 
-    test.beforeEach(async ({page}) => {
+    /** The account the running test writes with: its own, so its broker and rows are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
         ownedBrokerId = undefined;
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, 'bdh');
+        await prepareOnboardingAccount(page, account, []);
     });
 
     // afterEach, not `finally`: a cleanup throwing from `finally` would replace the
     // assertion error it follows, and that assertion is the point of this block.
-    test.afterEach(async ({page}) => {
-        if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+    test.afterEach(async ({page, request}) => {
+        try {
+            if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     test('uploads a report from the import history modal to its own broker', async ({page}) => {
@@ -1742,15 +1752,24 @@ async function closeEmptyBulkWithoutGuard(page: Page): Promise<void> {
 test.describe('Broker detail — the Bulk editor opened before the transaction types are cached (6b)', () => {
     let ownedBrokerId: number | undefined;
 
-    test.beforeEach(async ({page}) => {
+    /** The account the running test writes with: its own, so its broker and rows are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
         ownedBrokerId = undefined;
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, 'bd6');
+        await prepareOnboardingAccount(page, account, []);
     });
 
     // afterEach, not `finally`: a cleanup throwing from `finally` would replace the assertion
     // error it follows. Nothing is saved here, so the owned broker is all there is to remove.
-    test.afterEach(async ({page}) => {
-        if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+    test.afterEach(async ({page, request}) => {
+        try {
+            if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     test('B6a New transaction on a cold broker page, its form closed untouched: the Bulk closes without asking to discard', async ({page}) => {
@@ -1891,15 +1910,24 @@ async function frenchQuota(page: Page): Promise<string> {
 test.describe('Broker detail — the quota badge in the UI language', () => {
     let ownedBrokerId: number | undefined;
 
-    test.beforeEach(async ({page}) => {
+    /** The account the running test writes with: its own, so its broker and rows are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
         ownedBrokerId = undefined;
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, 'bdq');
+        await prepareOnboardingAccount(page, account, []);
     });
 
     // afterEach, not `finally`: a cleanup throwing from `finally` would replace the assertion
     // error it follows, and that assertion is the point of this block.
-    test.afterEach(async ({page}) => {
-        if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+    test.afterEach(async ({page, request}) => {
+        try {
+            if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     /** A broker of this test's own, whose badge shows QUOTA_SHARE. */
@@ -2215,14 +2243,23 @@ test.describe('Broker detail — a FAILED lots analysis names the transaction to
 
     let owned: UnbuildableOwned = {};
 
-    test.beforeEach(async ({page}) => {
+    /** The account the running test writes with: its own, so its broker and rows are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
         owned = {};
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, 'bdj');
+        await prepareOnboardingAccount(page, account, []);
     });
 
     // afterEach, not `finally`: a cleanup throwing from `finally` would replace the assertion error it follows.
-    test.afterEach(async ({page}) => {
-        await deleteUnbuildableOwned(page, owned);
+    test.afterEach(async ({page, request}) => {
+        try {
+            await deleteUnbuildableOwned(page, owned);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     test('J12-1 an ADJUSTMENT on a short fails the analysis BUY and SELL had drawn: one row with the broker’s name and the day, the average-cost lines and the market price line, no Gantt, table, comparison or banner group', async ({page}) => {

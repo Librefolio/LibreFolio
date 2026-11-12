@@ -56,10 +56,11 @@
  */
 
 import type {CDPSession} from '@playwright/test';
-import {expect, test as base, type Locator, type Page} from '../fixtures/playwright';
+import {expect, test as base, type APIRequestContext, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
@@ -84,7 +85,7 @@ const PROBE_PATH = '/__lf-flag-font-probe__.html';
 
 type PlatformFont = {familyName: string; postScriptName?: string; isCustomFont: boolean; glyphCount: number};
 type Host = {apple: boolean; probe: PlatformFont[]};
-type Owned = {suffix: string; brokerIds: number[]};
+type Owned = {suffix: string; brokerIds: number[]; user: DisposableUser | null};
 type OwnRow = {id: number; currency: 'EUR' | 'USD'; flag: string};
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
 type CommitResult = {operation: string; index?: number; ids?: number[]; status?: string};
@@ -222,6 +223,12 @@ async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> 
     return (await response.json()) as T;
 }
 
+/** Sign in as an account of this test's own: the broker and rows it writes are seen by no other spec. */
+async function signInOwned(page: Page, request: APIRequestContext, owned: Owned): Promise<void> {
+    owned.user = await registerDisposableUser(request, 'flag');
+    await prepareOnboardingAccount(page, owned.user, []);
+}
+
 /** One broker and two DEPOSITs with flagged currencies; the broker id is recorded before anything can fail. */
 async function createOwnRows(page: Page, owned: Owned): Promise<{brokerId: number; rows: OwnRow[]}> {
     const name = `FLAG ${owned.suffix}`;
@@ -282,16 +289,20 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<void> {
 }
 
 const test = base.extend<{owned: Owned}>({
-    owned: async ({page}, use, testInfo) => {
+    owned: async ({page, request}, use, testInfo) => {
         const baseURL = testInfo.project.use.baseURL;
         if (!baseURL || new URL(baseURL).port !== TEST_PORT || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
             throw new Error(`Flag font checks write owned rows and may only use the shared local test backend on port ${TEST_PORT}`);
         }
-        const owned: Owned = {suffix: `f${testInfo.workerIndex}-${uniqueSuffix()}`, brokerIds: []};
+        const owned: Owned = {suffix: `f${testInfo.workerIndex}-${uniqueSuffix()}`, brokerIds: [], user: null};
         try {
             await use(owned);
         } finally {
-            await cleanupOwned(page, owned);
+            try {
+                await cleanupOwned(page, owned);
+            } finally {
+                if (owned.user) await deleteDisposableUser(request, owned.user);
+            }
         }
     },
 });
@@ -337,8 +348,8 @@ test.describe('flag font — which font draws a flag, read through CDP (K step 1
     test.skip(({browserName, isMobile}) => browserName !== 'chromium' || isMobile, 'CSS.getPlatformFontsForNode is a Chromium DevTools call: desktop Chromium only');
     test.describe.configure({timeout: 90_000});
 
-    test('R1 transactions cash cell: the flag is drawn by Apple Color Emoji on an Apple host, by the Noto flags elsewhere', async ({page, owned}) => {
-        await login(page, TEST_USER);
+    test('R1 transactions cash cell: the flag is drawn by Apple Color Emoji on an Apple host, by the Noto flags elsewhere', async ({page, request, owned}) => {
+        await signInOwned(page, request, owned);
         const {brokerId, rows} = await createOwnRows(page, owned);
         await openOwnTransactions(page, brokerId, rows);
         const cdp = await openCdp(page);
@@ -353,9 +364,9 @@ test.describe('flag font — which font draws a flag, read through CDP (K step 1
         expect.soft(await flagFaceStatuses(page), `the app declares the '${FLAG_FACE}' face once, and the flags on screen engaged it`).toEqual(['loaded']);
     });
 
-    test('R2 an Apple host fetches nothing from the Noto directory while transactions, dashboard and FX show flags', async ({page, owned}) => {
+    test('R2 an Apple host fetches nothing from the Noto directory while transactions, dashboard and FX show flags', async ({page, request, owned}) => {
         const noto = recordNotoRequests(page);
-        await login(page, TEST_USER);
+        await signInOwned(page, request, owned);
         const {brokerId, rows} = await createOwnRows(page, owned);
 
         await openOwnTransactions(page, brokerId, rows);
@@ -490,8 +501,8 @@ test.describe('flag font — which font draws a flag, read through CDP (K step 1
         expect.soft(distinct(noto), 'the url source fetched the flags subset and nothing else').toEqual([FLAGS_SUBSET]);
     });
 
-    test('C2 control: digits beside a currency flag are drawn by the text font under the app stacks, never by an emoji font', async ({page, owned}) => {
-        await login(page, TEST_USER);
+    test('C2 control: digits beside a currency flag are drawn by the text font under the app stacks, never by an emoji font', async ({page, request, owned}) => {
+        await signInOwned(page, request, owned);
         const {brokerId, rows} = await createOwnRows(page, owned);
         await openOwnTransactions(page, brokerId, rows);
         const cdp = await openCdp(page);
