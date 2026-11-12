@@ -63,6 +63,8 @@ type ExactConstraintCode = Literal[
     "FX_SOURCE_CASH",
     "FX_NATIVE_QUANTUM",
     "FX_SINGLE_DIRECTION",
+    "ENTRY_VALUE_WITHIN_LIMITS",
+    "UNINVESTED_WITHIN_CASH_MAXIMA",
     "ORDER_QUANTIZED",
     "ORDER_MIN_IF_ACTIVE",
     "ORDER_REQUIRED_MIN",
@@ -440,9 +442,47 @@ class ExactOrderRoute:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactLimit:
+    """One bound on the final value of an entry (V5): an amount in the valuation currency, or a share of the Tool's reference.
+
+    The reference is the money the plan works with (decisioni M17): in the PAC the funding the plan can reach,
+    ``accounting.fixed_reference``; ``pa/limits.py`` resolves a limit to an amount against it.
+    """
+
+    kind: Literal["amount", "share"]
+    value: ExactRatio
+
+    def __post_init__(self) -> None:
+        if self.kind not in {"amount", "share"}:
+            raise ValueError("limit kind must be amount or share")
+        _require_nonnegative(self.value, "limit value")
+        if self.kind == "share" and self.value > ExactRatio(1):
+            raise ValueError("a share limit cannot exceed one")
+
+
+@dataclass(frozen=True, slots=True)
+class ExactCashLimit:
+    """Minimum and maximum of the final spendable cash of one Broker and currency cell (V5 on cash)."""
+
+    broker_id: str
+    currency: str
+    minimum: ExactLimit | None
+    maximum: ExactLimit | None
+
+    def __post_init__(self) -> None:
+        _require_text(self.broker_id, "cash limit broker_id")
+        _require_currency(self.currency, "cash limit currency")
+        if self.minimum is None and self.maximum is None:
+            raise ValueError("a cash limit needs a minimum or a maximum: no limit is no entry")
+
+
+@dataclass(frozen=True, slots=True)
 class ExactTargetWeight:
     asset_id: str
     weight: ExactRatio
+    # A3 (project 67): V5 limits on the Asset's final value. Absent by default, so every target built before A3 keeps its meaning.
+    minimum: ExactLimit | None = None
+    maximum: ExactLimit | None = None
 
     def __post_init__(self) -> None:
         _require_unit_interval(self.weight, "target weight")
@@ -538,6 +578,7 @@ class ExactPlannerScenario:
     target_weights: tuple[ExactTargetWeight, ...]
     sell_context: ExactSellContext | None
     transfer_lanes: tuple[ExactTransferLane, ...] = ()
+    cash_limits: tuple[ExactCashLimit, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.product == "pac") != (self.policy in {"proportional", "min_fragmentation"}):
@@ -566,6 +607,7 @@ class ExactPlannerScenario:
         _require_canonical_tuple(self.order_routes, lambda item: item.route_id, "order_routes")
         _require_canonical_tuple(self.target_weights, lambda item: item.asset_id, "target_weights")
         _require_canonical_tuple(self.transfer_lanes, lambda item: (item.source_broker_id, item.destination_broker_id, item.currency), "transfer_lanes")
+        _require_canonical_tuple(self.cash_limits, lambda item: (item.broker_id, item.currency), "cash_limits")
         if self.valuation_currency not in {item.currency for item in self.currency_specs}:
             raise ValueError("valuation currency requires a currency spec")
         if sum((item.weight for item in self.target_weights), ExactRatio(0)) != ExactRatio(1):
