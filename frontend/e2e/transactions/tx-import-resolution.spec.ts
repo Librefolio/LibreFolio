@@ -32,7 +32,7 @@
  *
  * Prerequisites:
  *   - Backend test mode (port 6041)
- *   - DB populated: the "Interactive Brokers" broker, on which the test user is an owner.
+ *   - Nothing seeded: the account is the test's own, with a generic-CSV broker created by beforeEach.
  *
  * Test IDs: IWR-001..IWR-014
  *
@@ -58,17 +58,17 @@
 
 import {IntlMessageFormat} from 'intl-messageformat';
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {navigateTo} from '../fixtures/auth-helpers';
 import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {SUPPORTED_LANGUAGES, t as catalogueText} from '../fixtures/i18n-data';
 import {continueToReview, deleteOwnedReports, parseSelectedFile, selectBrokerFile, uploadOwnedReport, type OwnedReport, type ParseResponse} from '../fixtures/import-wizard';
-import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 
 test.setTimeout(90_000);
 
-/** The seeded broker the sample belongs to, and the sample a parsing test uploads a copy of. */
-const GENERIC_SIMPLE = {brokerName: 'Interactive Brokers', sample: 'generic_simple.csv'};
+/** The sample a parsing test uploads a copy of, to the account's own generic-CSV broker. */
+const GENERIC_SAMPLE = 'generic_simple.csv';
 
 /** The message of the resolve header's badge: how many assets are still unresolved, `{n}`. */
 const UNRESOLVED_COUNT_KEY = 'importWizard.unresolvedCount';
@@ -95,6 +95,13 @@ type Owned = {id: number; name: string};
 const ownedReports: OwnedReport[] = [];
 const ownedAssetIds: number[] = [];
 const ownedBrokerIds: number[] = [];
+/** The broker the account's files go to when a test names none: the account's own, set by beforeEach, with the generic CSV as its plugin. */
+let homeBroker: Owned | null = null;
+
+function home(): Owned {
+    if (!homeBroker) throw new Error("The account's home broker is created by beforeEach, before any test body");
+    return homeBroker;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -160,7 +167,7 @@ async function parseOwnFile(page: Page, own: OwnedReport): Promise<ParseResponse
  * step. Called with the wizard on step 1.
  */
 async function parseGenericSimple(page: Page): Promise<ParseResponse> {
-    const own = await uploadOwnedReport(page, ownedReports, GENERIC_SIMPLE);
+    const own = await uploadOwnedReport(page, ownedReports, {brokerName: home().name, sample: GENERIC_SAMPLE});
     return parseOwnFile(page, own);
 }
 
@@ -205,22 +212,12 @@ function purchasesOf(tickers: string[]): string {
 
 /**
  * Upload `csv`, a file of this test's own making, under a unique name — to `broker`, or to the seeded
- * "Interactive Brokers" when none is given — and push it onto `ownedReports` as soon as the server has
+ * the account's home broker when none is given — and push it onto `ownedReports` as soon as the server has
  * accepted it, for afterEach to delete. The route and the checks of `uploadOwnedReport`, replicated: the
  * fixture uploads only the samples on disk.
  */
 async function uploadOwnedCsv(page: Page, csv: string, broker?: Owned): Promise<OwnedReport> {
-    let target = broker;
-    if (!target) {
-        const brokersResponse = await page.request.get('/api/v1/brokers');
-        expect(brokersResponse.ok(), `list the brokers: HTTP ${brokersResponse.status()}`).toBe(true);
-        const {items} = (await brokersResponse.json()) as {items: Array<{id: number; name: string}>};
-        const brokers = items.filter((candidate) => candidate.name === GENERIC_SIMPLE.brokerName);
-        if (brokers.length !== 1) {
-            throw new Error(`Expected exactly one broker named "${GENERIC_SIMPLE.brokerName}" visible to this user, found ${brokers.length}: it is seeded by backend/test_scripts/test_db/populate_mock_data.py (populate_brokers)`);
-        }
-        target = brokers[0];
-    }
+    const target = broker ?? home();
     const brokerId = target.id;
     const fileName = `iwr-own-${uniqueSuffix()}.csv`;
     const response = await page.request.post('/api/v1/brokers/import/upload', {
@@ -352,9 +349,9 @@ async function createOwnedAsset(page: Page): Promise<Owned> {
  * before anything about the result is checked. The page keeps its brokers in a session cache: create this
  * before the page loads it.
  */
-async function createOwnedBroker(page: Page): Promise<Owned> {
+async function createOwnedBroker(page: Page, defaultImportPlugin?: string): Promise<Owned> {
     const name = `E2E import resolution ${uniqueSuffix()}`;
-    const response = await page.request.post('/api/v1/brokers', {data: [{name, opened_at: '2020-01-01'}]});
+    const response = await page.request.post('/api/v1/brokers', {data: [{name, opened_at: '2020-01-01', ...(defaultImportPlugin ? {default_import_plugin: defaultImportPlugin} : {})}]});
     expect(response.ok(), `create the owned broker: HTTP ${response.status()} ${await response.text()}`).toBe(true);
     const {results} = (await response.json()) as {results: Array<{name: string; success: boolean; broker_id: number | null; message?: string}>};
     const created = results.find((result) => result.name === name);
@@ -413,7 +410,7 @@ function pendingCsv(name: string): {name: string; mimeType: string; buffer: Buff
 }
 
 /**
- * Delete, by id, the broker IWR-009 created as TEST_USER under `name`, unique to the run. The id is looked up through
+ * Delete, by id, the broker IWR-009 created as the test's own account under `name`, unique to the run. The id is looked up through
  * the API, not carried over from the creation, so a red anywhere after the submit still finds the broker. A plain
  * delete: the broker never held a transaction, and a refusal would say so. After a red the test keeps its own error
  * and a failed cleanup is only logged; after a green the broker must be found and deleted, or the test goes red.
@@ -442,14 +439,21 @@ async function deleteBrokerNamed(page: Page, name: string, passed: boolean): Pro
 // ---------------------------------------------------------------------------
 
 test.describe('Import Wizard — Asset Resolution', () => {
-    test.beforeEach(async ({page}) => {
-        await login(page, TEST_USER);
+    /** The account the running test writes with: its own, so its brokers, assets and reports are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
+        account = await registerDisposableUser(request, 'iwr');
+        await prepareOnboardingAccount(page, account, []);
+        // Before the page loads: it keeps its brokers in a session cache. The generic CSV is its plugin, so the
+        // samples below are read by it whatever the seeded brokers read.
+        homeBroker = await createOwnedBroker(page, 'broker_generic_csv');
         await goToTransactions(page);
     });
 
     // Files first — a report outlives its broker otherwise — then assets, then brokers: each
     // step runs whatever the one before it did, and every one is scoped to the ids recorded.
-    test.afterEach(async ({page}) => {
+    test.afterEach(async ({page, request}) => {
         try {
             // Unmount the wizard first, so nothing on the page queries what is about to go.
             await page.goto('about:blank');
@@ -460,7 +464,13 @@ test.describe('Import Wizard — Asset Resolution', () => {
                 try {
                     await deleteOwnedAssets(page);
                 } finally {
-                    await deleteOwnedBrokers(page);
+                    try {
+                        await deleteOwnedBrokers(page);
+                    } finally {
+                        homeBroker = null;
+                        if (account) await deleteDisposableUser(request, account);
+                        account = null;
+                    }
                 }
             }
         }
@@ -729,7 +739,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
         await expect(brokerSelectWrapper, 'precondition: a pending file shows the step-1 broker selector').toBeVisible({timeout: 5_000});
         const brokerSelect = brokerSelectWrapper.getByRole('combobox');
 
-        // The broker is TEST_USER's: unique to the run, and deleted by id in finally.
+        // The broker is the test account's: unique to the run, and deleted by id in finally.
         const uniqueName = `E2E Test Broker ${uniqueSuffix()}`;
         let passed = false;
         try {
@@ -786,7 +796,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
         // The file to preview is this test's own, uploaded before step 2 reads the broker files
         // — the precondition built, not borrowed from whatever step 2 happens to list.
         await openImportWizard(page);
-        const own = await uploadOwnedReport(page, ownedReports, GENERIC_SIMPLE);
+        const own = await uploadOwnedReport(page, ownedReports, {brokerName: home().name, sample: GENERIC_SAMPLE});
 
         // Step 1: skip to Step 2 where files are listed with a preview action; the file is found
         // by its id in its broker's panel, on whichever page it is.

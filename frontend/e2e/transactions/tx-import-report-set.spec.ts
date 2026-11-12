@@ -268,12 +268,12 @@
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
 import {samplePath} from '../fixtures/brimSamples';
-import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {randomUUID} from 'crypto';
 import {mkdirSync, readFileSync, writeFileSync} from 'fs';
 import path from 'path';
@@ -1424,23 +1424,33 @@ async function expectUngroupedHint(page: Page, files: StoredFile[]) {
 test.describe('Import Wizard — report sets', () => {
     let ownedBrokerId: number | undefined;
     let ownedSince = 0;
+    /** The account the running test writes with: its own, so the broker and the files are seen by no other spec. */
+    let account: DisposableUser | null = null;
 
-    test.beforeEach(async ({page}, testInfo) => {
+    test.beforeEach(async ({page, request}, testInfo) => {
         ownedBrokerId = undefined;
+        account = null;
         // One test, one project (step 8): the runner runs this spec on desktop and on mobile. A test tagged @mobile is a phone
         // contract and runs on the mobile project only; every other test runs on desktop only. Decided after ownedBrokerId is
         // cleared, so afterEach never deletes a broker an earlier test left there; before the login, so a skip costs nothing.
         const phone = testInfo.tags.includes('@mobile');
         test.skip(testInfo.project.name !== (phone ? 'mobile' : 'desktop'), phone ? 'tagged @mobile: a phone contract, run on the mobile project only' : 'not tagged @mobile: run on the desktop project only');
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, `rs_${testInfo.project.name}`);
+        await prepareOnboardingAccount(page, account, []);
     });
 
     // afterEach, not `finally`: a cleanup throwing from `finally` would replace the
     // assertion error it follows, and that assertion is the point of the test.
-    test.afterEach(async ({page}) => {
-        if (ownedBrokerId === undefined) return;
-        await page.goto('about:blank');
-        await deleteOwnedBrokerAndFiles(page, ownedBrokerId, ownedSince);
+    test.afterEach(async ({page, request}) => {
+        try {
+            if (ownedBrokerId !== undefined) {
+                await page.goto('about:blank');
+                await deleteOwnedBrokerAndFiles(page, ownedBrokerId, ownedSince);
+            }
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     /** Own a broker, then open the wizard: the broker exists before the wizard reads the list. */
