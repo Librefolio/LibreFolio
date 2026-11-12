@@ -20,6 +20,8 @@ from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, RE
 from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.pac_allocator import normalize
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
 from backend.app.services.pac_allocator.issues import (
     CANONICAL_ISSUE_CODES,
     W1_NORMALIZER_ISSUE_DEFINITIONS,
@@ -42,7 +44,14 @@ from backend.app.services.pac_allocator.normalize import (
     normalize_rebalancer_plan,
 )
 from backend.app.services.pac_allocator.numeric import ExactRatio
-from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, fx_conversion_request
+from backend.test_scripts.test_services._pac_synthetic_requests import (
+    FX_TRIANGLE,
+    fx_conversion_request,
+    fx_two_assets_one_pair_request,
+    fx_two_brokers_request,
+    fx_two_sources_request,
+    fx_two_way_request,
+)
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator"
 PAC_FIXTURE = "pac_plan_request.min.v2.json"
@@ -2261,3 +2270,30 @@ def test_normalized_pac_scenario_has_no_broker_transfer() -> None:
         scenario = _normalize_payload("pac", payload).normalized
         assert scenario.transfer_lanes == ()
         assert not [access for access in build_exact_policy_view(scenario).decisions if access.family == "broker_transfer"]
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(lambda: fx_conversion_request("pairs-one", funding_currency="EUR", assets=[("USD", "10.00")], fx_rates={"EUR/USD": "1.085"}), id="one-pair"),
+        pytest.param(fx_two_assets_one_pair_request, id="N1-two-routes-one-pair"),
+        pytest.param(fx_two_way_request, id="N2-both-directions"),
+        pytest.param(fx_two_brokers_request, id="N3-two-brokers"),
+        pytest.param(fx_two_sources_request, id="N4-two-sources"),
+    ],
+)
+def test_normalizer_and_engine_agree_on_conversion_pairs(build):
+    """A2 step 14: the normalizer checks a rate (and its coherence) for every conversion a buy may need, from its own
+    reading of the cash pools; the engine plans exactly those conversions, from ``fx_decision_specs``. The two readings of
+    the pool-currency rule (D2 a) must name the same (Broker, source, destination) pairs."""
+    payload = build()
+    request = PAC_PLAN_INPUT_ADAPTER.validate_json(_wire(payload), strict=True)
+    normalizer = normalize._PlannerV2Normalizer(request, ())
+    normalizer.validate_assets()
+    pools = normalizer._cash_pool_currencies_by_broker()
+    checked = {(route.broker_id, pool, normalizer.asset_by_id[route.asset_id].quote.currency) for route in request.order_routes if route.side == "buy" for pool in pools.get(route.broker_id, set()) if pool != normalizer.asset_by_id[route.asset_id].quote.currency}
+
+    scenario = _normalize_payload("pac", payload).normalized
+    planned = {(spec.broker_id, spec.source_currency, spec.destination_currency) for spec in fx_decision_specs(scenario, build_scenario_index(scenario), None)}
+    assert planned == checked
+    assert planned, "every case converts"
