@@ -11,19 +11,51 @@
  * - the unit: a value that is not a whole number from 1 shows the error and keeps «Continue» off, even when another
  *   field would turn it on; a valid one goes out in the payload;
  * - the type is chosen through the same two-level select as the single modal;
- * - «Continue» hands the draft and the items (only the fields that change for each asset) to `oncontinue`;
+ * - «Continue» checks the payload (only the fields that change for each asset) through `POST /assets/validate` and moves to
+ *   the summary (`data-step`); the summary has its own test file;
  * - a new opening starts clean.
  * Responsive layout is not checked here (jsdom has no layout): the E2E at 375 px does it (lot E1).
  */
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {get} from 'svelte/store';
 import {_} from '$lib/i18n';
-import {fireEvent, render, screen, setupI18n, within} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+vi.mock('$lib/api', async () => {
+    const {schemas} = await import('$lib/api/generated');
+    const cache = new Map<string, ReturnType<typeof vi.fn>>();
+    const zodiosApi = new Proxy(
+        {},
+        {
+            get(_t, prop: string) {
+                if (!cache.has(prop))
+                    cache.set(
+                        prop,
+                        vi.fn(async () => undefined),
+                    );
+                return cache.get(prop);
+            },
+        },
+    );
+    return {zodiosApi, schemas, ApiError: class ApiError extends Error {}, axiosInstance: {}};
+});
+
+import {zodiosApi} from '$lib/api';
 import AssetBulkEditModal from './AssetBulkEditModal.svelte';
 import type {BulkAsset} from './assetBulkEdit';
 
+const validate = () => vi.mocked(zodiosApi.validate_assets_patch_api_v1_assets_validate_post as never) as ReturnType<typeof vi.fn>;
+const patch = () => vi.mocked(zodiosApi.patch_assets_bulk_api_v1_assets_patch as never) as ReturnType<typeof vi.fn>;
+const answer = (over: Record<string, unknown> = {}) => ({results: [], success_count: 0, errors: [], committed: false, issues: [], warnings: [], ...over});
+
 beforeAll(async () => {
     await setupI18n();
+});
+
+beforeEach(() => {
+    validate().mockReset();
+    validate().mockResolvedValue(answer());
+    patch().mockReset();
+    patch().mockResolvedValue(answer({committed: true}));
 });
 
 function asset(id: number, over: Partial<BulkAsset> = {}): BulkAsset {
@@ -33,10 +65,10 @@ function asset(id: number, over: Partial<BulkAsset> = {}): BulkAsset {
 const SELECTION: BulkAsset[] = [asset(1), asset(2, {is_benchmark: true}), asset(3, {asset_type: 'ETF_STOCK'}), asset(4, {asset_type: 'CROWDFUND_REAL_ESTATE'}), asset(5, {active: false})];
 
 function mount(over: Record<string, unknown> = {}) {
-    const oncontinue = vi.fn();
+    const onsaved = vi.fn();
     const onclose = vi.fn();
-    const view = render(AssetBulkEditModal, {open: true, assets: SELECTION, oncontinue, onclose, ...over});
-    return {oncontinue, onclose, ...view};
+    const view = render(AssetBulkEditModal, {open: true, assets: SELECTION, onsaved, onclose, ...over});
+    return {onsaved, onclose, ...view};
 }
 
 const root = () => screen.getByTestId('asset-bulk-edit');
@@ -144,17 +176,16 @@ describe('AssetBulkEditModal — «Continue»', () => {
         expect(root()).toHaveAttribute('data-modified', '0');
     });
 
-    it('hands the draft and only the changing fields of each asset to oncontinue', async () => {
-        const {oncontinue} = mount();
+    it('checks only the changing fields of each asset and moves to the summary', async () => {
+        mount();
         await fireEvent.click(screen.getByTestId('asset-bulk-is_benchmark-yes'));
         await fireEvent.click(screen.getByTestId('asset-bulk-active-yes'));
         await fireEvent.click(cont());
 
-        expect(oncontinue).toHaveBeenCalledTimes(1);
-        const {draft, items} = oncontinue.mock.calls[0][0];
-        expect(draft).toMatchObject({active: true, is_benchmark: true});
+        await waitFor(() => expect(root()).toHaveAttribute('data-step', 'summary'));
+        expect(validate()).toHaveBeenCalledTimes(1);
         // asset 2 is already a benchmark and asset 5 is the only inactive one: each item carries only its own changes.
-        expect(items).toEqual([
+        expect(validate().mock.calls[0][0]).toEqual([
             {asset_id: 1, is_benchmark: true},
             {asset_id: 3, is_benchmark: true},
             {asset_id: 4, is_benchmark: true},
@@ -177,7 +208,7 @@ describe('AssetBulkEditModal — units per single price', () => {
     });
 
     it('a valid unit goes out in the payload, and clearing the field removes the error', async () => {
-        const {oncontinue} = mount({assets: [asset(1), asset(2)]});
+        mount({assets: [asset(1), asset(2)]});
         await fireEvent.input(screen.getByTestId('asset-bulk-quote-base'), {target: {value: '0'}});
         expect(screen.getByTestId('asset-bulk-quote-base-error')).toBeInTheDocument();
 
@@ -185,7 +216,8 @@ describe('AssetBulkEditModal — units per single price', () => {
         expect(screen.queryByTestId('asset-bulk-quote-base-error')).toBeNull();
         await fireEvent.click(cont());
 
-        expect(oncontinue.mock.calls[0][0].items).toEqual([
+        await waitFor(() => expect(validate()).toHaveBeenCalledTimes(1));
+        expect(validate().mock.calls[0][0]).toEqual([
             {asset_id: 1, quote_base_quantity: 100},
             {asset_id: 2, quote_base_quantity: 100},
         ]);
@@ -194,7 +226,7 @@ describe('AssetBulkEditModal — units per single price', () => {
 
 describe('AssetBulkEditModal — the type', () => {
     it('is chosen through the two-level select, and Undo puts it back', async () => {
-        const {oncontinue} = mount();
+        mount();
         const field = screen.getByTestId('asset-bulk-type');
         await fireEvent.click(within(field).getByTestId('asset-bulk-type-button'));
         await fireEvent.click(within(field).getByTestId('asset-type-tree-option-BOND'));
@@ -202,7 +234,8 @@ describe('AssetBulkEditModal — the type', () => {
         expect(screen.getByTestId('asset-bulk-field-asset_type')).toHaveAttribute('data-modified', 'true');
         expect(screen.getByTestId('asset-bulk-asset_type-impact')).toHaveAttribute('data-changing', '5');
         await fireEvent.click(cont());
-        expect(oncontinue.mock.calls[0][0].items).toEqual(SELECTION.map((a) => ({asset_id: a.id, asset_type: 'BOND'})));
+        await waitFor(() => expect(validate()).toHaveBeenCalledTimes(1));
+        expect(validate().mock.calls[0][0]).toEqual(SELECTION.map((a) => ({asset_id: a.id, asset_type: 'BOND'})));
     });
 
     it('Undo of the type clears the choice', async () => {

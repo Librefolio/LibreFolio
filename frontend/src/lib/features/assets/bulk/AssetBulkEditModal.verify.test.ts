@@ -15,7 +15,7 @@
  *   them out) and discards the answer; «That's fine» hides the warnings for good, blocks stay.
  * - Any change of the draft discards the answer; an answer that comes back after the draft changed is dropped.
  * - A failed call shows a banner and `data-verify="failed"`, and the button can be pressed again.
- * - «Continue» tells whether the warnings were accepted.
+ * - a warning accepted with «That's fine» does not come back on the summary.
  */
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -55,9 +55,9 @@ const answer = (over: Record<string, unknown> = {}) => ({results: [], success_co
 const issue = (code: string, assetId: number, index: number, over: Record<string, unknown> = {}) => ({asset_id: assetId, index, code, message: `English ${code}`, params: null, field: null, ...over});
 
 function mount(over: Record<string, unknown> = {}) {
-    const oncontinue = vi.fn();
-    const view = render(AssetBulkEditModal, {open: true, assets: SELECTION, oncontinue, onclose: vi.fn(), ...over});
-    return {oncontinue, ...view};
+    const onsaved = vi.fn();
+    const view = render(AssetBulkEditModal, {open: true, assets: SELECTION, onsaved, onclose: vi.fn(), ...over});
+    return {onsaved, ...view};
 }
 
 const root = () => screen.getByTestId('asset-bulk-edit');
@@ -171,6 +171,17 @@ describe('blocks and warnings', () => {
         expect(validate().mock.calls[1][0]).toEqual([{asset_id: 3, asset_type: 'INDEX'}]);
     });
 
+    it('keeps the removed assets visible among the chips, marked as removed', async () => {
+        await verifyIndex();
+        await fireEvent.click(screen.getByTestId('asset-bulk-block-indexWithTransactions-remove'));
+        const chips = screen.getAllByTestId('asset-bulk-selected-chip');
+        expect(chips.map((c) => [c.getAttribute('data-asset-id'), c.getAttribute('data-removed')])).toEqual([
+            ['1', 'true'],
+            ['2', 'true'],
+            ['3', 'false'],
+        ]);
+    });
+
     it("«That's fine» hides the warnings for good; the block stays", async () => {
         await verifyIndex();
         await fireEvent.click(screen.getByTestId('asset-bulk-warning-assetFamilyChange-ok'));
@@ -216,15 +227,16 @@ describe('blocks and warnings', () => {
         expect(screen.queryByTestId('asset-bulk-block-indexWithTransactions')).toBeNull();
     });
 
-    it('«Continue» says whether the warnings were accepted', async () => {
-        const {oncontinue} = await verifyIndex();
+    it('an accepted warning does not come back on the summary', async () => {
+        await verifyIndex();
         await fireEvent.click(screen.getByTestId('asset-bulk-block-indexWithTransactions-remove'));
         validate().mockResolvedValue(answer({warnings: [issue('assetFamilyChange', 3, 0, {field: 'asset_type', params: {from: 'CROWDFUND_REAL_ESTATE', to: 'INDEX'}})]}));
         await fireEvent.click(verifyBtn());
         await waitFor(() => expect(screen.getByTestId('asset-bulk-warning-assetFamilyChange')).toBeInTheDocument());
         await fireEvent.click(screen.getByTestId('asset-bulk-warning-assetFamilyChange-ok'));
         await fireEvent.click(screen.getByTestId('asset-bulk-continue'));
-        expect(oncontinue.mock.calls[0][0].warningsAccepted).toBe(true);
+        await waitFor(() => expect(root()).toHaveAttribute('data-step', 'summary'));
+        expect(screen.queryByTestId('asset-bulk-warning-assetFamilyChange')).toBeNull();
     });
 });
 
