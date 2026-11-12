@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from backend.app.services.pac_allocator.evaluation.economics import EconomicState, evaluate_economic_state
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, is_quantum_multiple
-from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_two_way_pairs
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, valuation_rate_of
 from backend.app.services.pac_allocator.ledger import (
@@ -191,6 +191,32 @@ def _fx_constraint_facts(
             lower_bound=_EXACT_ZERO,
             upper_bound=None,
             satisfied=source_ledger.final_spendable >= _EXACT_ZERO,
+        )
+    return facts
+
+
+def _fx_direction_constraint_facts(
+    *,
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    state: EconomicState,
+    checkpoint: Checkpoint | None,
+) -> dict[str, _ConstraintFact]:
+    """V7: at most one of the two directions of a Broker's pair converts anything (``FX_SINGLE_DIRECTION``).
+
+    Converting ``x`` from ``c`` to ``c'`` and ``y`` back never leaves more than the net conversion alone: the planning
+    rate never beats the triangle and credits are floored. So the rule removes no optimum, only round trips.
+    """
+    active = {item.decision_id for item in state.fx if item.quanta > 0}
+    facts: dict[str, _ConstraintFact] = {}
+    for pair in fx_two_way_pairs(fx_decision_specs(scenario, index, checkpoint)):
+        check_budget(checkpoint)
+        count = ExactRatio(sum(1 for spec in (pair.low_to_high, pair.high_to_low) if spec.decision_id in active))
+        facts[_constraint_id("FX_SINGLE_DIRECTION", pair.key)] = _ConstraintFact(
+            value=count,
+            lower_bound=_EXACT_ZERO,
+            upper_bound=ExactRatio(1),
+            satisfied=count <= ExactRatio(1),
         )
     return facts
 
@@ -529,6 +555,7 @@ def constraint_facts(
             checkpoint=checkpoint,
         )
     )
+    facts.update(_fx_direction_constraint_facts(scenario=scenario, index=index, state=state, checkpoint=checkpoint))
     facts.update(
         _order_constraint_facts(
             scenario,

@@ -5430,3 +5430,56 @@ def test_a_transfer_lane_to_the_same_broker_is_refused() -> None:
     looping = _with_lane(_transfer_lane_scenario(), "broker:a", "broker:a")
     with pytest.raises(ExactScenarioContractError, match="same Broker"):
         build_exact_policy_view(looping)
+
+
+# ---------------------------------------------------------------------------
+# A2 step 13 (project 67): V7, one direction per Broker and currency pair (T6 in PAC form)
+# ---------------------------------------------------------------------------
+
+
+def _two_way_scenario() -> ExactPlannerScenario:
+    """N2 in small: one Broker holding EUR4 and USD6, one EUR Asset and one USD Asset (4 each, at most 2 units).
+
+    Both directions of EUR/USD exist at the Broker: EUR to USD for the USD buy, USD to EUR for the EUR buy. Whole-unit
+    quanta keep the domains small enough for the exhaustive oracle.
+    """
+    capability = _capability("capability:whole")
+    eur_fee = _fee("fee:buy:eur", capability.capability_id, "buy")
+    usd_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")
+    broker = _broker("broker:hub", (capability,), (eur_fee, usd_fee))
+
+    def buy(route_id: str, asset_id: str, fee: ExactFeeSchedule) -> ExactOrderRoute:
+        return _order_route(route_id, broker_id=broker.broker_id, asset_id=asset_id, capability=capability, fee_id=fee.fee_schedule_id, side="buy", cap=R(2))
+
+    return _scenario(
+        "scenario:two-way",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:eur", price=R(4), currency="EUR"), _asset("asset:usd", price=R(4), currency="USD")),
+        brokers=(broker,),
+        existing_cash=(_cash("cash:eur", broker.broker_id, R(4)), _cash("cash:usd", broker.broker_id, R(6), currency="USD")),
+        order_routes=(buy("route:buy:eur", "asset:eur", eur_fee), buy("route:buy:usd", "asset:usd", usd_fee)),
+        fx_rates=(_fx_rate("EUR", "USD", R(5, 4)),),
+        fx_spread_rate=R(1, 100),
+        currency_quantums=(("EUR", ONE), ("USD", ONE)),
+    )
+
+
+def test_both_directions_of_a_pair_fail_the_exact_replay() -> None:
+    """V7 in the replay: converting EUR to USD and USD to EUR at one Broker in one plan is refused (one fact per Broker and
+    pair that has both directions); either direction alone is not."""
+    scenario = _two_way_scenario()
+    view = build_exact_policy_view(scenario)
+    to_usd = fx_id(scenario, source="EUR", destination="USD")
+    to_eur = fx_id(scenario, source="USD", destination="EUR")
+    fact_id = "constraint:fx_single_direction:10:broker:hub:EUR/USD"
+
+    both = evaluate_exact_candidate(scenario, view, _candidate(view, {to_usd: 1, to_eur: 2}))
+    (fact,) = [item for item in both.constraints if item.ref_id == fact_id]
+    assert (fact.satisfied, both.feasible) == (False, False)
+
+    for one_way in ({to_usd: 1}, {to_eur: 2}, {}):
+        evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, one_way))
+        (fact,) = [item for item in evaluation.constraints if item.ref_id == fact_id]
+        assert fact.satisfied is True, one_way
+        assert evaluation.feasible is True, one_way

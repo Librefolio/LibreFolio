@@ -188,3 +188,34 @@ def fx_decision_specs(
             )
         )
     return tuple(specs)
+
+
+@dataclass(frozen=True, slots=True)
+class FxTwoWayPair:
+    """A Broker and currency pair with an FX decision in each direction: V7 lets a plan use at most one of them.
+
+    ``low_to_high`` converts the pair's alphabetically first currency into the second, ``high_to_low`` the other way;
+    ``key`` is ``len(broker):broker:LOW/HIGH``.
+    """
+
+    key: str
+    broker_id: str
+    low_to_high: FxDecisionSpec
+    high_to_low: FxDecisionSpec
+
+
+def fx_two_way_pairs(specs: tuple[FxDecisionSpec, ...]) -> tuple[FxTwoWayPair, ...]:
+    """The pairs of ``specs`` (``fx_decision_specs``) that a Broker can convert both ways, in canonical (Broker, pair) order."""
+    by_direction = {(spec.broker_id, spec.source_currency, spec.destination_currency): spec for spec in specs}
+    pairs = []
+    for (broker_id, source, destination), spec in sorted(by_direction.items()):
+        if source < destination and (broker_id, destination, source) in by_direction:
+            pairs.append(
+                FxTwoWayPair(
+                    key=f"{len(broker_id)}:{broker_id}:{source}/{destination}",
+                    broker_id=broker_id,
+                    low_to_high=spec,
+                    high_to_low=by_direction[(broker_id, destination, source)],
+                )
+            )
+    return tuple(pairs)

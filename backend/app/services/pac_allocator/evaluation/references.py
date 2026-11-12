@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, entity_refs
-from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_two_way_pairs
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex
 from backend.app.services.pac_allocator.models import (
     Checkpoint,
@@ -208,6 +208,25 @@ def _fx_constraint_refs(
             )
         )
     return refs
+
+
+def _fx_direction_constraint_refs(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    checkpoint: Checkpoint | None,
+) -> list[ConstraintRef]:
+    """V7: one ref per Broker and pair that has an FX decision in each direction (``FX_SINGLE_DIRECTION``)."""
+    return [
+        _constraint_ref(
+            code="FX_SINGLE_DIRECTION",
+            key=pair.key,
+            scope="broker",
+            entity_refs=entity_refs(("broker", pair.broker_id), ("currency_pair", pair.key.rsplit(":", 1)[1])),
+            unit=ExactUnit(kind="count"),
+            bound_source="one conversion direction per Broker and pair (V7)",
+        )
+        for pair in fx_two_way_pairs(fx_decision_specs(scenario, index, checkpoint))
+    ]
 
 
 def _order_constraint_refs(
@@ -493,6 +512,7 @@ def build_constraint_refs(
             checkpoint,
         )
     )
+    refs.extend(_fx_direction_constraint_refs(scenario, index, checkpoint))
     refs.extend(
         _order_constraint_refs(
             scenario,
