@@ -70,8 +70,9 @@ from backend.app.services.pac_allocator.solver import (
     solve_policy_program,
 )
 from backend.test_scripts.test_services._pac_exhaustive_oracle import run_exhaustive_oracle
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scenario_of
-from backend.test_scripts.test_services.test_pac_planner_evaluator import _CASH_MAX_40, ONE, ZERO, R, _limit_plan_scenario, _pac_scenario, _shared_pair_scenario, _transfer_lane_scenario, _two_way_scenario, _with_lane
+from backend.test_scripts.test_services.test_pac_planner_evaluator import _CASH_MAX_40, ONE, ZERO, R, _limit_plan_scenario, _pac_scenario, _relay_scenario, _shared_pair_scenario, _transfer_lane_scenario, _two_way_scenario, _with_lane
 from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _credit_tie_fx_scenario, _two_asset_pac_scenario
 
 # --------------------------------------------------------------------------
@@ -828,3 +829,14 @@ def test_solver_matches_oracle_with_entry_limits(build) -> None:
     view, result = _run(scenario)
     evaluation = evaluate_exact_candidate(scenario, view, result.candidate)
     assert evaluation.feasible is True
+
+
+def test_solver_matches_oracle_when_a_currency_could_relay() -> None:
+    """V7 widened, in small: EUR to USD and USD to CHF could chain. SCIP and the exhaustive oracle agree exactly, and the plan
+    never both receives and gives in one currency at the Broker."""
+    test_solver_incumbent_equals_exhaustive_oracle_optimum(_relay_scenario)
+    view, result = _run(_relay_scenario())
+    scenario = _relay_scenario()
+    quanta = _quanta(result.candidate)
+    eur_usd, usd_chf = fx_id(scenario, source="EUR", destination="USD"), fx_id(scenario, source="USD", destination="CHF")
+    assert not (quanta[eur_usd] > 0 and quanta[usd_chf] > 0)

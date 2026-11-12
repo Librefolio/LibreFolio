@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.evaluation.reachability import FxDecisionSpec, fx_decision_specs
-from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
 from backend.app.services.pac_allocator.models import ExactFeeSchedule, ExactOrderCapability, ExactOrderRoute, ExactPlannerScenario
 from backend.app.services.pac_allocator.numeric import ExactRatio
@@ -50,7 +49,6 @@ class ScenarioFacts:
     mid_native_by_asset: dict[str, float]
     capability_by_key: dict[tuple[str, str], ExactOrderCapability]
     fee_by_key: dict[tuple[str, str], ExactFeeSchedule]
-    ledger_cells: tuple[tuple[str, str], ...]  # the evaluator's ledger cells (``references.ledger_keys``), for V10
     fx_decisions: tuple[FxDecisionSpec, ...]  # the evaluator's one list (``reachability.fx_decision_specs``), never re-derived here
 
 
@@ -131,7 +129,6 @@ def build_scenario_facts(scenario: ExactPlannerScenario) -> ScenarioFacts:
         mid_native_by_asset=mid_native_by_asset,
         capability_by_key=capability_by_key,
         fee_by_key=fee_by_key,
-        ledger_cells=ledger_keys(scenario, scenario_index),
         fx_decisions=fx_decision_specs(scenario, scenario_index, None),
     )
 

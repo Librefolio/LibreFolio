@@ -174,7 +174,7 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
     rule of the time a 9.504 USD exact FX credit posted as 10 USD, and
     treating it as 9.504 wrongly pruned the true optimum; under the floor it
     posts 9, and 9.504 would admit plans the replay rejects.
-    Returns the terms of every cell (A3: V5 and V10 on cash read the same sums), by (Broker, currency).
+    Returns the terms of every cell (A3: V5 on cash reads the same sums), by (Broker, currency).
 
     ``initial_selected``/``funding_in``/``funding_out``/``fx_debit``
     are exact-flow families (``ledger.py``'s ``_EXACT_FLOW_FAMILIES``) and are

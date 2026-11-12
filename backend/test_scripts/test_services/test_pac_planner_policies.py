@@ -96,6 +96,8 @@ from backend.app.services.pac_allocator.objectives import build_canonical_tie_st
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id, fx_spec
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _CASH_MAX_40,
+    _CENTS_BOUGHT,
+    _MAXIMUM_JUST_UNDER_IT,
     CENT,
     ONE,
     ZERO,
@@ -117,9 +119,12 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _objective_map,
     _order_route,
     _pac_scenario,
+    _relay_scenario,
     _scenario,
     _shared_pair_scenario,
+    _two_pool_scenario,
     _two_way_scenario,
+    _usd_by_amount_scenario,
 )
 from backend.test_scripts.test_services.test_pac_planner_oracle import (
     _coarse_funding_fx_scenario,
@@ -142,7 +147,14 @@ def _fresh_program(scenario: ExactPlannerScenario, view: ExactPolicyView) -> Com
 
 
 def _pin(model, variable, value: int | float) -> None:
-    """Pin one SCIP variable to an exact value (both bounds at once)."""
+    """Pin one SCIP variable to an exact value (both bounds at once).
+
+    A value outside the variable's own box, for instance past an integer bound a limit put on it (A3), is pinned with an
+    equality row instead: changing the bounds would widen the box and so lift the very limit a test is probing.
+    """
+    if value < variable.getLbOriginal() or value > variable.getUbOriginal():
+        model.addCons(variable == value)
+        return
     model.chgVarLb(variable, value)
     model.chgVarUb(variable, value)
 
@@ -1319,8 +1331,7 @@ def test_compiled_model_has_one_fx_variable_and_credit_row_per_broker_pair() -> 
 
 
 def test_compiled_model_forbids_both_directions_of_a_pair() -> None:
-    """V7 in SCIP: one binary per Broker and pair that has both directions; pinning both debits above zero is infeasible,
-    pinning either alone is not."""
+    """V7 in SCIP: pinning both directions of a pair above zero is infeasible, pinning either alone is not."""
     scenario = _two_way_scenario()
     view = build_exact_policy_view(scenario)
     to_usd = fx_id(scenario, source="EUR", destination="USD")
@@ -1329,13 +1340,27 @@ def test_compiled_model_forbids_both_directions_of_a_pair() -> None:
     assert _pinned_status(scenario, view, quanta={to_usd: 1, to_eur: 2}) == "infeasible"
     assert _pinned_status(scenario, view, quanta={to_usd: 1, to_eur: 0}) == "optimal"
     assert _pinned_status(scenario, view, quanta={to_usd: 0, to_eur: 2}) == "optimal"
-    program = _fresh_program(scenario, view)  # kept alive: a SCIP variable's name is read through its model
-    variable_names = {variable.name for variable in program.model.getVars()}
-    assert [name for name in variable_names if name.startswith("fx_direction:")] == ["fx_direction:10:broker:hub:EUR/USD"]
+
+
+def test_compiled_model_forbids_a_currency_that_receives_to_give() -> None:
+    """V7 widened: EUR to USD and USD to CHF at once is infeasible; one alone, or EUR to both, is not. One binary per Broker and
+    currency that both receives and gives."""
+    scenario = _relay_scenario()
+    view = build_exact_policy_view(scenario)
+    eur_usd = fx_id(scenario, source="EUR", destination="USD")
+    usd_chf = fx_id(scenario, source="USD", destination="CHF")
+    eur_chf = fx_id(scenario, source="EUR", destination="CHF")
+
+    assert _pinned_status(scenario, view, quanta={eur_usd: 2, usd_chf: 2}) == "infeasible"
+    assert _pinned_status(scenario, view, quanta={eur_usd: 2, usd_chf: 0}) == "optimal"
+    assert _pinned_status(scenario, view, quanta={eur_usd: 0, usd_chf: 2}) == "optimal"
+    assert _pinned_status(scenario, view, quanta={eur_usd: 1, usd_chf: 0, eur_chf: 1}) == "optimal"
+    program = _fresh_program(scenario, view)
+    assert sorted(variable.name for variable in program.model.getVars() if variable.name.startswith("fx_side:")) == ["fx_side:10:broker:hub:USD"]
 
 
 # --------------------------------------------------------------------------
-# A3 step 4 (project 67): the compiled limit rows (V5, V10) agree with the exact facts
+# A3 step 4 (project 67): the compiled limit rows (V5) agree with the exact facts
 # --------------------------------------------------------------------------
 
 
@@ -1345,8 +1370,8 @@ def test_compiled_model_forbids_both_directions_of_a_pair() -> None:
         pytest.param(lambda: _limit_plan_scenario(asset_a=(None, ExactLimit("amount", R(30)))), id="asset-maximum"),
         pytest.param(lambda: _limit_plan_scenario(asset_a=(ExactLimit("amount", R(20)), None), weights=(R(0), R(1))), id="asset-minimum-at-zero-target"),
         pytest.param(lambda: _limit_plan_scenario(asset_b=(ExactLimit("share", R(3, 10)), ExactLimit("share", R(1, 2)))), id="asset-window-as-shares"),
-        pytest.param(lambda: _limit_plan_scenario(cash=_CASH_MAX_40), id="cash-maximum-and-uninvested"),
-        pytest.param(lambda: _limit_plan_scenario(cash=(pac_models.ExactCashLimit(broker_id="broker:hub", currency="EUR", minimum=ExactLimit("amount", R(25)), maximum=None),)), id="cash-minimum"),
+        pytest.param(lambda: _limit_plan_scenario(cash=_CASH_MAX_40), id="cash-maximum"),
+        pytest.param(lambda: _limit_plan_scenario(cash=(pac_models.ExactCashEntry(broker_id="broker:hub", currency="EUR", minimum=ExactLimit("amount", R(25)), maximum=None),)), id="cash-minimum"),
     ],
 )
 def test_compiled_limit_rows_match_the_exact_facts_at_the_boundary(build) -> None:
@@ -1372,3 +1397,37 @@ def test_a_scenario_without_limits_compiles_to_the_model_of_a2() -> None:
     program = _fresh_program(scenario, build_exact_policy_view(scenario))
     names = {constraint.name for constraint in program.model.getConss()}
     assert not [name for name in names if name.startswith("entry_limit") or name.startswith("uninvested")]
+
+
+def test_a_limit_a_thousandth_under_a_reachable_value_is_infeasible_in_the_model_as_in_the_replay() -> None:
+    """A3 fix: SCIP checks a linear row with a relative tolerance (1e-6 of the bound, a thousandth of a euro near EUR1000),
+    so a maximum less than that under a value the plan can reach would be accepted by the model and refused by the exact
+    replay (``ExactReplayRejectedError``). The compiled limit holds to the unit: buying the cents that overshoot the maximum is
+    infeasible in the model, and the cents just under it are feasible."""
+    scenario = _usd_by_amount_scenario(_MAXIMUM_JUST_UNDER_IT)
+    view = build_exact_policy_view(scenario)
+    buy = exact_decision_id("buy_quantum", "route:buy:usd")
+    fx = fx_id(scenario, source="EUR", destination="USD")
+    for cents, expected in ((_CENTS_BOUGHT, "infeasible"), (_CENTS_BOUGHT - 1, "optimal")):
+        status = _pinned_status(scenario, view, quanta={buy: cents, fx: 100_000})  # EUR1000 of 1085 USD afford either purchase
+        assert status == expected, (cents, status)
+
+
+def test_limits_on_one_route_are_integer_bounds_cash_is_in_whole_units_and_several_routes_keep_a_tightened_float_row() -> None:
+    """A3 fix, the shape of the compiled limits: an Asset on one route has no row at all, its limit is an integer bound on
+    the one decision; an Asset on several routes keeps a float row, tightened inward (the cost is stated in
+    ``add_limit_constraints``); a cash cell is a row in whole units of its currency."""
+    single = _limit_plan_scenario(asset_a=(None, ExactLimit("amount", R(35))), cash=_CASH_MAX_40)
+    program = _fresh_program(single, build_exact_policy_view(single))
+    names = {constraint.name for constraint in program.model.getConss()}
+    assert "entry_limit_max:asset:asset:a" not in names, "one route: a bound on the variable, not a row"
+    assert program.variables.quanta[exact_decision_id("buy_quantum", "route:buy:a")].getUbOriginal() == 3  # floor(35 / 10)
+    assert "entry_limit_max:cash:broker:hub:EUR" in names
+    (cash_row,) = [constraint for constraint in program.model.getConss() if constraint.name == "entry_limit_max:cash:broker:hub:EUR"]
+    assert program.model.getRhs(cash_row) == 40 - 100  # whole euros (the quantum of EUR is one); SCIP folds the EUR100 of cash into the bound
+    # Several routes: the Asset's value is a sum over decisions, so the row stays in float, tightened inward by 2e-6 * max(1, limit).
+    several = replace(_two_pool_scenario(R(100), R(100)), target_weights=(pac_models.ExactTargetWeight("asset:a", R(1), maximum=ExactLimit("amount", R(35))),))
+    program = _fresh_program(several, build_exact_policy_view(several))
+    (row,) = [constraint for constraint in program.model.getConss() if constraint.name == "entry_limit_max:asset:asset:a"]
+    assert program.model.getRhs(row) == pytest.approx(35 - 2e-6 * 35, abs=1e-12)
+    assert all(variable.getUbOriginal() > 3 for name, variable in program.variables.quanta.items() if name.startswith("buy:")), "no integer bound on a sum"
