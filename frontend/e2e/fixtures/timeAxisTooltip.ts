@@ -166,12 +166,16 @@ export async function tooltipAt(page: Page, host: Locator, x: number, timeout = 
     const inset = Math.min(Math.max(x, 0), box.width - 1);
     let span: TooltipSpan | null = null;
     let jitter = 0;
+    let attempt = 0;
     try {
         await expect
             .poll(
                 async () => {
                     jitter = jitter === 0 ? 1 : 0;
-                    await page.mouse.move(box.x + inset, box.y + box.height * 0.4 + jitter);
+                    // a marker under the pointer (a lot opened on the edge day) shows its own tooltip, which is not a day's: after three tries
+                    // the pointer settles lower in the plot, where only the axis answers (and stays there, so the tooltip has time to come)
+                    const height = attempt++ < 3 ? 0.4 : 0.6;
+                    await page.mouse.move(box.x + inset, box.y + box.height * height + jitter);
                     span = await readTooltipSpan(host);
                     return span !== null;
                 },
