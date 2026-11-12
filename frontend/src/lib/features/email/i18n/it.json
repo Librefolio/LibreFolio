@@ -165,7 +165,9 @@
         "missing": "Questo link è incompleto: aprilo di nuovo dall'email.",
         "error": "Non è stato possibile controllare il link: riprova.",
         "confirm": "Conferma il nuovo indirizzo",
-        "notExpected": "Se non ti aspettavi questo cambio, chiudi questa pagina: non succede nulla."
+        "notExpected": "Se non ti aspettavi questo cambio, chiudi questa pagina: non succede nulla.",
+        "signin": "Per confermare il nuovo indirizzo, accedi con l'account che ha chiesto il cambio. Poi torni qui, e basta un clic.",
+        "signinAction": "Accedi per confermare"
       },
       "changed": "Il tuo indirizzo email è stato cambiato: accedi di nuovo."
     }

@@ -165,7 +165,9 @@
         "missing": "Ce lien est incomplet : ouvrez-le à nouveau depuis l'e-mail.",
         "error": "Le lien n'a pas pu être vérifié : réessayez.",
         "confirm": "Confirmer la nouvelle adresse",
-        "notExpected": "Si vous n'attendiez pas ce changement, fermez cette page : il ne se passe rien."
+        "notExpected": "Si vous n'attendiez pas ce changement, fermez cette page : il ne se passe rien.",
+        "signin": "Pour confirmer la nouvelle adresse, connectez-vous au compte qui a demandé le changement. Vous revenez ensuite ici, et un clic suffit.",
+        "signinAction": "Se connecter pour confirmer"
       },
       "changed": "Votre adresse e-mail a été changée : reconnectez-vous."
     }

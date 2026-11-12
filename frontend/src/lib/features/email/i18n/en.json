@@ -165,7 +165,9 @@
         "missing": "This link is incomplete: open it again from the email.",
         "error": "The link could not be checked: try again.",
         "confirm": "Confirm the new address",
-        "notExpected": "If you did not expect this change, close this page: nothing happens."
+        "notExpected": "If you did not expect this change, close this page: nothing happens.",
+        "signin": "To confirm the new address, sign in to the account that asked for the change. You then come back here, and one click is enough.",
+        "signinAction": "Sign in to confirm"
       },
       "changed": "Your email address was changed: sign in again."
     }

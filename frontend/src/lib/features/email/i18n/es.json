@@ -165,7 +165,9 @@
         "missing": "Este enlace está incompleto: ábrelo de nuevo desde el correo.",
         "error": "No se pudo comprobar el enlace: inténtalo de nuevo.",
         "confirm": "Confirmar la nueva dirección",
-        "notExpected": "Si no esperabas este cambio, cierra esta página: no pasa nada."
+        "notExpected": "Si no esperabas este cambio, cierra esta página: no pasa nada.",
+        "signin": "Para confirmar la nueva dirección, inicia sesión con la cuenta que pidió el cambio. Después vuelves aquí, y basta un clic.",
+        "signinAction": "Iniciar sesión para confirmar"
       },
       "changed": "Tu dirección de correo se cambió: inicia sesión de nuevo."
     }
