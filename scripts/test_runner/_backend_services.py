@@ -757,6 +757,16 @@ def services_owner_email_change(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Instance owner email change tests", verbose=verbose)
 
 
+def services_email_change(verbose: bool = False, test_names: list = None) -> bool:
+    """Test project 71, block 2: the change of address a user asks for from Profile."""
+    print_section("Services: Profile Email Change (project 71)")
+    print_info("Testing: services/accounts/user_service.py (revoke_pending_email_change, email_refusal, move_email), api/v1/auth.py change_password")
+    print_info("Tests: the Profile link revoked by a password change, a reset (link or command line) and a deactivation, the host link kept; the helpers extracted from update_profile")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_change.py", test_names)
+    return run_command(cmd, "Profile email change tests", verbose=verbose)
+
+
 def services_owner_assignment(verbose: bool = False, test_names: list = None) -> bool:
     """Test A5-2: a restore on a managed instance gives the instance to the owner the administrator chose."""
     print_section("Services: Owner Assignment after a Restore (A5-2)")
@@ -2912,6 +2922,16 @@ Note: No backend server required.
         desc="users.is_instance_owner and the protection rule (the click not made: the owner stays protected; a stranger holding the new address is not), the startup sync owner-sync (pending administrator untouched, heal, same address, conflict blocked, live link not resent, new link emailed to the NEW address, link in the log only when the email did not go, expired and changed-again links, two workers), owner_change_status, build_email_change_confirmation in four languages, the step after admin-bootstrap",
         # PURE: every database is a private file under tmp_path built with create_all; profile and variables set with
         # monkeypatch; the email faked in this process (outbox); no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-change",
+        services_email_change,
+        name="Profile Email Change (project 71)",
+        desc="A change of address asked from Profile waits for a link the account issued for itself (created_by_user_id): a password change (route), a password reset (link or command line) and a deactivation (administrator, user limit, command line) revoke it, an activation does not, and the host's link of the same account stays valid; email_refusal (another account's address or username, the owner's reserved address unless reserve_owner_address=False) and move_email (moved, verified, sessions ended, links revoked) extracted from update_profile",
+        # PURE: every database is a private file under tmp_path built with create_all; the change-password route is called
+        # in this process on that file; profile and variables set with monkeypatch. No lane DB, no server, no email.
         isolation="pure",
     )
     add_test(
