@@ -11,6 +11,7 @@ from backend.app.schemas.pac_allocator.evidence import NumericObjectiveUnit, Obj
 from backend.app.schemas.pac_allocator.exact import ExactNumber, exact_fraction, fixed_fraction, money_fraction
 from backend.app.schemas.pac_allocator.rows import (
     PacAssetPlanRow,
+    PacCashEntryRow,
     PacExposurePlanRow,
     PlannerAccountingSummary,
     PlannerBuyOrderRow,
@@ -92,6 +93,7 @@ class PacPlanSolution(AllocationStrictModel):
     solution_kind: Literal["primary"]
     validation: Literal["decimal_verified"]
     asset_rows: list[PacAssetPlanRow]
+    cash_rows: list[PacCashEntryRow] = Field(description="One row per cash entry that carries a limit; empty when the request set none.")
     funding_actions: list[PlannerFundingAction]
     conversions: list[PlannerConversion] = Field(description="One conversion per Broker x ordered currency pair, the engine's own decision; manual ones are numbered steps.")
     order_rows: list[PlannerBuyOrderRow]
@@ -105,6 +107,10 @@ class PacPlanSolution(AllocationStrictModel):
     @model_validator(mode="after")
     def validate_authoritative_rows(self) -> PacPlanSolution:
         require_unique([row.asset_id for row in self.asset_rows], "PAC Asset rows")
+        require_unique([(row.broker_id, row.currency) for row in self.cash_rows], "PAC cash entry rows")
+        for row in [*self.asset_rows, *self.cash_rows]:
+            if row.minimum is not None and row.maximum is not None and money_fraction(row.minimum) > money_fraction(row.maximum):
+                raise ValueError("A row's minimum cannot exceed its maximum")
         _validate_action_ids_and_sequences(self, "PAC")
         _validate_conversions(self, "PAC")
         require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "PAC ledger scopes")
@@ -158,6 +164,8 @@ def _validate_no_op_common(solution: PacPlanSolution | RebalancerPlanSolution) -
     flow_fields = (
         "funding_in",
         "funding_out",
+        "transfer_in",
+        "transfer_out",
         "fx_debit",
         "fx_credit",
         "buy_debit",
@@ -165,6 +173,7 @@ def _validate_no_op_common(solution: PacPlanSolution | RebalancerPlanSolution) -
         "buy_fees",
         "sell_fees",
         "broker_withheld_tax",
+        "foreign_withholding_tax",
         "self_reserved_tax",
     )
     for row in solution.ledger_rows:

@@ -220,6 +220,7 @@ def _build_primary_solution(scenario, view, evaluation, *, sequence: PR._Sequenc
         solution_kind="primary",
         validation="decimal_verified",
         asset_rows=PR.build_asset_rows(scenario, evaluation),
+        cash_rows=PR.build_cash_rows(scenario, evaluation),
         funding_actions=funding_actions,
         conversions=conversions,
         order_rows=order_rows,

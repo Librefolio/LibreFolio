@@ -93,6 +93,18 @@ class PacAssetPlanRow(AllocationStrictModel):
     residual: ExactMoney
     final_weight: ExactNumberAvailability
     buy_mid_value: ExactMoney
+    minimum: ExactMoney | None = Field(description="The Asset's minimum final value as an amount in the valuation currency, whichever form the request gave it; null when not set.")
+    maximum: ExactMoney | None = Field(description="The Asset's maximum final value as an amount in the valuation currency, whichever form the request gave it; null when not set.")
+
+
+class PacCashEntryRow(AllocationStrictModel):
+    """A cash entry with a limit: the final spendable cash of one Broker in one currency, valued in the valuation currency, and its limits."""
+
+    broker_id: PlannerId
+    currency: CurrencyCode
+    final_value: ExactMoney
+    minimum: ExactMoney | None = Field(description="The cell's minimum final cash as an amount in the valuation currency; null when not set.")
+    maximum: ExactMoney | None = Field(description="The cell's maximum final cash as an amount in the valuation currency; null when not set.")
 
 
 class RebalancerAssetPlanRow(AllocationStrictModel):
@@ -322,14 +334,17 @@ class PlannerLedgerRow(AllocationStrictModel):
     initial_selected: PlannerFixedDecimal
     funding_in: PlannerFixedDecimal
     funding_out: PlannerFixedDecimal
+    transfer_in: PlannerFixedDecimal = Field(description="Cash that arrives from another Broker of the plan in this currency.")
+    transfer_out: PlannerFixedDecimal = Field(description="Cash that leaves for another Broker of the plan in this currency.")
     fx_debit: PlannerFixedDecimal
     fx_credit: PlannerFixedDecimal
     buy_debit: PlannerFixedDecimal
     gross_sell_credit: PlannerFixedDecimal
     buy_fees: PlannerFixedDecimal
     sell_fees: PlannerFixedDecimal
-    broker_withheld_tax: PlannerFixedDecimal
-    self_reserved_tax: PlannerFixedDecimal
+    broker_withheld_tax: PlannerFixedDecimal = Field(description="Tax withheld by a Broker whose tax_regime is administered.")
+    foreign_withholding_tax: PlannerFixedDecimal = Field(description="Tax a foreign source withheld before the cash reached the cell.")
+    self_reserved_tax: PlannerFixedDecimal = Field(description="Tax the plan sets aside for a Broker whose tax_regime is declarative: the Broker withholds nothing.")
     rounding_delta: ExactNumber = Field(description="Raw posted-exact rounding delta; credits are negated in the accounting identity.")
     final_spendable: PlannerFixedDecimal
     final_physical: PlannerFixedDecimal
@@ -343,6 +358,8 @@ class PlannerLedgerRow(AllocationStrictModel):
             "initial_selected",
             "funding_in",
             "funding_out",
+            "transfer_in",
+            "transfer_out",
             "fx_debit",
             "fx_credit",
             "buy_debit",
@@ -350,6 +367,7 @@ class PlannerLedgerRow(AllocationStrictModel):
             "buy_fees",
             "sell_fees",
             "broker_withheld_tax",
+            "foreign_withholding_tax",
             "self_reserved_tax",
         )
         if any(fixed_fraction(getattr(self, name)) < 0 for name in nonnegative_fields):
@@ -359,12 +377,15 @@ class PlannerLedgerRow(AllocationStrictModel):
             + fixed_fraction(self.funding_in)
             + fixed_fraction(self.fx_credit)
             + fixed_fraction(self.gross_sell_credit)
+            + fixed_fraction(self.transfer_in)
             - fixed_fraction(self.funding_out)
+            - fixed_fraction(self.transfer_out)
             - fixed_fraction(self.fx_debit)
             - fixed_fraction(self.buy_debit)
             - fixed_fraction(self.buy_fees)
             - fixed_fraction(self.sell_fees)
             - fixed_fraction(self.broker_withheld_tax)
+            - fixed_fraction(self.foreign_withholding_tax)
             - fixed_fraction(self.self_reserved_tax)
         )
         if expected_spendable != fixed_fraction(self.final_spendable):
@@ -456,8 +477,9 @@ class PlannerCostTotals(AllocationStrictModel):
     sell_fees: ExactMoney
     fx_spread_loss: ExactMoney
     execution_margin_cost: ExactMoney
-    broker_withheld_tax: ExactMoney
-    self_reserved_tax: ExactMoney
+    broker_withheld_tax: ExactMoney = Field(description="Tax withheld by a Broker whose tax_regime is administered.")
+    self_reserved_tax: ExactMoney = Field(description="Tax the plan sets aside for a Broker whose tax_regime is declarative: the Broker withholds nothing.")
+    foreign_withholding_tax: ExactMoney
 
 
 class ObjectiveStageResult(AllocationStrictModel):

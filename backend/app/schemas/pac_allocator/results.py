@@ -189,6 +189,15 @@ def _validate_exposure_projection(solution: PacPlanSolution | RebalancerPlanSolu
             )
 
 
+def _pac_limit_row_money(solution: PacPlanSolution | RebalancerPlanSolution) -> list:
+    """The amounts of a PAC solution's limit rows (Asset minimum and maximum, cash entry value and limits): all in the valuation currency."""
+    if not isinstance(solution, PacPlanSolution):
+        return []
+    amounts = [money for row in solution.asset_rows for money in (row.minimum, row.maximum)]
+    amounts += [money for row in solution.cash_rows for money in (row.final_value, row.minimum, row.maximum)]
+    return [money for money in amounts if money is not None]
+
+
 def _validate_solution_financials(
     solution: PacPlanSolution | RebalancerPlanSolution,
     valuation_currency: CurrencyCode,
@@ -202,6 +211,7 @@ def _validate_solution_financials(
         if isinstance(row, RebalancerAssetPlanRow):
             fields = ("before_value", *fields, "sell_mid_value")
         valuation_money.extend(getattr(row, name) for name in fields)
+    valuation_money.extend(_pac_limit_row_money(solution))
     valuation_money.extend(row.spread_loss for row in solution.conversions)
     valuation_money.extend(row.execution_margin_cost for row in solution.order_rows)
     top_ups = solution.rounding_top_ups if isinstance(solution, PacPlanSolution) else []
@@ -249,6 +259,8 @@ def _validate_ready_solution(
         raise ValueError("Solution must carry exactly one authoritative row per catalog Asset")
     if any(row.broker_id not in broker_ids or row.currency not in currencies for row in solution.ledger_rows):
         raise ValueError("Ledger rows must reference catalog Broker and currency IDs")
+    if isinstance(solution, PacPlanSolution) and any(row.broker_id not in broker_ids or row.currency not in currencies for row in solution.cash_rows):
+        raise ValueError("Cash entry rows must reference catalog Broker and currency IDs")
     if any(row.destination_broker_id not in broker_ids for row in solution.funding_actions):
         raise ValueError("Funding rows must reference catalog Broker IDs")
     if any(row.broker_id not in broker_ids for row in solution.conversions):

@@ -34,6 +34,7 @@ from backend.app.schemas.pac_allocator.rows import (
     MonetaryAmountInstruction,
     ObjectiveStageResult,
     PacAssetPlanRow,
+    PacCashEntryRow,
     PacExposurePlanRow,
     PlannerAccountingSummary,
     PlannerBuyOrderRow,
@@ -50,7 +51,8 @@ from backend.app.schemas.pac_allocator.rows import (
     TieBreakResult,
     WholeQuantityInstruction,
 )
-from backend.app.services.pac_allocator.evaluation.scenario import exact_scenario_fingerprint
+from backend.app.services.pac_allocator.evaluation.limits import resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint, to_valuation
 from backend.app.services.pac_allocator.models import (
     ExactAsset,
     ExactEvaluation,
@@ -90,13 +92,6 @@ UNCATEGORISED_EXPOSURE_CATEGORY_ID = "allocation.uncategorised"
 UNCATEGORISED_EXPOSURE_LABEL = "Uncategorised"
 
 _EXPOSURE_DIMENSIONS = ("asset_type", "sector", "geography")
-
-
-class TransferColumnsUnpublishableError(ValueError):
-    """A ledger cell posted a transfer between Brokers, which contract ``1.0.0`` has no column for (A2, project 67).
-
-    The transfer columns arrive with contract ``2.0.0`` (A4); until then such a row is an error, never a row that drops them.
-    """
 
 
 class ExposureProvenanceError(ValueError):
@@ -446,8 +441,10 @@ def build_asset_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
     currency = scenario.valuation_currency
     final_invested = accounting.final_invested
     zero_denominator = final_invested == _EXACT_ZERO
+    bounds = resolve_scenario_limits(scenario, accounting.fixed_reference).assets()
     rows: list[PacAssetPlanRow] = []
     for row in evaluation.assets:
+        limit = bounds.get(row.asset_id)
         share = UnavailableExactNumber(kind="unavailable", reason="zero_final_invested") if zero_denominator else AvailableExactNumber(kind="available", value=ratio_to_exact_number(row.final_value / final_invested))
         rows.append(
             PacAssetPlanRow(
@@ -458,9 +455,34 @@ def build_asset_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
                 residual=_money(row.residual, currency),
                 final_weight=share,
                 buy_mid_value=_money(row.buy_mid_value, currency),
+                minimum=_money(limit.minimum, currency) if limit is not None and limit.minimum is not None else None,
+                maximum=_money(limit.maximum, currency) if limit is not None and limit.maximum is not None else None,
             )
         )
     return rows
+
+
+def build_cash_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list[PacCashEntryRow]:
+    """One row per cash entry that carries a limit: the cell's final spendable cash in the valuation currency, and its limits.
+
+    The value is the one the replay checks the limit against (``ENTRY_VALUE_WITHIN_LIMITS``): the cell's ``final_spendable``,
+    valued with the scenario's own rates.
+    """
+    accounting = _require_accounting(evaluation)
+    currency = scenario.valuation_currency
+    index = build_scenario_index(scenario)
+    bounds = resolve_scenario_limits(scenario, accounting.fixed_reference).cash()
+    final_by_cell = {(row.broker_id, row.currency): to_valuation(index, row.final_spendable, row.currency) for row in evaluation.ledgers}
+    return [
+        PacCashEntryRow(
+            broker_id=broker_id,
+            currency=cell_currency,
+            final_value=_money(final_by_cell.get((broker_id, cell_currency), _EXACT_ZERO), currency),
+            minimum=_money(limit.minimum, currency) if limit.minimum is not None else None,
+            maximum=_money(limit.maximum, currency) if limit.maximum is not None else None,
+        )
+        for (broker_id, cell_currency), limit in sorted(bounds.items())
+    ]
 
 
 def build_funding_actions(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, sequence: _SequenceAllocator) -> list[PlannerFundingAction]:
@@ -589,8 +611,6 @@ def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
     """
     rows: list[PlannerLedgerRow] = []
     for ledger in evaluation.ledgers:
-        if ledger.transfer_in or ledger.transfer_out:
-            raise TransferColumnsUnpublishableError(f"ledger cell {ledger.broker_id!r} {ledger.currency} posted a transfer between Brokers: contract 1.0.0 has no column for it")
         rows.append(
             PlannerLedgerRow(
                 broker_id=ledger.broker_id,
@@ -598,6 +618,8 @@ def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
                 initial_selected=ratio_to_fixed_decimal(ledger.initial_selected),
                 funding_in=ratio_to_fixed_decimal(ledger.funding_in),
                 funding_out=ratio_to_fixed_decimal(ledger.funding_out),
+                transfer_in=ratio_to_fixed_decimal(ledger.transfer_in),
+                transfer_out=ratio_to_fixed_decimal(ledger.transfer_out),
                 fx_debit=ratio_to_fixed_decimal(ledger.fx_debit),
                 fx_credit=ratio_to_fixed_decimal(ledger.fx_credit),
                 buy_debit=ratio_to_fixed_decimal(ledger.buy_debit),
@@ -605,6 +627,8 @@ def build_ledger_rows(evaluation: ExactEvaluation) -> list[PlannerLedgerRow]:
                 buy_fees=ratio_to_fixed_decimal(ledger.buy_fees),
                 sell_fees=ratio_to_fixed_decimal(ledger.sell_fees),
                 broker_withheld_tax=ratio_to_fixed_decimal(ledger.broker_withheld_tax),
+                # The engine posts no foreign withholding yet (C2 of project 67 adds the posting family): the column is zero until then.
+                foreign_withholding_tax=ratio_to_fixed_decimal(_EXACT_ZERO),
                 self_reserved_tax=ratio_to_fixed_decimal(ledger.self_reserved_tax),
                 rounding_delta=ratio_to_exact_number(ledger.raw_rounding_delta),
                 final_spendable=ratio_to_fixed_decimal(ledger.final_spendable),
@@ -680,6 +704,8 @@ def build_costs(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> 
         execution_margin_cost=_money(costs.execution_margin_loss, currency),
         broker_withheld_tax=_money(costs.broker_withheld_tax, currency),
         self_reserved_tax=_money(costs.self_reserved_tax, currency),
+        # No foreign withholding is posted yet (see ``build_ledger_rows``): the line is zero until C2.
+        foreign_withholding_tax=_money(_EXACT_ZERO, currency),
     )
 
 
