@@ -252,7 +252,8 @@
         "inactive": "Disattivato",
         "protected": "Protetto",
         "pendingSetup": "In attesa del setup",
-        "pendingVerification": "In attesa di verifica"
+        "pendingVerification": "In attesa di verifica",
+        "pendingEmailChange": "Cambio email in attesa"
       },
       "actions": {
         "deactivate": "Disattiva",

@@ -252,7 +252,8 @@
         "inactive": "Desactivada",
         "protected": "Protegida",
         "pendingSetup": "Pendiente de configuración",
-        "pendingVerification": "Pendiente de verificación"
+        "pendingVerification": "Pendiente de verificación",
+        "pendingEmailChange": "Cambio de correo pendiente"
       },
       "actions": {
         "deactivate": "Desactivar",
