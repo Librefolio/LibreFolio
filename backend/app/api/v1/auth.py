@@ -6,10 +6,10 @@ Provides login, logout, and JWT-based session management.
 
 import asyncio
 import math
-from typing import Literal
+from typing import Literal, NoReturn
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api import account_protection
@@ -30,6 +30,7 @@ from backend.app.schemas.auth import (
     ChangePasswordResponse,
     PasswordResetRequest,
     PasswordResetResponse,
+    PendingEmailChangeRead,
     TokenInspectRequest,
     TokenInspectResponse,
     UpdateProfileRequest,
@@ -37,7 +38,7 @@ from backend.app.schemas.auth import (
     WhatsNewRead,
 )
 from backend.app.schemas.users import AccountDeletionPreviewRead, BrokerAccessItemRead, BrokerDeletionItemRead
-from backend.app.services.accounts import address_probe, bootstrap_admin_service, login_throttle, password_policy, registration_service, settings_service, token_service, user_service, whats_new_service
+from backend.app.services.accounts import address_probe, bootstrap_admin_service, email_change, login_throttle, password_policy, registration_service, settings_service, token_service, user_service, whats_new_service
 from backend.app.services.accounts.auth_service import (
     create_jwt_token,
     decode_jwt_token,
@@ -50,6 +51,9 @@ from backend.app.services.accounts.global_settings_service import get_session_tt
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.email import flows as email_flows
 from backend.app.services.email import verification as email_verification
+from backend.app.services.email.delivery import EmailDeliveryError, EmailError, EmailRateLimitedError, EmailUnavailableError
+from backend.app.services.email.links import EmailLinksUnavailableError
+from backend.app.services.email.messages import EmailRecipientError
 from backend.app.services.platform.client_address import rate_limit_address
 
 logger = structlog.get_logger(__name__)
@@ -57,11 +61,16 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-def _auth_user(user: User) -> AuthUserResponse:
-    """The user as the app reads it, with what is new for it since the release it saw last (C-54)."""
-    pending = whats_new_service.pending_for(user)
-    whats_new = WhatsNewRead(since=pending.since, release=pending.release) if pending is not None else None
-    return AuthUserResponse.model_validate(user).model_copy(update={"whats_new": whats_new})
+def _pending_read(pending: email_change.PendingEmailChange | None) -> PendingEmailChangeRead | None:
+    return PendingEmailChangeRead(email=pending.email, expires_at=pending.expires_at) if pending is not None else None
+
+
+def _auth_user(user: User, pending: email_change.PendingEmailChange | None = None) -> AuthUserResponse:
+    """The user as the app reads it, with what is new for it since the release it saw last (C-54) and the change of
+    address it waits for (project 71); the callers without a session (registration, setup) leave the latter null."""
+    news = whats_new_service.pending_for(user)
+    whats_new = WhatsNewRead(since=news.since, release=news.release) if news is not None else None
+    return AuthUserResponse.model_validate(user).model_copy(update={"whats_new": whats_new, "pending_email_change": _pending_read(pending)})
 
 
 # Session cookie configuration
@@ -206,7 +215,7 @@ async def login(
     user_settings = await settings_service.get_user_settings(user.id, session)
 
     return AuthLoginResponse(
-        user=_auth_user(user),
+        user=_auth_user(user, await email_change.pending(session, user.id)),
         user_settings=user_settings,
         message="Login successful",
         show_donation_popup=show_donation_popup,
@@ -235,11 +244,11 @@ async def logout(
 
 
 @router.get("/me", response_model=AuthMeResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
+async def get_me(current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session_generator)):
     """
-    Get current authenticated user info.
+    Get current authenticated user info, with the change of address it waits for.
     """
-    return AuthMeResponse(user=_auth_user(current_user))
+    return AuthMeResponse(user=_auth_user(current_user, await email_change.pending(session, current_user.id)))
 
 
 @router.post("/whats-new/seen", status_code=204, summary="Mark the changelog of the running release as seen")
@@ -449,15 +458,24 @@ async def update_profile(
 
     Changing the email needs the current password (A6e): with a «forgot password» link, a new address is a way to take
     the account over. It is checked before anything else, so whoever lacks it cannot probe which addresses are taken.
-    The change ends every other session of the account; this one receives a new session cookie and carries on. When
-    email works, after the answer the address the account had before gets a notice (workstream E), which shows nothing
-    of the new one (N62), and the new address a confirmation that it is the account's now (UA2). The protected account (the paying administrator of a managed instance) cannot change its
-    email: 409 ``ACCOUNT_PROTECTED`` before the password is asked or anything is validated, and nothing of the request
-    is applied; its username and other fields stay free.
+    With email working (an SMTP server and ``LIBREFOLIO_PUBLIC_URL``) a new address waits for its link (project 71):
+    ``email_change: "pending"``, the account unchanged, no new cookie, a link of 24 hours to the new address and a notice
+    to the old one. Before the username is saved, the address and the limits are checked without writing: a taken
+    address is the 400 of every change, a limit 429 ``EMAIL_RATE_LIMITED`` with ``Retry-After``, email turned off
+    meanwhile 409 ``EMAIL_UNAVAILABLE`` or ``EMAIL_LINKS_UNAVAILABLE`` — and the username is not saved. Then the username
+    is saved, and then the link goes: when the server refuses it, 502 ``EMAIL_DELIVERY_FAILED``, nothing waits, and the
+    username stays saved (two saves).
+
+    Without links the change applies at once (``email_change: "applied"``): it ends every other session of the account;
+    this one receives a new session cookie and carries on. When email works, after the answer the address the account
+    had before gets a notice (workstream E), which shows nothing of the new one (N62), and the new address a confirmation
+    that it is the account's now (UA2). The protected account (the paying administrator of a managed instance) cannot
+    change its email: 409 ``ACCOUNT_PROTECTED`` before the password is asked or anything is validated, and nothing of
+    the request is applied; its username and other fields stay free.
     """
     # Nothing to update
     if request.username is None and request.email is None:
-        return UpdateProfileResponse(user=_auth_user(current_user), message="No changes requested")
+        return UpdateProfileResponse(user=_auth_user(current_user, await email_change.pending(session, current_user.id)), message="No changes requested")
 
     # The same address in another case is no change (decision P18): no password, no session ended.
     email_changes = request.email is not None and not user_service.same_email(request.email, current_user.email)
@@ -477,6 +495,8 @@ async def update_profile(
             logger.warning("Email change refused: wrong current password", user_id=current_user.id)
             raise HTTPException(status_code=400, detail={"error_code": "CURRENT_PASSWORD_INVALID", "message": "Current password is incorrect"})
         login_throttle.record_success(current_user.username)
+        if await email_change.verification_mode() == "verified":
+            return await _ask_for_email_change(request, current_user, old_email, background, session)
 
     # Update profile
     updated_user, error = await user_service.update_profile(
@@ -487,11 +507,7 @@ async def update_profile(
     )
 
     if error:
-        # A new username against its rules (A-21a) comes with its code, so the profile says it in the user's language: the
-        # service's code decides, never the wording (A-47)
-        if error.code == "USERNAME_INVALID":
-            raise HTTPException(status_code=400, detail={"error_code": "USERNAME_INVALID", "message": str(error)})
-        raise HTTPException(status_code=400, detail=str(error))
+        _profile_refusal(error)
 
     if email_changes:
         # update_profile ended every session of the account with the change: this one gets a new cookie.
@@ -504,7 +520,92 @@ async def update_profile(
     # Never the address in the log (workstream E's rule): whether it changed is enough.
     logger.info("Profile updated", user_id=updated_user.id, username=updated_user.username, email_changed=email_changes)
 
-    return UpdateProfileResponse(user=_auth_user(updated_user), message="Profile updated successfully")
+    return UpdateProfileResponse(
+        user=_auth_user(updated_user, await email_change.pending(session, updated_user.id)),
+        message="Profile updated successfully",
+        email_change="applied" if email_changes else None,
+    )
+
+
+def _profile_refusal(error: user_service.AccountError) -> NoReturn:
+    """The 400 of a refused profile change: a new username against its rules (A-21a) with its code, so the profile says it
+    in the user's language — the service's code decides, never the wording (A-47) —; anything else its message."""
+    if error.code == "USERNAME_INVALID":
+        raise HTTPException(status_code=400, detail={"error_code": "USERNAME_INVALID", "message": str(error)})
+    raise HTTPException(status_code=400, detail=str(error))
+
+
+def _email_change_refusal(exc: Exception) -> NoReturn:
+    """The answer to a change of address the email service refused. Never the SMTP code nor the configuration's problem:
+    whoever asks is not an administrator."""
+    if isinstance(exc, email_change.EmailChangeNotPendingError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error_code": exc.code, "message": "No change of address waits for its link"}) from None
+    if isinstance(exc, email_change.EmailChangeRefusedError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": exc.code, "message": "Email already registered"}) from None
+    if isinstance(exc, EmailUnavailableError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_UNAVAILABLE", "message": "This instance cannot send emails"}) from None
+    if isinstance(exc, EmailLinksUnavailableError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_LINKS_UNAVAILABLE", "message": "This instance cannot send emails with a link"}) from None
+    if isinstance(exc, EmailRateLimitedError):
+        seconds = max(1, math.ceil(exc.retry_after))
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail={"error_code": "EMAIL_RATE_LIMITED", "retry_after": seconds, "message": "Too many requests: try again later"}, headers={"Retry-After": str(seconds)}) from None
+    if isinstance(exc, EmailDeliveryError):
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail={"error_code": "EMAIL_DELIVERY_FAILED", "message": "The email could not be sent"}) from None
+    if isinstance(exc, EmailRecipientError):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail={"error_code": "EMAIL_RECIPIENT_INVALID", "message": "The new address is not a single email address"}) from None
+    raise exc
+
+
+async def _ask_for_email_change(request: UpdateProfileRequest, current_user: User, old_email: str, background: BackgroundTasks, session: AsyncSession) -> UpdateProfileResponse:
+    """``PUT /auth/profile`` with a new address while email works: the address waits for its link (project 71)."""
+    new_address = request.email or ""
+    # Read without writing first: a refusal here leaves the profile as it was, the username too.
+    try:
+        await email_change.admit_request(session, current_user, new_address)
+    except email_change.EmailChangeRefusedError:
+        # The answer of a taken address in any change of the profile, with or without email
+        raise HTTPException(status_code=400, detail="Email already registered") from None
+    except (EmailError, EmailRecipientError) as exc:
+        _email_change_refusal(exc)
+    user = current_user
+    if request.username is not None:
+        updated, error = await user_service.update_profile(session=session, user_id=current_user.id, username=request.username)
+        if error:
+            _profile_refusal(error)
+        user = updated
+    try:
+        pending = await email_change.request_change(session, user, new_address)
+    except email_change.EmailChangeRefusedError:
+        raise HTTPException(status_code=400, detail="Email already registered") from None
+    except (EmailError, EmailRecipientError) as exc:
+        _email_change_refusal(exc)
+    # The notice to the old address: after the answer, with a session of its own; never raises.
+    background.add_task(email_change.email_change_requested_work, user.id, old_email, engine=session.bind)
+    logger.info("Profile updated, email change waits for its link", user_id=user.id, username=user.username)
+    return UpdateProfileResponse(user=_auth_user(user, pending), message="Email change requested: confirm it from the new address", email_change="pending")
+
+
+@router.delete("/profile/email-change", status_code=204, summary="Cancel the change of address waiting for its link")
+async def cancel_pending_email_change(current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session_generator)) -> Response:
+    """The link of the change asked from Profile stops working (project 71). 204 always, also with nothing waiting; no email."""
+    await email_change.cancel(session, current_user.id)
+    return Response(status_code=204)
+
+
+@router.post("/profile/email-change/resend", response_model=PendingEmailChangeRead, summary="Send the link of the waiting change of address again")
+async def resend_pending_email_change(current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session_generator)) -> PendingEmailChangeRead:
+    """A new link to the address the account waits for, with a new expiry; the earlier link stops once the email went (project 71).
+
+    404 ``EMAIL_CHANGE_NOT_PENDING``; 409 ``EMAIL_UNAVAILABLE`` or ``EMAIL_LINKS_UNAVAILABLE``; 409 ``EMAIL_TAKEN`` when
+    another account took the address meanwhile (the request is revoked); 429 ``EMAIL_RATE_LIMITED`` with ``Retry-After``
+    (60 seconds between two emails, 5 an hour, 3 an hour to one mailbox, the hourly budget); 502 ``EMAIL_DELIVERY_FAILED``
+    (the earlier link still works). No password: the address is the one already asked for.
+    """
+    try:
+        pending = await email_change.resend(session, current_user)
+    except (EmailError, EmailRecipientError) as exc:
+        _email_change_refusal(exc)
+    return PendingEmailChangeRead(email=pending.email, expires_at=pending.expires_at)
 
 
 def deletion_preview_read(preview: user_service.AccountDeletionPreview) -> AccountDeletionPreviewRead:

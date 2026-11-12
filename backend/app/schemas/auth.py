@@ -74,6 +74,13 @@ class WhatsNewRead(BaseModel):
     release: str = Field(..., description="The release the instance runs")
 
 
+class PendingEmailChangeRead(BaseModel):
+    """A change of address asked from Profile that waits for its link (project 71): the new address, and when the link expires."""
+
+    email: str = Field(..., description="The address the account will have once the link sent to it is clicked")
+    expires_at: UTCDateTime = Field(..., description="When the link stops working")
+
+
 class AuthUserResponse(BaseModel):
     """User info returned after login or from /me endpoint."""
 
@@ -84,6 +91,7 @@ class AuthUserResponse(BaseModel):
     is_superuser: bool
     created_at: UTCDateTime
     whats_new: Optional[WhatsNewRead] = Field(None, description="The changelog chapters to show once, after an update; null when there is nothing new")
+    pending_email_change: Optional[PendingEmailChangeRead] = Field(None, description="The change of address waiting for its link; null when none waits")
 
     model_config = {"from_attributes": True}
 
@@ -182,6 +190,7 @@ class UpdateProfileResponse(BaseModel):
 
     user: AuthUserResponse
     message: str = "Profile updated successfully"
+    email_change: Optional[Literal["applied", "pending"]] = Field(None, description="applied: the address changed now; pending: it waits for the link sent to the new address; null: the address was not changed")
 
 
 class AdminSetupRequest(StrictModel):
