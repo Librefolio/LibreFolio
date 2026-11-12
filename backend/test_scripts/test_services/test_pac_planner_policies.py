@@ -1,10 +1,10 @@
 """Contract tests for the PAC/Rebalancer SCIP policy compiler (Step 3, Stage 2).
 
 Covers the three new production modules that turn one `ExactPolicyView` into
-one SCIP `pyscipopt.Model`, ready for `solver.py`'s (Stage 3, not yet built)
-lexicographic re-optimization loop:
+one SCIP `pyscipopt.Model`, ready for `solver.py`'s lexicographic
+re-optimization loop:
 
-  * `constraints.py` -- `ScenarioFacts`, `CompiledVariables`, the pure
+  * `constraints/` (package) -- `ScenarioFacts`, `CompiledVariables`, the pure
     lookup helpers (`fx_rate`, `valuation_rate`, `order_prices`,
     `order_notional`, `buy_pool_currencies`, `as_float`), and every hard
     constraint builder.
@@ -15,7 +15,7 @@ lexicographic re-optimization loop:
 
 Scope for this build (and therefore for every fixture below): PAC
 `proportional` policy, `primary` purpose only -- no other product/policy/
-purpose combination is implemented, and `solver.py` does not exist yet.
+purpose combination is implemented.
 Nothing here searches or optimizes in the ordinary MIP sense: every model
 built below has its `quanta` decisions pinned to one concrete candidate
 before `model.optimize()` is ever called, so SCIP is only ever asked to
@@ -65,6 +65,7 @@ from typing import Any
 
 import pytest
 
+from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.pac_allocator import numeric as NUM
 from backend.app.services.pac_allocator.compiler import (
     CompiledProgram,
@@ -86,6 +87,7 @@ from backend.app.services.pac_allocator.constraints import (
     order_prices,
     valuation_rate,
 )
+from backend.app.services.pac_allocator.constraints import facts as constraints_facts
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.ledger import _ROUNDED_FAMILIES
@@ -355,6 +357,26 @@ def test_fx_rate_direct_and_inverse_pair_direction() -> None:
     assert fx_rate(facts, "EUR", "USD") == pytest.approx(1.2)
     assert fx_rate(facts, "USD", "EUR") == pytest.approx(1.0 / 1.2)
     assert fx_rate(facts, "USD", "USD") == 1.0  # identity, no lookup needed
+
+
+@pytest.mark.parametrize(("source", "destination"), [pytest.param("EUR", "USD", id="stored-direction"), pytest.param("USD", "EUR", id="inverse-direction")])
+def test_constraints_fx_rate_is_the_oriented_rate(monkeypatch, source, destination) -> None:
+    """A0 (project 67): the floating-point reading of a stored rate goes through ``financial_math.fx_rates.oriented_rate``
+    too (generic on the number type: ``float`` here), so the engine keeps no third inversion of its own. The module that
+    holds ``fx_rate`` is ``constraints.facts``; ``oriented_rate`` is replaced there by a recorder that delegates."""
+    calls: list[tuple] = []
+
+    def recorder(rate, from_currency, to_currency):
+        calls.append((rate, from_currency, to_currency))
+        return oriented_rate(rate, from_currency, to_currency)
+
+    monkeypatch.setattr(constraints_facts, "oriented_rate", recorder)
+    facts = build_scenario_facts(_multi_broker_shared_ids_scenario())
+    stored = facts.fx_rate_by_pair["EUR/USD"]
+
+    assert constraints_facts.fx_rate(facts, source, destination) == oriented_rate(stored, source, destination)
+    assert calls == [(stored, source, destination)]
+    assert constraints_facts.fx_rate(facts, "USD", "USD") == 1.0  # identity answers before any orientation
 
 
 def test_valuation_rate_uses_scenario_valuation_currency() -> None:

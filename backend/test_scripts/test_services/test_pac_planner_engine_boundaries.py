@@ -52,6 +52,7 @@ from pathlib import Path
 
 import pytest
 
+from backend.app.services.pac_allocator import constraints
 from backend.test_scripts.test_utils import print_section, print_success
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -253,3 +254,54 @@ def test_an_engine_module_imports_neither_the_database_nor_the_planner_source(mo
     offenders = _offenders(module, (REPO_ROOT / module).read_text(encoding="utf-8"))
     assert not offenders, "D-J18: a PAC/Rebalancer engine module must not import the database (sqlalchemy, sqlmodel, backend.app.db) or the planner source (pac_allocator.source):\n" + "\n".join(offenders)
     print_success(f"{module}: no database or planner source import")
+
+
+# =============================================================================
+# A0 (project 67): the constraint builders are a package, and the engine owns no fee formula
+# =============================================================================
+
+# The public surface of ``pac_allocator.constraints`` before it became a package (the ``__all__`` of the one file), plus
+# the private names the policy tests import from it. Whoever imports a name from the old path imports it from the same path.
+CONSTRAINTS_IMPORT_SURFACE = (
+    "CompiledVariables",
+    "LedgerPostingScopeError",
+    "ScenarioFacts",
+    "add_fee_epigraph_constraints",
+    "add_funding_activation_constraints",
+    "add_funding_pool_constraints",
+    "add_ledger_balance_constraints",
+    "add_order_activation_constraints",
+    "add_order_required_minimum_constraints",
+    "build_scenario_facts",
+    "buy_pool_currencies",
+    "compile_hard_constraints",
+    "fx_rate",
+    "order_notional",
+    "order_prices",
+    "planning_fx_rate",
+    "valuation_rate",
+    "as_float",
+    "_MODELLED_ROUNDED_FAMILIES",
+    "_ROUNDED_FAMILY_DETECTORS",
+    "_require_modelled_rounded_families",
+)
+
+
+def test_constraints_package_keeps_its_import_surface():
+    assert (PAC_ROOT / "constraints" / "__init__.py").is_file(), "constraints is a package: one theme per module"
+    assert not (PAC_ROOT / "constraints.py").exists(), "the single file and the package cannot both stand"
+    missing = [name for name in CONSTRAINTS_IMPORT_SURFACE if not hasattr(constraints, name)]
+    assert not missing, f"names no longer importable from pac_allocator.constraints: {missing}"
+    # ``__all__`` of the package is the public part of the surface, unchanged.
+    public = [name for name in CONSTRAINTS_IMPORT_SURFACE if not name.startswith("_") and name != "as_float"]
+    assert sorted(constraints.__all__) == sorted(public)
+    print_success(f"{len(CONSTRAINTS_IMPORT_SURFACE)} names importable from the package")
+
+
+def test_engine_defines_no_fee_formula():
+    """The fee formula has one home, ``financial_math/fees.py``: no ``def calculate_fee`` under the engine."""
+    definitions = [path.relative_to(REPO_ROOT).as_posix() for path in _python_files(PAC_ROOT) for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))) if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == "calculate_fee"]
+    assert not definitions, f"the engine defines its own fee formula in {definitions}: import financial_math.fees.calculate_fee"
+    home = (REPO_ROOT / "backend" / "app" / "services" / "financial_math" / "fees.py").read_text(encoding="utf-8")
+    assert "def calculate_fee" in home
+    print_success("calculate_fee is defined in financial_math/fees.py only")
