@@ -539,7 +539,10 @@ The real change starts at the host, and `services/accounts/instance_owner.py` ru
   owner, that the token's address is still the variable's and that no other account holds it; then sets the address
   (verified), ends the owner's sessions, and revokes its other change links and its reset links. A link that no longer
   matches is revoked and answers `TOKEN_INVALID` `revoked`. The notice to the old address is
-  `flows.email_changed_work`, as for the profile.
+  `flows.email_changed_work`, as for the profile. Since release 1.4 the same route also serves the changes a user asks
+  for from the profile (`email_change.link_flow()` tells the flows apart by `created_by_user_id`): those confirm only
+  with the session of the link's account, and a link without it answers 403 `EMAIL_CHANGE_SIGN_IN_REQUIRED`
+  ([A Change Asked from Profile](../backend/email.md#flow-profile-email-change)). The owner's flow above is unchanged.
 
 Tests: `./dev.py test services owner-email-change`, `./dev.py test api owner-email-change`,
 `./dev.py test db migration-005`.
