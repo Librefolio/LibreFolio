@@ -70,7 +70,8 @@
     "notFound": "Activo n.º {id} no encontrado",
     "loadFailed": "No se pudo cargar la información del activo",
     "pricesLoadFailed": "No se pudieron cargar los precios",
-    "manualChip": "Manual"
+    "manualChip": "Manual",
+    "externalLinkHint": "{name}: abrir {site} en una pestaña nueva"
   },
   "assets": {
     "create": "Nuevo activo",

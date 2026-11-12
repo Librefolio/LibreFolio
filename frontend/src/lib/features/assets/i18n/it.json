@@ -70,7 +70,8 @@
     "notFound": "Asset n. {id} non trovato",
     "loadFailed": "Impossibile caricare i dati dell'asset",
     "pricesLoadFailed": "Impossibile caricare i prezzi",
-    "manualChip": "Manuale"
+    "manualChip": "Manuale",
+    "externalLinkHint": "{name}: apri {site} in una nuova scheda"
   },
   "assets": {
     "create": "Nuovo asset",

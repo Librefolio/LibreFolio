@@ -183,7 +183,7 @@ test.describe('Asset Detail Page', () => {
         const link = page.getByTestId('asset-detail-transactions-link');
         await expect(link).toBeVisible();
         await expect(link).toHaveAttribute('href', `/transactions?asset_id=${assetId}`);
-        await expect(link).toContainText(`(${globalCount})`);
+        await expect(link.getByTestId('asset-detail-transactions-count')).toHaveText(String(globalCount));
         // The label itself must come from the real transactions.title catalogue
         // entry, not a hardcoded English guess and not a missing key like the old
         // `nav.transactions` (svelte-i18n renders a missing key as the literal key
@@ -2957,7 +2957,7 @@ test.describe('Asset Detail Page', () => {
         await conversionGapIssue.click();
         // The sentence is worded from the issue: the pair in the direction of the conversion and the day
         await expect(page.getByTestId('tooltip-content')).toHaveText(/USD.*→.*EUR.*2026-08-01/);
-        await page.getByTestId('asset-detail-header').click();
+        await page.getByTestId('asset-detail-name').click();
         await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
 
         // An event-only FX miss is not evidence that the peer's price series
@@ -9109,11 +9109,11 @@ test.describe('Provider chip names the provider once its catalogue arrives', () 
             const iconSelector = `img[src=${JSON.stringify(iconUrl)}]`;
             await expect(info.locator(iconSelector), 'the catalogue icon reaches the provider chip').toBeAttached({timeout: 5_000});
 
-            // The chip is the span holding the catalogue's own icon: no test id, class or position.
+            // The chip is found by its test id; it holds the catalogue's own icon.
             // An exact text rather than a header-wide toContainText, so it also says the label is not
             // the raw code (name ≠ code, checked above). Provider names come from the backend
             // registry, not from i18n: this is not an assertion on translated text.
-            const chip = info.locator('span', {has: page.locator(iconSelector)});
+            const chip = info.getByTestId('asset-detail-provider-badge');
             await expect(chip, `the provider chip names «${providerCode}» as the catalogue does, not by its raw code`).toHaveText(provider.name, {timeout: 5_000});
         } finally {
             // The routes stay until the page closes with the test, so the live-price answer outlives the asset page, whose

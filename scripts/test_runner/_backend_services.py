@@ -1293,6 +1293,16 @@ def services_split_adjustment_ledger(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Split adjustment ledger tests", verbose=verbose)
 
 
+def services_lifo_lot_engine(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the lot engine replayed in FIFO or in LIFO (project 69, lot L1)."""
+    print_section("Services: Lot Engine in LIFO (project 69, L1)")
+    print_info("Testing: backend/app/services/financial_math/fifo/engine.py (matching_method, _broker_fragments, _event_sort_key)")
+    print_info("Tests: the most recent lot first for sales, outgoing adjustments, short covers and transfers; inflows before outflows within a day; D10; the same lots and the same closed total in both methods")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_lifo_lot_engine.py", test_names)
+    return run_command(cmd, "Lot engine LIFO tests", verbose=verbose)
+
+
 def services_dust_threshold(verbose: bool = False, test_names: list = None) -> bool:
     """Test that the daily state holds a position only above QUANTITY_DUST_THRESHOLD (MF6-2, backlog MF-A6)."""
     print_section("Services: Daily State Dust Threshold (MF6-2)")
@@ -3305,6 +3315,18 @@ Note: No backend server required.
         isolation="pure",
     )
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price marks")
+    add_test(
+        cat,
+        "lifo-lot-engine",
+        services_lifo_lot_engine,
+        name="Lot Engine LIFO",
+        desc="Project 69 L1: the lot engine's matching_method (default FIFO); LIFO takes the most recent lot first (opening date, then id) for sales, outgoing adjustments, short covers and transfer departures; within a day inflows before outflows in both methods (D4, D4b); D10 with every broker and with one; the same lots and the same total realized at a closed position in both methods",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: run_fifo_lot_engine and read_transfers_at_scope_boundary on hand-written rows; no DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "orphan-transfer-numbers",

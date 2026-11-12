@@ -447,6 +447,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/providerProbeState.test.ts",
             "src/lib/features/assets/AssetSyncModal.test.ts",
             "src/lib/features/assets/AssetBrowseNav.test.ts",
+            "src/lib/features/assets/detail/AssetDetailHeader.test.ts",
             "src/lib/features/assets/detail/AssetDetailSignalsPanel.test.ts",
             "src/lib/features/assets/detail/AssetDetailMeasuresSection.test.ts",
             "src/lib/features/assets/detail/AssetChartModeToggle.test.ts",
