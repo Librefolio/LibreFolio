@@ -453,6 +453,15 @@ def utils_coverage_combine(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Coverage combine tests", verbose=verbose)
 
 
+def utils_coverage_quotable(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the runner's quotable-coverage plumbing, step by step (release 1.4, project 71, block 3)."""
+    print_section("Utils: Coverage Quotable")
+    print_info("Testing: scripts/test_runner/_cli.py (_finish_coverage, _add_run_flags, _prepare_args)")
+    print_info("Tests: both entries of the runner finish coverage through one function, the run flags are registered once for both parsers, the arguments are prepared first")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_coverage_quotable.py", test_names)
+    return run_command(cmd, "Coverage quotable tests", verbose=verbose)
+
+
 def utils_translation_code_blocks(verbose: bool = False, test_names: list = None) -> bool:
     """Test that translated code blocks keep the source indentation (Aphra pipeline + validator)."""
     print_section("Utils: Translation Code Blocks")
@@ -1002,6 +1011,15 @@ Tests for utility modules and helper functions:
         name="Coverage Combine",
         desc="Coverage parts are combined as a directory: a part coverage renames while the combine starts and one landing after coverage's own listing are both folded in with nothing left behind, the shared backend's parts in the cwd too (.coveragerc is never a part), and a failed combine turns the parallel pass red; a run's parts/run-* directory goes once combined and stays, named with the unreadable part, when not; --cov-clean-backend empties parts/ of coverage data and keeps the junit reports; a finished part holding coverage's schema and no rows is removed and named without failing the combine (worker parts and the shared backend's alike), one with a transient name is never judged empty",
         # Temporary files and coverage subprocesses on them, cwd moved into tmp_path: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "coverage-quotable",
+        utils_coverage_quotable,
+        name="Coverage Quotable",
+        desc="The runner's quotable-coverage plumbing (project 71, block 3), one class per step; step 3.1: both entries (dev.py test and python -m scripts.test_runner) finish coverage through one _finish_coverage(success) -> int that finalizes the Python and the JS coverage asked, even after a red, and returns the exit code; the run flags are registered once by _add_run_flags for both parsers, with the same destinations and defaults and the deprecated --cov-clean-frontend alias; _prepare_args(args) runs first in both entries and changes nothing yet",
+        # PURE: no DB, no server, no network, no subprocess: the runner's passes and finalizers are stood in for with monkeypatch; _cli.py is read as source text.
         isolation="pure",
     )
     add_test(
