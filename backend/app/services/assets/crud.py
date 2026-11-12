@@ -589,19 +589,34 @@ class AssetCRUDService:
         - an asset that does not exist -> issue ``assetNotFound``;
         - a type that becomes INDEX on an asset that has transactions -> issue ``indexWithTransactions`` (``tx_count``);
           an asset that already is INDEX is never blocked and never cleaned up;
+        - a name that another asset holds -> issue ``assetNameTaken`` (``name``), the clash ``uq_assets_display_name`` would
+          raise at the flush. Names are judged item after item, as the apply step meets them: a name an earlier item of the
+          batch has just left is free, a name still held (by an asset inside or outside the batch) is not, and an asset
+          that keeps its own name is no clash. Two items taking the same new name: the second one is the issue;
         - a type that moves to another family -> warning ``assetFamilyChange`` (``from``, ``to``): it never blocks.
 
-        The transactions are counted in one query, and only when an item turns an asset into an INDEX (P0-5).
+        The transactions are counted in one query, and only when an item turns an asset into an INDEX (P0-5); the names
+        in one query too, and only when an item renames an asset.
         """
         issues: list[FAAssetPatchIssue] = []
         warnings: list[FAAssetPatchIssue] = []
         # The type each asset would have, item after item: one batch may patch the same asset twice.
         projected_type = {asset_id: AssetType(asset.asset_type) for asset_id, asset in assets_by_id.items()}
         type_changes: list[tuple[int, int, AssetType, AssetType]] = []
+        # The asset that holds each name, item after item: the batch's assets by their loaded names, the others from one query.
+        held_by = await AssetCRUDService._names_held(prepared, assets_by_id, session)
         for index, (patch, patch_dict) in enumerate(prepared):
             if patch.asset_id not in assets_by_id:
                 issues.append(FAAssetPatchIssue(asset_id=patch.asset_id, index=index, code=FAAssetPatchCode.ASSET_NOT_FOUND, message=f"Asset {patch.asset_id} not found"))
                 continue
+            new_name = patch_dict.get("display_name")
+            if new_name:
+                holder = held_by.get(new_name)
+                if holder is not None and holder != patch.asset_id:
+                    issues.append(FAAssetPatchIssue(asset_id=patch.asset_id, index=index, code=FAAssetPatchCode.ASSET_NAME_TAKEN, message=f"The name '{new_name}' is already used by another asset", params={"name": new_name}, field="display_name"))
+                else:
+                    held_by = {name: owner for name, owner in held_by.items() if owner != patch.asset_id}
+                    held_by[new_name] = patch.asset_id
             if patch_dict.get("asset_type") is None:
                 continue
             old_type, new_type = projected_type[patch.asset_id], AssetType(patch_dict["asset_type"])
@@ -623,6 +638,17 @@ class AssetCRUDService:
 
         issues.sort(key=lambda issue: issue.index)
         return issues, warnings
+
+    @staticmethod
+    async def _names_held(prepared: list[tuple[FAAssetPatchItem, dict]], assets_by_id: dict[int, Asset], session: AsyncSession) -> dict[str, int]:
+        """``{name: asset id}`` of the names the batch can clash with: the loaded names of the batch's assets, plus the
+        holders outside the batch of the names the items ask for (one query, none when nobody renames)."""
+        held_by = {asset.display_name: asset_id for asset_id, asset in assets_by_id.items()}
+        wanted = {patch_dict["display_name"] for _, patch_dict in prepared if patch_dict.get("display_name")}
+        if wanted:
+            rows = (await session.execute(select(Asset.id, Asset.display_name).where(Asset.display_name.in_(wanted)))).all()
+            held_by.update({name: asset_id for asset_id, name in rows if asset_id not in assets_by_id})
+        return held_by
 
     @staticmethod
     def _unsaved_response(patches: List[FAAssetPatchItem], issues: list[FAAssetPatchIssue], warnings: list[FAAssetPatchIssue]) -> FABulkAssetPatchResponse:

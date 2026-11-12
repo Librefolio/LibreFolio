@@ -367,6 +367,7 @@ class FAAssetPatchCode(StrEnum):
 
     ASSET_NOT_FOUND = "assetNotFound"
     INDEX_WITH_TRANSACTIONS = "indexWithTransactions"
+    ASSET_NAME_TAKEN = "assetNameTaken"
     ASSET_FAMILY_CHANGE = "assetFamilyChange"
     PATCH_FAILED = "patchFailed"
 
@@ -378,7 +379,7 @@ class FAAssetPatchIssue(StrictModel):
     index: int = Field(..., ge=0, description="Position of the item in the request list")
     code: FAAssetPatchCode = Field(..., description="Code the frontend translates")
     message: str = Field(..., description="English description, for logs and API clients")
-    params: Optional[Dict[str, Any]] = Field(None, description="Values for the translated message (indexWithTransactions: tx_count; assetFamilyChange: from, to)")
+    params: Optional[Dict[str, Any]] = Field(None, description="Values for the translated message (indexWithTransactions: tx_count; assetNameTaken: name; assetFamilyChange: from, to)")
     field: Optional[str] = Field(None, description="Patch field that caused it (e.g. 'asset_type'), None when the whole item is concerned")
 
 
