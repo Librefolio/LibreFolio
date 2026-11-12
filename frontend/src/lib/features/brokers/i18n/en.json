@@ -99,7 +99,7 @@
     },
     "lots": {
       "unifiedLots": "Lots",
-      "unifiedLotsHint": "Unified FIFO lots view with multi-selection and custody drill-down.",
+      "unifiedLotsHint": "Unified lots view ({method}) with multi-selection and custody drill-down.",
       "ganttTitle": "Lot life & custody",
       "openOnly": "Open",
       "valueComparisonTitle": "Value of selected lots",
@@ -118,7 +118,7 @@
       "custody": "Custody",
       "openQuantity": "Open Quantity",
       "currentValue": "Current Value",
-      "fifoPnl": "FIFO P&L",
+      "fifoPnl": "{method} P&L",
       "noUnifiedLots": "No lots match current filters",
       "noGanttData": "No lot custody history in selected range",
       "inTransit": "In transit",
@@ -127,7 +127,7 @@
       "lotLabel": "Lot {date}",
       "lotWord": "Lot",
       "shortLotLabel": "Short {date}",
-      "detailTitle": "FIFO Lot Detail",
+      "detailTitle": "Lot Detail · {method}",
       "loadFailed": "Failed to load lot data",
       "analysisFailed": "This asset's lots can't be rebuilt: some of its transactions don't add up. The lots, their timeline and the comparison are hidden; the average-cost lines below are not affected.",
       "combined": "Combined",
@@ -290,7 +290,10 @@
       "yAxisFromZero": "From 0",
       "annualizedReturn": "Annualized",
       "annualizedReturnTooltip": "Net annualized return (CAGR) of this single lot over its holding window, net of income and fees, for comparison across lots held for different durations.",
-      "analysisFailedFix": "Fix these transactions and the lots come back:"
+      "analysisFailedFix": "Fix these transactions and the lots come back:",
+      "matchingMethod": "Matching method",
+      "methodFifoHint": "FIFO: a sale closes the oldest lot first",
+      "methodLifoHint": "LIFO: a sale closes the most recent lot first"
     },
     "createdInSystem": "Created in System",
     "deleteBlockedTitle": "Cannot delete broker",

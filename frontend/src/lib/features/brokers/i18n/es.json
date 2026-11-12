@@ -99,7 +99,7 @@
     },
     "lots": {
       "unifiedLots": "Lotes",
-      "unifiedLotsHint": "Vista unificada de lotes FIFO con selección múltiple y detalle de custodia.",
+      "unifiedLotsHint": "Vista unificada de lotes ({method}) con selección múltiple y detalle de custodia.",
       "ganttTitle": "Vida y custodia de los lotes",
       "openOnly": "Abiertos",
       "valueComparisonTitle": "Valor de los lotes seleccionados",
@@ -118,7 +118,7 @@
       "custody": "Custodia",
       "openQuantity": "Cantidad abierta",
       "currentValue": "Valor actual",
-      "fifoPnl": "P&L FIFO",
+      "fifoPnl": "P&L {method}",
       "noUnifiedLots": "Ningún lote coincide con los filtros actuales",
       "noGanttData": "Sin historial de custodia en el período seleccionado",
       "inTransit": "En tránsito",
@@ -127,7 +127,7 @@
       "lotLabel": "Lote {date}",
       "lotWord": "Lote",
       "shortLotLabel": "Short {date}",
-      "detailTitle": "Detalle de Lotes FIFO",
+      "detailTitle": "Detalle de lotes · {method}",
       "loadFailed": "Error al cargar los datos de los lotes",
       "analysisFailed": "Los lotes de este activo no se pueden reconstruir: algunas de sus transacciones no cuadran. Los lotes, su cronología y la comparación están ocultos; las líneas del coste medio de abajo no se ven afectadas.",
       "combined": "Combinado",
@@ -290,7 +290,10 @@
       "yAxisFromZero": "Desde 0",
       "annualizedReturn": "Anualizado",
       "annualizedReturnTooltip": "Rendimiento neto anualizado (CAGR) de este lote individual durante su periodo de tenencia, neto de ingresos y gastos, para comparar lotes mantenidos durante distintas duraciones.",
-      "analysisFailedFix": "Corrige estas transacciones y los lotes volverán:"
+      "analysisFailedFix": "Corrige estas transacciones y los lotes volverán:",
+      "matchingMethod": "Método de emparejamiento",
+      "methodFifoHint": "FIFO: una venta cierra primero el lote más antiguo",
+      "methodLifoHint": "LIFO: una venta cierra primero el lote más reciente"
     },
     "createdInSystem": "Creado en el Sistema",
     "deleteBlockedTitle": "No se puede eliminar el bróker",
