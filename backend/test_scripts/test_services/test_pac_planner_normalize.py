@@ -966,8 +966,8 @@ def test_canonical_issue_universe_matches_schema_and_w1_map_is_explicit() -> Non
     schema_codes = tuple(get_args(PlannerIssueCode))
 
     assert schema_codes == CANONICAL_ISSUE_CODES
-    assert len(schema_codes) == 82
-    assert len(set(schema_codes)) == 82
+    assert len(schema_codes) == 77
+    assert len(set(schema_codes)) == 77
     # FX conversion fix: an incoherent cross rate is a closed code of its own.
     assert "allocation.fx_rate_inconsistent" in schema_codes
     # Contract compaction: the planner reads neither a quote date nor a freshness any more.
@@ -993,7 +993,6 @@ REQUIRED_NONPRODUCER_CODES = {
     "allocation.solver_limit_no_incumbent",
     "allocation.zero_selected_funding",
     "pac_allocator.initial_holding_forbidden",
-    "portfolio_rebalancer.sell_irreducibility_unresolved",
 }
 
 
@@ -2364,3 +2363,16 @@ def test_limit_values_are_checked_before_the_scenario_is_built() -> None:
     unknown = _fixture(PAC_FIXTURE)
     unknown["target_weights"] = [asset_entry("asset-one", "1"), cash_entry("broker-nowhere", "EUR", maximum=amount_limit("3"))]
     assert _issues(_normalize_payload("pac", unknown), "allocation.reference_not_found")
+
+
+def test_fiscal_row_without_a_currency_raises_no_fiscal_currency_issue() -> None:
+    """D14 (A4): «fiscal currency missing» is no longer a code. A fiscal row that names no currency takes the quote currency of
+    its Asset, where a SELL settles anyway, so nothing is reported on its ``fiscal_currency`` field. (The fixture has other,
+    unrelated problems on purpose, so only that field is read.)"""
+    payload = _fixture(REBALANCER_FIXTURE)
+    for row in payload["sell_context"]["asset_taxes"]:
+        row["fiscal_currency"] = None
+
+    result = _normalize_payload("rebalancer", payload)
+
+    assert not [issue for issue in result.issues if getattr(issue.path, "field", None) == "fiscal_currency"], [(issue.code, issue.path) for issue in result.issues]

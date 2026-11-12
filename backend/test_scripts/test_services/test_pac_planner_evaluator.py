@@ -213,7 +213,6 @@ def _order_route(
     fee_id: str,
     side: str,
     minimum: ExactRatio = ZERO,
-    required: ExactRatio = ZERO,
     cap: ExactRatio = R(100),
     margin: ExactRatio = ZERO,
     priority: int = 0,
@@ -229,7 +228,6 @@ def _order_route(
         fee_schedule_id=fee_id,
         side=side,
         minimum_if_active=_minimum(capability, minimum, currency),
-        required_minimum=_minimum(capability, required, currency),
         cap=ExactOrderCap(
             kind=cap_kind,
             value=cap,
@@ -555,7 +553,6 @@ def _planner_request_with_whole_step(
                     "side": "buy",
                     "priority": 0,
                     "minimum_if_active": {"kind": "none"},
-                    "required_minimum": {"kind": "none"},
                     "cap": {
                         "kind": "quantity",
                         "quantity": "100",
@@ -585,7 +582,6 @@ def _pac_scenario(
     fee_floor: ExactRatio = ZERO,
     fee_cap: ExactRatio | None = None,
     minimum: ExactRatio = ZERO,
-    required: ExactRatio = ZERO,
     route_cap: ExactRatio = R(100),
     margin: ExactRatio = ZERO,
     priority: int = 7,
@@ -636,7 +632,6 @@ def _pac_scenario(
                 fee_id=fee.fee_schedule_id,
                 side="buy",
                 minimum=minimum,
-                required=required,
                 cap=route_cap,
                 margin=margin,
                 priority=priority,
@@ -815,7 +810,6 @@ def _invest_and_sell_scenario(
     monetary_sell: bool = False,
     sell_step: ExactRatio = ONE,
     sell_minimum: ExactRatio = ZERO,
-    sell_required: ExactRatio = ZERO,
     zero_domain_sell: bool = False,
 ) -> ExactPlannerScenario:
     buy_capability = _capability("capability:buy")
@@ -858,7 +852,6 @@ def _invest_and_sell_scenario(
             fee_id=sell_fee.fee_schedule_id,
             side="sell",
             minimum=sell_minimum,
-            required=sell_required,
             cap=sell_a_cap,
             priority=4,
         ),

@@ -173,8 +173,8 @@ def perfect_run() -> _Run:
 
 @pytest.fixture(scope="module")
 def infeasible_run() -> _Run:
-    """A minimum of EUR500 on an Asset whose route is capped at 10 units of EUR10: SCIP closes the first, global stage infeasible."""
-    run = _real_run(_pac_scenario_with_asset_minimum(R(500), route_cap=R(10)))
+    """A minimum of EUR50 on an Asset whose route is capped at 3 units of EUR10 (EUR100 of cash, so the planner's checks pass): SCIP closes the first, global stage infeasible."""
+    run = _real_run(_pac_scenario_with_asset_minimum(R(50), route_cap=R(3)))
     result = run.result
     assert (result.outcome, result.anomaly, result.candidate) == ("reported_infeasible", None, None)
     assert [(stage.ordinal, stage.scope, stage.status, stage.scip_status) for stage in result.stages] == [(1, "global", "infeasible", "infeasible")]

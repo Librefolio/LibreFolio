@@ -570,10 +570,11 @@ def test_infeasible_first_stage_is_a_verdict_that_completes_the_search() -> None
     ``build_solver_evidence`` must carry that single stage with none of the four
     observations filled in, because SCIP reported none.
 
-    This is a real run, not a doctored one: the route cap (10 units, EUR100) is
-    below the Asset's minimum (EUR500), so no candidate can exist.
+    This is a real run, not a doctored one: the route cap (3 units, EUR30) is
+    below the Asset's minimum (EUR50) while EUR100 of cash makes the minimum itself plausible, so no candidate can
+    exist and the planner could publish this state.
     """
-    scenario = _pac_scenario_with_asset_minimum(R(500), route_cap=R(10))
+    scenario = _pac_scenario_with_asset_minimum(R(50), route_cap=R(3))
     view, result = _solve(scenario)
     assert result.outcome == "reported_infeasible"
 

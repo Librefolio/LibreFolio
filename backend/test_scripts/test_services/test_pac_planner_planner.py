@@ -347,6 +347,20 @@ def test_failure_availabilities_end_to_end(builder, availability, issue_kind, re
 
 
 @pytest.mark.parametrize(("builder", "availability", "issue_kind", "result_type"), _FAILURES)
+def test_failure_results_do_not_use_the_snapshot_id_as_request_fingerprint(builder, availability, issue_kind, result_type):
+    """§6, §10.2: a failure has no exact scenario, so it has no scenario fingerprint to carry. The field is empty; it is never the
+    snapshot's own identifier, which says nothing about the request."""
+    request = _validated(builder())
+
+    result = plan_pac_allocation(request)
+
+    assert isinstance(result, result_type)
+    assert result.snapshot.snapshot_id == request.snapshot.snapshot_id
+    assert result.snapshot.request_fingerprint == ""
+    _revalidate(result)
+
+
+@pytest.mark.parametrize(("builder", "availability", "issue_kind", "result_type"), _FAILURES)
 def test_failure_result_mapping_is_direct(builder, availability, issue_kind, result_type):
     """``_failure_result`` maps each normalizer availability onto its wire type.
 
@@ -357,7 +371,7 @@ def test_failure_result_mapping_is_direct(builder, availability, issue_kind, res
     request = _validated(builder())
     outcome = normalize_pac_plan(request)
     assert outcome.availability == availability
-    snapshot = PlannerResultSnapshot(snapshot_id=request.snapshot.snapshot_id, request_fingerprint=request.snapshot.snapshot_id)
+    snapshot = PlannerResultSnapshot(snapshot_id=request.snapshot.snapshot_id, request_fingerprint="")
 
     result = planner._failure_result(outcome.availability, snapshot, list(outcome.issues))
     assert isinstance(result, result_type)
