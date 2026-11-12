@@ -162,6 +162,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/transactions/__tests__/transactionsReconcileButton.wiring.test.ts",
             "src/lib/features/assets/currencyChangeErrors.test.ts",
             "src/lib/features/assets/assetPatchResult.test.ts",
+            "src/lib/features/assets/bulk/assetBulkEdit.test.ts",
             "src/lib/features/assets/assetPayload.test.ts",
             "src/lib/features/assets/assetSearchSelection.test.ts",
             "src/lib/features/assets/assetSearchSections.test.ts",
