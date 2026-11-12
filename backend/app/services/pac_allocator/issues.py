@@ -37,14 +37,17 @@ def _normalizer_definition(code: PlannerIssueCode, kind: NormalizerIssueKind) ->
 # Canonical public universe.  It intentionally carries no inferred
 # kind/severity policy for codes that this normalizer does not produce.
 CANONICAL_ISSUE_CODES: tuple[PlannerIssueCode, ...] = get_args(PlannerIssueCode)
-if len(CANONICAL_ISSUE_CODES) != 77 or len(set(CANONICAL_ISSUE_CODES)) != 77:
-    raise RuntimeError("PlannerIssueCode must remain the frozen 77-value G3 universe")
+if len(CANONICAL_ISSUE_CODES) != 82 or len(set(CANONICAL_ISSUE_CODES)) != 82:
+    raise RuntimeError("PlannerIssueCode must remain the frozen 82-value universe (A4 closes it once, step 4)")
 
 
 # Explicit W1 producer map.  Adding `self.issue(code, ...)` without first
 # defining that code here fails closed rather than inventing a universal
 # default for source, evaluator, solver, proof, or publication issues.
 W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
+    "allocation.bound_max_below_current": _normalizer_definition("allocation.bound_max_below_current", "invalid"),
+    "allocation.bound_min_above_max": _normalizer_definition("allocation.bound_min_above_max", "invalid"),
+    "allocation.bounds_min_sum_exceeds_reference": _normalizer_definition("allocation.bounds_min_sum_exceeds_reference", "invalid"),
     "allocation.broker_inactive": _normalizer_definition("allocation.broker_inactive", "unsupported"),
     "allocation.capacity_unsupported": _normalizer_definition("allocation.capacity_unsupported", "unsupported"),
     "allocation.cash_selection_invalid": _normalizer_definition("allocation.cash_selection_invalid", "invalid"),
@@ -89,6 +92,7 @@ W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
     "allocation.target_weight_out_of_range": _normalizer_definition("allocation.target_weight_out_of_range", "invalid"),
     "allocation.tax_netting_unsupported": _normalizer_definition("allocation.tax_netting_unsupported", "unsupported"),
     "allocation.wac_missing": _normalizer_definition("allocation.wac_missing", "missing"),
+    "pac_allocator.cash_weight_unsupported": _normalizer_definition("pac_allocator.cash_weight_unsupported", "unsupported"),
     "portfolio_rebalancer.carried_loss_negative": _normalizer_definition("portfolio_rebalancer.carried_loss_negative", "invalid"),
     "portfolio_rebalancer.cost_basis_negative": _normalizer_definition("portfolio_rebalancer.cost_basis_negative", "invalid"),
     "portfolio_rebalancer.holdings_missing": _normalizer_definition("portfolio_rebalancer.holdings_missing", "missing"),
@@ -123,6 +127,15 @@ def make_issue(
 ) -> PlannerIssue:
     ordered_params = sorted(params, key=lambda param: param.name)
     return PlannerIssue(code=definition.code, severity=definition.severity, kind=definition.kind, path=path, message_key=definition.code, params=ordered_params)
+
+
+def bounds_unsatisfiable_issue(entity_kind: Literal["asset", "cash"], entity_id: str) -> PlannerIssue:
+    """``allocation.bounds_unsatisfiable`` for one entry that carries a limit (M20, decisioni §10.2).
+
+    A ready result cannot carry an ``error``, so the problem is a ``warning`` of kind ``constraint``, its path on the entry; the
+    interface gathers the listed entries into one banner.
+    """
+    return PlannerIssue(code="allocation.bounds_unsatisfiable", severity="warning", kind="constraint", path=entity_path("targets", entity_kind, entity_id), message_key="allocation.bounds_unsatisfiable", params=[])
 
 
 def normalizer_issue_definition(code: PlannerIssueCode) -> IssueDefinition:

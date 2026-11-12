@@ -317,7 +317,6 @@ def _evaluate_fx(
         result.append(
             ExactFxEvaluation(
                 decision_id=spec.decision_id,
-                order_route_id=spec.representative_route_id,
                 broker_id=spec.broker_id,
                 source_currency=currency,
                 destination_currency=quote_currency,

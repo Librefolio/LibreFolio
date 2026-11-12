@@ -33,6 +33,8 @@ from backend.app.schemas.pac_allocator.request import (
     WholeQuantityMinimum,
 )
 from backend.app.services.financial_math.fx_rates import oriented_rate
+from backend.app.services.pac_allocator.evaluation.limits import entries_with_limits
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
 from backend.app.services.pac_allocator.issues import (
     PlannerAvailability,
     canonicalize_issues,
@@ -43,11 +45,13 @@ from backend.app.services.pac_allocator.issues import (
     normalizer_issue_definition,
     section_path,
 )
+from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, fixed_reference_of, trapped_cash_by_cell
 from backend.app.services.pac_allocator.models import (
     ExactAsset,
     ExactAssetQuote,
     ExactAssetTax,
     ExactBroker,
+    ExactCashEntry,
     ExactContribution,
     ExactCostBasis,
     ExactCurrencySpec,
@@ -57,6 +61,7 @@ from backend.app.services.pac_allocator.models import (
     ExactFundingRoute,
     ExactFxRate,
     ExactHolding,
+    ExactLimit,
     ExactMoney,
     ExactOrderCap,
     ExactOrderCapability,
@@ -264,16 +269,31 @@ class _PlannerV2Normalizer:
             if dimension not in out_of_range_dimensions and total > ExactRatio(1):
                 self.issue("allocation.exposure_total_exceeds_one", exposure_path, params=(TextIssueParam(kind="text", name="dimension", value=dimension),))
 
+    def validate_limit(self, limit, entity_kind: str, entity_id: str, field: str) -> None:
+        """One limit of a target entry: an amount in the valuation currency and not negative, or a share from 0 to 1."""
+        if limit is None:
+            return
+        path = field_path("targets", entity_kind, entity_id, field)
+        if limit.kind == "amount":
+            if limit.amount.currency != self.request.valuation_currency:
+                self.issue("allocation.currency_mismatch", path)
+            if self.ratio(limit.amount.amount, path) < ExactRatio(0):
+                self.issue("allocation.target_weight_out_of_range", path)
+        elif not self._ratio_in_unit_interval(self.ratio(limit.share, path)):
+            self.issue("allocation.target_weight_out_of_range", path)
+
     def validate_targets(self) -> None:
+        asset_entries = [item for item in self.request.target_weights if item.kind == "asset"]
+        cash_entries = [item for item in self.request.target_weights if item.kind == "cash"]
         target_ids = self.duplicates(
-            self.request.target_weights,
+            asset_entries,
             lambda item: item.asset_id,
             lambda _item, item_id: field_path("targets", "asset", item_id, "asset_id"),
         )
         valid_values: list[ExactRatio] = []
         references_valid = True
         values_valid = True
-        for item in self.request.target_weights:
+        for item in asset_entries:
             path = field_path("targets", "asset", item.asset_id, "weight")
             if item.asset_id not in self.asset_ids:
                 references_valid = False
@@ -283,15 +303,40 @@ class _PlannerV2Normalizer:
             if not self._ratio_in_unit_interval(weight):
                 values_valid = False
                 self.issue("allocation.target_weight_out_of_range", path)
+            self.validate_limit(item.minimum, "asset", item.asset_id, "minimum")
+            self.validate_limit(item.maximum, "asset", item.asset_id, "maximum")
         missing_targets = sorted(self.asset_ids - target_ids)
         for asset_id in missing_targets:
             self.issue("allocation.target_weight_missing", field_path("targets", "asset", asset_id, "weight"))
-        if not missing_targets and references_valid and values_valid and len(target_ids) == len(self.request.target_weights):
+        if not missing_targets and references_valid and values_valid and len(target_ids) == len(asset_entries):
             total = sum(valid_values, ExactRatio(0))
             if len(str(abs(total.numerator))) > _RATIO_WIRE_INTEGER_CHARS or len(str(total.denominator)) > _RATIO_WIRE_INTEGER_CHARS:
                 self.issue("allocation.coefficient_envelope_unsupported", section_path("targets"))
             if total != ExactRatio(1):
                 self.issue("allocation.target_total_not_one", section_path("targets"))
+        self.validate_cash_entries(cash_entries)
+
+    def validate_cash_entries(self, entries) -> None:
+        """Cash entries (contract 2.0.0): one per Broker and currency cell, a known Broker, limits as for an Asset. A weight other
+        than zero is unsupported until the Rebalancer's cash weights (block B)."""
+        seen: set[tuple[str, str]] = set()
+        for item in entries:
+            cell = f"{item.broker_id}:{item.currency}"
+            if (item.broker_id, item.currency) in seen:
+                self.issue("allocation.duplicate_id", field_path("targets", "cash", cell, "broker_id"))
+            seen.add((item.broker_id, item.currency))
+            if item.broker_id not in self.broker_ids:
+                self.issue("allocation.reference_not_found", field_path("targets", "cash", cell, "broker_id"))
+            if item.minimum is not None or item.maximum is not None:  # an entry with no limit says nothing: its currency needs no rate
+                self.currency(item.currency, field_path("targets", "cash", cell, "currency"))
+            weight_path = field_path("targets", "cash", cell, "weight")
+            weight = self.ratio(item.weight, weight_path)
+            if not self._ratio_in_unit_interval(weight):
+                self.issue("allocation.target_weight_out_of_range", weight_path)
+            elif weight != ExactRatio(0):
+                self.issue("pac_allocator.cash_weight_unsupported", weight_path)
+            self.validate_limit(item.minimum, "cash", cell, "minimum")
+            self.validate_limit(item.maximum, "cash", cell, "maximum")
 
     def validate_brokers(self) -> None:
         self.broker_ids = self.duplicates(
@@ -1104,6 +1149,14 @@ class _PlannerV2Normalizer:
             return self.build_money(next(cash.selected for cash in self.request.existing_cash if cash.cash_id == item.source.cash_id))
         return self.build_money(next(row.amount for row in self.request.contributions if row.contribution_id == item.source.contribution_id))
 
+    @staticmethod
+    def build_limit(limit) -> ExactLimit | None:
+        if limit is None:
+            return None
+        if limit.kind == "amount":
+            return ExactLimit(kind="amount", value=ExactRatio.from_decimal(Decimal(limit.amount.amount)))
+        return ExactLimit(kind="share", value=ExactRatio.from_decimal(Decimal(limit.share)))
+
     def build_scenario(self) -> ExactPlannerScenario:
         fx_rates = tuple(
             ExactFxRate(
@@ -1184,13 +1237,20 @@ class _PlannerV2Normalizer:
             contributions=contributions,
             funding_routes=funding_routes,
             order_routes=order_routes,
-            target_weights=tuple(ExactTargetWeight(asset_id=item.asset_id, weight=ExactRatio.from_decimal(Decimal(item.weight)), minimum=None, maximum=None) for item in sorted(self.request.target_weights, key=lambda value: value.asset_id)),
+            target_weights=tuple(
+                ExactTargetWeight(asset_id=item.asset_id, weight=ExactRatio.from_decimal(Decimal(item.weight)), minimum=self.build_limit(item.minimum), maximum=self.build_limit(item.maximum))
+                for item in sorted((value for value in self.request.target_weights if value.kind == "asset"), key=lambda value: value.asset_id)
+            ),
             sell_context=self.build_sell_context(),
             # Transfers between Brokers: none in the PAC, whose funding routes stay as the user declares them (specification
             # §15 n. 2); the Rebalancer's lanes are filled in block B.
             transfer_lanes=(),
-            # Limits on entries (V5): the request carries none until contract 2.0.0 (A4), so none here.
-            cash_entries=(),
+            # A cash entry with no minimum and no maximum says nothing (its weight is zero in the PAC): it is left out.
+            cash_entries=tuple(
+                ExactCashEntry(broker_id=item.broker_id, currency=item.currency, minimum=self.build_limit(item.minimum), maximum=self.build_limit(item.maximum))
+                for item in sorted((value for value in self.request.target_weights if value.kind == "cash"), key=lambda value: (value.broker_id, value.currency))
+                if item.minimum is not None or item.maximum is not None
+            ),
         )
 
     def run(self) -> PlannerV2NormalizationResult:
@@ -1209,7 +1269,35 @@ class _PlannerV2Normalizer:
         issues = canonicalize_issues(self.issues)
         availability = normalization_availability(issues)
         normalized = self.build_scenario() if availability == "ready" else None
+        if normalized is not None:
+            limit_issues = self.check_limits(normalized)
+            if limit_issues:
+                self.issues.extend(limit_issues)
+                issues = canonicalize_issues(self.issues)
+                availability = normalization_availability(issues)
+                normalized = None
         return PlannerV2NormalizationResult(availability=availability, issues=issues, normalized=normalized)
+
+    def check_limits(self, scenario: ExactPlannerScenario) -> list[PlannerIssue]:
+        """The three checks before the calculation (M1, T12), on the built scenario; each names the entries that cause it.
+
+        A scenario with no limit has nothing to check and the replay of the do-nothing plan is not run.
+        """
+        if not entries_with_limits(scenario):
+            return []
+        reference = fixed_reference_of(scenario)
+        problems = [
+            *check_minimum_above_maximum(scenario, reference),
+            *check_minimums_exceed_reference(scenario, reference, trapped_cash_by_cell(scenario)),
+            *check_maximum_below_current(scenario, build_scenario_index(scenario), reference),
+        ]
+        found: list[PlannerIssue] = []
+        for problem in problems:
+            field = "maximum" if problem.code == "bound_max_below_current" else "minimum"
+            for entry in problem.entries:
+                entity_id = entry.asset_id if entry.kind == "asset" else f"{entry.broker_id}:{entry.currency}"
+                found.append(make_issue(normalizer_issue_definition(f"allocation.{problem.code}"), field_path("targets", entry.kind, entity_id, field)))
+        return found
 
 
 def normalize_planner_request(request: _PlannerV2Request, *, source_issues: tuple[PlannerIssue, ...] = ()) -> PlannerV2NormalizationResult:

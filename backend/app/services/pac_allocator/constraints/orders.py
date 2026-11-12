@@ -1,4 +1,4 @@
-"""Order constraints: the unconditional required minimum of a buy route and the zero-or-at-least activation floor."""
+"""Order constraints: the zero-or-at-least activation floor of a buy route."""
 
 from __future__ import annotations
 
@@ -10,23 +10,6 @@ from backend.app.services.pac_allocator.models import ExactPlannerScenario
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a hard pyscipopt import for readers
     from pyscipopt import Model
-
-
-def add_order_required_minimum_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables) -> None:
-    """``ORDER_REQUIRED_MIN``: unconditional per-route floor (not "if
-    active" — evaluator.py forces this to zero for SELL in ``primary``
-    purpose, so only BUY routes can carry a real nonzero value here).
-    """
-    for route in scenario.order_routes:
-        if route.side != "buy":
-            continue
-        required_minimum = _minimum_value(route, "required_minimum")
-        if required_minimum == 0.0:
-            continue
-        capability = facts.capability_by_key[(route.broker_id, route.capability_id)]
-        order_step = as_float(capability.order_step)
-        decision = variables.quanta[exact_decision_id("buy_quantum", route.route_id)]
-        model.addCons(order_step * decision >= required_minimum, name=f"order_required_min:{route.route_id}")
 
 
 def add_order_activation_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables) -> None:

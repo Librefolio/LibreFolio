@@ -28,8 +28,7 @@ falls into exactly one of three buckets here:
    ``NO_SHORT_OR_LEVERAGE`` (Broker×currency ledger balance, folding in
    ``FX_SOURCE_CASH``'s spendable-cash floor), ``FX_CREDIT_POSITIVE`` (an
    active conversion posts a nonzero credit: the ``:active`` row of its
-   posted credit, ``_posted_units_term``), ``ORDER_REQUIRED_MIN``
-   (unconditional per-route floor), ``ORDER_MIN_IF_ACTIVE`` (semi-continuous:
+   posted credit, ``_posted_units_term``), ``ORDER_MIN_IF_ACTIVE`` (semi-continuous:
    measure is either exactly zero or at least the active floor), and the
    fee epigraph (linearizes ``financial_math.fees.calculate_fee``'s ``fixed +
    clamp(rate * notional, floor, cap)`` for the ``explicit_cost`` objective).
@@ -97,7 +96,7 @@ from backend.app.services.pac_allocator.constraints.fees import add_fee_epigraph
 from backend.app.services.pac_allocator.constraints.funding import add_funding_activation_constraints, add_funding_pool_constraints
 from backend.app.services.pac_allocator.constraints.fx import add_fx_no_relay_constraints
 from backend.app.services.pac_allocator.constraints.limits import add_limit_constraints
-from backend.app.services.pac_allocator.constraints.orders import add_order_activation_constraints, add_order_required_minimum_constraints
+from backend.app.services.pac_allocator.constraints.orders import add_order_activation_constraints
 from backend.app.services.pac_allocator.evaluation.limits import ResolvedLimits
 from backend.app.services.pac_allocator.models import ExactPlannerScenario
 
@@ -113,7 +112,6 @@ __all__ = [
     "add_funding_pool_constraints",
     "add_ledger_balance_constraints",
     "add_order_activation_constraints",
-    "add_order_required_minimum_constraints",
     "build_scenario_facts",
     "compile_hard_constraints",
     "fx_rate",
@@ -134,7 +132,6 @@ def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts
     """
     add_funding_pool_constraints(model, scenario, facts, variables)
     cells = add_ledger_balance_constraints(model, scenario, facts, variables)
-    add_order_required_minimum_constraints(model, scenario, facts, variables)
     add_order_activation_constraints(model, scenario, facts, variables)
     add_funding_activation_constraints(model, scenario, facts, variables)
     add_fee_epigraph_constraints(model, scenario, facts, variables)

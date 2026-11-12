@@ -23,7 +23,6 @@ from backend.app.services.pac_allocator.models import (
     ExactObjectiveCode,
     ExactOrderRoute,
     ExactPlannerScenario,
-    ExactPolicyPurpose,
     ExactPolicyView,
     check_budget,
 )
@@ -257,7 +256,6 @@ def _order_route_constraint_facts(
     route: ExactOrderRoute,
     index: ScenarioIndex,
     quanta: Mapping[str, int],
-    purpose: ExactPolicyPurpose,
 ) -> dict[str, _ConstraintFact]:
     capability = index.capabilities[(route.broker_id, route.capability_id)]
     family: DecisionFamily = "buy_quantum" if route.side == "buy" else "sell_quantum"
@@ -268,9 +266,6 @@ def _order_route_constraint_facts(
         capability.order_step,
         _minimum_value(route, "minimum_if_active"),
     )
-    required_minimum = _minimum_value(route, "required_minimum")
-    if purpose in {"primary", "invest_only_baseline"} and route.side == "sell":
-        required_minimum = _EXACT_ZERO
     prices = order_prices(index, route)
     price_order_safe = prices.mid_native <= prices.execution_native if route.side == "buy" else prices.execution_native <= prices.mid_native
     return {
@@ -294,15 +289,6 @@ def _order_route_constraint_facts(
             lower_bound=active_floor if active else _EXACT_ZERO,
             upper_bound=None,
             satisfied=not active or measure >= active_floor,
-        ),
-        _constraint_id(
-            "ORDER_REQUIRED_MIN",
-            route.route_id,
-        ): _ConstraintFact(
-            value=measure,
-            lower_bound=required_minimum,
-            upper_bound=None,
-            satisfied=measure >= required_minimum,
         ),
         _constraint_id("ORDER_CAP", route.route_id): _ConstraintFact(
             value=measure,
@@ -330,7 +316,6 @@ def _order_constraint_facts(
     index: ScenarioIndex,
     quanta: Mapping[str, int],
     state: EconomicState,
-    purpose: ExactPolicyPurpose,
     checkpoint: Checkpoint | None,
 ) -> dict[str, _ConstraintFact]:
     facts = {}
@@ -342,7 +327,6 @@ def _order_constraint_facts(
                 route=route,
                 index=index,
                 quanta=quanta,
-                purpose=purpose,
             )
         )
         if route.side == "sell":
@@ -594,7 +578,6 @@ def constraint_facts(
             index,
             quanta,
             state,
-            view.purpose,
             checkpoint,
         )
     )

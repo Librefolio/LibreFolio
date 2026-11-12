@@ -83,6 +83,7 @@ from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, limited_entries
+from backend.app.services.pac_allocator.issues import bounds_unsatisfiable_issue
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -307,6 +308,9 @@ def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, 
     if isinstance(conclusion, InfeasibilityProvenConclusion) and evaluation.candidate_valid and evaluation.feasible:
         raise SolverInfeasibilityContradictedError("the solver reported the scenario infeasible, but the do-nothing plan passes the exact replay")
 
+    if isinstance(conclusion, InfeasibilityProvenConclusion):
+        # M20: a proven «no solution» with limits in the request names every entry that carries one; no second search says which is the cause.
+        issues = [*issues, *(bounds_unsatisfiable_issue(entry.kind, entry.asset_id if entry.kind == "asset" else f"{entry.broker_id}:{entry.currency}") for entry in limited_entries(scenario))]
     common = _common_ready_fields(scenario, view, search, evaluation, issues)
     if isinstance(conclusion, InfeasibilityProvenConclusion):
         return PacPlannerReadyInfeasibleResult(result_state="ready_infeasible", outcome="infeasible_proven", proof=_wire_infeasibility(conclusion), **common)
@@ -340,8 +344,7 @@ def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView,
     """
     sequence = report._SequenceAllocator()
     funding_actions = report.build_funding_actions(scenario, evaluation, sequence)
-    fx_actions = report.build_fx_actions(scenario, evaluation)
-    conversions = report.build_conversions(scenario, evaluation, fx_actions, sequence)
+    conversions = report.build_conversions(scenario, evaluation, sequence)
     order_rows = report.build_order_rows(scenario, evaluation, sequence)
     return {
         "solution_id": _PRIMARY_SOLUTION_ID,
@@ -349,7 +352,6 @@ def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView,
         "validation": "decimal_verified",
         "asset_rows": report.build_asset_rows(scenario, evaluation),
         "funding_actions": funding_actions,
-        "fx_actions": fx_actions,
         "conversions": conversions,
         "order_rows": order_rows,
         "ledger_rows": report.build_ledger_rows(evaluation),

@@ -66,7 +66,6 @@ type ExactConstraintCode = Literal[
     "ENTRY_VALUE_WITHIN_LIMITS",
     "ORDER_QUANTIZED",
     "ORDER_MIN_IF_ACTIVE",
-    "ORDER_REQUIRED_MIN",
     "ORDER_CAP",
     "ORDER_SIDE_ALLOWED",
     "NO_IMPLICIT_ROUTE",
@@ -1053,7 +1052,6 @@ class ExactFundingSourceEvaluation:
 @dataclass(frozen=True, slots=True)
 class ExactFxEvaluation:
     decision_id: str
-    order_route_id: str
     broker_id: str
     source_currency: str
     destination_currency: str
@@ -1067,7 +1065,6 @@ class ExactFxEvaluation:
 
     def __post_init__(self) -> None:
         _require_text(self.decision_id, "FX decision_id")
-        _require_text(self.order_route_id, "FX order_route_id")
         _require_text(self.broker_id, "FX broker_id")
         _require_currency(self.source_currency, "FX source_currency")
         _require_currency(self.destination_currency, "FX destination_currency")

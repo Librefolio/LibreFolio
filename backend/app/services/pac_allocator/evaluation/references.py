@@ -293,11 +293,6 @@ def _order_constraint_refs(
                 "route minimum_if_active",
                 "allocation.order_minimum_exceeds_cap",
             ),
-            (
-                "ORDER_REQUIRED_MIN",
-                "route required_minimum",
-                "allocation.required_min_notional_unfunded",
-            ),
             ("ORDER_CAP", "route cap", "allocation.order_cap_nonpositive"),
             ("ORDER_SIDE_ALLOWED", "declared route side", None),
             ("NO_IMPLICIT_ROUTE", "normalized order route", None),

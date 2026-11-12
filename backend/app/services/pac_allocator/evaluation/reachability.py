@@ -130,7 +130,6 @@ class FxDecisionSpec:
 
     ``key`` keys the decision's constraint refs and facts and suffixes its ledger postings (``fx-debit:<key>``);
     ``scope`` and ``entity_refs`` describe it in the refs; ``tie_break`` is its row among the tie-break keys;
-    ``representative_route_id`` is the buy route the published FX action names (contract ``1.0.0``).
     """
 
     decision_id: str
@@ -141,7 +140,6 @@ class FxDecisionSpec:
     entity_refs: tuple[EntityRef, ...]
     scope: str
     tie_break: tuple[str, ...]
-    representative_route_id: str
 
 
 def fx_decision_specs(
@@ -153,10 +151,9 @@ def fx_decision_specs(
 
     A pair exists where a buy route of the Broker is quoted in the destination currency and the source is one of that buy's pool
     currencies (``buy_pool_currencies``: other currencies with cash possible on the Broker and a direct pair to the quote). Two buy
-    routes on the same pair share the decision. Its representative route, the one the published FX action names under contract
-    ``1.0.0``, is the first such buy route of the Broker in canonical (route id) order.
+    routes on the same pair share the decision.
     """
-    routes_by_pair: dict[tuple[str, str, str], list[str]] = {}
+    pairs: set[tuple[str, str, str]] = set()
     for route in scenario.order_routes:
         if route.side != "buy":
             continue
@@ -169,9 +166,9 @@ def fx_decision_specs(
             quote_currency=quote_currency,
             checkpoint=checkpoint,
         ):
-            routes_by_pair.setdefault((route.broker_id, currency, quote_currency), []).append(route.route_id)
+            pairs.add((route.broker_id, currency, quote_currency))
     specs: list[FxDecisionSpec] = []
-    for (broker_id, source_currency, destination_currency), route_ids in sorted(routes_by_pair.items()):
+    for broker_id, source_currency, destination_currency in sorted(pairs):
         key = fx_debit_key(broker_id, source_currency, destination_currency)
         decision_id = exact_decision_id("fx_debit", key)
         specs.append(
@@ -184,7 +181,6 @@ def fx_decision_specs(
                 entity_refs=entity_refs(("broker", broker_id), ("source_currency", source_currency), ("destination_currency", destination_currency)),
                 scope="broker",
                 tie_break=("", broker_id, source_currency, "fx", destination_currency, "", decision_id),
-                representative_route_id=min(route_ids),
             )
         )
     return tuple(specs)
