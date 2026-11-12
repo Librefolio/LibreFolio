@@ -604,6 +604,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/tabs/GlobalSettingsTab.verification.test.ts",
             "src/lib/features/settings/users/UserRow.verification.test.ts",
             "src/lib/features/settings/users/UserRow.pendingSetup.test.ts",
+            "src/lib/features/settings/users/UserRow.pendingEmailChange.test.ts",
             "src/lib/features/settings/users/UserRow.avatar.test.ts",
             "src/lib/features/settings/users/UserRow.selfHint.test.ts",
             "src/routes/(app)/settings/[...path]/page.tabs.test.ts",
