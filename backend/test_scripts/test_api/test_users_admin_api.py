@@ -410,8 +410,8 @@ PUBLIC_URL = "https://librefolio.example.test/base/"
 PUBLIC_ORIGIN = "https://librefolio.example.test/base"
 BILLING_LINK = "https://billing.example.test/plans/family"
 
-#: An account as GET /users lists it and PATCH /users/{user_id} answers it; ``avatar_url`` is lot N69-4's (point 20), ``pending_verification`` lot E-7's (point 21).
-USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup", "pending_verification", "avatar_url"})
+#: An account as GET /users lists it and PATCH /users/{user_id} answers it; ``avatar_url`` is lot N69-4's (point 20), ``pending_verification`` lot E-7's (point 21), ``pending_email_change`` project 71's (point 22).
+USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup", "pending_verification", "pending_email_change", "avatar_url"})
 INVITE_ITEM_KEYS = frozenset({"id", "grants_admin", "email", "created_at", "expires_at", "created_by_user_id"})
 #: An account link as GET /users/account-links lists it (lot UA3): never its token nor its hash.
 ACCOUNT_LINK_KEYS = frozenset({"id", "purpose", "state", "revocable", "user_id", "username", "email", "grants_admin", "created_by_user_id", "created_by_username", "created_at", "expires_at", "used_at", "used_by_user_id", "used_by_username", "revoked_at"})
@@ -5283,3 +5283,48 @@ class TestAnAccountWaitingForItsVerificationInTheUsersTab:
         _expect(violations, set(AdminUserRead.model_fields) == USER_ITEM_KEYS, f"AdminUserRead must be exactly {sorted(USER_ITEM_KEYS)}: {sorted(AdminUserRead.model_fields)}")
         assert not violations, f"AdminUserRead.pending_verification broke its contract:{_verdict(violations)}"
         print_success("a bool, false by default, eleven fields")
+
+
+# =============================================================================
+# 22. A change of address waiting for its link (release 1.4, project 71, step 2.6)
+# =============================================================================
+
+
+class TestAPendingEmailChangeInTheUsersTab:
+    """Point 22: ``pending_email_change`` on every account ``GET /users`` lists, true only for an account holding an open
+    change of address it asked from Profile (an ``email_change`` link with ``created_by_user_id == user_id``); the link is
+    ``revocable`` in ``GET /users/account-links`` and ``DELETE /users/account-links/{id}`` revokes it (204), after which the
+    account no longer waits. The owner's link (no creator) is neither a badge nor revocable (409 ``LINK_NOT_REVOCABLE``)."""
+
+    @pytest.mark.asyncio
+    async def test_pending_email_change_is_the_badge_of_an_open_profile_change_and_the_admin_revokes_it(self, private: _Private) -> None:
+        """UADM-PEC-01: root (the caller); ``waiting`` with an open Profile change; ``hosted`` with the host's change only; ``expired`` with a Profile change past its 24 hours; ``cancelled`` with a revoked one. GET /users → ``pending_email_change`` true for ``waiting`` only. Its link is revocable, the host's is not; DELETE of the Profile link → 204 and the badge is gone; DELETE of the host's link → 409 ``LINK_NOT_REVOCABLE``, the link still open."""
+        print_section("UADM-PEC-01: the pending email change badge, and its revocation")
+        root, cookie = await _admin(private)
+        waiting, hosted, expired, cancelled = [await _add_user(private, name) for name in ("waiting", "hosted", "expired", "cancelled")]
+        now = utcnow()
+        profile = await _private_issue(private, EMAIL_CHANGE, user_id=waiting.user_id, email="waiting-new@example.com", created_by_user_id=waiting.user_id, ttl=timedelta(hours=24))
+        host = await _private_issue(private, EMAIL_CHANGE, user_id=hosted.user_id, email="hosted-new@example.com")
+        await _private_issue(private, EMAIL_CHANGE, user_id=expired.user_id, email="expired-new@example.com", created_by_user_id=expired.user_id, ttl=timedelta(hours=24), now=now - timedelta(hours=25))
+        revoked = await _private_issue(private, EMAIL_CHANGE, user_id=cancelled.user_id, email="cancelled-new@example.com", created_by_user_id=cancelled.user_id, ttl=timedelta(hours=24))
+        async with AsyncSession(private.engine) as session:
+            await revoke_tokens(session, token_id=revoked.record.id)
+            await session.commit()
+
+        listed = await _private_listed(private, cookie)
+        badges = {item["username"]: item.get("pending_email_change", "<missing>") for item in listed.values()}
+        assert badges == {"root": False, "waiting": True, "hosted": False, "expired": False, "cancelled": False}, badges
+        links = {item["id"]: item for item in (await _call(private, "GET", LINKS, cookie=cookie)).json()["items"]}
+        assert (links[profile.record.id]["revocable"], links[host.record.id]["revocable"]) == (True, False)
+
+        refused = await _call(private, "DELETE", f"{LINKS}/{host.record.id}", cookie=cookie)
+        assert refused.status_code == 409 and refused.json()["detail"]["error_code"] == "LINK_NOT_REVOCABLE", refused.text
+        revoked_now = await _call(private, "DELETE", f"{LINKS}/{profile.record.id}", cookie=cookie)
+        assert revoked_now.status_code == 204, revoked_now.text
+
+        after = await _private_listed(private, cookie)
+        assert after[waiting.user_id]["pending_email_change"] is False
+        async with AsyncSession(private.engine) as session:
+            assert (await inspect_token(session, profile.token, EMAIL_CHANGE)).status == TokenStatus.REVOKED
+            assert (await inspect_token(session, host.token, EMAIL_CHANGE)).status == TokenStatus.VALID
+        print_success("badge for the open Profile change only; revocable and revoked; the host's link stays")
