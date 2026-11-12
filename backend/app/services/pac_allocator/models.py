@@ -425,7 +425,6 @@ class ExactOrderRoute:
     fee_schedule_id: str
     side: OrderSide
     minimum_if_active: ExactOrderMinimum
-    required_minimum: ExactOrderMinimum
     # None: no cap of its own; a buy stays bounded by the resources, a sell by the holding.
     cap: ExactOrderCap | None
     execution_margin_rate: ExactRatio

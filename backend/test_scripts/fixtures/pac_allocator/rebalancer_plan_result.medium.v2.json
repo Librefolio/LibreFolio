@@ -204,8 +204,8 @@
       },
       {
         "kind": "reported_floating",
-        "stage": "turnover",
-        "objective_code": "turnover",
+        "stage": "wealth_loss",
+        "objective_code": "wealth_loss",
         "ordinal": 3,
         "status": "finished",
         "scope": "incumbent_face",
@@ -1027,7 +1027,7 @@
             "result": "closed_no_better_candidate",
             "closure_kind": "exhaustive_oracle",
             "blocking_issue_codes": [
-              "portfolio_rebalancer.sell_irreducibility_unresolved"
+              "portfolio_rebalancer.sell_inventory_exceeded"
             ]
           },
           {
@@ -1035,7 +1035,7 @@
             "result": "closed_no_better_candidate",
             "closure_kind": "exhaustive_oracle",
             "blocking_issue_codes": [
-              "portfolio_rebalancer.sell_irreducibility_unresolved"
+              "portfolio_rebalancer.sell_inventory_exceeded"
             ]
           }
         ]
@@ -1400,7 +1400,7 @@
           "value": {"kind": "finite_decimal", "value": "0"}
         },
         {
-          "objective_code": "turnover",
+          "objective_code": "wealth_loss",
           "ordinal": 3,
           "sense": "min",
           "unit": {"kind": "valuation_money", "currency_code": "EUR"},

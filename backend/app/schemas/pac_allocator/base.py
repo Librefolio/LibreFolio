@@ -147,7 +147,6 @@ PlannerIssueCode = Literal[
     "allocation.fee_floor_exceeds_cap",
     "allocation.fee_rate_out_of_range",
     "allocation.fee_schedule_missing",
-    "allocation.fiscal_currency_missing",
     "allocation.funding_cap_negative",
     "allocation.fx_rate_inconsistent",
     "allocation.fx_rate_missing",
@@ -176,30 +175,26 @@ PlannerIssueCode = Literal[
     "allocation.provenance_stale_confirmed",
     "allocation.quote_base_quantity_missing",
     "allocation.reference_not_found",
-    "allocation.required_buy_sell_conflict",
-    "allocation.required_min_notional_unfunded",
     "allocation.route_priority_negative",
     "allocation.saved_fx_invalid",
     "allocation.solver_limit_no_incumbent",
     "allocation.target_total_not_one",
     "allocation.target_weight_missing",
     "allocation.target_weight_out_of_range",
-    "allocation.tax_netting_unsupported",
     "allocation.valuation_currency_missing",
     "allocation.wac_missing",
     "allocation.zero_selected_funding",
     "pac_allocator.cash_weight_unsupported",
     "pac_allocator.initial_holding_forbidden",
     "pac_allocator.sell_forbidden",
-    "portfolio_rebalancer.baseline_incumbent_missing",
     "portfolio_rebalancer.carried_loss_negative",
     "portfolio_rebalancer.cost_basis_negative",
     "portfolio_rebalancer.holdings_missing",
     "portfolio_rebalancer.nonpositive_current_portfolio",
     "portfolio_rebalancer.sell_fee_missing",
     "portfolio_rebalancer.sell_inventory_exceeded",
-    "portfolio_rebalancer.sell_irreducibility_unresolved",
-    "portfolio_rebalancer.sell_to_idle_forbidden",
+    "portfolio_rebalancer.tax_basket_unknown",
+    "portfolio_rebalancer.tax_data_missing",
     "portfolio_rebalancer.tax_rate_missing",
     "portfolio_rebalancer.tax_rate_out_of_range",
     "portfolio_rebalancer.withholding_missing",
@@ -211,10 +206,7 @@ DeploymentReasonCode = Literal[
     "allocation.no_additional_buy_feasible",
     "allocation.primary_is_deployment",
 ]
-NotProvenReasonCode = Literal[
-    "allocation.exact_proof_not_established",
-    "portfolio_rebalancer.sell_irreducibility_unresolved",
-]
+NotProvenReasonCode = Literal["allocation.exact_proof_not_established"]
 PlannerMessageKey = Annotated[str, StringConstraints(strict=True, min_length=3, max_length=160, pattern=_PLANNER_MESSAGE_KEY)]
 PlannerLabel = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128), AfterValidator(_unicode_scalar_text)]
 PlannerLongLabel = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256), AfterValidator(_unicode_scalar_text)]

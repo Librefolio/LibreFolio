@@ -469,9 +469,6 @@
         "quantity": "0",
         "unit": "asset_unit"
       },
-      "required_minimum": {
-        "kind": "none"
-      },
       "cap": {
         "kind": "quantity",
         "quantity": "3",
@@ -492,9 +489,6 @@
         "kind": "whole_quantity",
         "quantity": "0",
         "unit": "asset_unit"
-      },
-      "required_minimum": {
-        "kind": "none"
       },
       "cap": {
         "kind": "quantity",
@@ -518,9 +512,6 @@
           "amount": "0",
           "currency": "EUR"
         }
-      },
-      "required_minimum": {
-        "kind": "none"
       },
       "cap": {
         "kind": "notional",
@@ -547,9 +538,6 @@
           "currency": "EUR"
         }
       },
-      "required_minimum": {
-        "kind": "none"
-      },
       "cap": {
         "kind": "notional",
         "amount": {
@@ -572,9 +560,6 @@
         "kind": "whole_quantity",
         "quantity": "0",
         "unit": "asset_unit"
-      },
-      "required_minimum": {
-        "kind": "none"
       },
       "cap": {
         "kind": "quantity",
@@ -599,9 +584,6 @@
           "currency": "USD"
         }
       },
-      "required_minimum": {
-        "kind": "none"
-      },
       "cap": {
         "kind": "notional",
         "amount": {
@@ -625,9 +607,6 @@
         "quantity": "0",
         "unit": "asset_unit"
       },
-      "required_minimum": {
-        "kind": "none"
-      },
       "cap": {
         "kind": "quantity",
         "quantity": "10",
@@ -648,9 +627,6 @@
         "kind": "whole_quantity",
         "quantity": "0",
         "unit": "asset_unit"
-      },
-      "required_minimum": {
-        "kind": "none"
       },
       "cap": {
         "kind": "quantity",
@@ -674,9 +650,6 @@
           "amount": "0",
           "currency": "EUR"
         }
-      },
-      "required_minimum": {
-        "kind": "none"
       },
       "cap": {
         "kind": "notional",

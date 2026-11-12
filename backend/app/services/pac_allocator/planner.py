@@ -176,7 +176,8 @@ def plan_pac_allocation(
     """
     check_budget(checkpoint)
     normalized = normalize_pac_plan(request)
-    snapshot = PlannerResultSnapshot(snapshot_id=request.snapshot.snapshot_id, request_fingerprint=request.snapshot.snapshot_id)
+    # A failure has no exact scenario, so no scenario fingerprint: the field is empty, never the snapshot identifier (§6).
+    snapshot = PlannerResultSnapshot(snapshot_id=request.snapshot.snapshot_id, request_fingerprint="")
 
     if not normalized.ready or normalized.normalized is None:
         return _failure_result(normalized.availability, snapshot, list(normalized.issues))

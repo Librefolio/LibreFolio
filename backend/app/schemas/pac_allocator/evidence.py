@@ -40,13 +40,17 @@ type NumericObjectiveUnit = Annotated[
 ObjectiveCode = Literal[
     "fixed_l2",
     "shortfall",
-    "turnover",
     "explicit_cost",
     "incremental_cost",
     "split_asset_count",
     "active_order_rows",
     "incremental_order_rows",
     "route_priority",
+    # Rebalancer: one score (J = lambda * D / F + (F - W)) with its three parts, and the number of operations (decisioni §2).
+    "plan_score",
+    "target_distance",
+    "wealth_loss",
+    "operation_count",
 ]
 ObjectiveSense = Literal["min", "max"]
 
@@ -55,22 +59,25 @@ _ObjectiveSignDomain = Literal["signed", "nonnegative", "nonnegative_integer"]
 OBJECTIVE_SIGN_DOMAINS: dict[ObjectiveCode, _ObjectiveSignDomain] = {
     "fixed_l2": "nonnegative",
     "shortfall": "signed",
-    "turnover": "nonnegative",
     "explicit_cost": "nonnegative",
     "incremental_cost": "nonnegative",
     "split_asset_count": "nonnegative_integer",
     "active_order_rows": "nonnegative_integer",
     "incremental_order_rows": "nonnegative_integer",
     "route_priority": "nonnegative_integer",
+    "plan_score": "nonnegative",
+    "target_distance": "nonnegative",
+    "wealth_loss": "nonnegative",
+    "operation_count": "nonnegative_integer",
 }
 
 
 def objective_unit_kind(code: ObjectiveCode) -> str:
-    if code == "fixed_l2":
+    if code in {"fixed_l2", "target_distance"}:
         return "valuation_money_squared"
-    if code in {"shortfall", "turnover", "explicit_cost", "incremental_cost"}:
+    if code in {"shortfall", "explicit_cost", "incremental_cost", "plan_score", "wealth_loss"}:
         return "valuation_money"
-    if code in {"split_asset_count", "active_order_rows", "incremental_order_rows"}:
+    if code in {"split_asset_count", "active_order_rows", "incremental_order_rows", "operation_count"}:
         return "count"
     return "ordinal_penalty"
 

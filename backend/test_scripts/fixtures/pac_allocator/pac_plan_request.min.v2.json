@@ -129,9 +129,6 @@
         "quantity": "0",
         "unit": "asset_unit"
       },
-      "required_minimum": {
-        "kind": "none"
-      },
       "cap": {
         "kind": "quantity",
         "quantity": "10",

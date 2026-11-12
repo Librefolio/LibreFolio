@@ -338,20 +338,6 @@ def _validate_optimal_proof_objectives(
         raise ValueError("Optimal proof witness must close the published canonical tie-break")
 
 
-def _validate_not_proven_issue_binding(
-    product: str,
-    policy: str,
-    proof: ReadyPlanProof | InfeasibilityProvenProof | None,
-    issues: list[PlannerIssue],
-) -> None:
-    if not isinstance(proof, NotProvenProof) or proof.reason_code != "portfolio_rebalancer.sell_irreducibility_unresolved":
-        return
-    if product != "Rebalancer" or policy != "invest_and_sell":
-        raise ValueError("SELL irreducibility reason is only valid for invest_and_sell")
-    if not any(issue.code == proof.reason_code and issue.kind == "proof" and issue.severity == "warning" for issue in issues):
-        raise ValueError("SELL irreducibility reason requires a matching warning proof issue")
-
-
 def _validate_solver_status_proof(
     proof: ReadyPlanProof | InfeasibilityProvenProof | None,
     solver_evidence: ReportedFloatingSolverEvidence,
@@ -422,7 +408,9 @@ type RebalancerDeployment = Annotated[
 
 class PlannerResultSnapshot(AllocationStrictModel):
     snapshot_id: PlannerId
-    request_fingerprint: PlannerRef = Field(description="External request correlation emitted only after internal view and scenario-fingerprint verification.")
+    request_fingerprint: PlannerRef | Literal[""] = Field(
+        description="External request correlation: on a ready result the scenario fingerprint, emitted only after internal view and scenario-fingerprint verification; empty on needs_input, invalid and unsupported, which have no exact scenario and never carry the snapshot identifier in its place."
+    )
 
 
 class PacScenarioBasis(PlannerScenarioBasis):
@@ -500,7 +488,6 @@ class _PacReadyResultBase(AllocationStrictModel):
         solution = getattr(self, "primary_solution", None)
         _validate_stop_evidence(self.stop_reason, self.solver_evidence)
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
-        _validate_not_proven_issue_binding("PAC", self.scenario_basis.policy, proof, self.issues)
         _validate_optimal_proof_objectives(proof, solution)
         _validate_solver_status_proof(proof, self.solver_evidence)
         if solution is not None:
@@ -566,7 +553,6 @@ class _RebalancerReadyResultBase(AllocationStrictModel):
         solution = getattr(self, "primary_solution", None)
         _validate_stop_evidence(self.stop_reason, self.solver_evidence)
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
-        _validate_not_proven_issue_binding("Rebalancer", self.scenario_basis.policy, proof, self.issues)
         _validate_optimal_proof_objectives(proof, solution)
         _validate_solver_status_proof(proof, self.solver_evidence)
         if solution is not None:

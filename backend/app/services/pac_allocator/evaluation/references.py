@@ -449,7 +449,6 @@ def _position_constraint_refs(
                     entity_refs=asset_refs,
                     unit=boolean_unit,
                     bound_source="active order sides",
-                    public_issue_code="allocation.required_buy_sell_conflict",
                 ),
             )
         )
@@ -505,7 +504,6 @@ def _global_constraint_refs(
                 entity_refs=(),
                 unit=boolean_unit,
                 bound_source="frozen baseline and incremental BUY",
-                public_issue_code="portfolio_rebalancer.sell_to_idle_forbidden",
             )
         )
     return refs

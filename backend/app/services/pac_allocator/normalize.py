@@ -602,17 +602,13 @@ class _PlannerV2Normalizer:
 
     def validate_order_route_limits(self, route: PlannerOrderRouteInput, capability, quote_currency: str | None) -> None:
         minimum_if_active, minimum_if_active_kind, minimum_if_active_currency = self.order_minimum(route.minimum_if_active, route, "minimum_if_active")
-        required_minimum, required_minimum_kind, required_minimum_currency = self.order_minimum(route.required_minimum, route, "required_minimum")
         cap, cap_kind, cap_currency = self.order_cap(route)
         if minimum_if_active < ExactRatio(0):
             self.issue("allocation.order_minimum_negative", field_path("routing", "order_route", route.route_id, "minimum_if_active"))
-        if required_minimum < ExactRatio(0):
-            self.issue("allocation.order_minimum_negative", field_path("routing", "order_route", route.route_id, "required_minimum"))
         if cap is not None and cap <= ExactRatio(0):
             self.issue("allocation.order_cap_nonpositive", field_path("routing", "order_route", route.route_id, "cap"))
         expected_kind = "quantity" if isinstance(capability, WholeQuantityCapability) else "notional" if isinstance(capability, MonetaryAmountCapability) else None
         self.validate_order_minimum_kind(route, capability, expected_kind, minimum_if_active_kind, minimum_if_active_currency, quote_currency, "minimum_if_active")
-        self.validate_order_minimum_kind(route, capability, expected_kind, required_minimum_kind, required_minimum_currency, quote_currency, "required_minimum")
         if cap is None:
             return
         if expected_kind is not None and cap_kind != expected_kind:
@@ -621,8 +617,6 @@ class _PlannerV2Normalizer:
             self.issue("allocation.currency_mismatch", field_path("routing", "order_route", route.route_id, "cap"))
         if minimum_if_active_kind in {"none", cap_kind} and minimum_if_active > cap:
             self.issue("allocation.order_minimum_exceeds_cap", field_path("routing", "order_route", route.route_id, "minimum_if_active"))
-        if required_minimum_kind in {"none", cap_kind} and required_minimum > cap:
-            self.issue("allocation.order_minimum_exceeds_cap", field_path("routing", "order_route", route.route_id, "required_minimum"))
 
     def validate_order_minimum_kind(self, route: PlannerOrderRouteInput, capability, expected_kind: str | None, minimum_kind: str, minimum_currency: str | None, quote_currency: str | None, field: str) -> None:
         if minimum_kind != "none" and expected_kind is not None and minimum_kind != expected_kind:
@@ -806,9 +800,7 @@ class _PlannerV2Normalizer:
             tax_rate = self.ratio(item.tax_rate, tax_path)
             if not self._ratio_in_unit_interval(tax_rate):
                 self.issue("portfolio_rebalancer.tax_rate_out_of_range", tax_path)
-            if item.fiscal_currency is None:
-                self.issue("allocation.fiscal_currency_missing", field_path("policy", "asset", item.asset_id, "fiscal_currency"))
-            else:
+            if item.fiscal_currency is not None:
                 self.currency(item.fiscal_currency, field_path("policy", "asset", item.asset_id, "fiscal_currency"))
         return tax_by_asset
 
@@ -842,7 +834,8 @@ class _PlannerV2Normalizer:
             self.validate_sell_route_requirement(route, holdings_by_pair, ambiguous_holding_pairs, cost_by_holding, tax_by_asset, withholding_by_broker, fiscal_by_broker)
         for broker_id, fiscal_currencies in sorted(fiscal_by_broker.items()):
             if len(fiscal_currencies) > 1:
-                self.issue("allocation.tax_netting_unsupported", field_path("policy", "broker", broker_id, "fiscal_currency"))
+                # One carried loss per Broker is netted in one currency: sells settling in several are refused as a mismatch.
+                self.issue("allocation.currency_mismatch", field_path("policy", "broker", broker_id, "fiscal_currency"))
                 continue
             withholding = withholding_by_broker.get(broker_id)
             if withholding is not None and fiscal_currencies and withholding.carried_loss.currency not in fiscal_currencies:
@@ -861,14 +854,16 @@ class _PlannerV2Normalizer:
         tax = tax_by_asset.get(route.asset_id)
         if tax is None:
             self.issue("portfolio_rebalancer.tax_rate_missing", field_path("policy", "asset", route.asset_id, "tax_rate"))
-        elif tax.fiscal_currency is not None:
-            fiscal_by_broker[route.broker_id].add(tax.fiscal_currency)
+        else:
             asset = self.asset_by_id.get(route.asset_id)
             quote_currency = asset.quote.currency if asset is not None and asset.quote is not None else None
+            fiscal_currency = tax.fiscal_currency or quote_currency  # absent: the Asset's own quote currency, where a SELL settles
+            if fiscal_currency is not None:
+                fiscal_by_broker[route.broker_id].add(fiscal_currency)
             # SELL always settles tax/withholding in the asset's own quote currency
             # (no conversion at SELL time); the evaluator hard-asserts this, so it
             # must be a typed issue here rather than a boundary crash.
-            if quote_currency is not None and tax.fiscal_currency != quote_currency:
+            if quote_currency is not None and fiscal_currency != quote_currency:
                 self.issue("allocation.currency_mismatch", field_path("policy", "asset", route.asset_id, "fiscal_currency"))
         if route.broker_id not in withholding_by_broker:
             self.issue("portfolio_rebalancer.withholding_missing", field_path("policy", "broker", route.broker_id, "withholding"))
@@ -882,8 +877,11 @@ class _PlannerV2Normalizer:
         cost_basis = cost_by_holding.get(holding.holding_id)
         if cost_basis is None:
             self.issue("allocation.wac_missing", field_path("policy", "holding", holding.holding_id, "average_unit_cost"))
-        elif tax is not None and tax.fiscal_currency is not None:
-            self.require_fx_pair(cost_basis.average_unit_cost.currency, tax.fiscal_currency)
+        elif tax is not None:
+            asset = self.asset_by_id.get(route.asset_id)
+            fiscal_currency = tax.fiscal_currency or (asset.quote.currency if asset is not None and asset.quote is not None else None)
+            if fiscal_currency is not None:
+                self.require_fx_pair(cost_basis.average_unit_cost.currency, fiscal_currency)
 
     def validate_current_portfolio(self) -> None:
         if isinstance(self.request, PacPlannerRequest) or not self.request.holdings:
@@ -1106,6 +1104,11 @@ class _PlannerV2Normalizer:
             return ExactOrderCap(kind="notional", value=ExactRatio.from_decimal(Decimal(cap.amount.amount)), currency=cap.amount.currency)
         return ExactOrderCap(kind="quantity", value=ExactRatio.from_decimal(Decimal(cap.quantity)), currency=None)
 
+    def asset_quote_currency(self, asset_id: str) -> str:
+        """The currency a SELL of this Asset settles in; a fiscal row that names none uses it (D14: no «fiscal currency missing»)."""
+        asset = self.asset_by_id[asset_id]
+        return asset.quote.currency if asset.quote is not None else self.request.valuation_currency
+
     def build_sell_context(self) -> ExactSellContext | None:
         if not isinstance(self.request, RebalancerInvestAndSellRequest):
             return None
@@ -1122,7 +1125,7 @@ class _PlannerV2Normalizer:
             asset_tax=tuple(
                 ExactAssetTax(
                     asset_id=item.asset_id,
-                    fiscal_currency=item.fiscal_currency or "",
+                    fiscal_currency=item.fiscal_currency or self.asset_quote_currency(item.asset_id),
                     gain_tax_rate=ExactRatio.from_decimal(Decimal(item.tax_rate)),
                     provenance_id=item.provenance_id,
                 )
@@ -1208,7 +1211,6 @@ class _PlannerV2Normalizer:
                 fee_schedule_id=route_fee_ids[item.route_id],
                 side=item.side,
                 minimum_if_active=self.build_order_minimum(item.minimum_if_active),
-                required_minimum=self.build_order_minimum(item.required_minimum),
                 cap=self.build_order_cap(item.cap),
                 execution_margin_rate=ExactRatio.from_decimal(Decimal(item.execution_margin_rate)),
                 priority=item.priority,

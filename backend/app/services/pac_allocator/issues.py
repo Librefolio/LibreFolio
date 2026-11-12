@@ -37,8 +37,8 @@ def _normalizer_definition(code: PlannerIssueCode, kind: NormalizerIssueKind) ->
 # Canonical public universe.  It intentionally carries no inferred
 # kind/severity policy for codes that this normalizer does not produce.
 CANONICAL_ISSUE_CODES: tuple[PlannerIssueCode, ...] = get_args(PlannerIssueCode)
-if len(CANONICAL_ISSUE_CODES) != 82 or len(set(CANONICAL_ISSUE_CODES)) != 82:
-    raise RuntimeError("PlannerIssueCode must remain the frozen 82-value universe (A4 closes it once, step 4)")
+if len(CANONICAL_ISSUE_CODES) != 77 or len(set(CANONICAL_ISSUE_CODES)) != 77:
+    raise RuntimeError("PlannerIssueCode must remain the frozen 77-value universe (A4 closed it, step 4)")
 
 
 # Explicit W1 producer map.  Adding `self.issue(code, ...)` without first
@@ -61,7 +61,6 @@ W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
     "allocation.fee_floor_exceeds_cap": _normalizer_definition("allocation.fee_floor_exceeds_cap", "invalid"),
     "allocation.fee_rate_out_of_range": _normalizer_definition("allocation.fee_rate_out_of_range", "invalid"),
     "allocation.fee_schedule_missing": _normalizer_definition("allocation.fee_schedule_missing", "missing"),
-    "allocation.fiscal_currency_missing": _normalizer_definition("allocation.fiscal_currency_missing", "missing"),
     "allocation.funding_cap_negative": _normalizer_definition("allocation.funding_cap_negative", "invalid"),
     "allocation.fx_rate_inconsistent": _normalizer_definition("allocation.fx_rate_inconsistent", "invalid"),
     "allocation.fx_rate_missing": _normalizer_definition("allocation.fx_rate_missing", "missing"),
@@ -90,7 +89,6 @@ W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
     "allocation.target_total_not_one": _normalizer_definition("allocation.target_total_not_one", "invalid"),
     "allocation.target_weight_missing": _normalizer_definition("allocation.target_weight_missing", "missing"),
     "allocation.target_weight_out_of_range": _normalizer_definition("allocation.target_weight_out_of_range", "invalid"),
-    "allocation.tax_netting_unsupported": _normalizer_definition("allocation.tax_netting_unsupported", "unsupported"),
     "allocation.wac_missing": _normalizer_definition("allocation.wac_missing", "missing"),
     "pac_allocator.cash_weight_unsupported": _normalizer_definition("pac_allocator.cash_weight_unsupported", "unsupported"),
     "portfolio_rebalancer.carried_loss_negative": _normalizer_definition("portfolio_rebalancer.carried_loss_negative", "invalid"),

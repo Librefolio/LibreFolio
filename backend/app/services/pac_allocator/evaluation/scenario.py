@@ -223,12 +223,11 @@ def _validate_order_route_units(
     _validate_capability_step(capability)
     expected_minimum_kind = "whole_quantity" if capability.kind == "whole_quantity" else "monetary_amount"
     expected_cap_kind = "quantity" if capability.kind == "whole_quantity" else "notional"
-    for field_name in ("minimum_if_active", "required_minimum"):
-        minimum = getattr(route, field_name)
-        if minimum.kind not in {"none", expected_minimum_kind}:
-            raise ExactScenarioContractError(f"order route {route.route_id} has incompatible {field_name}")
-        if minimum.kind == "monetary_amount" and minimum.currency != quote_currency:
-            raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency {field_name}")
+    minimum = route.minimum_if_active
+    if minimum.kind not in {"none", expected_minimum_kind}:
+        raise ExactScenarioContractError(f"order route {route.route_id} has incompatible minimum_if_active")
+    if minimum.kind == "monetary_amount" and minimum.currency != quote_currency:
+        raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency minimum_if_active")
     if route.cap is not None and route.cap.kind != expected_cap_kind:
         raise ExactScenarioContractError(f"order route {route.route_id} has incompatible cap unit")
     if route.cap is not None and route.cap.kind == "notional" and route.cap.currency != quote_currency:

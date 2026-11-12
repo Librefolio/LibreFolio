@@ -284,7 +284,6 @@ class PlannerOrderRouteInput(AllocationStrictModel):
     side: OrderSide
     priority: PlannerWireInteger = 0
     minimum_if_active: OrderMinimum = NoOrderMinimum(kind="none")
-    required_minimum: OrderMinimum = NoOrderMinimum(kind="none")
     cap: OrderCap = NoOrderCap(kind="none")
     execution_margin_rate: PlannerFixedDecimal = "0"
     fee_schedule_id: PlannerId
