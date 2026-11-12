@@ -265,7 +265,7 @@ function describeCspViolation(v: CspViolation): string {
     return `${v.directive} blocked ${v.blockedURI || '(nothing)'} at ${v.sourceFile || v.documentURI}:${v.lineNumber} (page ${v.page ?? v.documentURI}, ${v.disposition})`;
 }
 
-const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknown: boolean; cspViolations: CspRecorder}, {hygieneApi: HygieneState; jsCoverageSink: WorkerCoverageSink | null}>({
+const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknown: boolean; cspViolations: CspRecorder; updateCheckBlocked: boolean; updateCheckGuard: void}, {hygieneApi: HygieneState; jsCoverageSink: WorkerCoverageSink | null}>({
     hygieneApi: [
         async ({}, use) => {
             if (HYGIENE_REQUESTED && !HYGIENE_ON) {
@@ -398,6 +398,43 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknow
             }
         },
         {scope: 'test', auto: true, timeout: JS_COVERAGE_TIMEOUT_MS},
+    ],
+
+    /**
+     * Whether the context keeps the update check out of the test. After login an administrator's browser asks GitHub for
+     * the latest release (`updateCheck.ts`) and, when it is newer than the build under test, opens `update-available-modal`
+     * over the page: every click of an admin spec is then intercepted, on the day a release is published and not before.
+     * The answer is a third party's, so the test blocks the request (the probe fails closed and says nothing) and the
+     * modal depends only on the spec that wants it, which turns this off for itself (`test.use({updateCheckBlocked: false})`)
+     * and answers the request with its own release. The image probe goes through the backend and is reached only after
+     * GitHub answers, so blocking GitHub is enough.
+     */
+    updateCheckBlocked: [true, {option: true}],
+
+    updateCheckGuard: [
+        async ({browser, context, updateCheckBlocked}, use) => {
+            if (!updateCheckBlocked) {
+                await use();
+                return;
+            }
+            const block = (target: BrowserContext) => target.route('https://api.github.com/**', (route) => route.abort());
+            await block(context);
+            // The specs that sign in as a second user open contexts of their own (`browser.newContext()`, and `newPage()`,
+            // which goes through it): the worker runs one test at a time, so patching the worker's browser for this test
+            // reaches them all, and the own property is deleted again at its end.
+            const original = browser.newContext.bind(browser);
+            browser.newContext = async (...args: Parameters<Browser['newContext']>) => {
+                const created = await original(...args);
+                await block(created);
+                return created;
+            };
+            try {
+                await use();
+            } finally {
+                delete (browser as {newContext?: unknown}).newContext;
+            }
+        },
+        {scope: 'test', auto: true},
     ],
 
     /** Whether a violation the baseline does not know fails the test (H-43): a spec may turn it off for itself. */
