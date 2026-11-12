@@ -262,6 +262,8 @@ def test_an_engine_module_imports_neither_the_database_nor_the_planner_source(mo
 
 # The public surface of ``pac_allocator.constraints`` before it became a package (the ``__all__`` of the one file), plus
 # the private names the policy tests import from it. Whoever imports a name from the old path imports it from the same path.
+# A2 (project 67) took ``buy_pool_currencies`` out: it was the SCIP side's copy of the evaluator's rule, and the facts now
+# carry the evaluator's one list of FX decisions instead.
 CONSTRAINTS_IMPORT_SURFACE = (
     "CompiledVariables",
     "LedgerPostingScopeError",
@@ -273,7 +275,6 @@ CONSTRAINTS_IMPORT_SURFACE = (
     "add_order_activation_constraints",
     "add_order_required_minimum_constraints",
     "build_scenario_facts",
-    "buy_pool_currencies",
     "compile_hard_constraints",
     "fx_rate",
     "order_notional",

@@ -8,7 +8,7 @@ import math
 from collections import defaultdict
 from typing import TYPE_CHECKING, Literal
 
-from backend.app.services.pac_allocator.constraints.facts import CompiledVariables, ScenarioFacts, as_float, buy_pool_currencies, order_notional, planning_fx_rate
+from backend.app.services.pac_allocator.constraints.facts import CompiledVariables, ScenarioFacts, as_float, order_notional, planning_fx_rate
 from backend.app.services.pac_allocator.constraints.fees import _fee_variable_upper
 from backend.app.services.pac_allocator.constraints.funding import _source_cash_cell
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
@@ -53,7 +53,7 @@ def _scenario_posts_sell(scenario: ExactPlannerScenario, facts: ScenarioFacts) -
 
 
 def _scenario_posts_fx_credit(scenario: ExactPlannerScenario, facts: ScenarioFacts) -> bool:
-    return any(route.side == "buy" and buy_pool_currencies(scenario, facts, broker_id=route.broker_id, quote_currency=facts.assets_by_id[route.asset_id]) for route in scenario.order_routes)
+    return bool(facts.fx_decisions)
 
 
 # One detector per rounded family in ``ledger.py``. Keyed so that a family
@@ -224,24 +224,23 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
             )
         )
 
-        for pool_currency in buy_pool_currencies(scenario, facts, broker_id=route.broker_id, quote_currency=quote_currency):
-            # f"{route_id}:{currency}" mirrors evaluation.keys.fx_debit_key exactly (an evaluator internal, re-derived not imported).
-            fx_decision = variables.quanta[exact_decision_id("fx_debit", f"{route.route_id}:{pool_currency}")]
-            debit_expr = facts.currency_quantum[pool_currency] * fx_decision
-            cells[(route.broker_id, pool_currency)].append(-debit_expr)
-            effective_rate = planning_fx_rate(facts, pool_currency, quote_currency)
-            credit_upper = facts.currency_quantum[pool_currency] * fx_decision.getUbOriginal() * effective_rate
-            cells[(route.broker_id, quote_currency)].append(
-                _posted_units_term(
-                    model,
-                    name=f"posted_fx_credit:{route.route_id}:{pool_currency}",
-                    exact_expr=debit_expr * effective_rate,
-                    quantum=quote_quantum,
-                    exact_upper=credit_upper,
-                    side="credit",
-                    active_decision=fx_decision,
-                )
+    for spec in facts.fx_decisions:
+        fx_decision = variables.quanta[spec.decision_id]
+        debit_expr = facts.currency_quantum[spec.source_currency] * fx_decision
+        cells[(spec.broker_id, spec.source_currency)].append(-debit_expr)
+        effective_rate = planning_fx_rate(facts, spec.source_currency, spec.destination_currency)
+        credit_upper = facts.currency_quantum[spec.source_currency] * fx_decision.getUbOriginal() * effective_rate
+        cells[(spec.broker_id, spec.destination_currency)].append(
+            _posted_units_term(
+                model,
+                name=f"posted_fx_credit:{spec.key}",
+                exact_expr=debit_expr * effective_rate,
+                quantum=facts.currency_quantum[spec.destination_currency],
+                exact_upper=credit_upper,
+                side="credit",
+                active_decision=fx_decision,
             )
+        )
 
     for (broker_id, currency), terms in cells.items():
         model.addCons(sum(terms) >= 0, name=f"ledger_nonnegative:{broker_id}:{currency}")

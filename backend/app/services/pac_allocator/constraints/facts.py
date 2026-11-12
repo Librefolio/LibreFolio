@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from backend.app.services.financial_math.fx_rates import oriented_rate
+from backend.app.services.pac_allocator.evaluation.reachability import FxDecisionSpec, fx_decision_specs
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
 from backend.app.services.pac_allocator.models import ExactFeeSchedule, ExactOrderCapability, ExactOrderRoute, ExactPlannerScenario
 from backend.app.services.pac_allocator.numeric import ExactRatio
 
@@ -29,10 +31,13 @@ def as_float(value: ExactRatio) -> float:
 
 @dataclass(frozen=True, slots=True)
 class ScenarioFacts:
-    """Pure, decision-independent scenario facts, derived only from public
-    ``ExactPlannerScenario`` fields (deliberately not the evaluator's internal
-    ``evaluation/scenario.py`` ``ScenarioIndex`` — see Step3 §16.9 for why: this module must
-    stay buildable without reaching into another module's internals).
+    """Pure, decision-independent scenario facts, projected to floats from public
+    ``ExactPlannerScenario`` fields (Step3 §16.9). One exception, on purpose
+    (A2, project 67): ``fx_decisions`` is the evaluator's own list,
+    ``evaluation.reachability.fx_decision_specs``, so the model and the replay can
+    never disagree on which FX decisions exist or how they are keyed. Building it
+    builds the evaluator's ``ScenarioIndex``, which validates the scenario: the
+    facts of a scenario the evaluator would refuse are refused too.
     """
 
     valuation_currency: str
@@ -43,6 +48,7 @@ class ScenarioFacts:
     mid_native_by_asset: dict[str, float]
     capability_by_key: dict[tuple[str, str], ExactOrderCapability]
     fee_by_key: dict[tuple[str, str], ExactFeeSchedule]
+    fx_decisions: tuple[FxDecisionSpec, ...]  # the evaluator's one list (``reachability.fx_decision_specs``), never re-derived here
 
 
 def _fx_pair_key(first: str, second: str) -> str:
@@ -121,26 +127,8 @@ def build_scenario_facts(scenario: ExactPlannerScenario) -> ScenarioFacts:
         mid_native_by_asset=mid_native_by_asset,
         capability_by_key=capability_by_key,
         fee_by_key=fee_by_key,
+        fx_decisions=fx_decision_specs(scenario, build_scenario_index(scenario), None),
     )
-
-
-def buy_pool_currencies(scenario: ExactPlannerScenario, facts: ScenarioFacts, *, broker_id: str, quote_currency: str) -> tuple[str, ...]:
-    """Mirror ``evaluation.reachability.buy_pool_currencies`` exactly: currencies that hold
-    (or can hold) cash at ``broker_id`` and have a direct FX pair to
-    ``quote_currency`` — anti-cascade, one hop only.
-    """
-    candidates: set[str] = set()
-    for cash in scenario.existing_cash:
-        if cash.broker_id == broker_id:
-            candidates.add(cash.selected.currency)
-    for route in scenario.funding_routes:
-        if route.broker_id == broker_id:
-            candidates.add(route.currency)
-    for other in scenario.order_routes:
-        if other.broker_id == broker_id and other.side == "sell":
-            candidates.add(facts.assets_by_id[other.asset_id])
-    candidates.discard(quote_currency)
-    return tuple(sorted(currency for currency in candidates if _fx_pair_key(currency, quote_currency) in facts.fx_rate_by_pair))
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,7 +6,7 @@ re-optimization loop:
 
   * `constraints/` (package) -- `ScenarioFacts`, `CompiledVariables`, the pure
     lookup helpers (`fx_rate`, `valuation_rate`, `order_prices`,
-    `order_notional`, `buy_pool_currencies`, `as_float`), and every hard
+    `order_notional`, `as_float`; the FX decisions come from the evaluator's one list), and every hard
     constraint builder.
   * `objectives.py` -- the five named objective-cascade stages plus the
     canonical tie-break stages.
@@ -81,7 +81,6 @@ from backend.app.services.pac_allocator.constraints import (
     _require_modelled_rounded_families,
     as_float,
     build_scenario_facts,
-    buy_pool_currencies,
     fx_rate,
     order_notional,
     order_prices,
@@ -93,6 +92,7 @@ from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.ledger import _ROUNDED_FAMILIES
 from backend.app.services.pac_allocator.models import ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.objectives import build_canonical_tie_stages
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id, fx_spec
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     CENT,
     ONE,
@@ -206,7 +206,7 @@ def _multi_broker_shared_ids_scenario() -> ExactPlannerScenario:
     *same* raw id string (`capability:shared` / `fee:shared`), plus a third
     currency (GBP) with no direct FX pair to the route's own quote currency
     (USD). Proves `build_scenario_facts` keys its capability/fee dicts by
-    `(broker_id, id)` rather than by `id` alone, and gives `buy_pool_currencies`
+    `(broker_id, id)` rather than by `id` alone, and gives the FX decision list
     a real anti-cascade candidate to exclude: GBP is real, fundable cash at
     this broker, but reaching USD from it would need two FX hops, which this
     module deliberately never attempts (one hop only).
@@ -417,10 +417,11 @@ def test_order_notional_monetary_amount_returns_measure_unchanged() -> None:
     assert order_notional(facts, route, monetary_capability, 42.0) == 42.0
 
 
-def test_buy_pool_currencies_excludes_quote_and_no_direct_pair_currency() -> None:
+def test_fx_decisions_exclude_quote_and_no_direct_pair_currency() -> None:
+    """The facts carry the evaluator's one FX list (A2): the SCIP side keeps no copy of the pool-currency rule."""
     scenario = _multi_broker_shared_ids_scenario()
     facts = build_scenario_facts(scenario)
-    pools = buy_pool_currencies(scenario, facts, broker_id="broker:a", quote_currency="USD")
+    pools = tuple(spec.source_currency for spec in facts.fx_decisions if spec.broker_id == "broker:a" and spec.destination_currency == "USD")
     # EUR: real cash at broker:a with a direct EUR/USD pair -> included.
     # GBP: also real cash at broker:a, but only a direct EUR/GBP pair exists
     #      (no direct GBP/USD pair) -> excluded, one hop only (anti-cascade).
@@ -771,7 +772,7 @@ def test_objective_stage_values_match_evaluator_coarse_funding_fx(overrides: dic
     scenario = _coarse_funding_fx_scenario()
     view = build_exact_policy_view(scenario)
     funding_decision = exact_decision_id("funding_transfer", "route:funding:eur")
-    fx_decision = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    fx_decision = fx_id(scenario, source="EUR", destination="USD")
     buy_decision = exact_decision_id("buy_quantum", "route:buy:usd")
 
     candidate = _candidate(
@@ -932,7 +933,7 @@ def test_fractional_fx_credit_floors_and_the_buy_it_cannot_cover_is_infeasible()
     scenario = _coarse_funding_fx_scenario()
     view = build_exact_policy_view(scenario)
     funding = exact_decision_id("funding_transfer", "route:funding:eur")
-    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    fx = fx_id(scenario, source="EUR", destination="USD")
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
     quanta = {funding: 8, fx: 8, buy: 2}
 
@@ -973,7 +974,7 @@ def test_fractional_fx_credit_whose_floor_covers_the_buy_stays_feasible() -> Non
     scenario = _coarse_funding_fx_scenario()
     view = build_exact_policy_view(scenario)
     funding = exact_decision_id("funding_transfer", "route:funding:eur")
-    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    fx = fx_id(scenario, source="EUR", destination="USD")
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
     quanta = {funding: 9, fx: 9, buy: 2}
 
@@ -1024,7 +1025,7 @@ def test_exact_fx_credit_tie_posts_its_floor_and_not_one_quantum_more() -> None:
     scenario = _credit_tie_fx_scenario(price=R(1), cap=R(10))
     view = build_exact_policy_view(scenario)
     funding = exact_decision_id("funding_transfer", "route:funding:eur")
-    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    fx = fx_id(scenario, source="EUR", destination="USD")
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
 
     # The rounding function itself, independently of the ledger: 7.5 sits
@@ -1085,7 +1086,10 @@ def test_rounded_family_guard_fails_closed_on_unmodelled_sell_families() -> None
     buy_route = baseline.order_routes[0]
     sell_route = replace(buy_route, route_id="route:sell:usd", side="sell")
     sell_scenario = replace(baseline, order_routes=tuple(sorted((buy_route, sell_route), key=lambda route: route.route_id)))
-    sell_facts = build_scenario_facts(sell_scenario)
+    # The facts carry the evaluator's FX list since A2, so building them validates the scenario like the evaluator does, and
+    # this hand-made SELL route (the BUY route's fee schedule, no sell context) is not a valid one. The guard's SELL detectors
+    # read the scenario's routes, not the facts, so the baseline's facts serve unchanged.
+    sell_facts = baseline_facts
 
     with pytest.raises(LedgerPostingScopeError) as excinfo:
         _require_modelled_rounded_families(sell_scenario, sell_facts)
@@ -1122,7 +1126,7 @@ def test_posted_units_terms_add_nonneg_row_per_rounded_flow() -> None:
 
     assert "posted_buy_debit:route:buy:usd:nonneg" in constraint_names
     assert "posted_buy_fee:route:buy:usd:nonneg" in constraint_names
-    assert "posted_fx_credit:route:buy:usd:EUR:nonneg" in constraint_names
+    assert f"posted_fx_credit:{fx_spec(scenario, source='EUR', destination='USD').key}:nonneg" in constraint_names
 
 
 # --------------------------------------------------------------------------
@@ -1147,14 +1151,14 @@ def test_exact_flow_families_are_not_posted_through_units_terms() -> None:
 
     # This scenario really does carry a funding transfer and an fx_debit ...
     assert "funding:route:funding:eur" in variable_names
-    assert "fx:route:buy:usd:EUR" in variable_names
+    assert fx_id(scenario, source="EUR", destination="USD") in variable_names
 
     # ... yet the only posted variables are the three rounded flows -- never a
     # funding transfer, never the fx_debit leg.
     assert posted_variable_names == {
         "posted_buy_debit:route:buy:usd",
         "posted_buy_fee:route:buy:usd",
-        "posted_fx_credit:route:buy:usd:EUR",
+        f"posted_fx_credit:{fx_spec(scenario, source='EUR', destination='USD').key}",
     }
     assert not any("funding" in name for name in posted_variable_names)
     assert not any(name.startswith("posted_fx_debit") for name in posted_variable_names)
@@ -1163,7 +1167,7 @@ def test_exact_flow_families_are_not_posted_through_units_terms() -> None:
 # --------------------------------------------------------------------------
 # Item A6 (C-FXPOS): an active FX conversion must post a nonzero credit. The
 # Decimal-exact replay checks it (`FX_CREDIT_POSITIVE`); the compiled model
-# must carry it too, as a live `posted_fx_credit:{route}:{currency}:active`
+# must carry it too, as a live `posted_fx_credit:{key}:active` (the key of the FX decision)
 # row -- the rounding rows alone happily post a zero credit.
 # --------------------------------------------------------------------------
 
@@ -1190,7 +1194,7 @@ def test_fx_credit_positive_has_a_compiled_row_per_fx_conversion(suffix: str) ->
     program = _fresh_program(scenario, view)
     constraint_names = {constraint.name for constraint in program.model.getConss()}
 
-    assert f"posted_fx_credit:route:buy:usd:EUR:{suffix}" in constraint_names
+    assert f"posted_fx_credit:{fx_spec(scenario, source='EUR', destination='USD').key}:{suffix}" in constraint_names
 
 
 _ZERO_POSTED_FX_CREDIT_CASES = [
@@ -1214,7 +1218,7 @@ def test_fx_credit_that_posts_zero_is_rejected_by_the_exact_replay(source_eur: i
     scenario = _sub_quantum_fx_credit_scenario()
     view = build_exact_policy_view(scenario)
     funding = exact_decision_id("funding_transfer", "route:funding:eur")
-    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    fx = fx_id(scenario, source="EUR", destination="USD")
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
     quanta = {funding: source_eur, fx: source_eur, buy: 0}
 
@@ -1226,7 +1230,7 @@ def test_fx_credit_that_posts_zero_is_rejected_by_the_exact_replay(source_eur: i
     assert fx_evaluation.exact_destination_credit == exact_credit
     assert fx_evaluation.posted_destination_credit == ZERO
 
-    positive = next(item for item in evaluation.constraints if item.ref_id == "constraint:fx_credit_positive:route:buy:usd:EUR")
+    positive = next(item for item in evaluation.constraints if item.ref_id == f"constraint:fx_credit_positive:{fx_spec(scenario, source='EUR', destination='USD').key}")
     assert (positive.satisfied, positive.value) == (False, ZERO)
     assert evaluation.feasible is False
     assert evaluation.conflict_codes == ("FX_CREDIT_POSITIVE",)
@@ -1243,7 +1247,7 @@ def test_active_fx_conversion_whose_credit_posts_zero_is_infeasible_in_the_compi
     scenario = _sub_quantum_fx_credit_scenario()
     view = build_exact_policy_view(scenario)
     funding = exact_decision_id("funding_transfer", "route:funding:eur")
-    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    fx = fx_id(scenario, source="EUR", destination="USD")
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
     quanta = {funding: source_eur, fx: source_eur, buy: 0}
 
@@ -1267,9 +1271,9 @@ def test_fx_credit_positive_admits_a_nonzero_floored_credit_and_no_conversion() 
     scenario = _sub_quantum_fx_credit_scenario()
     view = build_exact_policy_view(scenario)
     funding = exact_decision_id("funding_transfer", "route:funding:eur")
-    fx = exact_decision_id("fx_debit", "route:buy:usd:EUR")
+    fx = fx_id(scenario, source="EUR", destination="USD")
     buy = exact_decision_id("buy_quantum", "route:buy:usd")
-    constraint_id = "constraint:fx_credit_positive:route:buy:usd:EUR"
+    constraint_id = f"constraint:fx_credit_positive:{fx_spec(scenario, source='EUR', destination='USD').key}"
 
     converting = {funding: 3, fx: 3, buy: 0}
     evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, converting, candidate_id="candidate:fx-credit-one"))

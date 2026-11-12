@@ -31,7 +31,6 @@ from backend.app.services.pac_allocator.constraints import (
     CompiledVariables,
     ScenarioFacts,
     as_float,
-    buy_pool_currencies,
     order_notional,
     order_prices,
     planning_fx_rate,
@@ -189,20 +188,12 @@ def build_explicit_cost_stage(model: Model, scenario: ExactPlannerScenario, fact
             native_mid_value = measure * (mid_native / execution_native)
         execution_margin_loss = (notional_expr - native_mid_value) * quote_valuation_rate
         total = total + execution_margin_loss
-
-        for pool_currency in _buy_pool_currencies_for_route(scenario, facts, route, quote_currency):
-            # f"{route_id}:{currency}" mirrors evaluation.keys.fx_debit_key exactly (an evaluator internal, re-derived not imported).
-            fx_decision = variables.quanta[exact_decision_id("fx_debit", f"{route.route_id}:{pool_currency}")]
-            debit_expr = facts.currency_quantum[pool_currency] * fx_decision
-            effective_rate = planning_fx_rate(facts, pool_currency, quote_currency)
-            credit_expr = debit_expr * effective_rate
-            spread_loss = debit_expr * valuation_rate(facts, pool_currency) - credit_expr * quote_valuation_rate
-            total = total + spread_loss
+    for spec in facts.fx_decisions:
+        debit_expr = facts.currency_quantum[spec.source_currency] * variables.quanta[spec.decision_id]
+        credit_expr = debit_expr * planning_fx_rate(facts, spec.source_currency, spec.destination_currency)
+        spread_loss = debit_expr * valuation_rate(facts, spec.source_currency) - credit_expr * valuation_rate(facts, spec.destination_currency)
+        total = total + spread_loss
     return ObjectiveStage(code="explicit_cost", expression=total)
-
-
-def _buy_pool_currencies_for_route(scenario: ExactPlannerScenario, facts: ScenarioFacts, route: ExactOrderRoute, quote_currency: str) -> tuple[str, ...]:
-    return buy_pool_currencies(scenario, facts, broker_id=route.broker_id, quote_currency=quote_currency)
 
 
 def build_active_order_rows_stage(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables, inputs: ObjectiveInputs) -> ObjectiveStage:

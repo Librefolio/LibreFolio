@@ -87,7 +87,6 @@ from backend.app.services.pac_allocator.constraints.facts import (
     ScenarioFacts,
     as_float,  # noqa: F401 -- private use by the policy tests, from this path
     build_scenario_facts,
-    buy_pool_currencies,
     fx_rate,
     order_notional,
     order_prices,
@@ -113,7 +112,6 @@ __all__ = [
     "add_order_activation_constraints",
     "add_order_required_minimum_constraints",
     "build_scenario_facts",
-    "buy_pool_currencies",
     "compile_hard_constraints",
     "fx_rate",
     "order_notional",
