@@ -5,6 +5,10 @@
     import {sectionCounts} from '../review';
     import type {PlannerStep} from '../types';
     import {SECTION_TITLE} from '../ui';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
@@ -15,7 +19,7 @@
         testid?: string;
     }
 
-    let {draft, step, apiVersion, uiVersion, testid = 'pac-planner-summary'}: Props = $props();
+    let {draft, step, apiVersion, uiVersion, testid = testId('summary', profile)}: Props = $props();
 
     const POLICY_FALLBACKS: Record<string, string> = {proportional: 'Proportional'};
 
