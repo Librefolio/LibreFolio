@@ -43,6 +43,12 @@ coverage exists, and writes pure numbers. It lands in small steps, each pinned h
    (per category, spec, test, Vitest file and pytest unit, plus the summary of ``coverage-js/timing/`` when there is one),
    and the campaign record of the invocation names the file.
 
+8. ``TestChunk`` (step 3.11) — under JS coverage the consolidated pass used to split a category's specs into Playwright runs of
+   8, because a worker that summed full slices died of heap exhaustion past ~20 minutes. With the counter-based sink (3.7) and
+   the light read (3.8) the worker's heap no longer grows with its life: measured on ``front-utility all`` without the split,
+   every worker peaked under 2 GB (1 700 MB the highest, on a worker's first full read; 1 516 MB the one that ran 396 tests).
+   So a category runs as one Playwright run, with or without JS coverage.
+
 Pure: no database, no server, no network, no subprocess. The runner's heavy parts are stood in for with ``monkeypatch``; the
 source of ``_cli.py`` is read as text (``ast``), never executed beyond its import. The coverage data of step 3.4 is real: a few
 lines of Python under ``tmp_path``, measured in process by coverage.py itself.
@@ -1022,3 +1028,24 @@ class TestDurations:
         assert json.loads(durations.file.read_text(encoding="utf-8"))["coverage_timing"] is None, "a previous run's stopwatches"
         _run_cache.write_durations(with_coverage_timing=True)
         assert json.loads(durations.file.read_text(encoding="utf-8"))["coverage_timing"] == {"tests": 1}
+
+
+class TestChunk:
+    """Step 3.11: under JS coverage a category's specs run as one Playwright run, as they do without it."""
+
+    @pytest.mark.parametrize("js", [True, False])
+    def test_js_coverage_does_not_split_a_category(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, js: bool) -> None:
+        """CH-01 — 30 specs of one category and project, JS coverage on or off: one ``run_playwright_group`` call with all 30."""
+        specs = {f"area/s{i:02d}.spec.ts": [f"action-{i}"] for i in range(30)}
+        monkeypatch.setattr(_consolidate, "group_frontend_units", lambda scope: {"front-utility": {"playwright": {"desktop": specs}, "vitest": {}}})
+        for name in ("_ensure_frontend_build", "_ensure_db_populated", "_ensure_test_users"):
+            monkeypatch.setattr(_frontend_common, name, lambda: True)
+        batches: list[list[str]] = []
+        monkeypatch.setattr(_consolidate, "run_playwright_group", lambda batch, coverage, project=None, category=None: batches.append(list(batch)) or dict.fromkeys(batch, True))
+        monkeypatch.setattr(_run_cache, "_CACHE_FILE", tmp_path / ".run_cache.json")
+        monkeypatch.setattr(_common, "_COVERAGE_JS", js)
+
+        ok, _covered, _outcome = _consolidate.run_consolidated("front-utility", True)
+
+        assert ok
+        assert batches == [sorted(specs)], f"{len(batches)} Playwright run(s): {[len(batch) for batch in batches]}"
