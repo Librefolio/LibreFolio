@@ -362,12 +362,15 @@ A field you touch gets a **modified** chip, a line telling for how many assets i
 is**; **Undo All**, in the title bar, does it for every field. The value you choose is the same for
 all the assets, and **only what changes is sent**: an asset that already has it is left out.
 
-!!! note "Nothing is cleared from here"
+!!! note "Removing an icon or a link"
 
-    An empty **User URL**, or no icon chosen, means **Leave as is**. To remove a link or an icon,
-    use the [asset's own form](#editing-an-asset). The same goes for the name, the currency, the
-    identifiers and the provider, which are not in this window, and for the description and the
-    sector and country distributions.
+    An empty **User URL**, or no icon chosen, means **Leave as is**. To take an icon or a link away
+    from the assets that have one, use **Remove icon** or **Remove URL**: an asset that has none is
+    left as it is, and the summary lists only the assets that change. Choosing an icon takes an
+    icon removal back; for a link, press the button again (the field is off meanwhile) or use
+    **Undo**. The name, the currency, the identifiers and the provider are not in this window, nor
+    are the description and the sector and country distributions: use the
+    [asset's own form](#editing-an-asset).
 
 **Continue to summary** turns on as soon as at least one asset would change. A units value that is
 not a whole number from 1 shows an error and keeps it off.
