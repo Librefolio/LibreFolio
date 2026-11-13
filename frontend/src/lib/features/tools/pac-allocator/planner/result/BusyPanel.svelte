@@ -18,10 +18,47 @@
          * the solver reports no progress (P4a).
          */
         timeoutMs?: number | null;
+        /** The phases the calculation reports, in the order the service declares them (V3 of project 67); none for a Tool without phases. */
+        progressPhases?: readonly string[];
+        /** The phase the calculation last reported, as the service names it. */
+        progressPhase?: string | null;
         onstop: () => void;
     }
 
-    let {phase = 'compute', built = null, timeoutMs = null, onstop}: Props = $props();
+    let {phase = 'compute', built = null, timeoutMs = null, progressPhases = [], progressPhase = null, onstop}: Props = $props();
+
+    // The phase labels are the Tool's own keys (created by V2 in the plugin's fragment), written whole: a key composed with the
+    // phase's name at run time is one the i18n audit cannot prove (plan §3 n. 2).
+    const PHASE_KEYS: Record<'pac' | 'rebalancer', Readonly<Record<string, string>>> = {
+        pac: {
+            validate: 'tools.pacAllocator.progress.validate',
+            model: 'tools.pacAllocator.progress.model',
+            search: 'tools.pacAllocator.progress.search',
+            verify: 'tools.pacAllocator.progress.verify',
+            report: 'tools.pacAllocator.progress.report',
+        },
+        rebalancer: {
+            validate: 'tools.portfolioRebalancer.progress.validate',
+            model: 'tools.portfolioRebalancer.progress.model',
+            search: 'tools.portfolioRebalancer.progress.search',
+            verify: 'tools.portfolioRebalancer.progress.verify',
+            report: 'tools.portfolioRebalancer.progress.report',
+        },
+    };
+    const PHASE_FALLBACKS: Readonly<Record<string, string>> = {
+        validate: 'Checking the data',
+        model: 'Building the model',
+        search: 'Searching for the plan',
+        verify: 'Verifying the figures',
+        report: 'Preparing the result',
+    };
+
+    /** The last phase that is on the declared list: an unknown one leaves the label as it was (M11: no percentage, a position). */
+    let shownPhase = $state<string | null>(null);
+    $effect.pre(() => {
+        if (progressPhase !== null && progressPhases.includes(progressPhase)) shownPhase = progressPhase;
+    });
+    const shownIndex = $derived(shownPhase === null ? -1 : progressPhases.indexOf(shownPhase));
 
     /** The wait starts when the panel does: one panel per request, one per re-read of the copied data. */
     const startedAt = Date.now();
@@ -46,6 +83,13 @@
         <LoaderCircle class="h-5 w-5 motion-safe:animate-spin" aria-hidden="true" />
         {#if phase === 'refresh'}
             {$t('tools.pacAllocator.planner.busy.refreshing', {default: 'Reading the copied data again from LibreFolio…'})}
+        {:else if shownPhase !== null && shownIndex >= 0}
+            <span data-testid={testId('busy-phase', profile)} data-progress-phase={shownPhase} data-progress-index={shownIndex + 1} data-progress-total={progressPhases.length}>
+                {$t('tools.pacAllocator.planner.busy.phase', {
+                    default: '{phase} ({index} of {total})',
+                    values: {phase: $t(PHASE_KEYS[profile.text][shownPhase] ?? shownPhase, {default: PHASE_FALLBACKS[shownPhase] ?? shownPhase}), index: shownIndex + 1, total: progressPhases.length},
+                })}
+            </span>
         {:else}
             {$t('tools.pacAllocator.planner.busy.searching', {default: 'Validating and searching for the operational plan…'})}
         {/if}

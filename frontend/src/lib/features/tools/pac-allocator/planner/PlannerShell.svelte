@@ -26,7 +26,8 @@
     import {loadCopyScope, selectableIds} from './scope';
     import {SourceLoad, type SourceLoadError} from './sourceLoad.svelte';
     import type {PlannerStep} from './types';
-    import {domId, getPlannerProfile, testId} from './profile';
+    import {declaredPhases, domId, getPlannerProfile, testId} from './profile';
+    import {PLANNER_OPERATION} from './defaults';
     import {BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, NOTICE, SECTION_TITLE} from './ui';
     import HelpTip from './shared/HelpTip.svelte';
     import IssueList from './shared/IssueList.svelte';
@@ -105,6 +106,8 @@
             return null;
         }
     });
+    /** The phases the plan reports, in order, as the served descriptor declares them (V3 of project 67). */
+    const planPhases = $derived(declaredPhases(descriptor, PLANNER_OPERATION));
     const problems = $derived(localProblems(draft).map(listLocalProblem));
     const reviewProblems = $derived.by(() => {
         if (problems.length > 0) return problems;
@@ -317,7 +320,7 @@
         {:else if refreshFailure}
             <RefreshFailedPanel error={refreshFailure} onretry={() => void calculate()} onproceed={() => void calculate({refresh: false})} onedit={() => editStep('review')} />
         {:else if run.busy}
-            <BusyPanel built={run.busy} {timeoutMs} onstop={() => run.stop()} />
+            <BusyPanel built={run.busy} {timeoutMs} progressPhases={planPhases} progressPhase={run.progress} onstop={() => run.stop()} />
         {:else if run.outcome}
             {#if run.stopped}
                 <p class={NOTICE.info} role="status" data-testid={testId('stopped-previous', profile)}>
