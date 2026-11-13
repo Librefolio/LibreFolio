@@ -1227,6 +1227,7 @@ def test_effective_policy_only_lowers_limits_and_reserves_output_time():
         "request_timeout_ms": 59_000,
         "client_timeout_ms": 65_000,
         "memory_limit_bytes": 1_073_741_824,
+        "progress_phases": [],
     }
     assert declared.model_dump() == original
 
@@ -1352,3 +1353,32 @@ def test_registered_portfolio_rebalancer_service_is_published():
     served = next(item for item in catalog.items if item.tool_code == "portfolio_rebalancer")
     assert (served.description, served.description_i18n_key, served.ui) == (descriptor.description, descriptor.description_i18n_key, descriptor.ui)
     assert "portfolio_rebalancer" not in {item.tool_code for item in catalog.unavailable}
+
+
+# ---------------------------------------------------------------------------
+# Progress phases (lot V1 of project 67): declared on the operation, in order
+# ---------------------------------------------------------------------------
+
+
+def test_progress_phases_are_declared_in_order(plugin_factory):
+    """An operation publishes its progress phases in the declared order, through the effective catalog policy too; a
+    repeated or malformed name, or too many phases, is refused at declaration."""
+    phases = ("validate", "model", "search", "verify", "report")
+    plugin = plugin_factory(operations=(ToolOperationPolicy(operation="inspect", progress_phases=phases),))
+    definition = _build(plugin)
+    (policy,) = definition.descriptor.operations
+    assert policy.progress_phases == phases
+    assert effective_operation(policy, ToolPlatformPolicy()).progress_phases == phases
+    assert policy.model_dump(mode="json")["progress_phases"] == list(phases)
+    assert ToolOperationPolicy(operation="inspect").progress_phases == ()
+
+    for refused in (("search", "search"), ("Search",), ("search phase",), ("x" * 33,), ("",), tuple(f"p{index}" for index in range(17))):
+        with pytest.raises(ValidationError):
+            ToolOperationPolicy(operation="inspect", progress_phases=refused)
+
+
+def test_progress_phases_do_not_move_the_schema_fingerprint(plugin_factory):
+    """The schema fingerprint reads the schemas and the operation names: the same service with phases, without, or with
+    other phases has one fingerprint."""
+    fingerprints = {_build(plugin_factory(operations=(ToolOperationPolicy(operation="inspect", progress_phases=phases),))).descriptor.schema_fingerprint for phases in ((), ("validate", "search"), ("validate", "model", "search", "verify", "report"))}
+    assert len(fingerprints) == 1

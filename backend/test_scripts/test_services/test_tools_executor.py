@@ -55,6 +55,7 @@ from backend.app.services.tools.registry import build_tool_definition
 from backend.app.services.tools.wire import decode_json, encode_json
 from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob
 from backend.test_scripts.test_services._tools_executor_fixtures import (
+    FIXTURE_PROGRESS_PHASES,
     FIXTURE_TOOL_CODE,
     FixtureOutput,
     FixturePlugin,
@@ -2866,3 +2867,104 @@ def test_cleanup_does_not_claim_success_when_native_inspection_is_denied(monkeyp
     assert tree.closed is False
     assert handle.closed is False
     assert handle.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Progress messages (lot V1 of project 67): child → parent → listener
+# ---------------------------------------------------------------------------
+
+
+async def _run_with_progress(runtime: _Runtime, scenario: str) -> tuple[ToolComputeFailure | object, list]:
+    """One real worker item whose progress messages are collected as the executor hands them over."""
+    executor = runtime.executor(workers=1)
+    events: list = []
+    task = asyncio.create_task(executor.compute(_batch(_item("owned-progress", scenario)), principal_key="private-principal", on_progress=events.append))
+    runtime.tasks.append(task)
+    handle = await _begin_worker(runtime.harness, stage="compute")
+    response = await asyncio.wait_for(task, timeout=_WAIT)
+    await asyncio.to_thread(_assert_native_termination, handle)
+    (result,) = response.results
+    return result, events
+
+
+def _phases(events: list) -> list[tuple[str, int | None, int | None]]:
+    return [(event.phase, event.step, event.total) for event in events]
+
+
+@pytest.mark.asyncio
+async def test_report_progress_sends_declared_phases_between_ready_and_result(runtime):
+    """A real child reports the declared phases: they reach the listener in order, with the item's correlation id and a
+    non-decreasing elapsed time, all before the result, which is intact."""
+    result, events = await _run_with_progress(runtime, "progress")
+
+    assert result.status == "success", result
+    assert result.result["status"] == "ready"
+    assert _phases(events) == [("validate", None, None), ("search", 1, 2), ("search", 2, 2), ("report", None, None)]
+    assert {event.correlation_id for event in events} == {"owned-progress"}
+    assert {event.phase for event in events} <= set(FIXTURE_PROGRESS_PHASES)
+    elapsed = [event.elapsed_ms for event in events]
+    assert elapsed == sorted(elapsed) and elapsed[0] >= 0
+
+
+@pytest.mark.asyncio
+async def test_undeclared_phase_or_extra_field_is_dropped_not_fatal(runtime):
+    """An undeclared phase, a step over its total, a total without a step, an extra field, a step of the wrong type: each
+    is dropped, the calculation ends well, and only the valid message passes (contract §10: not a worker_crashed)."""
+    result, events = await _run_with_progress(runtime, "progress_rogue")
+
+    assert result.status == "success", result
+    assert _phases(events) == [("report", None, None)]
+    assert "PRIVATE" not in repr(events)
+
+
+@pytest.mark.asyncio
+async def test_progress_messages_are_capped_and_deduplicated(runtime):
+    """A flood: a repeated (phase, step, total) passes once, and no more than the cap reaches the listener; the result is
+    intact."""
+    result, events = await _run_with_progress(runtime, "progress_flood")
+
+    assert result.status == "success", result
+    phases = _phases(events)
+    assert len(phases) == executor_module.TOOL_PROGRESS_MESSAGE_CAP == 50
+    assert len(set(phases)) == len(phases)
+    assert phases[:3] == [("search", 1, None), ("search", 1, 100), ("search", 2, 100)]
+
+
+def test_child_progress_reporter_is_bounded_and_closes(monkeypatch):
+    """The child's reporter never blocks or raises: it drops a malformed call, stops at its own frame cap (so the pipe
+    cannot fill), swallows a broken pipe, and sends nothing once compute has returned."""
+    sent: list[bytes] = []
+
+    class _Pipe:
+        broken = False
+
+        def send_bytes(self, payload: bytes) -> None:
+            if self.broken:
+                raise BrokenPipeError
+            sent.append(payload)
+
+    pipe = _Pipe()
+    reporter = worker_module.PipeProgressReporter(pipe, "e" * 32)
+    reporter.report("search", 1, 2)
+    for malformed in (("search", True, None), ("search", -1, None), (7, None, None), ("search", 1.5, None)):
+        reporter.report(*malformed)
+    assert [decode_json(frame) for frame in sent] == [{"kind": "progress", "execution_id": "e" * 32, "phase": "search", "step": 1, "total": 2}]
+
+    for step in range(2, 500):
+        reporter.report("search", step, None)
+    assert len(sent) == worker_module.CHILD_PROGRESS_FRAME_CAP
+
+    pipe.broken = True
+    other = worker_module.PipeProgressReporter(pipe, "f" * 32)
+    other.report("search")  # a broken pipe is swallowed
+
+    pipe.broken = False
+    closed = worker_module.PipeProgressReporter(pipe, "g" * 32)
+    closed.close()
+    before = len(sent)
+    closed.report("search")
+    closed.send_frame({"kind": "progress", "execution_id": "g" * 32, "phase": "search"})
+    assert len(sent) == before
+
+    context = ToolExecutionContext(execution_id="x", soft_deadline=time.monotonic() + 10, hard_deadline=time.monotonic() + 20, cancelled=lambda: False)
+    context.report_progress("search", 1, 2)  # no channel: a no-op

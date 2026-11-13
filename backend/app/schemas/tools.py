@@ -22,6 +22,11 @@ ToolFingerprint = Annotated[str, Field(strict=True, pattern=r"^[a-f0-9]{64}$")]
 ToolMilliseconds = Annotated[int, Field(strict=True, ge=0)]
 ToolBytes = Annotated[int, Field(strict=True, ge=0)]
 ToolPositiveInt = Annotated[int, Field(strict=True, gt=0)]
+#: A progress phase name, declared by the service on its operation (lot V1 of project 67); the client reads its text from
+#: the Tool's i18n keys, ``tools.<tool>.progress.<phase>``.
+ToolProgressPhase = Annotated[str, Field(strict=True, min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9_]*$")]
+#: The most phases an operation declares, and the most progress messages one item hands to the browser.
+TOOL_MAX_PROGRESS_PHASES = 16
 ToolFieldPath = Annotated[list[Annotated[str, Field(strict=True, max_length=64)] | Annotated[int, Field(strict=True, ge=0)]], Field(max_length=16)]
 ToolMemoryLimitMode = Literal["cgroup_v2_hard", "process_tree_observed", "unavailable"]
 
@@ -126,6 +131,18 @@ class ToolOperationPolicy(ToolTransportModel):
     request_timeout_ms: ToolPositiveInt = 20_000
     client_timeout_ms: ToolPositiveInt = 25_000
     memory_limit_bytes: ToolPositiveInt = 1_073_741_824
+    # Not strict on the container only: JSON has no tuple, and a catalog read back gives a list; each name stays strict.
+    progress_phases: Annotated[tuple[ToolProgressPhase, ...], Field(strict=False, max_length=TOOL_MAX_PROGRESS_PHASES)] = Field(
+        default=(),
+        description="The phases a calculation of this operation reports, in order; none for an operation that reports none.",
+    )
+
+    @field_validator("progress_phases")
+    @classmethod
+    def unique_progress_phases(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if len(set(value)) != len(value):
+            raise ValueError("A progress phase is declared once")
+        return value
 
     @field_validator("pure", mode="before")
     @classmethod
@@ -297,6 +314,24 @@ class ToolComputeFailure(ToolResultIdentity):
 ToolComputeResult = Annotated[ToolComputeSuccess | ToolComputeFailure, Field(discriminator="status")]
 
 
+class ToolComputeProgress(ToolTransportModel):
+    """One progress message of the streaming route (lot V1 of project 67): the phase a calculation is in, and «n of m»
+    inside it. Never a datum of the scenario or the result, never a percentage."""
+
+    kind: Literal["progress"] = Field(..., json_schema_extra={"enum": ["progress"]})
+    correlation_id: ToolToken
+    phase: ToolProgressPhase
+    step: Annotated[int, Field(strict=True, ge=1)] | None
+    total: Annotated[int, Field(strict=True, ge=1)] | None
+    elapsed_ms: ToolMilliseconds
+
+    @model_validator(mode="after")
+    def step_within_total(self) -> Self:
+        if self.total is not None and (self.step is None or self.step > self.total):
+            raise ValueError("A progress total needs a step no larger than it")
+        return self
+
+
 class ToolComputeBatchResponse(ToolTransportModel):
     """Counts describe platform outcomes, not financially ready scenarios."""
 
@@ -362,6 +397,17 @@ class ToolPoolSnapshot(ToolTransportModel):
     completed: Annotated[int, Field(strict=True, ge=0)]
     failed: Annotated[int, Field(strict=True, ge=0)]
     resources: ToolPoolResourceReservation
+
+
+class ToolComputeStreamResult(ToolTransportModel):
+    """The last line of the streaming route: the answer ``POST /tools/compute`` gives for the same request."""
+
+    kind: Literal["result"] = Field(..., json_schema_extra={"enum": ["result"]})
+    response: ToolComputeBatchResponse
+
+
+#: One line of ``POST /tools/compute/stream``: progress messages, then the result line.
+ToolComputeStreamLine = Annotated[ToolComputeProgress | ToolComputeStreamResult, Field(discriminator="kind")]
 
 
 class ToolDiagnosticsResponse(ToolTransportModel):

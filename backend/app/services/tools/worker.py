@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+import threading
 import time
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
@@ -16,7 +17,7 @@ from backend.app.schemas.tools import ToolError, ToolErrorCode, ToolItemMetrics
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolExecutionContext, ToolExecutionError
 from backend.app.services.tools.registry import ToolDefinition, ToolPluginRegistry
-from backend.app.services.tools.wire import decode_json, encode_json, plain_json_object, validation_error
+from backend.app.services.tools.wire import PROGRESS_FRAME_MAX_BYTES, decode_json, encode_json, encode_progress_frame, plain_json_object, validation_error
 
 
 class CancellationSignal(Protocol):
@@ -48,6 +49,57 @@ class PipeCancellation:
             except (EOFError, OSError):
                 self.stopped = True
         return self.stopped
+
+
+#: The most progress frames a child writes: well above the parent's cap of forwarded messages, and so few small frames that
+#: the pipe never fills, so the child never waits for its parent to report progress.
+CHILD_PROGRESS_FRAME_CAP = 64
+
+
+class PipeProgressReporter:
+    """The child's progress channel (lot V1 of project 67): small frames on the response pipe, between ``ready`` and the
+    result. It never blocks for long, never raises: a malformed call is dropped, past its cap it stops, a broken pipe is
+    swallowed, and once closed (compute returned) it sends nothing, so a stray thread cannot split the result frame. The
+    parent checks every frame again: declared phase, shape, duplicates, its own cap."""
+
+    def __init__(self, connection: Connection, execution_id: str) -> None:
+        self._connection = connection
+        self._execution_id = execution_id
+        self._lock = threading.Lock()
+        self._sent = 0
+        self._closed = False
+
+    def report(self, phase: str, step: int | None = None, total: int | None = None) -> None:
+        if not isinstance(phase, str) or not all(value is None or (type(value) is int and value >= 0) for value in (step, total)):
+            return
+        try:
+            frame = encode_progress_frame(self._execution_id, phase, step, total)
+        except ValueError:
+            return
+        self._send(frame)
+
+    def send_frame(self, frame: dict[str, object]) -> None:
+        """The raw transport, bounded like ``report``: a plugin calls ``context.report_progress``."""
+        try:
+            payload = encode_json(frame, max_depth=1, max_bytes=PROGRESS_FRAME_MAX_BYTES, limit_code="output_limit_exceeded")
+        except (ValueError, ToolExecutionError):
+            return
+        self._send(payload)
+
+    def _send(self, payload: bytes) -> None:
+        with self._lock:
+            if self._closed or self._sent >= CHILD_PROGRESS_FRAME_CAP:
+                return
+            self._sent += 1
+            try:
+                self._connection.send_bytes(payload)
+            except (OSError, ValueError):
+                # A broken pipe ends the reporting, not the calculation: the parent sees the crash on the result frame.
+                self._closed = True
+
+    def close(self) -> None:
+        with self._lock:
+            self._closed = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,7 +170,7 @@ def _error_code_for_phase(phase: str) -> ToolErrorCode:
     return "execution_failed"
 
 
-def _execute(job: ToolWorkerJob, cancellation: CancellationSignal, registry_class: type[ToolPluginRegistry]) -> dict[str, object]:
+def _execute(job: ToolWorkerJob, cancellation: CancellationSignal, registry_class: type[ToolPluginRegistry], progress: PipeProgressReporter | None = None) -> dict[str, object]:
     metrics: dict[str, int | None] = {}
     phase = "definition"
     context = ToolExecutionContext(
@@ -127,6 +179,7 @@ def _execute(job: ToolWorkerJob, cancellation: CancellationSignal, registry_clas
         hard_deadline=job.hard_deadline,
         cancelled=cancellation.is_set,
         engine_timeout_ms=job.engine_timeout_ms,
+        progress=progress,
     )
     try:
         context.checkpoint()
@@ -149,6 +202,8 @@ def _execute(job: ToolWorkerJob, cancellation: CancellationSignal, registry_clas
             result = plugin.compute(definition.descriptor.tool_code, parameters, context)
         finally:
             metrics["compute_ms"] = _elapsed_ms(started)
+            if progress is not None:
+                progress.close()
         context.checkpoint()
         if not isinstance(result, BaseModel):
             raise ToolExecutionError("invalid_output")
@@ -211,8 +266,12 @@ def execute_tool_job(
                 )
             )
             # No plugin code runs before the supervisor has adopted the owned session.
+            progress = PipeProgressReporter(response, job.execution_id)
             if cancellation.await_start(job.hard_deadline):
-                frame = _execute(job, cancellation, registry_class)
+                try:
+                    frame = _execute(job, cancellation, registry_class, progress)
+                finally:
+                    progress.close()
             else:
                 frame = _failure_frame(job, ToolError(code="execution_limit", retryable=True), {})
         response.send_bytes(encode_json(frame, max_depth=job.max_json_depth + 4, max_bytes=job.max_result_bytes + 65_536, limit_code="output_limit_exceeded"))

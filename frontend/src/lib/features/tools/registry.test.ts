@@ -53,6 +53,7 @@ function makeCatalog(): VerifiedToolCatalog {
                         max_parameter_bytes: 65_536,
                         max_result_bytes: 65_536,
                         memory_limit_bytes: 268_435_456,
+                        progress_phases: [],
                         pure: true,
                         queue_timeout_ms: 30_000,
                         request_timeout_ms: 30_000,

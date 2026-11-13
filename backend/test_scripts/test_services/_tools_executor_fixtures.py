@@ -213,6 +213,9 @@ class FixtureInput(BaseModel):
         "not_model",
         "descendants",
         "partial_frame",
+        "progress",
+        "progress_rogue",
+        "progress_flood",
     ]
     text: str = "private"
     size: int = Field(default=2_048, strict=True, le=1_000_000)
@@ -290,6 +293,34 @@ def _end_without_a_result(scenario: str, execution_id: str) -> None:
         _close_response_and_linger(execution_id)
 
 
+# The phases the fixture's operation declares, in order (lot V1 of project 67).
+FIXTURE_PROGRESS_PHASES = ("validate", "search", "report")
+
+
+def _report_fixture_progress(scenario: str, context: ToolExecutionContext) -> None:
+    """The progress scenarios: the declared phases in order; messages the parent must drop; a flood past every cap."""
+    if scenario == "progress":
+        context.report_progress("validate")
+        context.report_progress("search", 1, 2)
+        context.report_progress("search", 2, 2)
+        context.report_progress("report")
+    elif scenario == "progress_rogue":
+        # A misbehaving child: everything but the last message must be dropped by the parent, never be fatal.
+        context.report_progress("undeclared")
+        context.report_progress("search", 3, 2)
+        context.report_progress("search", None, 2)
+        assert context.progress is not None
+        context.progress.send_frame({"kind": "progress", "execution_id": context.execution_id, "phase": "search", "secret": "PRIVATE"})
+        context.progress.send_frame({"kind": "progress", "execution_id": context.execution_id, "phase": "search", "step": "2"})
+        context.progress.send_frame({"kind": "progress", "execution_id": context.execution_id, "phase": "search", "step": True})
+        context.report_progress("report")
+    elif scenario == "progress_flood":
+        context.report_progress("search", 1)
+        context.report_progress("search", 1)
+        for step in range(1, 101):
+            context.report_progress("search", step, 100)
+
+
 @register_plugin(FixtureRegistry)
 class FixturePlugin(ToolPlugin):
     contract_version = "1.0.0"
@@ -326,6 +357,7 @@ class FixturePlugin(ToolPlugin):
                     request_timeout_ms=120_000,
                     client_timeout_ms=130_000,
                     memory_limit_bytes=1_073_741_824,
+                    progress_phases=FIXTURE_PROGRESS_PHASES,
                 ),
             ),
             input_type=FixtureInput,
@@ -354,6 +386,8 @@ class FixturePlugin(ToolPlugin):
             _spawn_descendants(context, parameters.ignore_term)
         if parameters.scenario in ("hold", "descendants"):
             _wait_for_release(parameters.text)
+
+        _report_fixture_progress(parameters.scenario, context)
 
         # These two probes must start from a valid, genuinely constructed model.
         text = "private" if parameters.scenario in ("unicode", "invalid_output") else parameters.text

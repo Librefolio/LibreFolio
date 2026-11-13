@@ -33,6 +33,7 @@ def effective_operation(policy: ToolOperationPolicy, platform: ToolPlatformPolic
         request_timeout_ms=request,
         client_timeout_ms=client,
         memory_limit_bytes=min(policy.memory_limit_bytes, platform.memory_limit_bytes),
+        progress_phases=policy.progress_phases,
     )
 
 

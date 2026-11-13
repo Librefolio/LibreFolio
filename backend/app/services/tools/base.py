@@ -6,7 +6,7 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Protocol
 
 from pydantic import BaseModel, TypeAdapter
 
@@ -36,6 +36,14 @@ class ToolEngineWindow:
     post_engine_reserve_ms: int
 
 
+class ToolProgressChannel(Protocol):
+    """Where a child's progress messages go (lot V1 of project 67): the worker's pipe to its parent."""
+
+    def report(self, phase: str, step: int | None = None, total: int | None = None) -> None: ...
+
+    def send_frame(self, frame: dict[str, object]) -> None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class ToolExecutionContext:
     execution_id: str
@@ -43,6 +51,14 @@ class ToolExecutionContext:
     hard_deadline: float
     cancelled: Callable[[], bool]
     engine_timeout_ms: int = 4_000
+    progress: ToolProgressChannel | None = None
+
+    def report_progress(self, phase: str, step: int | None = None, total: int | None = None) -> None:
+        """Tell the platform the calculation is in ``phase`` (one the operation declares), optionally at ``step`` of
+        ``total``. Never a datum of the scenario or the result, never a percentage. It never blocks, raises or slows the
+        calculation: a message the platform does not accept is dropped, and without a channel it does nothing."""
+        if self.progress is not None:
+            self.progress.report(phase, step, total)
 
     def checkpoint(self) -> None:
         if self.cancelled():

@@ -64,6 +64,23 @@ def encode_json(value: object, *, max_depth: int = 32, max_bytes: int | None = N
     return bytes(output)
 
 
+#: The byte ceiling of one progress frame (lot V1 of project 67): a phase name and two integers fit many times over.
+PROGRESS_FRAME_MAX_BYTES = 256
+
+
+def encode_progress_frame(execution_id: str, phase: str, step: int | None, total: int | None) -> bytes:
+    """A child's progress frame: its execution id, a phase and «n of m» when given; ValueError past its byte ceiling."""
+    frame: dict[str, object] = {"kind": "progress", "execution_id": execution_id, "phase": phase}
+    if step is not None:
+        frame["step"] = step
+    if total is not None:
+        frame["total"] = total
+    try:
+        return encode_json(frame, max_depth=1, max_bytes=PROGRESS_FRAME_MAX_BYTES, limit_code="output_limit_exceeded")
+    except ToolExecutionError as exc:
+        raise ValueError("A progress frame exceeds its byte ceiling") from exc
+
+
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
