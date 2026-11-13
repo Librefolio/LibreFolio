@@ -37,7 +37,7 @@ type ConstraintEnforcement = Literal["normalizer", "exact_only", "solver_and_exa
 type ObjectiveSense = Literal["min"]
 type DecisionFamily = Literal["funding_transfer", "fx_debit", "buy_quantum", "sell_quantum", "broker_transfer"]
 type DecisionMode = Literal["disabled", "mutable", "frozen_exact", "additive_only"]
-type ExactPolicyPurpose = Literal["primary", "invest_only_baseline", "sell_extension", "deployment"]
+type ExactPolicyPurpose = Literal["primary", "deployment"]
 type ExactUnitKind = Literal["boolean", "count", "ratio", "asset_quantity", "native_money", "valuation_money", "valuation_money_squared", "ordinal_penalty", "canonical_key"]
 type ExactObjectiveCode = Literal[
     "fixed_l2",
@@ -83,8 +83,6 @@ type ExactConstraintCode = Literal[
     "NO_ASSET_BUY_AND_SELL",
     "NO_SHORT_OR_LEVERAGE",
     "REBALANCER_NONEMPTY",
-    "SELL_ELIGIBLE",
-    "SELL_FUNDS_INCREMENTAL_BUY",
 ]
 type LedgerPostingDirection = Literal["credit", "debit"]
 type LedgerPostingFamily = Literal[
@@ -787,45 +785,6 @@ class TieBreakRef:
             _require_text(decision_id, "tie-break decision ID")
 
 
-@dataclass(frozen=True, slots=True)
-class ProofRequirement:
-    requirement_id: str
-    code: str
-    allowed_sources: tuple[Literal["deterministic_conflict", "exhaustive_oracle"], ...]
-
-    def __post_init__(self) -> None:
-        _require_text(self.requirement_id, "proof requirement_id")
-        _require_text(self.code, "proof code")
-        if not self.allowed_sources:
-            raise ValueError("proof requirements need at least one exact source")
-        if len(self.allowed_sources) != len(set(self.allowed_sources)):
-            raise ValueError("proof sources must be unique")
-
-
-@dataclass(frozen=True, slots=True)
-class SellIrreducibilityGateRef:
-    gate_id: str
-    sell_decision_id: str
-    fixed_incremental_buy_decision_ids: tuple[str, ...]
-    reopened_decision_ids: tuple[str, ...]
-    counterfactuals: tuple[Literal["decrement_one_quantum", "zero_row"], ...] = ("decrement_one_quantum", "zero_row")
-
-    def __post_init__(self) -> None:
-        _require_text(self.gate_id, "SELL gate_id")
-        _require_text(self.sell_decision_id, "SELL decision_id")
-        for values, field in (
-            (
-                self.fixed_incremental_buy_decision_ids,
-                "fixed incremental BUY decision IDs",
-            ),
-            (self.reopened_decision_ids, "reopened decision IDs"),
-        ):
-            if values != tuple(sorted(set(values))):
-                raise ValueError(f"{field} must be unique and sorted")
-        if self.counterfactuals != ("decrement_one_quantum", "zero_row"):
-            raise ValueError("SELL irreducibility uses the frozen decrement-then-zero order")
-
-
 def _validate_tie_break_coverage(
     tie_breaks: tuple[TieBreakRef, ...],
     decision_by_id: dict[str, DecisionAccess],
@@ -834,20 +793,6 @@ def _validate_tie_break_coverage(
     for tie_break in tie_breaks:
         if set(tie_break.decision_ids) != expected_decision_ids:
             raise ValueError("every tie-break must cover the complete decision vector")
-
-
-def _validate_sell_gate_references(
-    sell_gates: tuple[SellIrreducibilityGateRef, ...],
-    decision_by_id: dict[str, DecisionAccess],
-) -> None:
-    for gate in sell_gates:
-        sell_decision = decision_by_id.get(gate.sell_decision_id)
-        if sell_decision is None or sell_decision.family != "sell_quantum":
-            raise ValueError("SELL gates must reference one SELL decision")
-        if any(decision_by_id.get(decision_id) is None or decision_by_id[decision_id].family != "buy_quantum" for decision_id in gate.fixed_incremental_buy_decision_ids):
-            raise ValueError("SELL gates can freeze only declared BUY decisions")
-        if any(decision_by_id.get(decision_id) is None or decision_by_id[decision_id].family not in {"funding_transfer", "fx_debit", "broker_transfer"} for decision_id in gate.reopened_decision_ids):
-            raise ValueError("SELL gates can reopen only funding and FX decisions")
 
 
 @dataclass(frozen=True, slots=True)
@@ -862,29 +807,16 @@ class ExactPolicyView:
     constraints: tuple[ConstraintRef, ...]
     objectives: tuple[ObjectiveRef, ...]
     tie_breaks: tuple[TieBreakRef, ...]
-    sell_gates: tuple[SellIrreducibilityGateRef, ...]
-    proof_requirements: tuple[ProofRequirement, ...]
 
     def __post_init__(self) -> None:
         _require_text(self.view_id, "view_id")
         _require_text(self.scenario_fingerprint, "scenario_fingerprint")
-        if self.purpose not in {
-            "primary",
-            "invest_only_baseline",
-            "sell_extension",
-            "deployment",
-        }:
+        if self.purpose not in {"primary", "deployment"}:
             raise ValueError("unknown exact policy purpose")
         if self.phase != "exact":
             raise ValueError("ExactPolicyView must use the exact phase")
         if (self.product == "pac") != (self.policy in {"proportional", "min_fragmentation"}):
             raise ValueError("ExactPolicyView product and policy must be compatible")
-        if self.purpose == "primary" and self.policy == "invest_and_sell":
-            raise ValueError("invest_and_sell requires an invest-only baseline view")
-        if self.purpose in {"invest_only_baseline", "sell_extension"} and self.policy != "invest_and_sell":
-            raise ValueError(f"{self.purpose} requires invest_and_sell policy")
-        if self.purpose != "sell_extension" and (self.sell_gates or self.proof_requirements):
-            raise ValueError("only sell_extension views can carry SELL proof metadata")
         _require_canonical_tuple(self.decisions, lambda item: item.decision_id, "decisions")
         decision_by_id = {item.decision_id: item for item in self.decisions}
         _require_canonical_tuple(self.constraints, lambda item: item.ref_id, "constraints")
@@ -908,12 +840,6 @@ class ExactPolicyView:
         )
         _validate_tie_break_coverage(
             self.tie_breaks,
-            decision_by_id,
-        )
-        _require_canonical_tuple(self.sell_gates, lambda item: item.gate_id, "sell_gates")
-        _require_canonical_tuple(self.proof_requirements, lambda item: item.requirement_id, "proof_requirements")
-        _validate_sell_gate_references(
-            self.sell_gates,
             decision_by_id,
         )
 

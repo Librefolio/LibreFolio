@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from backend.app.services.pac_allocator.evaluation.economics import EconomicState, evaluate_economic_state
+from backend.app.services.pac_allocator.evaluation.economics import EconomicState
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, is_quantum_multiple
 from backend.app.services.pac_allocator.evaluation.limits import resolve_scenario_limits
@@ -496,61 +496,12 @@ def _global_constraint_facts(  # noqa: C901 — flat sequential global facts, ea
     return facts
 
 
-def _sell_extension_constraint_facts(
-    *,
-    scenario: ExactPlannerScenario,
-    index: ScenarioIndex,
-    view: ExactPolicyView,
-    quanta: Mapping[str, int],
-    state: EconomicState,
-    baseline_state: EconomicState | None,
-    checkpoint: Checkpoint | None,
-) -> dict[str, _ConstraintFact]:
-    if baseline_state is None:
-        raise ExactPolicyContractError("SELL extension constraints require baseline facts")
-    facts = {}
-    baseline_assets = {item.asset_id: item for item in baseline_state.assets}
-    baseline_buy_assets = {order.asset_id for order in baseline_state.orders if order.side == "buy"}
-    active_order_ids = {order.route_id for order in state.orders}
-    for route in scenario.order_routes:
-        if route.side != "sell":
-            continue
-        check_budget(checkpoint)
-        eligible = baseline_assets[route.asset_id].residual > _EXACT_ZERO and route.asset_id not in baseline_buy_assets
-        facts[_constraint_id("SELL_ELIGIBLE", route.route_id)] = _bool_fact(route.route_id not in active_order_ids or eligible)
-    sell_active = any(order.side == "sell" for order in state.orders)
-    incremental_buy = any(item.family == "buy_quantum" and quanta[item.decision_id] > item.baseline_quanta for item in view.decisions)
-    no_sell_fundable = True
-    if sell_active:
-        no_sell_quanta = dict(quanta)
-        for item in view.decisions:
-            check_budget(checkpoint)
-            if item.family == "sell_quantum":
-                no_sell_quanta[item.decision_id] = 0
-        no_sell_state = evaluate_economic_state(
-            scenario,
-            index,
-            no_sell_quanta,
-            checkpoint,
-        )
-        no_sell_fundable = all(row.final_spendable >= _EXACT_ZERO for row in no_sell_state.ledgers)
-    facts[
-        _constraint_id(
-            "SELL_FUNDS_INCREMENTAL_BUY",
-            "global",
-        )
-    ] = _bool_fact(not sell_active or (incremental_buy and not no_sell_fundable))
-    return facts
-
-
 def constraint_facts(
     *,
     scenario: ExactPlannerScenario,
     index: ScenarioIndex,
-    view: ExactPolicyView,
     quanta: Mapping[str, int],
     state: EconomicState,
-    baseline_state: EconomicState | None,
     checkpoint: Checkpoint | None,
 ) -> dict[str, _ConstraintFact]:
     facts = _funding_constraint_facts(
@@ -590,18 +541,6 @@ def constraint_facts(
         )
     )
     facts.update(_global_constraint_facts(scenario, state, checkpoint))
-    if view.purpose == "sell_extension":
-        facts.update(
-            _sell_extension_constraint_facts(
-                scenario=scenario,
-                index=index,
-                view=view,
-                quanta=quanta,
-                state=state,
-                baseline_state=baseline_state,
-                checkpoint=checkpoint,
-            )
-        )
     return facts
 
 

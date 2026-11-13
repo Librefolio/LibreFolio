@@ -3,7 +3,7 @@
 Scope for this build: PAC ``proportional`` policy, ``primary`` purpose only
 (see ``plan-phase00Step3PacRebalancerSolverPolicies.prompt.md`` §16.6/§16.9).
 SELL is always off for this policy, so every SELL-only ``ExactConstraintCode``
-(``SELL_WITHIN_INVENTORY``, ``NO_ASSET_BUY_AND_SELL``, ``SELL_ELIGIBLE``, ...)
+(``SELL_WITHIN_INVENTORY``, ``NO_ASSET_BUY_AND_SELL``, ...)
 is out of scope by construction, not merely deferred.
 
 Every ``ExactConstraintCode`` that ``evaluator.py`` enforces at replay time

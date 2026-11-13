@@ -24,12 +24,11 @@ from backend.app.services.pac_allocator.evaluation.economics import EconomicStat
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError, ExactReplayRejectedError
 from backend.app.services.pac_allocator.evaluation.facts import constraint_facts, objective_value_map
 from backend.app.services.pac_allocator.evaluation.keys import candidate_quanta
-from backend.app.services.pac_allocator.evaluation.policy import baseline_state_for_purpose, build_decision_accesses, canonical_tie_breaks, default_exact_view_id, sell_gate_refs, validate_invest_only_baseline, validate_policy_purpose
+from backend.app.services.pac_allocator.evaluation.policy import baseline_state_for_purpose, build_decision_accesses, canonical_tie_breaks, default_exact_view_id, validate_policy_purpose, validate_primary_baseline
 from backend.app.services.pac_allocator.evaluation.references import build_constraint_refs, build_objective_refs
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, build_scenario_index, exact_scenario_fingerprint, to_valuation
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
-    CandidateDecision,
     Checkpoint,
     DecisionAccess,
     ExactConflict,
@@ -49,34 +48,6 @@ from backend.app.services.pac_allocator.numeric import (
 _EXACT_ZERO = ExactRatio(0)
 
 
-def _require_feasible_invest_only_baseline(
-    scenario: ExactPlannerScenario,
-    *,
-    purpose: ExactPolicyPurpose,
-    baseline: CandidateActionVector | None,
-    checkpoint: Checkpoint | None,
-) -> None:
-    if purpose != "sell_extension":
-        return
-    if baseline is None:
-        raise ExactPolicyContractError("SELL extension requires an invest-only baseline candidate")
-    baseline_view = build_exact_policy_view(
-        scenario,
-        purpose="invest_only_baseline",
-        view_id=baseline.view_id,
-        checkpoint=checkpoint,
-    )
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        baseline_view,
-        baseline,
-        checkpoint=checkpoint,
-    )
-    if not evaluation.feasible:
-        codes = ", ".join(evaluation.conflict_codes)
-        raise ExactPolicyContractError("SELL extension baseline is not exact-feasible" + (f": {codes}" if codes else ""))
-
-
 def build_exact_policy_view(
     scenario: ExactPlannerScenario,
     *,
@@ -85,13 +56,11 @@ def build_exact_policy_view(
     view_id: str | None = None,
     checkpoint: Checkpoint | None = None,
 ) -> ExactPolicyView:
-    """Build the canonical solver-neutral exact view for one policy phase.
+    """Build the canonical solver-neutral exact view for one purpose.
 
-    ``invest_and_sell`` is deliberately two-stage: callers first request
-    ``invest_only_baseline`` and then pass that complete candidate to
-    ``sell_extension``. ``deployment`` freezes all primary funding, FX and
-    SELL decisions and exposes BUY decisions as additive-only; its caller
-    supplies the already exact-verified primary candidate.
+    ``primary`` serves every policy and starts from the zero vector; its sells stay disabled until the sale lot (C1 of
+    project 67) opens them. ``deployment`` freezes all primary funding, FX, transfer and SELL decisions and exposes BUY
+    decisions as additive-only; its caller supplies the already exact-verified primary candidate.
     """
     check_budget(checkpoint)
     index = build_scenario_index(scenario)
@@ -107,40 +76,17 @@ def build_exact_policy_view(
         baseline=baseline,
         expected_ids=expected_ids,
         upper_bounds=upper_bounds,
-        required=purpose in {"sell_extension", "deployment"},
+        required=purpose == "deployment",
     )
-    _require_feasible_invest_only_baseline(
-        scenario,
-        purpose=purpose,
-        baseline=baseline,
-        checkpoint=checkpoint,
-    )
-    validate_invest_only_baseline(
-        purpose=purpose,
-        rows=rows,
-        baseline_quanta=baseline_quanta,
-    )
-    baseline_state = baseline_state_for_purpose(
-        scenario=scenario,
-        index=index,
-        purpose=purpose,
-        baseline_quanta=baseline_quanta,
-        checkpoint=checkpoint,
-    )
+    validate_primary_baseline(purpose=purpose, baseline_quanta=baseline_quanta)
     decision_tuple = build_decision_accesses(
-        scenario=scenario,
         purpose=purpose,
         rows=rows,
         upper_bounds=upper_bounds,
         baseline_quanta=baseline_quanta,
-        baseline_state=baseline_state,
         checkpoint=checkpoint,
     )
     objectives = build_objective_refs(scenario, purpose)
-    sell_gates, proof_requirements = sell_gate_refs(
-        purpose=purpose,
-        decisions=decision_tuple,
-    )
     fingerprint = exact_scenario_fingerprint(scenario)
     result = ExactPolicyView(
         view_id=(
@@ -170,8 +116,6 @@ def build_exact_policy_view(
             index=index,
             checkpoint=checkpoint,
         ),
-        sell_gates=sell_gates,
-        proof_requirements=proof_requirements,
     )
     check_budget(checkpoint)
     return result
@@ -195,29 +139,7 @@ def _validated_policy_decisions(
     baseline_quanta = {item.decision_id: item.baseline_quanta for item in view.decisions}
     if any(value < 0 or value > upper_bounds[decision_id] for decision_id, value in baseline_quanta.items()):
         raise ExactPolicyContractError("policy view baseline lies outside the canonical finite domain")
-    validate_invest_only_baseline(
-        purpose=view.purpose,
-        rows=expected_rows,
-        baseline_quanta=baseline_quanta,
-    )
-    if view.purpose == "sell_extension":
-        embedded_baseline = CandidateActionVector(
-            view_id=f"{view.view_id}:embedded-invest-only",
-            candidate_id=f"{view.view_id}:embedded-invest-only",
-            decisions=tuple(
-                CandidateDecision(
-                    decision_id=decision_id,
-                    quanta=baseline_quanta[decision_id],
-                )
-                for decision_id in expected_ids
-            ),
-        )
-        _require_feasible_invest_only_baseline(
-            scenario,
-            purpose=view.purpose,
-            baseline=embedded_baseline,
-            checkpoint=checkpoint,
-        )
+    validate_primary_baseline(purpose=view.purpose, baseline_quanta=baseline_quanta)
     baseline_state = baseline_state_for_purpose(
         scenario=scenario,
         index=index,
@@ -226,12 +148,10 @@ def _validated_policy_decisions(
         checkpoint=checkpoint,
     )
     expected_decisions = build_decision_accesses(
-        scenario=scenario,
         purpose=view.purpose,
         rows=expected_rows,
         upper_bounds=upper_bounds,
         baseline_quanta=baseline_quanta,
-        baseline_state=baseline_state,
         checkpoint=checkpoint,
     )
     if view.decisions != expected_decisions:
@@ -278,12 +198,6 @@ def _validate_policy_view(
         checkpoint=checkpoint,
     ):
         raise ExactPolicyContractError("policy view tie break differs from the canonical vector")
-    expected_gates, expected_requirements = sell_gate_refs(
-        purpose=view.purpose,
-        decisions=expected_decisions,
-    )
-    if view.sell_gates != expected_gates or view.proof_requirements != expected_requirements:
-        raise ExactPolicyContractError("policy view SELL proof metadata differs from the canonical phase")
     return view.purpose, baseline_state
 
 
@@ -331,10 +245,8 @@ def evaluate_exact_candidate(
     facts = constraint_facts(
         scenario=scenario,
         index=index,
-        view=view,
         quanta=quanta,
         state=state,
-        baseline_state=baseline_state,
         checkpoint=checkpoint,
     )
     constraints = []

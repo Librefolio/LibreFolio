@@ -348,17 +348,6 @@ def _order_constraint_refs(
                     bound_source="posted BUY cash debit",
                 )
             )
-        if purpose == "sell_extension" and route.side == "sell":
-            refs.append(
-                _constraint_ref(
-                    code="SELL_ELIGIBLE",
-                    key=route.route_id,
-                    scope="order_route",
-                    entity_refs=route_refs,
-                    unit=boolean_unit,
-                    bound_source="frozen invest-only baseline",
-                )
-            )
     return refs
 
 
@@ -493,17 +482,6 @@ def _global_constraint_refs(
                 unit=valuation_unit,
                 bound_source="current and final invested value",
                 public_issue_code=("portfolio_rebalancer.nonpositive_current_portfolio"),
-            )
-        )
-    if purpose == "sell_extension":
-        refs.append(
-            _constraint_ref(
-                code="SELL_FUNDS_INCREMENTAL_BUY",
-                key="global",
-                scope="scenario",
-                entity_refs=(),
-                unit=boolean_unit,
-                bound_source="frozen baseline and incremental BUY",
             )
         )
     return refs
