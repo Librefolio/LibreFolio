@@ -13,7 +13,7 @@
     import {deltaPeriodLabel} from '$lib/features/assets/assetPriceDerived';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
-    import {Merge, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
+    import {Merge, Pencil, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
@@ -58,6 +58,8 @@
         dateStart?: string;
         /** Date range end (passed to detail page on row click) */
         dateEnd?: string;
+        /** U10: the row action «Edit» — the owner opens the asset editor, complete, without leaving the list. */
+        onedit?: (asset: AssetRow) => void;
         onsync?: (asset: AssetRow) => void;
         onrefresh?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
@@ -74,7 +76,7 @@
         browseSegment?: AssetPanelId;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange, clearSelectionToken = 0, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onedit, onsync, onrefresh, ondelete, onmerge, onselectionchange, clearSelectionToken = 0, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
 
     // The owner asks for the selection to be dropped by changing the token: this table clears its own DataTable.
     let seenClearToken = untrack(() => clearSelectionToken);
@@ -321,6 +323,13 @@
         getRowClass={(row) => (row.active ? '' : 'asset-row-inactive')}
         onSelectionChange={(ids) => onselectionchange?.(data.filter((row) => ids.includes(String(row.id))))}
         rowActions={[
+            {
+                id: 'edit',
+                label: () => $t('common.edit'),
+                icon: Pencil,
+                onClick: (row) => onedit?.(row),
+                testid: 'asset-table-edit-action',
+            },
             {
                 id: 'sync',
                 label: () => $t('common.sync'),

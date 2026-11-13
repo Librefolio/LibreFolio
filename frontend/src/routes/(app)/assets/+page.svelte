@@ -2411,6 +2411,7 @@
                             dateEnd={urlDateEnd}
                             storageKey="assetsTable-{panel.id}"
                             browseSegment={panel.id}
+                            onedit={handleEditAsset}
                             onsync={handleSyncAsset}
                             onrefresh={handleRefreshAsset}
                             ondelete={handleDeleteAsset}
