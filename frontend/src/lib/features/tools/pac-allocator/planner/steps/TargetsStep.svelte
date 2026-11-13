@@ -14,7 +14,7 @@
     import HelpTip from '../shared/HelpTip.svelte';
     import TargetInputCell from '../shared/TargetInputCell.svelte';
     import LimitInputCell from '../shared/LimitInputCell.svelte';
-    import {limitProblems} from '../request';
+    import LimitProblems from '../shared/LimitProblems.svelte';
     import TableColumns from '../shared/TableColumns.svelte';
     import {withHelpCues} from '../shared/columnHelp';
     import DistributionDialog from './DistributionDialog.svelte';
@@ -52,25 +52,6 @@
         return 'unknown';
     });
     const excess = $derived(remaining === null ? null : remainingControlPercentage(remaining, '0'));
-    /** The limits' own problems, live under the table (M1): the same check that stops «Continue» and «Calculate». */
-    const limitIssues = $derived(limitProblems(draft));
-    const P_KEY = 'tools.pacAllocator.planner.problems';
-    /** One literal key per limit problem, so the i18n audit can prove each one is used. */
-    function limitProblemText(problem: (typeof limitIssues)[number]): string {
-        const options = {default: problem.fallback, values: problem.values};
-        switch (problem.key) {
-            case 'limitInvalid':
-                return $t('tools.pacAllocator.planner.problems.limitInvalid', options);
-            case 'limitShareAboveHundred':
-                return $t('tools.pacAllocator.planner.problems.limitShareAboveHundred', options);
-            case 'limitMinAboveMax':
-                return $t('tools.pacAllocator.planner.problems.limitMinAboveMax', options);
-            case 'limitShareMinimumsAboveHundred':
-                return $t('tools.pacAllocator.planner.problems.limitShareMinimumsAboveHundred', options);
-            default:
-                return $t(`${P_KEY}.${problem.key}`, options);
-        }
-    }
     const maxWeight = $derived(Math.max(1, ...draft.data.assets.map((asset) => percentNumber(draft.data.targets[asset.key]))));
 
     function assetLabel(asset: DraftAsset): string {
@@ -289,14 +270,7 @@
             />
         </div>
 
-        {#if limitIssues.length > 0}
-            <div class="{NOTICE.danger} space-y-1" role="alert" data-testid={testId('targets-limits-problems', profile)}>
-                <p class="font-semibold">{$t(`${KEY}.limitsCheck`, {default: 'Check the limits'})}</p>
-                {#each limitIssues as problem (`${problem.key}|${problem.entity ?? ''}`)}
-                    <p data-testid={testId('targets-limits-problem', profile)} data-key={problem.key}>{problem.entity ? `${problem.entity}: ` : ''}{limitProblemText(problem)}</p>
-                {/each}
-            </div>
-        {/if}
+        <LimitProblems {draft} />
         <p class={NOTICE.info} data-testid={testId('targets-limits-note', profile)}>
             {$t(`${KEY}.limitsNote`, {default: 'Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.'})}
         </p>

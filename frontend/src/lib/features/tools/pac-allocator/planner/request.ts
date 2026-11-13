@@ -160,29 +160,32 @@ function cashLabel(draft: PlannerDraft, brokerKey: string, currency: string): st
     return `${draft.broker(brokerKey)?.name ?? brokerKey} · ${currency}`;
 }
 
+/** A limit problem, with the Asset it is about (null for the sum of the share minimums): the line under the table reads its limits. */
+export type LimitProblem = Omit<LocalProblem, 'id' | 'step'> & {assetKey: string | null};
+
 /**
  * The limits' own problems (F2 of project 67), in row order: the shape of each field, a share above 100%, a minimum above
  * the maximum in the same form, and the share minimums together above 100% (an exact sum, like the targets'). Shown live
  * under the targets table and part of `localProblems`, so «Continue» and «Calculate» stop on them. Two limits in
  * different forms, or amounts against the plan's total, need the Tool's reference: the backend checks them.
  */
-export function limitProblems(draft: PlannerDraft): Omit<LocalProblem, 'id' | 'step'>[] {
-    const found: Omit<LocalProblem, 'id' | 'step'>[] = [];
+export function limitProblems(draft: PlannerDraft): LimitProblem[] {
+    const found: LimitProblem[] = [];
     const shareMinimums: {name: string; percent: string}[] = [];
     for (const asset of draft.orderedAssets) {
         const limits = draft.data.limits[asset.key];
         if (!limits) continue;
         const minimum = parseLimit(limits.minimum);
         const maximum = parseLimit(limits.maximum);
-        if (minimum === 'invalid' || maximum === 'invalid') found.push({key: 'limitInvalid', fallback: 'A limit is not an amount or a percentage from 0.', entity: asset.name, values: {}});
-        else if (shareAboveHundred(minimum) || shareAboveHundred(maximum)) found.push({key: 'limitShareAboveHundred', fallback: 'A limit in percent cannot be above 100%.', entity: asset.name, values: {}});
-        else if (limitsConflict(limits)) found.push({key: 'limitMinAboveMax', fallback: 'The minimum is above the maximum.', entity: asset.name, values: {}});
+        if (minimum === 'invalid' || maximum === 'invalid') found.push({key: 'limitInvalid', fallback: 'A limit is not an amount or a percentage from 0.', entity: asset.name, assetKey: asset.key, values: {}});
+        else if (shareAboveHundred(minimum) || shareAboveHundred(maximum)) found.push({key: 'limitShareAboveHundred', fallback: 'A limit in percent cannot be above 100%.', entity: asset.name, assetKey: asset.key, values: {}});
+        else if (limitsConflict(limits)) found.push({key: 'limitMinAboveMax', fallback: 'The minimum is above the maximum.', entity: asset.name, assetKey: asset.key, values: {}});
         // A share above 100% is its own problem: it stays out of the sum, so it is not reported twice.
         if (minimum !== null && minimum !== 'invalid' && minimum.kind === 'share' && !shareAboveHundred(minimum)) shareMinimums.push({name: asset.name, percent: minimum.percent});
     }
     const shareTotal = sumControlPercentages(shareMinimums.map((item) => item.percent));
     if (shareTotal !== null && compareDecimal(shareTotal, '100') === 1) {
-        found.push({key: 'limitShareMinimumsAboveHundred', fallback: 'The minimums in percent add up to more than 100%: {assets}.', entity: null, values: {assets: shareMinimums.map((item) => item.name).join(', ')}});
+        found.push({key: 'limitShareMinimumsAboveHundred', fallback: 'The minimums in percent add up to more than 100%: {assets}.', entity: null, assetKey: null, values: {assets: shareMinimums.map((item) => item.name).join(', ')}});
     }
     return found;
 }
