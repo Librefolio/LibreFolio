@@ -423,11 +423,16 @@ function normalizeMainName(name) {
     return name.replace(/[^A-Za-z0-9_]/gu, '_');
 }
 
+// Transport roles the main Zodios client never declares: the streaming route's lines are read by the Tool client
+// itself (lot V1 of project 67), and the main generator emits no schema for a non-JSON response.
+const STREAM_ONLY_TRANSPORT_ROLES = new Set(['computeProgress']);
+
 function mainToolSchemas(mainDocument, manifest) {
     const schemas = mainDocument.components?.schemas;
     invariant(isRecord(schemas), 'main OpenAPI components are missing');
     const roots = new Set();
-    for (const entry of Object.values(manifest.transport)) {
+    for (const [role, entry] of Object.entries(manifest.transport)) {
+        if (STREAM_ONLY_TRANSPORT_ROLES.has(role)) continue;
         const candidates = Object.entries(schemas).filter(([name, schema]) =>
             name === entry.model || schema.title === entry.model);
         invariant(candidates.length > 0, `main OpenAPI transport root ${entry.model} is missing`);
