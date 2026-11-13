@@ -8,7 +8,7 @@
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {ASSET_TYPES} from '$lib/utils/assetTypes';
     import {plannerAssetClass} from '../copies';
-    import {canonicalInput, compareDecimal, fractionToPercent, percentToFraction, sumControlPercentages} from '../decimal';
+    import {canonicalInput, compareDecimal, fractionToPercent, percentToFraction, sumControlPercentages} from '$lib/utils/core/exactDecimal';
     import {nowTimestamp, type DraftAsset, type DraftExposure, type ExposureDimension, type PlannerDraft} from '../draft.svelte';
     import {DIMENSION_FALLBACKS} from '../labels';
     import {BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, INPUT, LABEL_ROW, NOTICE, SECTION_TITLE} from '../ui';

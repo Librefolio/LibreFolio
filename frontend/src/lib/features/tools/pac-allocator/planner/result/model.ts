@@ -4,7 +4,7 @@
  * Grouping, ordering by `sequence` and bar widths from published weights:
  * presentation only. No amount is added, subtracted or converted here.
  */
-import {canonicalDecimal, compareDecimal, decimalSign} from '../decimal';
+import {canonicalDecimal, compareDecimal, decimalSign} from '$lib/utils/core/exactDecimal';
 import {exactDisplay} from '../format';
 import type {
     PlannerConversion,

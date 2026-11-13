@@ -14,7 +14,7 @@
     import {applyOwnedAssets, domainAssetKey, domainBrokerKey, ownedAssets} from '../copies';
     import type {PlannerDraft} from '../draft.svelte';
     import {loadCopyScope, selectableIds, type ScopeBroker} from '../scope';
-    import {compareDecimal} from '../decimal';
+    import {compareDecimal} from '$lib/utils/core/exactDecimal';
     import {formatPlannerPercent} from '../format';
     import {SourceLoad} from '../sourceLoad.svelte';
     import {BADGE, BUTTON_PILL, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, LABEL_ROW, NOTICE} from '../ui';

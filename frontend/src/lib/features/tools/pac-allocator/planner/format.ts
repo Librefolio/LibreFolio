@@ -20,7 +20,7 @@ import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
 import {formatExactDecimal} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {maskable, shouldMaskAmount, type AmountSensitivity} from '$lib/utils/privacy/maskable';
-import {canonicalDecimal, decimalEqualsRatio, decimalScale, roundDecimal, roundRatio, shiftDecimal} from './decimal';
+import {canonicalDecimal, decimalEqualsRatio, decimalScale, roundDecimal, roundRatio, shiftDecimal} from '$lib/utils/core/exactDecimal';
 import {defaultAsOf} from './defaults';
 import type {PlannerExactMoney, PlannerExactNumber, PlannerExactPrice, PlannerObjectiveUnit} from './types';
 import {uiLocale} from '$lib/stores/app/uiLocale';

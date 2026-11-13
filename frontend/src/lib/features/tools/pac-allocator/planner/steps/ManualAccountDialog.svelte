@@ -3,7 +3,7 @@
     import {t} from '$lib/i18n';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
-    import {canonicalInput, compareDecimal} from '../decimal';
+    import {canonicalInput, compareDecimal} from '$lib/utils/core/exactDecimal';
     import type {PlannerDraft} from '../draft.svelte';
     import {cldrCurrencyStep} from '../format';
     import {BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, INPUT, LABEL, NOTICE} from '../ui';

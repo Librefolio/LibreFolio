@@ -2,7 +2,7 @@
     import {onDestroy, onMount} from 'svelte';
     import {t} from '$lib/i18n';
     import {applyBrokerCopy, applyLiquidityCopy, domainBrokerKey, domainCashKey, newCopyRecord, type CopyOutcome} from '../copies';
-    import {compareDecimal} from '../decimal';
+    import {compareDecimal} from '$lib/utils/core/exactDecimal';
     import type {PlannerDraft} from '../draft.svelte';
     import {formatPlannerMoneyPlain} from '../format';
     import {loadCopyScope, selectableIds, type ScopeBroker} from '../scope';

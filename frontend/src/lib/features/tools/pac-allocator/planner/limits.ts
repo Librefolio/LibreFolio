@@ -5,7 +5,7 @@
  * «500» is an amount in the valuation currency, «35%» a share of the plan's total, an empty field is no limit.
  * No calculation here: a share and an amount are compared only by the backend, which knows the Tool's reference.
  */
-import {canonicalInput, compareDecimal, decimalSign} from './decimal';
+import {canonicalInput, compareDecimal, decimalSign} from '$lib/utils/core/exactDecimal';
 
 export type LimitSide = 'minimum' | 'maximum';
 

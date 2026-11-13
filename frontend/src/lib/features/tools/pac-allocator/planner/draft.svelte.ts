@@ -7,7 +7,7 @@
  * value and the stamp of their copy, so an explicit re-copy can tell "the
  * source changed" from "the user changed it" (B4) instead of overwriting.
  */
-import {compareDecimal, sumControlPercentages, remainingControlPercentage, canonicalInput} from './decimal';
+import {compareDecimal, sumControlPercentages, remainingControlPercentage, canonicalInput} from '$lib/utils/core/exactDecimal';
 import {DEFAULT_EXECUTION_MARGIN_PERCENT, DEFAULT_FEE, DEFAULT_FUNDING_PRIORITY, DEFAULT_FX_SPREAD_PERCENT, DEFAULT_QUANTITY_STEP, DEFAULT_ROUTE_PRIORITY, defaultAsOf} from './defaults';
 import {canonicalPair, type ExposureDimension, type SourceProvenance} from './source';
 import {PAC_PLANNER_PROFILE, type PlannerProfile} from './profile';

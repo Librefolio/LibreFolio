@@ -6,7 +6,7 @@
  * text that differs between the two Tools takes one of the forms `labels.ts` describes: two whole
  * literal keys in a ternary, or a same-file conditional prefix whose group exists under both.
  */
-import {canonicalInput, decimalScale, decimalSign} from './decimal';
+import {canonicalInput, decimalScale, decimalSign} from '$lib/utils/core/exactDecimal';
 import type {DraftMode, ModeKind} from './draft.svelte';
 import {formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from './format';
 import {MODE_KIND_FALLBACKS} from './labels';

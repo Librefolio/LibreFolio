@@ -5,7 +5,7 @@
     import type {ColumnDef, FooterCells} from '$lib/components/table/types';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {applyDistribution, distributionProposal, type DistributionRow} from '../copies';
-    import {canonicalInput, sumControlPercentages} from '../decimal';
+    import {canonicalInput, sumControlPercentages} from '$lib/utils/core/exactDecimal';
     import type {PlannerDraft} from '../draft.svelte';
     import {formatPlannerDate, formatPlannerPercentUnits} from '../format';
     import {loadCopyScope, selectableIds, type ScopeBroker} from '../scope';

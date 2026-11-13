@@ -7,7 +7,7 @@
  */
 import type {Readable} from 'svelte/store';
 import type {t} from '$lib/i18n';
-import {compareDecimal, decimalScale, fractionToPercent} from '../decimal';
+import {compareDecimal, decimalScale, fractionToPercent} from '$lib/utils/core/exactDecimal';
 import {exactQuantityCount, formatExactPricePlain, formatExactQuantity, formatPlannerMoneyPlain, formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, formatPlannerQuantity, plannerPlainDecimalCount, plannerQuantityCount, type CurrencyDigits} from '../format';
 import type {PlannerExactPrice, PlannerOrderRow, PlannerResolvedOrderRoute} from '../types';
 
