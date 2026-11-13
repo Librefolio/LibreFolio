@@ -61,6 +61,7 @@ out of scope for this build's required coverage.
 from __future__ import annotations
 
 from dataclasses import replace
+from fractions import Fraction
 from typing import Any
 
 import pytest
@@ -93,6 +94,7 @@ from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.ledger import _ROUNDED_FAMILIES
 from backend.app.services.pac_allocator.models import ExactLimit, ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.objectives import build_canonical_tie_stages
+from backend.test_scripts.test_services import _reb_small_cases as cases
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id, fx_spec
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _CASH_MAX_40,
@@ -856,12 +858,14 @@ def test_scope_error_for_non_proportional_policy() -> None:
         compile_policy_program(scenario, view)
 
 
-def test_scope_error_for_non_pac_product() -> None:
-    scenario = _invest_only_scenario()
-    view = build_exact_policy_view(scenario)
-    assert scenario.product == "rebalancer"
-    with pytest.raises(PolicyProgramScopeError, match="PAC proportional"):
-        compile_policy_program(scenario, view)
+def test_scope_opens_for_the_rebalancer_primary_view() -> None:
+    """B2: the compiler builds the Rebalancer's ``primary`` model (the gate was PAC only). ``deployment`` and
+    ``min_fragmentation`` stay outside it (the two tests above)."""
+    for scenario in (_invest_only_scenario(), cases.t4()):
+        view = build_exact_policy_view(scenario)
+        assert scenario.product == "rebalancer"
+        program = compile_policy_program(scenario, view)
+        assert [stage.code for stage in program.objective_stages][:3] == ["plan_score", "operation_count", "route_priority"]
 
 
 # --------------------------------------------------------------------------
@@ -1402,3 +1406,100 @@ def test_limits_on_one_route_are_integer_bounds_cash_is_in_whole_units_and_sever
     (row,) = [constraint for constraint in program.model.getConss() if constraint.name == "entry_limit_max:asset:asset:a"]
     assert program.model.getRhs(row) == pytest.approx(35 - 2e-6 * 35, abs=1e-12)
     assert all(variable.getUbOriginal() > 3 for name, variable in program.variables.quanta.items() if name.startswith("buy:")), "no integer bound on a sum"
+
+
+# --------------------------------------------------------------------------
+# B2 (project 67): the Rebalancer's single objective in SCIP
+# --------------------------------------------------------------------------
+
+_TARGET_FIRST = pac_models.ExactTargetFidelity(kind="target_first", distance_weight=None)
+
+
+@pytest.mark.parametrize(
+    ("fidelity", "named"),
+    [
+        pytest.param(None, ["plan_score", "operation_count", "route_priority"], id="weighted"),
+        pytest.param(_TARGET_FIRST, ["target_distance", "wealth_loss", "operation_count", "route_priority"], id="target-first"),
+    ],
+)
+def test_rebalancer_cascade_stage_order(fidelity, named: list[str]) -> None:
+    """A weighted fidelity is one score stage, «Target first» the distance then the money lost; both end with the tie-breaks
+    and the canonical vector, in the view's own order."""
+    scenario = cases.t4() if fidelity is None else cases.t4(target_fidelity=fidelity)
+    view = build_exact_policy_view(scenario)
+    program = _fresh_program(scenario, view)
+    expected = named + [f"tie:{decision_id}" for decision_id in view.tie_breaks[0].decision_ids]
+    assert [stage.code for stage in program.objective_stages] == expected
+
+
+def _rebalancer_cases() -> list:
+    weighted_four = pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(4))
+    return [
+        pytest.param(cases.t1, {}, id="t1"),
+        pytest.param(cases.t4, {cases.buy_decision("asset:b"): 195}, id="t4-buy"),
+        pytest.param(cases.t4, {}, id="t4-idle"),
+        pytest.param(cases.t5, {cases.buy_decision("asset:b"): 95}, id="t5-buy"),
+        pytest.param(lambda **fields: cases.t6(**({"target_fidelity": weighted_four} | fields)), {cases.buy_decision("asset:a"): 1}, id="t6-one-unit"),
+        pytest.param(lambda **fields: cases.t6(with_usd=True, **({"target_fidelity": weighted_four} | fields)), {cases.buy_decision("asset:a"): 1, "fx:8:broker:x:EUR:USD": 10_000}, id="t6-wasted-conversion"),
+        pytest.param(cases.t4_cash_over_target, {cases.buy_decision("asset:b"): 40}, id="cash-over-target"),
+        pytest.param(lambda **fields: cases.t4_cash_over_target(fee_rate=R(1, 100), **fields), {cases.buy_decision("asset:b"): 40}, id="cash-over-target-fee-rate"),
+    ]
+
+
+@pytest.mark.parametrize("fidelity", [pytest.param(None, id="weighted"), pytest.param(_TARGET_FIRST, id="target-first")])
+@pytest.mark.parametrize(("build", "quanta"), _rebalancer_cases())
+def test_rebalancer_stage_values_match_the_exact_replay(build, quanta: dict[str, int], fidelity) -> None:
+    """With every decision pinned, each named stage of SCIP equals its scale times the exact value of the replay (D2): ``J``
+    is scaled by ``F`` (SCIP minimizes ``λ·D + F·C``), the others by one. No slack of the model may lower a stage below the
+    truth: a fee above its formula, or a posting one unit against the plan, would shorten ``D`` when a cell with a target
+    holds more than its target (the two «cash-over-target» cases, under «Target first» where nothing else pays for it)."""
+    scenario = build() if fidelity is None else build(target_fidelity=fidelity)
+    view = build_exact_policy_view(scenario)
+    candidate = _candidate(view, quanta, candidate_id="candidate:reb-stage-check")
+    evaluation = evaluate_exact_candidate(scenario, view, candidate)
+    assert evaluation.feasible, evaluation.conflict_codes
+    exact = _objective_map(view, evaluation)
+    program = _fresh_program(scenario, view)
+    for stage in program.objective_stages:
+        if stage.code.startswith("tie:"):
+            continue
+        scip_value = _stage_value(scenario, view, _quanta_map(candidate), stage.code)
+        expected = float(stage.scale * Fraction(exact[stage.code].numerator, exact[stage.code].denominator))
+        assert scip_value == pytest.approx(expected, rel=1e-9, abs=1e-6), f"stage {stage.code!r}: scip={scip_value} exact×scale={expected}"
+
+
+def test_rounding_at_an_exact_multiple_posts_the_true_unit_under_the_score() -> None:
+    """B2-10, P6: in the Rebalancer the posted units enter ``F − W``. At an exact multiple of the quantum (a 40 EUR order, a
+    5 EUR fee) SCIP posts exactly the replay's units, even under «Target first» with the cell above its target, where one
+    unit more would shorten ``D``; and the routes that buy nothing post nothing."""
+    scenario = cases.t4_cash_over_target(target_fidelity=_TARGET_FIRST)
+    view = build_exact_policy_view(scenario)
+    program = _fresh_program(scenario, view)
+    quanta = {cases.buy_decision("asset:a"): 0, cases.buy_decision("asset:b"): 40}
+    for decision_id, value in quanta.items():
+        _pin(program.model, program.variables.quanta[decision_id], value)
+    program.model.setObjective(program.objective_stages[0].expression, sense="minimize")
+    program.model.optimize()
+    posted = {var.name: round(program.model.getVal(var)) for var in program.model.getVars() if var.name.startswith("posted_buy_")}
+    assert posted == {
+        "posted_buy_debit:route:buy:asset:a": 0,
+        "posted_buy_fee:route:buy:asset:a": 0,
+        "posted_buy_debit:route:buy:asset:b": 4_000,
+        "posted_buy_fee:route:buy:asset:b": 500,
+    }
+
+
+def test_rebalancer_compiled_variables_count_conversions_and_transfers() -> None:
+    """The Rebalancer gets one activity binary per conversion and per transfer, for ``operation_count``; the PAC none."""
+    base = cases.t6(with_usd=True)
+    broker_y = replace(base.brokers[0], broker_id="broker:y", name="broker:y")
+    lane = pac_models.ExactTransferLane(source_broker_id=cases.BROKER, destination_broker_id="broker:y", currency="EUR")
+    scenario = replace(base, brokers=tuple(sorted((*base.brokers, broker_y), key=lambda item: item.broker_id)), transfer_lanes=(lane,))
+    view = build_exact_policy_view(scenario)
+    program = _fresh_program(scenario, view)
+    assert set(program.variables.fx_active) == {item.decision_id for item in view.decisions if item.family == "fx_debit"} != set()
+    assert set(program.variables.transfer_active) == {item.decision_id for item in view.decisions if item.family == "broker_transfer"} != set()
+
+    pac = _two_asset_pac_scenario()
+    pac_program = _fresh_program(pac, build_exact_policy_view(pac))
+    assert (pac_program.variables.fx_active, pac_program.variables.transfer_active) == ({}, {})

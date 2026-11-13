@@ -74,6 +74,7 @@ from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_
 from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactExposure
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import solve_policy_program
+from backend.test_scripts.test_services import _reb_small_cases as cases
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     ONE,
@@ -1308,3 +1309,21 @@ def test_float_text_keeps_its_spelling_of_signed_and_absent_observations(value: 
 def test_tolerance_text_spells_a_float_tolerance_positionally() -> None:
     """A SCIP tolerance such as ``1e-06`` is published positionally, as the wire pattern requires."""
     assert PR._tolerance_text(1e-06) == "0.000001"
+
+
+def test_solver_evidence_bounds_use_the_published_unit() -> None:
+    """B2-9, D2: SCIP minimizes ``λ·D + F·C``, the view's ``plan_score`` is ``J``. The evidence publishes the stage's primal,
+    dual and gap divided by the stage's scale ``F``, so they read in money next to the published ``J``."""
+    scenario = cases.t4()
+    view = build_exact_policy_view(scenario)
+    result = solve_policy_program(compile_policy_program(scenario, view), time_budget_seconds=30.0)
+    (report,) = [stage for stage in result.stages if stage.objective_code == "plan_score"]
+    assert report.scale == Fraction(10_000)
+
+    evidence = PR.build_solver_evidence(scenario, view, result)
+
+    (published,) = [stage for stage in evidence.stages if stage.objective_code == "plan_score"]
+    assert published.unit.kind == "valuation_money"
+    assert float(published.primal) == pytest.approx(report.primal / 10_000, rel=1e-12)
+    assert float(published.primal) == pytest.approx(1_001 / 200, rel=1e-6)
+    assert float(published.dual) == pytest.approx(report.dual / 10_000, rel=1e-12)

@@ -56,8 +56,10 @@ import pytest
 from pyscipopt import Model as ScipModel
 
 from backend.app.services.pac_allocator import compiler as compiler_module
+from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
+from backend.app.services.pac_allocator.constraints import LedgerPostingScopeError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactLimit, ExactPlannerScenario, ExactPolicyView, ExactTargetWeight
@@ -69,10 +71,11 @@ from backend.app.services.pac_allocator.solver import (
     SolverStageReport,
     solve_policy_program,
 )
+from backend.test_scripts.test_services import _reb_small_cases as cases
 from backend.test_scripts.test_services._pac_exhaustive_oracle import run_exhaustive_oracle
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services._pac_synthetic_requests import V, make, scenario_of
-from backend.test_scripts.test_services.test_pac_planner_evaluator import _CASH_MAX_40, ONE, ZERO, R, _limit_plan_scenario, _pac_scenario, _relay_scenario, _shared_pair_scenario, _transfer_lane_scenario, _two_way_scenario, _with_lane
+from backend.test_scripts.test_services.test_pac_planner_evaluator import _CASH_MAX_40, ONE, ZERO, R, _invest_and_sell_scenario, _limit_plan_scenario, _pac_scenario, _relay_scenario, _shared_pair_scenario, _transfer_lane_scenario, _two_way_scenario, _with_lane
 from backend.test_scripts.test_services.test_pac_planner_oracle import _coarse_funding_fx_scenario, _credit_tie_fx_scenario, _two_asset_pac_scenario
 
 # --------------------------------------------------------------------------
@@ -847,3 +850,172 @@ def test_solver_matches_oracle_when_a_currency_could_relay() -> None:
     quanta = _quanta(result.candidate)
     eur_usd, usd_chf = fx_id(scenario, source="EUR", destination="USD"), fx_id(scenario, source="USD", destination="CHF")
     assert not (quanta[eur_usd] > 0 and quanta[usd_chf] > 0)
+
+
+# --------------------------------------------------------------------------
+# B2 (project 67): the Rebalancer's single objective in SCIP
+# --------------------------------------------------------------------------
+
+_WEIGHTED_FOUR = pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(4))
+_TARGET_FIRST = pac_models.ExactTargetFidelity(kind="target_first", distance_weight=None)
+
+
+def _reb_run(scenario: ExactPlannerScenario) -> tuple[ExactPolicyView, SolverRunResult, ExactEvaluation]:
+    view, result = _run(scenario, time_budget_seconds=30.0)
+    assert result.outcome == "incumbent" and result.candidate is not None, (result.outcome, result.anomaly)
+    evaluation = evaluate_exact_candidate(scenario, view, result.candidate)
+    assert (evaluation.candidate_valid, evaluation.feasible) == (True, True), evaluation.conflict_codes
+    return view, result, evaluation
+
+
+def _exact_objectives(view: ExactPolicyView, evaluation: ExactEvaluation) -> dict[str, Fraction]:
+    by_ref = {item.ref_id: item.value for item in evaluation.objectives}
+    return {ref.code: Fraction(by_ref[ref.ref_id].numerator, by_ref[ref.ref_id].denominator) for ref in view.objectives}
+
+
+def _proven(view: ExactPolicyView, result: SolverRunResult) -> bool:
+    conclusion = conclude_with_solver(result, objective_codes=list(_objective_codes(view)), published=result.candidate)
+    return isinstance(conclusion, OptimalProvenConclusion)
+
+
+_HAND_CASES = [
+    pytest.param(cases.t1, {}, Fraction(8, 25), id="t1-no-trade"),
+    pytest.param(cases.t4, {cases.buy_decision("asset:b"): 195}, Fraction(1_001, 200), id="t4-buy-195-of-b"),
+    pytest.param(cases.t5, {}, Fraction(2), id="t5-idle-cash-wins"),
+    pytest.param(lambda: cases.t6(target_fidelity=_WEIGHTED_FOUR), {cases.buy_decision("asset:a"): 1}, Fraction(3_205), id="t6-one-unit"),
+]
+
+
+@pytest.mark.parametrize(("build", "plan", "score"), _HAND_CASES)
+def test_solver_finds_the_hand_computed_plan(build, plan: dict[str, int], score: Fraction) -> None:
+    """Specifica §11, at their real size (1 EUR steps): SCIP finds the plan computed by hand, every stage closes, the replay
+    confirms it and gives the hand's ``J``; the run is «optimal proven»."""
+    scenario = build()
+    view, result, evaluation = _reb_run(scenario)
+    assert {key: value for key, value in _quanta(result.candidate).items() if value} == plan
+    assert _exact_objectives(view, evaluation)["plan_score"] == score
+    assert all(stage.status == "finished" for stage in result.stages), [(stage.stage, stage.status, stage.scip_status) for stage in result.stages]
+    assert result.anomaly is None and _proven(view, result)
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(lambda: cases.t4(amount_step=R(5), caps={"asset:a": R(200), "asset:b": R(200)}), id="t4-reduced"),
+        pytest.param(lambda: cases.t5(amount_step=R(5), caps={"asset:a": R(100), "asset:b": R(100)}), id="t5-reduced"),
+        pytest.param(lambda: cases.t6(target_fidelity=_WEIGHTED_FOUR), id="t6"),
+        pytest.param(lambda: cases.t5(amount_step=R(5), caps={"asset:a": R(100), "asset:b": R(100)}, target_fidelity=_TARGET_FIRST), id="t5-reduced-target-first"),
+    ],
+)
+def test_rebalancer_solver_equals_the_exhaustive_oracle(build) -> None:
+    """On the reduced cases SCIP's plan is the oracle's, objectives and tie-breaks included."""
+    scenario = build()
+    view, result, evaluation = _reb_run(scenario)
+    best_candidate, best = _oracle_best(scenario, view)
+    assert _quanta(result.candidate) == _quanta(best_candidate)
+    assert _exact_objectives(view, evaluation) == {code: Fraction(value.numerator, value.denominator) for code, value in best.items()}
+
+
+def test_target_first_buys_what_the_weighted_score_leaves_idle() -> None:
+    """T5: at «Balanced» the 5 EUR fee is worth more than the penalty, so the plan does nothing; «Target first» pays it and
+    buys 95 of B (``D`` = 50 against 20 000), then loses only the fee."""
+    _view, weighted, _evaluation = _reb_run(cases.t5())
+    assert {key: value for key, value in _quanta(weighted.candidate).items() if value} == {}
+    view, chain, evaluation = _reb_run(cases.t5(target_fidelity=_TARGET_FIRST))
+    assert {key: value for key, value in _quanta(chain.candidate).items() if value} == {cases.buy_decision("asset:b"): 95}
+    objectives = _exact_objectives(view, evaluation)
+    assert (objectives["target_distance"], objectives["wealth_loss"]) == (Fraction(50), Fraction(5))
+
+
+def test_tie_break_prefers_fewer_operations_then_route_priority() -> None:
+    """Two Brokers with the same fee and the same cash pool reachable by a free transfer (specifica §6.4, absurd n. 6): the
+    plan buys 195 of B once, on the Broker that already holds the cash, with no transfer in between; same ``J`` either way,
+    fewer operations wins. The second Broker's route has the better priority, which must not buy a transfer."""
+    base = cases.t4()
+    broker_y = replace(base.brokers[0], broker_id="broker:y", name="broker:y")
+    route_y = replace(next(route for route in base.order_routes if route.asset_id == "asset:b"), route_id="route:buy:asset:b:y", broker_id="broker:y", priority=0)
+    routes = tuple(sorted((*(replace(route, priority=3) for route in base.order_routes), route_y), key=lambda item: item.route_id))
+    lane = pac_models.ExactTransferLane(source_broker_id=cases.BROKER, destination_broker_id="broker:y", currency="EUR")
+    scenario = replace(base, brokers=tuple(sorted((*base.brokers, broker_y), key=lambda item: item.broker_id)), order_routes=routes, transfer_lanes=(lane,))
+
+    view, result, evaluation = _reb_run(scenario)
+    assert {key: value for key, value in _quanta(result.candidate).items() if value} == {cases.buy_decision("asset:b"): 195}
+    assert _exact_objectives(view, evaluation)["operation_count"] == 1
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(cases.t4, id="t4"),
+        pytest.param(lambda: cases.t6(target_fidelity=_WEIGHTED_FOUR), id="t6"),
+        pytest.param(lambda: cases.t4(target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(1, 1000))), id="t4-lambda-thousandth"),
+        pytest.param(lambda: cases.t4(target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(1000))), id="t4-lambda-thousand"),
+        pytest.param(lambda: cases.scenario("t4-x20", holdings={"asset:a": R(100_000), "asset:b": R(96_000)}, cash=R(4_000), weights={"asset:a": R(1, 2), "asset:b": R(1, 2)}), id="t4-f-200000"),
+        pytest.param(lambda: cases.t4(target_fidelity=_TARGET_FIRST), id="t4-target-first"),
+    ],
+)
+def test_finished_score_stage_bounds_bracket_the_exact_replay(build) -> None:
+    """D2, D3: the exact value of every finished named stage, times the stage's scale, lies within SCIP's bounds widened by
+    the band the stage declares; no anomaly. Repeated with ``F`` = 200 000 and with ``λ`` = 1/1000 and 1000."""
+    scenario = build()
+    view, result, evaluation = _reb_run(scenario)
+    program = compile_policy_program(scenario, view)
+    exact = _exact_objectives(view, evaluation)
+    for report in result.stages:
+        if report.status != "finished" or report.stage.startswith("tie:"):
+            continue
+        stage = program.objective_stages[report.ordinal - 1]
+        scaled = stage.scale * exact[report.objective_code]
+        band = Fraction(stage.band) + _BOUND_TOLERANCE * max(1, abs(Fraction(report.primal)))
+        assert Fraction(report.dual) - band <= scaled <= Fraction(report.primal) + band, (report.stage, report.primal, report.dual, float(scaled))
+    assert result.anomaly is None and _proven(view, result)
+
+
+def test_score_stage_pin_never_sits_below_the_scaled_exact_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The ``plan_score`` pin is at least ``λ·D + F·C`` of its candidate, exactly: SCIP reporting the score a little low does
+    not cut the plan out of the tie-break stages."""
+    scenario = cases.t4()
+    view, result, lever = _lever_run(monkeypatch, scenario, target_stage=0, shift=lambda value: value * 0.999)
+    assert "plan_score" in lever.pins, lever.log
+    assert Fraction(lever.pins["plan_score"]) >= Fraction(10_000) * Fraction(1_001, 200)
+    assert result.candidate is not None
+    assert {key: value for key, value in _quanta(result.candidate).items() if value} == {cases.buy_decision("asset:b"): 195}
+
+
+def test_operation_count_stage_is_pinned_as_an_integer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``operation_count`` is among the integral stages: pinned at a whole number, not with a relative slack."""
+    scenario = cases.t4()
+    _view, _result, lever = _lever_run(monkeypatch, scenario, target_stage=1, shift=lambda value: value + 0.25)
+    assert Fraction(lever.pins["operation_count"]).denominator == 1
+
+
+@pytest.mark.parametrize(("build", "plan", "score"), _HAND_CASES)
+def test_plan_never_scores_worse_than_doing_nothing(build, plan: dict[str, int], score: Fraction) -> None:
+    """P2: with no limit, doing nothing is a plan, so the published ``J`` is never above its ``J``."""
+    scenario = build()
+    view, _result, evaluation = _reb_run(scenario)
+    zero = evaluate_exact_candidate(scenario, view, CandidateActionVector(view_id=view.view_id, candidate_id="zero", decisions=tuple(pac_models.CandidateDecision(decision_id=item.decision_id, quanta=0) for item in view.decisions)))
+    assert _exact_objectives(view, evaluation)["plan_score"] <= _exact_objectives(view, zero)["plan_score"]
+
+
+def test_a_held_asset_limit_reads_its_current_value_in_the_model() -> None:
+    """V5 on a held Asset counts ``V⁰`` (the integer bound of its single route subtracts it): T4 with a maximum of 4 900 on B
+    lets the plan buy at most 100 of it, in SCIP as in the replay."""
+    base = cases.t4()
+    scenario = replace(base, target_weights=tuple(replace(item, maximum=ExactLimit("amount", R(4_900))) if item.asset_id == "asset:b" else item for item in base.target_weights))
+    _view, result, evaluation = _reb_run(scenario)
+    bought = _quanta(result.candidate).get(cases.buy_decision("asset:b"), 0)
+    assert bought == 100
+    assert _by_id_value(evaluation.assets, "asset:b") == R(4_900)
+
+
+def _by_id_value(rows, asset_id: str):
+    return next(row.final_value for row in rows if row.asset_id == asset_id)
+
+
+def test_invest_and_sell_fails_closed_at_compile_until_sales_are_modelled() -> None:
+    """The model posts no sale yet (C1): an ``invest_and_sell`` scenario, whose sell routes would post rounded sale families,
+    is refused at compile time by the ledger guard, never silently modelled without them."""
+    scenario = _invest_and_sell_scenario()
+    with pytest.raises(LedgerPostingScopeError, match="sell_fee|gross_sell_credit"):
+        compile_policy_program(scenario, build_exact_policy_view(scenario))
