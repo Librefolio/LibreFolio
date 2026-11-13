@@ -11,6 +11,7 @@ import {compareDecimal, sumControlPercentages, remainingControlPercentage, canon
 import {DEFAULT_EXECUTION_MARGIN_PERCENT, DEFAULT_FEE, DEFAULT_FUNDING_PRIORITY, DEFAULT_FX_SPREAD_PERCENT, DEFAULT_QUANTITY_STEP, DEFAULT_ROUTE_PRIORITY, defaultAsOf} from './defaults';
 import {canonicalPair, type ExposureDimension, type SourceProvenance} from './source';
 import {PAC_PLANNER_PROFILE, type PlannerProfile} from './profile';
+import type {DraftLimits, LimitSide} from './limits';
 import type {PlannerStep} from './types';
 
 export type {ExposureDimension};
@@ -187,6 +188,8 @@ export interface DraftData {
     assets: DraftAsset[];
     routes: Record<string, DraftRoute>;
     targets: Record<string, string>;
+    /** Minimum and maximum of each Asset's final value, as typed (F2 of project 67); an Asset with no limit has no entry. */
+    limits: Record<string, DraftLimits>;
     fxRates: DraftFx[];
     copies: Record<string, CopyRecord>;
 }
@@ -272,6 +275,7 @@ function emptyData(valuationCurrency: string): DraftData {
         assets: [],
         routes: {},
         targets: {},
+        limits: {},
         fxRates: [],
         copies: {},
     };
@@ -587,6 +591,7 @@ export class PlannerDraft {
     removeAsset(key: string): void {
         this.data.assets = this.data.assets.filter((item) => item.key !== key);
         delete this.data.targets[key];
+        delete this.data.limits[key];
         if (this.assetOrder.includes(key)) this.assetOrder = this.assetOrder.filter((item) => item !== key);
         this.syncRoutes();
     }
@@ -639,6 +644,14 @@ export class PlannerDraft {
     });
 
     readonly targetRemaining = $derived(this.targetTotal === null ? null : remainingControlPercentage(this.targetTotal));
+
+    /** Writes one limit as typed; an entry left with two empty fields is removed, so no limit leaves no trace. */
+    setLimit(assetKey: string, side: LimitSide, text: string): void {
+        const current = this.data.limits[assetKey] ?? {minimum: '', maximum: ''};
+        const next = {...current, [side]: text};
+        if (next.minimum.trim() === '' && next.maximum.trim() === '') delete this.data.limits[assetKey];
+        else this.data.limits[assetKey] = next;
+    }
 
     // -- FX ------------------------------------------------------------------
 

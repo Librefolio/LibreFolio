@@ -12,8 +12,9 @@
  * `resolved`, the codec's parsed output, which the result views read.
  */
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
-import {canonicalInput, compareDecimal, decimalSign, isWholeDecimal, percentToFraction} from './decimal';
+import {canonicalInput, compareDecimal, decimalSign, isWholeDecimal, percentToFraction, sumControlPercentages} from './decimal';
 import {PLANNER_OPERATION} from './defaults';
+import {limitsConflict, parseLimit, shareAboveHundred} from './limits';
 import {priceIsCopied, routeKey, sameExposures, selectionExceedsAvailable, type CopyRef, type DraftAsset, type DraftBroker, type DraftMode, type DraftRoute, type PlannerDraft} from './draft.svelte';
 import {toPlannerId, toPlannerTimestamp} from './source';
 import type {
@@ -159,6 +160,40 @@ function cashLabel(draft: PlannerDraft, brokerKey: string, currency: string): st
     return `${draft.broker(brokerKey)?.name ?? brokerKey} · ${currency}`;
 }
 
+/**
+ * The limits' own problems (F2 of project 67), in row order: the shape of each field, a share above 100%, a minimum above
+ * the maximum in the same form, and the share minimums together above 100% (an exact sum, like the targets'). Shown live
+ * under the targets table and part of `localProblems`, so «Continue» and «Calculate» stop on them. Two limits in
+ * different forms, or amounts against the plan's total, need the Tool's reference: the backend checks them.
+ */
+export function limitProblems(draft: PlannerDraft): Omit<LocalProblem, 'id' | 'step'>[] {
+    const found: Omit<LocalProblem, 'id' | 'step'>[] = [];
+    const shareMinimums: {name: string; percent: string}[] = [];
+    for (const asset of draft.orderedAssets) {
+        const limits = draft.data.limits[asset.key];
+        if (!limits) continue;
+        const minimum = parseLimit(limits.minimum);
+        const maximum = parseLimit(limits.maximum);
+        if (minimum === 'invalid' || maximum === 'invalid') found.push({key: 'limitInvalid', fallback: 'A limit is not an amount or a percentage from 0.', entity: asset.name, values: {}});
+        else if (shareAboveHundred(minimum) || shareAboveHundred(maximum)) found.push({key: 'limitShareAboveHundred', fallback: 'A limit in percent cannot be above 100%.', entity: asset.name, values: {}});
+        else if (limitsConflict(limits)) found.push({key: 'limitMinAboveMax', fallback: 'The minimum is above the maximum.', entity: asset.name, values: {}});
+        // A share above 100% is its own problem: it stays out of the sum, so it is not reported twice.
+        if (minimum !== null && minimum !== 'invalid' && minimum.kind === 'share' && !shareAboveHundred(minimum)) shareMinimums.push({name: asset.name, percent: minimum.percent});
+    }
+    const shareTotal = sumControlPercentages(shareMinimums.map((item) => item.percent));
+    if (shareTotal !== null && compareDecimal(shareTotal, '100') === 1) {
+        found.push({key: 'limitShareMinimumsAboveHundred', fallback: 'The minimums in percent add up to more than 100%: {assets}.', entity: null, values: {assets: shareMinimums.map((item) => item.name).join(', ')}});
+    }
+    return found;
+}
+
+/** The wire form of one typed limit (contract 2.0.0 §5.2), or null for no limit. Problems were reported before. */
+function wireLimit(text: string | undefined, currency: string): {kind: 'amount'; amount: {amount: string; currency: string}} | {kind: 'share'; share: string} | null {
+    const limit = parseLimit(text);
+    if (limit === null || limit === 'invalid') return null;
+    return limit.kind === 'amount' ? {kind: 'amount', amount: {amount: limit.value, currency}} : {kind: 'share', share: percentToFraction(limit.percent) as string};
+}
+
 /** D8: problems that stop the request before it is sent. */
 export function localProblems(draft: PlannerDraft): LocalProblem[] {
     const problems = new ProblemList();
@@ -259,6 +294,7 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
         const value = data.targets[asset.key] ?? '';
         if (value.trim() !== '' && (canonicalInput(value) === null || decimalSign(canonicalInput(value) as string) === -1)) problems.add('targets', 'targetInvalid', 'The target is not a number from 0.', asset.name);
     }
+    for (const problem of limitProblems(draft)) problems.add('targets', problem.key, problem.fallback, problem.entity, problem.values);
     const total = draft.targetTotal;
     if (data.assets.length > 0 && (total === null || compareDecimal(total, '100') !== 0)) {
         problems.add('targets', 'targetTotalNotHundred', 'The target total is {total}%, it must be 100% (control).', null, {total: total ?? '?'});
@@ -469,7 +505,13 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         ...field('existing_cash', nonEmpty(existingCash)),
         ...field('contributions', nonEmpty(contributions)),
         ...field('funding_routes', nonEmpty(fundingRoutes)),
-        target_weights: data.assets.map((asset) => ({kind: 'asset' as const, asset_id: asset.key, weight: wireFraction(data.targets[asset.key]?.trim() ? data.targets[asset.key] : '0') as string})),
+        target_weights: data.assets.map((asset) => ({
+            kind: 'asset' as const,
+            asset_id: asset.key,
+            weight: wireFraction(data.targets[asset.key]?.trim() ? data.targets[asset.key] : '0') as string,
+            ...field('minimum', wireLimit(data.limits[asset.key]?.minimum, data.valuationCurrency)),
+            ...field('maximum', wireLimit(data.limits[asset.key]?.maximum, data.valuationCurrency)),
+        })),
         order_routes: orderRoutes,
         policy: data.policy,
     } as PlannerRequest;
