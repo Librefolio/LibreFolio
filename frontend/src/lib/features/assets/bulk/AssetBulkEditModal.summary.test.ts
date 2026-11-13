@@ -359,3 +359,33 @@ describe('the icon in the summary (U6)', () => {
         expect(container.textContent ?? '').not.toContain('old.png');
     });
 });
+
+describe('the summary of a removal (U7)', () => {
+    it('lists only the assets that hold the value, «before → nothing», and sends the nulls', async () => {
+        const assets = [asset(1, {icon_url: 'https://example.test/1.png', user_url: 'https://example.test/u1'}), asset(2), asset(3, {icon_url: 'https://example.test/3.png'})];
+        const {onsaved} = mount({assets});
+        await fireEvent.click(screen.getByTestId('asset-bulk-icon-remove'));
+        await fireEvent.click(screen.getByTestId('asset-bulk-user-url-remove'));
+        await fireEvent.click(screen.getByTestId('asset-bulk-continue'));
+        await waitFor(() => expect(root()).toHaveAttribute('data-step', 'summary'));
+
+        expect(screen.getAllByTestId('asset-bulk-summary-row').map((r) => r.getAttribute('data-asset-id'))).toEqual(['1', '3']);
+        // Asset 3 has no URL: «already without» for that cell, a real change for the icon.
+        const row3 = screen.getAllByTestId('asset-bulk-summary-row')[1];
+        expect(
+            within(row3)
+                .getAllByTestId('asset-bulk-summary-cell')
+                .map((c) => [c.getAttribute('data-field'), c.getAttribute('data-unchanged')]),
+        ).toEqual([
+            ['icon_url', 'false'],
+            ['user_url', 'true'],
+        ]);
+
+        await fireEvent.click(saveBtn());
+        await waitFor(() => expect(onsaved).toHaveBeenCalledTimes(1));
+        expect(patch().mock.calls[0][0]).toEqual([
+            {asset_id: 1, icon_url: null, user_url: null},
+            {asset_id: 3, icon_url: null},
+        ]);
+    });
+});

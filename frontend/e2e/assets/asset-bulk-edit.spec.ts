@@ -25,7 +25,7 @@ import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {API_BASE, goToAssetsPage} from './assets-helpers';
 import {deleteOwned, jsonFrom, type Owned} from './asset-events-owned';
 
-type StoredAsset = {id: number; display_name: string; asset_type: string | null; is_benchmark: boolean | null; active: boolean};
+type StoredAsset = {id: number; display_name: string; asset_type: string | null; is_benchmark: boolean | null; active: boolean; icon_url?: string | null; user_url?: string | null};
 
 /** Three EUR stocks named after `token` (A, B, C); their ids are recorded for the cleanup first. */
 async function createAssets(page: Page, owned: Owned, token: string, letters: string[]): Promise<Array<{id: number; name: string}>> {
@@ -336,6 +336,80 @@ test.describe('Asset bulk edit', () => {
                 expect(found!.y, `${part} is inside the viewport`).toBeGreaterThanOrEqual(0);
                 expect(found!.y + found!.height, `${part} is inside the viewport`).toBeLessThanOrEqual(viewport.height);
             }
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
+    // U7: «Remove icon» and «Remove URL» take the value away from the assets that hold it, in one save; an asset that holds
+    // neither has nothing to remove and is not touched.
+    test('«Remove icon» and «Remove URL» clear them for the assets that hold them', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        try {
+            const assets = await createAssets(page, owned, token, ['A', 'B', 'C']);
+            const [a, , c] = assets;
+            const patched = await page.request.patch(`${API_BASE}/assets`, {
+                data: [
+                    {asset_id: a.id, icon_url: 'https://example.test/a.png', user_url: 'https://example.test/a'},
+                    {asset_id: c.id, icon_url: 'https://example.test/c.png'},
+                ],
+            });
+            expect(patched.ok(), 'give A an icon and a URL, C an icon').toBe(true);
+            await openBulkEdit(page, token, 3);
+
+            await page.getByTestId('asset-bulk-icon-remove').click();
+            await page.getByTestId('asset-bulk-user-url-remove').click();
+            await expect(page.getByTestId('asset-bulk-edit')).toHaveAttribute('data-modified', '2');
+            await toSummary(page);
+            await expect(page.getByTestId('asset-bulk-summary')).toHaveAttribute('data-changing', '2');
+            await expect(page.locator(`[data-testid="asset-bulk-summary-row"][data-asset-id="${assets[1].id}"]`)).toHaveCount(0);
+
+            const since = await eventSeq(page);
+            await page.getByTestId('asset-bulk-save').click();
+            await waitForEvent(page, 'asset.bulk.saved', {since, timeout: 20_000});
+
+            const [after, untouched, afterC] = await storedAssets(
+                page,
+                assets.map((asset) => asset.id),
+            );
+            expect(after.icon_url ?? null, 'A lost its icon').toBeNull();
+            expect(after.user_url ?? null, 'A lost its URL').toBeNull();
+            expect(afterC.icon_url ?? null, 'C lost its icon').toBeNull();
+            expect(untouched.icon_url ?? null, 'B had none and still has none').toBeNull();
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
+    // U10: the table row has its own «Edit»: the editor of the asset opens in place (complete, as in the detail page) and a
+    // rename shows in the list, without ever leaving it.
+    test('the row action «Edit» opens the asset editor in the list and a rename shows in the table', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        try {
+            const [asset] = await createAssets(page, owned, token, ['A']);
+            await goToAssetsPage(page);
+            await page.getByTestId('assets-search-input').fill(token);
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+            await page.getByTestId(`row-actions-${asset.id}`).click();
+            await page.getByTestId('asset-table-edit-action').click();
+            await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 10_000});
+            const nameInput = page.getByTestId('asset-modal-display-name');
+            await expect(nameInput).toHaveValue(asset.name, {timeout: 5_000});
+            await expect(page, 'the list page stays: no detail page').toHaveURL(/\/assets(\?|$)/);
+
+            const renamed = `${asset.name} renamed`;
+            await nameInput.fill(renamed);
+            await page.getByTestId('asset-modal-save').click();
+            await expect(page.getByTestId('asset-modal-form')).toHaveCount(0, {timeout: 15_000});
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+            const stored = await storedAssets(page, [asset.id]);
+            expect(stored[0].display_name).toBe(renamed);
         } finally {
             await deleteOwned(page, owned);
         }
