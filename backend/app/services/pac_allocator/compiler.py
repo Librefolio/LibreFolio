@@ -8,12 +8,11 @@ ordered objective cascade (``objectives.build_objective_cascade``), ready for
 built). This module never calls ``model.optimize()`` itself — building and
 solving are deliberately separate responsibilities.
 
-Scope: PAC ``proportional`` policy, ``primary`` purpose only (see
-``constraints``/``objectives.py`` module docstrings and Step3 §16.6/
-§16.9). ``compile_policy_program`` raises ``PolicyProgramScopeError`` for any
-other ``(product, policy, purpose)`` combination rather than silently
-building an incomplete or wrong model — this build only implements PAC
-proportional.
+Scope: PAC ``proportional`` and the Rebalancer (B2 of project 67), ``primary``
+purpose only. ``compile_policy_program`` raises ``PolicyProgramScopeError`` for
+``min_fragmentation`` and ``deployment`` rather than silently building an
+incomplete or wrong model. A Rebalancer scenario with sell routes fails closed
+in the ledger guard (``LedgerPostingScopeError``) until the sales are modelled.
 
 ``ObjectiveInputs`` (``fixed_reference``/per-Asset ``target_value``) are
 obtained by one probe call to the public ``evaluate_exact_candidate`` rather
@@ -51,6 +50,7 @@ by widening an epsilon.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 
 from pyscipopt import Model
 
@@ -62,7 +62,7 @@ from backend.app.services.pac_allocator.constraints import (
     compile_hard_constraints,
 )
 from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
-from backend.app.services.pac_allocator.evaluation.limits import resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -119,8 +119,9 @@ class CompiledProgram:
 
 
 def _require_supported_scope(scenario: ExactPlannerScenario, view: ExactPolicyView) -> None:
-    if scenario.product != "pac" or scenario.policy != "proportional":
-        raise PolicyProgramScopeError(f"compiler.py only supports PAC proportional for now; got product={scenario.product!r} policy={scenario.policy!r}")
+    # The PAC proportional, and the Rebalancer (B2 of project 67); min_fragmentation and deployment stay out of SCIP.
+    if scenario.product == "pac" and scenario.policy != "proportional":
+        raise PolicyProgramScopeError(f"compiler.py only supports PAC proportional and the Rebalancer for now; got product={scenario.product!r} policy={scenario.policy!r}")
     if view.purpose != "primary":
         raise PolicyProgramScopeError(f"compiler.py only supports the primary purpose for now; got purpose={view.purpose!r}")
 
@@ -142,7 +143,20 @@ def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyVie
     if evaluation.accounting is None:
         raise PolicyProgramContractError("compiler.py's internal probe candidate was rejected; the policy view is not well-formed")
     target_value_by_asset = {asset.asset_id: as_float(asset.target_value) for asset in evaluation.assets}
-    return compute_objective_inputs(target_value_by_asset, as_float(evaluation.accounting.fixed_reference)), evaluation.accounting.fixed_reference
+    reference = limit_reference(scenario, evaluation.accounting)
+    if scenario.product != "rebalancer":
+        return compute_objective_inputs(target_value_by_asset, as_float(evaluation.accounting.fixed_reference)), reference
+    initial_wealth = evaluation.accounting.initial_wealth
+    return (
+        compute_objective_inputs(
+            target_value_by_asset,
+            as_float(evaluation.accounting.fixed_reference),
+            initial_wealth=Fraction(initial_wealth.numerator, initial_wealth.denominator),
+            cash_target_by_cell={(row.broker_id, row.currency): as_float(row.target_value) for row in evaluation.cash_targets},
+            fidelity=scenario.target_fidelity,
+        ),
+        reference,
+    )
 
 
 def _create_variables(model: Model, scenario: ExactPlannerScenario, view: ExactPolicyView) -> CompiledVariables:
@@ -155,7 +169,12 @@ def _create_variables(model: Model, scenario: ExactPlannerScenario, view: ExactP
         buy_active[route.route_id] = model.addVar(vtype="B", name=f"active_buy:{route.route_id}")
         buy_fee[route.route_id] = model.addVar(vtype="C", lb=0.0, name=f"fee:{route.route_id}")
     funding_active = {route.route_id: model.addVar(vtype="B", name=f"active_funding:{route.route_id}") for route in scenario.funding_routes}
-    return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee)
+    if scenario.product != "rebalancer":
+        return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee)
+    # The Rebalancer counts its operations (B2 of project 67): one activity binary per conversion and per transfer.
+    fx_active = {access.decision_id: model.addVar(vtype="B", name=f"active_fx:{access.decision_id}") for access in view.decisions if access.family == "fx_debit"}
+    transfer_active = {access.decision_id: model.addVar(vtype="B", name=f"active_transfer:{access.decision_id}") for access in view.decisions if access.family == "broker_transfer"}
+    return CompiledVariables(quanta=quanta, buy_active=buy_active, funding_active=funding_active, buy_fee=buy_fee, fx_active=fx_active, transfer_active=transfer_active)
 
 
 def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView) -> CompiledProgram:
@@ -169,8 +188,8 @@ def compile_policy_program(scenario: ExactPlannerScenario, view: ExactPolicyView
     variables = _create_variables(model, scenario, view)
     # The probe first: V5 resolves shares of the reference, which only the exact do-nothing replay gives (specification §15 n. 17).
     objective_inputs, reference = _probe_objective_inputs(scenario, view)
-    compile_hard_constraints(model, scenario, facts, variables, resolve_scenario_limits(scenario, reference))
-    objective_stages = tuple(build_objective_cascade(model, scenario, facts, variables, objective_inputs, view))
+    cells = compile_hard_constraints(model, scenario, facts, variables, resolve_scenario_limits(scenario, reference))
+    objective_stages = tuple(build_objective_cascade(model, scenario, facts, variables, objective_inputs, view, cells))
     return CompiledProgram(
         model=model,
         scenario=scenario,

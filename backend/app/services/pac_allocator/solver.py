@@ -132,7 +132,7 @@ STAGE_PIN_RELATIVE_SLACK = 1e-12
 # and every ``tie:*`` stage is one integer decision variable. These are pinned
 # at their exact rounded value, so the lexicographic contract is exact — not
 # merely tolerant — for that part of the cascade.
-_INTEGRAL_STAGE_CODES = frozenset({"route_priority", "active_order_rows"})
+_INTEGRAL_STAGE_CODES = frozenset({"route_priority", "active_order_rows", "operation_count"})
 _TIE_STAGE_PREFIX = "tie:"
 
 # A stage that ended on one of these ran out of its allowance rather than
@@ -230,6 +230,9 @@ class SolverStageReport:
     scip_status: str
     solving_seconds: float
     nodes: int
+    # SCIP minimizes ``scale ×`` the view's objective (D2 of the step-2 plan of project 67): ``primal``, ``dual`` and
+    # ``absolute_gap`` above are in SCIP's units, and the report divides them by this to publish the objective's own unit.
+    scale: Fraction = Fraction(1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,7 +276,7 @@ class SolverRunResult:
 
 
 def _is_integral_stage(stage: ObjectiveStage) -> bool:
-    return stage.code in _INTEGRAL_STAGE_CODES or stage.code.startswith(_TIE_STAGE_PREFIX)
+    return stage.integral or stage.code in _INTEGRAL_STAGE_CODES or stage.code.startswith(_TIE_STAGE_PREFIX)
 
 
 def _objective_code(stage: ObjectiveStage) -> str:
@@ -354,6 +357,7 @@ def _unfinished_report(stage: ObjectiveStage, ordinal: int, scope: Literal["glob
         scip_status=scip_status,
         solving_seconds=0.0,
         nodes=0,
+        scale=stage.scale,
     )
 
 
@@ -486,8 +490,9 @@ def _exact_stage_values(cascade: _Cascade, candidate: CandidateActionVector) -> 
     outside its own box or its view — so it has no values to pin or compare
     with. A plan that merely breaks a rule is still valid here: the planner
     decides later whether rounding explains it. A named stage takes its
-    objective's exact value; a tie-break stage is the quanta of one decision,
-    which is all its expression is.
+    objective's exact value times the stage's scale, SCIP's own unit (D2 of the
+    step-2 plan of project 67): pins and bound checks compare like with like. A
+    tie-break stage is the quanta of one decision, which is all its expression is.
     """
     program = cascade.program
     evaluation = evaluate_exact_candidate(program.scenario, program.view, candidate, checkpoint=cascade.checkpoint)
@@ -502,7 +507,7 @@ def _exact_stage_values(cascade: _Cascade, candidate: CandidateActionVector) -> 
             values.append(Fraction(quanta[stage.code.removeprefix(_TIE_STAGE_PREFIX)]))
         else:
             ratio = value_by_code[stage.code]
-            values.append(Fraction(ratio.numerator, ratio.denominator))
+            values.append(stage.scale * Fraction(ratio.numerator, ratio.denominator))
     return tuple(values)
 
 
@@ -522,9 +527,24 @@ def _take_candidate(cascade: _Cascade, candidate: CandidateActionVector, ordinal
             return
     elif cascade.in_tail and cascade.best_values is not None and values > cascade.best_values:
         return
+    elif cascade.best_values is not None and _worse_before_tie_break(cascade.program.objective_stages, ordinal, values, cascade.best_values):
+        return
     cascade.best = candidate
     cascade.best_values = values
     cascade.outcome = "incumbent"
+
+
+def _worse_before_tie_break(stages: tuple[ObjectiveStage, ...], ordinal: int, values: tuple[Fraction, ...], best: tuple[Fraction, ...]) -> bool:
+    """D4 (step-2 plan of project 67): a tie-break chooses only among plans no worse on what precedes it.
+
+    After its pin a tie-break stage may pick a plan whose objectives, within SCIP's tolerance of the pin, are a hair worse
+    in exact arithmetic. Such a plan never replaces the best one: the objectives before the tie-breaks are compared exactly,
+    in order. Stages that are not tie-breaks (all the PAC's) keep the rule of the cascade.
+    """
+    if not stages[ordinal - 1].tie_break:
+        return False
+    prefix = [index for index in range(ordinal - 1) if not stages[index].tie_break]
+    return tuple(values[index] for index in prefix) > tuple(best[index] for index in prefix)
 
 
 def _exact_pin_value(stage: ObjectiveStage, primal: float | None, exact: Fraction) -> float:
@@ -598,6 +618,7 @@ def _stage_report(stage: ObjectiveStage, index: int, observation: _StageObservat
         scip_status=observation.scip_status,
         solving_seconds=observation.solving_seconds,
         nodes=observation.nodes,
+        scale=stage.scale,
     )
 
 
@@ -656,12 +677,13 @@ def _close_stage(cascade: _Cascade, stage: ObjectiveStage, index: int, observati
     return True
 
 
-def _outside_reported_bounds(report: SolverStageReport, value: Fraction, weight_count: int) -> bool:
-    if report.objective_code in _INTEGRAL_STAGE_CODES:
+def _outside_reported_bounds(report: SolverStageReport, value: Fraction, stage: ObjectiveStage) -> bool:
+    if _is_integral_stage(stage):
         below = report.dual is not None and value < math.ceil(report.dual - _BOUND_CHECK_TOLERANCE)
         above = report.primal is not None and value > round(report.primal)
         return below or above
-    extra = weight_count * _BOUND_CHECK_TOLERANCE if report.objective_code == "fixed_l2" else 0.0
+    # The band the stage declares from its quadratic rows (D3): today's `fixed_l2` declares one tolerance per target weight.
+    extra = stage.band
     below = report.dual is not None and value < Fraction(report.dual) - Fraction(_BOUND_CHECK_TOLERANCE * max(1.0, abs(report.dual)) + extra)
     above = report.primal is not None and value > Fraction(report.primal) + Fraction(_BOUND_CHECK_TOLERANCE * max(1.0, abs(report.primal)) + extra)
     return below or above
@@ -675,11 +697,11 @@ def _flag_contradicted_bounds(cascade: _Cascade) -> None:
     """
     if cascade.best is None or cascade.best_values is None:
         return
-    weight_count = len(cascade.program.scenario.target_weights)
+    stages = cascade.program.objective_stages
     for report in cascade.reports:
         if report.status != "finished" or report.stage.startswith(_TIE_STAGE_PREFIX):
             continue
-        if _outside_reported_bounds(report, cascade.best_values[report.ordinal - 1], weight_count):
+        if _outside_reported_bounds(report, cascade.best_values[report.ordinal - 1], stages[report.ordinal - 1]):
             cascade.flag(f"stage {report.stage!r} (ordinal {report.ordinal}): the exact value of the returned plan lies outside the bounds the solver reported")
             return
 

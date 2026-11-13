@@ -873,8 +873,11 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     for report in result.stages:
         if report.objective_code not in unit_by_code:
             continue  # a tie:* stage — see the docstring
-        primal = _float_text(report.primal)
-        dual = _float_text(report.dual)
+        # SCIP minimizes ``scale ×`` the objective (D2 of the step-2 plan of project 67): the evidence publishes the
+        # objective's own unit, the one of its value, so the bounds are divided by the stage's scale here and only here.
+        scale = float(report.scale)
+        primal = _float_text(None if report.primal is None else report.primal / scale)
+        dual = _float_text(None if report.dual is None else report.dual / scale)
         stages.append(
             SolverStageEvidence(
                 kind="reported_floating",
@@ -887,7 +890,7 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
                 unit=_objective_unit(unit_by_code[report.objective_code], scenario.valuation_currency),
                 primal=primal,
                 dual=dual,
-                absolute_gap=_published_gap(primal, dual, report.absolute_gap),
+                absolute_gap=_published_gap(primal, dual, None if report.absolute_gap is None else report.absolute_gap / scale),
                 relative_gap=_float_text(report.relative_gap, nonnegative=True),
                 tolerances=tolerances,
                 engine=result.engine,
