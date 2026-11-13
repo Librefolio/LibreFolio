@@ -182,15 +182,18 @@ async function setVisibility(page: Page, state: 'hidden' | 'visible'): Promise<v
 /**
  * The counts of the two live requests so far, read in the page, and — once the stub has answered them and the answers are
  * back in the page — the requests. `expected` of each.
+ *
+ * Polled, never read once: a poll asks the prices, waits for their answer, and only then asks the summary
+ * (`portfolioData.ts`, `livePoll`). Right after the clock runs, the prices may be out while the summary is still waiting
+ * for them — a one-shot read then saw `summaries: expected - 1` (13/11/2026, front-portfolio at 4 workers). Equality is
+ * still exact: a poll too many fails as before.
  */
 async function expectPolls(page: Page, traffic: PriceTraffic, expected: number, what: string): Promise<{prices: Exchange[]; summaries: Exchange[]}> {
+    await expect.poll(async () => ({prices: (await livePricesSent(page)).length, summaries: (await summariesSent(page)).length}), {message: `${what} — the page sent`, timeout: 10_000}).toEqual({prices: expected, summaries: expected});
     const prices = await livePricesSent(page);
     const summaries = await summariesSent(page);
-    expect({prices: prices.length, summaries: summaries.length}, `${what} — the page sent`).toEqual({prices: expected, summaries: expected});
     await expect.poll(() => traffic.served, {message: `${what} — the stub answered every price request`, timeout: 10_000}).toBe(expected);
-    await expect
-        .poll(async () => [...(await livePricesSent(page)), ...(await summariesSent(page))].every((entry) => entry.settledAt !== null), {message: `${what} — every answer is back in the page before its clock moves on`, timeout: 15_000})
-        .toBe(true);
+    await expect.poll(async () => [...(await livePricesSent(page)), ...(await summariesSent(page))].every((entry) => entry.settledAt !== null), {message: `${what} — every answer is back in the page before its clock moves on`, timeout: 15_000}).toBe(true);
     return {prices, summaries};
 }
 
@@ -212,6 +215,11 @@ async function openDashboard(page: Page, query: string, answer: PriceAnswer = 'e
     await page.mouse.move(1, 1);
     await page.clock.install({});
     await login(page, TEST_USER);
+    // The sign-in arrives on a Dashboard of its own, which asks its report too. Settled first, so that the wait below can
+    // only meet the report of the page opened next: registered while the arrival's report was still out, it took that one,
+    // whose body was gone once the page navigated («No resource with given identifier», F-4, 13/11/2026). A session reused
+    // per worker arrives sooner, with the report still out, which is how it showed.
+    await waitForSettled(root(page), 30_000);
     const mainReport = page.waitForResponse((response) => response.url().endsWith(REPORT_PATH) && response.request().method() === 'POST' && (response.request().postDataJSON() as ReportBody).include_history !== false, {timeout: 30_000});
     await page.goto(`/dashboard?${query}`);
     const answered = await mainReport;
@@ -239,7 +247,10 @@ test.describe('Dashboard — the figures follow the current prices (FB-28)', () 
         await userMoves(page);
         await runClockTo(page, reported + INTERVAL_MS + SLACK_MS);
         const first = await expectPolls(page, traffic, 1, 'a minute after the report: one poll');
-        expect(traffic.askedFor[0].slice().sort((a, b) => a - b), 'the poll asks the held assets, once each').toEqual(held);
+        expect(
+            traffic.askedFor[0].slice().sort((a, b) => a - b),
+            'the poll asks the held assets, once each',
+        ).toEqual(held);
         expect(first.prices[0].sentAt, 'the prices are asked before the summary').toBeLessThanOrEqual(first.summaries[0].sentAt);
         const summary = bodyOf(first.summaries[0]);
         expect(summary, 'the summary is the same scope as the report, with every section off').toMatchObject({include_summary: true, include_history: false, include_allocation_history: false, broker_ids: brokerIds});
