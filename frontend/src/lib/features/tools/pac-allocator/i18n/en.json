@@ -434,7 +434,11 @@
           "selectedNegative": "'Amount to use' cannot be negative.",
           "declaredNegative": "'Declared liquidity' cannot be negative.",
           "contributionAmountNegative": "The contribution amount cannot be negative.",
-          "modeStepNotPositive": "The order step must be greater than zero."
+          "modeStepNotPositive": "The order step must be greater than zero.",
+          "limitInvalid": "A limit is not an amount or a percentage from 0.",
+          "limitShareAboveHundred": "A limit in percent cannot be above 100%.",
+          "limitMinAboveMax": "The minimum is above the maximum.",
+          "limitShareMinimumsAboveHundred": "The minimums in percent add up to more than 100%: {assets}."
         },
         "removal": {
           "cash": "Cash row {broker} · {currency}",
@@ -670,7 +674,8 @@
               "deposit": "Make the deposit “{source}” of {amount} to the Broker “{destination}”",
               "transfer": "Transfer {amount} from “{source}” to the Broker “{destination}”",
               "cash": "Use {amount} of the cash available on the Broker “{source}”"
-            }
+            },
+            "automaticConversionNote": "{brokers} convert currency at each purchase. The plan counts one conversion per currency pair; the broker may round each order separately, so a few cents per order may differ."
           },
           "platform": {
             "draftIntact": "The draft is intact.",
@@ -746,7 +751,11 @@
               "constraints": "Hard constraints involved (from the request; caps and minimums masked with privacy on):",
               "funding": "Liquidity reachable: {amount}",
               "note": "The interface does not choose which constraint to relax: it lists them. No partial plan is shown as valid.",
-              "title": "Infeasible with these constraints"
+              "title": "Infeasible with these constraints",
+              "limitsTitle": "No solution with these limits",
+              "limitsBody": "Without the limits a plan exists: they are what rule it out. Review them:",
+              "limitMinimum": "minimum {value}",
+              "limitMaximum": "maximum {value}"
             },
             "limit": {
               "complete": "The result below stays complete and can be consulted.",
@@ -833,7 +842,8 @@
           "ordersIn": "Orders in",
           "externalAccount": "External account",
           "noOrdersHint": "The calculation sends no order to the Brokers.",
-          "factsToggle": "Calculation data ({count})"
+          "factsToggle": "Calculation data ({count})",
+          "limited": "{count, plural, =0 {} one { · # with a limit} other { · # with limits}}"
         },
         "route": {
           "cap": "Maximum purchase",
@@ -933,7 +943,8 @@
           "toggle": "Summary",
           "total": "Total (control)",
           "versions": "Backend/API {api} · UI {ui}",
-          "rates": "Rates"
+          "rates": "Rates",
+          "limits": "With a limit"
         },
         "targets": {
           "copyDistribution": "Copy current distribution",
@@ -948,7 +959,15 @@
           "balance": "Balance to 100%",
           "totalHelp": "The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.",
           "balanceAll": "Balance all",
-          "balanceSelected": "Balance the selected rows to 100%"
+          "balanceSelected": "Balance the selected rows to 100%",
+          "limits": "Limits",
+          "limitsHelp": "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the money you invest now. Empty field = no limit.",
+          "limitMinimum": "min",
+          "limitMaximum": "max",
+          "limitMinimumLabel": "Minimum of {asset}",
+          "limitMaximumLabel": "Maximum of {asset}",
+          "limitsNote": "Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.",
+          "limitsCheck": "Check the limits"
         },
         "toolErrors": {
           "cleanup_failed": "The calculation finished, but the platform could not clean up after it.",

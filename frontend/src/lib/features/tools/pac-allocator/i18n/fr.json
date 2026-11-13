@@ -434,7 +434,11 @@
           "selectedNegative": "« Montant à utiliser » ne peut pas être négatif.",
           "declaredNegative": "« Liquidités déclarées » ne peut pas être négatif.",
           "contributionAmountNegative": "Le montant du versement ne peut pas être négatif.",
-          "modeStepNotPositive": "Le pas d’ordre doit être supérieur à zéro."
+          "modeStepNotPositive": "Le pas d’ordre doit être supérieur à zéro.",
+          "limitInvalid": "Une limite n’est ni un montant ni un pourcentage à partir de 0.",
+          "limitShareAboveHundred": "Une limite en pourcentage ne peut pas dépasser 100 %.",
+          "limitMinAboveMax": "Le minimum dépasse le maximum.",
+          "limitShareMinimumsAboveHundred": "Les minimums en pourcentage totalisent plus de 100 % : {assets}."
         },
         "removal": {
           "cash": "Ligne de liquidités {broker} · {currency}",
@@ -670,7 +674,8 @@
               "deposit": "Effectuez le versement « {source} » de {amount} sur le Broker « {destination} »",
               "transfer": "Transférez {amount} de « {source} » vers le Broker « {destination} »",
               "cash": "Utilisez {amount} des liquidités disponibles sur le Broker « {source} »"
-            }
+            },
+            "automaticConversionNote": "{brokers} convertit la devise à chaque achat. Le plan compte une seule conversion par paire de devises : le courtier peut arrondir chaque ordre séparément, d’où quelques centimes d’écart par ordre."
           },
           "platform": {
             "draftIntact": "Le brouillon est intact.",
@@ -746,7 +751,11 @@
               "constraints": "Contraintes strictes concernées (issues de la requête ; plafonds et minimums masqués avec la confidentialité activée) :",
               "funding": "Liquidités atteignables : {amount}",
               "note": "L’interface ne choisit pas la contrainte à assouplir : elle les liste. Aucun plan partiel n’est présenté comme valide.",
-              "title": "Infaisable avec ces contraintes"
+              "title": "Infaisable avec ces contraintes",
+              "limitsTitle": "Aucune solution avec ces limites",
+              "limitsBody": "Sans les limites, un plan existe : ce sont elles qui l’excluent. Revoyez-les :",
+              "limitMinimum": "minimum {value}",
+              "limitMaximum": "maximum {value}"
             },
             "limit": {
               "complete": "Le résultat ci-dessous reste complet et consultable.",
@@ -833,7 +842,8 @@
           "ordersIn": "Ordres en",
           "externalAccount": "Compte externe",
           "noOrdersHint": "Le calcul n’envoie aucun ordre aux courtiers.",
-          "factsToggle": "Données du calcul ({count})"
+          "factsToggle": "Données du calcul ({count})",
+          "limited": "{count, plural, =0 {} one { · # avec une limite} other { · # avec des limites}}"
         },
         "route": {
           "cap": "Achat maximum",
@@ -933,7 +943,8 @@
           "toggle": "Résumé",
           "total": "Total (contrôle)",
           "versions": "Backend/API {api} · UI {ui}",
-          "rates": "Taux"
+          "rates": "Taux",
+          "limits": "Avec une limite"
         },
         "targets": {
           "copyDistribution": "Copier la répartition actuelle",
@@ -948,7 +959,15 @@
           "balance": "Équilibrer à 100 %",
           "totalHelp": "Les cibles répartissent entre les actifs l’argent que vous investissez maintenant, liquidités et versements compris : pour calculer, leur somme doit faire exactement 100 %. « Tout équilibrer » redimensionne chaque cible en gardant leurs proportions (parts égales si elles sont toutes à 0). Cochez des lignes pour ne redimensionner que celles-ci, avec « Équilibrer les lignes sélectionnées à 100 % ». « Équilibrer à 100 % » sur une ligne donne à cet actif ce qui manque, ou retire l’excédent.",
           "balanceAll": "Tout équilibrer",
-          "balanceSelected": "Équilibrer les lignes sélectionnées à 100 %"
+          "balanceSelected": "Équilibrer les lignes sélectionnées à 100 %",
+          "limits": "Limites",
+          "limitsHelp": "Minimum et maximum de la valeur de cet Actif à la fin du plan. Écrivez un montant dans la devise d’évaluation (500) ou un pourcentage du total du plan (35 %) : le total est l’argent que vous investissez maintenant. Champ vide = aucune limite.",
+          "limitMinimum": "min",
+          "limitMaximum": "max",
+          "limitMinimumLabel": "Minimum de {asset}",
+          "limitMaximumLabel": "Maximum de {asset}",
+          "limitsNote": "Limites sur la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage du total (35 %). Champ vide = aucune limite.",
+          "limitsCheck": "Vérifiez les limites"
         },
         "toolErrors": {
           "cleanup_failed": "Le calcul est terminé, mais la plateforme n’a pas pu nettoyer après lui.",

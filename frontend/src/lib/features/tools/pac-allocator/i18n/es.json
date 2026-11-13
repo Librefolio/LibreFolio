@@ -434,7 +434,11 @@
           "selectedNegative": "«Importe a usar» no puede ser negativo.",
           "declaredNegative": "«Liquidez declarada» no puede ser negativo.",
           "contributionAmountNegative": "El importe de la aportación no puede ser negativo.",
-          "modeStepNotPositive": "El paso de orden debe ser mayor que cero."
+          "modeStepNotPositive": "El paso de orden debe ser mayor que cero.",
+          "limitInvalid": "Un límite no es un importe ni un porcentaje desde 0.",
+          "limitShareAboveHundred": "Un límite en porcentaje no puede superar el 100 %.",
+          "limitMinAboveMax": "El mínimo supera el máximo.",
+          "limitShareMinimumsAboveHundred": "Los mínimos en porcentaje suman más del 100 %: {assets}."
         },
         "removal": {
           "cash": "Fila de efectivo {broker} · {currency}",
@@ -670,7 +674,8 @@
               "deposit": "Realiza la aportación «{source}» de {amount} en el bróker «{destination}»",
               "transfer": "Transfiere {amount} desde «{source}» al bróker «{destination}»",
               "cash": "Usa {amount} del efectivo disponible en el bróker «{source}»"
-            }
+            },
+            "automaticConversionNote": "{brokers} convierte la divisa en cada compra. El plan cuenta una sola conversión por par de divisas: el bróker puede redondear cada orden por separado, con unos céntimos de diferencia por orden."
           },
           "platform": {
             "draftIntact": "El borrador está intacto.",
@@ -746,7 +751,11 @@
               "constraints": "Restricciones estrictas implicadas (de la solicitud; topes y mínimos ocultos con la privacidad activada):",
               "funding": "Liquidez alcanzable: {amount}",
               "note": "La interfaz no elige qué restricción relajar: las enumera. Ningún plan parcial se muestra como válido.",
-              "title": "Inviable con estas restricciones"
+              "title": "Inviable con estas restricciones",
+              "limitsTitle": "Ninguna solución con estos límites",
+              "limitsBody": "Sin los límites existe un plan: son ellos los que lo excluyen. Revísalos:",
+              "limitMinimum": "mínimo {value}",
+              "limitMaximum": "máximo {value}"
             },
             "limit": {
               "complete": "El resultado de abajo sigue completo y consultable.",
@@ -833,7 +842,8 @@
           "ordersIn": "Órdenes en",
           "externalAccount": "Cuenta externa",
           "noOrdersHint": "El cálculo no envía ninguna orden a los brókeres.",
-          "factsToggle": "Datos del cálculo ({count})"
+          "factsToggle": "Datos del cálculo ({count})",
+          "limited": "{count, plural, =0 {} one { · # con un límite} other { · # con límites}}"
         },
         "route": {
           "cap": "Compra máxima",
@@ -933,7 +943,8 @@
           "toggle": "Resumen",
           "total": "Total (control)",
           "versions": "Backend/API {api} · UI {ui}",
-          "rates": "Tipos"
+          "rates": "Tipos",
+          "limits": "Con un límite"
         },
         "targets": {
           "copyDistribution": "Copiar la distribución actual",
@@ -948,7 +959,15 @@
           "balance": "Equilibrar al 100 %",
           "totalHelp": "Los objetivos reparten entre los activos el dinero que inviertes ahora, efectivo y aportaciones incluidos: para calcular deben sumar exactamente el 100 %. «Equilibrar todo» reescala todos los objetivos manteniendo sus proporciones (partes iguales si todos están a 0). Marca algunas filas para reescalar solo esas, con «Equilibrar las filas seleccionadas al 100 %». «Equilibrar al 100 %» en una fila da a ese activo lo que falta, o quita el exceso.",
           "balanceAll": "Equilibrar todo",
-          "balanceSelected": "Equilibrar las filas seleccionadas al 100 %"
+          "balanceSelected": "Equilibrar las filas seleccionadas al 100 %",
+          "limits": "Límites",
+          "limitsHelp": "Mínimo y máximo del valor de este Activo al final del plan. Escribe un importe en la divisa de valoración (500) o un porcentaje del total del plan (35 %): el total es el dinero que inviertes ahora. Campo vacío = sin límite.",
+          "limitMinimum": "mín",
+          "limitMaximum": "máx",
+          "limitMinimumLabel": "Mínimo de {asset}",
+          "limitMaximumLabel": "Máximo de {asset}",
+          "limitsNote": "Límites sobre el valor al final del plan. Escribe un importe (500) o un porcentaje del total (35 %). Campo vacío = sin límite.",
+          "limitsCheck": "Revisa los límites"
         },
         "toolErrors": {
           "cleanup_failed": "El cálculo terminó, pero la plataforma no pudo limpiar después.",

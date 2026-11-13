@@ -434,7 +434,11 @@
           "selectedNegative": "«Importo da usare» non può essere negativo.",
           "declaredNegative": "«Liquidità dichiarata» non può essere negativo.",
           "contributionAmountNegative": "L’importo del versamento non può essere negativo.",
-          "modeStepNotPositive": "Il passo d’ordine deve essere maggiore di zero."
+          "modeStepNotPositive": "Il passo d’ordine deve essere maggiore di zero.",
+          "limitInvalid": "Un limite non è un importo o una percentuale da 0 in su.",
+          "limitShareAboveHundred": "Un limite in percentuale non può superare il 100%.",
+          "limitMinAboveMax": "Il minimo supera il massimo.",
+          "limitShareMinimumsAboveHundred": "I minimi in percentuale sommano più del 100%: {assets}."
         },
         "removal": {
           "cash": "Riga di cassa {broker} · {currency}",
@@ -670,7 +674,8 @@
               "deposit": "Esegui il versamento «{source}» di {amount} sul Broker «{destination}»",
               "transfer": "Trasferisci {amount} da «{source}» al Broker «{destination}»",
               "cash": "Usa {amount} della liquidità disponibile sul Broker «{source}»"
-            }
+            },
+            "automaticConversionNote": "{brokers} converte la valuta a ogni acquisto. Il piano conta una sola conversione per coppia di valute: il broker può arrotondare ogni ordine per conto suo, con qualche centesimo di differenza per ordine."
           },
           "platform": {
             "draftIntact": "La bozza è intatta.",
@@ -746,7 +751,11 @@
               "constraints": "Vincoli rigidi coinvolti (dalla richiesta; tetti e minimi mascherati con la privacy attiva):",
               "funding": "Liquidità raggiungibile: {amount}",
               "note": "L’interfaccia non sceglie quale vincolo allentare: li elenca. Nessun piano parziale viene mostrato come valido.",
-              "title": "Infattibile con questi vincoli"
+              "title": "Infattibile con questi vincoli",
+              "limitsTitle": "Nessuna soluzione con questi limiti",
+              "limitsBody": "Senza i limiti un piano esiste: sono loro a escluderlo. Rivedili:",
+              "limitMinimum": "minimo {value}",
+              "limitMaximum": "massimo {value}"
             },
             "limit": {
               "complete": "Il risultato qui sotto resta completo e consultabile.",
@@ -833,7 +842,8 @@
           "ordersIn": "Ordini in",
           "externalAccount": "Conto esterno",
           "noOrdersHint": "Il calcolo non invia ordini ai Broker.",
-          "factsToggle": "Dati del calcolo ({count})"
+          "factsToggle": "Dati del calcolo ({count})",
+          "limited": "{count, plural, =0 {} one { · # con un limite} other { · # con limiti}}"
         },
         "route": {
           "cap": "Acquisto massimo",
@@ -933,7 +943,8 @@
           "toggle": "Sintesi",
           "total": "Totale (controllo)",
           "versions": "Backend/API {api} · UI {ui}",
-          "rates": "Tassi"
+          "rates": "Tassi",
+          "limits": "Con un limite"
         },
         "targets": {
           "copyDistribution": "Copia la distribuzione attuale",
@@ -948,7 +959,15 @@
           "balance": "Bilancia al 100%",
           "totalHelp": "Gli obiettivi dividono fra gli Asset il denaro che investi ora, cassa e versamenti compresi: per calcolare devono sommare esattamente il 100%. «Bilancia tutto» riscala ogni obiettivo mantenendo i loro rapporti (parti uguali se sono tutti a 0). Spunta alcune righe per riscalare solo quelle, con «Bilancia le righe selezionate al 100%». «Bilancia al 100%» su una riga dà a quell’Asset quanto manca, o toglie l’eccesso.",
           "balanceAll": "Bilancia tutto",
-          "balanceSelected": "Bilancia le righe selezionate al 100%"
+          "balanceSelected": "Bilancia le righe selezionate al 100%",
+          "limits": "Limiti",
+          "limitsHelp": "Minimo e massimo del valore di questo Asset alla fine del piano. Scrivi un importo nella valuta di valutazione (500) o una percentuale del totale del piano (35%): il totale è il denaro che investi ora. Campo vuoto = nessun limite.",
+          "limitMinimum": "min",
+          "limitMaximum": "max",
+          "limitMinimumLabel": "Minimo di {asset}",
+          "limitMaximumLabel": "Massimo di {asset}",
+          "limitsNote": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale del totale (35%). Campo vuoto = nessun limite.",
+          "limitsCheck": "Controlla i limiti"
         },
         "toolErrors": {
           "cleanup_failed": "Il calcolo è terminato, ma la piattaforma non è riuscita a ripulire dopo di esso.",
