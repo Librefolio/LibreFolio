@@ -967,7 +967,8 @@
           "limitMinimumLabel": "Minimo di {asset}",
           "limitMaximumLabel": "Massimo di {asset}",
           "limitsNote": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale del totale (35%). Campo vuoto = nessun limite.",
-          "limitsCheck": "Controlla i limiti"
+          "limitsCheck": "Controlla i limiti",
+          "limitMinAboveMax": "Il minimo ({minimum}) supera il massimo ({maximum})."
         },
         "toolErrors": {
           "cleanup_failed": "Il calcolo è terminato, ma la piattaforma non è riuscita a ripulire dopo di esso.",
