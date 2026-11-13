@@ -9,6 +9,10 @@
     import IssueList from '../shared/IssueList.svelte';
     import type {PlannerSource} from '../source';
     import {BADGE, NOTICE} from '../ui';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const KEY = 'tools.pacAllocator.planner.refresh.notice';
 
     interface Props {
@@ -20,7 +24,7 @@
         testid?: string;
     }
 
-    let {summary, asOf, draft, source, testid = 'pac-planner-refresh-notice'}: Props = $props();
+    let {summary, asOf, draft, source, testid = testId('refresh-notice', profile)}: Props = $props();
 
     const stamp = $derived(formatCopyStamp(asOf, summary.readAt));
     const issues = $derived(presentSourceIssues(summary.issues, draft, source).map(listIssue));
