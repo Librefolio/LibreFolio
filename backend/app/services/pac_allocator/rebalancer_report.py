@@ -14,8 +14,6 @@ from backend.app.schemas.pac_allocator.exact import UnavailableExactNumber
 from backend.app.schemas.pac_allocator.request import RebalancerCustomFidelityInput, RebalancerFidelityInput, RebalancerLevelFidelityInput, RebalancerTargetFirstFidelityInput
 from backend.app.schemas.pac_allocator.results import RebalancerScenarioBasis
 from backend.app.schemas.pac_allocator.rows import (
-    PlannerMoneyLost,
-    PlannerPlanAccounts,
     PlannerTransfer,
     RebalancerAssetPlanRow,
     RebalancerCashItemRow,
@@ -37,7 +35,6 @@ from backend.app.services.pac_allocator.wire_numbers import ratio_to_exact_numbe
 
 __all__ = [
     "build_cash_item_rows",
-    "build_plan_accounts",
     "build_rebalancer_asset_rows",
     "build_rebalancer_exposure_rows",
     "build_rebalancer_scenario_basis",
@@ -212,30 +209,6 @@ def build_rebalancer_exposure_rows(scenario: ExactPlannerScenario, evaluation: E
                 )
             )
     return rows
-
-
-def build_plan_accounts(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> PlannerPlanAccounts:
-    """The plan's accounts (contract §6.1): ``F``, ``W``, the money lost by entry, ``N``. The entries are the exact costs and
-    the rounding adjustment, whose sum is ``F − W`` by the identity ``ExactAccountingEvaluation`` checks."""
-    accounting = _accounting(evaluation)
-    costs = evaluation.costs
-    currency = scenario.valuation_currency
-    return PlannerPlanAccounts(
-        initial_wealth=ratio_to_money(accounting.initial_wealth, currency),
-        final_wealth=ratio_to_money(accounting.final_wealth, currency),
-        money_lost=PlannerMoneyLost(
-            buy_fees=ratio_to_money(costs.buy_fees, currency),
-            sell_fees=ratio_to_money(costs.sell_fees, currency),
-            fx_spread_loss=ratio_to_money(costs.fx_spread_loss, currency),
-            execution_margin_cost=ratio_to_money(costs.execution_margin_loss, currency),
-            broker_withheld_tax=ratio_to_money(costs.broker_withheld_tax, currency),
-            self_reserved_tax=ratio_to_money(costs.self_reserved_tax, currency),
-            # No foreign withholding is posted yet (C2 of project 67): the entry is zero until then.
-            foreign_withholding_tax=ratio_to_money(_ZERO, currency),
-            rounding=ratio_to_money(accounting.rounding_adjustment + accounting.identity_delta, currency),
-        ),
-        uninvested=ratio_to_money(accounting.uninvested, currency),
-    )
 
 
 def _tie_break_status(view: ExactPolicyView, solver: SolverRunResult) -> list[RebalancerTieBreakStage]:

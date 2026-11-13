@@ -43,7 +43,9 @@ from backend.app.schemas.pac_allocator.rows import (
     PlannerCostTotals,
     PlannerFundingAction,
     PlannerLedgerRow,
+    PlannerMoneyLost,
     PlannerObjectiveResults,
+    PlannerPlanAccounts,
     PlannerRoundingTopUp,
     PlannerScenarioCounts,
     TieBreakResult,
@@ -710,6 +712,33 @@ def build_costs(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> 
         self_reserved_tax=_money(costs.self_reserved_tax, currency),
         # No foreign withholding is posted yet (see ``build_ledger_rows``): the line is zero until C2.
         foreign_withholding_tax=_money(_EXACT_ZERO, currency),
+    )
+
+
+def build_plan_accounts(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> PlannerPlanAccounts:
+    """The plan's accounts (contract §6.1), the same for both Tools: ``F``, ``W``, the money lost by entry, ``N``, all read off
+    B1's exact accounting and costs. The entries are the exact costs and the rounding adjustment, whose sum is ``F − W`` by the
+    identity ``ExactAccountingEvaluation`` checks. In the PAC ``N`` is the shortfall plus the trapped cash."""
+    accounting = _require_accounting(evaluation)
+    costs = evaluation.costs
+    if costs is None:
+        raise ValueError("plan accounts require an evaluation that produced costs")
+    currency = scenario.valuation_currency
+    return PlannerPlanAccounts(
+        initial_wealth=_money(accounting.initial_wealth, currency),
+        final_wealth=_money(accounting.final_wealth, currency),
+        money_lost=PlannerMoneyLost(
+            buy_fees=_money(costs.buy_fees, currency),
+            sell_fees=_money(costs.sell_fees, currency),
+            fx_spread_loss=_money(costs.fx_spread_loss, currency),
+            execution_margin_cost=_money(costs.execution_margin_loss, currency),
+            broker_withheld_tax=_money(costs.broker_withheld_tax, currency),
+            self_reserved_tax=_money(costs.self_reserved_tax, currency),
+            # No foreign withholding is posted yet (C2 of project 67): the entry is zero until then.
+            foreign_withholding_tax=_money(_EXACT_ZERO, currency),
+            rounding=_money(accounting.rounding_adjustment + accounting.identity_delta, currency),
+        ),
+        uninvested=_money(accounting.uninvested, currency),
     )
 
 

@@ -415,6 +415,7 @@ def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView,
         "exposure_rows": report.build_exposure_rows(scenario, evaluation),
         "accounting": report.build_accounting(scenario, evaluation),
         "costs": report.build_costs(scenario, evaluation),
+        "plan_accounts": report.build_plan_accounts(scenario, evaluation),
         "objectives": report.build_objective_results(scenario, view, evaluation),
     }
 
@@ -444,7 +445,7 @@ def _rebalancer_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicy
         "exposure_rows": rebalancer_report.build_rebalancer_exposure_rows(scenario, evaluation),
         "accounting": report.build_accounting(scenario, evaluation),
         "costs": report.build_costs(scenario, evaluation),
-        "plan_accounts": rebalancer_report.build_plan_accounts(scenario, evaluation),
+        "plan_accounts": report.build_plan_accounts(scenario, evaluation),
         "score": rebalancer_report.build_score(scenario, view, evaluation, solver),
         "tax_basket_rows": [],
         "tax_scope_rows": [],

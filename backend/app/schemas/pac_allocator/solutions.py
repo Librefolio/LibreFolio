@@ -123,6 +123,7 @@ class PacPlanSolution(AllocationStrictModel):
     exposure_rows: list[PacExposurePlanRow]
     accounting: PlannerAccountingSummary
     costs: PlannerCostTotals
+    plan_accounts: PlannerPlanAccounts = Field(description="The plan's accounts, the same for both Tools: the wealth before and after, the money lost by entry and what is left uninvested (contract §6.1).")
     objectives: PlannerObjectiveResults
 
     @model_validator(mode="after")

@@ -197,8 +197,6 @@ def _validate_rebalancer_items(solution: RebalancerPlanSolution) -> None:
     wealth = money_fraction(accounts.initial_wealth)
     if wealth <= 0:
         raise ValueError("A ready Rebalancer plan starts from a positive wealth")
-    if wealth != money_fraction(accounting.current_invested) + money_fraction(accounting.selected_funding):
-        raise ValueError("The initial wealth must equal current invested plus selected funding")
     for row in [*solution.asset_rows, *solution.cash_rows]:
         _validate_rebalancer_item_row(row, wealth)
     items: list[RebalancerAssetPlanRow | RebalancerCashItemRow] = [*solution.asset_rows, *_distance_cash_rows(solution)]
@@ -281,14 +279,29 @@ def _limit_row_money(solution: PacPlanSolution | RebalancerPlanSolution) -> list
     return [money for money in amounts if money is not None]
 
 
+def _validate_plan_accounts(solution: PacPlanSolution | RebalancerPlanSolution) -> None:
+    """The plan accounts against the accounting (both Tools, contract §6.1): ``F`` is the current invested value plus the
+    selected funding; the money lost, by entry, is the reserves plus the economic losses plus the rounding; ``N`` is ``F``
+    less the final invested value and the cash items with a target (the PAC has none: its ``N`` is the shortfall plus the
+    trapped cash)."""
+    accounting = solution.accounting
+    accounts = solution.plan_accounts
+    wealth = money_fraction(accounts.initial_wealth)
+    if wealth != money_fraction(accounting.current_invested) + money_fraction(accounting.selected_funding):
+        raise ValueError("The initial wealth must equal current invested plus selected funding")
+    if accounts.money_lost.total() != money_fraction(accounting.physical_reserves) + money_fraction(accounting.economic_losses) + money_fraction(accounting.rounding_delta):
+        raise ValueError("The money lost must equal the reserves, the economic losses and the rounding of the accounting")
+    targeted_cash = sum((money_fraction(row.final_value) for row in solution.cash_rows if isinstance(row, RebalancerCashItemRow) and exact_fraction(row.target_weight) != 0), Fraction())
+    if money_fraction(accounts.uninvested) != wealth - money_fraction(accounting.final_invested) - targeted_cash:
+        raise ValueError("The uninvested value must be the initial wealth less the final invested value and the cash items with a target")
+
+
 def _rebalancer_valuation_money(solution: PacPlanSolution | RebalancerPlanSolution) -> list:
-    """The Rebalancer's amounts in the valuation currency: the uninvested row, the plan accounts, the score, the cost basis
-    and gain of every sale, the tax parts."""
+    """The Rebalancer's amounts in the valuation currency: the uninvested row, the score, the cost basis and gain of every
+    sale, the tax parts."""
     if not isinstance(solution, RebalancerPlanSolution):
         return []
-    accounts = solution.plan_accounts
-    amounts = [solution.uninvested_row.before_value, solution.uninvested_row.final_value, accounts.initial_wealth, accounts.final_wealth, accounts.uninvested]
-    amounts += [getattr(accounts.money_lost, name) for name in type(accounts.money_lost).model_fields]
+    amounts = [solution.uninvested_row.before_value, solution.uninvested_row.final_value]
     amounts += [solution.score.distance_per_wealth, solution.score.wealth_loss, *([solution.score.plan_score] if solution.score.plan_score is not None else [])]
     amounts += [money for row in solution.order_rows if isinstance(row, PlannerSellOrderRow) for money in (row.cost_basis, row.realized_gain)]
     amounts += [getattr(row, name) for row in solution.tax_basket_rows for name in ("weighted_gains", "weighted_losses", "carried_losses_used", "taxable", "tax", "loss_left")]
@@ -313,6 +326,8 @@ def _validate_solution_financials(
     valuation_money.extend(row.spread_loss for row in solution.conversions)
     valuation_money.extend(row.execution_margin_cost for row in solution.order_rows)
     valuation_money.extend(_rebalancer_valuation_money(solution))
+    accounts = solution.plan_accounts
+    valuation_money.extend([accounts.initial_wealth, accounts.final_wealth, accounts.uninvested, *(getattr(accounts.money_lost, name) for name in type(accounts.money_lost).model_fields)])
     top_ups = solution.rounding_top_ups
     valuation_money.extend(row.valuation_amount for row in top_ups)
     if any(money.currency != valuation_currency for money in valuation_money):
@@ -323,6 +338,7 @@ def _validate_solution_financials(
         raise ValueError("Cost totals cannot be negative")
     # Final invested may be zero in the Rebalancer too (contract §3): a plan may end fully in cash.
     _validate_accounting_summary(solution.accounting, top_up_value=sum((money_fraction(row.valuation_amount) for row in top_ups), Fraction()))
+    _validate_plan_accounts(solution)
     _validate_asset_projection(solution)
     _validate_exposure_projection(solution)
     if any(stage.unit.kind in {"valuation_money", "valuation_money_squared"} and stage.unit.currency_code != valuation_currency for stage in solution.objectives.stages):

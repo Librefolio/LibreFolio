@@ -326,6 +326,21 @@ def _failure_result(product: str, state: str) -> JsonObject:
     }
 
 
+def _restate_pac_plan_accounts(solution: JsonObject) -> None:
+    """The PAC's plan accounts as the report fills them (contract §6.1), from the solution's own accounting and costs:
+    ``F`` = current + selected, the money lost by entry (costs and rounding), ``W`` = ``F`` less it, ``N`` = ``F`` less
+    the final invested value. A variant of the min fixture that moves the accounting restates them through here."""
+    accounting, costs = solution["accounting"], solution["costs"]
+    wealth = _money_wire_fraction(accounting["current_invested"]) + _money_wire_fraction(accounting["selected_funding"])
+    lost = {name: _money_wire_fraction(costs[name]) for name in _MONEY_LOST_FIELDS if name != "rounding"} | {"rounding": _money_wire_fraction(accounting["rounding_delta"])}
+    solution["plan_accounts"] = {
+        "initial_wealth": _wire_money(wealth),
+        "final_wealth": _wire_money(wealth - sum(lost.values(), Fraction())),
+        "money_lost": {name: _wire_money(lost[name]) for name in _MONEY_LOST_FIELDS},
+        "uninvested": _wire_money(wealth - _money_wire_fraction(accounting["final_invested"])),
+    }
+
+
 def _pac_incumbent_result() -> JsonObject:
     payload = _pac_no_op_result()
     payload["result_state"] = "ready_incumbent"
@@ -417,6 +432,7 @@ def _pac_incumbent_result() -> JsonObject:
     }.items():
         _find(solution["objectives"]["stages"], "objective_code", objective_code)["value"] = _finite(value)
     solution["objectives"]["tie_break"]["ordered_keys"] = ["order-buy-asset-one"]
+    _restate_pac_plan_accounts(solution)
     payload["issues"] = []
     payload["deployment"] = {"kind": "coincident", "reason_code": "allocation.primary_is_deployment"}
     return payload
@@ -3152,6 +3168,7 @@ def _pac_top_up_result(deficit: str = "0.01", *, rounded_postings: int = 1) -> J
     _find(solution["objectives"]["stages"], "objective_code", "shortfall")["value"] = _finite(str(-gap))
     _find(solution["objectives"]["stages"], "objective_code", "fixed_l2")["value"] = _finite(str(gap * gap))
     solution["rounding_top_ups"] = [_top_up_row(deficit, rounded_postings=rounded_postings)]
+    _restate_pac_plan_accounts(solution)
     return payload
 
 
@@ -3941,11 +3958,13 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
 # B3 (project 67, S1, D11): only the Rebalancer's moves, to its final request (one class, fidelity, ``tax``, no funding routes)
 # and result (items on F, cash items, uninvested, transfers, top-ups, plan accounts, score, tax parts, the final sale row);
 # the PAC's stays where A4 left it. C1 moves the Rebalancer's once more, to widen the strategy field.
+# The PAC accounts on the wire (B3, coordinator's instruction against X1): the PAC's moves once, for ``plan_accounts`` on its
+# solution, the shared type both Tools publish (contract §6.1); the PAC's screen does not change (X17).
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "fa1cdae9b2b2554f875a4000fba44234a3cf2920fc725f68638836a3483f935b",
+        "0a4f829eff1e8a31dc6ae02d69c5ae0fd37e25540e5b3ff2659d2e3e1f03503f",
         id="pac",
     ),
     pytest.param(
@@ -4355,7 +4374,7 @@ REBALANCER_RESULT_REJECTION_CASES = (
     pytest.param(_medium_mutated(_set(("primary_solution", "score", "plan_score"), _money("2.27"))), "The plan score must equal λ·D/F plus the money lost", id="plan-score"),
     pytest.param(_medium_mutated(_set(("primary_solution", "score", "target_distance"), _finite("168"))), "The target distance must be the squared residuals of the items plus the uninvested squared", id="target-distance"),
     pytest.param(_medium_mutated(_set(("primary_solution", "score", "largest_deviation_after"), _finite("0.04"))), "The largest deviation must be read off the items' weights", id="largest-deviation"),
-    pytest.param(_medium_mutated(_set(("primary_solution", "plan_accounts", "uninvested"), _money("1.42"))), "The uninvested row must match the plan accounts", id="uninvested"),
+    pytest.param(_medium_mutated(_set(("primary_solution", "plan_accounts", "uninvested"), _money("1.42"))), "The uninvested value must be the initial wealth less the final invested value and the cash items with a target", id="uninvested"),
     pytest.param(_medium_mutated(_set(("primary_solution", "objectives", "stages", ("objective_code", "plan_score"), "value"), _finite("2.27"))), "The published objective stages must match the score", id="plan-score-stage"),
     pytest.param(_medium_mutated(_set(("scenario_basis", "initial_wealth"), _money("199"))), "Rebalancer initial wealth must equal current invested plus selected funding", id="basis-initial-wealth"),
     pytest.param(_medium_mutated(_set(("primary_solution", "transfers", ("transfer_id", "transfer-alpha-beta-eur"), "destination_broker_id"), "broker-alpha")), "A transfer moves cash between two different Brokers", id="transfer-to-itself"),

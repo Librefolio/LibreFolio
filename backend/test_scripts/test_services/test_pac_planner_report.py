@@ -76,6 +76,7 @@ from backend.app.services.pac_allocator.models import CandidateActionVector, Can
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import solve_policy_program
 from backend.test_scripts.test_services import _reb_small_cases as cases
+from backend.test_scripts.test_services import test_pac_planner_evaluator as ev
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     ONE,
@@ -231,6 +232,7 @@ def _build_primary_solution(scenario, view, evaluation, *, sequence: PR._Sequenc
         exposure_rows=PR.build_exposure_rows(scenario, evaluation),
         accounting=PR.build_accounting(scenario, evaluation),
         costs=PR.build_costs(scenario, evaluation),
+        plan_accounts=PR.build_plan_accounts(scenario, evaluation),
         objectives=PR.build_objective_results(scenario, view, evaluation),
     )
 
@@ -1390,10 +1392,40 @@ def test_rebalancer_publishes_the_largest_deviation_before_and_after() -> None:
 @pytest.mark.parametrize("build", [pytest.param(lambda: cases.t6(with_usd=True, target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(4))), id="rebalancer-t6-usd"), pytest.param(_coarse_funding_fx_scenario, id="pac-fx")])
 def test_plan_accounts_sum_the_money_lost_to_f_minus_w(build) -> None:
     """The shared accounts type (contract §6.1) read off the exact accounting and costs: the entries, rounding included,
-    sum to ``F − W`` on a plan with a conversion spread and an FX credit rounded against the plan, for either product."""
+    sum to ``F − W`` on a plan with a conversion spread and an FX credit rounded against the plan, for either product; the
+    PAC's ``N`` is its shortfall plus its trapped cash."""
     scenario = build()
     view, evaluation = _evaluate(scenario)
-    accounts = RR.build_plan_accounts(scenario, evaluation)
+    accounts = PR.build_plan_accounts(scenario, evaluation)
     lost = accounts.money_lost.total()
     assert lost == _wire_fraction(accounts.initial_wealth) - _wire_fraction(accounts.final_wealth)
     assert lost == Fraction(evaluation.accounting.wealth_loss.numerator, evaluation.accounting.wealth_loss.denominator)
+    if scenario.product == "pac":
+        accounting = evaluation.accounting
+        expected = accounting.shortfall + accounting.trapped_funding
+        assert _wire_fraction(accounts.uninvested) == Fraction(expected.numerator, expected.denominator)
+
+
+def test_pac_plan_accounts_count_trapped_cash_as_uninvested() -> None:
+    """The PAC's accounts on the wire (B3 of project 67): ``F`` counts every selected cash and contribution, trapped or not
+    (10 reachable + 7 trapped + a 5 contribution no route reaches = 22), and ``N`` is the shortfall plus the trapped cash; no
+    validator equates the uninvested with the shortfall alone."""
+    capability = ev._capability("capability:buy")
+    fee = ev._fee("fee:buy", capability.capability_id, "buy")
+    broker_a, broker_b = ev._broker("broker:a", (capability,), (fee,)), ev._broker("broker:b")
+    scenario = ev._scenario(
+        "scenario:trapped",
+        product="pac",
+        policy="proportional",
+        assets=(ev._asset("asset:a"),),
+        brokers=(broker_a, broker_b),
+        existing_cash=(ev._cash("cash:reachable", broker_a.broker_id, R(10)), ev._cash("cash:trapped", broker_b.broker_id, R(7))),
+        contributions=(ev._contribution("contribution:trapped", R(5)),),
+        order_routes=(ev._order_route("route:buy", broker_id=broker_a.broker_id, asset_id="asset:a", capability=capability, fee_id=fee.fee_schedule_id, side="buy"),),
+    )
+    view = build_exact_policy_view(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, ev._candidate(view))
+    accounts = PR.build_plan_accounts(scenario, evaluation)
+    assert evaluation.accounting.trapped_funding == R(12)
+    # Nothing is bought (the do-nothing candidate): the shortfall is the 10 reachable, the trapped 12 the rest.
+    assert (_wire_fraction(accounts.initial_wealth), _wire_fraction(accounts.uninvested)) == (22, 10 + 12)

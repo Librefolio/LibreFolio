@@ -161,6 +161,21 @@
       "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
       "foreign_withholding_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
     },
+    "plan_accounts": {
+      "initial_wealth": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "final_wealth": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "money_lost": {
+        "buy_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+        "sell_fees": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+        "fx_spread_loss": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+        "execution_margin_cost": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+        "broker_withheld_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+        "self_reserved_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+        "foreign_withholding_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+        "rounding": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+      },
+      "uninvested": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+    },
     "objectives": {
       "stages": [
         {"objective_code": "fixed_l2", "ordinal": 1, "sense": "min", "unit": {"kind": "valuation_money_squared", "currency_code": "EUR"}, "value": {"kind": "finite_decimal", "value": "0"}},
