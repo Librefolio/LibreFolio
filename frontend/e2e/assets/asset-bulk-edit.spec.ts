@@ -232,6 +232,30 @@ test.describe('Asset bulk edit', () => {
         }
     });
 
+    // U9: rows selected in two tables (the asset with a position is «yours», the two without are «watched»); the modal is
+    // opened and closed with nothing changed; the «n selected» chip must still clear every table.
+    test('the «n selected» chip clears the selection of every table after the modal was opened and closed', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        try {
+            const assets = await createAssets(page, owned, token, ['A', 'B', 'C']);
+            await giveTransactions(page, owned, assets[2].id);
+            await openBulkEdit(page, token, 3);
+            await expect(page.getByTestId('assets-table-panel-own').locator('[data-testid^="dt-row-checkbox-"]')).toHaveCount(1);
+            await expect(page.getByTestId('assets-table-panel-analysis').locator('[data-testid^="dt-row-checkbox-"]')).toHaveCount(2);
+
+            await page.getByTestId('asset-bulk-cancel').click();
+            await expect(page.getByTestId('asset-bulk-edit')).toHaveCount(0);
+            await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '3');
+
+            await page.getByTestId('selection-toolbar-clear').click();
+            await expect(page.getByTestId('selection-toolbar')).toHaveCount(0);
+            await expect(page.locator('[data-testid^="dt-row-checkbox-"][data-state="checked"]')).toHaveCount(0);
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
     test('closing without saving changes nothing and keeps the selection', async ({page}) => {
         const owned: Owned = {assetIds: [], brokerIds: []};
         const token = uniqueToken(6);

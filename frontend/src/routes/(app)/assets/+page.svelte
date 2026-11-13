@@ -148,8 +148,11 @@
         }
     }
 
+    /** Bumped to tell every AssetTable to drop its selection: a table does not depend on a ref the page holds. */
+    let clearSelectionToken = $state(0);
+
     function clearAllTableSelections() {
-        for (const ref of Object.values(assetTableRefs)) ref?.getTableRef()?.clearSelection();
+        clearSelectionToken++;
         panelSelections = {};
     }
     /** Set of asset IDs currently syncing (for per-card/row rotating icon) */
@@ -2406,6 +2409,7 @@
                             ondelete={handleDeleteAsset}
                             onmerge={handleMergeAsset}
                             onColumnResize={(colId, w) => mirrorColumnResize(panel.id, colId, w)}
+                            {clearSelectionToken}
                             onselectionchange={(rows) => {
                                 panelSelections = {...panelSelections, [panel.id]: rows};
                             }}

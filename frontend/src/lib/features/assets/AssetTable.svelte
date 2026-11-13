@@ -8,7 +8,7 @@
 <script lang="ts">
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {goto} from '$app/navigation';
-    import {onMount} from 'svelte';
+    import {onMount, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {deltaPeriodLabel} from '$lib/features/assets/assetPriceDerived';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -63,6 +63,8 @@
         ondelete?: (asset: AssetRow) => void;
         onmerge?: (asset: AssetRow) => void;
         onselectionchange?: (rows: AssetRow[]) => void;
+        /** Changes (by any step) when the owner wants the selection dropped. */
+        clearSelectionToken?: number;
         /** F15 round-2 — stacked usage tables share column layout; this callback
          *  lets the parent mirror live resizes onto the sibling instances. */
         onColumnResize?: (columnId: string, width: number) => void;
@@ -72,7 +74,16 @@
         browseSegment?: AssetPanelId;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange, clearSelectionToken = 0, onColumnResize, storageKey = 'assetsTable', browseSegment}: Props = $props();
+
+    // The owner asks for the selection to be dropped by changing the token: this table clears its own DataTable.
+    let seenClearToken = untrack(() => clearSelectionToken);
+    $effect(() => {
+        const token = clearSelectionToken;
+        if (token === seenClearToken) return;
+        seenClearToken = token;
+        tableRef?.clearSelection();
+    });
 
     ensureCurrenciesLoaded($currentLanguage);
     ensureAssetProvidersCached();
