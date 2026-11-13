@@ -342,7 +342,7 @@ each one.
 1. On the **Assets** page, switch to the **table** view and tick the assets. They can sit in any of
    the three tables (yours, other users' and watched ones); the selection adds them up. The card
    view has no selection.
-2. In the toolbar that appears, click the pencil, **Edit selected (N)**. The **Edit N assets**
+2. In the selection bar that appears at the bottom of the screen (it stays there while rows are selected, also after a save), click **Edit**. The **Edit N assets**
    window opens on the **Fields** step.
 
 ### 🧩 Step 1: Fields {: #bulk-edit-fields }
