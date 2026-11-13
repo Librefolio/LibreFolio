@@ -117,7 +117,8 @@
           "title": "Calcul en cours",
           "refreshing": "Relecture des données copiées depuis LibreFolio…",
           "elapsed": "En attente depuis {elapsed} s sur {limit} s au maximum",
-          "barLabel": "Temps d’attente"
+          "barLabel": "Temps d’attente",
+          "phase": "{phase} ({index} sur {total})"
         },
         "cash": {
           "custody": "Disponible (conservation) {amount}",
