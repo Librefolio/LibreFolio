@@ -16,6 +16,10 @@
     import RemovalConfirm from '../shared/RemovalConfirm.svelte';
     import BrokerScopeCopyDialog from './BrokerScopeCopyDialog.svelte';
     import ManualAccountDialog from './ManualAccountDialog.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         draft: PlannerDraft;
@@ -86,11 +90,11 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="pac-planner-liquidity">
+<div class="space-y-4" data-testid={testId('liquidity', profile)}>
     <div class="space-y-2">
         <p class="text-sm text-lf-secondary">{$t('tools.pacAllocator.planner.liquidity.intro', {default: 'Where does the money to invest come from? You can combine several sources.'})}</p>
         <div class="grid gap-2 sm:grid-cols-3">
-            <button type="button" class={CHOICE_CARD} disabled={copyDisabled} data-testid="pac-planner-liquidity-copy-open" onclick={() => (copyOpen = true)}>
+            <button type="button" class={CHOICE_CARD} disabled={copyDisabled} data-testid={testId('liquidity-copy-open', profile)} onclick={() => (copyOpen = true)}>
                 <span class="flex w-full items-center gap-2 font-medium text-lf-primary">
                     <span class={ICON_BUBBLE}><Briefcase class="h-4 w-4" aria-hidden="true" /></span>
                     <span class="flex-1">{$t('tools.pacAllocator.planner.liquidity.copy', {default: 'From your Brokers'})}</span>
@@ -98,7 +102,7 @@
                 </span>
                 <span class={HINT}>{$t('tools.pacAllocator.planner.liquidity.copyHint', {default: 'Cash already on the Brokers registered in LibreFolio. You choose how much to use.'})}</span>
             </button>
-            <button type="button" class={CHOICE_CARD} data-testid="pac-planner-contribution-add" onclick={addContribution}>
+            <button type="button" class={CHOICE_CARD} data-testid={testId('contribution-add', profile)} onclick={addContribution}>
                 <span class="flex w-full items-center gap-2 font-medium text-lf-primary">
                     <span class={ICON_BUBBLE}><PiggyBank class="h-4 w-4" aria-hidden="true" /></span>
                     <span class="flex-1">{$t('tools.pacAllocator.planner.liquidity.addContribution', {default: 'New contribution'})}</span>
@@ -106,7 +110,7 @@
                 </span>
                 <span class={HINT}>{$t('tools.pacAllocator.planner.liquidity.contributionHint', {default: 'New money you add, for example the PAC instalment. In the Broker step you choose which Broker receives it.'})}</span>
             </button>
-            <button type="button" class={CHOICE_CARD} data-testid="pac-planner-manual-account-open" onclick={() => (manualOpen = true)}>
+            <button type="button" class={CHOICE_CARD} data-testid={testId('manual-account-open', profile)} onclick={() => (manualOpen = true)}>
                 <span class="flex w-full items-center gap-2 font-medium text-lf-primary">
                     <span class={ICON_BUBBLE}><Landmark class="h-4 w-4" aria-hidden="true" /></span>
                     <span class="flex-1">{$t('tools.pacAllocator.planner.liquidity.addManual', {default: 'External account'})}</span>
@@ -117,10 +121,10 @@
         </div>
     </div>
     {#if copyDisabled}
-        <p class={HINT} data-testid="pac-planner-copy-needs-currency">{$t('tools.pacAllocator.planner.copy.needsCurrency', {default: 'Choose the valuation currency in the Scenario step to copy from the system.'})}</p>
+        <p class={HINT} data-testid={testId('copy-needs-currency', profile)}>{$t('tools.pacAllocator.planner.copy.needsCurrency', {default: 'Choose the valuation currency in the Scenario step to copy from the system.'})}</p>
     {/if}
 
-    <CopyFlowView {flow} {draft} testid="pac-planner-liquidity-notice" quiet />
+    <CopyFlowView {flow} {draft} testid={testId('liquidity-notice', profile)} quiet />
 
     {#if draft.liquidityEntries.length > 0}
         <OrderableList items={draft.liquidityEntries} keyFn={(entry) => entry.key} onReorder={(next) => draft.reorderLiquidity(next.map((entry) => entry.key))}>
@@ -129,7 +133,7 @@
                     {@const cash = entry.cash}
                     {@const broker = draft.broker(cash.brokerKey)}
                     {@const exceeds = selectionExceedsAvailable(cash)}
-                    <section class="space-y-3 p-1 sm:p-2" data-testid="pac-planner-cash" data-cash-key={cash.key} data-origin={cash.origin} aria-labelledby="{ids}-{cash.key}-title">
+                    <section class="space-y-3 p-1 sm:p-2" data-testid={testId('cash', profile)} data-cash-key={cash.key} data-origin={cash.origin} aria-labelledby="{ids}-{cash.key}-title">
                         <div class="flex flex-wrap items-start justify-between gap-2">
                             <div class="flex min-w-0 items-center gap-2">
                                 <PlannerBrokerIcon {broker} />
@@ -141,13 +145,13 @@
                                             {$t('tools.pacAllocator.planner.cash.title', {default: '{name} · cash', values: {name: brokerName(cash)}})}
                                         {/if}
                                     </span>
-                                    <CurrencyCode code={cash.currency} testid="pac-planner-cash-currency" />
+                                    <CurrencyCode code={cash.currency} testid={testId('cash-currency', profile)} />
                                 </h3>
                             </div>
-                            {#if cash.origin === 'manual'}<OriginBadge origin="manual" testid="pac-planner-cash-origin" />{/if}
+                            {#if cash.origin === 'manual'}<OriginBadge origin="manual" testid={testId('cash-origin', profile)} />{/if}
                         </div>
                         {#if cash.origin === 'copied'}
-                            <p class="text-sm tabular-nums" data-testid="pac-planner-cash-available">
+                            <p class="text-sm tabular-nums" data-testid={testId('cash-available', profile)}>
                                 {$t('tools.pacAllocator.planner.cash.custody', {default: 'Available (custody) {amount}', values: {amount: formatPlannerMoneyPlain(cash.available, cash.currency)}})}
                                 ·
                                 {#if partial(cash.ownershipShare)}
@@ -160,11 +164,11 @@
                             <div class="grid gap-3 sm:grid-cols-2">
                                 <label>
                                     <span class={LABEL}>{$t('tools.pacAllocator.planner.manualAccount.name', {default: 'Account name'})} *</span>
-                                    {#if broker}<input class={INPUT} bind:value={broker.name} maxlength="120" data-testid="pac-planner-cash-name" />{/if}
+                                    {#if broker}<input class={INPUT} bind:value={broker.name} maxlength="120" data-testid={testId('cash-name', profile)} />{/if}
                                 </label>
                                 <label for="{ids}-{cash.key}-available">
                                     <span class={LABEL}>{$t('tools.pacAllocator.planner.manualAccount.declared', {default: 'Declared liquidity'})} * <CurrencyCode code={cash.currency} /></span>
-                                    <ExactDecimalInput id="{ids}-{cash.key}-available" bind:value={cash.available} step={cldrCurrencyStep(cash.currency)} className={INPUT} testid="pac-planner-cash-declared" />
+                                    <ExactDecimalInput id="{ids}-{cash.key}-available" bind:value={cash.available} step={cldrCurrencyStep(cash.currency)} className={INPUT} testid={testId('cash-declared', profile)} />
                                 </label>
                             </div>
                         {/if}
@@ -172,9 +176,9 @@
                             <label class={LABEL} for="{ids}-{cash.key}-selected">{$t('tools.pacAllocator.planner.cash.selected', {default: 'Amount to use'})} * <CurrencyCode code={cash.currency} /></label>
                             <div class="flex gap-2">
                                 <div class="min-w-0 flex-1">
-                                    <ExactDecimalInput id="{ids}-{cash.key}-selected" bind:value={cash.selected} step={cldrCurrencyStep(cash.currency)} className={INPUT} externalInvalid={exceeds} ariaDescribedby="{ids}-{cash.key}-hint" testid="pac-planner-cash-selected" />
+                                    <ExactDecimalInput id="{ids}-{cash.key}-selected" bind:value={cash.selected} step={cldrCurrencyStep(cash.currency)} className={INPUT} externalInvalid={exceeds} ariaDescribedby="{ids}-{cash.key}-hint" testid={testId('cash-selected', profile)} />
                                 </div>
-                                <button type="button" class={BUTTON_SECONDARY} disabled={allAvailable(cash) === null} title={$t('tools.pacAllocator.planner.cash.useAllHint', {default: 'Use the whole available amount'})} data-testid="pac-planner-cash-use-all" onclick={() => useAll(cash)}>
+                                <button type="button" class={BUTTON_SECONDARY} disabled={allAvailable(cash) === null} title={$t('tools.pacAllocator.planner.cash.useAllHint', {default: 'Use the whole available amount'})} data-testid={testId('cash-use-all', profile)} onclick={() => useAll(cash)}>
                                     {$t('tools.pacAllocator.planner.cash.useAll', {default: 'All'})}
                                 </button>
                             </div>
@@ -187,18 +191,18 @@
                             </p>
                         </div>
                         {#if exceeds}
-                            <p class="text-sm text-lf-danger" role="alert" data-testid="pac-planner-cash-exceeds">{$t('tools.pacAllocator.planner.problems.selectedExceedsAvailable', {default: "'Amount to use' exceeds the available amount in the same currency."})}</p>
+                            <p class="text-sm text-lf-danger" role="alert" data-testid={testId('cash-exceeds', profile)}>{$t('tools.pacAllocator.planner.problems.selectedExceedsAvailable', {default: "'Amount to use' exceeds the available amount in the same currency."})}</p>
                         {/if}
                         {#if broker?.fundingOnly}
                             <p class={HINT}>{$t('tools.pacAllocator.planner.cash.fundingOnly', {default: 'Nothing is bought from this account: in the Broker step you choose which Broker receives this money.'})}</p>
                         {/if}
-                        <button type="button" class={BUTTON_DANGER} data-testid="pac-planner-cash-remove" onclick={() => askRemoveCash(cash)}>
+                        <button type="button" class={BUTTON_DANGER} data-testid={testId('cash-remove', profile)} onclick={() => askRemoveCash(cash)}>
                             <Trash2 class="h-4 w-4" aria-hidden="true" />{$t('common.remove', {default: 'Remove'})}
                         </button>
                     </section>
                 {:else}
                     {@const item = entry.contribution}
-                    <section class="space-y-3 p-1 sm:p-2" data-testid="pac-planner-contribution" data-contribution-key={item.key} aria-labelledby="{ids}-{item.key}-title">
+                    <section class="space-y-3 p-1 sm:p-2" data-testid={testId('contribution', profile)} data-contribution-key={item.key} aria-labelledby="{ids}-{item.key}-title">
                         <div class="flex items-start justify-between gap-2">
                             <div class="flex min-w-0 flex-1 items-center gap-2">
                                 <span class={ICON_BUBBLE}><PiggyBank class="h-4 w-4" aria-hidden="true" /></span>
@@ -209,25 +213,25 @@
                                         maxlength="120"
                                         placeholder={$t('tools.pacAllocator.planner.contribution.untitled', {default: 'New contribution'})}
                                         aria-label={$t('tools.pacAllocator.planner.contribution.label', {default: 'Label'})}
-                                        data-testid="pac-planner-contribution-label"
+                                        data-testid={testId('contribution-label', profile)}
                                     />
                                     <PenLine class="pointer-events-none absolute top-1/2 right-2 h-3.5 w-3.5 -translate-y-1/2 text-lf-muted opacity-60 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100" aria-hidden="true" />
                                 </h3>
                             </div>
-                            <OriginBadge origin="manual" testid="pac-planner-contribution-origin" />
+                            <OriginBadge origin="manual" testid={testId('contribution-origin', profile)} />
                         </div>
                         <div class="grid gap-3 sm:grid-cols-2">
                             <label for="{ids}-{item.key}-amount">
                                 <span class={LABEL}>{$t('common.amount', {default: 'Amount'})} *</span>
-                                <ExactDecimalInput id="{ids}-{item.key}-amount" bind:value={item.amount} step={item.currency ? cldrCurrencyStep(item.currency) : '0.01'} className={INPUT} testid="pac-planner-contribution-amount" />
+                                <ExactDecimalInput id="{ids}-{item.key}-amount" bind:value={item.amount} step={item.currency ? cldrCurrencyStep(item.currency) : '0.01'} className={INPUT} testid={testId('contribution-amount', profile)} />
                             </label>
                             <div>
                                 <span class={LABEL}>{$t('common.currency', {default: 'Currency'})} *</span>
-                                <CurrencySearchSelect bind:value={item.currency} testId="pac-planner-contribution-currency" compact />
+                                <CurrencySearchSelect bind:value={item.currency} testId={testId('contribution-currency', profile)} compact />
                             </div>
                         </div>
                         <p class={HINT}>{$t('tools.pacAllocator.planner.contribution.destination', {default: 'In the Broker step you choose which Broker receives this contribution.'})}</p>
-                        <button type="button" class={BUTTON_DANGER} data-testid="pac-planner-contribution-remove" onclick={() => askRemoveContribution(item.key, item.label.trim() || item.currency)}>
+                        <button type="button" class={BUTTON_DANGER} data-testid={testId('contribution-remove', profile)} onclick={() => askRemoveContribution(item.key, item.label.trim() || item.currency)}>
                             <Trash2 class="h-4 w-4" aria-hidden="true" />{$t('common.remove', {default: 'Remove'})}
                         </button>
                     </section>
@@ -235,7 +239,7 @@
             {/snippet}
         </OrderableList>
     {:else}
-        <p class={NOTICE.info} data-testid="pac-planner-liquidity-empty">{$t('tools.pacAllocator.planner.liquidity.empty', {default: 'No liquidity yet: pick one of the sources above.'})}</p>
+        <p class={NOTICE.info} data-testid={testId('liquidity-empty', profile)}>{$t('tools.pacAllocator.planner.liquidity.empty', {default: 'No liquidity yet: pick one of the sources above.'})}</p>
     {/if}
     <p class={HINT}>{$t('tools.pacAllocator.planner.liquidity.noConversion', {default: 'Each amount stays in its own currency; conversions, if needed, are worked out by the plan.'})}</p>
 </div>
@@ -252,7 +256,7 @@
     title={$t('tools.pacAllocator.planner.removal.title', {default: 'Remove {name}?', values: {name: removal?.label ?? ''}})}
     message={$t('tools.pacAllocator.planner.removal.message', {default: 'It leaves the draft only; nothing changes in the system.'})}
     impact={removal?.impact ?? null}
-    testId="pac-planner-liquidity-removal"
+    testId={testId('liquidity-removal', profile)}
     onConfirm={confirmRemoval}
     onCancel={() => (removal = null)}
 />

@@ -27,6 +27,10 @@
     import CurrencyCode from '../shared/CurrencyCode.svelte';
     import HelpTip from '../shared/HelpTip.svelte';
     import IssueList from '../shared/IssueList.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     const KEY = 'tools.pacAllocator.planner.fx';
 
@@ -215,7 +219,7 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="pac-planner-fx" aria-busy={reader.busy} data-busy={reader.busy ? 'true' : 'false'}>
+<div class="space-y-4" data-testid={testId('fx', profile)} aria-busy={reader.busy} data-busy={reader.busy ? 'true' : 'false'}>
     <p class="flex flex-wrap items-center gap-1 text-sm text-lf-secondary">
         {$t(`${KEY}.intro`, {default: 'The rates the calculation needs, one for each pair of currencies in play. «Auto» uses the rate stored in LibreFolio, «Manual» a rate of your own.'})}
         <HelpTip
@@ -223,24 +227,24 @@
             help={$t(`${KEY}.autoHelp`, {
                 default: '«Auto» reads the latest rate LibreFolio already has, when this step opens and again just before the calculation: no provider is called. «Manual» uses your rate as typed and never reads it again. The calculation decides by itself whether and how much to convert.',
             })}
-            testid="pac-planner-fx-auto-help"
+            testid={testId('fx-auto-help', profile)}
         />
     </p>
 
     {#if reader.error}
-        <div class="{NOTICE.warning} flex flex-wrap items-start justify-between gap-2" role="alert" data-testid="pac-planner-fx-read-error">
+        <div class="{NOTICE.warning} flex flex-wrap items-start justify-between gap-2" role="alert" data-testid={testId('fx-read-error', profile)}>
             <p>{$t(reader.error.key, {default: reader.error.fallback})}</p>
             <div class="flex shrink-0 gap-3">
                 {#if reader.canRetry}
-                    <button type="button" class={BUTTON_LINK} data-testid="pac-planner-fx-read-retry" onclick={() => reader.retry(draft, accountGeneration)}>{$t('common.retry', {default: 'Retry'})}</button>
+                    <button type="button" class={BUTTON_LINK} data-testid={testId('fx-read-retry', profile)} onclick={() => reader.retry(draft, accountGeneration)}>{$t('common.retry', {default: 'Retry'})}</button>
                 {/if}
-                <button type="button" class={BUTTON_LINK} data-testid="pac-planner-fx-read-dismiss" onclick={() => reader.dismiss()}>{$t('common.close', {default: 'Close'})}</button>
+                <button type="button" class={BUTTON_LINK} data-testid={testId('fx-read-dismiss', profile)} onclick={() => reader.dismiss()}>{$t('common.close', {default: 'Close'})}</button>
             </div>
         </div>
     {/if}
 
     {#if draft.requiredPairs.length === 0}
-        <p class={HINT} data-testid="pac-planner-fx-empty">{$t(`${KEY}.none`, {default: 'No conversion needed: every currency in play is the valuation currency.'})}</p>
+        <p class={HINT} data-testid={testId('fx-empty', profile)}>{$t(`${KEY}.none`, {default: 'No conversion needed: every currency in play is the valuation currency.'})}</p>
     {:else}
         <div class="grid gap-3 lg:grid-cols-2">
             {#each draft.requiredPairs as pair (pair)}
@@ -250,81 +254,81 @@
                 {@const rate = fx?.rate.trim() ?? ''}
                 {@const status = readState(pair)}
                 {@const pairIssues = manual ? [] : presentSourceIssues(reader.issues(draft, pair), draft, reader.load.data).map(listIssue)}
-                <section class={CARD} data-testid="pac-planner-fx-pair" data-pair={pair} data-purpose={draft.fxPurpose(pair)} data-mode={manual ? 'manual' : 'auto'} data-rate={rate === '' ? 'missing' : 'set'} data-read={status}>
+                <section class={CARD} data-testid={testId('fx-pair', profile)} data-pair={pair} data-purpose={draft.fxPurpose(pair)} data-mode={manual ? 'manual' : 'auto'} data-rate={rate === '' ? 'missing' : 'set'} data-read={status}>
                     <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h3 class="flex flex-wrap items-center gap-1.5 font-semibold text-lf-primary" data-testid="pac-planner-fx-pair-title">
+                        <h3 class="flex flex-wrap items-center gap-1.5 font-semibold text-lf-primary" data-testid={testId('fx-pair-title', profile)}>
                             <CurrencyCode code={base} />
                             <span class="text-sm font-normal text-lf-muted" aria-hidden="true">→</span>
                             <CurrencyCode code={quote} />
                         </h3>
-                        <AutoManualToggle {manual} label={pairLabel(pair)} testid="pac-planner-fx-mode" onchange={(next) => switchMode(pair, next)} />
+                        <AutoManualToggle {manual} label={pairLabel(pair)} testid={testId('fx-mode', profile)} onchange={(next) => switchMode(pair, next)} />
                     </div>
 
                     <p class="mt-1 flex flex-wrap items-center gap-1">
                         {#each uses(pair) as use (use)}
-                            <span class={use === 'valuation' ? BADGE.info : BADGE.neutral} data-testid="pac-planner-fx-purpose" data-purpose={use}>{useText(use)}</span>
-                            <HelpTip label={useText(use)} help={useHelp(use)} testid="pac-planner-fx-purpose-help" />
+                            <span class={use === 'valuation' ? BADGE.info : BADGE.neutral} data-testid={testId('fx-purpose', profile)} data-purpose={use}>{useText(use)}</span>
+                            <HelpTip label={useText(use)} help={useHelp(use)} testid={testId('fx-purpose-help', profile)} />
                         {/each}
                     </p>
 
                     <div class="mt-3 text-sm">
                         {#if manual}
-                            <div class="flex flex-wrap items-center gap-2" data-testid="pac-planner-fx-rate-manual">
-                                <label for="{ids}-{pair}" class="flex items-center gap-1 whitespace-nowrap tabular-nums">1 <CurrencyCode code={base} testid="pac-planner-fx-rate-base" /> =</label>
+                            <div class="flex flex-wrap items-center gap-2" data-testid={testId('fx-rate-manual', profile)}>
+                                <label for="{ids}-{pair}" class="flex items-center gap-1 whitespace-nowrap tabular-nums">1 <CurrencyCode code={base} testid={testId('fx-rate-base', profile)} /> =</label>
                                 <span class="w-40">
-                                    <ExactDecimalInput id="{ids}-{pair}" value={fx?.rate ?? ''} step="0.0001" className={INPUT} testid="pac-planner-fx-rate" onchange={(value) => setRate(pair, value)} />
+                                    <ExactDecimalInput id="{ids}-{pair}" value={fx?.rate ?? ''} step="0.0001" className={INPUT} testid={testId('fx-rate', profile)} onchange={(value) => setRate(pair, value)} />
                                 </span>
-                                <CurrencyCode code={quote} testid="pac-planner-fx-rate-quote" />
-                                <HelpTip label={pairLabel(pair)} help={manualHelp(fx)} testid="pac-planner-fx-rate-help" />
+                                <CurrencyCode code={quote} testid={testId('fx-rate-quote', profile)} />
+                                <HelpTip label={pairLabel(pair)} help={manualHelp(fx)} testid={testId('fx-rate-help', profile)} />
                             </div>
                         {:else if rate !== '' && fx}
-                            <p class="flex flex-wrap items-center gap-2" data-testid="pac-planner-fx-rate-value">
+                            <p class="flex flex-wrap items-center gap-2" data-testid={testId('fx-rate-value', profile)}>
                                 <span class="flex flex-wrap items-center gap-1 tabular-nums text-lf-primary">
-                                    1 <CurrencyCode code={base} testid="pac-planner-fx-rate-base" /> = <span class="font-semibold">{formatPlannerFxRate(rate)}</span>
-                                    <CurrencyCode code={quote} testid="pac-planner-fx-rate-quote" />
+                                    1 <CurrencyCode code={base} testid={testId('fx-rate-base', profile)} /> = <span class="font-semibold">{formatPlannerFxRate(rate)}</span>
+                                    <CurrencyCode code={quote} testid={testId('fx-rate-quote', profile)} />
                                 </span>
                                 {#if fx.stamp}
-                                    <HelpTip label={pairLabel(pair)} help={rateHelp(fx)} testid="pac-planner-fx-rate-help" />
+                                    <HelpTip label={pairLabel(pair)} help={rateHelp(fx)} testid={testId('fx-rate-help', profile)} />
                                 {/if}
                             </p>
                         {:else if status === 'reading'}
-                            <span class="flex items-center gap-2 {HINT}" role="status" data-testid="pac-planner-fx-reading">
+                            <span class="flex items-center gap-2 {HINT}" role="status" data-testid={testId('fx-reading', profile)}>
                                 <LoaderCircle class="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />{$t(`${KEY}.reading`, {default: 'Reading the rate stored in LibreFolio…'})}
                             </span>
                         {:else if status === 'ownerless'}
-                            <p class="text-lf-warning-on-soft" data-testid="pac-planner-fx-no-rate">
+                            <p class="text-lf-warning-on-soft" data-testid={testId('fx-no-rate', profile)}>
                                 {$t(`${KEY}.ownerless`, {default: 'LibreFolio reads its stored rates through a Broker you own, and you own none: switch to «Manual» and type the rate.'})}
                             </p>
                         {:else if status === 'not-stored'}
                             {@const setup = setups ? pairSetup(setups, base, quote) : null}
-                            <div class="space-y-2" data-testid="pac-planner-fx-no-rate" data-setup={setup ?? 'loading'}>
+                            <div class="space-y-2" data-testid={testId('fx-no-rate', profile)} data-setup={setup ?? 'loading'}>
                                 <p class="flex flex-wrap items-center gap-1 text-lf-warning-on-soft">
                                     {setupText(setup)}
                                     {#if setup}
-                                        <HelpTip label={pairLabel(pair)} help={setupHelp(setup)} testid="pac-planner-fx-no-rate-help" />
+                                        <HelpTip label={pairLabel(pair)} help={setupHelp(setup)} testid={testId('fx-no-rate-help', profile)} />
                                     {/if}
                                 </p>
                                 {#if setup === 'absent'}
-                                    <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-fx-add-pair" onclick={() => openAdd(pair)}>
+                                    <button type="button" class={BUTTON_SECONDARY} data-testid={testId('fx-add-pair', profile)} onclick={() => openAdd(pair)}>
                                         <Plus class="h-4 w-4" aria-hidden="true" />{$t(`${KEY}.addPair`, {default: 'Add the pair'})}
                                     </button>
                                 {:else if setup === 'provider'}
-                                    <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-fx-sync" onclick={() => openSync(pair)}>
+                                    <button type="button" class={BUTTON_SECONDARY} data-testid={testId('fx-sync', profile)} onclick={() => openSync(pair)}>
                                         <Download class="h-4 w-4" aria-hidden="true" />{$t(`${KEY}.syncRates`, {default: 'Download the rates'})}
                                     </button>
                                 {:else if setup === 'manual'}
-                                    <a class={BUTTON_LINK} href="/fx/{createPairSlug(base, quote)}" target="_blank" rel="noopener noreferrer" data-testid="pac-planner-fx-open-pair">
+                                    <a class={BUTTON_LINK} href="/fx/{createPairSlug(base, quote)}" target="_blank" rel="noopener noreferrer" data-testid={testId('fx-open-pair', profile)}>
                                         {$t(`${KEY}.openPair`, {default: 'Open the pair'})}<ExternalLink class="h-3.5 w-3.5" aria-hidden="true" />
                                     </a>
                                 {/if}
                             </div>
                         {:else}
-                            <p class={HINT} data-testid="pac-planner-fx-no-rate">{$t(`${KEY}.readLater`, {default: 'Read from LibreFolio just before the calculation.'})}</p>
+                            <p class={HINT} data-testid={testId('fx-no-rate', profile)}>{$t(`${KEY}.readLater`, {default: 'Read from LibreFolio just before the calculation.'})}</p>
                         {/if}
                     </div>
                     {#if pairIssues.length > 0}
                         <!-- X-R45b: what the read said about this pair, such as a saved rate skipped for an older one -->
-                        <div class="mt-2"><IssueList items={pairIssues} testid="pac-planner-fx-issues" /></div>
+                        <div class="mt-2"><IssueList items={pairIssues} testid={testId('fx-issues', profile)} /></div>
                     {/if}
                 </section>
             {/each}
@@ -332,7 +336,7 @@
     {/if}
 
     {#if draft.conversionPairs.length > 0}
-        <div class="max-w-xs" data-testid="pac-planner-fx-spread-field">
+        <div class="max-w-xs" data-testid={testId('fx-spread-field', profile)}>
             <div class={LABEL_ROW}>
                 <label for="{ids}-spread">{$t(`${KEY}.spread`, {default: 'Conversion spread *'})}</label>
                 <HelpTip
@@ -340,11 +344,11 @@
                     help={$t(`${KEY}.spreadHint`, {
                         default: 'A margin surcharge, as a percentage of the amount converted, to cover possible changes in the official rate or Broker fees.',
                     })}
-                    testid="pac-planner-fx-spread-help"
+                    testid={testId('fx-spread-help', profile)}
                 />
             </div>
             <div class="relative">
-                <ExactDecimalInput id="{ids}-spread" bind:value={draft.data.fxSpreadPercent} step="0.01" max="100" className="{INPUT} pr-10" testid="pac-planner-fx-spread" />
+                <ExactDecimalInput id="{ids}-spread" bind:value={draft.data.fxSpreadPercent} step="0.01" max="100" className="{INPUT} pr-10" testid={testId('fx-spread', profile)} />
                 <span class={INPUT_ADORNMENT} aria-hidden="true">%</span>
             </div>
         </div>
