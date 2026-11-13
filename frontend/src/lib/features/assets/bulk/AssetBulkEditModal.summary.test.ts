@@ -14,6 +14,10 @@
  *   the fields; `committed=false` stays on the summary with the red banner and the issues (nothing saved, `onsaved`
  *   never called); a failed call shows the banner too and the button stays usable for a retry.
  * - While the call is open `data-saving` is true and every button that could change something is off.
+ * - After a committed save (U1) the modal stays open on the summary: `data-saved`, the «Saved» check in the footer,
+ *   «Save» off, «Cancel» is «Close»; the summary keeps what was saved even when the owner reloads the assets; «Back»
+ *   (or any change) takes the check away. The owner is told once and does not close the modal.
+ * - The summary shows an icon as a thumbnail, never as the URL (U6).
  * - «Remove from the edit» on the summary re-checks the rest by itself, so «Save» is never on over a stale answer;
  *   when nothing is left to change the modal goes back to the fields.
  */
@@ -41,7 +45,8 @@ vi.mock('$lib/api', async () => {
 
 import {zodiosApi} from '$lib/api';
 import AssetBulkEditModal from './AssetBulkEditModal.svelte';
-import type {BulkAsset} from './assetBulkEdit';
+import AssetBulkSummary from './AssetBulkSummary.svelte';
+import {summarizeChanges, type BulkAsset} from './assetBulkEdit';
 
 const validate = () => vi.mocked(zodiosApi.validate_assets_patch_api_v1_assets_validate_post as never) as ReturnType<typeof vi.fn>;
 const patch = () => vi.mocked(zodiosApi.patch_assets_bulk_api_v1_assets_patch as never) as ReturnType<typeof vi.fn>;
@@ -282,5 +287,75 @@ describe('removing the last changing asset on the summary', () => {
 
         expect(root()).toHaveAttribute('data-step', 'fields');
         expect(root()).toHaveAttribute('data-selected', '0');
+    });
+});
+
+describe('after the save (U1)', () => {
+    it('stays open on the summary with the «Saved» check, and «Save» is off', async () => {
+        const {onsaved, onclose} = await toSummary();
+        expect(screen.queryByTestId('asset-bulk-saved')).toBeNull();
+        await fireEvent.click(saveBtn());
+
+        await waitFor(() => expect(onsaved).toHaveBeenCalledTimes(1));
+        expect(onclose).not.toHaveBeenCalled();
+        expect(root()).toHaveAttribute('data-saved', 'true');
+        expect(root()).toHaveAttribute('data-step', 'summary');
+        expect(screen.getByTestId('asset-bulk-saved')).toBeInTheDocument();
+        expect(saveBtn()).toBeDisabled();
+        // «Close» is the same button as «Cancel» and closes the modal.
+        await fireEvent.click(screen.getByTestId('asset-bulk-cancel'));
+        expect(onclose).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the summary of what was saved when the owner reloads the assets with the new values', async () => {
+        const {onsaved, rerender} = await toSummary();
+        await fireEvent.click(saveBtn());
+        await waitFor(() => expect(onsaved).toHaveBeenCalledTimes(1));
+
+        // The list reloaded: every asset now holds what was chosen, so nothing «changes» any more.
+        await rerender({assets: SELECTION.map((a) => ({...a, asset_type: 'STOCK', is_benchmark: true}))});
+
+        expect(root()).toHaveAttribute('data-saved', 'true');
+        expect(screen.getByTestId('asset-bulk-summary')).toHaveAttribute('data-changing', '3');
+        expect(screen.getAllByTestId('asset-bulk-summary-row')).toHaveLength(3);
+        expect(screen.getByTestId('asset-bulk-saved')).toBeInTheDocument();
+    });
+
+    it('«Back» takes the check away and the fields show the new values', async () => {
+        const {onsaved, rerender} = await toSummary();
+        await fireEvent.click(saveBtn());
+        await waitFor(() => expect(onsaved).toHaveBeenCalledTimes(1));
+        await rerender({assets: SELECTION.map((a) => ({...a, asset_type: 'STOCK', is_benchmark: true}))});
+
+        await fireEvent.click(screen.getByTestId('asset-bulk-back'));
+
+        expect(root()).toHaveAttribute('data-step', 'fields');
+        expect(root()).toHaveAttribute('data-saved', 'false');
+        expect(screen.queryByTestId('asset-bulk-saved')).toBeNull();
+    });
+
+    it('a refused save shows no «Saved» check', async () => {
+        patch().mockResolvedValue(answer({committed: false, issues: [issue('assetNotFound', 2, 1)]}));
+        await toSummary();
+        await fireEvent.click(saveBtn());
+        await waitFor(() => expect(screen.getByTestId('asset-bulk-save-failed')).toBeInTheDocument());
+        expect(root()).toHaveAttribute('data-saved', 'false');
+        expect(screen.queryByTestId('asset-bulk-saved')).toBeNull();
+    });
+});
+
+describe('the icon in the summary (U6)', () => {
+    it('is a thumbnail before → after, never the URL', () => {
+        const summary = summarizeChanges([asset(1, {icon_url: 'https://example.test/old.png'}), asset(2)], {icon_url: 'https://example.test/new.png'});
+        const {container} = render(AssetBulkSummary, {summary});
+
+        const thumbs = screen.getAllByTestId('asset-bulk-summary-icon');
+        // Asset 1: before + after; asset 2 has no icon before: «no icon» as text, the thumbnail only for the after; plus the
+        // «after» of the field card.
+        const sources = thumbs.map((t) => t.querySelector('img')?.getAttribute('src'));
+        expect(sources).toContain('https://example.test/old.png');
+        expect(sources.filter((src) => src === 'https://example.test/new.png').length).toBeGreaterThanOrEqual(3);
+        expect(container.textContent ?? '').not.toContain('new.png');
+        expect(container.textContent ?? '').not.toContain('old.png');
     });
 });

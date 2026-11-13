@@ -17,18 +17,20 @@
   top, then the numbers and the table before → after (`AssetBulkSummary.svelte`). A block does not stop the way there;
   it turns «Save» off. «Back» returns to the fields as they were. «Save N assets» sends `PATCH /assets` with the same
   payload, all or nothing: `committed=false` (or a failed call) keeps the modal on the summary with the red banner and
-  the issues; `committed=true` shows the toast and calls `onsaved`, and the owner reloads the list and clears the
-  selection.
+  the issues; `committed=true` shows the toast and calls `onsaved`. The modal then STAYS OPEN on the summary with the green
+  «Saved» check in the footer («Cancel» becomes «Close», «Save» is off) and keeps the summary of what was saved, even when
+  the owner reloads the assets (it never closes the modal and keeps the page selection, so the same assets can be edited
+  again): «Back», or any change, takes the check away.
 
   Published state for the tests: `data-step` on the root, `data-modified` (the count of touched fields),
-  `data-verify` (`idle`, `running`, `done`, `failed`), `data-blocked` (the count of blocking groups), `data-saving`, `data-state`
+  `data-verify` (`idle`, `running`, `done`, `failed`), `data-blocked` (the count of blocking groups), `data-saving`, `data-saved`, `data-state`
   (`leave`, `yes`, `no`) on the three-state controls, `data-modified` and `data-blocked` on each field.
   Svelte 5 runes.
 -->
 <script lang="ts">
     import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Loader2, Undo, Upload, X} from 'lucide-svelte';
+    import {Check, Loader2, Undo, Upload, X} from 'lucide-svelte';
     import {zodiosApi} from '$lib/api';
     import {notify} from '$lib/stores/app/notify.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
@@ -39,7 +41,7 @@
     import AssetBulkSummary from './AssetBulkSummary.svelte';
     import {extractErrorMessage} from '$lib/utils/trySave';
     import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {FIELD_LABEL_KEYS, buildBulkPatch, hasChanges, summarizeChanges, summarizeCurrent, touchedFields, validateQuoteBase, type BulkAsset, type BulkDraft, type BulkFieldKey, type BulkPatchItem, type ValueCounts} from './assetBulkEdit';
+    import {FIELD_LABEL_KEYS, buildBulkPatch, hasChanges, summarizeChanges, summarizeCurrent, touchedFields, validateQuoteBase, type BulkAsset, type BulkDraft, type BulkFieldKey, type BulkPatchItem, type ChangeSummary, type ValueCounts} from './assetBulkEdit';
     import {affectedIds, hasBlocks, organizeVerify, type VerifyGroup, type VerifyView} from './assetBulkVerify';
     import {patchIssueMessage, type AssetPatchAnswer} from '../assetPatchResult';
 
@@ -81,6 +83,9 @@
     let verifyToken = 0;
     // «Save N assets»: in flight, and why it did not go through ('' = no refusal to show).
     let saving = $state(false);
+    // The last save went through: the check in the footer and the summary of what was saved, until something changes.
+    let saved = $state(false);
+    let savedSummary = $state<ChangeSummary | null>(null);
     let saveFailure = $state<'' | 'refused' | 'error'>('');
     let saveError = $state('');
 
@@ -101,6 +106,8 @@
     let current = $derived(summarizeCurrent(selection));
     let touched = $derived(touchedFields(draft));
     let summary = $derived(summarizeChanges(selection, draft));
+    // After a save the owner reloads the assets, which then hold the new values: the summary keeps what was saved.
+    let shownSummary = $derived(saved && savedSummary ? savedSummary : summary);
     // A unit that is typed but not valid keeps «Continue» off: otherwise another touched field would turn it on and the
     // typed unit would be dropped without a word.
     let canContinue = $derived(hasChanges(selection, draft) && (quoteCheck === 'empty' || quoteCheck === 'ok'));
@@ -110,7 +117,6 @@
 
     // The chips follow the whole selection: an asset taken out of the edit stays visible, struck through (mockup v5, 5a).
     let shownSelected = $derived(showAllSelected ? assets : assets.slice(0, CHIPS_SHOWN));
-    let iconFileName = $derived(iconUrl ? decodeURIComponent(iconUrl.split(/[?#]/)[0].split('/').pop() ?? '') : '');
     let urlPlaceholder = $derived(current.user_url.distinct + (current.user_url.empty > 0 ? 1 : 0) > 1 ? $t('assets.bulkEdit.leaveDifferent') : $t('assets.bulkEdit.leave'));
     let typePlaceholder = $derived(current.asset_type.distinct > 1 ? $t('assets.bulkEdit.leaveDifferent') : $t('assets.bulkEdit.leave'));
 
@@ -130,7 +136,7 @@
     let warnedIds = $derived(warningGroups.flatMap((group) => affectedIds(group)));
     let blockedIds = $derived(verify ? verify.blocks.flatMap((group) => affectedIds(group)) : []);
     // «Save» is on only on the summary, with something to save, after a check with no block, and not while saving.
-    let canSave = $derived(step === 'summary' && summary.changing > 0 && verifyRun === 'done' && !(verify && hasBlocks(verify)) && !saving);
+    let canSave = $derived(step === 'summary' && summary.changing > 0 && verifyRun === 'done' && !(verify && hasBlocks(verify)) && !saving && !saved);
 
     function discardVerify() {
         verifyToken++;
@@ -141,6 +147,8 @@
         warningsAccepted = false;
         saveFailure = '';
         saveError = '';
+        saved = false;
+        savedSummary = null;
     }
 
     // Every opening starts clean.
@@ -220,6 +228,8 @@
 
     function handleBack() {
         if (saving) return;
+        saved = false;
+        savedSummary = null;
         step = 'fields';
     }
 
@@ -240,6 +250,9 @@
                     detail: {count: ids.length, fields},
                     toast: {variant: 'success', message: $t('assets.bulkEdit.savedToast', {values: {count: ids.length, fields: fields.map((field) => $t(FIELD_LABEL_KEYS[field])).join(', ')}})},
                 });
+                // The modal stays open: the check says it went through, and the summary stays as it was saved.
+                savedSummary = summary;
+                saved = true;
                 onsaved?.({ids, fields, count: ids.length});
                 return;
             }
@@ -433,7 +446,7 @@
 {/snippet}
 
 <ModalBase {open} maxWidth="4xl" allowOverflow={true} onRequestClose={handleClose} {zIndex} testId="asset-bulk-edit-modal" labelledBy="asset-bulk-edit-title">
-    <div data-testid="asset-bulk-edit" data-step={step} data-modified={modifiedCount} data-selected={selection.length} data-verify={verifyRun} data-blocked={blockedCount} data-saving={saving}>
+    <div data-testid="asset-bulk-edit" data-step={step} data-modified={modifiedCount} data-selected={selection.length} data-verify={verifyRun} data-blocked={blockedCount} data-saving={saving} data-saved={saved}>
         <!-- Header -->
         <div class="flex items-start justify-between gap-3 border-b border-lf-subtle px-6 py-4">
             <div class="min-w-0">
@@ -476,7 +489,9 @@
 
             <!-- «Verify now»: the blocks first, the warnings after; nothing at all when the check finds nothing -->
             <div class="space-y-2" data-testid="asset-bulk-verify-banners">
-                {@render verifyBanners()}
+                {#if !saved}
+                    {@render verifyBanners()}
+                {/if}
             </div>
 
             {#if step === 'fields'}
@@ -544,9 +559,6 @@
                                     <Upload size={20} />
                                 {/if}
                             </button>
-                            {#if iconFileName}
-                                <span class="max-w-[8rem] truncate text-[10px] text-lf-muted" data-testid="asset-bulk-icon-file">{iconFileName}</span>
-                            {/if}
                         </div>
                         <div class="flex h-16 items-center">
                             <input
@@ -637,7 +649,7 @@
                     </div>
                 </section>
             {:else}
-                <AssetBulkSummary {summary} {warnedIds} {blockedIds} />
+                <AssetBulkSummary summary={shownSummary} warnedIds={saved ? [] : warnedIds} blockedIds={saved ? [] : blockedIds} />
             {/if}
         </div>
 
@@ -685,8 +697,14 @@
                     {$t('common.back')}
                 </button>
                 <div class="flex flex-wrap items-center justify-end gap-3">
+                    {#if saved}
+                        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-lf-success" role="status" data-testid="asset-bulk-saved">
+                            <Check size={16} aria-hidden="true" />
+                            {$t('assets.bulkEdit.saved')}
+                        </span>
+                    {/if}
                     <button type="button" class="rounded-lg bg-lf-panel px-4 py-2 text-sm font-medium text-lf-secondary transition-colors hover:bg-lf-neutral disabled:opacity-50" disabled={saving} data-testid="asset-bulk-cancel" onclick={handleClose}>
-                        {$t('common.cancel')}
+                        {saved ? $t('common.close') : $t('common.cancel')}
                     </button>
                     <button
                         type="button"

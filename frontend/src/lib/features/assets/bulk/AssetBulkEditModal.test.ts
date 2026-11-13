@@ -39,6 +39,8 @@ vi.mock('$lib/api', async () => {
     return {zodiosApi, schemas, ApiError: class ApiError extends Error {}, axiosInstance: {}};
 });
 
+vi.mock('$lib/components/ui/media/ImagePickerWrapper.svelte', async () => ({default: (await import('$test/ImagePickerStub.svelte')).default}));
+
 import {zodiosApi} from '$lib/api';
 import AssetBulkEditModal from './AssetBulkEditModal.svelte';
 import type {BulkAsset} from './assetBulkEdit';
@@ -283,5 +285,15 @@ describe('AssetBulkEditModal — closing and reopening', () => {
 
         expect(screen.getByTestId('asset-bulk-active')).toHaveAttribute('data-state', 'leave');
         expect(root()).toHaveAttribute('data-modified', '0');
+    });
+});
+
+describe('the chosen icon', () => {
+    it('shows no file name or URL under the icon once it is chosen (U2)', async () => {
+        mount();
+        await fireEvent.click(screen.getByTestId('asset-bulk-icon-pick'));
+        await fireEvent.click(screen.getByTestId('stub-icon-pick'));
+        expect(screen.getByTestId('asset-bulk-field-icon_url')).toHaveAttribute('data-modified', 'true');
+        expect(screen.queryByTestId('asset-bulk-icon-file')).toBeNull();
     });
 });

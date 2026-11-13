@@ -3,8 +3,8 @@
  *
  * The pencil of the selection toolbar opens «Modifica N asset»: fields → check → summary → one `PATCH /assets`, all or
  * nothing. What this spec proves against the real backend and a real browser, which the component tests cannot:
- * - a type and a benchmark flag chosen once are saved for every selected asset, the modal closes, the selection is
- *   cleared and the list holds the new values;
+ * - a type and a benchmark flag chosen once are saved for every selected asset; the modal stays open with the «Saved»
+ *   check, the selection stays and the list holds the new values;
  * - «Index» on an asset with transactions is a block: the check names it, «Save» stays off, and nothing is saved — not
  *   even for the other, free asset — until the blocked one is taken out of the edit; then the rest saves;
  * - at 375 px neither the fields nor the summary scroll sideways, and the summary is the card list, not the table;
@@ -129,10 +129,15 @@ test.describe('Asset bulk edit', () => {
             expect(saved.detail?.count).toBe(3);
             expect(saved.detail?.fields).toEqual(['asset_type', 'is_benchmark']);
 
-            // The modal is gone, the selection is cleared and the list reloaded.
-            await expect(page.getByTestId('asset-bulk-edit')).toHaveCount(0);
-            await expect(page.getByTestId('selection-toolbar')).toHaveCount(0);
+            // U1: the modal stays open on the summary with the «Saved» check, the rows stay selected and the list reloaded.
+            await expect(page.getByTestId('asset-bulk-edit')).toHaveAttribute('data-saved', 'true');
+            await expect(page.getByTestId('asset-bulk-saved')).toBeVisible();
+            await expect(page.getByTestId('asset-bulk-save')).toBeDisabled();
             await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            await expect(page.getByTestId('asset-bulk-summary')).toHaveAttribute('data-changing', '3');
+            await page.getByTestId('asset-bulk-cancel').click();
+            await expect(page.getByTestId('asset-bulk-edit')).toHaveCount(0);
+            await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '3');
 
             for (const row of await storedAssets(page, ids)) {
                 expect(row.asset_type, `type of ${row.display_name}`).toBe('BOND');

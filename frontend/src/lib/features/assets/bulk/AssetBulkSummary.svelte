@@ -10,6 +10,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import AssetIcon from '../AssetIcon.svelte';
     import {FIELD_LABEL_KEYS, type BulkFieldKey, type BulkValue, type ChangeSummary, type SummaryCell} from './assetBulkEdit';
 
     interface Props {
@@ -26,10 +27,6 @@
         return blockedIds.includes(id) ? 'blocked' : warnedIds.includes(id) ? 'warning' : 'ok';
     }
 
-    function fileName(url: string): string {
-        return decodeURIComponent(url.split(/[?#]/)[0].split('/').pop() ?? '') || url;
-    }
-
     function flagLabel(value: boolean): string {
         return value ? $t('assets.bulkEdit.yes') : $t('assets.bulkEdit.no');
     }
@@ -37,7 +34,6 @@
     /** A plain value as text; the types are drawn as badges by the snippet. */
     function valueText(field: BulkFieldKey, value: BulkValue): string {
         if (typeof value === 'boolean') return flagLabel(value);
-        if (field === 'icon_url') return value === null ? $t('assets.bulkEdit.iconNone') : fileName(String(value));
         if (value === null) return '—';
         return String(value);
     }
@@ -49,6 +45,10 @@
             <img src={getAssetTypeIconUrl(value)} alt="" class="h-3.5 w-3.5 object-contain" />
             {$t(`assets.types.${value}`)}
         </span>
+    {:else if field === 'icon_url' && typeof value === 'string' && value}
+        <span class="inline-flex" data-testid="asset-bulk-summary-icon"><AssetIcon iconUrl={value} size="sm" /></span>
+    {:else if field === 'icon_url'}
+        <span class="text-lf-muted">{$t('assets.bulkEdit.iconNone')}</span>
     {:else}
         <span class="break-all text-lf-primary">{valueText(field, value)}</span>
     {/if}

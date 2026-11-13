@@ -1502,22 +1502,29 @@
         clearAllTableSelections();
     }
 
-    /** The pencil: the selected assets, in the order of the selection, as the list holds them now. */
-    function handleBulkEditAssets() {
+    /** The selected assets, in the order of the selection, as the list holds them now. */
+    function selectedBulkAssets() {
         const byId = new Map(assets.map((a) => [a.id, a]));
-        bulkEditAssets = selectedAssetRows
+        return selectedAssetRows
             .map((row) => byId.get(row.id))
             .filter((a): a is AssetState => a !== undefined)
             .map((a) => ({id: a.id, display_name: a.display_name, asset_type: a.asset_type, active: a.active, is_benchmark: a.is_benchmark, quote_base_quantity: a.quote_base_quantity, icon_url: a.icon_url, user_url: a.user_url}));
+    }
+
+    /** The pencil: the selected assets, in the order of the selection, as the list holds them now. */
+    function handleBulkEditAssets() {
+        bulkEditAssets = selectedBulkAssets();
         bulkEditOpen = true;
     }
 
-    /** The bulk edit saved (all or nothing): drop the cached rows, clear the selection, reload the list. */
+    /**
+     * The bulk edit saved (all or nothing): drop the cached rows and reload the list. The modal stays open on its summary
+     * and the rows stay selected, so the same assets can be edited again: the modal gets the reloaded values.
+     */
     async function handleBulkEditSaved(saved: {ids: number[]}) {
-        bulkEditOpen = false;
         invalidateAfterMutation(saved.ids);
-        clearAllTableSelections();
         await pageBusy.track('assets-reload', () => loadAssets({soft: true}));
+        if (bulkEditOpen) bulkEditAssets = selectedBulkAssets();
     }
 
     function handleBulkDeleteAssets() {
