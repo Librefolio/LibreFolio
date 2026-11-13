@@ -20,6 +20,10 @@
     import {withHelpCues} from '../shared/columnHelp';
     import {listIssue} from '../labels';
     import {presentSourceIssues} from '../issues';
+    import {getPlannerProfile, storageKey, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         draft: PlannerDraft;
@@ -29,7 +33,7 @@
 
     let {draft, accountGeneration, onclose}: Props = $props();
 
-    const testid = 'pac-planner-distribution';
+    const testid = testId('distribution', profile);
     /**
      * The weight bar. The track is on the role of the tracks; the fill is the asset's current weight. Two constants,
      * not one template: the gate reads each script string whole (G3).
@@ -227,7 +231,7 @@
                         data={proposal?.rows ?? []}
                         {columns}
                         getRowId={(row) => row.assetKey}
-                        storageKey="pac-planner-distribution"
+                        storageKey={storageKey('distribution', profile)}
                         enableSelection={false}
                         selectionMode="none"
                         enableActions={false}
