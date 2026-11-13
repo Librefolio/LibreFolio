@@ -49,6 +49,28 @@ def _can_reach_buy(
     return False
 
 
+def _can_reach_buy_over_lanes(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+    *,
+    broker_id: str,
+    currency: str,
+    checkpoint: Checkpoint | None,
+) -> bool:
+    """Cash of ``currency`` at ``broker_id`` reaches a buy there, or on a Broker one transfer lane away (B3, project 67).
+
+    One hop is enough: the Rebalancer's lanes join every pair of its Brokers (specification §15 n. 2), and a lane has no cap,
+    so cash that reaches a buy through one lane reaches it whole. A PAC scenario has no lanes and reads as before.
+    """
+    if _can_reach_buy(scenario, index, broker_id=broker_id, currency=currency, checkpoint=checkpoint):
+        return True
+    for lane in scenario.transfer_lanes:
+        check_budget(checkpoint)
+        if lane.source_broker_id == broker_id and lane.currency == currency and _can_reach_buy(scenario, index, broker_id=lane.destination_broker_id, currency=currency, checkpoint=checkpoint):
+            return True
+    return False
+
+
 def source_reachability(
     scenario: ExactPlannerScenario,
     index: ScenarioIndex,
@@ -68,7 +90,7 @@ def source_reachability(
     # nonnegative and reconcile with `ExactFundingSourceEvaluation`'s
     # invariant, instead of raising before the violation can be reported.
     effective_remaining = max(remaining, _EXACT_ZERO)
-    if source_broker_id is not None and _can_reach_buy(
+    if source_broker_id is not None and _can_reach_buy_over_lanes(
         scenario,
         index,
         broker_id=source_broker_id,
@@ -81,7 +103,7 @@ def source_reachability(
         check_budget(checkpoint)
         if route.source_kind != source_kind or route.source_id != source_id:
             continue
-        if not _can_reach_buy(scenario, index, broker_id=route.broker_id, currency=route.currency, checkpoint=checkpoint):
+        if not _can_reach_buy_over_lanes(scenario, index, broker_id=route.broker_id, currency=route.currency, checkpoint=checkpoint):
             continue
         unused = route.transfer_cap.amount - transferred_by_route.get(route.route_id, _EXACT_ZERO)
         if unused > _EXACT_ZERO:
@@ -102,8 +124,8 @@ def buy_pool_currencies(
     """Return the other currencies whose cash can fund a BUY at ``broker_id``.
 
     Candidates are currencies that actually hold (or can hold) cash at this
-    Broker: existing cash, funding-route destinations, and other SELL
-    routes' proceeds at the same Broker. Only currencies with a known direct
+    Broker: existing cash, funding-route destinations, transfer lanes into
+    it (B3, project 67), and other SELL routes' proceeds at the same Broker. Only currencies with a known direct
     FX pair to ``quote_currency`` qualify (anti-cascade: a pool currency must
     convert in one direct hop, never through a chain).
     """
@@ -116,6 +138,10 @@ def buy_pool_currencies(
         check_budget(checkpoint)
         if route.broker_id == broker_id:
             candidates.add(route.currency)
+    for lane in scenario.transfer_lanes:
+        check_budget(checkpoint)
+        if lane.destination_broker_id == broker_id:
+            candidates.add(lane.currency)
     for other in scenario.order_routes:
         check_budget(checkpoint)
         if other.broker_id == broker_id and other.side == "sell":

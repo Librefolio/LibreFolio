@@ -60,6 +60,7 @@ from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.constraints import LedgerPostingScopeError
+from backend.app.services.pac_allocator.evaluation.bounds import transfer_decision_id
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.models import CandidateActionVector, ExactEvaluation, ExactLimit, ExactPlannerScenario, ExactPolicyView, ExactTargetWeight
@@ -941,6 +942,24 @@ def test_tie_break_prefers_fewer_operations_then_route_priority() -> None:
     view, result, evaluation = _reb_run(scenario)
     assert {key: value for key, value in _quanta(result.candidate).items() if value} == {cases.buy_decision("asset:b"): 195}
     assert _exact_objectives(view, evaluation)["operation_count"] == 1
+
+
+def test_cash_reaches_a_buy_on_another_broker_through_a_lane() -> None:
+    """B3 of project 67: the cash sits on Broker X, every buy route on Broker Y, a free lane X → Y in EUR. The cash is not
+    trapped (one hop over a lane reaches a buy) and SCIP moves it: 200 EUR to Y, then 195 of B bought there, as in T4."""
+    base = cases.t4()
+    broker_y = replace(base.brokers[0], broker_id="broker:y", name="broker:y")
+    routes = tuple(replace(route, broker_id="broker:y") for route in base.order_routes)
+    lane = pac_models.ExactTransferLane(source_broker_id=cases.BROKER, destination_broker_id="broker:y", currency="EUR")
+    scenario = replace(base, brokers=tuple(sorted((*base.brokers, broker_y), key=lambda item: item.broker_id)), order_routes=routes, transfer_lanes=(lane,))
+
+    view, result, evaluation = _reb_run(scenario)
+    assert evaluation.accounting is not None
+    assert (evaluation.accounting.reachable_funding, evaluation.accounting.trapped_funding) == (R(200), ZERO)
+    transfer_id = transfer_decision_id(lane)
+    plan = {key: value for key, value in _quanta(result.candidate).items() if value}
+    assert plan == {cases.buy_decision("asset:b"): 195, transfer_id: 20_000}
+    assert _exact_objectives(view, evaluation)["plan_score"] == Fraction(1_001, 200)
 
 
 @pytest.mark.parametrize(
