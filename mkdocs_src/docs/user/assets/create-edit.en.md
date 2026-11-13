@@ -399,8 +399,10 @@ and turns **Save** off. On a phone, each asset is a card instead of a table row.
 **Back** returns to the fields as you left them. **Save N assets** sends everything at once, and
 the save is **all or nothing**:
 
-- If every asset passes, the window closes, a message tells how many assets and which fields were
-  updated, the selection is cleared and the list reloads.
+- If every asset passes, a message tells how many assets and which fields were updated and the
+  list reloads. The window stays open on the summary with a green **✓ Saved** next to the buttons
+  (**Cancel** becomes **Close**) and your selection stays, so you can go **Back** and change the
+  same assets again; the check goes away as soon as you do.
 - If one does not (it was deleted meanwhile, for example), **nothing is saved**: the summary stays,
   a red banner says *no asset was changed* and names the one that stopped it. Take it out of the edit
   and save the rest, or go back.
