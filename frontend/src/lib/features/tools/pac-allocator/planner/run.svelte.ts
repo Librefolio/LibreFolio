@@ -26,6 +26,11 @@ export class PlannerRun {
     outcome = $state.raw<RunOutcome | null>(null);
     /** Set when the user stopped waiting; cleared by the next run. */
     stopped = $state(false);
+    /**
+     * The phase the calculation last reported (V3 of project 67), as the service names it; `null` before the first message,
+     * once the answer is in, and for a Tool that reports none. Only the current run's messages count.
+     */
+    progress = $state<string | null>(null);
 
     #descriptor: () => PlannerDescriptor;
     /** The Tool this run is for (F1 of project 67): its correlation prefix and its event names. */
@@ -61,12 +66,16 @@ export class PlannerRun {
         this.#controller = controller;
         this.busy = built;
         this.stopped = false;
+        this.progress = null;
         try {
             const item = await runTool(this.#profile.toolCode, this.#profile.contractVersion, {
                 descriptor: this.#descriptor(),
                 correlationId: `${this.#profile.correlationPrefix}-${built.revision}-${sequence}`,
                 parameters: built.request,
                 signal: controller.signal,
+                onProgress: (event) => {
+                    if (sequence === this.#sequence) this.progress = event.phase;
+                },
             });
             if (!this.#current(sequence, accountGeneration)) return;
             if (item.status === 'success') {
@@ -92,6 +101,7 @@ export class PlannerRun {
         } finally {
             if (sequence === this.#sequence) {
                 this.busy = null;
+                this.progress = null;
                 this.#controller = null;
             }
         }
@@ -110,5 +120,6 @@ export class PlannerRun {
         this.#controller?.abort();
         this.#controller = null;
         this.busy = null;
+        this.progress = null;
     }
 }

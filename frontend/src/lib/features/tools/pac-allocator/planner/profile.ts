@@ -83,3 +83,11 @@ export function storageKey(suffix: string, profile: PlannerProfile = PAC_PLANNER
 export function domId(suffix: string, profile: PlannerProfile = PAC_PLANNER_PROFILE): string {
     return prefixed(suffix, profile);
 }
+
+/**
+ * The phases an operation of the Tool reports, in order, as its served descriptor declares them (V3 of project 67): the
+ * waiting panel shows the current one by its position in this list. Empty for an operation that reports none.
+ */
+export function declaredPhases(descriptor: {readonly operations: readonly {readonly operation: string; readonly progress_phases?: readonly string[]}[]}, operation: string): readonly string[] {
+    return descriptor.operations.find((policy) => policy.operation === operation)?.progress_phases ?? [];
+}
