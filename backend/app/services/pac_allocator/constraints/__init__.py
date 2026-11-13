@@ -122,13 +122,14 @@ __all__ = [
 ]
 
 
-def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables, limits: ResolvedLimits | None = None) -> None:
+def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables, limits: ResolvedLimits | None = None) -> dict[tuple[str, str], list]:
     """Add every real cross-decision / semi-continuous constraint for one
     PAC ``proportional`` ``primary`` scenario. Box bounds are set on the
     variables themselves by ``compiler.py`` before this is called.
 
     ``limits`` are the scenario's V5 limits resolved to amounts (``evaluation.limits.resolve_scenario_limits``): without
-    them, or without any limit, the model has no limit row (A3).
+    them, or without any limit, the model has no limit row (A3). Returns the posted terms of every cash cell, which the
+    Rebalancer's objectives read (B2 of project 67).
     """
     add_funding_pool_constraints(model, scenario, facts, variables)
     cells = add_ledger_balance_constraints(model, scenario, facts, variables)
@@ -137,3 +138,14 @@ def compile_hard_constraints(model: Model, scenario: ExactPlannerScenario, facts
     add_fee_epigraph_constraints(model, scenario, facts, variables)
     add_fx_no_relay_constraints(model, scenario, facts, variables)
     add_limit_constraints(model, scenario, facts, variables, cells, limits)
+    add_move_activity_constraints(model, variables)
+    return cells
+
+
+def add_move_activity_constraints(model: Model, variables: CompiledVariables) -> None:
+    """Rebalancer only (B2 of project 67): a conversion or a transfer that moves money switches its activity binary on, for
+    ``operation_count``. ``decision <= upper * active``, the upper read off the variable (P5); minimizing the count keeps a
+    binary off when its decision is zero. The PAC has no such binary, so it gets no row."""
+    for decision_id, active in (*variables.fx_active.items(), *variables.transfer_active.items()):
+        decision = variables.quanta[decision_id]
+        model.addCons(decision <= decision.getUbOriginal() * active, name=f"move_active:{decision_id}")

@@ -108,6 +108,7 @@ def add_fee_epigraph_constraints(model: Model, scenario: ExactPlannerScenario, f
         model.addCons(fee >= fixed + floor - big_m * (1 - active), name=f"fee_floor:{route.route_id}")
 
         cap_relief: LinearTerm = 0.0
+        capped = None
         cap_excess = _fee_cap_excess(fee_schedule, notional_upper)
         if fee_schedule.maximum_fee is not None and cap_excess is not None:
             cap = as_float(fee_schedule.maximum_fee.amount)
@@ -116,3 +117,23 @@ def add_fee_epigraph_constraints(model: Model, scenario: ExactPlannerScenario, f
             model.addCons(fee >= (fixed + cap) * capped, name=f"fee_cap:{route.route_id}")
             cap_relief = cap_excess * capped
         model.addCons(fee >= fixed + rate * notional_expr - big_m * (1 - active) - cap_relief, name=f"fee_linear:{route.route_id}")
+        if scenario.product == "rebalancer":
+            _add_fee_upper_rows(model, route.route_id, fee, fixed, floor, rate, notional_expr, big_m, capped, fee_schedule)
+
+
+def _add_fee_upper_rows(model: Model, route_id: str, fee, fixed: float, floor: float, rate: float, notional_expr: LinearTerm, big_m: float, capped, fee_schedule: ExactFeeSchedule) -> None:
+    """The Rebalancer only (B2 of project 67): the fee also from ABOVE, so it is exactly ``calculate_fee``.
+
+    In the PAC a fee above its formula never helps a stage. In the Rebalancer it lowers a cash cell, which shortens the
+    distance when the cell holds more than its target. One binary picks the branch of ``max(floor, rate * notional)``:
+    ``fee <= fixed + floor`` on the floor branch, ``fee <= fixed + rate * notional`` on the linear one (relieved by ``big_m``
+    on the other branch and, where the cap can bind, on the cap branch, which has ``fee <= fixed + cap``). With the lower
+    rows the fee has one value; when the order is off, ``fee_active_upper`` already holds it at zero.
+    """
+    floor_binds = model.addVar(vtype="B", name=f"fee_floor_binds:{route_id}")
+    model.addCons(fee <= fixed + floor + big_m * (1 - floor_binds), name=f"fee_floor_upper:{route_id}")
+    relief: LinearTerm = big_m * floor_binds
+    if capped is not None:
+        relief = relief + big_m * capped
+        model.addCons(fee <= fixed + as_float(fee_schedule.maximum_fee.amount) + big_m * (1 - capped), name=f"fee_cap_upper:{route_id}")
+    model.addCons(fee <= fixed + rate * notional_expr + relief, name=f"fee_linear_upper:{route_id}")

@@ -16,6 +16,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from backend.app.services.pac_allocator.constraints.facts import CompiledVariables, ScenarioFacts, as_float, asset_final_value_exprs
+from backend.app.services.pac_allocator.evaluation.bounds import current_value_by_asset
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, ResolvedBounds, ResolvedLimits, buy_value_per_quantum
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, to_valuation
@@ -69,21 +70,23 @@ def add_limit_constraints(
         if route.side == "buy":
             buy_routes[route.asset_id].append(route)
     final_value = asset_final_value_exprs(scenario, facts, variables)
+    current = current_value_by_asset(scenario, index)
     for entry, bounds in limits.by_entry.items():
         if entry.kind == "cash":
             _cash_rows(model, index, facts, cells, zero, entry, bounds)
         elif len(buy_routes[entry.asset_id]) == 1:
-            _single_route_bounds(model, index, variables, zero, entry, bounds, buy_routes[entry.asset_id][0])
+            _single_route_bounds(model, index, variables, zero, entry, bounds, buy_routes[entry.asset_id][0], current.get(entry.asset_id, ExactRatio(0)))
         else:
             _float_rows(model, final_value[entry.asset_id], entry, bounds)
 
 
-def _single_route_bounds(model: Model, index, variables: CompiledVariables, zero, entry: LimitEntry, bounds: ResolvedBounds, route: ExactOrderRoute) -> None:
-    """One route, one decision: the limits as integer bounds on its quanta; an empty range is an infeasible row."""
+def _single_route_bounds(model: Model, index, variables: CompiledVariables, zero, entry: LimitEntry, bounds: ResolvedBounds, route: ExactOrderRoute, current: ExactRatio) -> None:
+    """One route, one decision: the limits, less what the Asset is already worth (``current``, zero in the PAC), as integer
+    bounds on its quanta; an empty range is an infeasible row."""
     variable = variables.quanta[exact_decision_id("buy_quantum", route.route_id)]
     unit = buy_value_per_quantum(index, route)
-    lower = max(int(variable.getLbOriginal()), 0 if bounds.minimum is None else _ceil(bounds.minimum / unit))
-    upper = int(variable.getUbOriginal()) if bounds.maximum is None else min(int(variable.getUbOriginal()), _floor(bounds.maximum / unit))
+    lower = max(int(variable.getLbOriginal()), 0 if bounds.minimum is None else _ceil((bounds.minimum - current) / unit))
+    upper = int(variable.getUbOriginal()) if bounds.maximum is None else min(int(variable.getUbOriginal()), _floor((bounds.maximum - current) / unit))
     if lower > upper:
         model.addCons(zero >= 1, name=f"entry_limit_empty:{entry.key}")
         return

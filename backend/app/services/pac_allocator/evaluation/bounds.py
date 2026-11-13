@@ -43,6 +43,23 @@ def current_invested(
     return total
 
 
+def current_value_by_asset(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+) -> dict[str, ExactRatio]:
+    """What each held Asset is worth today, ``V⁰``, in the valuation currency: the planning quantity at the mid price.
+
+    ``current_invested`` is its sum; the SCIP model of the Rebalancer starts every Asset from it (B2 of project 67).
+    """
+    values: dict[str, ExactRatio] = {}
+    for holding in scenario.holdings:
+        asset = index.assets[holding.asset_id]
+        source_unit = asset.quote.price.amount / asset.quote.quote_base_quantity
+        value = to_valuation(index, holding.planning_quantity * source_unit, asset.quote.price.currency)
+        values[holding.asset_id] = values.get(holding.asset_id, _EXACT_ZERO) + value
+    return values
+
+
 def selected_funding(
     scenario: ExactPlannerScenario,
     index: ScenarioIndex,

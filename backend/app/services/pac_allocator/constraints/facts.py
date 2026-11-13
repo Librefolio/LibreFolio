@@ -4,10 +4,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from backend.app.services.financial_math.fx_rates import oriented_rate
+from backend.app.services.pac_allocator.evaluation.bounds import current_value_by_asset
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.evaluation.reachability import FxDecisionSpec, fx_decision_specs
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
@@ -50,6 +51,8 @@ class ScenarioFacts:
     capability_by_key: dict[tuple[str, str], ExactOrderCapability]
     fee_by_key: dict[tuple[str, str], ExactFeeSchedule]
     fx_decisions: tuple[FxDecisionSpec, ...]  # the evaluator's one list (``reachability.fx_decision_specs``), never re-derived here
+    # What each held Asset is worth today, V⁰ (B2 of project 67): empty in the PAC, which holds nothing.
+    current_value_by_asset: dict[str, float] = field(default_factory=dict)
 
 
 def _fx_pair_key(first: str, second: str) -> str:
@@ -130,6 +133,7 @@ def build_scenario_facts(scenario: ExactPlannerScenario) -> ScenarioFacts:
         capability_by_key=capability_by_key,
         fee_by_key=fee_by_key,
         fx_decisions=fx_decision_specs(scenario, scenario_index, None),
+        current_value_by_asset={asset_id: as_float(value) for asset_id, value in current_value_by_asset(scenario, scenario_index).items()},
     )
 
 
@@ -141,6 +145,10 @@ class CompiledVariables:
     buy_active: dict[str, Variable]  # buy order_route_id -> binary var
     funding_active: dict[str, Variable]  # funding route_id -> binary var
     buy_fee: dict[str, Variable]  # buy order_route_id -> continuous fee var (quote currency), every buy route
+    # The Rebalancer only (B2 of project 67): one activity binary per conversion and per transfer, for ``operation_count``.
+    # The PAC has none, so its model stays the one of A3.
+    fx_active: dict[str, Variable] = field(default_factory=dict)  # fx decision_id -> binary var
+    transfer_active: dict[str, Variable] = field(default_factory=dict)  # transfer decision_id -> binary var
 
 
 def _minimum_value(route: ExactOrderRoute, field: str) -> float:
@@ -174,10 +182,10 @@ def buy_mid_value_expr(facts: ScenarioFacts, route: ExactOrderRoute, measure: Li
 def asset_final_value_exprs(scenario: ExactPlannerScenario, facts: ScenarioFacts, variables: CompiledVariables) -> dict[str, LinearTerm]:
     """The final value of every Asset in the valuation currency, as a linear expression of the decisions.
 
-    A PAC has no holdings, so the final value of an Asset is the sum of the mid values of its own buy routes. It lived in
-    ``objectives.py``; V5 reads it too (A3, project 67), so it is here, shared.
+    What the Asset is worth today (``V⁰``, zero in the PAC, which holds nothing) plus the mid values of its own buy routes. It
+    lived in ``objectives.py``; V5 reads it too (A3, project 67), and the Rebalancer's distance (B2), so it is here, shared.
     """
-    values: dict[str, LinearTerm] = dict.fromkeys(facts.assets_by_id, 0.0)
+    values: dict[str, LinearTerm] = {asset_id: facts.current_value_by_asset.get(asset_id, 0.0) for asset_id in facts.assets_by_id}
     for route in scenario.order_routes:
         if route.side == "buy":
             values[route.asset_id] = values[route.asset_id] + buy_mid_value_expr(facts, route, buy_measure_expr(facts, variables, route))
