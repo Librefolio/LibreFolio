@@ -37,6 +37,12 @@ coverage exists, and writes pure numbers. It lands in small steps, each pinned h
    accumulated database, once per action. The finalizer writes each HTML once, at the end; a backend-only run, which had
    none of its own, now writes ``htmlcov-backend``, so ``coverage show backend`` keeps working.
 
+7. ``TestDurations`` (step 3.10) — the reports the consolidated passes already read for their verdicts (Playwright's JSON,
+   Vitest's JSON, pytest's junit) also carry how long each spec, test, file and unit took; those reports lived in throwaway
+   temporary folders and the times were lost. The runner keeps them in one ``.coverage_data/durations.json`` per run
+   (per category, spec, test, Vitest file and pytest unit, plus the summary of ``coverage-js/timing/`` when there is one),
+   and the campaign record of the invocation names the file.
+
 Pure: no database, no server, no network, no subprocess. The runner's heavy parts are stood in for with ``monkeypatch``; the
 source of ``_cli.py`` is read as text (``ast``), never executed beyond its import. The coverage data of step 3.4 is real: a few
 lines of Python under ``tmp_path``, measured in process by coverage.py itself.
@@ -58,7 +64,7 @@ from types import SimpleNamespace
 import coverage
 import pytest
 
-from scripts.test_runner import _cli, _common, _consolidate, _consolidate_backend, _coverage, _executor, _frontend_common, _frontend_fx, _inventory, _server
+from scripts.test_runner import _cli, _common, _consolidate, _consolidate_backend, _coverage, _executor, _frontend_common, _frontend_fx, _inventory, _run_cache, _server
 
 CLI_SOURCE = Path(_cli.__file__).read_text(encoding="utf-8")
 VITEST_CONFIG = Path(_common.PROJECT_ROOT, "frontend", "vitest.config.ts")
@@ -891,3 +897,128 @@ class TestHtmlOnce:
         (tmp_path / ".coverage").unlink()
         _coverage._finalize_coverage(is_front=False, is_all=False)
         assert [cmd for cmd in commands if "html" in cmd] == []
+
+
+#: A Playwright JSON report: one spec of two tests (the second retried once), one of one test; durations in milliseconds.
+_PLAYWRIGHT_REPORT = {
+    "suites": [
+        {
+            "file": "fx/fx-list.spec.ts",
+            "specs": [
+                {"file": "fx/fx-list.spec.ts", "title": "lists the pairs", "tests": [{"projectName": "desktop", "status": "expected", "results": [{"duration": 1500}]}]},
+                {"file": "fx/fx-list.spec.ts", "title": "filters", "tests": [{"projectName": "desktop", "status": "flaky", "results": [{"duration": 1000}, {"duration": 2500}]}]},
+            ],
+            "suites": [{"file": "fx/fx-list.spec.ts", "specs": [], "suites": []}],
+        },
+        {"file": "fx/fx-detail.spec.ts", "specs": [{"file": "fx/fx-detail.spec.ts", "title": "opens", "tests": [{"projectName": "mobile", "status": "expected", "results": [{"duration": 250}]}]}]},
+    ]
+}
+
+#: A Vitest JSON report: two files, their start and end in epoch milliseconds.
+_VITEST_REPORT = {
+    "testResults": [
+        {"name": "/x/frontend/src/lib/a.test.ts", "status": "passed", "startTime": 1_000, "endTime": 1_750, "assertionResults": [{"status": "passed", "duration": 700}]},
+        {"name": "/x/frontend/src/lib/b.test.ts", "status": "passed", "startTime": 2_000, "endTime": 2_125, "assertionResults": [{"status": "passed", "duration": 100}]},
+    ]
+}
+
+#: A pytest junit report: two cases of one module, one of a module under a directory unit; times in seconds.
+_JUNIT_REPORT = """<?xml version="1.0" encoding="utf-8"?>
+<testsuites><testsuite name="pytest">
+<testcase classname="backend.test_scripts.test_api.test_fx_api.TestFx" name="test_one" time="1.25"/>
+<testcase classname="backend.test_scripts.test_api.test_fx_api.TestFx" name="test_two" time="0.75"/>
+<testcase classname="backend.test_scripts.test_services.test_financial.test_fifo" name="test_lot" time="3.5"/>
+</testsuite></testsuites>
+"""
+
+
+class TestDurations:
+    """Step 3.10: the durations the consolidated reports carry, kept in one file per run, named by the campaign."""
+
+    @pytest.fixture
+    def durations(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        """A durations file and a campaign file of the test's own; the accumulator emptied."""
+        target = tmp_path / ".coverage_data" / "durations.json"
+        monkeypatch.setattr(_run_cache, "DURATIONS_FILE", target)
+        monkeypatch.setattr(_run_cache, "_CAMPAIGN_FILE", tmp_path / ".campaign.json")
+        monkeypatch.setattr(_run_cache, "DURATIONS", _run_cache.RunDurations())
+        monkeypatch.setattr(_run_cache, "TIMING_DIR", tmp_path / "no-timing")
+        return SimpleNamespace(file=target, campaign=tmp_path / ".campaign.json")
+
+    def test_playwright_vitest_and_junit_reports_feed_one_durations_file(self, monkeypatch: pytest.MonkeyPatch, durations: SimpleNamespace) -> None:
+        """DU-01 — a Playwright group, a Vitest group and a consolidated pytest group, each with its report stood in, feed the
+        accumulator; ``write_durations()`` writes ``lf-durations/1``: per category its total, per spec its seconds and its
+        tests (every attempt counted: a retry is time the run spent), per Vitest file its seconds, per pytest unit the sum of
+        its cases."""
+
+        def stood_in_run(cmd, **kwargs):
+            argv = [str(part) for part in cmd]
+            env = kwargs.get("env") or {}
+            if "playwright" in argv:
+                Path(env["PLAYWRIGHT_JSON_OUTPUT_NAME"]).write_text(json.dumps(_PLAYWRIGHT_REPORT), encoding="utf-8")
+            elif "vitest" in argv:
+                out = next(part.split("=", 1)[1] for part in argv if part.startswith("--outputFile.json="))
+                Path(out).write_text(json.dumps(_VITEST_REPORT), encoding="utf-8")
+            else:
+                junit = next(part.split("=", 1)[1] for part in argv if part.startswith("--junit-xml="))
+                Path(junit).write_text(_JUNIT_REPORT, encoding="utf-8")
+            return SimpleNamespace(returncode=0)
+
+        monkeypatch.setattr(_consolidate.subprocess, "run", stood_in_run)
+        monkeypatch.setattr(_common, "get_log_dir", lambda: None)
+        monkeypatch.setattr(_common, "_COVERAGE_JS", False)
+
+        _consolidate.run_playwright_group(["fx/fx-list.spec.ts", "fx/fx-detail.spec.ts"], False, category="front-fx")
+        _consolidate.run_vitest_group(["src/lib/a.test.ts", "src/lib/b.test.ts"], False, category="front-fx")
+        _consolidate_backend._run_group("api", ["test_api/test_fx_api.py", "test_services/test_financial/"], False, False)
+
+        written = _run_cache.write_durations()
+        assert written == durations.file
+        data = json.loads(durations.file.read_text(encoding="utf-8"))
+        assert data["schema"] == "lf-durations/1"
+        fx = data["categories"]["front-fx"]
+        assert fx["playwright"]["fx/fx-list.spec.ts"] == {"seconds": 5.0, "tests": {"desktop › lists the pairs": 1.5, "desktop › filters": 3.5}}
+        assert fx["playwright"]["fx/fx-detail.spec.ts"] == {"seconds": 0.25, "tests": {"mobile › opens": 0.25}}
+        assert fx["vitest"] == {"src/lib/a.test.ts": 0.75, "src/lib/b.test.ts": 0.125}
+        assert fx["seconds"] == 6.125
+        api = data["categories"]["api"]
+        assert api["pytest"] == {"test_api/test_fx_api.py": 2.0, "test_services/test_financial/": 3.5}
+        assert api["seconds"] == 5.5
+        assert data["coverage_timing"] is None, "no coverage-js/timing/ in this run"
+
+    def test_the_campaign_record_points_to_it(self, durations: SimpleNamespace) -> None:
+        """DU-02 — ``_timed_run`` starts with an empty accumulator, writes the file at the end of a run that recorded durations
+        and names it in the invocation's campaign record; a run that recorded none writes nothing and names nothing."""
+        args = SimpleNamespace(category="front-fx", fresh_run=True, resume=False, run_status=False)
+        _run_cache.DURATIONS.add("stale", "vitest", "src/old.test.ts", 9.0)
+
+        def body() -> int:
+            assert _run_cache.DURATIONS.empty(), "a run starts from an empty accumulator"
+            _run_cache.DURATIONS.add("front-fx", "vitest", "src/lib/a.test.ts", 0.5)
+            return 0
+
+        assert _cli._timed_run(args, body) == 0
+        runs = json.loads(durations.campaign.read_text(encoding="utf-8"))["runs"]
+        assert runs[-1]["durations"] == str(durations.file)
+        assert json.loads(durations.file.read_text(encoding="utf-8"))["categories"] == {"front-fx": {"seconds": 0.5, "vitest": {"src/lib/a.test.ts": 0.5}}}
+
+        durations.file.unlink()
+        args.fresh_run = False
+        assert _cli._timed_run(args, lambda: 0) == 0
+        runs = json.loads(durations.campaign.read_text(encoding="utf-8"))["runs"]
+        assert "durations" not in runs[-1] and not durations.file.exists()
+
+    def test_the_coverage_timing_belongs_to_this_run_only(self, monkeypatch: pytest.MonkeyPatch, durations: SimpleNamespace, tmp_path: Path) -> None:
+        """DU-03 — ``coverage-js/timing/`` survives every run that is not under JS coverage (a JS run wipes it when it starts):
+        its summary goes into the durations only when this run collected JS coverage, never a previous run's."""
+        timing = tmp_path / "timing"
+        timing.mkdir()
+        (timing / "worker-0-1.jsonl").write_text("{}\n", encoding="utf-8")
+        monkeypatch.setattr(_run_cache, "TIMING_DIR", timing)
+        monkeypatch.setattr(_run_cache, "_coverage_timing", lambda: {"tests": 1})
+        _run_cache.DURATIONS.add("utils", "pytest", "test_utilities/test_x.py", 1.0)
+
+        _run_cache.write_durations(with_coverage_timing=False)
+        assert json.loads(durations.file.read_text(encoding="utf-8"))["coverage_timing"] is None, "a previous run's stopwatches"
+        _run_cache.write_durations(with_coverage_timing=True)
+        assert json.loads(durations.file.read_text(encoding="utf-8"))["coverage_timing"] == {"tests": 1}

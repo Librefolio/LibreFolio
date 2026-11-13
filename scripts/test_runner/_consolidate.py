@@ -43,7 +43,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from . import _common, _coverage
+from . import _common, _coverage, _run_cache
 from ._archive import log_file_for
 from ._common import PROJECT_ROOT, Colors, print_error, print_info, print_success, print_warning
 
@@ -138,6 +138,30 @@ def _playwright_results(report_path: Path) -> dict[str, bool]:
     for suite in data.get("suites", []):
         walk(suite)
     return outcome
+
+
+def _playwright_durations(report_path: Path, category: str) -> None:
+    """Hand the run's durations to ``_run_cache.DURATIONS``: per spec, per test (``<project> › <title>``), every attempt
+    counted — a retry is time the run spent. Milliseconds in the report, seconds in the record."""
+    try:
+        data = json.loads(report_path.read_text())
+    except Exception:
+        return
+
+    def walk(suite: dict, inherited: str = "") -> None:
+        file_name = suite.get("file") or inherited
+        for spec in suite.get("specs", []):
+            path = _norm_spec(spec.get("file") or file_name)
+            tests = {}
+            for test in spec.get("tests", []):
+                title = f"{test.get('projectName') or 'default'} › {spec.get('title', '')}"
+                tests[title] = tests.get(title, 0.0) + sum(r.get("duration", 0) for r in test.get("results", [])) / 1000
+            _run_cache.DURATIONS.add(category, "playwright", path, sum(tests.values()), tests)
+        for child in suite.get("suites", []):
+            walk(child, file_name)
+
+    for suite in data.get("suites", []):
+        walk(suite)
 
 
 # Consolidation trades process count for process lifetime, and under JS coverage
@@ -235,6 +259,7 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
         return dict.fromkeys(specs, False)
 
     results = _playwright_results(report)
+    _playwright_durations(report, category or "playwright")
     return {s: results.get(s, False) for s in specs}
 
 
@@ -259,6 +284,20 @@ def _vitest_results(report_path: Path, known: list[str]) -> dict[str, bool]:
         ok = result.get("status") == "passed" and all(a.get("status") in ("passed", "pending", "todo") for a in result.get("assertionResults", []))
         outcome[match] = outcome.get(match, True) and ok
     return outcome
+
+
+def _vitest_durations(report_path: Path, known: list[str], category: str) -> None:
+    """Hand each Vitest file's seconds (its ``endTime − startTime``) to ``_run_cache.DURATIONS``."""
+    try:
+        data = json.loads(report_path.read_text())
+    except Exception:
+        return
+    for result in data.get("testResults", []):
+        name = (result.get("name") or "").replace("\\", "/")
+        match = next((k for k in known if name.endswith(k)), None)
+        if match is None or result.get("endTime") is None or result.get("startTime") is None:
+            continue
+        _run_cache.DURATIONS.add(category, "vitest", match, (result["endTime"] - result["startTime"]) / 1000)
 
 
 def run_vitest_group(paths: list[str], coverage: bool, category: str | None = None) -> dict[str, bool]:
@@ -290,6 +329,7 @@ def run_vitest_group(paths: list[str], coverage: bool, category: str | None = No
         return dict.fromkeys(paths, False)
 
     results = _vitest_results(report, paths)
+    _vitest_durations(report, paths, category or "vitest")
     return {p: results.get(p, False) for p in paths}
 
 

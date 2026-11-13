@@ -19,7 +19,7 @@ from scripts.coverage_analysis import register_subparser as register_cov_parser
 from scripts.coverage_analysis import run_analysis as run_coverage_analysis
 
 # Import common module to set its globals
-from . import _common, _coverage, _frontend_common
+from . import _common, _coverage, _frontend_common, _run_cache
 from ._backend_external import _get_external_extra_args
 from ._common import (
     Colors,
@@ -752,12 +752,19 @@ def _timed_run(args, body):
     fresh = bool(getattr(args, "fresh_run", False))
     resumed = bool(getattr(args, "resume", False))
     _campaign_begin(reset=fresh)
+    # The run's durations start empty and end in .coverage_data/durations.json, named by the campaign record (step 3.10).
+    _run_cache.DURATIONS.reset()
     rc = 1
     try:
         rc = body()
         return rc
     finally:
-        _campaign_end(success=rc == 0, label=str(getattr(args, "category", "run")), fresh=fresh, resumed=resumed)
+        try:
+            durations = _run_cache.write_durations(with_coverage_timing=bool(_common._COVERAGE_JS))
+        except OSError as exc:
+            print_warning(f"Could not write the run's durations: {exc}")
+            durations = None
+        _campaign_end(success=rc == 0, label=str(getattr(args, "category", "run")), fresh=fresh, resumed=resumed, durations=str(durations) if durations else None)
         note = _campaign_summary()
         if note:
             print()
