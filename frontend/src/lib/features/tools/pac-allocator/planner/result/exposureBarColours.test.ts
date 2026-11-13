@@ -49,7 +49,7 @@ import {PAC_EXPOSURE_COLORS} from '$lib/theme/chartTheme';
 import {setRoleReader} from '$lib/theme/roleColors';
 import {themed} from '$lib/theme/themePair';
 import {ASSET_TYPE_FAMILY} from '$lib/utils/assetTypes';
-import type {PacExactNumber} from '../types';
+import type {PlannerExactNumber} from '../types';
 import {actualColours, idealColour} from './exposureBarColours';
 import {compareExact, UNCATEGORISED_CATEGORY_ID, type WeightRow} from './model';
 
@@ -62,13 +62,13 @@ afterEach(() => {
 // =============================================================================
 
 /** An ideal weight as the backend publishes a finite decimal. */
-const decimal = (value: string): PacExactNumber => ({kind: 'finite_decimal', value});
+const decimal = (value: string): PlannerExactNumber => ({kind: 'finite_decimal', value});
 
 /** An ideal weight as an exact ratio; its display fields are never read here. */
-const ratio = (numerator: string, denominator: string, display: string): PacExactNumber => ({kind: 'exact_ratio', numerator, denominator, display_decimal: display, display_scale: 6, display_authority: 'non_authoritative'});
+const ratio = (numerator: string, denominator: string, display: string): PlannerExactNumber => ({kind: 'exact_ratio', numerator, denominator, display_decimal: display, display_scale: 6, display_authority: 'non_authoritative'});
 
 /** A row of the bars: its category id and its ideal weight. The label and the final weight play no part in the colour. */
-function row(id: string, target: PacExactNumber): WeightRow {
+function row(id: string, target: PlannerExactNumber): WeightRow {
     return {id, label: id, target, final: {kind: 'available', value: target}};
 }
 

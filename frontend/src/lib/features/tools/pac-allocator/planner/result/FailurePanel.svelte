@@ -6,7 +6,7 @@
     import {presentIssues} from '../issues';
     import {listIssue} from '../labels';
     import type {RequestIdMap} from '../request';
-    import type {PacFailureResult, PlannerStep} from '../types';
+    import type {PlannerFailureResult, PlannerStep} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY, CARD, HINT} from '../ui';
     import {getPlannerProfile, domId, testId} from '../profile';
 
@@ -15,7 +15,7 @@
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
-        result: PacFailureResult;
+        result: PlannerFailureResult;
         draft: PlannerDraft;
         ids: RequestIdMap;
         ongoto: (step: PlannerStep) => void;

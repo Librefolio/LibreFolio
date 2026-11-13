@@ -9,7 +9,7 @@
     import type {ToolItemMetrics} from '$lib/features/tools/contracts';
     import HelpTip from '../shared/HelpTip.svelte';
     import {formatExactMoneyPlain, formatObjectiveValue, type CurrencyDigits} from '../format';
-    import type {PacCosts, PacExactMoney, PacReadyResult, PacSolution} from '../types';
+    import type {PlannerCosts, PlannerExactMoney, PlannerReadyResult, PlannerSolution} from '../types';
     import {BADGE, CARD, HINT, SECTION_TITLE} from '../ui';
     import {exactSign, objectiveStage} from './model';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -19,8 +19,8 @@
     const profile = getPlannerProfile();
 
     interface Props {
-        solution: PacSolution | null;
-        result: PacReadyResult;
+        solution: PlannerSolution | null;
+        result: PlannerReadyResult;
         metrics: ToolItemMetrics;
         digits: CurrencyDigits;
     }
@@ -42,13 +42,13 @@
         {field: 'execution_margin_cost', key: `${RESULT_KEY}.detail.marginCost`, fallback: 'Margin cost'},
         {field: 'broker_withheld_tax', key: `${RESULT_KEY}.ledger.fields.broker_withheld_tax`, fallback: 'Tax withheld by the Broker'},
         {field: 'self_reserved_tax', key: `${RESULT_KEY}.ledger.fields.self_reserved_tax`, fallback: 'Tax reserved by you'},
-    ] as const satisfies readonly {field: keyof PacCosts; key: string; fallback: string}[];
+    ] as const satisfies readonly {field: keyof PlannerCosts; key: string; fallback: string}[];
 
-    const money = (value: PacExactMoney) => formatExactMoneyPlain(value, {digits});
+    const money = (value: PlannerExactMoney) => formatExactMoneyPlain(value, {digits});
     /** A part that is exactly 0 is left out; one that cannot be read is shown. */
-    const shown = (value: PacExactMoney) => exactSign(value.value) !== 0;
+    const shown = (value: PlannerExactMoney) => exactSign(value.value) !== 0;
     const text = (key: string, fallback: string) => $t(`${KEY}.${key}`, {default: fallback});
-    const part = (id: string, label: string, value: PacExactMoney, tone: Tone = 'neutral'): Chip => ({id, label, value: money(value), tone});
+    const part = (id: string, label: string, value: PlannerExactMoney, tone: Tone = 'neutral'): Chip => ({id, label, value: money(value), tone});
 
     const trapped = $derived(solution !== null && shown(solution.accounting.trapped_funding));
 
