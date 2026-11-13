@@ -262,6 +262,16 @@ def db_migration_005(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Migration 005 tests", verbose=verbose)
 
 
+def db_migration_006_broker_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the broker operating profile step of 006_release_1_4_0_schema (project 67, P1), on temporary databases only."""
+    print_section("DB Test: Migration 006 — broker operating profile")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: a 1.3 database gets brokers.operating_profile TEXT NULL and keeps every broker row; run again, nothing changes; a column already there; downgrade; models = migration")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_006_broker_profile.py", test_names)
+    return run_command(cmd, "Migration 006 broker profile tests", verbose=verbose)
+
+
 def db_session_pragmas(verbose: bool = False, test_names: list = None) -> bool:
     """Test the pragmas every SQLAlchemy engine's connection gets (set_sqlite_pragma, H-51): trusted_schema off first, the schema reset last."""
     print_section("DB Test: Session Pragmas (trusted_schema off)")
@@ -325,6 +335,7 @@ def db_all(verbose: bool = False) -> bool:
         "post-migration-orphan-pairs",
         "integrity-check",
         "migration-005",
+        "migration-006-broker-profile",
         "referential-integrity",
         "fx-rates",
         "brim",
@@ -426,6 +437,16 @@ Note: No backend server required. Tests operate directly on test DB.
         db_migration_005,
         name="Migration 005 Release 1.3 Schema",
         desc="005_release_1_3_0_schema (H-57: the unreleased 1.3 migrations in one, variant V4): equal to the schema the retired chain left (frozen); 1.2 data upgraded; duplicate addresses stop it before the unique index, as the retired 009 did, and the remedy works; the 13 redundant indexes gone, every UNIQUE still refusing; models = migration; downgrade; idempotence",
+        prereq="None (temporary databases)",
+        isolation="pure",
+    )
+    # PURE: as migration-005, every database is a private file under tmp_path.
+    add_test(
+        cat,
+        "migration-006-broker-profile",
+        db_migration_006_broker_profile,
+        name="Migration 006 Broker Operating Profile",
+        desc="006_release_1_4_0_schema, step «broker operating profile» (project 67, P1): a 1.3 database gets brokers.operating_profile TEXT NULL with every broker row kept; idempotent; a column already there; downgrade drops it and keeps the rows; models = migration",
         prereq="None (temporary databases)",
         isolation="pure",
     )
