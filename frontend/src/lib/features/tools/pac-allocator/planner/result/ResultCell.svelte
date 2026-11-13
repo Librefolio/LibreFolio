@@ -32,6 +32,10 @@
     import {BADGE, ICON_BUBBLE, STEP_NUMBER} from '../ui';
     import {UNAVAILABLE_FALLBACKS, weightWidth} from './model';
     import {instructionText, priceText} from './text';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         cell: ResultCellContent;
@@ -87,8 +91,8 @@
     <span class="tabular-nums">{priceText(cell.price, $t, cell.digits)}</span>
 {:else if cell.type === 'instruction'}
     <span class="flex flex-wrap items-center gap-1.5">
-        <span class="font-medium text-lf-primary" data-testid="pac-planner-plan-instruction">{instructionText(cell.order, $t, cell.digits)}</span>
-        {#if cell.autoConversion}<span class={BADGE.info} data-testid="pac-planner-plan-order-auto-conversion">{$t(`${KEY}.plan.autoConversion`, {default: 'Automatic conversion'})}</span>{/if}
+        <span class="font-medium text-lf-primary" data-testid={testId('plan-instruction', profile)}>{instructionText(cell.order, $t, cell.digits)}</span>
+        {#if cell.autoConversion}<span class={BADGE.info} data-testid={testId('plan-order-auto-conversion', profile)}>{$t(`${KEY}.plan.autoConversion`, {default: 'Automatic conversion'})}</span>{/if}
     </span>
 {:else if cell.type === 'label'}
     <span class="flex min-w-0 items-center gap-2" data-testid={cell.testid} {...cell.attrs ?? {}}>
