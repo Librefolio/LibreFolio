@@ -112,13 +112,11 @@ the whole run rather than once per action.
 `--no-consolidate` exists as the escape hatch, not as the recommended path: the consolidated route is
 what the 8 categories are verified against (629 Playwright + 687 vitest passing).
 
-!!! warning "Under `--coverage js` the groups are split into batches of 8"
-    The batches date from the V8 era, when a consolidated worker accumulated coverage for its whole lifetime.
-    Measured then: 8 specs finish comfortably, 25 specs die at the heap limit — and the failure lands on an innocent
-    test with a duration of `0ms`. Today each worker holds an istanbul map of its tests' coverage, bounded by the size
-    of the build rather than by the number of tests, but the batches of `_JS_COVERAGE_CHUNK` (8,
-    `scripts/test_runner/_consolidate.py`) stay as a bound on how long a worker lives. If a run starts dying again, lower that constant; do **not** raise `--max-old-space-size`, which only
-    postpones the crash.
+!!! info "Under `--coverage js` a category is still one Playwright run"
+    The batches of 8 specs of the V8 era are gone: with the counter sum and the light read a worker's heap does not
+    grow with its life (measured on `front-utility all` whole: every worker under 2 GB, 1 700 MB the highest, at a
+    worker's first full read). If a coverage run starts dying of heap again, measure with `LF_COV_TIMING=1` (the
+    `heap_mb` column) before changing anything; do **not** raise `--max-old-space-size`, which only postpones the crash.
 
 !!! warning "Never run two Playwright invocations in one lane"
     Consolidation reduces the number of invocations; it does not make them concurrent. Within a lane
@@ -260,9 +258,13 @@ import type {Page} from '../fixtures/playwright';
 ```
 
 `e2e/fixtures/playwright.ts` re-exports the same symbols and adds the `auto` fixture `jsCoverage`, which works only
-when the flag is on — at flag off it returns at once and costs nothing. In its teardown it reads `window.__coverage__`
-from every page of the test (about 17 MB on the instrumented build) and merges it, with `istanbul-lib-coverage`, into
-the worker's sum held by the worker-scoped fixture `jsCoverageSink` (`e2e/fixtures/js-coverage-sink.ts`). The sum is
+when the flag is on — at flag off it returns at once and costs nothing. In its teardown it reads every page of the test
+with `readCoverageInPage`, handing it the files the worker already holds (`knownHashes()`): those come back as their
+counters alone, and only when touched; any other file comes in full, zeros included. A worker therefore reads the
+~25 MB of full objects once, then ~0.6 MB per test (`front-fx all`: 18.5 s → 0.9 s per test, 66 → 18 min). The sink,
+held by the worker-scoped fixture `jsCoverageSink` (`e2e/fixtures/js-coverage-sink.ts`), keeps each module's fixed
+parts once and its counters as arrays, and replays istanbul's merge exactly (items keyed by position, folded from a
+file's second slice on). The sum is
 written to one file per worker, `frontend/coverage-js/e2e-raw/worker-<parallelIndex>-<pid>.json`, every 20 tests and
 at worker teardown, through a `.tmp` file and a rename; a new worker absorbs, then deletes, the files of dead workers
 of its `parallelIndex`, so a full run leaves about one file per parallel slot instead of ~30 GB of per-test files. A
@@ -271,13 +273,24 @@ worker killed outright loses at most the tests since its last write. The teardow
 under load, turned green tests red (V-28). A collection that overruns fails as «Fixture "jsCoverage" timeout …
 exceeded during teardown», never as a slow test.
 
+Two switches for measuring the collection itself, never needed for a normal run:
+
+- `LF_COV_TIMING=1`: one line per test in `coverage-js/timing/worker-<i>-<pid>.jsonl` (`evaluate_ms`,
+  `payload_bytes`, `merge_ms`, `flush_ms`, `rss_mb`, `heap_mb`); read with
+  `node scripts/js-coverage-probe.mjs timing coverage-js/timing` (mean, p50, p95, total, max).
+- `LF_COV_COMPARE=1`: a second, full sink fed from the same snapshots writes `coverage-js/e2e-raw-full/`;
+  `node scripts/js-coverage-probe.mjs compare coverage-js/e2e-raw-full coverage-js/e2e-raw` must say 0 differences.
+
+A run under `--coverage js` of pure specs alone is red at the end: nothing was measured, and the piece check says so.
+
 Key files:
 - `frontend/vite.config.ts`: the istanbul instrumentation, on with `COVERAGE_INSTRUMENT=1`
 - `frontend/e2e/fixtures/playwright.ts`: the `jsCoverage` and `jsCoverageSink` fixtures
 - `frontend/e2e/fixtures/js-coverage-sink.ts`: the worker's running sum, its write policy and the absorbing of dead
   workers' files
 - `frontend/scripts/js-coverage-report.js`: merges the worker files (and the vitest `coverage-final.json`) with
-  `istanbul-lib-coverage` into a report
+  `istanbul-lib-coverage` into a report, and writes its `summary.json` (covered / total, files read and skipped)
+- `frontend/scripts/js-coverage-probe.mjs`: `timing` and `compare`, test infrastructure only
 
 Reports: `frontend/coverage-js/e2e/` (Playwright only), `frontend/coverage-js/unit-combined/` (vitest only), and
 `frontend/coverage-js/combined/` (both). Open with `./dev.py test coverage show js` (or `js-e2e`, `js-unit`).

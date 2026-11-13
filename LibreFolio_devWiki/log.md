@@ -4039,3 +4039,10 @@ Graph: `./dev.py graph update` (incremental, no LLM) and `./dev.py graph viz` ra
 169 communities → 1 548 · 2 287 · 165 (the code nodes dropped). Today's 12 new pages and the lint's edits are **not**
 in the graph: that needs the full semantic rebuild (the `graphify` skill, or `graph build --full` with an LLM key),
 not available in this session. Not repaired.
+
+## [2026-11-13] file | Coverage: the quotable run, pure numbers, each invocation timed
+Project 71, block 3 (coverage) closed its runner steps: `--quotable all`, the piece check that makes an incomplete
+run red, `coverage-summary.json` with lines and branches apart, the light E2E read (18,5 s → 0,9 s a test), the
+campaign timer that now belongs to each invocation, and `durations.json`. Updated the two pages that carried the old
+operational rule and the old way of reading the numbers.
+Filed: [[concepts/run-cache-and-campaign-semantics]], [[concepts/coverage-rate-vs-volume]].
