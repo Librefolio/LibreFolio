@@ -1430,6 +1430,7 @@
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedFxRows.length > 0}
                 <DataTableToolbar
+                    variant="floating"
                     selectedCount={selectedFxRows.length}
                     bulkActions={[
                         {id: 'sync', icon: RotateCw, label: () => $_('common.sync'), onClick: () => handleBulkSyncFx()},

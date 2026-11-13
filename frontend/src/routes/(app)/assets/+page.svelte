@@ -1855,9 +1855,10 @@
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedAssetRows.length > 0}
                 <DataTableToolbar
+                    variant="floating"
                     selectedCount={selectedAssetRows.length}
                     bulkActions={[
-                        {id: 'edit', icon: Pencil, label: () => $t('assets.bulkEdit.action', {values: {count: selectedAssetRows.length}}), onClick: () => handleBulkEditAssets()},
+                        {id: 'edit', icon: Pencil, label: () => $t('assets.bulkEdit.action', {values: {count: selectedAssetRows.length}}), shortLabel: () => $t('common.edit'), primary: true, onClick: () => handleBulkEditAssets()},
                         {id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets()},
                         {id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets()},
                         {id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets()},
