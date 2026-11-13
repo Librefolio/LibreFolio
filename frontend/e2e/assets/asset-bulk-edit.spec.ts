@@ -261,6 +261,86 @@ test.describe('Asset bulk edit', () => {
         }
     });
 
+    // U3 + U4: «Type» sits under «User URL» on one column; «Now: …» is under the field it describes; the Undo of a field
+    // is on the row of its control, not of its title. Geometry only: no text is read.
+    test('the fields are on one grid: Type under User URL, «Now» under the control, Undo on the control row', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        await page.setViewportSize({width: 1280, height: 900});
+        try {
+            await createAssets(page, owned, token, ['A', 'B', 'C']);
+            await openBulkEdit(page, token, 3);
+            await page.getByTestId('asset-bulk-user-url').fill('https://example.test/bulk');
+            await chooseType(page, 'BOND');
+            await page.getByTestId('asset-bulk-active-no').click();
+            await page.getByTestId('asset-bulk-icon-pick').scrollIntoViewIfNeeded();
+
+            const box = async (testId: string) => {
+                const found = await page.getByTestId(testId).boundingBox();
+                if (!found) throw new Error(`${testId} has no box`);
+                return found;
+            };
+            const url = await box('asset-bulk-user-url');
+            const type = await box('asset-bulk-type-button');
+            expect(type.y, 'Type is under User URL').toBeGreaterThanOrEqual(url.y + url.height);
+            expect(Math.abs(type.x - url.x), 'Type and User URL share the left edge').toBeLessThanOrEqual(1);
+            expect(Math.abs(type.width - url.width), 'Type and User URL share the width').toBeLessThanOrEqual(1);
+
+            const controls: Array<[string, string]> = [
+                ['user_url', 'asset-bulk-user-url'],
+                ['asset_type', 'asset-bulk-type-button'],
+                ['active', 'asset-bulk-active'],
+            ];
+            for (const [field, controlId] of controls) {
+                const control = await box(controlId);
+                const undo = await box(`asset-bulk-reset-${field}`);
+                const undoCentre = undo.y + undo.height / 2;
+                expect(undoCentre, `the Undo of ${field} is on the row of its control`).toBeGreaterThanOrEqual(control.y);
+                expect(undoCentre, `the Undo of ${field} is on the row of its control`).toBeLessThanOrEqual(control.y + control.height);
+                const now = await box(`asset-bulk-${field}-now`);
+                expect(now.y, `«Now» of ${field} is under its control`).toBeGreaterThanOrEqual(control.y + control.height - 1);
+            }
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
+    // U5: the body of the window has no scrollbar of its own while the window fits; below that, the body scrolls and the
+    // header and the footer stay in view.
+    test('the window grows with its content: no inner scrollbar when it fits, the body scrolls at 600 px with header and footer in view', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        // The fullest case (a block banner, a warning banner and five assets) is about 1120 px with its header and footer:
+        // 90% of 1400 px holds it, so there the body must not need a scrollbar of its own.
+        await page.setViewportSize({width: 1280, height: 1400});
+        const bodyScroll = () => page.getByTestId('asset-bulk-body').evaluate((el) => ({scroll: el.scrollHeight, client: el.clientHeight, overflowY: getComputedStyle(el).overflowY}));
+        try {
+            const assets = await createAssets(page, owned, token, ['A', 'B', 'C', 'D', 'E']);
+            await giveTransactions(page, owned, assets[0].id);
+            await openBulkEdit(page, token, 5);
+            await chooseType(page, 'INDEX');
+            await page.getByTestId('asset-bulk-verify').click();
+            await expect(page.getByTestId('asset-bulk-edit')).toHaveAttribute('data-verify', 'done', {timeout: 15_000});
+            await expect(page.getByTestId('asset-bulk-block-indexWithTransactions')).toBeVisible();
+            await expect(page.getByTestId('asset-bulk-warning-assetFamilyChange')).toBeVisible();
+
+            const roomy = await bodyScroll();
+            expect(roomy.scroll, 'the body shows all its content, no scrollbar of its own').toBeLessThanOrEqual(roomy.client);
+
+            await page.setViewportSize({width: 1280, height: 600});
+            await expect.poll(async () => (await bodyScroll()).scroll > (await bodyScroll()).client, {timeout: 5_000}).toBe(true);
+            const viewport = page.viewportSize()!;
+            for (const part of ['asset-bulk-title', 'asset-bulk-footer-fields']) {
+                const found = await page.getByTestId(part).boundingBox();
+                expect(found, `${part} is drawn`).not.toBeNull();
+                expect(found!.y, `${part} is inside the viewport`).toBeGreaterThanOrEqual(0);
+                expect(found!.y + found!.height, `${part} is inside the viewport`).toBeLessThanOrEqual(viewport.height);
+            }
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
     test('closing without saving changes nothing and keeps the selection', async ({page}) => {
         const owned: Owned = {assetIds: [], brokerIds: []};
         const token = uniqueToken(6);
