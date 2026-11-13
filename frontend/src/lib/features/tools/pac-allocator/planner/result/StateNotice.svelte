@@ -1,9 +1,9 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import {formatExactMoneyPlain, formatPlannerMoneyPlain, type CurrencyDigits} from '../format';
+    import {formatExactMoneyPlain, formatPlannerMoneyPlain, formatPlannerPercent, type CurrencyDigits} from '../format';
     import type {PlannerReadyResult, PlannerRoundingTopUp, PlannerStep} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
-    import type {ResultNames} from './model';
+    import type {LimitedEntry, PlannerResolvedLimit, ResultNames} from './model';
     import {getPlannerProfile, testId} from '../profile';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
@@ -14,11 +14,13 @@
         result: PlannerReadyResult;
         names: ResultNames;
         digits: CurrencyDigits;
+        /** The request's entries with a limit (F2 of project 67): with `ready_infeasible`, the limits are the cause (M20). */
+        limits?: readonly LimitedEntry[];
         ongoto: (step: PlannerStep) => void;
         onedit: () => void;
     }
 
-    let {result, names, digits, ongoto, onedit}: Props = $props();
+    let {result, names, digits, limits = [], ongoto, onedit}: Props = $props();
 
     const KEY = 'tools.pacAllocator.planner.result.states';
     const limited = $derived(result.result_state === 'ready_incumbent' && result.stop_reason !== 'completed');
@@ -26,6 +28,9 @@
     const finished = $derived(stages.filter((stage) => stage.status === 'finished').length);
     // Cash the plan still needs per pool because every posting rounds against the plan (QX1-b): computed by the backend.
     const topUps: PlannerRoundingTopUp[] = $derived('primary_solution' in result ? result.primary_solution.rounding_top_ups : []);
+    /** An amount limit is wealth (masked with privacy on); a share is a percentage, public. */
+    const limitValue = (limit: PlannerResolvedLimit) => (limit.kind === 'amount' ? formatPlannerMoneyPlain(limit.amount.amount, limit.amount.currency, {digits}) : formatPlannerPercent(limit.share));
+    const entryName = (entry: LimitedEntry) => (entry.kind === 'asset' ? names.asset(entry.id) : `${names.broker(entry.brokerId ?? '')} · ${entry.currency ?? ''}`);
     const goToLabel = (step: PlannerStep, fallback: string) => $t(`${PLANNER_KEY}.actions.goTo`, {default: 'Go to {step}', values: {step: $t(`${PLANNER_KEY}.steps.${step}`, {default: fallback})}});
 </script>
 
@@ -58,19 +63,40 @@
         </div>
     </div>
 {:else if result.result_state === 'ready_infeasible'}
-    <div class="{NOTICE.danger} space-y-3" role="alert" data-testid={testId('state', profile)} data-state="infeasible" data-proof-source={result.proof.proof_source}>
-        <p class="font-semibold">{$t(`${KEY}.infeasible.title`, {default: 'Infeasible with these constraints'})}</p>
-        <p>{$t(`${KEY}.infeasible.body`, {default: 'Proven: no combination meets every hard constraint together.'})}</p>
-        <div class="space-y-1">
-            <p class="font-medium">{$t(`${KEY}.infeasible.constraints`, {default: 'Hard constraints involved (from the request; caps and minimums masked with privacy on):'})}</p>
-            <ul class="space-y-1" data-testid={testId('state-constraints', profile)}>
-                <li class="flex flex-wrap items-center justify-between gap-2" data-testid={testId('state-constraint', profile)} data-kind="reachable_funding">
-                    <span>{$t(`${KEY}.infeasible.funding`, {default: 'Liquidity reachable: {amount}', values: {amount: formatExactMoneyPlain(result.scenario_basis.reachable_funding, {digits})}})}</span>
-                    <button type="button" class={BUTTON_LINK} data-testid={testId('state-goto', profile)} onclick={() => ongoto('liquidity')}>{goToLabel('liquidity', 'Liquidity')}</button>
-                </li>
+    <div class="{NOTICE.danger} space-y-3" role="alert" data-testid={testId('state', profile)} data-state="infeasible" data-proof-source={result.proof.proof_source} data-limits={limits.length > 0 ? 'true' : 'false'}>
+        {#if limits.length > 0}
+            <p class="font-semibold">{$t(`${KEY}.infeasible.limitsTitle`, {default: 'No solution with these limits'})}</p>
+            <p>{$t(`${KEY}.infeasible.limitsBody`, {default: 'Without the limits a plan exists: they are what rule it out. Review them:'})}</p>
+            <ul class="space-y-1" data-testid={testId('state-limits', profile)}>
+                {#each limits as entry (`${entry.kind}:${entry.id}`)}
+                    <li class="flex flex-wrap items-center justify-between gap-2" data-testid={testId('state-limit', profile)} data-kind={entry.kind} data-entity={entry.id}>
+                        <span>
+                            <span class="font-medium">{entryName(entry)}</span>
+                            {#if entry.minimum}
+                                <span data-side="minimum"> · {$t(`${KEY}.infeasible.limitMinimum`, {default: 'minimum {value}', values: {value: limitValue(entry.minimum)}})}</span>
+                            {/if}
+                            {#if entry.maximum}
+                                <span data-side="maximum"> · {$t(`${KEY}.infeasible.limitMaximum`, {default: 'maximum {value}', values: {value: limitValue(entry.maximum)}})}</span>
+                            {/if}
+                        </span>
+                        <button type="button" class={BUTTON_LINK} data-testid={testId('state-limit-goto', profile)} onclick={() => ongoto('targets')}>{goToLabel('targets', 'Targets')}</button>
+                    </li>
+                {/each}
             </ul>
-        </div>
-        <p class={HINT}>{$t(`${KEY}.infeasible.note`, {default: 'The interface does not choose which constraint to relax: it lists them. No partial plan is shown as valid.'})}</p>
+        {:else}
+            <p class="font-semibold">{$t(`${KEY}.infeasible.title`, {default: 'Infeasible with these constraints'})}</p>
+            <p>{$t(`${KEY}.infeasible.body`, {default: 'Proven: no combination meets every hard constraint together.'})}</p>
+            <div class="space-y-1">
+                <p class="font-medium">{$t(`${KEY}.infeasible.constraints`, {default: 'Hard constraints involved (from the request; caps and minimums masked with privacy on):'})}</p>
+                <ul class="space-y-1" data-testid={testId('state-constraints', profile)}>
+                    <li class="flex flex-wrap items-center justify-between gap-2" data-testid={testId('state-constraint', profile)} data-kind="reachable_funding">
+                        <span>{$t(`${KEY}.infeasible.funding`, {default: 'Liquidity reachable: {amount}', values: {amount: formatExactMoneyPlain(result.scenario_basis.reachable_funding, {digits})}})}</span>
+                        <button type="button" class={BUTTON_LINK} data-testid={testId('state-goto', profile)} onclick={() => ongoto('liquidity')}>{goToLabel('liquidity', 'Liquidity')}</button>
+                    </li>
+                </ul>
+            </div>
+            <p class={HINT}>{$t(`${KEY}.infeasible.note`, {default: 'The interface does not choose which constraint to relax: it lists them. No partial plan is shown as valid.'})}</p>
+        {/if}
         <button type="button" class={BUTTON_SECONDARY} data-testid={testId('state-edit', profile)} onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
     </div>
 {:else if result.result_state === 'ready_no_incumbent'}

@@ -312,6 +312,40 @@ export function planLookup(result: PlannerReadyResult, request: PlannerResolvedR
     };
 }
 
+// -- limits (F2 of project 67, M20) ------------------------------------------------------
+
+type PlannerResolvedTargetEntry = PlannerResolvedRequest['target_weights'][number];
+export type PlannerResolvedLimit = NonNullable<PlannerResolvedTargetEntry['minimum']>;
+
+/** A target entry with at least one limit: an Asset (`id` = its id) or a Broker's cash in one currency (`id` = `broker:currency`). */
+export interface LimitedEntry {
+    kind: 'asset' | 'cash';
+    id: string;
+    brokerId: string | null;
+    currency: string | null;
+    minimum: PlannerResolvedLimit | null;
+    maximum: PlannerResolvedLimit | null;
+}
+
+/** The entries of the request that carry a limit, in wire order: what the «no solution with these limits» banner lists. */
+export function limitedEntries(request: PlannerResolvedRequest): LimitedEntry[] {
+    return request.target_weights.flatMap((entry): LimitedEntry[] => {
+        const minimum = entry.minimum ?? null;
+        const maximum = entry.maximum ?? null;
+        if (minimum === null && maximum === null) return [];
+        return entry.kind === 'asset' ? [{kind: 'asset', id: entry.asset_id, brokerId: null, currency: null, minimum, maximum}] : [{kind: 'cash', id: `${entry.broker_id}:${entry.currency}`, brokerId: entry.broker_id, currency: entry.currency, minimum, maximum}];
+    });
+}
+
+/**
+ * The result's notes to list beside the state notice. With `ready_infeasible` and a limit in the request the banner lists every
+ * limited entry, so the backend's per-entry `allocation.bounds_unsatisfiable` notes would say it twice: they are left out.
+ */
+export function notesBesideLimitsBanner(result: PlannerReadyResult, limits: readonly LimitedEntry[]): PlannerReadyResult['issues'] {
+    if (result.result_state !== 'ready_infeasible' || limits.length === 0) return result.issues;
+    return result.issues.filter((issue) => issue.code !== 'allocation.bounds_unsatisfiable');
+}
+
 // -- operational plan (C10–C12) -------------------------------------------------------
 
 export type PlanStep = {kind: 'funding'; sequence: number; action: PlannerFundingAction} | {kind: 'conversion'; sequence: number; action: PlannerConversion};

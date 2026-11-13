@@ -23,7 +23,7 @@
     import StaleBanner from './StaleBanner.svelte';
     import StateNotice from './StateNotice.svelte';
     import ToolErrorPanel from './ToolErrorPanel.svelte';
-    import {isReady, planLookup, resultNames} from './model';
+    import {isReady, limitedEntries, notesBesideLimitsBanner, planLookup, resultNames} from './model';
     import {getPlannerProfile, domId, testId} from '../profile';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
@@ -51,7 +51,9 @@
     const digits = $derived(catalogCurrencyDigits(ready ? ready.catalogs.currencies : []));
     const names = $derived(ready ? resultNames(ready) : null);
     const lookup = $derived(ready && names ? planLookup(ready, outcome.built.resolved, names) : null);
-    const notes = $derived(ready ? presentIssues(ready.issues, draft, outcome.built.ids).map(listIssue) : []);
+    /** The entries with a limit (F2, M20): the banner of a `ready_infeasible` result lists them. */
+    const limits = $derived(limitedEntries(outcome.built.resolved));
+    const notes = $derived(ready ? presentIssues(notesBesideLimitsBanner(ready, limits), draft, outcome.built.ids).map(listIssue) : []);
     const orderCount = $derived(solution ? solution.order_rows.length : 0);
     const hasPlan = $derived(solution !== null && orderCount + solution.funding_actions.length + solution.conversions.length > 0);
     const sections = $derived(solution ? ['allocation', ...(hasPlan ? ['plan'] : []), 'exposures', 'ledger', 'proof'] : ['proof']);
@@ -114,7 +116,7 @@
         <FailurePanel result={failure} {draft} ids={outcome.built.ids} {ongoto} {onedit} />
     {:else if ready && names && lookup && outcome.kind === 'result'}
         <OutcomeHeader result={ready} revision={outcome.built.revision} {apiVersion} {digits} disabled={busy} {onedit} {oncalculate} ongotoproof={gotoProof} />
-        <StateNotice result={ready} {names} {digits} {ongoto} {onedit} />
+        <StateNotice result={ready} {names} {digits} {limits} {ongoto} {onedit} />
 
         {#if notes.length > 0}
             <section class="{CARD} space-y-2" aria-labelledby={domId('notes-title', profile)} data-testid={testId('notes', profile)}>

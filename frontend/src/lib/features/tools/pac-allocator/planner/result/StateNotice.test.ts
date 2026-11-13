@@ -43,7 +43,7 @@ import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {catalogCurrencyDigits, formatPlannerMoneyPlain} from '../format';
 import type {PlannerReadyResult} from '../types';
-import type {ResultNames} from './model';
+import type {LimitedEntry, ResultNames} from './model';
 import StateNotice from './StateNotice.svelte';
 
 const digits = catalogCurrencyDigits([
@@ -111,8 +111,8 @@ function amountOf(row: TopUp): string {
     return formatPlannerMoneyPlain(row.amount, row.currency, {digits});
 }
 
-async function mount(result: PlannerReadyResult): Promise<void> {
-    render(StateNotice, {result, names, digits, ongoto: vi.fn(), onedit: vi.fn()});
+async function mount(result: PlannerReadyResult, limits: LimitedEntry[] = [], ongoto = vi.fn()): Promise<void> {
+    render(StateNotice, {result, names, digits, limits, ongoto, onedit: vi.fn()});
     flushSync();
     await tick();
 }
@@ -231,5 +231,66 @@ describe('StateNotice infeasible state (M19, §10.2)', () => {
         stateNotice('infeasible');
         const constraints = within(screen.getByTestId('pac-planner-state-constraints')).getAllByTestId('pac-planner-state-constraint');
         expect(constraints.map((row) => row.getAttribute('data-kind'))).toEqual(['reachable_funding']);
+    });
+});
+
+/*
+ * F2 of project 67 (M20, U6): without limits «do nothing» is always a plan, so `ready_infeasible` with a limit in the
+ * request means the limits rule every plan out. The notice then lists every entry with a limit, read from the resolved
+ * request, each with its own «Go to» the Targets step. Without limits the generic message of today stays; a search that
+ * ran out of time (`ready_no_incumbent`) is not a proof, and never shows this banner.
+ */
+const LIMIT_MAX: LimitedEntry = {kind: 'asset', id: 'msft', brokerId: null, currency: null, minimum: null, maximum: {kind: 'amount', amount: {amount: '1000', currency: 'EUR'}}};
+const LIMIT_MIN: LimitedEntry = {kind: 'asset', id: 'bond', brokerId: null, currency: null, minimum: {kind: 'share', share: '0.35'}, maximum: null};
+
+function limitRows(): HTMLElement[] {
+    return within(screen.getByTestId('pac-planner-state-limits')).getAllByTestId('pac-planner-state-limit');
+}
+
+describe('StateNotice limits banner (F2, M20)', () => {
+    it('infeasible with limits lists every limited entry and links to Targets', async () => {
+        const ongoto = vi.fn();
+        await mount(infeasible(), [LIMIT_MAX, LIMIT_MIN], ongoto);
+
+        expect(stateNotice('infeasible')).toHaveAttribute('data-limits', 'true');
+        const rows = limitRows();
+        expect(rows.map((row) => [row.getAttribute('data-kind'), row.getAttribute('data-entity')])).toEqual([
+            ['asset', 'msft'],
+            ['asset', 'bond'],
+        ]);
+        expect(rows[0]).toHaveTextContent(formatPlannerMoneyPlain('1000', 'EUR', {digits}));
+        expect(rows[0].querySelector('[data-side="maximum"]')).not.toBeNull();
+        expect(rows[1].querySelector('[data-side="minimum"]')).not.toBeNull();
+        // The generic list of today is not shown beside the banner.
+        expect(screen.queryByTestId('pac-planner-state-constraints')).toBeNull();
+
+        within(rows[1]).getByTestId('pac-planner-state-limit-goto').click();
+        expect(ongoto).toHaveBeenCalledWith('targets');
+    });
+
+    it('masks an amount limit with privacy on, and keeps a share visible', async () => {
+        await mount(infeasible(), [LIMIT_MAX, LIMIT_MIN]);
+        await setPrivacy(true);
+
+        const [amountRow, shareRow] = limitRows();
+        expect(amountRow).toHaveTextContent(PRIVACY_PLACEHOLDER);
+        expect(amountRow).not.toHaveTextContent('1,000');
+        expect(shareRow).not.toHaveTextContent(PRIVACY_PLACEHOLDER);
+        expect(isPrivacyEnabled()).toBe(true);
+    });
+
+    it('infeasible without limits shows the generic message', async () => {
+        await mount(infeasible(), []);
+
+        expect(stateNotice('infeasible')).toHaveAttribute('data-limits', 'false');
+        expect(screen.queryByTestId('pac-planner-state-limits')).toBeNull();
+        expect(screen.getByTestId('pac-planner-state-constraints')).toBeInTheDocument();
+    });
+
+    it('no incumbent never shows the limits banner', async () => {
+        await mount(noIncumbent(), [LIMIT_MAX]);
+
+        stateNotice('no_incumbent');
+        expect(screen.queryByTestId('pac-planner-state-limits')).toBeNull();
     });
 });

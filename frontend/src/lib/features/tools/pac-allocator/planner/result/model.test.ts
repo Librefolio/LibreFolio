@@ -57,7 +57,8 @@ vi.mock('$lib/api', () => ({
 
 import en from '$lib/i18n/en.json';
 import type {PlannerExactNumber, PlannerLedgerRow, PlannerProof, PlannerReadyResult} from '../types';
-import {LEDGER_FIELDS, ledgerFields, resultBadges, type ResultBadge} from './model';
+import {LEDGER_FIELDS, ledgerFields, limitedEntries, notesBesideLimitsBanner, resultBadges, type LimitedEntry, type ResultBadge} from './model';
+import type {PlannerResolvedRequest} from '../types';
 
 interface ProofCase {
     proof: PlannerProof['kind'];
@@ -180,5 +181,47 @@ describe('ledgerFields — the rounding column reads an exact number', () => {
 
     it('shows it for a nonzero finite decimal on any row, not only the first', () => {
         expect(ledgerFields([ledgerRow('EUR', ZERO_RESIDUAL), ledgerRow('USD', DECIMAL_RESIDUAL)], false)).toContain('rounding_delta');
+    });
+});
+
+describe('limitedEntries — the entries with a limit, read from the resolved request (F2 of project 67, M20)', () => {
+    it('keeps every entry with a minimum or a maximum, in wire order, and nothing else', () => {
+        const amount = {kind: 'amount', amount: {amount: '500', currency: 'EUR'}};
+        const share = {kind: 'share', share: '0.35'};
+        const resolved = {
+            target_weights: [
+                {kind: 'asset', asset_id: 'a-free', weight: '0.2', minimum: null, maximum: null},
+                {kind: 'asset', asset_id: 'a-max', weight: '0.3', minimum: null, maximum: share},
+                {kind: 'cash', broker_id: 'b-1', currency: 'USD', weight: '0', minimum: amount, maximum: null},
+                {kind: 'asset', asset_id: 'a-min', weight: '0.5', minimum: amount, maximum: null},
+            ],
+        } as unknown as PlannerResolvedRequest;
+
+        expect(limitedEntries(resolved)).toEqual([
+            {kind: 'asset', id: 'a-max', brokerId: null, currency: null, minimum: null, maximum: share},
+            {kind: 'cash', id: 'b-1:USD', brokerId: 'b-1', currency: 'USD', minimum: amount, maximum: null},
+            {kind: 'asset', id: 'a-min', brokerId: null, currency: null, minimum: amount, maximum: null},
+        ]);
+    });
+
+    it('a request without limits has no limited entry', () => {
+        const resolved = {target_weights: [{kind: 'asset', asset_id: 'a', weight: '1', minimum: null, maximum: null}]} as unknown as PlannerResolvedRequest;
+        expect(limitedEntries(resolved)).toEqual([]);
+    });
+});
+
+describe('notesBesideLimitsBanner — the backend notes that would repeat the limits banner (F2, M20)', () => {
+    const BOUNDS = {code: 'allocation.bounds_unsatisfiable'};
+    const OTHER = {code: 'allocation.something_else'};
+    const ENTRY: LimitedEntry = {kind: 'asset', id: 'a', brokerId: null, currency: null, minimum: {kind: 'share', share: '1'}, maximum: null};
+    const result = (state: string) => ({result_state: state, issues: [BOUNDS, OTHER]}) as unknown as PlannerReadyResult;
+
+    it('drops the per-entry «bounds unsatisfiable» notes when the banner lists the entries', () => {
+        expect(notesBesideLimitsBanner(result('ready_infeasible'), [ENTRY])).toEqual([OTHER]);
+    });
+
+    it('keeps every note when there is no banner: no limit, or a state other than infeasible', () => {
+        expect(notesBesideLimitsBanner(result('ready_infeasible'), [])).toEqual([BOUNDS, OTHER]);
+        expect(notesBesideLimitsBanner(result('ready_no_incumbent'), [ENTRY])).toEqual([BOUNDS, OTHER]);
     });
 });
