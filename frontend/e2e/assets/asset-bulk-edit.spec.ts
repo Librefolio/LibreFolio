@@ -415,6 +415,93 @@ test.describe('Asset bulk edit', () => {
         }
     });
 
+    // U8: the selection bar floats at the bottom of the content, only while rows are selected, and stays after the save.
+    for (const [width, height] of [
+        [1280, 800],
+        [375, 812],
+    ] as const) {
+        test(`the selection bar floats at the bottom (${width} px): only with a selection, and it stays after the save`, async ({page}) => {
+            const owned: Owned = {assetIds: [], brokerIds: []};
+            const token = uniqueToken(6);
+            await page.setViewportSize({width, height});
+            const bar = page.getByTestId('selection-toolbar');
+            const reserved = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--lf-selbar-space').trim());
+            try {
+                const assets = await createAssets(page, owned, token, ['A', 'B']);
+                await goToAssetsPage(page);
+                await page.getByTestId('assets-search-input').fill(token);
+                await waitForSettled(page.getByTestId('assets-page'), 20_000);
+                await page.getByTestId('view-mode-list').click();
+                await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+                // No selection, no bar, no room kept at the bottom.
+                await expect(bar).toHaveCount(0);
+                expect(await reserved()).toBe('');
+
+                for (const asset of assets) await page.getByTestId(`dt-row-checkbox-${asset.id}`).click();
+                await expect(bar).toHaveAttribute('data-selected-count', '2');
+                await expect(bar).toHaveAttribute('data-variant', 'floating');
+                const box = await bar.boundingBox();
+                expect(box, 'the bar is drawn').not.toBeNull();
+                expect(box!.x, 'inside the viewport on the left').toBeGreaterThanOrEqual(0);
+                expect(box!.x + box!.width, 'inside the viewport on the right').toBeLessThanOrEqual(width);
+                expect(box!.y + box!.height, 'at the bottom of the viewport').toBeLessThanOrEqual(height);
+                expect(box!.y + box!.height, 'close to the bottom of the viewport').toBeGreaterThanOrEqual(height - 48);
+                expect(await reserved(), 'the page keeps room for the bar').not.toBe('');
+                // The words show on a wide screen only; the icon button is always there.
+                if (width >= 1024) await expect(page.getByTestId('toolbar-action-edit-label')).toBeVisible();
+                else await expect(page.getByTestId('toolbar-action-edit-label')).toBeHidden();
+
+                // Open the bulk edit, save, close: the bar is still there with the same rows.
+                await page.getByTestId('toolbar-action-edit').click();
+                await expect(page.getByTestId('asset-bulk-edit')).toHaveAttribute('data-selected', '2');
+                await page.getByTestId('asset-bulk-is_benchmark-yes').click();
+                await toSummary(page);
+                const since = await eventSeq(page);
+                await page.getByTestId('asset-bulk-save').click();
+                await waitForEvent(page, 'asset.bulk.saved', {since, timeout: 20_000});
+                await page.getByTestId('asset-bulk-cancel').click();
+                await expect(page.getByTestId('asset-bulk-edit')).toHaveCount(0);
+                await expect(bar).toHaveAttribute('data-selected-count', '2');
+
+                // Esc inside the bar deselects.
+                await page.getByTestId('toolbar-action-edit').focus();
+                await page.keyboard.press('Escape');
+                await expect(bar).toHaveCount(0);
+                expect(await reserved()).toBe('');
+            } finally {
+                await deleteOwned(page, owned);
+            }
+        });
+    }
+
+    // The page holds its three tables through refs (column menu, width mirror): with rows in two tables the column menu must act on
+    // both. A check made after the finding of U9, where those refs were empty.
+    test('the column menu acts on every table of the list', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        try {
+            const assets = await createAssets(page, owned, token, ['A', 'B', 'C']);
+            await giveTransactions(page, owned, assets[2].id);
+            await goToAssetsPage(page);
+            await page.getByTestId('assets-search-input').fill(token);
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            const own = page.getByTestId('assets-table-panel-own');
+            const watched = page.getByTestId('assets-table-panel-analysis');
+            await expect(own.getByTestId('dt-header-lastPrice')).toHaveCount(1);
+            await expect(watched.getByTestId('dt-header-lastPrice')).toHaveCount(1);
+
+            await page.getByTestId('column-visibility-toggle').click();
+            await page.getByTestId('column-visibility-item-lastPrice').click();
+            await expect(own.getByTestId('dt-header-lastPrice'), 'hidden in the «yours» table').toHaveCount(0);
+            await expect(watched.getByTestId('dt-header-lastPrice'), 'hidden in the «watched» table too').toHaveCount(0);
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
     test('closing without saving changes nothing and keeps the selection', async ({page}) => {
         const owned: Owned = {assetIds: [], brokerIds: []};
         const token = uniqueToken(6);
