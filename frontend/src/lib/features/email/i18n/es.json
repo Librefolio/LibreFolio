@@ -166,8 +166,10 @@
         "error": "No se pudo comprobar el enlace: inténtalo de nuevo.",
         "confirm": "Confirmar la nueva dirección",
         "notExpected": "Si no esperabas este cambio, cierra esta página: no pasa nada.",
-        "signin": "Para confirmar la nueva dirección, inicia sesión con la cuenta que pidió el cambio. Después vuelves aquí, y basta un clic.",
-        "signinAction": "Iniciar sesión para confirmar"
+        "signin": "Para confirmar la nueva dirección, inicia sesión con la cuenta que pidió el cambio, no con otra cuenta que uses. Si en este navegador hay otra cuenta abierta, primero se cierra su sesión. Después vuelves aquí, y basta un clic.",
+        "signinAction": "Iniciar sesión con esa cuenta para confirmar",
+        "otherAccount": "Este enlace pertenece a otra cuenta, no a la que tiene la sesión abierta en este navegador: la dirección no ha cambiado. Cierra la sesión y luego inicia sesión con la cuenta que pidió el cambio.",
+        "otherAccountAction": "Cerrar sesión e iniciarla con la cuenta correcta"
       },
       "changed": "Tu dirección de correo se cambió: inicia sesión de nuevo."
     }

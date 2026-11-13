@@ -166,8 +166,10 @@
         "error": "Le lien n'a pas pu être vérifié : réessayez.",
         "confirm": "Confirmer la nouvelle adresse",
         "notExpected": "Si vous n'attendiez pas ce changement, fermez cette page : il ne se passe rien.",
-        "signin": "Pour confirmer la nouvelle adresse, connectez-vous au compte qui a demandé le changement. Vous revenez ensuite ici, et un clic suffit.",
-        "signinAction": "Se connecter pour confirmer"
+        "signin": "Pour confirmer la nouvelle adresse, connectez-vous avec le compte qui a demandé le changement, et non avec un autre compte que vous utilisez. Si un autre compte est connecté dans ce navigateur, il est d'abord déconnecté. Vous revenez ensuite ici, et un clic suffit.",
+        "signinAction": "Se connecter avec ce compte pour confirmer",
+        "otherAccount": "Ce lien appartient à un autre compte, pas à celui connecté dans ce navigateur : l'adresse n'a pas changé. Déconnectez-vous, puis connectez-vous avec le compte qui a demandé le changement.",
+        "otherAccountAction": "Se déconnecter et se connecter avec le bon compte"
       },
       "changed": "Votre adresse e-mail a été changée : reconnectez-vous."
     }

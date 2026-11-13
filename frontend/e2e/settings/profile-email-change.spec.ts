@@ -18,8 +18,10 @@
  * - PEC-E-05 (D10): the link page answered 403 `EMAIL_CHANGE_SIGN_IN_REQUIRED` shows `signin`; its button opens the sign-in
  *   with the way back; once the fixture user signs in, the page is back on `/confirm-email-change`, ready, and its click
  *   sends the same token (kept in the tab, never in the address); the confirmation stays simulated.
- * - PEC-E-06 (D10, plan §8.1): the same with ANOTHER account signed in in that browser: the button signs it out first, so
- *   the sign-in form shows instead of a bounce back to the same 403, and the right account then finds the page ready.
+ * - PEC-E-06 (D10, plan §8.1): ANOTHER account signed in in that browser: the route answers 403 `EMAIL_CHANGE_OTHER_ACCOUNT`,
+ *   the page shows `otheraccount` (the link belongs to another account, never which), its button signs the other account
+ *   out first, so the sign-in form shows instead of a bounce back to the same 403, and the right account then finds the
+ *   page ready.
  *
  * Shared lane: nothing is written but sign-ins and sign-outs of the fixture users' own sessions. Every assertion reads a test id, a published state, an event or a request — never a
  * translated text.
@@ -346,7 +348,7 @@ test.describe('The link page — sign in to confirm (project 71, D10)', () => {
         expect(problems).toEqual([]);
     });
 
-    test('PEC-E-06 another account signed in here: the button signs it out, the sign-in form shows, the right account finds the page ready', async ({page}) => {
+    test('PEC-E-06 another account signed in here: the page says the link is another account’s, its button signs it out, the sign-in form shows, the right account finds the page ready', async ({page}) => {
         const token = `pec-token-${uniqueSuffix()}`;
         const confirms: unknown[] = [];
         await page.route(
@@ -354,8 +356,8 @@ test.describe('The link page — sign in to confirm (project 71, D10)', () => {
             async (route) => {
                 if (route.request().method() !== 'POST') return route.fallback();
                 confirms.push(route.request().postDataJSON());
-                // The administrator's session is not the account of the link: 403, as the route answers it (PEC-021)
-                if (confirms.length === 1) return route.fulfill({status: 403, json: {detail: {error_code: 'EMAIL_CHANGE_SIGN_IN_REQUIRED', message: 'Sign in'}}});
+                // The administrator's session is not the account of the link: 403 for another account, as the route answers it (PEC-021)
+                if (confirms.length === 1) return route.fulfill({status: 403, json: {detail: {error_code: 'EMAIL_CHANGE_OTHER_ACCOUNT', message: 'This link belongs to another account'}}});
                 await route.fulfill({status: 200, json: {username: TEST_USER.username}});
             },
         );
@@ -364,8 +366,8 @@ test.describe('The link page — sign in to confirm (project 71, D10)', () => {
         await page.goto(`/confirm-email-change#token=${token}`);
         const card = page.getByTestId('email-change-status');
         await card.getByTestId('email-change-confirm').click({timeout: LOAD_MS});
-        await expect(card).toHaveAttribute('data-status', 'signin', {timeout: ACTION_MS});
-        await card.getByTestId('email-change-signin-action').click();
+        await expect(card).toHaveAttribute('data-status', 'otheraccount', {timeout: ACTION_MS});
+        await card.getByTestId('email-change-switch-account').click();
 
         // Signed out first: the sign-in page shows its form, instead of jumping back to the link page with the admin's session
         await expect(page.getByTestId('login-form')).toBeVisible({timeout: LOAD_MS});

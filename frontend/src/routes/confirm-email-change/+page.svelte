@@ -11,7 +11,9 @@
      * have ended: the page sends it to the sign-in with a message. A link that cannot be used says why, after the click.
      *
      * A link asked from Profile confirms only with the session of its account (decision D10): the server answers 403
-     * `EMAIL_CHANGE_SIGN_IN_REQUIRED` otherwise, and the page says `signin`. Only then is the token kept, in this tab's
+     * `EMAIL_CHANGE_SIGN_IN_REQUIRED` otherwise, and the page says `signin`; with another account's session the answer is
+     * `EMAIL_CHANGE_OTHER_ACCOUNT`, and the page says `otheraccount`: the link belongs to another account, sign out and sign in
+     * with the one that asked — never which one, the link may have reached a stranger through a mistyped address. Only then is the token kept, in this tab's
      * `sessionStorage` (`KEPT_LINK`), never in the address: the button ends this browser's session (another account may be
      * signed in here) and opens the sign-in with the way back. Back here without a `#token`, the kept token makes the page
      * `ready` and leaves the storage at once (R1, the developer, 11/11). The token alone confirms nothing any more, so
@@ -101,7 +103,7 @@
             if (mine !== generation) return;
             const refusal = readEmailChangeRefusal(error);
             // Kept only for the way through the sign-in: never written for any other answer
-            if (refusal === 'signin') keepLink(spending);
+            if (refusal === 'signin' || refusal === 'otheraccount') keepLink(spending);
             else forgetKeptLink();
             status = refusal ?? 'error';
         }

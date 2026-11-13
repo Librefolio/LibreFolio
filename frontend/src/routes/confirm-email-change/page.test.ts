@@ -319,6 +319,27 @@ describe('/confirm-email-change — sign in to confirm a change asked from Profi
         expect(window.sessionStorage.getItem(KEPT)).toBe(TOKEN);
     });
 
+    it('ECP-11c: a 403 EMAIL_CHANGE_OTHER_ACCOUNT (another account signed in here) → otheraccount: says the link is another account’s, offers to sign out and sign in with the right one; the token kept', async () => {
+        mocks.confirm.mockRejectedValueOnce(refusal(403, {error_code: 'EMAIL_CHANGE_OTHER_ACCOUNT', message: 'This link belongs to another account'}));
+        openAt(`/confirm-email-change#token=${TOKEN}`);
+        render(EmailChangePage);
+
+        await confirmOnPage();
+
+        await expectStatus('otheraccount');
+        expect(within(card()).getByTestId('email-change-message')).toHaveTextContent('email.emailChange.page.otherAccount');
+        expect(within(card()).getByTestId('email-change-other-account')).toBeInTheDocument();
+        expect(within(card()).queryByTestId('email-change-signin')).toBeNull();
+        expect(within(card()).queryByTestId('email-change-goto-login')).toBeNull();
+        expect(window.sessionStorage.getItem(KEPT)).toBe(TOKEN);
+
+        const order: string[] = [];
+        mocks.logout.mockImplementation(async () => void order.push('logout'));
+        mocks.goto.mockImplementation(async (path: unknown) => void order.push(`goto ${String(path)}`));
+        await fireEvent.click(within(card()).getByTestId('email-change-switch-account'));
+        await waitFor(() => expect(order).toEqual(['logout', `goto ${LOGIN}`]));
+    });
+
     it('ECP-12: the button signs out first, then opens the sign-in that comes back to this page', async () => {
         await reachSignIn();
         const order: string[] = [];
@@ -409,11 +430,11 @@ describe('/confirm-email-change — sign in to confirm a change asked from Profi
         expect(window.sessionStorage.getItem(KEPT)).toBeNull();
     });
 
-    it('ECP-19: the two keys of the sign-in state are sentences in the four catalogues', async () => {
+    it('ECP-19: the keys of the sign-in and the other-account states are sentences in the four catalogues', async () => {
         const catalogues = await Promise.all([import('$lib/i18n/en.json'), import('$lib/i18n/it.json'), import('$lib/i18n/fr.json'), import('$lib/i18n/es.json')]);
         for (const catalogue of catalogues) {
             const page = (catalogue.default as {email: {emailChange: {page: Record<string, string>}}}).email.emailChange.page;
-            for (const key of ['signin', 'signinAction']) expect(typeof page[key] === 'string' && page[key].trim().length > 0, key).toBe(true);
+            for (const key of ['signin', 'signinAction', 'otherAccount', 'otherAccountAction']) expect(typeof page[key] === 'string' && page[key].trim().length > 0, key).toBe(true);
         }
     });
 });

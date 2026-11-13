@@ -166,8 +166,10 @@
         "error": "The link could not be checked: try again.",
         "confirm": "Confirm the new address",
         "notExpected": "If you did not expect this change, close this page: nothing happens.",
-        "signin": "To confirm the new address, sign in to the account that asked for the change. You then come back here, and one click is enough.",
-        "signinAction": "Sign in to confirm"
+        "signin": "To confirm the new address, sign in with the account that asked for this change, not with another account you use. If another account is signed in on this browser, it is signed out first. You then come back here, and one click is enough.",
+        "signinAction": "Sign in with that account to confirm",
+        "otherAccount": "This link belongs to another account, not to the one signed in on this browser: the address has not changed. Sign out, then sign in with the account that asked for this change.",
+        "otherAccountAction": "Sign out and sign in with the right account"
       },
       "changed": "Your email address was changed: sign in again."
     }
