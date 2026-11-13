@@ -152,3 +152,5 @@ him to answer by number. He reads better from a file than from a long chat messa
   child for «CHECKPOINT READY after your final review».
 - 13/11/2026 — A child's red reported as «caught by the -k filter» is checked alone on the lane before committing (it was
   a DB unit, 9/9 alone), never assumed.
+- 13/11/2026 — A child can miss the notification of its own background run too (65UX: run ended 13:28, session idle
+  until 14:18). The heartbeat also checks each idle child's last background log: finished run + idle child → wake it.
