@@ -556,6 +556,41 @@ async def test_rebalancer_and_pac_items_share_one_batch(test_server):
     assert results[pac["correlation_id"]]["result"]["result_state"] == "ready_incumbent"
 
 
+async def _stream(client: httpx.AsyncClient, *items: dict) -> list[dict]:
+    """One batch through ``POST /tools/compute/stream``, through the server's whole middleware stack; its lines."""
+    envelope = {"request_id": f"pac-request-{uuid4().hex}", "items": list(items)}
+    async with client.stream("POST", f"{API_BASE}/tools/compute/stream", json=envelope, headers={"Accept-Encoding": "gzip"}, timeout=COMPUTE_TIMEOUT) as response:
+        body = b"".join([chunk async for chunk in response.aiter_bytes()])
+    assert response.status_code == 200, body
+    assert "content-encoding" not in response.headers
+    return [json.loads(line) for line in body.decode("utf-8").split("\n") if line]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("tool_code", "parameters", "searches"), [pytest.param(TOOL_CODE, _buying_request, 5, id="pac"), pytest.param(REBALANCER_TOOL_CODE, reb.t4, 3, id="rebalancer-t4")])
+async def test_compute_forwards_progress_to_the_context(test_server, tool_code, parameters, searches):
+    """V2 test 8 (project 67): the plugin hands ``report_progress`` to the engine, and a served plan streams its phases in
+    order — validate, model, search «n of m», verify, report — then the result of ``/compute`` for the same request."""
+    async with _tool_user() as client:
+        descriptor = await _served_descriptor(client, tool_code)
+        plan_policy = next(policy for policy in descriptor["operations"] if policy["operation"] == "plan")
+        identity = {key: descriptor[key] for key in IDENTITY_KEYS}
+        item = _item(identity, parameters())
+        lines = await _stream(client, item)
+        _payload, computed = await _compute(client, _item(identity, parameters()))
+
+    assert plan_policy["progress_phases"] == ["validate", "model", "search", "verify", "report"]
+    *progress, last = lines
+    assert {line["correlation_id"] for line in progress} == {item["correlation_id"]}
+    expected = [("validate", None, None), ("model", None, None), *(("search", step, searches) for step in range(1, searches + 1)), ("verify", None, None), ("report", None, None)]
+    assert [(line["phase"], line["step"], line["total"]) for line in progress] == expected
+    assert last["kind"] == "result"
+    (streamed,) = last["response"]["results"]
+    (planned,) = computed.values()
+    assert streamed["status"] == planned["status"] == "success", streamed
+    assert streamed["result"] == planned["result"]
+
+
 @pytest.mark.asyncio
 async def test_rebalancer_compute_rejects_a_pac_request_and_invest_and_sell(test_server):
     """B3 tests 16 and 19 (service half): parameters of the wrong kind, and «Invest and sell» before C1, are refused as

@@ -133,6 +133,7 @@ from backend.app.services.pac_allocator.models import ExactCashEntry, ExactLimit
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.numeric import ExactRatio as R
 from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
+from backend.app.services.tools.executor import TOOL_PROGRESS_MESSAGE_CAP
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
 from backend.test_scripts.test_services import _pac_reference_values as ref
 from backend.test_scripts.test_services import _reb_small_requests as reb
@@ -2343,8 +2344,8 @@ def test_result_without_limits_has_no_cash_rows_and_null_asset_limits():
 # V2 (project 67) — the planner reports its phases
 # --------------------------------------------------------------------------
 _PLANNER_PHASES = ("validate", "model", "search", "verify", "report")
-# The cap of messages per item the platform will set (V1); a constant of the test until V1 lands.
-_PROGRESS_CAP = 50
+# The cap of progress messages per item the platform forwards (V1 of project 67).
+_PROGRESS_CAP = TOOL_PROGRESS_MESSAGE_CAP
 
 
 class _Recorder:

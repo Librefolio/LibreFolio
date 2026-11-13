@@ -22,7 +22,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_fie
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from backend.app.schemas.tools import ToolDiscoveryFailure, ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
+from backend.app.services.pac_allocator.progress import PLANNER_PHASES
 from backend.app.services.platform.provider_registry import AbstractPluginRegistry, register_plugin
+from backend.app.services.tool_plugins.pac_allocator.plugin import PacAllocatorTool
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
 from backend.app.services.tools.catalog import effective_catalog_entries, effective_operation, get_tool_catalog
 from backend.app.services.tools.registry import ToolPluginRegistry, build_tool_definition
@@ -1382,3 +1384,13 @@ def test_progress_phases_do_not_move_the_schema_fingerprint(plugin_factory):
     other phases has one fingerprint."""
     fingerprints = {_build(plugin_factory(operations=(ToolOperationPolicy(operation="inspect", progress_phases=phases),))).descriptor.schema_fingerprint for phases in ((), ("validate", "search"), ("validate", "model", "search", "verify", "report"))}
     assert len(fingerprints) == 1
+
+
+def test_planner_services_declare_their_progress_phases():
+    """V2 test 7 (project 67): both planner services declare the five phases, in order, on ``plan``; ``preview`` runs no
+    optimizer and declares none. The phases are the engine's own list."""
+    assert PLANNER_PHASES == ("validate", "model", "search", "verify", "report")
+    for service in PacAllocatorTool.services:
+        definition = build_tool_definition(PacAllocatorTool, service)
+        phases = {policy.operation: policy.progress_phases for policy in definition.descriptor.operations}
+        assert phases == {"plan": PLANNER_PHASES, "preview": ()}, service.tool_code

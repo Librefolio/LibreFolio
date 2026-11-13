@@ -18,6 +18,10 @@ numbers the screen shows before the calculation, read with the normalizer and
 one exact replay (``pac_allocator/preview.py``). No optimizer, no engine window,
 no phases; the platform's short default deadlines.
 
+**``plan`` reports its phases** (V2 of project 67): ``validate``, ``model``,
+``search`` («n of m» over the named stages), ``verify``, ``report``, declared on
+the operation and handed to the engine as ``context.report_progress``.
+
 Timeout envelope: only one number is a product decision — ``engine_timeout_ms``,
 the solver's own budget, set to 30 s by the developer. Every other value is
 *derived* from identities the platform validators impose, not chosen:
@@ -58,6 +62,7 @@ from backend.app.schemas.tools import (
 )
 from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
 from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
+from backend.app.services.pac_allocator.progress import PLANNER_PHASES
 from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import (
     ToolExecutionContext,
@@ -100,6 +105,8 @@ _OPERATION_POLICIES = (
         cleanup_timeout_ms=5_000,
         request_timeout_ms=59_000,
         client_timeout_ms=65_000,
+        # The engine's phases, in order (V2 of project 67): the stream route forwards them, the waiting panel shows them.
+        progress_phases=PLANNER_PHASES,
     ),
     # The scenario preview (B4 of project 67): the normalizer and one exact replay, no optimizer, so no engine window is
     # claimed and the platform's short defaults hold. Its answer has one row per target entry, smaller than the entry in the
@@ -252,6 +259,9 @@ class PacAllocatorTool(ToolPlugin):
                     parameters,
                     checkpoint=context.checkpoint,
                     solver_time_budget_seconds=window.timeout_ms / 1000,
+                    # A pipe write per phase and per named stage of the search, never a datum of the scenario: no cost
+                    # inside the engine window worth a reserve.
+                    progress=context.report_progress,
                 )
             except ToolExecutionError:
                 # A platform code (time or cancellation limit): not a failure of the engine.

@@ -7,6 +7,7 @@ import gzip
 import json
 import re
 from collections.abc import Awaitable, Callable, Iterator
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import NoReturn
 from uuid import uuid4
@@ -36,7 +37,7 @@ from backend.app.schemas.tools import (
     ToolPoolSnapshot,
     ToolResourceCapabilities,
 )
-from backend.app.services.platform.middleware import MIDDLEWARE_STACK
+from backend.app.services.platform.middleware import MIDDLEWARE_STACK, install_middleware
 from backend.app.services.tools.base import ToolExecutionError
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_services import _reb_small_requests as reb
@@ -870,8 +871,9 @@ async def test_tool_without_phases_streams_only_the_result(test_server):
     assert [result["correlation_id"] for result in line["response"]["results"]] == [item["correlation_id"] for item in items]
 
 
-# In process: the real router behind the app's GZip middleware (its options from ``MIDDLEWARE_STACK``), driven at the ASGI level, so that what is sent and when is
-# observed message by message (httpx's ASGI transport would hand over the whole body at the end).
+# In process: the real router behind the app's whole middleware stack (``MIDDLEWARE_STACK``, GZip on any size), driven
+# at the ASGI level, so that what is sent and when is observed message by message (httpx's ASGI transport would hand
+# over the whole body at the end).
 
 
 def _failure_response(batch: ToolComputeBatchRequest) -> ToolComputeBatchResponse:
@@ -919,16 +921,16 @@ async def _drive_stream(
     on_body: Callable[[bytes], None] = lambda body: None,
     policy: ToolPlatformPolicy | None = None,
 ) -> list[dict]:
-    """POST the stream route of a fresh app (Tool router + the app's GZip, any size) and return every ASGI message it
-    sends."""
+    """POST the stream route of a fresh app — the Tool router behind the app's whole ``MIDDLEWARE_STACK``, its GZip on
+    any size — and return every ASGI message it sends."""
     policy = policy or ToolPlatformPolicy()
     executor = _StreamExecutor(policy, script)
     monkeypatch.setattr(tools_api, "get_tool_executor", lambda: executor)
     app = FastAPI()
     app.include_router(tools_api.router, prefix="/api/v1")
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
-    gzip = next(entry for entry in MIDDLEWARE_STACK if entry.name == "gzip")
-    app.add_middleware(gzip.cls, **{**gzip.options, "minimum_size": 1})  # the app's GZip, on any size
+    stack = tuple(replace(entry, options={**entry.options, "minimum_size": 1}) if entry.name == "gzip" else entry for entry in MIDDLEWARE_STACK)
+    install_middleware(app, stack)
     body = json.dumps(envelope).encode()
     received = False
     messages: list[dict] = []
