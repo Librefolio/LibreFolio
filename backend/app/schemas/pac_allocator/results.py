@@ -20,7 +20,7 @@ from backend.app.schemas.pac_allocator.evidence import (
 from backend.app.schemas.pac_allocator.exact import ExactMoney, ExactNumberAvailability, available_fraction, exact_fraction, fixed_fraction, money_fraction, validate_weight_availability
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, PlannerProvenance, RebalancerFidelityInput, RebalancerPlannerRequest
-from backend.app.schemas.pac_allocator.rows import PacAssetPlanRow, PacExposurePlanRow, PlannerAccountingSummary, PlannerCatalogs, PlannerScenarioBasis, PlannerSellOrderRow, RebalancerAssetPlanRow, RebalancerCashItemRow, RebalancerExposurePlanRow
+from backend.app.schemas.pac_allocator.rows import PacAssetPlanRow, PacExposurePlanRow, PlannerAccountingSummary, PlannerCatalogs, PlannerScenarioBasis, PlannerSellOrderRow, RebalancerAssetPlanRow, RebalancerCashItemRow, RebalancerExposurePlanRow, RebalancerUnavailableWeight
 from backend.app.schemas.pac_allocator.solutions import DeploymentCoincident, DeploymentUnavailable, PacDistinctDeployment, PacIncumbentSolution, PacNoOpSolution, PacPlanSolution, RebalancerDistinctDeployment, RebalancerIncumbentSolution, RebalancerNoOpSolution, RebalancerPlanSolution
 
 
@@ -250,7 +250,10 @@ def _validate_rebalancer_score(solution: RebalancerPlanSolution, items: list, we
 
 
 def _validate_exposure_projection(solution: PacPlanSolution | RebalancerPlanSolution) -> None:
-    dimensions: dict[str, list[PacExposurePlanRow | RebalancerExposurePlanRow]] = {}
+    if isinstance(solution, RebalancerPlanSolution):
+        _validate_rebalancer_exposure(solution)
+        return
+    dimensions: dict[str, list[PacExposurePlanRow]] = {}
     for row in solution.exposure_rows:
         dimensions.setdefault(row.dimension, []).append(row)
     for dimension, rows in dimensions.items():
@@ -262,13 +265,51 @@ def _validate_exposure_projection(solution: PacPlanSolution | RebalancerPlanSolu
             "zero_final_invested",
             f"{dimension} final exposure",
         )
-        if isinstance(solution, RebalancerPlanSolution):
-            validate_weight_availability(
-                [row.before_weight for row in rows],
-                money_fraction(solution.accounting.current_invested),
-                "zero_current_invested",
-                f"{dimension} before exposure",
-            )
+
+
+def _validate_rebalancer_weights(values: list, base: Fraction, zero_reason: str, label: str) -> None:
+    """One base of a Rebalancer dimension: every weight available and summing to one on a positive base; every weight
+    unavailable for ``zero_reason`` on a zero base."""
+    if base == 0:
+        if any(not isinstance(value, RebalancerUnavailableWeight) or value.reason != zero_reason for value in values):
+            raise ValueError(f"{label} weights must be unavailable for {zero_reason} on a zero base")
+        return
+    fractions = [available_fraction(value) for value in values]
+    if any(value is None for value in fractions):
+        raise ValueError(f"{label} weights must all be available on a positive base")
+    if sum((value for value in fractions if value is not None), Fraction()) != 1:
+        raise ValueError(f"{label} weights must sum to one")
+
+
+_REBALANCER_EXPOSURE_DIMENSIONS = ("asset_type", "sector", "geography")
+
+
+def _validate_rebalancer_exposure(solution: RebalancerPlanSolution) -> None:
+    """The whole portfolio, in each of the three dimensions (developer's decision of 13/11, project 67): exactly one cash
+    row, whose target is the cash items' weights and whose before and after are the cash of the accounts (``F`` less the
+    invested value, ``W`` less the final invested value); the targets sum to one; before sums to one on ``F``, after on
+    ``W``, each unavailable with its own reason at a zero base."""
+    dimensions: dict[str, list[RebalancerExposurePlanRow]] = {dimension: [] for dimension in _REBALANCER_EXPOSURE_DIMENSIONS}
+    for row in solution.exposure_rows:
+        dimensions[row.dimension].append(row)
+    initial = money_fraction(solution.plan_accounts.initial_wealth)
+    final = money_fraction(solution.plan_accounts.final_wealth)
+    cash_target = sum((exact_fraction(row.target_weight) for row in solution.cash_rows), Fraction())
+    cash_before = None if initial == 0 else (initial - money_fraction(solution.accounting.current_invested)) / initial
+    cash_after = None if final == 0 else (final - money_fraction(solution.accounting.final_invested)) / final
+    for dimension, rows in dimensions.items():
+        cash_rows = [row for row in rows if row.kind == "cash"]
+        if len(cash_rows) != 1:
+            raise ValueError(f"{dimension} exposure must have exactly one cash row")
+        (cash,) = cash_rows
+        if exact_fraction(cash.target_weight) != cash_target:
+            raise ValueError(f"{dimension} exposure cash target must be the cash items' weights, not renormalised")
+        if (available_fraction(cash.before_weight), available_fraction(cash.final_weight)) != (cash_before, cash_after):
+            raise ValueError(f"{dimension} exposure cash must be the cash of the accounts, before on F and after on W")
+        if sum((exact_fraction(row.target_weight) for row in rows), Fraction()) != 1:
+            raise ValueError(f"{dimension} exposure targets must sum to one with the cash row")
+        _validate_rebalancer_weights([row.before_weight for row in rows], initial, "zero_initial_wealth", f"{dimension} before exposure")
+        _validate_rebalancer_weights([row.final_weight for row in rows], final, "zero_final_wealth", f"{dimension} final exposure")
 
 
 def _limit_row_money(solution: PacPlanSolution | RebalancerPlanSolution) -> list:

@@ -10,16 +10,19 @@ shares (deposits, conversions, buys, ledger, top-ups, accounting, costs, objecti
 
 from __future__ import annotations
 
-from backend.app.schemas.pac_allocator.exact import UnavailableExactNumber
+from backend.app.schemas.pac_allocator.exact import AvailableExactNumber
 from backend.app.schemas.pac_allocator.request import RebalancerCustomFidelityInput, RebalancerFidelityInput, RebalancerLevelFidelityInput, RebalancerTargetFirstFidelityInput
 from backend.app.schemas.pac_allocator.results import RebalancerScenarioBasis
 from backend.app.schemas.pac_allocator.rows import (
     PlannerTransfer,
     RebalancerAssetPlanRow,
     RebalancerCashItemRow,
+    RebalancerExposureCashRow,
+    RebalancerExposureCategoryRow,
     RebalancerExposurePlanRow,
     RebalancerScoreSummary,
     RebalancerTieBreakStage,
+    RebalancerUnavailableWeight,
     RebalancerUninvestedRow,
 )
 from backend.app.services.financial_math.weights import largest_weight_deviation
@@ -178,36 +181,77 @@ def build_transfers(evaluation: ExactEvaluation, sequence) -> list[PlannerTransf
     return rows
 
 
+def _weight(value: ExactRatio, base: ExactRatio, zero_reason: str) -> AvailableExactNumber | RebalancerUnavailableWeight:
+    if base == _ZERO:
+        return RebalancerUnavailableWeight(kind="unavailable", reason=zero_reason)
+    return AvailableExactNumber(kind="available", value=ratio_to_exact_number(value / base))
+
+
+def _exposure_row_weights(before: ExactRatio, target: ExactRatio, after: ExactRatio, initial: ExactRatio, final: ExactRatio) -> dict:
+    return {
+        "before_weight": _weight(before, initial, "zero_initial_wealth"),
+        "target_weight": ratio_to_exact_number(target),
+        "final_weight": _weight(after, final, "zero_final_wealth"),
+    }
+
+
 def build_rebalancer_exposure_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list[RebalancerExposurePlanRow]:
-    """The exposure before and after, on the invested part (decision 3 of the B3 checkpoint): the targets are the Assets'
-    target weights over their sum, the cash being no exposure; before over the current invested value, after over the final.
-    With no weight on any Asset there is no exposure target to close, and no row."""
+    """The exposure of the whole portfolio (developer's decision of 13/11, project 67), per dimension: the categories the
+    Assets declare (and the uncategorised rest), then one ``cash`` row, always there. Before is on ``F``, the target on the
+    items' weights as they are (the cash items' weights make the cash row's), after on ``W``. The cash before is the
+    selected cash and the contributions (``F`` less the invested value), after the spendable cash and the contributions not
+    deposited (``W`` less the final invested value); the tax set aside is money lost, in neither."""
     accounting = _accounting(evaluation)
-    asset_total = sum((row.target_weight for row in evaluation.assets), _ZERO)
-    if asset_total == _ZERO:
-        return []
-    targets = {row.asset_id: row.target_weight / asset_total for row in evaluation.assets}
+    initial, final = accounting.initial_wealth, accounting.final_wealth
+    target = {row.asset_id: row.target_weight for row in evaluation.assets}
     current = {row.asset_id: row.current_value for row in evaluation.assets}
-    final = {row.asset_id: row.final_value for row in evaluation.assets}
-    rows = []
+    after = {row.asset_id: row.final_value for row in evaluation.assets}
+    cash_target = sum((entry.weight for entry in scenario.cash_entries), _ZERO)
+    cash_provenance = sorted({cash.provenance_id for cash in scenario.existing_cash} | {contribution.provenance_id for contribution in scenario.contributions})
+    rows: list[RebalancerExposurePlanRow] = []
     for dimension in report._EXPOSURE_DIMENSIONS:
-        before_rows = report._exposure_rows_for_dimension(scenario, dimension, targets, current, accounting.current_invested)
-        after_rows = report._exposure_rows_for_dimension(scenario, dimension, targets, final, accounting.final_invested)
-        for before_row, after_row in zip(before_rows, after_rows, strict=True):
-            before_weight = before_row.final_weight
-            if isinstance(before_weight, UnavailableExactNumber):
-                before_weight = UnavailableExactNumber(kind="unavailable", reason="zero_current_invested")
+        sums: dict[str, list[ExactRatio]] = {}
+        labels: dict[str, str] = {}
+        provenance: dict[str, set[str]] = {}
+        assets: dict[str, list[str]] = {}
+        for asset in scenario.assets:
+            shares = [(exposure.category, exposure.weight, exposure.label, {exposure.provenance_id}) for exposure in asset.exposures if exposure.dimension == dimension]
+            undeclared = ExactRatio(1) - report._declared_weight(asset, dimension)
+            if undeclared != _ZERO:
+                # The rest of an Asset no exposure declares: its quote and its exposures in this dimension are the facts it reads.
+                rest_provenance = {asset.quote.provenance_id} | {exposure.provenance_id for exposure in asset.exposures if exposure.dimension == dimension}
+                shares.append((report.UNCATEGORISED_EXPOSURE_CATEGORY_ID, undeclared, report.UNCATEGORISED_EXPOSURE_LABEL, rest_provenance))
+            for category, share, label, ids in shares:
+                values = sums.setdefault(category, [_ZERO, _ZERO, _ZERO])
+                values[0] += current.get(asset.asset_id, _ZERO) * share
+                values[1] += target.get(asset.asset_id, _ZERO) * share
+                values[2] += after.get(asset.asset_id, _ZERO) * share
+                labels.setdefault(category, label)
+                provenance.setdefault(category, set()).update(ids)
+                assets.setdefault(category, []).append(asset.asset_id)
+        categories = sorted(category for category in sums if category != report.UNCATEGORISED_EXPOSURE_CATEGORY_ID)
+        if report.UNCATEGORISED_EXPOSURE_CATEGORY_ID in sums:
+            categories.append(report.UNCATEGORISED_EXPOSURE_CATEGORY_ID)
+        for category in categories:
+            before_value, target_value, after_value = sums[category]
             rows.append(
-                RebalancerExposurePlanRow(
-                    dimension=after_row.dimension,
-                    category_id=after_row.category_id,
-                    label=after_row.label,
-                    before_weight=before_weight,
-                    target_weight=after_row.target_weight,
-                    final_weight=after_row.final_weight,
-                    provenance_ids=after_row.provenance_ids,
+                RebalancerExposureCategoryRow(
+                    kind="category",
+                    dimension=dimension,
+                    category_id=category,
+                    label=labels[category],
+                    **_exposure_row_weights(before_value, target_value, after_value, initial, final),
+                    provenance_ids=report._canonical_provenance_ids(provenance[category], context=f"{dimension} exposure category {category!r}", asset_ids=tuple(assets[category])),
                 )
             )
+        rows.append(
+            RebalancerExposureCashRow(
+                kind="cash",
+                dimension=dimension,
+                **_exposure_row_weights(initial - accounting.current_invested, cash_target, final - accounting.final_invested, initial, final),
+                provenance_ids=cash_provenance,
+            )
+        )
     return rows
 
 

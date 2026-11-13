@@ -1085,6 +1085,7 @@
     "rounding_top_ups": [],
     "exposure_rows": [
       {
+        "kind": "category",
         "dimension": "asset_type",
         "category_id": "equity",
         "label": "Equity",
@@ -1092,18 +1093,22 @@
           "kind": "available",
           "value": {
             "kind": "finite_decimal",
-            "value": "1"
+            "value": "0.75"
           }
         },
         "target_weight": {
           "kind": "finite_decimal",
-          "value": "1"
+          "value": "0.95"
         },
         "final_weight": {
           "kind": "available",
           "value": {
-            "kind": "finite_decimal",
-            "value": "1"
+            "kind": "exact_ratio",
+            "numerator": "6500",
+            "denominator": "6619",
+            "display_decimal": "0.982021",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
           }
         },
         "provenance_ids": [
@@ -1112,149 +1117,26 @@
         ]
       },
       {
-        "dimension": "sector",
-        "category_id": "sector-a",
-        "label": "Sector A",
+        "kind": "cash",
+        "dimension": "asset_type",
         "before_weight": {
           "kind": "available",
           "value": {
-            "kind": "exact_ratio",
-            "numerator": "8",
-            "denominator": "15",
-            "display_decimal": "0.533333",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
+            "kind": "finite_decimal",
+            "value": "0.25"
           }
         },
         "target_weight": {
-          "kind": "exact_ratio",
-          "numerator": "5",
-          "denominator": "19",
-          "display_decimal": "0.263158",
-          "display_scale": 6,
-          "display_authority": "non_authoritative"
+          "kind": "finite_decimal",
+          "value": "0.05"
         },
         "final_weight": {
           "kind": "available",
           "value": {
             "kind": "exact_ratio",
-            "numerator": "10",
-            "denominator": "39",
-            "display_decimal": "0.25641",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "provenance_ids": [
-          "prov-market"
-        ]
-      },
-      {
-        "dimension": "sector",
-        "category_id": "sector-b",
-        "label": "Sector B",
-        "before_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "2",
-            "denominator": "15",
-            "display_decimal": "0.133333",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "target_weight": {
-          "kind": "exact_ratio",
-          "numerator": "5",
-          "denominator": "19",
-          "display_decimal": "0.263158",
-          "display_scale": 6,
-          "display_authority": "non_authoritative"
-        },
-        "final_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "10",
-            "denominator": "39",
-            "display_decimal": "0.25641",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "provenance_ids": [
-          "prov-market"
-        ]
-      },
-      {
-        "dimension": "sector",
-        "category_id": "sector-c",
-        "label": "Sector C",
-        "before_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "4",
-            "denominator": "15",
-            "display_decimal": "0.266667",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "target_weight": {
-          "kind": "exact_ratio",
-          "numerator": "4",
-          "denominator": "19",
-          "display_decimal": "0.210526",
-          "display_scale": 6,
-          "display_authority": "non_authoritative"
-        },
-        "final_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "10",
-            "denominator": "39",
-            "display_decimal": "0.25641",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "provenance_ids": [
-          "prov-market"
-        ]
-      },
-      {
-        "dimension": "sector",
-        "category_id": "sector-d",
-        "label": "Sector D",
-        "before_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "1",
-            "denominator": "15",
-            "display_decimal": "0.066667",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "target_weight": {
-          "kind": "exact_ratio",
-          "numerator": "5",
-          "denominator": "19",
-          "display_decimal": "0.263158",
-          "display_scale": 6,
-          "display_authority": "non_authoritative"
-        },
-        "final_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "3",
-            "denominator": "13",
-            "display_decimal": "0.230769",
+            "numerator": "119",
+            "denominator": "6619",
+            "display_decimal": "0.017979",
             "display_scale": 6,
             "display_authority": "non_authoritative"
           }
@@ -1264,6 +1146,160 @@
         ]
       },
       {
+        "kind": "category",
+        "dimension": "sector",
+        "category_id": "sector-a",
+        "label": "Sector A",
+        "before_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0.4"
+          }
+        },
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "0.25"
+        },
+        "final_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "5000",
+            "denominator": "19857",
+            "display_decimal": "0.2518",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
+          }
+        },
+        "provenance_ids": [
+          "prov-market"
+        ]
+      },
+      {
+        "kind": "category",
+        "dimension": "sector",
+        "category_id": "sector-b",
+        "label": "Sector B",
+        "before_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0.1"
+          }
+        },
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "0.25"
+        },
+        "final_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "5000",
+            "denominator": "19857",
+            "display_decimal": "0.2518",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
+          }
+        },
+        "provenance_ids": [
+          "prov-market"
+        ]
+      },
+      {
+        "kind": "category",
+        "dimension": "sector",
+        "category_id": "sector-c",
+        "label": "Sector C",
+        "before_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0.2"
+          }
+        },
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "0.2"
+        },
+        "final_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "5000",
+            "denominator": "19857",
+            "display_decimal": "0.2518",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
+          }
+        },
+        "provenance_ids": [
+          "prov-market"
+        ]
+      },
+      {
+        "kind": "category",
+        "dimension": "sector",
+        "category_id": "sector-d",
+        "label": "Sector D",
+        "before_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0.05"
+          }
+        },
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "0.25"
+        },
+        "final_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "1500",
+            "denominator": "6619",
+            "display_decimal": "0.22662",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
+          }
+        },
+        "provenance_ids": [
+          "prov-manual"
+        ]
+      },
+      {
+        "kind": "cash",
+        "dimension": "sector",
+        "before_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0.25"
+          }
+        },
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "0.05"
+        },
+        "final_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "119",
+            "denominator": "6619",
+            "display_decimal": "0.017979",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
+          }
+        },
+        "provenance_ids": [
+          "prov-manual"
+        ]
+      },
+      {
+        "kind": "category",
         "dimension": "geography",
         "category_id": "unknown",
         "label": "Unknown",
@@ -1271,22 +1307,55 @@
           "kind": "available",
           "value": {
             "kind": "finite_decimal",
-            "value": "1"
+            "value": "0.75"
           }
         },
         "target_weight": {
           "kind": "finite_decimal",
-          "value": "1"
+          "value": "0.95"
         },
         "final_weight": {
           "kind": "available",
           "value": {
-            "kind": "finite_decimal",
-            "value": "1"
+            "kind": "exact_ratio",
+            "numerator": "6500",
+            "denominator": "6619",
+            "display_decimal": "0.982021",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
           }
         },
         "provenance_ids": [
           "prov-market",
+          "prov-manual"
+        ]
+      },
+      {
+        "kind": "cash",
+        "dimension": "geography",
+        "before_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0.25"
+          }
+        },
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "0.05"
+        },
+        "final_weight": {
+          "kind": "available",
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "119",
+            "denominator": "6619",
+            "display_decimal": "0.017979",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
+          }
+        },
+        "provenance_ids": [
           "prov-manual"
         ]
       }

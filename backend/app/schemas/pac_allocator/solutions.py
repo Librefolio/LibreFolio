@@ -181,7 +181,7 @@ class RebalancerPlanSolution(AllocationStrictModel):
         require_unique([(row.source_broker_id, row.destination_broker_id, row.amount.currency) for row in self.transfers], "Rebalancer transfer lanes")
         require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "Rebalancer ledger scopes")
         _validate_rounding_top_ups(self, "Rebalancer")
-        require_unique([(row.dimension, row.category_id) for row in self.exposure_rows], "Rebalancer exposure rows")
+        require_unique([(row.dimension, row.kind, getattr(row, "category_id", "")) for row in self.exposure_rows], "Rebalancer exposure rows")
         require_unique([(row.scope.model_dump_json(), row.basket_id) for row in self.tax_basket_rows], "Rebalancer tax basket rows")
         require_unique([row.scope.model_dump_json() for row in self.tax_scope_rows], "Rebalancer tax scope rows")
         require_unique([(row.broker_id, row.amount.currency) for row in self.tax_reserves], "Rebalancer tax reserves")

@@ -29,7 +29,7 @@ from backend.app.schemas.pac_allocator.base import (
     require_unique,
 )
 from backend.app.schemas.pac_allocator.evidence import OBJECTIVE_SIGN_DOMAINS, CanonicalKeyUnit, NumericObjectiveUnit, ObjectiveCode, ObjectiveSense, objective_unit_kind
-from backend.app.schemas.pac_allocator.exact import ExactFxRate, ExactMoney, ExactNumber, ExactNumberAvailability, ExactPrice, ExactRatio, available_fraction, exact_fraction, fixed_fraction, money_fraction
+from backend.app.schemas.pac_allocator.exact import AvailableExactNumber, ExactFxRate, ExactMoney, ExactNumber, ExactNumberAvailability, ExactPrice, ExactRatio, available_fraction, exact_fraction, fixed_fraction, money_fraction
 from backend.app.schemas.pac_allocator.request import CurrencySpec, PlannerFundingSourceRef, RebalancerLossScopeInput
 
 
@@ -480,25 +480,55 @@ class PacExposurePlanRow(AllocationStrictModel):
         return self
 
 
-class RebalancerExposurePlanRow(AllocationStrictModel):
+class RebalancerUnavailableWeight(AllocationStrictModel):
+    """A Rebalancer exposure weight with no base: the wealth it is measured on is zero (before on ``F``, after on ``W``).
+    Its own reasons, so that the PAC's ``UnavailableExactNumber`` (and its fingerprint) stays as it is."""
+
+    kind: Literal["unavailable"]
+    reason: Literal["zero_initial_wealth", "zero_final_wealth"]
+
+
+type RebalancerWeightAvailability = Annotated[Union[AvailableExactNumber, RebalancerUnavailableWeight], Field(discriminator="kind")]
+
+
+class _RebalancerExposureWeights(AllocationStrictModel):
+    """The exposure of the whole portfolio in one dimension (developer's decision of 13/11, project 67): before on the
+    plan's total ``F``, the target on the items' weights as they are (not renormalised), after on the final wealth ``W``."""
+
     dimension: Literal["asset_type", "sector", "geography"]
-    category_id: PlannerId
-    label: PlannerLabel
-    before_weight: ExactNumberAvailability
+    before_weight: RebalancerWeightAvailability
     target_weight: ExactNumber
-    final_weight: ExactNumberAvailability
-    provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
+    final_weight: RebalancerWeightAvailability
 
     @model_validator(mode="after")
-    def validate_weights(self) -> RebalancerExposurePlanRow:
+    def validate_weights(self) -> _RebalancerExposureWeights:
         target = exact_fraction(self.target_weight)
-        before = available_fraction(self.before_weight)
-        final = available_fraction(self.final_weight)
         if target < 0 or target > 1:
             raise ValueError("Target exposure weight must be between zero and one")
-        if any(value is not None and (value < 0 or value > 1) for value in (before, final)):
+        if any(value is not None and (value < 0 or value > 1) for value in (available_fraction(self.before_weight), available_fraction(self.final_weight))):
             raise ValueError("Available exposure weights must be between zero and one")
         return self
+
+
+class RebalancerExposureCategoryRow(_RebalancerExposureWeights):
+    """A category of the dimension (or the uncategorised rest), as the Assets declare it."""
+
+    kind: Literal["category"]
+    category_id: PlannerId
+    label: PlannerLabel
+    provenance_ids: Annotated[list[PlannerId], Field(min_length=1)]
+
+
+class RebalancerExposureCashRow(_RebalancerExposureWeights):
+    """The cash of the portfolio in this dimension: one row, always there, even at zero. Before: the selected cash and the
+    contributions; target: the cash items' weights; after: the final spendable cash and the contributions not deposited.
+    The tax set aside is not here (it is money lost). No category and no label: the screen names it."""
+
+    kind: Literal["cash"]
+    provenance_ids: list[PlannerId]
+
+
+type RebalancerExposurePlanRow = Annotated[Union[RebalancerExposureCategoryRow, RebalancerExposureCashRow], Field(discriminator="kind")]
 
 
 class PlannerAccountingSummary(AllocationStrictModel):

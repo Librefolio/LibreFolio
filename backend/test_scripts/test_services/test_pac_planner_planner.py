@@ -111,6 +111,7 @@ from typing import get_args
 import pytest
 
 from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, ReportedFloatingSolverEvidence
+from backend.app.schemas.pac_allocator.exact import exact_fraction
 from backend.app.schemas.pac_allocator.results import (
     PAC_PLAN_INPUT_ADAPTER,
     PAC_PLAN_OUTPUT_ADAPTER,
@@ -125,7 +126,7 @@ from backend.app.schemas.pac_allocator.results import (
     PacPlannerUnsupportedResult,
     PlannerResultSnapshot,
 )
-from backend.app.services.pac_allocator import planner
+from backend.app.services.pac_allocator import planner, rebalancer_report
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactReplayRejectedError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
@@ -2413,3 +2414,69 @@ def test_progress_messages_carry_only_a_phase_and_two_counts(plan) -> None:
     assert len(recorder.messages) <= _PROGRESS_CAP
     assert len({(phase, step) for phase, step, _total in recorder.messages}) == len(recorder.messages)
     assert list(dict.fromkeys(phase for phase, _step, _total in recorder.messages)) == list(_PLANNER_PHASES)
+
+
+# --------------------------------------------------------------------------
+# The Rebalancer's exposure covers the whole portfolio, with a cash row (developer's decision 4 of 13/11, project 67)
+# --------------------------------------------------------------------------
+
+
+def test_rebalancer_exposure_is_on_the_whole_portfolio_with_a_cash_row() -> None:
+    """T4 (A 5 000, B 4 800, cash 200, F = 10 000; buy 195 of B with a 5 EUR fee, W = 9 995): every dimension has its
+    categories and exactly one ``cash`` row. Before is on F, the target on the items' weights (not renormalised), after on
+    W; the cash row is present even where its target and its final value are zero."""
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))
+    assert result.result_state == "ready_incumbent"
+    rows = result.primary_solution.exposure_rows
+    expected = {"before": Fraction(9_800, 10_000), "target": Fraction(1), "after": Fraction(9_995, 9_995)}
+    expected_cash = {"before": Fraction(200, 10_000), "target": Fraction(0), "after": Fraction(0)}
+    for dimension in ("asset_type", "sector", "geography"):
+        dimension_rows = [row for row in rows if row.dimension == dimension]
+        (cash,) = [row for row in dimension_rows if row.kind == "cash"]
+        (category,) = [row for row in dimension_rows if row.kind == "category"]
+        for row, values in ((category, expected), (cash, expected_cash)):
+            read = {"before": _available(row.before_weight), "target": _exact(row.target_weight), "after": _available(row.final_weight)}
+            assert read == values, (dimension, row.kind)
+    (equity,) = [row for row in rows if row.dimension == "asset_type" and row.kind == "category"]
+    assert (equity.category_id, equity.label) == ("equity", "Equity")
+    assert not hasattr(next(row for row in rows if row.kind == "cash"), "category_id")
+
+
+def test_rebalancer_exposure_cash_row_reads_the_cash_items() -> None:
+    """A cash item with a weight (A 0.50, B 0.48, cash 0.02 on T4): the cash row's target is the cash item's weight, the
+    categories hold the Assets' weights as they are, and each base still sums to one, as the schema checks it."""
+    payload = reb.t4()
+    payload["target_weights"] = [
+        {"kind": "asset", "asset_id": "asset-a", "weight": "0.5", "minimum": None, "maximum": None},
+        {"kind": "asset", "asset_id": "asset-b", "weight": "0.48", "minimum": None, "maximum": None},
+        {"kind": "cash", "broker_id": reb.BROKER, "currency": "EUR", "weight": "0.02", "minimum": None, "maximum": None},
+    ]
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(payload))
+    assert result.result_state in ("ready_incumbent", "ready_no_op"), result.issues
+    solution = result.primary_solution
+    accounts = solution.plan_accounts
+    initial, final = _exact(accounts.initial_wealth.value), _exact(accounts.final_wealth.value)
+    for dimension in ("asset_type", "sector", "geography"):
+        rows = [row for row in solution.exposure_rows if row.dimension == dimension]
+        (cash,) = [row for row in rows if row.kind == "cash"]
+        assert _exact(cash.target_weight) == Fraction(1, 50)
+        assert _available(cash.before_weight) == (initial - _exact(solution.accounting.current_invested.value)) / initial
+        assert _available(cash.final_weight) == (final - _exact(solution.accounting.final_invested.value)) / final
+        assert sum(_exact(row.target_weight) for row in rows) == 1
+        assert sum(_available(row.before_weight) for row in rows) == sum(_available(row.final_weight) for row in rows) == 1
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_python(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json")) == result
+
+
+def test_rebalancer_exposure_weight_at_a_zero_base() -> None:
+    """The report's weight: unavailable for its base's own reason at a zero base, the exact ratio otherwise."""
+    assert rebalancer_report._weight(R(5), R(0), "zero_final_wealth").reason == "zero_final_wealth"
+    assert _available(rebalancer_report._weight(R(5), R(20), "zero_final_wealth")) == Fraction(1, 4)
+
+
+def _available(value) -> Fraction:
+    assert value.kind == "available", value
+    return _exact(value.value)
+
+
+def _exact(number) -> Fraction:
+    return exact_fraction(number)

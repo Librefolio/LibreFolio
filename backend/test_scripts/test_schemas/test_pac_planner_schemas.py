@@ -22,7 +22,7 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from backend.app.schemas.pac_allocator import base as pac_schema_base
 from backend.app.schemas.pac_allocator.base import PlannerFixedDecimal
 from backend.app.schemas.pac_allocator.evidence import SolverStageEvidence, ValuationMoneyUnit
-from backend.app.schemas.pac_allocator.exact import ExactNumber
+from backend.app.schemas.pac_allocator.exact import AvailableExactNumber, ExactNumber
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
 from backend.app.schemas.pac_allocator.preview import PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, PlannerBrokerIdentity, RebalancerPlannerRequest, RebalancerTaxInput
@@ -45,8 +45,9 @@ from backend.app.schemas.pac_allocator.results import (
     RebalancerPlannerReadyNoIncumbentResult,
     RebalancerPlannerReadyNoOpResult,
     RebalancerPlannerUnsupportedResult,
+    _validate_rebalancer_weights,
 )
-from backend.app.schemas.pac_allocator.rows import ObjectiveStageResult, PlannerSellOrderRow, RebalancerAssetTypeTaxRow, RebalancerTaxBasketRow, RebalancerTaxReserveRow, RebalancerTaxScopeRow
+from backend.app.schemas.pac_allocator.rows import ObjectiveStageResult, PlannerSellOrderRow, RebalancerAssetTypeTaxRow, RebalancerExposureCashRow, RebalancerTaxBasketRow, RebalancerTaxReserveRow, RebalancerTaxScopeRow, RebalancerUnavailableWeight
 from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.services.tools.schema import (
     declared_operations,
@@ -3976,7 +3977,7 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "74d3ea58c8880f3fcbb3334e6c51f81e6c44c330987ef47b2dfbe4d1390d93dd",
+        "e7f6b5b6d5f2d6958d9d39946705637420f299df12bdce4e2f4058f8078cd7be",
         id="rebalancer",
     ),
 )
@@ -4301,7 +4302,8 @@ def test_sell_row_net_reconciles_gross_fee_withholding_and_tax() -> None:
 
 def test_rebalancer_ready_result_may_end_fully_in_cash() -> None:
     """B3 test 4 (contract §3, specifica §15 n. 14): a ready Rebalancer plan may sell every Asset; final invested zero, the
-    final weights over it unavailable, the items on ``F`` still adding up."""
+    items on ``F`` still adding up. The exposure is on the whole portfolio (developer's decision of 13/11): after, on ``W``,
+    it is all cash, every category at zero."""
     payload = _rebalancer_incumbent_result()
     solution = payload["primary_solution"]
     for asset in solution["asset_rows"]:
@@ -4309,7 +4311,7 @@ def test_rebalancer_ready_result_may_end_fully_in_cash() -> None:
         asset["sell_mid_value"] = deepcopy(asset["before_value"])
     _reprice_rebalancer(solution, final=dict.fromkeys(_MEDIUM_BEFORE, Fraction(0)))
     for exposure in solution["exposure_rows"]:
-        exposure["final_weight"] = {"kind": "unavailable", "reason": "zero_final_invested"}
+        exposure["final_weight"] = {"kind": "available", "value": _finite("1" if exposure["kind"] == "cash" else "0")}
     accounting = solution["accounting"]
     accounting["shortfall"] = _money("200")
     accounting["free_cash"] = _money("198.57")
@@ -4425,6 +4427,10 @@ def _medium_with_a_limit_only_cash_row() -> JsonObject:
     cash = _find(solution["cash_rows"], "broker_id", "broker-alpha")
     cash.update(target_weight=_finite("0"), target_value=_money("0"), maximum=_money("5"))
     _reprice_rebalancer(solution, final={"asset-a": Fraction(50), "asset-b": Fraction(50), "asset-c": Fraction(50), "asset-d": Fraction(45)})
+    # The exposure targets follow the items' weights: no cash target, a quarter on each sector, the whole on one category.
+    for exposure in solution["exposure_rows"]:
+        whole = exposure["kind"] == "category" and exposure["dimension"] != "sector"
+        exposure["target_weight"] = _finite("0" if exposure["kind"] == "cash" else "1" if whole else "0.25")
     return payload
 
 
@@ -4550,7 +4556,7 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # 1.4 still serves one contract 2.0.0). The two fingerprints above stay the ``plan`` contract alone (its own result union).
 TOOL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "26b9e8d33466cfd12cb9b639e5a84cfc1772aa39d6d232ee8fc24b819358363d", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "1c9479d164cefc631565706b48a6b613120e6b25d922c66cec6012414677b596", id="rebalancer"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "8f8aac9cce5ede8ed07fda76f1f33798f2a826617fbf2bd372d3e712da362d63", id="rebalancer"),
 )
 
 
@@ -4572,3 +4578,144 @@ def test_custom_reference_amount_belongs_to_the_preview() -> None:
     preview = {**payload, "operation": "preview"}
     _strict_roundtrip(REBALANCER_PLAN_INPUT_ADAPTER, preview)
     _reject_because(REBALANCER_PLAN_INPUT_ADAPTER, {**preview, "custom_reference_amount": {"amount": "60", "currency": "USD"}}, "custom_reference_amount must be in the valuation currency")
+
+
+# ---------------------------------------------------------------------------
+# The Rebalancer's exposure on the whole portfolio (developer's decision 4 of 13/11, project 67)
+# ---------------------------------------------------------------------------
+
+# The medium plan (F = 200, W = 200 − 1.43 of tax): before on F, target on the items' weights, after on W.
+_MEDIUM_F = Fraction(200)
+_MEDIUM_W = Fraction(200) - Fraction(143, 100)
+_MEDIUM_FINAL_INVESTED = Fraction(80 - 30) + Fraction(20 + 30) + Fraction(40 + 10) + Fraction(10 + 35)
+_MEDIUM_ALPHA_CASH = Fraction(50 - 40 + 30 - 35) - Fraction(143, 100)
+
+
+def _exposure_weights(row: JsonObject) -> tuple[Fraction | None, Fraction, Fraction | None]:
+    def available(value: JsonObject) -> Fraction | None:
+        return _wire_fraction(value["value"]) if value["kind"] == "available" else None
+
+    return available(row["before_weight"]), _wire_fraction(row["target_weight"]), available(row["final_weight"])
+
+
+def _wire_fraction(number: JsonObject) -> Fraction:
+    if number["kind"] == "finite_decimal":
+        return Fraction(Decimal(number["value"]))
+    return Fraction(int(number["numerator"]), int(number["denominator"]))
+
+
+def test_rebalancer_exposure_rows_cover_the_whole_portfolio() -> None:
+    """Every dimension of the medium plan has one ``cash`` row, and its three bases each sum to one: before on F (the 50
+    EUR contribution is the cash before), the target on the items' weights (cash 5 %), after on W."""
+    payload = _rebalancer_incumbent_result()
+    REBALANCER_PLAN_OUTPUT_ADAPTER.validate_python(payload)
+    rows = payload["primary_solution"]["exposure_rows"]
+    for dimension in ("asset_type", "sector", "geography"):
+        dimension_rows = [row for row in rows if row["dimension"] == dimension]
+        cash_rows = [row for row in dimension_rows if row["kind"] == "cash"]
+        assert len(cash_rows) == 1, dimension
+        assert "category_id" not in cash_rows[0] and "label" not in cash_rows[0]
+        assert _exposure_weights(cash_rows[0]) == (Fraction(50) / _MEDIUM_F, Fraction(1, 20), _MEDIUM_ALPHA_CASH / _MEDIUM_W)
+        weights = [_exposure_weights(row) for row in dimension_rows]
+        assert [sum(column) for column in zip(*weights, strict=True)] == [1, 1, 1], dimension
+    (equity,) = [row for row in rows if row["dimension"] == "asset_type" and row["kind"] == "category"]
+    assert _exposure_weights(equity) == (Fraction(150) / _MEDIUM_F, Fraction(19, 20), _MEDIUM_FINAL_INVESTED / _MEDIUM_W)
+
+
+def _exposure_payload(mutate: Callable[[list[JsonObject]], None]) -> JsonObject:
+    payload = _rebalancer_incumbent_result()
+    mutate(payload["primary_solution"]["exposure_rows"])
+    return payload
+
+
+def _without_sector_cash(rows: list[JsonObject]) -> None:
+    rows.remove(next(row for row in rows if row["dimension"] == "sector" and row["kind"] == "cash"))
+
+
+def _two_sector_cash_rows(rows: list[JsonObject]) -> None:
+    cash = next(row for row in rows if row["dimension"] == "sector" and row["kind"] == "cash")
+    rows.append(deepcopy(cash))
+
+
+def _before_on_the_invested_part(rows: list[JsonObject]) -> None:
+    for row in rows:
+        if row["dimension"] == "asset_type" and row["kind"] == "category":
+            row["before_weight"] = {"kind": "available", "value": {"kind": "finite_decimal", "value": "1"}}
+
+
+def _target_renormalised(rows: list[JsonObject]) -> None:
+    for row in rows:
+        if row["dimension"] == "asset_type":
+            row["target_weight"] = {"kind": "finite_decimal", "value": "1" if row["kind"] == "category" else "0"}
+
+
+def _cash_row_with_a_category(rows: list[JsonObject]) -> None:
+    cash = next(row for row in rows if row["kind"] == "cash")
+    cash["category_id"] = "cash"
+    cash["label"] = "Cash"
+
+
+def _invested_part_reason(rows: list[JsonObject]) -> None:
+    rows[0]["final_weight"] = {"kind": "unavailable", "reason": "zero_final_invested"}
+
+
+def _without_the_sector_dimension(rows: list[JsonObject]) -> None:
+    rows[:] = [row for row in rows if row["dimension"] != "sector"]
+
+
+def _without_any_row(rows: list[JsonObject]) -> None:
+    rows.clear()
+
+
+def _cash_traded_with_a_category(rows: list[JsonObject]) -> None:
+    """A tenth of the weight moved from the cash row to a category: every sum still one, the cash off the accounts."""
+    cash = next(row for row in rows if row["dimension"] == "asset_type" and row["kind"] == "cash")
+    category = next(row for row in rows if row["dimension"] == "asset_type" and row["kind"] == "category")
+    cash_before, category_before = (_wire_fraction(row["before_weight"]["value"]) for row in (cash, category))
+    cash["before_weight"] = {"kind": "available", "value": _finite(str(Decimal(cash_before.numerator) / cash_before.denominator - Decimal("0.1")))}
+    category["before_weight"] = {"kind": "available", "value": _finite(str(Decimal(category_before.numerator) / category_before.denominator + Decimal("0.1")))}
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        pytest.param(_without_sector_cash, id="no-cash-row"),
+        pytest.param(_two_sector_cash_rows, id="two-cash-rows"),
+        pytest.param(_before_on_the_invested_part, id="before-not-on-F"),
+        pytest.param(_target_renormalised, id="target-renormalised-off-the-items"),
+        pytest.param(_cash_row_with_a_category, id="cash-row-with-a-category"),
+        pytest.param(_invested_part_reason, id="the-pac-unavailable-reason"),
+        pytest.param(_without_the_sector_dimension, id="a-dimension-missing"),
+        pytest.param(_without_any_row, id="no-exposure-at-all"),
+        pytest.param(_cash_traded_with_a_category, id="cash-off-the-accounts"),
+    ],
+)
+def test_rebalancer_exposure_rows_are_refused_off_their_bases(mutate: Callable[[list[JsonObject]], None]) -> None:
+    """Exactly one cash row per dimension; before sums to one on F and after on W (a renormalised target no longer closes
+    with the cash row); a cash row has no category; the Rebalancer's unavailable reasons are its own."""
+    with pytest.raises(ValidationError):
+        REBALANCER_PLAN_OUTPUT_ADAPTER.validate_python(_exposure_payload(mutate))
+
+
+def test_rebalancer_exposure_weights_have_their_own_unavailable_reasons() -> None:
+    """At zero wealth a Rebalancer weight is unavailable with its own reason: before at a zero F, after at a zero W."""
+    for reason in ("zero_initial_wealth", "zero_final_wealth"):
+        unavailable = {"kind": "unavailable", "reason": reason}
+        row = RebalancerExposureCashRow.model_validate({"kind": "cash", "dimension": "sector", "before_weight": unavailable, "target_weight": {"kind": "finite_decimal", "value": "0"}, "final_weight": unavailable, "provenance_ids": []})
+        assert row.before_weight.reason == reason
+
+
+def test_rebalancer_exposure_weights_at_a_zero_base() -> None:
+    """At a zero base every weight is unavailable for that base's own reason: an available weight, or the other reason,
+    is refused; on a positive base the weights are available and sum to one."""
+    validate = _validate_rebalancer_weights
+    initial = RebalancerUnavailableWeight(kind="unavailable", reason="zero_initial_wealth")
+    final = RebalancerUnavailableWeight(kind="unavailable", reason="zero_final_wealth")
+    half = AvailableExactNumber.model_validate({"kind": "available", "value": {"kind": "finite_decimal", "value": "0.5"}})
+    validate([initial, initial], Fraction(0), "zero_initial_wealth", "before")
+    for refused in ([initial, half], [final, final]):
+        with pytest.raises(ValueError):
+            validate(refused, Fraction(0), "zero_initial_wealth", "before")
+    validate([half, half], Fraction(10), "zero_initial_wealth", "before")
+    with pytest.raises(ValueError):
+        validate([half, initial], Fraction(10), "zero_initial_wealth", "before")
