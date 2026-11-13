@@ -15,13 +15,25 @@
  * - PEC-E-03: on a 375 px phone the box's buttons are under its text.
  * - PEC-E-04: an administrator sees the badge on the account and revokes its open link from «Account links»: one `DELETE
  *   /users/account-links/{id}`, the event `accounts.link.revoked`, and the badge goes with the reload.
- * - PEC-E-05 (D10): the link page answered 403 `EMAIL_CHANGE_SIGN_IN_REQUIRED` shows `signin`; its button opens the sign-in
- *   with the way back; once the fixture user signs in, the page is back on `/confirm-email-change`, ready, and its click
- *   sends the same token (kept in the tab, never in the address); the confirmation stays simulated.
- * - PEC-E-06 (D10, plan §8.1): ANOTHER account signed in in that browser: the route answers 403 `EMAIL_CHANGE_OTHER_ACCOUNT`,
- *   the page shows `otheraccount` (the link belongs to another account, never which), its button signs the other account
- *   out first, so the sign-in form shows instead of a bounce back to the same 403, and the right account then finds the
- *   page ready.
+ * - The link page (D10; lots E1–E3, the developer's test of 13/11/2026). The lane cannot mint a real link (no SMTP), so
+ *   `simulateLinkServer` answers the check and the confirmation as the server does, from the browser's REAL session
+ *   (`GET /auth/me`): none → `signin` / 403 `EMAIL_CHANGE_SIGN_IN_REQUIRED`; another account → `other_account` / 403
+ *   `EMAIL_CHANGE_OTHER_ACCOUNT`; the link's account → `ready` / 200 `{session_kept: true}`. That the server really keeps
+ *   the confirming session and ends the others is pinned in-process by the API test PEC-020b.
+ * - PEC-E-05 (E2): signed out (a private window): the page asks to sign in AT ONCE, with no confirm button; its button
+ *   opens the sign-in with the way back; signed in, the page is back, ready, and ONE click confirms the same token (kept in
+ *   the tab, never in the address); then the Profile opens, still signed in (E1).
+ * - PEC-E-06 (D10, plan §8.1): ANOTHER account signed in in that browser: the page shows `otheraccount` at once (the link
+ *   belongs to another account, never which), its button signs the other account out first, so the sign-in form shows
+ *   instead of a bounce back, and the right account then finds the page ready.
+ * - PEC-E-07 (E1): already signed in with the link's account: ready at once, one click, then the Profile, still signed in;
+ *   nothing left for the sign-in page.
+ * - PEC-E-08 (E3): a link the server does not know, read by the REAL check: the page says so at once, with no confirm
+ *   button and the way back to the sign-in.
+ * - PEC-E-09 (E5): at 1280, 1024, 820, 640 and 375 px, editing the address never narrows its field: the field keeps its width once a
+ *   new address is typed and the password field shows, it is as wide as that password field under it (measured before the
+ *   fix: 228 px over 288 px at every width from 640 to 1440, the address cut), and the save and undo buttons are drawn
+ *   beside or under it, never over it.
  *
  * Shared lane: nothing is written but sign-ins and sign-outs of the fixture users' own sessions. Every assertion reads a test id, a published state, an event or a request — never a
  * translated text.
@@ -42,6 +54,7 @@ const RESEND_PATH = `${API}/auth/profile/email-change/resend`;
 const USERS_PATH = `${API}/users`;
 const LINKS_PATH = `${API}/users/account-links`;
 const CONFIRM_PATH = `${API}/email/email-change/confirm`;
+const CHECK_PATH = `${API}/email/email-change/check`;
 
 // Budgets: deadlines, never delays.
 /** From a navigation to a settled tab. */
@@ -303,85 +316,185 @@ test.describe('Users — the administrator sees a pending change and revokes its
     });
 });
 
-test.describe('The link page — sign in to confirm (project 71, D10)', () => {
-    test('PEC-E-05 a 403 asks to sign in; after the sign-in the page is back, ready, with the same token', async ({page}) => {
+/** What the simulated link server was asked, and why it could not answer as asked (a test asserts it empty). */
+interface LinkServer {
+    checks: unknown[];
+    confirms: unknown[];
+    problems: string[];
+}
+
+/**
+ * Answer the link page's check and confirmation for `owner`'s link, as the server does, from the browser's REAL session:
+ * none → `signin` / 403 `EMAIL_CHANGE_SIGN_IN_REQUIRED`; another account → `other_account` / 403
+ * `EMAIL_CHANGE_OTHER_ACCOUNT`; `owner` → `ready` / 200 with the session kept. Each answer is checked against the generated
+ * schema before it is served. Nothing is written on the server.
+ */
+async function simulateLinkServer(page: Page, owner: {username: string}): Promise<LinkServer> {
+    const server: LinkServer = {checks: [], confirms: [], problems: []};
+    const whoIsHere = async (): Promise<'nobody' | 'owner' | 'other'> => {
+        const me = await page.request.get(ME_PATH);
+        if (me.status() === 401) return 'nobody';
+        if (!me.ok()) throw new Error(`the real GET ${ME_PATH} answered ${me.status()}`);
+        return ((await me.json()) as {user: {username: string}}).user.username === owner.username ? 'owner' : 'other';
+    };
+    const checked = (path: string, schema: {safeParse: (value: unknown) => {success: boolean; error?: {message: string}}}, json: unknown): unknown => {
+        const result = schema.safeParse(json);
+        if (!result.success) server.problems.push(`POST ${path}: the answer fails the generated schema: ${result.error?.message}`);
+        return json;
+    };
+    await page.route(
+        (url) => url.pathname === CHECK_PATH,
+        async (route) => {
+            if (route.request().method() !== 'POST') return route.fallback();
+            server.checks.push(route.request().postDataJSON());
+            const here = await whoIsHere();
+            const status = here === 'nobody' ? 'signin' : here === 'other' ? 'other_account' : 'ready';
+            await route.fulfill({status: 200, json: checked(CHECK_PATH, schemas.EmailChangeCheckResponse, {status})});
+        },
+    );
+    await page.route(
+        (url) => url.pathname === CONFIRM_PATH,
+        async (route) => {
+            if (route.request().method() !== 'POST') return route.fallback();
+            server.confirms.push(route.request().postDataJSON());
+            const here = await whoIsHere();
+            if (here === 'nobody') return route.fulfill({status: 403, json: {detail: {error_code: 'EMAIL_CHANGE_SIGN_IN_REQUIRED', message: 'Sign in to the account that asked for this change to confirm it'}}});
+            if (here === 'other') return route.fulfill({status: 403, json: {detail: {error_code: 'EMAIL_CHANGE_OTHER_ACCOUNT', message: 'This link belongs to another account'}}});
+            await route.fulfill({status: 200, json: checked(CONFIRM_PATH, schemas.EmailChangeConfirmResponse, {username: owner.username, session_kept: true})});
+        },
+    );
+    return server;
+}
+
+/** Sign in through the form the link page opened, which must come back to the link page. */
+async function signInOnTheWayBack(page: Page, user: {username: string; password: string}): Promise<void> {
+    await expect(page.getByTestId('login-form')).toBeVisible({timeout: LOAD_MS});
+    expect(new URL(page.url()).search).toBe('?redirect=%2Fconfirm-email-change');
+    await page.getByTestId('login-username').fill(user.username);
+    await page.getByTestId('login-password').fill(user.password);
+    await page.getByTestId('login-submit').click();
+    await expect.poll(() => new URL(page.url()).pathname, {timeout: LOAD_MS}).toBe('/confirm-email-change');
+}
+
+/** One click on «confirm» from a ready card: the event says the session was kept, the Profile opens, still signed in. */
+async function confirmAndStayIn(page: Page): Promise<void> {
+    const card = page.getByTestId('email-change-status');
+    await expect(card).toHaveAttribute('data-status', 'ready', {timeout: LOAD_MS});
+    const since = await eventSeq(page);
+    await card.getByTestId('email-change-confirm').click();
+    const event = await waitForEvent(page, 'email.change.confirmed', {since, timeout: ACTION_MS});
+    expect(event.detail).toEqual({sessionKept: true});
+    await expect.poll(() => new URL(page.url()).pathname, {timeout: LOAD_MS}).toBe('/settings/profile');
+    // Raised on the link page, shown by the app's container once the Profile mounts: read at once, before the page settles
+    await expect(page.getByTestId('toast-success'), 'A success toast says the address changed').toBeVisible({timeout: UI_MS});
+    await expect(page.getByTestId('profile-tab'), 'The Profile opens, signed in').toHaveAttribute('data-busy', 'false', {timeout: LOAD_MS});
+    expect((await page.request.get(ME_PATH)).status(), 'still signed in').toBe(200);
+}
+
+test.describe('The link page — knows on opening what the link can do, and stays signed in (project 71, D10, lot E)', () => {
+    test('PEC-E-05 signed out: the sign-in is asked at once; after it, one click confirms and the Profile opens, signed in', async ({page}) => {
         const token = `pec-token-${uniqueSuffix()}`;
-        const confirms: unknown[] = [];
-        const problems: string[] = [];
-        await page.route(
-            (url) => url.pathname === CONFIRM_PATH,
-            async (route) => {
-                if (route.request().method() !== 'POST') return route.fallback();
-                confirms.push(route.request().postDataJSON());
-                if (confirms.length === 1) {
-                    await route.fulfill({status: 403, json: {detail: {error_code: 'EMAIL_CHANGE_SIGN_IN_REQUIRED', message: 'Sign in to the account that asked for this change to confirm it'}}});
-                    return;
-                }
-                const json = {username: TEST_USER.username};
-                const checked = schemas.EmailChangeConfirmResponse.safeParse(json);
-                if (!checked.success) problems.push(`POST ${CONFIRM_PATH}: ${checked.error.message}`);
-                await route.fulfill({status: 200, json});
-            },
-        );
+        const server = await simulateLinkServer(page, TEST_USER);
 
         await page.goto(`/confirm-email-change#token=${token}`);
         const card = page.getByTestId('email-change-status');
-        await expect(card).toHaveAttribute('data-status', 'ready', {timeout: LOAD_MS});
+        await expect(card, 'The sign-in is asked before any click').toHaveAttribute('data-status', 'signin', {timeout: LOAD_MS});
         expect(page.url(), 'the token leaves the address bar').not.toContain(token);
-        await card.getByTestId('email-change-confirm').click();
-        await expect(card).toHaveAttribute('data-status', 'signin', {timeout: ACTION_MS});
+        await expect(card.getByTestId('email-change-confirm'), 'No confirm button before the sign-in').toHaveCount(0);
         await expect(card.getByTestId('email-change-goto-login'), 'One way to the sign-in, not two').toHaveCount(0);
 
         await card.getByTestId('email-change-signin-action').click();
-        await expect.poll(() => new URL(page.url()).search, {timeout: ACTION_MS}).toBe('?redirect=%2Fconfirm-email-change');
-        await expect(page.getByTestId('login-form')).toBeVisible({timeout: LOAD_MS});
-        await page.getByTestId('login-username').fill(TEST_USER.username);
-        await page.getByTestId('login-password').fill(TEST_USER.password);
-        await page.getByTestId('login-submit').click();
-
-        await expect.poll(() => new URL(page.url()).pathname, {timeout: LOAD_MS}).toBe('/confirm-email-change');
-        await expect(card, 'Back from the sign-in, ready for the click').toHaveAttribute('data-status', 'ready', {timeout: LOAD_MS});
+        await signInOnTheWayBack(page, TEST_USER);
         expect(page.url(), 'the kept token never reaches the address bar').not.toContain(token);
-        await card.getByTestId('email-change-confirm').click();
-        await expect.poll(() => confirms.length, {timeout: ACTION_MS}).toBe(2);
-        expect(confirms).toEqual([{token}, {token}]);
-        expect(problems).toEqual([]);
+        await confirmAndStayIn(page);
+
+        expect(server.checks).toEqual([{token}, {token}]);
+        expect(server.confirms, 'one click, one confirmation').toEqual([{token}]);
+        expect(server.problems).toEqual([]);
     });
 
-    test('PEC-E-06 another account signed in here: the page says the link is another account’s, its button signs it out, the sign-in form shows, the right account finds the page ready', async ({page}) => {
+    test('PEC-E-06 another account signed in here: said at once, its button signs it out, the right account finds the page ready', async ({page}) => {
         const token = `pec-token-${uniqueSuffix()}`;
-        const confirms: unknown[] = [];
-        await page.route(
-            (url) => url.pathname === CONFIRM_PATH,
-            async (route) => {
-                if (route.request().method() !== 'POST') return route.fallback();
-                confirms.push(route.request().postDataJSON());
-                // The administrator's session is not the account of the link: 403 for another account, as the route answers it (PEC-021)
-                if (confirms.length === 1) return route.fulfill({status: 403, json: {detail: {error_code: 'EMAIL_CHANGE_OTHER_ACCOUNT', message: 'This link belongs to another account'}}});
-                await route.fulfill({status: 200, json: {username: TEST_USER.username}});
-            },
-        );
+        const server = await simulateLinkServer(page, TEST_USER);
         await login(page, TEST_ADMIN);
 
         await page.goto(`/confirm-email-change#token=${token}`);
         const card = page.getByTestId('email-change-status');
-        await card.getByTestId('email-change-confirm').click({timeout: LOAD_MS});
-        await expect(card).toHaveAttribute('data-status', 'otheraccount', {timeout: ACTION_MS});
+        await expect(card, 'Said before any click').toHaveAttribute('data-status', 'otheraccount', {timeout: LOAD_MS});
+        await expect(card.getByTestId('email-change-confirm')).toHaveCount(0);
         await card.getByTestId('email-change-switch-account').click();
 
         // Signed out first: the sign-in page shows its form, instead of jumping back to the link page with the admin's session
         await expect(page.getByTestId('login-form')).toBeVisible({timeout: LOAD_MS});
-        expect(new URL(page.url()).search).toBe('?redirect=%2Fconfirm-email-change');
-        const me = await page.request.get(ME_PATH);
-        expect(me.status(), 'the administrator’s session is gone from this browser').toBe(401);
-        await page.getByTestId('login-username').fill(TEST_USER.username);
-        await page.getByTestId('login-password').fill(TEST_USER.password);
-        await page.getByTestId('login-submit').click();
+        expect((await page.request.get(ME_PATH)).status(), 'the administrator’s session is gone from this browser').toBe(401);
+        await signInOnTheWayBack(page, TEST_USER);
+        await confirmAndStayIn(page);
 
-        await expect.poll(() => new URL(page.url()).pathname, {timeout: LOAD_MS}).toBe('/confirm-email-change');
-        await expect(card).toHaveAttribute('data-status', 'ready', {timeout: LOAD_MS});
-        await card.getByTestId('email-change-confirm').click();
-        await expect.poll(() => confirms.length, {timeout: ACTION_MS}).toBe(2);
-        expect(confirms).toEqual([{token}, {token}]);
+        expect(server.confirms).toEqual([{token}]);
+        expect(server.problems).toEqual([]);
+    });
+
+    test('PEC-E-07 already signed in with the link’s account: ready at once, one click, the Profile, still signed in', async ({page}) => {
+        const token = `pec-token-${uniqueSuffix()}`;
+        const server = await simulateLinkServer(page, TEST_USER);
+        await login(page, TEST_USER);
+
+        await page.goto(`/confirm-email-change#token=${token}`);
+        await confirmAndStayIn(page);
+
+        expect(server.checks).toEqual([{token}]);
+        expect(server.confirms).toEqual([{token}]);
+        expect(server.problems).toEqual([]);
+    });
+
+    test('PEC-E-08 a link the server does not know (the real check): said at once, no confirm button', async ({page}) => {
+        let confirms = 0;
+        await page.route(
+            (url) => url.pathname === CONFIRM_PATH,
+            async (route) => {
+                confirms += 1;
+                await route.fallback();
+            },
+        );
+
+        await page.goto(`/confirm-email-change#token=pec-unknown-${uniqueSuffix()}`);
+        const card = page.getByTestId('email-change-status');
+        await expect(card).toHaveAttribute('data-status', 'unknown', {timeout: LOAD_MS});
+        await expect(card.getByTestId('email-change-confirm')).toHaveCount(0);
+        await expect(card.getByTestId('email-change-goto-login')).toBeVisible();
+        expect(confirms, 'nothing was spent').toBe(0);
     });
 });
+
+for (const width of [1280, 1024, 820, 640, 375]) {
+    test(`PEC-E-09 editing the address keeps its field’s width, ${width} px`, async ({page}) => {
+        await page.setViewportSize({width, height: 900});
+        await login(page, TEST_USER);
+        const server = await simulateProfileServer(page);
+        await openProfile(page);
+
+        await page.getByTestId('profile-edit-toggle').click();
+        const field = page.getByTestId('profile-email');
+        await expect(field).toBeEnabled({timeout: UI_MS});
+        const before = await field.boundingBox();
+        await field.fill(newAddress('width'));
+        await expect(page.getByTestId('profile-email-password'), 'A new address asks for the password').toBeVisible({timeout: UI_MS});
+        const after = await field.boundingBox();
+
+        expect(before && after, 'the field is drawn').toBeTruthy();
+        test.info().annotations.push({type: 'PEC-E-09 field width', description: `${width}px: ${before!.width.toFixed(1)} → ${after!.width.toFixed(1)}`});
+        expect(after!.width, 'the field does not narrow while it is edited').toBeGreaterThanOrEqual(before!.width - 1);
+        const password = (await page.getByTestId('profile-email-password').boundingBox())!;
+        expect(after!.width, 'the field is as wide as the password field under it').toBeGreaterThanOrEqual(password.width - 1);
+        for (const id of ['profile-email-save', 'profile-email-undo']) {
+            const button = page.getByTestId(id).filter({visible: true});
+            await expect(button, `${id} is drawn`).toHaveCount(1);
+            const box = (await button.boundingBox())!;
+            const overlaps = box.x < after!.x + after!.width && box.x + box.width > after!.x && box.y < after!.y + after!.height && box.y + box.height > after!.y;
+            expect(overlaps, `${id} is beside or under the field, never over it`).toBe(false);
+        }
+        const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expect(sideways, 'the page does not scroll sideways').toBeLessThanOrEqual(1);
+        expect(server.problems).toEqual([]);
+    });
+}
