@@ -50,9 +50,10 @@
     // Mount = open: the editor works on a copy taken once, and writes it back only on apply.
     const original = untrack(() => draft.broker(brokerKey));
     let working = $state<DraftBroker | null>(original ? structuredClone($state.snapshot(original)) : null);
-    // A source not yet paired with this Broker starts allowed, as `syncFunding` does in the draft.
+    // A source not yet paired with this Broker starts allowed, as `syncFunding` does in the draft. A Tool without funding
+    // routes (the Rebalancer) has none to pair, and no liquidity section below.
     untrack(() => {
-        if (!working) return;
+        if (!working || !profile.fundingRoutes) return;
         for (const source of draft.fundingCandidates(working.key)) {
             if (!draft.fundingFor(working, source)) working.funding.push({...draft.newFunding(source), enabled: true});
         }
@@ -249,87 +250,89 @@
             <BrokerOperatingProfileBox draft={boxDraft} groups={BOX_GROUPS} {requiredCurrencies} testIdPrefix={profile.testIdPrefix} rootTestid={testId('broker-editor-profile', profile)} {stepFor} onchange={profileChanged} />
         </section>
 
-        <section class="space-y-3" aria-labelledby="{ids}-funding">
-            <div class="flex items-center gap-0.5">
-                <h3 id="{ids}-funding" class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.brokerEditor.funding', {default: 'Liquidity {name} may use', values: {name: working.name || '—'}})}</h3>
-                <HelpTip
-                    label={$t('tools.pacAllocator.planner.brokerEditor.funding', {default: 'Liquidity {name} may use', values: {name: working.name || '—'}})}
-                    help={$t('tools.pacAllocator.planner.brokerEditor.fundingHelp', {default: 'Purchases on this Broker can be paid with its own cash and with every source in green here. Everything starts allowed: click a source to exclude it, click again to allow it.'})}
-                />
-            </div>
-            <ul class="space-y-2">
-                {#each localCash as cash (cash.key)}
-                    <li class="flex flex-wrap items-center gap-2 p-2 {TOGGLE_CARD} {TOGGLE_ON}" data-testid={testId('funding-local', profile)} data-currency={cash.currency}>
-                        <PlannerBrokerIcon broker={working} size={20} />
-                        <span class="font-medium text-lf-primary">{working.name || '—'}</span>
-                        <CurrencyCode code={cash.currency} />
-                        <HelpTip label={working.name || '—'} help={fundingSourceHelp($t, 'local', working.name, cash.currency)} />
-                    </li>
-                {/each}
-                {#each candidates as source (sourceKey(source))}
-                    {@const funding = fundingOf(source)}
-                    {@const info = sourceOf(source)}
-                    {@const enabled = funding?.enabled === true}
-                    <li class="{TOGGLE_CARD} {enabled ? TOGGLE_ON : TOGGLE_OFF}" data-testid={testId('funding', profile)} data-source={sourceKey(source)} data-enabled={enabled ? 'true' : 'false'}>
-                        <button type="button" class="flex w-full cursor-pointer flex-wrap items-center gap-2 p-2 text-left" aria-pressed={enabled} data-testid={testId('funding-toggle', profile)} onclick={() => toggleFunding(source, !enabled)}>
-                            {#if source.kind === 'contribution'}
-                                <span class={ICON_BUBBLE} style="width: 20px; height: 20px;"><PiggyBank size={12} aria-hidden="true" /></span>
-                            {:else}
-                                <PlannerBrokerIcon broker={info.broker} size={20} />
-                            {/if}
-                            {#if info.label}<span class="font-medium text-lf-primary">{info.label}</span>{/if}
-                            {#if info.currency}<CurrencyCode code={info.currency} />{/if}
-                            {#if source.kind === 'contribution'}<span class={BADGE.neutral}>{$t('tools.pacAllocator.planner.contribution.kind', {default: 'contribution'})}</span>{/if}
-                            {#if info.currency && info.amount && info.amount.trim() !== ''}
-                                <span class={HINT}>· {$t('tools.pacAllocator.planner.brokerEditor.sourceAmount', {default: 'source {amount}', values: {amount: formatPlannerMoneyPlain(info.amount, info.currency)}})}</span>
-                            {/if}
-                        </button>
-                        {#if funding && enabled}
-                            <div class="grid gap-3 px-2 pb-2 sm:grid-cols-2 sm:pl-9">
-                                <div>
-                                    <div class={LABEL_ROW}>
-                                        <label for="{ids}-{funding.key}-priority">{$t('tools.pacAllocator.planner.route.priority', {default: 'Priority'})}</label>
-                                        <HelpTip
-                                            label={$t('tools.pacAllocator.planner.route.priority', {default: 'Priority'})}
-                                            help={$t('tools.pacAllocator.planner.brokerEditor.priorityHelp', {default: 'It counts only between plans that get equally close to the target: then the plan uses first the sources with the lowest number. 0 = preferred.'})}
-                                        />
-                                    </div>
-                                    <ExactDecimalInput id="{ids}-{funding.key}-priority" bind:value={funding.priority} step="1" maxFractionDigits={0} className={INPUT} testid={testId('funding-priority', profile)} />
-                                </div>
-                                <div>
-                                    <div class={LABEL_ROW}>
-                                        <label for="{ids}-{funding.key}-cap">{$t('tools.pacAllocator.planner.brokerEditor.fundingCap', {default: 'Maximum usable here'})}</label>
-                                        <HelpTip
-                                            label={$t('tools.pacAllocator.planner.brokerEditor.fundingCap', {default: 'Maximum usable here'})}
-                                            help={$t('tools.pacAllocator.planner.brokerEditor.fundingCapHint', {default: 'The most the plan may take from this source for purchases here. Empty = the whole amount of the source.'})}
-                                        />
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <div class="min-w-0 flex-1">
-                                            <ExactDecimalInput
-                                                id="{ids}-{funding.key}-cap"
-                                                bind:value={funding.cap}
-                                                step={info.currency ? cldrCurrencyStep(info.currency) : '0.01'}
-                                                placeholder={$t('tools.pacAllocator.planner.brokerEditor.fundingCapAll', {default: 'all'})}
-                                                className={INPUT}
-                                                testid={testId('funding-cap', profile)}
+        {#if profile.fundingRoutes}
+            <section class="space-y-3" aria-labelledby="{ids}-funding" data-testid={testId('broker-editor-funding', profile)}>
+                <div class="flex items-center gap-0.5">
+                    <h3 id="{ids}-funding" class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.brokerEditor.funding', {default: 'Liquidity {name} may use', values: {name: working.name || '—'}})}</h3>
+                    <HelpTip
+                        label={$t('tools.pacAllocator.planner.brokerEditor.funding', {default: 'Liquidity {name} may use', values: {name: working.name || '—'}})}
+                        help={$t('tools.pacAllocator.planner.brokerEditor.fundingHelp', {default: 'Purchases on this Broker can be paid with its own cash and with every source in green here. Everything starts allowed: click a source to exclude it, click again to allow it.'})}
+                    />
+                </div>
+                <ul class="space-y-2">
+                    {#each localCash as cash (cash.key)}
+                        <li class="flex flex-wrap items-center gap-2 p-2 {TOGGLE_CARD} {TOGGLE_ON}" data-testid={testId('funding-local', profile)} data-currency={cash.currency}>
+                            <PlannerBrokerIcon broker={working} size={20} />
+                            <span class="font-medium text-lf-primary">{working.name || '—'}</span>
+                            <CurrencyCode code={cash.currency} />
+                            <HelpTip label={working.name || '—'} help={fundingSourceHelp($t, 'local', working.name, cash.currency)} />
+                        </li>
+                    {/each}
+                    {#each candidates as source (sourceKey(source))}
+                        {@const funding = fundingOf(source)}
+                        {@const info = sourceOf(source)}
+                        {@const enabled = funding?.enabled === true}
+                        <li class="{TOGGLE_CARD} {enabled ? TOGGLE_ON : TOGGLE_OFF}" data-testid={testId('funding', profile)} data-source={sourceKey(source)} data-enabled={enabled ? 'true' : 'false'}>
+                            <button type="button" class="flex w-full cursor-pointer flex-wrap items-center gap-2 p-2 text-left" aria-pressed={enabled} data-testid={testId('funding-toggle', profile)} onclick={() => toggleFunding(source, !enabled)}>
+                                {#if source.kind === 'contribution'}
+                                    <span class={ICON_BUBBLE} style="width: 20px; height: 20px;"><PiggyBank size={12} aria-hidden="true" /></span>
+                                {:else}
+                                    <PlannerBrokerIcon broker={info.broker} size={20} />
+                                {/if}
+                                {#if info.label}<span class="font-medium text-lf-primary">{info.label}</span>{/if}
+                                {#if info.currency}<CurrencyCode code={info.currency} />{/if}
+                                {#if source.kind === 'contribution'}<span class={BADGE.neutral}>{$t('tools.pacAllocator.planner.contribution.kind', {default: 'contribution'})}</span>{/if}
+                                {#if info.currency && info.amount && info.amount.trim() !== ''}
+                                    <span class={HINT}>· {$t('tools.pacAllocator.planner.brokerEditor.sourceAmount', {default: 'source {amount}', values: {amount: formatPlannerMoneyPlain(info.amount, info.currency)}})}</span>
+                                {/if}
+                            </button>
+                            {#if funding && enabled}
+                                <div class="grid gap-3 px-2 pb-2 sm:grid-cols-2 sm:pl-9">
+                                    <div>
+                                        <div class={LABEL_ROW}>
+                                            <label for="{ids}-{funding.key}-priority">{$t('tools.pacAllocator.planner.route.priority', {default: 'Priority'})}</label>
+                                            <HelpTip
+                                                label={$t('tools.pacAllocator.planner.route.priority', {default: 'Priority'})}
+                                                help={$t('tools.pacAllocator.planner.brokerEditor.priorityHelp', {default: 'It counts only between plans that get equally close to the target: then the plan uses first the sources with the lowest number. 0 = preferred.'})}
                                             />
                                         </div>
-                                        <span class={INPUT_SUFFIX}
-                                            >{#if info.currency}<CurrencyCode code={info.currency} />{/if}</span
-                                        >
+                                        <ExactDecimalInput id="{ids}-{funding.key}-priority" bind:value={funding.priority} step="1" maxFractionDigits={0} className={INPUT} testid={testId('funding-priority', profile)} />
+                                    </div>
+                                    <div>
+                                        <div class={LABEL_ROW}>
+                                            <label for="{ids}-{funding.key}-cap">{$t('tools.pacAllocator.planner.brokerEditor.fundingCap', {default: 'Maximum usable here'})}</label>
+                                            <HelpTip
+                                                label={$t('tools.pacAllocator.planner.brokerEditor.fundingCap', {default: 'Maximum usable here'})}
+                                                help={$t('tools.pacAllocator.planner.brokerEditor.fundingCapHint', {default: 'The most the plan may take from this source for purchases here. Empty = the whole amount of the source.'})}
+                                            />
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <div class="min-w-0 flex-1">
+                                                <ExactDecimalInput
+                                                    id="{ids}-{funding.key}-cap"
+                                                    bind:value={funding.cap}
+                                                    step={info.currency ? cldrCurrencyStep(info.currency) : '0.01'}
+                                                    placeholder={$t('tools.pacAllocator.planner.brokerEditor.fundingCapAll', {default: 'all'})}
+                                                    className={INPUT}
+                                                    testid={testId('funding-cap', profile)}
+                                                />
+                                            </div>
+                                            <span class={INPUT_SUFFIX}
+                                                >{#if info.currency}<CurrencyCode code={info.currency} />{/if}</span
+                                            >
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            {/if}
+                        </li>
+                    {:else}
+                        {#if localCash.length === 0}
+                            <li class={HINT} data-testid={testId('funding-empty', profile)}>{$t('tools.pacAllocator.planner.brokerEditor.noFunding', {default: 'No liquidity can reach this Broker yet: add cash or a contribution in the Liquidity step.'})}</li>
                         {/if}
-                    </li>
-                {:else}
-                    {#if localCash.length === 0}
-                        <li class={HINT} data-testid={testId('funding-empty', profile)}>{$t('tools.pacAllocator.planner.brokerEditor.noFunding', {default: 'No liquidity can reach this Broker yet: add cash or a contribution in the Liquidity step.'})}</li>
-                    {/if}
-                {/each}
-            </ul>
-        </section>
+                    {/each}
+                </ul>
+            </section>
+        {/if}
 
         {#if savePhase}
             <ProfileSaveConfirm phase={savePhase} brokerName={working.name} changes={savePlan?.changes ?? []} refusal={saveRefusal} onconfirm={confirmProfileSave} oncancel={closeProfileSave} />

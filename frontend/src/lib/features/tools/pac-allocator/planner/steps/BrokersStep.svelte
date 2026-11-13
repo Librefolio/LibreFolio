@@ -158,55 +158,58 @@
                 </p>
             </div>
 
-            <div class="space-y-1.5" data-testid={testId('broker-funding', profile)}>
-                <p class={LABEL_ROW}>
-                    {$t('tools.pacAllocator.planner.brokers.fundingLabel', {default: 'Usable liquidity'})}
-                    <HelpTip
-                        label={$t('tools.pacAllocator.planner.brokers.fundingLabel', {default: 'Usable liquidity'})}
-                        help={$t('tools.pacAllocator.planner.brokers.fundingHelp', {
-                            default: 'The money the plan may use to buy on this Broker: its own cash, plus the contributions and the cash of other accounts you allow in Edit. Everything is allowed at first; in Edit, click a source to exclude it.',
-                        })}
-                    />
-                </p>
-                {#if localCash.length === 0 && routes.length === 0}
-                    <p class="text-sm text-lf-muted">{$t('tools.pacAllocator.planner.brokers.noFunding', {default: 'none yet'})}</p>
-                {:else}
-                    <ul class="flex flex-wrap gap-1.5">
-                        {#each localCash as cash (cash.key)}
-                            <li data-testid={testId('broker-funding-local', profile)} data-currency={cash.currency}>
-                                <Tooltip text={fundingSourceHelp($t, 'local', broker.name, cash.currency)} maxWidth="320px">
-                                    <span class={CHIP}>
-                                        <PlannerBrokerIcon {broker} size={20} />
-                                        <span class="max-w-40 truncate">{broker.name || '—'}</span>
-                                        <CurrencyCode code={cash.currency} />
-                                    </span>
-                                </Tooltip>
-                            </li>
-                        {/each}
-                        {#each routes as item (item.key)}
-                            {@const source = sourceOf(item.source)}
-                            <li data-testid={testId('broker-funding-route', profile)} data-source-kind={item.source.kind}>
-                                <Tooltip text={fundingSourceHelp($t, item.source.kind === 'contribution' ? 'contribution' : 'account', source.label, source.currency ?? '')} maxWidth="320px">
-                                    <span class={CHIP}>
-                                        {#if item.source.kind === 'contribution'}
-                                            <span class={ICON_BUBBLE} style="width: 20px; height: 20px;"><PiggyBank size={12} aria-hidden="true" /></span>
-                                        {:else}
-                                            <PlannerBrokerIcon broker={source.broker} size={20} />
-                                        {/if}
-                                        <span class="max-w-40 truncate">{source.label}</span>
-                                        {#if source.currency}<CurrencyCode code={source.currency} />{/if}
-                                    </span>
-                                </Tooltip>
-                            </li>
-                        {/each}
-                    </ul>
-                {/if}
-            </div>
+            {#if profile.fundingRoutes}
+                <div class="space-y-1.5" data-testid={testId('broker-funding', profile)}>
+                    <p class={LABEL_ROW}>
+                        {$t('tools.pacAllocator.planner.brokers.fundingLabel', {default: 'Usable liquidity'})}
+                        <HelpTip
+                            label={$t('tools.pacAllocator.planner.brokers.fundingLabel', {default: 'Usable liquidity'})}
+                            help={$t('tools.pacAllocator.planner.brokers.fundingHelp', {
+                                default: 'The money the plan may use to buy on this Broker: its own cash, plus the contributions and the cash of other accounts you allow in Edit. Everything is allowed at first; in Edit, click a source to exclude it.',
+                            })}
+                        />
+                    </p>
+                    {#if localCash.length === 0 && routes.length === 0}
+                        <p class="text-sm text-lf-muted">{$t('tools.pacAllocator.planner.brokers.noFunding', {default: 'none yet'})}</p>
+                    {:else}
+                        <ul class="flex flex-wrap gap-1.5">
+                            {#each localCash as cash (cash.key)}
+                                <li data-testid={testId('broker-funding-local', profile)} data-currency={cash.currency}>
+                                    <Tooltip text={fundingSourceHelp($t, 'local', broker.name, cash.currency)} maxWidth="320px">
+                                        <span class={CHIP}>
+                                            <PlannerBrokerIcon {broker} size={20} />
+                                            <span class="max-w-40 truncate">{broker.name || '—'}</span>
+                                            <CurrencyCode code={cash.currency} />
+                                        </span>
+                                    </Tooltip>
+                                </li>
+                            {/each}
+                            {#each routes as item (item.key)}
+                                {@const source = sourceOf(item.source)}
+                                <li data-testid={testId('broker-funding-route', profile)} data-source-kind={item.source.kind}>
+                                    <Tooltip text={fundingSourceHelp($t, item.source.kind === 'contribution' ? 'contribution' : 'account', source.label, source.currency ?? '')} maxWidth="320px">
+                                        <span class={CHIP}>
+                                            {#if item.source.kind === 'contribution'}
+                                                <span class={ICON_BUBBLE} style="width: 20px; height: 20px;"><PiggyBank size={12} aria-hidden="true" /></span>
+                                            {:else}
+                                                <PlannerBrokerIcon broker={source.broker} size={20} />
+                                            {/if}
+                                            <span class="max-w-40 truncate">{source.label}</span>
+                                            {#if source.currency}<CurrencyCode code={source.currency} />{/if}
+                                        </span>
+                                    </Tooltip>
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                </div>
+            {/if}
         </section>
     {/each}
 
     {#each draft.fundingOnlyBrokers as broker (broker.key)}
-        <section class="{CARD} space-y-1" data-testid={testId('broker-funding-only', profile)} data-broker-key={broker.key}>
+        <!-- The PAC's account funds other Brokers through routes; the Rebalancer's is an account with its cash (no routes). -->
+        <section class="{CARD} space-y-1" data-testid={testId('broker-funding-only', profile)} data-broker-key={broker.key} data-kind={profile.fundingRoutes ? 'funding-only' : 'cash-only'}>
             <div class="flex flex-wrap items-start justify-between gap-2">
                 <div class="flex min-w-0 items-center gap-2">
                     <PlannerBrokerIcon {broker} />
@@ -214,10 +217,12 @@
                 </div>
                 <div class="flex gap-1">
                     <OriginBadge origin={broker.origin} testid={testId('broker-origin', profile)} />
-                    <span class={BADGE.neutral}>{$t('tools.pacAllocator.planner.brokers.fundingOnly', {default: 'funding only'})}</span>
+                    <span class={BADGE.neutral}>{profile.fundingRoutes ? $t('tools.pacAllocator.planner.brokers.fundingOnly', {default: 'funding only'}) : $t('tools.portfolioRebalancer.planner.brokers.cashOnly')}</span>
                 </div>
             </div>
-            <p class={HINT}>{$t('tools.pacAllocator.planner.brokers.fundingOnlyHint', {default: 'No order: it funds other Brokers through routes. Edit it in the Liquidity step.'})}</p>
+            <p class={HINT}>
+                {profile.fundingRoutes ? $t('tools.pacAllocator.planner.brokers.fundingOnlyHint', {default: 'No order: it funds other Brokers through routes. Edit it in the Liquidity step.'}) : $t('tools.portfolioRebalancer.planner.brokers.cashOnlyHint')}
+            </p>
         </section>
     {/each}
 
