@@ -59,6 +59,14 @@ The contract
    named with a warning, and the combine does not fail. Every other part no round could fold
    in stays red, kept and named; a part with a transient name is never judged empty, since it
    may still be filling up.
+8. (Project 71, after the C3 run of 13/11/2026.) A backend server started under coverage — the runner's shared backend, or
+   Playwright's own webServer — writes its parts into their own folder, ``.coverage_data/parts/server/``
+   (``COVERAGE_FILE``, set by ``_common.apply_server_coverage_env``), never into the project root. pytest-cov's
+   session-finish ``combine()`` takes every ``.coverage.*`` beside its ``.coverage``: in the C3 run it took the parts the
+   shared backend left at its pause for ``db create-clean``, and the API and E2E server's whole measure went into
+   ``.coverage_data/backend``. The finalizer combines that folder into ``.coverage_data/frontend`` (a frontend or a whole
+   run) or folds it into ``.coverage_data/backend`` (one backend category); in a whole run the parts left in the root
+   are pytest's own children, and go to ``.coverage_data/backend``.
 
 How it is reproduced
 --------------------
@@ -76,18 +84,20 @@ directory under test, nor into the repository. Code that works from ``os.getcwd(
 from __future__ import annotations
 
 import contextlib
+import inspect
 import sqlite3
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import coverage
 import pytest
 from coverage import CoverageData
 from coverage.sqldata import SCHEMA
 
 from scripts import cli_base
-from scripts.test_runner import _cli, _common, _coverage, _executor, _scheduler, _suites
+from scripts.test_runner import _cli, _common, _consolidate, _coverage, _executor, _frontend_common, _scheduler, _server, _suites
 from scripts.test_runner._inventory import PURE
 
 HOST = "Laptop di sviluppo (2)"  # the machine that hit the race: spaces and parentheses, no dots
@@ -121,6 +131,8 @@ CURRENT_RUN_DIR = "run-20261008-112600-777"  # this run's: not created yet when 
 P1_W0_EMPTY = f".coverage.p1.w0.{HOST}.pid17336.XWmqACex.HuitnSoGmx4h"
 P1_W0_EMPTY_TRANSIENT = f".coverage.p1.w0.{HOST}.pid17337.XtRaNs1x"
 SERVER_EMPTY = f".coverage.{HOST}.pid333.Xeeeeeex.Hffffffffffh"
+# A process pytest started under COVERAGE_PROCESS_START (a tool worker, a spawn child): its part lands beside `.coverage`.
+PYTEST_CHILD = f".coverage.{HOST}.pid444.Xggggggx.Hhhhhhhhhhhh"
 
 # One distinct fake source per part: the combined database then names every part folded in.
 SOURCE = {
@@ -135,6 +147,7 @@ SOURCE = {
     P1_W1: "/fake/p1_w1.py",
     P1_W1_SPAWN_CHILD: "/fake/p1_w1_spawn_child.py",
     ".coverage": "/fake/pytest_own.py",
+    PYTEST_CHILD: "/fake/pytest_child.py",
 }
 
 NON_EXISTENT = "Couldn't combine from non-existent path"
@@ -176,6 +189,13 @@ def _measured(db: Path) -> set[str]:
 
 def _parts_left(directory: Path, pattern: str) -> list[str]:
     return sorted(p.name for p in directory.glob(pattern))
+
+
+def _server_dir(root: Path) -> Path:
+    """Where a backend server under coverage writes its parts (contract 8): ``<root>/.coverage_data/parts/server``."""
+    directory = root / ".coverage_data" / "parts" / "server"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
 
 
 def _this_interpreter() -> list:
@@ -314,7 +334,7 @@ class TestWorkerPartsCombine:
 class TestSharedBackendPartsCombine:
     """``_coverage._finalize_coverage()``: the shared backend's parts, in the working directory."""
 
-    def test_server_parts_in_the_cwd_are_all_combined_and_coveragerc_is_kept(self, coverage_sandbox, monkeypatch, capsys):
+    def test_server_parts_in_their_folder_are_all_combined_and_coveragerc_is_kept(self, coverage_sandbox, monkeypatch, capsys):
         """Frontend mode: the server's own part, plus its tracker renaming itself as the combine starts.
 
         ``coverage html`` and ``coverage report`` run too, through the same interpreter, on fake
@@ -326,15 +346,17 @@ class TestSharedBackendPartsCombine:
         monkeypatch.chdir(coverage_sandbox)
         coveragerc = coverage_sandbox / ".coveragerc"
         coveragerc.write_text("[run]\nbranch = true\n", encoding="utf-8")
+        server = _server_dir(coverage_sandbox)
         for name in (SERVER, SERVER_TRACKER):
-            _write_part(coverage_sandbox, name)
-        hook = _hook_first_combine(monkeypatch, before=lambda: (coverage_sandbox / SERVER_TRACKER).rename(coverage_sandbox / SERVER_TRACKER_DONE))
+            _write_part(server, name)
+        hook = _hook_first_combine(monkeypatch, before=lambda: (server / SERVER_TRACKER).rename(server / SERVER_TRACKER_DONE))
 
         _coverage._finalize_coverage(is_front=True, is_all=False)
         out = capsys.readouterr().out
 
         assert hook.combines, "no `coverage combine` was launched: the race was never replayed"
         assert _measured(coverage_sandbox / ".coverage_data" / "frontend") == {SOURCE[SERVER], SOURCE[SERVER_TRACKER]}, f"the shared backend's parts did not reach .coverage_data/frontend:\n{out}"
+        assert _parts_left(server, ".coverage.*") == []
         assert _parts_left(coverage_sandbox, ".coverage.*") == []
         assert coveragerc.is_file(), ".coveragerc was taken for a coverage part"
         assert NON_EXISTENT not in out
@@ -357,16 +379,19 @@ class TestBackendCategoryServerParts:
         monkeypatch.chdir(coverage_sandbox)
         (coverage_sandbox / ".coveragerc").write_text("[run]\nbranch = true\n", encoding="utf-8")
         _write_part(coverage_sandbox, ".coverage")
+        _write_part(coverage_sandbox, PYTEST_CHILD)
+        server = _server_dir(coverage_sandbox)
         for name in (SERVER, SERVER_TRACKER):
-            _write_part(coverage_sandbox, name)
-        hook = _hook_first_combine(monkeypatch, before=lambda: (coverage_sandbox / SERVER_TRACKER).rename(coverage_sandbox / SERVER_TRACKER_DONE))
+            _write_part(server, name)
+        hook = _hook_first_combine(monkeypatch, before=lambda: (server / SERVER_TRACKER).rename(server / SERVER_TRACKER_DONE))
 
         finalized = _coverage._finalize_coverage(is_front=False, is_all=False)
         out = capsys.readouterr().out
 
         assert hook.combines, "no `coverage combine` was launched: the parts were never folded"
-        assert _measured(coverage_sandbox / ".coverage_data" / "backend") == {SOURCE[".coverage"], SOURCE[SERVER], SOURCE[SERVER_TRACKER]}, f"the backend database lacks the pytest data or a server part:\n{out}"
+        assert _measured(coverage_sandbox / ".coverage_data" / "backend") == {SOURCE[".coverage"], SOURCE[PYTEST_CHILD], SOURCE[SERVER], SOURCE[SERVER_TRACKER]}, f"the backend database lacks the pytest data, a child of pytest or a server part:\n{out}"
         assert _parts_left(coverage_sandbox, ".coverage.*") == []
+        assert _parts_left(server, ".coverage.*") == []
         assert (finalized.server_parts, finalized.backend_folded, finalized.frontend_saved) == (2, True, False)
         assert not (coverage_sandbox / ".coverage_data" / "frontend").exists(), "a backend run does not write the E2E database"
         assert (coverage_sandbox / ".coveragerc").is_file()
@@ -386,12 +411,13 @@ class TestBackendCategoryServerParts:
     def test_a_server_alone_still_makes_the_backend_database(self, coverage_sandbox, monkeypatch):
         """No pytest ``.coverage`` (an action that ran nothing under pytest-cov) but a server part: the part is the database."""
         monkeypatch.chdir(coverage_sandbox)
-        _write_part(coverage_sandbox, SERVER)
+        server = _server_dir(coverage_sandbox)
+        _write_part(server, SERVER)
 
         finalized = _coverage._finalize_coverage(is_front=False, is_all=False)
 
         assert _measured(coverage_sandbox / ".coverage_data" / "backend") == {SOURCE[SERVER]}
-        assert _parts_left(coverage_sandbox, ".coverage.*") == []
+        assert _parts_left(server, ".coverage.*") == []
         assert finalized.backend_folded is True
 
 
@@ -525,6 +551,7 @@ class TestCleanBackendCoverage:
         earlier_run = parts_dir / LEFTOVER_RUN_DIR
         earlier_run.mkdir()
         _write_part(earlier_run, P1_W0)
+        stale_server = _write_part(_server_dir(coverage_sandbox), SERVER)  # a server of an earlier run (contract 8)
         # The clean-up runs at start-up, before this run has created its own directory.
         _point_parts_at(monkeypatch, parts_dir, parts_dir / CURRENT_RUN_DIR)
 
@@ -533,6 +560,7 @@ class TestCleanBackendCoverage:
         assert _parts_left(parts_dir, ".coverage*") == [], "--cov-clean-backend left loose coverage parts at the top of parts/"
         assert _parts_left(parts_dir, "run-*") == [], "--cov-clean-backend left a run directory in parts/"
         assert junit.is_file(), "junit.w0.xml is not coverage data: --cov-clean-backend must leave it"
+        assert not stale_server.exists(), "--cov-clean-backend left an earlier server's part in parts/server/"
 
 
 class TestEmptyFinishedParts:
@@ -589,14 +617,71 @@ class TestEmptyFinishedParts:
         monkeypatch.chdir(coverage_sandbox)
         coveragerc = coverage_sandbox / ".coveragerc"
         coveragerc.write_text("[run]\nbranch = true\n", encoding="utf-8")
-        _write_part(coverage_sandbox, SERVER)
-        _write_empty_part(coverage_sandbox, SERVER_EMPTY)
+        server = _server_dir(coverage_sandbox)
+        _write_part(server, SERVER)
+        _write_empty_part(server, SERVER_EMPTY)
 
         _coverage._finalize_coverage(is_front=True, is_all=False)
         captured = capsys.readouterr()
         printed = captured.out + captured.err
 
         assert _measured(coverage_sandbox / ".coverage_data" / "frontend") == {SOURCE[SERVER]}, printed
-        assert _parts_left(coverage_sandbox, ".coverage.*") == [], f"a part was left in the working directory:\n{printed}"
+        assert _parts_left(server, ".coverage.*") == [], f"a part was left in the server's folder:\n{printed}"
         assert coveragerc.is_file(), ".coveragerc was taken for a coverage part"
         assert SERVER_EMPTY in printed, f"the removed part must be named:\n{printed}"
+
+
+class TestServerPartsInTheirOwnFolder:
+    """Contract 8: the server's parts are out of pytest-cov's reach, and each finalizer takes them where they belong."""
+
+    def test_the_server_env_points_coverage_at_its_own_folder(self, coverage_sandbox):
+        """``apply_server_coverage_env`` keeps the spawn-child wiring and names a data file inside
+        ``.coverage_data/parts/server/``, which it creates. Red today: there is no such function."""
+        env = _common.apply_server_coverage_env({"PATH": "/usr/bin"})
+
+        data_file = Path(env["COVERAGE_FILE"])
+        assert data_file.parent == coverage_sandbox / ".coverage_data" / "parts" / "server"
+        assert data_file.parent.is_dir()
+        assert data_file.name == ".coverage", "coverage's own parallel names follow: .coverage.<host>.pid<N>.X<rand>x…"
+        assert env["COVERAGE_PROCESS_START"].endswith(".coveragerc") and env["PATH"] == "/usr/bin"
+
+    def test_every_launcher_of_a_server_under_coverage_uses_the_server_env(self):
+        """The runner's shared backend and both Playwright launchers (whose env reaches Playwright's own webServer) go
+        through ``apply_server_coverage_env``, never the bare subprocess wiring that leaves the parts in the root."""
+        for function in (_server.SharedTestServer.start, _frontend_common._run_playwright_body, _consolidate.run_playwright_group):
+            source = inspect.getsource(function)
+            assert "apply_server_coverage_env(" in source, f"{function.__qualname__} does not use the server env"
+            assert "apply_subprocess_coverage_env(" not in source, f"{function.__qualname__} still leaves its server's parts in the root"
+
+    def test_pytest_covs_session_combine_never_takes_the_servers_parts_and_the_whole_run_sorts_them(self, coverage_sandbox, monkeypatch, capsys):
+        """The C3 run, replayed: the shared backend paused (its part in its folder), then a pytest session ends and
+        pytest-cov runs ``Coverage.combine()`` on its ``.coverage`` (``Central.finish``: load, combine, save). Its own data and
+        its child's part are combined; the server's part is not. The whole run's finalizer then puts the server's part in
+        ``.coverage_data/frontend`` and leaves the backend database the pytest data alone."""
+        monkeypatch.chdir(coverage_sandbox)
+        (coverage_sandbox / ".coveragerc").write_text("[run]\nbranch = true\n", encoding="utf-8")
+        server = _server_dir(coverage_sandbox)
+        _write_part(server, SERVER)
+        _write_part(coverage_sandbox, ".coverage")
+        _write_part(coverage_sandbox, PYTEST_CHILD)
+
+        pytest_cov = coverage.Coverage(data_file=str(coverage_sandbox / ".coverage"), config_file=False)
+        pytest_cov.load()
+        pytest_cov.combine()
+        pytest_cov.save()
+
+        assert (server / SERVER).is_file(), "pytest-cov's combine took the server's part"
+        assert _measured(coverage_sandbox / ".coverage") == {SOURCE[".coverage"], SOURCE[PYTEST_CHILD]}
+
+        data = coverage_sandbox / ".coverage_data"
+        data.mkdir(exist_ok=True)
+        (coverage_sandbox / ".coverage").rename(data / "backend")
+        _write_part(coverage_sandbox, PYTEST_CHILD)  # one more child, finished after its session: pytest's, not the server's
+        finalized = _coverage._finalize_coverage(is_front=False, is_all=True)
+        out = capsys.readouterr().out
+
+        assert _measured(data / "frontend") == {SOURCE[SERVER]}, f"the E2E database is not the server's measure:\n{out}"
+        assert _measured(data / "backend") == {SOURCE[".coverage"], SOURCE[PYTEST_CHILD]}, f"the backend database is not pytest's alone:\n{out}"
+        assert _parts_left(server, ".coverage.*") == [] and _parts_left(coverage_sandbox, ".coverage.*") == []
+        assert finalized.server_parts == 1 and finalized.frontend_saved is True
+        assert finalized.server_pids == frozenset({111})

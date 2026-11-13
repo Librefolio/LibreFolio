@@ -348,9 +348,9 @@ def _run_playwright_body(  # noqa: C901 — flat command/env assembly + error ha
                 _coverage.LEDGER.expect_python("frontend")
                 env["COVERAGE_BACKEND"] = "1"
                 # Playwright merges this env into its webServer (`dev.py server
-                # --coverage`), whose spawn workers then measure themselves —
-                # see _common.apply_subprocess_coverage_env.
-                _common.apply_subprocess_coverage_env(env)
+                # --coverage`), whose spawn workers then measure themselves, all of
+                # them into .coverage_data/parts/server/ — see _common.apply_server_coverage_env.
+                _common.apply_server_coverage_env(env)
             if cov_js:
                 _coverage.LEDGER.expect_e2e_js()
                 env["COVERAGE_JS"] = "1"

@@ -37,7 +37,8 @@ from typing import BinaryIO
 from backend.app.config import TEST_LANE_HEADER
 from scripts.cli_base import ensure_test_lane_id
 
-from ._common import PROJECT_ROOT, Colors, apply_subprocess_coverage_env, get_log_dir, print_error, print_info, print_success, print_warning
+from . import _coverage
+from ._common import PROJECT_ROOT, Colors, apply_server_coverage_env, get_log_dir, print_error, print_info, print_success, print_warning
 
 #: Read by backend/test_scripts/test_server_helper.py — see shared_server_mode().
 SHARED_SERVER_ENV = "LIBREFOLIO_TEST_SHARED_SERVER"
@@ -371,10 +372,10 @@ class SharedTestServer:
         # Under coverage the spawn workers (risk/quant/spawn_worker.py) started
         # by uvicorn need COVERAGE_PROCESS_START + the sitecustomize PYTHONPATH
         # entry to measure themselves; dev.py's coverage branch preserves the
-        # environment across the execvpe chain, and the children's
-        # `.coverage.<host>.<pid>.<rand>` files land in PROJECT_ROOT, where
-        # _finalize_coverage's `.coverage.*` glob collects them.
-        server_env = apply_subprocess_coverage_env(os.environ.copy()) if self.coverage else None
+        # environment across the execvpe chain. The server's and the children's
+        # `.coverage.<host>.<pid>.<rand>` files land in .coverage_data/parts/server/
+        # (COVERAGE_FILE), out of pytest-cov's reach, where _finalize_coverage collects them.
+        server_env = apply_server_coverage_env(os.environ.copy()) if self.coverage else None
         try:
             with self._spawn_output(server_env) as (stdout, stderr, spawn_env), _publish_spawn_ownership():
                 with _block_spawn_signals():
@@ -405,6 +406,9 @@ class SharedTestServer:
                     holders = port_holders(self.port)
                     if (not holders or self._owns_listener(holders)) and self.proc.poll() is None:
                         print_success(f"Shared backend ready on port {self.port}")
+                        if self.coverage:
+                            # The run checks at its end that this start left its part (_coverage.check_coverage_pieces).
+                            _coverage.LEDGER.note_server_start(self.proc.pid, workers=self.workers)
                         return True
                     print_error(f"Port {self.port} became healthy under an unowned PID; " "refusing to attach to another lane")
                     self.stop()
@@ -588,8 +592,10 @@ def database_file_owned_exclusively(reason: str):
     ``./dev.py test all-backend`` could not get past its own database category.
 
     Restarting is cheap and, under coverage, safe: ``stop()`` waits for
-    ``coverage run`` to flush its ``.coverage.<pid>``, and the second process
-    writes its own, which ``coverage combine`` merges. Nothing is discarded.
+    ``coverage run`` to flush its ``.coverage.<pid>`` into the server's own folder
+    (``.coverage_data/parts/server/``), where the pytest sessions that run during
+    the pause cannot combine it, and the second process writes its own beside it.
+    The finalizer combines both. Nothing is discarded or taken elsewhere.
     """
     server = _ACTIVE
     if server is None:

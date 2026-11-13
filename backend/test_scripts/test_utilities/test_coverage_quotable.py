@@ -332,6 +332,8 @@ class TestCompleteness:
         ledger = _coverage.CoverageLedger()
         monkeypatch.setattr(_coverage, "LEDGER", ledger)
         monkeypatch.setattr(_coverage, "PROJECT_ROOT", tmp_path)
+        # The launchers' server env creates the server's folder (_common.apply_server_coverage_env): here, never in the repository
+        monkeypatch.setattr(_common, "server_coverage_dir", lambda: tmp_path / ".coverage_data" / "parts" / "server")
         monkeypatch.chdir(tmp_path)
         return SimpleNamespace(root=tmp_path, js=tmp_path / "frontend" / "coverage-js", ledger=ledger)
 
@@ -372,14 +374,40 @@ class TestCompleteness:
 
     def test_a_part_left_uncombined_is_a_red_row(self, run_root: SimpleNamespace) -> None:
         """CC-03 — where the finalizer combines the server's parts (a frontend or a whole run), a ``.coverage.*`` still in the
-        project root is data no report holds: a red row naming how many are left."""
+        project root, or in the server's own folder (``.coverage_data/parts/server/``), is data no report holds: a red row
+        naming how many are left."""
         run_root.ledger.expect_python("frontend")
         _coverage_database(run_root.root / ".coverage_data" / "frontend", 3)
-        _coverage_database(run_root.root / ".coverage.host.4242.XabcdeX.Habcdefghijh", 2)
+        left_in_root = _coverage_database(run_root.root / ".coverage.host.4242.XabcdeX.Habcdefghijh", 2)
 
         for mode in ("frontend", "all"):
             red = [row for row in _coverage.check_coverage_pieces(run_root.ledger, mode) if not row.ok]
             assert len(red) == 1 and ".coverage.*" in red[0].where and "1" in red[0].found, f"mode {mode}: {red}"
+
+        left_in_root.unlink()
+        _coverage_database(run_root.root / ".coverage_data" / "parts" / "server" / ".coverage.host.pid4242.XabcdeX.Habcdefghijh", 2)
+        red = [row for row in _coverage.check_coverage_pieces(run_root.ledger, "all") if not row.ok]
+        assert len(red) == 1 and "parts/server" in red[0].where and "1" in red[0].found, red
+
+    def test_a_server_started_under_coverage_without_its_part_is_a_red_row(self, run_root: SimpleNamespace) -> None:
+        """CC-12 (after the C3 run) — every shared backend the runner started under coverage with one uvicorn worker is noted
+        in the ledger by its pid; the finalizer reports the pids of the parts it found in the server's folder. A start whose
+        pid left no part — its data was taken elsewhere, or lost — is a red row naming it; a start with its part is green.
+        A start with several workers is not checked by pid: its first process is uvicorn's supervisor, which measures nothing."""
+        run_root.ledger.expect_python("frontend")
+        _coverage_database(run_root.root / ".coverage_data" / "frontend", 3)
+        run_root.ledger.note_server_start(111, workers=1)
+        run_root.ledger.note_server_start(222, workers=1)
+        run_root.ledger.note_server_start(333, workers=2)
+
+        finalized = _coverage.PythonFinalized(server_parts=2, frontend_saved=True, server_pids=frozenset({222, 555}))
+        red = [row for row in _coverage.check_coverage_pieces(run_root.ledger, "all", finalized) if not row.ok]
+        assert len(red) == 1 and "111" in red[0].found and "parts/server" in red[0].where, red
+
+        finalized = _coverage.PythonFinalized(server_parts=3, frontend_saved=True, server_pids=frozenset({111, 222}))
+        rows = _coverage.check_coverage_pieces(run_root.ledger, "all", finalized)
+        assert all(row.ok for row in rows), rows
+        assert any("each start" in row.piece for row in rows), "the row is there when it is green too"
 
     def test_a_torn_worker_file_is_a_red_row(self, run_root: SimpleNamespace) -> None:
         """CC-04 — a Playwright run under JS coverage: the worker files must all be readable JSON (one cut short is a red row) and no

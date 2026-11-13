@@ -227,9 +227,9 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
     if coverage and _common._COVERAGE_PY:
         _coverage.LEDGER.expect_python("frontend")
         env["COVERAGE_BACKEND"] = "1"
-        # Same spawn-worker wiring as _frontend_common._run_playwright_body:
+        # Same server wiring as _frontend_common._run_playwright_body:
         # Playwright hands this env to the webServer it launches.
-        _common.apply_subprocess_coverage_env(env)
+        _common.apply_server_coverage_env(env)
     if coverage and _common._COVERAGE_JS:
         _coverage.LEDGER.expect_e2e_js()
         env["COVERAGE_JS"] = "1"

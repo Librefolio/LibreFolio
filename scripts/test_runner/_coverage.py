@@ -62,6 +62,7 @@ class CoverageLedger:
         self.python: set[str] = set()
         self.e2e_js = 0
         self.backend_server = False
+        self.server_pids: list[int] = []
         self._counts: dict[str, int] = {}
 
     def expect_unit(self, label: str) -> str:
@@ -79,6 +80,13 @@ class CoverageLedger:
         """Note the shared backend started under Python coverage by a backend category (``api``, ``e2e``): its parts are folded into
         ``.coverage_data/backend`` by that run's finalizer, so the run expects them folded."""
         self.backend_server = True
+
+    def note_server_start(self, pid: int, *, workers: int) -> None:
+        """Note a shared backend started under Python coverage, by its pid: its part must be in the server's folder at the end
+        (``check_coverage_pieces``). Only a start with one uvicorn worker is noted: with several, the first process is uvicorn's
+        supervisor, which runs no app code and leaves no part of its own."""
+        if workers == 1:
+            self.server_pids.append(pid)
 
     def expect_e2e_js(self) -> None:
         """Note a Playwright run under JS coverage: its workers write ``coverage-js/e2e-raw/worker-*.json``."""
@@ -107,6 +115,16 @@ _FINISHED_PART = re.compile(r"\.H\w{10}h$")
 
 def _js_dir() -> Path:
     return PROJECT_ROOT / "frontend" / JS_COVERAGE_DIR
+
+
+#: The server's folder under a working directory (``_common.server_coverage_dir`` under the project root).
+SERVER_PARTS = Path(".coverage_data") / "parts" / "server"
+_PART_PID = re.compile(r"\.pid(\d+)\.")
+
+
+def _part_pids(parts: list) -> frozenset:
+    """The pids in the names of the parts that hold data (coverage's parallel names: ``….pid<N>.X<rand>x…``)."""
+    return frozenset(int(match.group(1)) for part in parts if not _holds_no_data(part) and (match := _PART_PID.search(part.name)))
 
 
 def _coverage_parts(directory: Path) -> list:
@@ -158,7 +176,8 @@ def _drop_empty_parts(parts: list) -> list:
 
 
 def clean_coverage_parts(parts_dir: Path) -> int:
-    """Remove the worker coverage left in ``parts_dir`` by earlier runs: loose ``.coverage*`` files and ``run-*`` directories.
+    """Remove the worker coverage left in ``parts_dir`` by earlier runs: loose ``.coverage*`` files, ``run-*`` directories and
+    the parts in ``server/``.
 
     A clean backend measure must not inherit the parts of a run whose combine failed.
     The junit reports beside them are not coverage data, and the parallel pass rewrites them.
@@ -173,6 +192,11 @@ def clean_coverage_parts(parts_dir: Path) -> int:
         elif entry.is_file() and entry.name.startswith(".coverage"):
             entry.unlink(missing_ok=True)
             removed += 1
+        elif entry.is_dir() and entry.name == "server":
+            # An earlier run's server parts: this run's servers write here too
+            for part in sorted(entry.glob(".coverage*")):
+                part.unlink(missing_ok=True)
+                removed += 1
     if removed:
         print(f"{Colors.GREEN}🗑️  Removed {removed} leftover worker coverage item(s) — loose parts and run-* directories — from .coverage_data/parts/{Colors.NC}")
     return removed
@@ -350,14 +374,16 @@ def _finalize_js_coverage() -> None:
 
 
 class PythonFinalized(NamedTuple):
-    """What ``_finalize_coverage`` did with the E2E server's data in this run: how many parts it found in the project root, and
-    whether it saved the combined data into ``.coverage_data/frontend``; for one backend category, whether it folded them into
-    the pytest data it saved in ``.coverage_data/backend`` (``backend_folded``). The databases accumulate across runs, so
-    their rows alone do not say that this run's server wrote anything."""
+    """What ``_finalize_coverage`` did with the server's data in this run: how many parts it found in the server's folder
+    (``.coverage_data/parts/server/``), and whether it saved the combined data into ``.coverage_data/frontend``; for one
+    backend category, whether it folded them into the pytest data it saved in ``.coverage_data/backend`` (``backend_folded``);
+    the pids of the parts that held data (``server_pids``), which every start the ledger noted must be among. The databases
+    accumulate across runs, so their rows alone do not say that this run's server wrote anything."""
 
     server_parts: int
     frontend_saved: bool
     backend_folded: bool = False
+    server_pids: frozenset = frozenset()
 
 
 def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa: C901 — TODO(P2-refactor): mode matrix × combine/html pipeline, nested error handling
@@ -374,6 +400,19 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa
         archive_path(db_path, target_dir=data_dir, label=label)
 
     server_parts, frontend_saved, backend_folded = 0, False, False
+    # The server's parts live in their own folder, out of pytest-cov's reach (_common.apply_server_coverage_env); the parts in
+    # the working directory are pytest's own children that finished after their session.
+    server_dir = cwd / SERVER_PARTS
+    server_found = _coverage_parts(server_dir)
+    server_pids = _part_pids(server_found)
+
+    def _say_not_combined(combined: bool, leftovers: list, detail: str) -> None:
+        if combined:
+            return
+        if detail:
+            print_warning(f"   coverage combine: {detail}")
+        if leftovers:
+            print_warning(f"   {len(leftovers)} data file(s) not combined: {', '.join(f.name for f in leftovers)}")
 
     if is_front or is_all:
         if main_cov.exists():
@@ -381,18 +420,32 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa
                 shutil.copy2(str(main_cov), str(backend_db))
             main_cov.unlink()
 
-        pid_files = _coverage_parts(cwd)
-        server_parts = len(pid_files)
+        root_parts = _coverage_parts(cwd)
+        if is_all and root_parts:
+            # A whole run: pytest's late children belong to the pytest data, never to the server's
+            print(f"{Colors.YELLOW}📊 Folding {len(root_parts)} part(s) of pytest's children into the backend coverage...{Colors.NC}")
+            if backend_db.exists():
+                shutil.copy2(str(backend_db), str(main_cov))
+            _say_not_combined(*combine_coverage_dir(cwd, cwd=cwd, append=backend_db.exists()))
+            if main_cov.exists():
+                _archive_db(backend_db, "backend")
+                shutil.copy2(str(main_cov), str(backend_db))
+                main_cov.unlink()
+            root_parts = []
+
+        pid_files = server_found + root_parts
+        server_parts = len(server_found)
 
         print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
         if pid_files:
             print(f"   Found {len(pid_files)} coverage data file(s): " f"{', '.join(f.name for f in pid_files[:5])}" f"{'...' if len(pid_files) > 5 else ''}")
-            combined, leftovers, detail = combine_coverage_dir(cwd, cwd=cwd, append=False)
-            if not combined:
-                if detail:
-                    print_warning(f"   coverage combine: {detail}")
-                if leftovers:
-                    print_warning(f"   {len(leftovers)} data file(s) not combined: {', '.join(f.name for f in leftovers)}")
+            appended = False
+            if server_found:
+                _say_not_combined(*combine_coverage_dir(server_dir, cwd=cwd, append=False))
+                appended = main_cov.exists()
+            if root_parts:
+                # A frontend run: a part in the root came from a process of this run's E2E, as before
+                _say_not_combined(*combine_coverage_dir(cwd, cwd=cwd, append=appended))
 
             if main_cov.exists():
                 _archive_db(frontend_db, "frontend")
@@ -440,16 +493,21 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa
         # One backend category. The shared backend of `api` and `e2e` writes its parts into the working directory; they are
         # folded into the pytest data (`.coverage`, appended to) before it is saved, so this run's database holds them. They
         # used to wait there for the next run's pytest-cov, one run late and into whichever database that run saved.
-        parts = _coverage_parts(cwd)
-        server_parts = len(parts)
-        if parts:
-            print(f"{Colors.YELLOW}📊 Folding {len(parts)} shared-backend part(s) into the backend coverage...{Colors.NC}")
-            folded, leftovers, detail = combine_coverage_dir(cwd, cwd=cwd, append=True)
+        server_parts = len(server_found)
+        root_parts = _coverage_parts(cwd)
+        if server_found or root_parts:
+            print(f"{Colors.YELLOW}📊 Folding {len(server_found)} shared-backend part(s) and {len(root_parts)} other part(s) into the backend coverage...{Colors.NC}")
+            folded = True
+            for directory, parts in ((cwd, root_parts), (server_dir, server_found)):
+                if not parts:
+                    continue
+                combined, leftovers, detail = combine_coverage_dir(directory, cwd=cwd, append=True)
+                folded = folded and combined
+                if detail:
+                    print_warning(f"   coverage combine: {detail}")
+                if leftovers:
+                    print_warning(f"   {len(leftovers)} data file(s) not combined: {', '.join(f.name for f in leftovers)}")
             backend_folded = folded
-            if detail:
-                print_warning(f"   coverage combine: {detail}")
-            if leftovers:
-                print_warning(f"   {len(leftovers)} data file(s) not combined: {', '.join(f.name for f in leftovers)}")
         if main_cov.exists():
             _archive_db(backend_db, "backend")
             shutil.copy2(str(main_cov), str(backend_db))
@@ -481,7 +539,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa
         print("└─▶ $ ./dev.py test coverage show combined   # merge backend + frontend")
     print()
 
-    return PythonFinalized(server_parts, frontend_saved, backend_folded)
+    return PythonFinalized(server_parts, frontend_saved, backend_folded, server_pids)
 
 
 class PieceRow(NamedTuple):
@@ -514,7 +572,9 @@ def check_coverage_pieces(ledger: CoverageLedger, mode: str, finalized: PythonFi
 
     - every ``.coverage_data/<database>`` a launch noted holds at least one measured file (the ``file`` table, read-only);
     - where the finalizer combines the server's parts (``mode`` ``frontend`` or ``all``), no ``.coverage.*`` is left in the
-      project root: a part left there is data no report holds;
+      project root nor in the server's folder (``.coverage_data/parts/server/``): a part left there is data no report holds;
+    - every shared backend the runner started under coverage (the ledger's pids) left a part with data in the server's folder:
+      one taken elsewhere — by pytest-cov's combine, as in the C3 run of 13/11/2026 — or lost is a red row naming its pid;
     - every Vitest directory of the ledger holds a ``coverage-final.json`` with at least one file;
     - after a Playwright run under JS coverage, at least one worker file, every one readable whole, and no ``*.tmp`` left;
     - the JS reports of what ran: ``unit-combined`` for Vitest, ``e2e`` for Playwright, ``combined`` for both.
@@ -546,6 +606,14 @@ def check_coverage_pieces(ledger: CoverageLedger, mode: str, finalized: PythonFi
         left = _coverage_parts(root)
         found = f"{len(left)} left" + (f": {_named(left)}" if left else "")
         rows.append(PieceRow("server parts", ".coverage.* (project root)", "none left after the combine", found, not left))
+        left = _coverage_parts(root / SERVER_PARTS)
+        found = f"{len(left)} left" + (f": {_named(left)}" if left else "")
+        rows.append(PieceRow("server parts", f".coverage.* ({SERVER_PARTS.as_posix()})", "none left after the combine", found, not left))
+
+    if ledger.server_pids and finalized is not None:
+        missing = [pid for pid in ledger.server_pids if pid not in finalized.server_pids]
+        found = f"{len(ledger.server_pids) - len(missing)} of {len(ledger.server_pids)}" + (f", no part from pid {', '.join(map(str, missing))}" if missing else "")
+        rows.append(PieceRow("server data, each start", f"{SERVER_PARTS.as_posix()}/", "a part from every shared backend started", found, not missing))
 
     for directory in ledger.units:
         path = root / "frontend" / directory / "coverage-final.json"
@@ -876,7 +944,7 @@ def _coverage_combine_internal(html_dir: str = "htmlcov", title: str = "LibreFol
             combine_files.append(str(frontend_cov))
         print(f"   Using saved snapshots: {', '.join(f.name for f in [backend_cov, frontend_cov] if f.exists())}")
     else:
-        combine_files = [str(f) for f in _coverage_parts(cwd)]
+        combine_files = [str(f) for f in _coverage_parts(cwd) + _coverage_parts(cwd / SERVER_PARTS)]
         if combine_files:
             print(f"   Using {len(combine_files)} parallel data file(s)")
 
