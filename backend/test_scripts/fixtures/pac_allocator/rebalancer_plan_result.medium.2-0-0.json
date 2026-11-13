@@ -93,7 +93,7 @@
       "funding_routes": 2,
       "capabilities": 3,
       "fx_rates": 1,
-      "order_routes": 9,
+      "order_routes": 7,
       "provenance": 3
     },
     "current_invested": {
@@ -130,6 +130,17 @@
         "value": "200"
       },
       "currency": "EUR"
+    },
+    "target_fidelity": {
+      "kind": "level",
+      "level": "balanced"
+    },
+    "initial_wealth": {
+      "value": {
+        "kind": "finite_decimal",
+        "value": "200"
+      },
+      "currency": "EUR"
     }
   },
   "proof": {
@@ -142,18 +153,18 @@
     "stages": [
       {
         "kind": "reported_floating",
-        "stage": "fixed_l2",
-        "objective_code": "fixed_l2",
+        "stage": "plan_score",
+        "objective_code": "plan_score",
         "ordinal": 1,
         "status": "finished",
         "scope": "global",
         "sense": "min",
         "unit": {
-          "kind": "valuation_money_squared",
+          "kind": "valuation_money",
           "currency_code": "EUR"
         },
-        "primal": "0",
-        "dual": "0",
+        "primal": "2.271949",
+        "dual": "2.271949",
         "absolute_gap": "0",
         "relative_gap": "0",
         "tolerances": {
@@ -173,110 +184,47 @@
       },
       {
         "kind": "reported_floating",
-        "stage": "shortfall",
-        "objective_code": "shortfall",
+        "stage": "operation_count",
+        "objective_code": "operation_count",
         "ordinal": 2,
         "status": "finished",
-        "scope": "incumbent_face",
-        "sense": "min",
-        "unit": {
-          "kind": "valuation_money",
-          "currency_code": "EUR"
-        },
-        "primal": "0",
-        "dual": "0",
-        "absolute_gap": "0",
-        "relative_gap": "0",
-        "tolerances": {
-          "feasibility": "0.000001",
-          "integrality": "0.000000001",
-          "absolute_gap": "0",
-          "relative_gap": "0"
-        },
-        "engine": "SCIP",
-        "version": "10.0",
-        "settings": [
-          {
-            "name": "time_budget",
-            "value": "30"
-          }
-        ]
-      },
-      {
-        "kind": "reported_floating",
-        "stage": "wealth_loss",
-        "objective_code": "wealth_loss",
-        "ordinal": 3,
-        "status": "finished",
-        "scope": "incumbent_face",
-        "sense": "min",
-        "unit": {
-          "kind": "valuation_money",
-          "currency_code": "EUR"
-        },
-        "primal": "110",
-        "dual": "110",
-        "absolute_gap": "0",
-        "relative_gap": "0",
-        "tolerances": {
-          "feasibility": "0.000001",
-          "integrality": "0.000000001",
-          "absolute_gap": "0",
-          "relative_gap": "0"
-        },
-        "engine": "SCIP",
-        "version": "10.0",
-        "settings": [
-          {
-            "name": "time_budget",
-            "value": "30"
-          }
-        ]
-      },
-      {
-        "kind": "reported_floating",
-        "stage": "explicit_cost",
-        "objective_code": "explicit_cost",
-        "ordinal": 4,
-        "status": "finished",
-        "scope": "incumbent_face",
-        "sense": "min",
-        "unit": {
-          "kind": "valuation_money",
-          "currency_code": "EUR"
-        },
-        "primal": "0",
-        "dual": "0",
-        "absolute_gap": "0",
-        "relative_gap": "0",
-        "tolerances": {
-          "feasibility": "0.000001",
-          "integrality": "0.000000001",
-          "absolute_gap": "0",
-          "relative_gap": "0"
-        },
-        "engine": "SCIP",
-        "version": "10.0",
-        "settings": [
-          {
-            "name": "time_budget",
-            "value": "30"
-          }
-        ]
-      },
-      {
-        "kind": "reported_floating",
-        "stage": "active_order_rows",
-        "objective_code": "active_order_rows",
-        "ordinal": 5,
-        "status": "finished",
-        "scope": "incumbent_face",
+        "scope": "global",
         "sense": "min",
         "unit": {
           "kind": "count"
         },
-        "primal": "4",
-        "dual": "4",
+        "primal": "7",
+        "dual": "7",
+        "absolute_gap": "0",
+        "relative_gap": "0",
+        "tolerances": {
+          "feasibility": "0.000001",
+          "integrality": "0.000000001",
+          "absolute_gap": "0",
+          "relative_gap": "0"
+        },
+        "engine": "SCIP",
+        "version": "10.0",
+        "settings": [
+          {
+            "name": "time_budget",
+            "value": "30"
+          }
+        ]
+      },
+      {
+        "kind": "reported_floating",
+        "stage": "route_priority",
+        "objective_code": "route_priority",
+        "ordinal": 3,
+        "status": "finished",
+        "scope": "global",
+        "sense": "min",
+        "unit": {
+          "kind": "ordinal_penalty"
+        },
+        "primal": "3",
+        "dual": "3",
         "absolute_gap": "0",
         "relative_gap": "0",
         "tolerances": {
@@ -311,6 +259,10 @@
           },
           "currency": "EUR"
         },
+        "before_weight": {
+          "kind": "finite_decimal",
+          "value": "0.4"
+        },
         "target_weight": {
           "kind": "finite_decimal",
           "value": "0.25"
@@ -329,30 +281,16 @@
           },
           "currency": "EUR"
         },
+        "final_weight": {
+          "kind": "finite_decimal",
+          "value": "0.25"
+        },
         "residual": {
           "value": {
             "kind": "finite_decimal",
             "value": "0"
           },
           "currency": "EUR"
-        },
-        "before_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "8",
-            "denominator": "15",
-            "display_decimal": "0.533333",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "final_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "finite_decimal",
-            "value": "0.25"
-          }
         },
         "buy_mid_value": {
           "value": {
@@ -367,7 +305,9 @@
             "value": "30"
           },
           "currency": "EUR"
-        }
+        },
+        "minimum": null,
+        "maximum": null
       },
       {
         "asset_id": "asset-b",
@@ -378,6 +318,10 @@
           },
           "currency": "EUR"
         },
+        "before_weight": {
+          "kind": "finite_decimal",
+          "value": "0.1"
+        },
         "target_weight": {
           "kind": "finite_decimal",
           "value": "0.25"
@@ -396,30 +340,16 @@
           },
           "currency": "EUR"
         },
+        "final_weight": {
+          "kind": "finite_decimal",
+          "value": "0.25"
+        },
         "residual": {
           "value": {
             "kind": "finite_decimal",
             "value": "0"
           },
           "currency": "EUR"
-        },
-        "before_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "2",
-            "denominator": "15",
-            "display_decimal": "0.133333",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "final_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "finite_decimal",
-            "value": "0.25"
-          }
         },
         "buy_mid_value": {
           "value": {
@@ -434,7 +364,9 @@
             "value": "0"
           },
           "currency": "EUR"
-        }
+        },
+        "minimum": null,
+        "maximum": null
       },
       {
         "asset_id": "asset-c",
@@ -445,14 +377,18 @@
           },
           "currency": "EUR"
         },
+        "before_weight": {
+          "kind": "finite_decimal",
+          "value": "0.2"
+        },
         "target_weight": {
           "kind": "finite_decimal",
-          "value": "0.25"
+          "value": "0.2"
         },
         "target_value": {
           "value": {
             "kind": "finite_decimal",
-            "value": "50"
+            "value": "40"
           },
           "currency": "EUR"
         },
@@ -463,30 +399,16 @@
           },
           "currency": "EUR"
         },
+        "final_weight": {
+          "kind": "finite_decimal",
+          "value": "0.25"
+        },
         "residual": {
           "value": {
             "kind": "finite_decimal",
-            "value": "0"
+            "value": "10"
           },
           "currency": "EUR"
-        },
-        "before_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "4",
-            "denominator": "15",
-            "display_decimal": "0.266667",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "final_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "finite_decimal",
-            "value": "0.25"
-          }
         },
         "buy_mid_value": {
           "value": {
@@ -501,7 +423,9 @@
             "value": "0"
           },
           "currency": "EUR"
-        }
+        },
+        "minimum": null,
+        "maximum": null
       },
       {
         "asset_id": "asset-d",
@@ -512,6 +436,10 @@
           },
           "currency": "EUR"
         },
+        "before_weight": {
+          "kind": "finite_decimal",
+          "value": "0.05"
+        },
         "target_weight": {
           "kind": "finite_decimal",
           "value": "0.25"
@@ -526,39 +454,25 @@
         "final_value": {
           "value": {
             "kind": "finite_decimal",
-            "value": "50"
+            "value": "45"
           },
           "currency": "EUR"
+        },
+        "final_weight": {
+          "kind": "finite_decimal",
+          "value": "0.225"
         },
         "residual": {
           "value": {
             "kind": "finite_decimal",
-            "value": "0"
+            "value": "-5"
           },
           "currency": "EUR"
-        },
-        "before_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "exact_ratio",
-            "numerator": "1",
-            "denominator": "15",
-            "display_decimal": "0.066667",
-            "display_scale": 6,
-            "display_authority": "non_authoritative"
-          }
-        },
-        "final_weight": {
-          "kind": "available",
-          "value": {
-            "kind": "finite_decimal",
-            "value": "0.25"
-          }
         },
         "buy_mid_value": {
           "value": {
             "kind": "finite_decimal",
-            "value": "40"
+            "value": "35"
           },
           "currency": "EUR"
         },
@@ -568,39 +482,95 @@
             "value": "0"
           },
           "currency": "EUR"
-        }
+        },
+        "minimum": null,
+        "maximum": null
       }
     ],
+    "cash_rows": [
+      {
+        "broker_id": "broker-alpha",
+        "currency": "EUR",
+        "before_value": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "before_weight": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "target_weight": {
+          "kind": "finite_decimal",
+          "value": "0.05"
+        },
+        "target_value": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "10"
+          },
+          "currency": "EUR"
+        },
+        "final_value": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "3.57"
+          },
+          "currency": "EUR"
+        },
+        "final_weight": {
+          "kind": "finite_decimal",
+          "value": "0.01785"
+        },
+        "residual": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "-6.43"
+          },
+          "currency": "EUR"
+        },
+        "minimum": null,
+        "maximum": null
+      }
+    ],
+    "uninvested_row": {
+      "before_value": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "50"
+        },
+        "currency": "EUR"
+      },
+      "before_weight": {
+        "kind": "finite_decimal",
+        "value": "0.25"
+      },
+      "final_value": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "1.43"
+        },
+        "currency": "EUR"
+      },
+      "final_weight": {
+        "kind": "finite_decimal",
+        "value": "0.00715"
+      }
+    },
     "funding_actions": [
       {
         "action_id": "funding-action-alpha",
         "sequence": 1,
-        "funding_route_id": "fund-contribution-alpha",
+        "funding_route_id": "deposit:16:contribution-eur12:broker-alpha",
         "source": {
           "kind": "contribution",
           "contribution_id": "contribution-eur"
         },
         "destination_broker_id": "broker-alpha",
         "amount": {
-          "amount": "10",
-          "currency": "EUR"
-        },
-        "reason_code": "allocation.fund_declared_orders",
-        "provenance_ids": [
-          "prov-manual"
-        ]
-      },
-      {
-        "action_id": "funding-action-beta",
-        "sequence": 2,
-        "funding_route_id": "fund-contribution-beta",
-        "source": {
-          "kind": "contribution",
-          "contribution_id": "contribution-eur"
-        },
-        "destination_broker_id": "broker-beta",
-        "amount": {
-          "amount": "40",
+          "amount": "50",
           "currency": "EUR"
         },
         "reason_code": "allocation.fund_declared_orders",
@@ -650,6 +620,18 @@
           "prov-manual",
           "prov-market"
         ]
+      }
+    ],
+    "transfers": [
+      {
+        "transfer_id": "transfer-alpha-beta-eur",
+        "sequence": 2,
+        "source_broker_id": "broker-alpha",
+        "destination_broker_id": "broker-beta",
+        "amount": {
+          "amount": "40",
+          "currency": "EUR"
+        }
       }
     ],
     "order_rows": [
@@ -724,26 +706,35 @@
           "currency": "EUR"
         },
         "cost_basis": {
-          "amount": "30",
+          "value": {
+            "kind": "finite_decimal",
+            "value": "24"
+          },
           "currency": "EUR"
         },
-        "taxable_gain": {
+        "realized_gain": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "6"
+          },
+          "currency": "EUR"
+        },
+        "foreign_withholding_tax": {
           "amount": "0",
           "currency": "EUR"
         },
-        "tax_reserve": {
-          "amount": "0",
+        "tax": {
+          "amount": "1.43",
           "currency": "EUR"
         },
-        "withholding_kind": "self_reserved",
-        "spendable_credit": {
-          "amount": "30",
+        "tax_handling": "withheld",
+        "net_credit": {
+          "amount": "28.57",
           "currency": "EUR"
         },
-        "irreducibility_evidence_ref": "sell-proof-order-sell-a-alpha",
+        "reason": "rebalancing",
         "explanation_keys": [
-          "tools.portfolioRebalancer.explanations.inventoryRespected",
-          "tools.portfolioRebalancer.explanations.fundingOnlySell"
+          "tools.portfolioRebalancer.explanations.inventoryRespected"
         ],
         "provenance_ids": [
           "prov-portfolio",
@@ -943,7 +934,7 @@
         "route_id": "route-d-alpha-buy",
         "instruction": {
           "kind": "whole_quantity",
-          "quantity": "8",
+          "quantity": "7",
           "quantity_step": "1",
           "unit": "asset_unit"
         },
@@ -951,7 +942,7 @@
           "kind": "exact",
           "value": {
             "kind": "finite_decimal",
-            "value": "8"
+            "value": "7"
           },
           "unit": "asset_unit"
         },
@@ -985,7 +976,7 @@
         "mid_value": {
           "value": {
             "kind": "finite_decimal",
-            "value": "40"
+            "value": "35"
           },
           "currency": "EUR"
         },
@@ -997,7 +988,7 @@
           "currency": "EUR"
         },
         "cash_debit": {
-          "amount": "40",
+          "amount": "35",
           "currency": "EUR"
         },
         "fee": {
@@ -1017,61 +1008,39 @@
         ]
       }
     ],
-    "sell_irreducibility": [
-      {
-        "evidence_id": "sell-proof-order-sell-a-alpha",
-        "order_id": "order-sell-a-alpha",
-        "checks": [
-          {
-            "kind": "decrement_one_quantum",
-            "result": "closed_no_better_candidate",
-            "closure_kind": "exhaustive_oracle",
-            "blocking_issue_codes": [
-              "portfolio_rebalancer.sell_inventory_exceeded"
-            ]
-          },
-          {
-            "kind": "zero_row",
-            "result": "closed_no_better_candidate",
-            "closure_kind": "exhaustive_oracle",
-            "blocking_issue_codes": [
-              "portfolio_rebalancer.sell_inventory_exceeded"
-            ]
-          }
-        ]
-      }
-    ],
     "ledger_rows": [
       {
         "broker_id": "broker-alpha",
         "currency": "EUR",
         "initial_selected": "0",
-        "funding_in": "10",
+        "funding_in": "50",
         "funding_out": "0",
+        "transfer_in": "0",
+        "transfer_out": "40",
         "fx_debit": "0",
         "fx_credit": "0",
-        "buy_debit": "40",
+        "buy_debit": "35",
         "gross_sell_credit": "30",
         "buy_fees": "0",
         "sell_fees": "0",
-        "broker_withheld_tax": "0",
+        "broker_withheld_tax": "1.43",
+        "foreign_withholding_tax": "0",
         "self_reserved_tax": "0",
         "rounding_delta": {
           "kind": "finite_decimal",
           "value": "0"
         },
-        "final_spendable": "0",
-        "final_physical": "0",
-        "transfer_in": "0",
-        "transfer_out": "0",
-        "foreign_withholding_tax": "0"
+        "final_spendable": "3.57",
+        "final_physical": "3.57"
       },
       {
         "broker_id": "broker-beta",
         "currency": "EUR",
         "initial_selected": "0",
-        "funding_in": "40",
+        "funding_in": "0",
         "funding_out": "0",
+        "transfer_in": "40",
+        "transfer_out": "0",
         "fx_debit": "10",
         "fx_credit": "0",
         "buy_debit": "30",
@@ -1079,16 +1048,14 @@
         "buy_fees": "0",
         "sell_fees": "0",
         "broker_withheld_tax": "0",
+        "foreign_withholding_tax": "0",
         "self_reserved_tax": "0",
         "rounding_delta": {
           "kind": "finite_decimal",
           "value": "0"
         },
         "final_spendable": "0",
-        "final_physical": "0",
-        "transfer_in": "0",
-        "transfer_out": "0",
-        "foreign_withholding_tax": "0"
+        "final_physical": "0"
       },
       {
         "broker_id": "broker-beta",
@@ -1096,25 +1063,26 @@
         "initial_selected": "0",
         "funding_in": "0",
         "funding_out": "0",
+        "transfer_in": "0",
+        "transfer_out": "0",
         "fx_debit": "0",
-        "fx_credit": "12.50",
-        "buy_debit": "12.50",
+        "fx_credit": "12.5",
+        "buy_debit": "12.5",
         "gross_sell_credit": "0",
         "buy_fees": "0",
         "sell_fees": "0",
         "broker_withheld_tax": "0",
+        "foreign_withholding_tax": "0",
         "self_reserved_tax": "0",
         "rounding_delta": {
           "kind": "finite_decimal",
           "value": "0"
         },
         "final_spendable": "0",
-        "final_physical": "0",
-        "transfer_in": "0",
-        "transfer_out": "0",
-        "foreign_withholding_tax": "0"
+        "final_physical": "0"
       }
     ],
+    "rounding_top_ups": [],
     "exposure_rows": [
       {
         "dimension": "asset_type",
@@ -1159,14 +1127,22 @@
           }
         },
         "target_weight": {
-          "kind": "finite_decimal",
-          "value": "0.25"
+          "kind": "exact_ratio",
+          "numerator": "5",
+          "denominator": "19",
+          "display_decimal": "0.263158",
+          "display_scale": 6,
+          "display_authority": "non_authoritative"
         },
         "final_weight": {
           "kind": "available",
           "value": {
-            "kind": "finite_decimal",
-            "value": "0.25"
+            "kind": "exact_ratio",
+            "numerator": "10",
+            "denominator": "39",
+            "display_decimal": "0.25641",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
           }
         },
         "provenance_ids": [
@@ -1189,14 +1165,22 @@
           }
         },
         "target_weight": {
-          "kind": "finite_decimal",
-          "value": "0.25"
+          "kind": "exact_ratio",
+          "numerator": "5",
+          "denominator": "19",
+          "display_decimal": "0.263158",
+          "display_scale": 6,
+          "display_authority": "non_authoritative"
         },
         "final_weight": {
           "kind": "available",
           "value": {
-            "kind": "finite_decimal",
-            "value": "0.25"
+            "kind": "exact_ratio",
+            "numerator": "10",
+            "denominator": "39",
+            "display_decimal": "0.25641",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
           }
         },
         "provenance_ids": [
@@ -1219,14 +1203,22 @@
           }
         },
         "target_weight": {
-          "kind": "finite_decimal",
-          "value": "0.25"
+          "kind": "exact_ratio",
+          "numerator": "4",
+          "denominator": "19",
+          "display_decimal": "0.210526",
+          "display_scale": 6,
+          "display_authority": "non_authoritative"
         },
         "final_weight": {
           "kind": "available",
           "value": {
-            "kind": "finite_decimal",
-            "value": "0.25"
+            "kind": "exact_ratio",
+            "numerator": "10",
+            "denominator": "39",
+            "display_decimal": "0.25641",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
           }
         },
         "provenance_ids": [
@@ -1249,14 +1241,22 @@
           }
         },
         "target_weight": {
-          "kind": "finite_decimal",
-          "value": "0.25"
+          "kind": "exact_ratio",
+          "numerator": "5",
+          "denominator": "19",
+          "display_decimal": "0.263158",
+          "display_scale": 6,
+          "display_authority": "non_authoritative"
         },
         "final_weight": {
           "kind": "available",
           "value": {
-            "kind": "finite_decimal",
-            "value": "0.25"
+            "kind": "exact_ratio",
+            "numerator": "3",
+            "denominator": "13",
+            "display_decimal": "0.230769",
+            "display_scale": 6,
+            "display_authority": "non_authoritative"
           }
         },
         "provenance_ids": [
@@ -1330,21 +1330,21 @@
       "final_invested": {
         "value": {
           "kind": "finite_decimal",
-          "value": "200"
+          "value": "195"
         },
         "currency": "EUR"
       },
       "shortfall": {
         "value": {
           "kind": "finite_decimal",
-          "value": "0"
+          "value": "5"
         },
         "currency": "EUR"
       },
       "free_cash": {
         "value": {
           "kind": "finite_decimal",
-          "value": "0"
+          "value": "3.57"
         },
         "currency": "EUR"
       },
@@ -1358,7 +1358,7 @@
       "economic_losses": {
         "value": {
           "kind": "finite_decimal",
-          "value": "0"
+          "value": "1.43"
         },
         "currency": "EUR"
       },
@@ -1372,7 +1372,7 @@
       "rounding_bound": {
         "value": {
           "kind": "finite_decimal",
-          "value": "0.02"
+          "value": "0.07"
         },
         "currency": "EUR"
       },
@@ -1416,7 +1416,7 @@
       "broker_withheld_tax": {
         "value": {
           "kind": "finite_decimal",
-          "value": "0"
+          "value": "1.43"
         },
         "currency": "EUR"
       },
@@ -1435,70 +1435,260 @@
         "currency": "EUR"
       }
     },
+    "plan_accounts": {
+      "initial_wealth": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "200"
+        },
+        "currency": "EUR"
+      },
+      "final_wealth": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "198.57"
+        },
+        "currency": "EUR"
+      },
+      "money_lost": {
+        "buy_fees": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "sell_fees": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "fx_spread_loss": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "execution_margin_cost": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "broker_withheld_tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "1.43"
+          },
+          "currency": "EUR"
+        },
+        "self_reserved_tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "foreign_withholding_tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "rounding": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        }
+      },
+      "uninvested": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "1.43"
+        },
+        "currency": "EUR"
+      }
+    },
+    "score": {
+      "distance_weight": {
+        "kind": "finite_decimal",
+        "value": "1"
+      },
+      "target_distance": {
+        "kind": "finite_decimal",
+        "value": "168.3898"
+      },
+      "distance_per_wealth": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0.841949"
+        },
+        "currency": "EUR"
+      },
+      "wealth_loss": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "1.43"
+        },
+        "currency": "EUR"
+      },
+      "plan_score": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "2.271949"
+        },
+        "currency": "EUR"
+      },
+      "largest_deviation_before": {
+        "kind": "finite_decimal",
+        "value": "0.2"
+      },
+      "largest_deviation_after": {
+        "kind": "finite_decimal",
+        "value": "0.05"
+      },
+      "tie_breaks": [
+        {
+          "objective_code": "operation_count",
+          "status": "closed"
+        },
+        {
+          "objective_code": "route_priority",
+          "status": "closed"
+        }
+      ]
+    },
+    "tax_basket_rows": [
+      {
+        "scope": {
+          "kind": "broker",
+          "broker_id": "broker-alpha"
+        },
+        "basket_id": "basket-it-other-income",
+        "weighted_gains": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "6"
+          },
+          "currency": "EUR"
+        },
+        "weighted_losses": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "carried_losses_used": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0.5"
+          },
+          "currency": "EUR"
+        },
+        "taxable": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "5.5"
+          },
+          "currency": "EUR"
+        },
+        "tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "1.43"
+          },
+          "currency": "EUR"
+        },
+        "loss_left": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        }
+      }
+    ],
+    "tax_scope_rows": [
+      {
+        "scope": {
+          "kind": "broker",
+          "broker_id": "broker-alpha"
+        },
+        "nets_across_currencies": false
+      }
+    ],
+    "tax_reserves": [],
+    "asset_type_tax_rows": [
+      {
+        "asset_class": "etf",
+        "realized_gain": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "6"
+          },
+          "currency": "EUR"
+        },
+        "realized_loss": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "tax": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "1.43"
+          },
+          "currency": "EUR"
+        }
+      }
+    ],
     "objectives": {
       "stages": [
         {
-          "objective_code": "fixed_l2",
+          "objective_code": "plan_score",
           "ordinal": 1,
           "sense": "min",
           "unit": {
-            "kind": "valuation_money_squared",
+            "kind": "valuation_money",
             "currency_code": "EUR"
           },
           "value": {
             "kind": "finite_decimal",
-            "value": "0"
+            "value": "2.271949"
           }
         },
         {
-          "objective_code": "shortfall",
+          "objective_code": "operation_count",
           "ordinal": 2,
-          "sense": "min",
-          "unit": {
-            "kind": "valuation_money",
-            "currency_code": "EUR"
-          },
-          "value": {
-            "kind": "finite_decimal",
-            "value": "0"
-          }
-        },
-        {
-          "objective_code": "wealth_loss",
-          "ordinal": 3,
-          "sense": "min",
-          "unit": {
-            "kind": "valuation_money",
-            "currency_code": "EUR"
-          },
-          "value": {
-            "kind": "finite_decimal",
-            "value": "110"
-          }
-        },
-        {
-          "objective_code": "explicit_cost",
-          "ordinal": 4,
-          "sense": "min",
-          "unit": {
-            "kind": "valuation_money",
-            "currency_code": "EUR"
-          },
-          "value": {
-            "kind": "finite_decimal",
-            "value": "0"
-          }
-        },
-        {
-          "objective_code": "active_order_rows",
-          "ordinal": 5,
           "sense": "min",
           "unit": {
             "kind": "count"
           },
           "value": {
             "kind": "finite_decimal",
-            "value": "4"
+            "value": "7"
+          }
+        },
+        {
+          "objective_code": "route_priority",
+          "ordinal": 3,
+          "sense": "min",
+          "unit": {
+            "kind": "ordinal_penalty"
+          },
+          "value": {
+            "kind": "finite_decimal",
+            "value": "3"
           }
         }
       ],
@@ -1508,6 +1698,9 @@
           "kind": "canonical_key"
         },
         "ordered_keys": [
+          "funding-action-alpha",
+          "transfer-alpha-beta-eur",
+          "conversion-beta-eur-usd",
           "order-sell-a-alpha",
           "order-buy-b-beta",
           "order-buy-c-beta",

@@ -424,60 +424,7 @@
       "provenance_id": "prov-manual"
     }
   ],
-  "funding_routes": [
-    {
-      "funding_route_id": "fund-contribution-alpha",
-      "source": {
-        "kind": "contribution",
-        "contribution_id": "contribution-eur"
-      },
-      "broker_id": "broker-alpha",
-      "currency": "EUR",
-      "priority": 1,
-      "transfer_cap": {
-        "amount": "10",
-        "currency": "EUR"
-      },
-      "provenance_id": "prov-manual"
-    },
-    {
-      "funding_route_id": "fund-contribution-beta",
-      "source": {
-        "kind": "contribution",
-        "contribution_id": "contribution-eur"
-      },
-      "broker_id": "broker-beta",
-      "currency": "EUR",
-      "priority": 2,
-      "transfer_cap": {
-        "amount": "40",
-        "currency": "EUR"
-      },
-      "provenance_id": "prov-manual"
-    }
-  ],
   "order_routes": [
-    {
-      "route_id": "route-a-alpha-sell",
-      "asset_id": "asset-a",
-      "broker_id": "broker-alpha",
-      "capability_id": "cap-alpha-eur-whole",
-      "side": "sell",
-      "priority": 1,
-      "minimum_if_active": {
-        "kind": "whole_quantity",
-        "quantity": "0",
-        "unit": "asset_unit"
-      },
-      "cap": {
-        "kind": "quantity",
-        "quantity": "3",
-        "unit": "asset_unit"
-      },
-      "execution_margin_rate": "0",
-      "fee_schedule_id": "fee-alpha-eur-sell",
-      "provenance_id": "prov-manual"
-    },
     {
       "route_id": "route-a-alpha-buy",
       "asset_id": "asset-a",
@@ -522,31 +469,6 @@
       },
       "execution_margin_rate": "0",
       "fee_schedule_id": "fee-beta-eur-buy",
-      "provenance_id": "prov-manual"
-    },
-    {
-      "route_id": "route-b-beta-sell",
-      "asset_id": "asset-b",
-      "broker_id": "broker-beta",
-      "capability_id": "cap-beta-eur-money",
-      "side": "sell",
-      "priority": 1,
-      "minimum_if_active": {
-        "kind": "monetary_amount",
-        "amount": {
-          "amount": "5.00",
-          "currency": "EUR"
-        }
-      },
-      "cap": {
-        "kind": "notional",
-        "amount": {
-          "amount": "20.00",
-          "currency": "EUR"
-        }
-      },
-      "execution_margin_rate": "0.01",
-      "fee_schedule_id": "fee-beta-eur-sell",
       "provenance_id": "prov-manual"
     },
     {
@@ -681,7 +603,7 @@
     {
       "kind": "asset",
       "asset_id": "asset-c",
-      "weight": "0.25",
+      "weight": "0.20",
       "minimum": null,
       "maximum": null
     },
@@ -691,18 +613,107 @@
       "weight": "0.25",
       "minimum": null,
       "maximum": null
+    },
+    {
+      "kind": "cash",
+      "broker_id": "broker-alpha",
+      "currency": "EUR",
+      "weight": "0.05",
+      "minimum": null,
+      "maximum": null
     }
   ],
-  "policy": "invest_and_sell",
-  "sell_context": {
+  "policy": "invest_only",
+  "target_fidelity": {
+    "kind": "level",
+    "level": "balanced"
+  },
+  "tax": {
+    "baskets": [
+      {
+        "basket_id": "basket-it-other-income",
+        "name": "Redditi diversi",
+        "reference_rate": "0.26"
+      }
+    ],
+    "assets": [
+      {
+        "asset_id": "asset-a",
+        "gain_basket_id": "basket-it-other-income",
+        "loss_basket_id": "basket-it-other-income",
+        "tax_rate": "0.26",
+        "foreign_withholding_rate": "0",
+        "provenance_id": "prov-manual"
+      },
+      {
+        "asset_id": "asset-b",
+        "gain_basket_id": "basket-it-other-income",
+        "loss_basket_id": "basket-it-other-income",
+        "tax_rate": "0.26",
+        "foreign_withholding_rate": "0",
+        "provenance_id": "prov-manual"
+      },
+      {
+        "asset_id": "asset-c",
+        "gain_basket_id": "basket-it-other-income",
+        "loss_basket_id": "basket-it-other-income",
+        "tax_rate": "0.26",
+        "foreign_withholding_rate": "0.15",
+        "provenance_id": "prov-manual"
+      },
+      {
+        "asset_id": "asset-d",
+        "gain_basket_id": "basket-it-other-income",
+        "loss_basket_id": "basket-it-other-income",
+        "tax_rate": "0.26",
+        "foreign_withholding_rate": "0",
+        "provenance_id": "prov-manual"
+      }
+    ],
+    "brokers": [
+      {
+        "broker_id": "broker-alpha",
+        "tax_regime": "administered",
+        "provenance_id": "prov-manual"
+      },
+      {
+        "broker_id": "broker-beta",
+        "tax_regime": "declarative",
+        "provenance_id": "prov-manual"
+      }
+    ],
+    "carried_losses": [
+      {
+        "scope": {
+          "kind": "broker",
+          "broker_id": "broker-alpha"
+        },
+        "basket_id": "basket-it-other-income",
+        "amount": {
+          "amount": "0.50",
+          "currency": "EUR"
+        },
+        "provenance_id": "prov-manual"
+      },
+      {
+        "scope": {
+          "kind": "declared"
+        },
+        "basket_id": "basket-it-other-income",
+        "amount": {
+          "amount": "30",
+          "currency": "EUR"
+        },
+        "provenance_id": "prov-manual"
+      }
+    ],
     "cost_bases": [
       {
         "holding_id": "holding-a-alpha",
         "average_unit_cost": {
-          "amount": "10",
+          "amount": "8",
           "currency": "EUR"
         },
-        "reference_date": "2026-09-15",
         "provenance_id": "prov-portfolio"
       },
       {
@@ -711,7 +722,6 @@
           "amount": "20",
           "currency": "EUR"
         },
-        "reference_date": "2026-09-15",
         "provenance_id": "prov-portfolio"
       },
       {
@@ -720,7 +730,6 @@
           "amount": "25",
           "currency": "USD"
         },
-        "reference_date": "2026-09-15",
         "provenance_id": "prov-portfolio"
       },
       {
@@ -729,55 +738,6 @@
           "amount": "5",
           "currency": "EUR"
         },
-        "reference_date": "2026-09-15",
-        "provenance_id": "prov-manual"
-      }
-    ],
-    "asset_taxes": [
-      {
-        "asset_id": "asset-a",
-        "tax_rate": "1.25",
-        "fiscal_currency": "EUR",
-        "provenance_id": "prov-manual"
-      },
-      {
-        "asset_id": "asset-b",
-        "tax_rate": "0.26",
-        "fiscal_currency": "EUR",
-        "provenance_id": "prov-manual"
-      },
-      {
-        "asset_id": "asset-c",
-        "tax_rate": "0.26",
-        "fiscal_currency": "USD",
-        "provenance_id": "prov-manual"
-      },
-      {
-        "asset_id": "asset-d",
-        "tax_rate": "0.26",
-        "fiscal_currency": "EUR",
-        "provenance_id": "prov-manual"
-      }
-    ],
-    "broker_withholding": [
-      {
-        "broker_id": "broker-alpha",
-        "withholding_kind": "self_reserved",
-        "carried_loss": {
-          "amount": "0",
-          "currency": "EUR"
-        },
-        "reference_date": "2026-09-15",
-        "provenance_id": "prov-manual"
-      },
-      {
-        "broker_id": "broker-beta",
-        "withholding_kind": "self_reserved",
-        "carried_loss": {
-          "amount": "0",
-          "currency": "EUR"
-        },
-        "reference_date": "2026-09-15",
         "provenance_id": "prov-manual"
       }
     ]

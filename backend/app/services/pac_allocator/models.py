@@ -503,7 +503,9 @@ class ExactTargetFidelity:
             raise ValueError("fidelity kind must be weighted or target_first")
 
 
-BALANCED_FIDELITY = ExactTargetFidelity(kind="weighted", distance_weight=ExactRatio(1))
+# The distance weight λ of each fidelity level (specifica §6.3): the one table the normalizer and the scenario preview read.
+FIDELITY_LEVEL_WEIGHTS: dict[str, ExactRatio] = {"cost_aware": ExactRatio(1, 4), "balanced": ExactRatio(1), "faithful": ExactRatio(4)}
+BALANCED_FIDELITY = ExactTargetFidelity(kind="weighted", distance_weight=FIDELITY_LEVEL_WEIGHTS["balanced"])
 
 
 @dataclass(frozen=True, slots=True)

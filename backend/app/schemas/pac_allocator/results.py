@@ -11,8 +11,8 @@ from backend.app.schemas.pac_allocator.base import AllocationStrictModel, Curren
 from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, OptimalProvenProof, ReadyPlanProof, ReportedFloatingSolverEvidence
 from backend.app.schemas.pac_allocator.exact import ExactMoney, ExactNumberAvailability, available_fraction, exact_fraction, fixed_fraction, money_fraction, validate_weight_availability
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
-from backend.app.schemas.pac_allocator.request import PacPlannerRequest, PlannerProvenance, RebalancerPlannerRequest
-from backend.app.schemas.pac_allocator.rows import PacAssetPlanRow, PacExposurePlanRow, PlannerAccountingSummary, PlannerCatalogs, PlannerScenarioBasis, PlannerSellOrderRow, RebalancerAssetPlanRow, RebalancerExposurePlanRow
+from backend.app.schemas.pac_allocator.request import PacPlannerRequest, PlannerProvenance, RebalancerFidelityInput, RebalancerPlannerRequest
+from backend.app.schemas.pac_allocator.rows import PacAssetPlanRow, PacExposurePlanRow, PlannerAccountingSummary, PlannerCatalogs, PlannerScenarioBasis, PlannerSellOrderRow, RebalancerAssetPlanRow, RebalancerCashItemRow, RebalancerExposurePlanRow
 from backend.app.schemas.pac_allocator.solutions import DeploymentCoincident, DeploymentUnavailable, PacDistinctDeployment, PacIncumbentSolution, PacNoOpSolution, PacPlanSolution, RebalancerDistinctDeployment, RebalancerIncumbentSolution, RebalancerNoOpSolution, RebalancerPlanSolution
 
 
@@ -88,24 +88,17 @@ def _validate_accounting_summary(accounting: PlannerAccountingSummary, *, top_up
         raise ValueError("Published accounting identity delta must be zero")
 
 
-def _validate_asset_row(row: PacAssetPlanRow | RebalancerAssetPlanRow) -> None:
-    nonnegative_values = [row.target_value, row.final_value, row.buy_mid_value]
-    if isinstance(row, RebalancerAssetPlanRow):
-        nonnegative_values.extend([row.before_value, row.sell_mid_value])
-    if any(money_fraction(value) < 0 for value in nonnegative_values):
-        raise ValueError("Asset before, target, final, BUY, and SELL values cannot be negative")
+def _validate_asset_row(row: PacAssetPlanRow) -> None:
+    if any(money_fraction(value) < 0 for value in (row.target_value, row.final_value, row.buy_mid_value)):
+        raise ValueError("Asset target, final, and BUY values cannot be negative")
     if money_fraction(row.residual) != money_fraction(row.final_value) - money_fraction(row.target_value):
         raise ValueError("Asset residual must equal final minus target value")
-    if isinstance(row, RebalancerAssetPlanRow):
-        expected_final = money_fraction(row.before_value) + money_fraction(row.buy_mid_value) - money_fraction(row.sell_mid_value)
-    else:
-        expected_final = money_fraction(row.buy_mid_value)
-    if money_fraction(row.final_value) != expected_final:
+    if money_fraction(row.final_value) != money_fraction(row.buy_mid_value):
         raise ValueError("Asset final value must reconcile before, BUY, and SELL values")
 
 
 def _validate_target_weight_identities(
-    rows: list[PacAssetPlanRow] | list[RebalancerAssetPlanRow],
+    rows: list[PacAssetPlanRow],
     fixed_reference: Fraction,
 ) -> None:
     weights = [exact_fraction(row.target_weight) for row in rows]
@@ -132,6 +125,9 @@ def _validate_available_weight_identities(
 
 
 def _validate_asset_projection(solution: PacPlanSolution | RebalancerPlanSolution) -> None:
+    if isinstance(solution, RebalancerPlanSolution):
+        _validate_rebalancer_items(solution)
+        return
     accounting = solution.accounting
     fixed_reference = money_fraction(accounting.fixed_reference)
     current_invested = money_fraction(accounting.current_invested)
@@ -142,10 +138,7 @@ def _validate_asset_projection(solution: PacPlanSolution | RebalancerPlanSolutio
         raise ValueError("Asset final values must sum to final invested value")
     for row in solution.asset_rows:
         _validate_asset_row(row)
-    if isinstance(solution, RebalancerPlanSolution):
-        if sum((money_fraction(row.before_value) for row in solution.asset_rows), Fraction()) != current_invested:
-            raise ValueError("Rebalancer before values must sum to current invested value")
-    elif current_invested != 0:
+    if current_invested != 0:
         raise ValueError("PAC current invested value must be zero")
     if sum((money_fraction(row.residual) for row in solution.asset_rows), Fraction()) != -money_fraction(accounting.shortfall):
         raise ValueError("Asset residuals must sum to negative shortfall")
@@ -157,14 +150,97 @@ def _validate_asset_projection(solution: PacPlanSolution | RebalancerPlanSolutio
         "zero_final_invested",
         "Final",
     )
-    if isinstance(solution, RebalancerPlanSolution):
-        _validate_available_weight_identities(
-            [row.before_weight for row in solution.asset_rows],
-            [row.before_value for row in solution.asset_rows],
-            current_invested,
-            "zero_current_invested",
-            "Before",
-        )
+
+
+def _validate_rebalancer_item_row(row: RebalancerAssetPlanRow | RebalancerCashItemRow, wealth: Fraction) -> None:
+    """One item, on ``F``: its target is its weight of ``F``, its weights its values over ``F``, its residual final less target."""
+    target_weight = exact_fraction(row.target_weight)
+    if not 0 <= target_weight <= 1:
+        raise ValueError("An item's target weight must be between zero and one")
+    if money_fraction(row.before_value) < 0 or money_fraction(row.target_value) < 0:
+        raise ValueError("An item's before and target values cannot be negative")
+    if target_weight * wealth != money_fraction(row.target_value):
+        raise ValueError("An item's target value must be its target weight of the initial wealth")
+    if exact_fraction(row.before_weight) * wealth != money_fraction(row.before_value) or exact_fraction(row.final_weight) * wealth != money_fraction(row.final_value):
+        raise ValueError("An item's weights must be its values over the initial wealth")
+    if money_fraction(row.residual) != money_fraction(row.final_value) - money_fraction(row.target_value):
+        raise ValueError("An item's residual must equal final minus target value")
+    if isinstance(row, RebalancerAssetPlanRow):
+        if any(money_fraction(value) < 0 for value in (row.final_value, row.buy_mid_value, row.sell_mid_value)):
+            raise ValueError("Asset final, BUY, and SELL values cannot be negative")
+        if money_fraction(row.final_value) != money_fraction(row.before_value) + money_fraction(row.buy_mid_value) - money_fraction(row.sell_mid_value):
+            raise ValueError("Asset final value must reconcile before, BUY, and SELL values")
+
+
+def _largest_deviation(rows: list, weight: str) -> Fraction:
+    return max((abs(exact_fraction(getattr(row, weight)) - exact_fraction(row.target_weight)) for row in rows), default=Fraction())
+
+
+def _validate_rebalancer_items(solution: RebalancerPlanSolution) -> None:
+    """The items of a Rebalancer plan on ``F`` (contract §6.2) and the score read off them (specifica §6).
+
+    The items of the distance are the Asset rows and the cash rows with a target weight; a cash row with only a limit sits
+    inside the uninvested row, as in the exact replay. The items and the uninvested row add up to ``F`` before and after the
+    plan; the target weights of the items sum to one. ``D`` is the sum of the squared residuals of the items plus ``N²``; the
+    largest deviation is read off the same items (X14: the cash rows with a target). Final invested may be zero (contract §3).
+    """
+    accounting = solution.accounting
+    accounts = solution.plan_accounts
+    wealth = money_fraction(accounts.initial_wealth)
+    if wealth <= 0:
+        raise ValueError("A ready Rebalancer plan starts from a positive wealth")
+    if wealth != money_fraction(accounting.current_invested) + money_fraction(accounting.selected_funding):
+        raise ValueError("The initial wealth must equal current invested plus selected funding")
+    for row in [*solution.asset_rows, *solution.cash_rows]:
+        _validate_rebalancer_item_row(row, wealth)
+    items: list[RebalancerAssetPlanRow | RebalancerCashItemRow] = [*solution.asset_rows, *_distance_cash_rows(solution)]
+    if sum((exact_fraction(row.target_weight) for row in items), Fraction()) != 1:
+        raise ValueError("The target weights of the Assets and the cash items must sum to one")
+    if sum((money_fraction(row.before_value) for row in solution.asset_rows), Fraction()) != money_fraction(accounting.current_invested):
+        raise ValueError("Rebalancer before values must sum to current invested value")
+    if sum((money_fraction(row.final_value) for row in solution.asset_rows), Fraction()) != money_fraction(accounting.final_invested):
+        raise ValueError("Asset final values must sum to final invested value")
+    _validate_rebalancer_uninvested(solution, items, wealth)
+    _validate_rebalancer_score(solution, items, wealth)
+
+
+def _distance_cash_rows(solution: RebalancerPlanSolution) -> list[RebalancerCashItemRow]:
+    """The cash rows that are items of the distance: those with a target weight."""
+    return [row for row in solution.cash_rows if exact_fraction(row.target_weight) != 0]
+
+
+def _validate_rebalancer_uninvested(solution: RebalancerPlanSolution, items: list, wealth: Fraction) -> None:
+    """The uninvested row closes the items to ``F`` before and after, and is the plan accounts' ``N``."""
+    accounts = solution.plan_accounts
+    uninvested = solution.uninvested_row
+    for value, weight in ((uninvested.before_value, uninvested.before_weight), (uninvested.final_value, uninvested.final_weight)):
+        if exact_fraction(weight) * wealth != money_fraction(value):
+            raise ValueError("The uninvested weights must be its values over the initial wealth")
+    for field in ("before_value", "final_value"):
+        if sum((money_fraction(getattr(row, field)) for row in items), Fraction()) + money_fraction(getattr(uninvested, field)) != wealth:
+            raise ValueError("The items and the uninvested row must add up to the initial wealth")
+    if money_fraction(uninvested.final_value) != money_fraction(accounts.uninvested):
+        raise ValueError("The uninvested row must match the plan accounts")
+
+
+def _validate_rebalancer_score(solution: RebalancerPlanSolution, items: list, wealth: Fraction) -> None:
+    """``D``, ``D/F``, the money lost, the largest deviations and the published stages, all read off the items."""
+    accounts = solution.plan_accounts
+    uninvested = solution.uninvested_row
+    score = solution.score
+    distance = sum((money_fraction(row.residual) ** 2 for row in items), Fraction()) + money_fraction(uninvested.final_value) ** 2
+    if exact_fraction(score.target_distance) != distance or money_fraction(score.distance_per_wealth) != distance / wealth:
+        raise ValueError("The target distance must be the squared residuals of the items plus the uninvested squared")
+    if money_fraction(score.wealth_loss) != wealth - money_fraction(accounts.final_wealth):
+        raise ValueError("The score's money lost must equal the initial less the final wealth")
+    if (exact_fraction(score.largest_deviation_before), exact_fraction(score.largest_deviation_after)) != (_largest_deviation(items, "before_weight"), _largest_deviation(items, "final_weight")):
+        raise ValueError("The largest deviation must be read off the items' weights")
+    published = {stage.objective_code: exact_fraction(stage.value) for stage in solution.objectives.stages}
+    expected = {"target_distance": distance, "wealth_loss": money_fraction(score.wealth_loss)}
+    if score.plan_score is not None:
+        expected["plan_score"] = money_fraction(score.plan_score)
+    if any(code in published and published[code] != value for code, value in expected.items()):
+        raise ValueError("The published objective stages must match the score")
 
 
 def _validate_exposure_projection(solution: PacPlanSolution | RebalancerPlanSolution) -> None:
@@ -189,13 +265,27 @@ def _validate_exposure_projection(solution: PacPlanSolution | RebalancerPlanSolu
             )
 
 
-def _pac_limit_row_money(solution: PacPlanSolution | RebalancerPlanSolution) -> list:
-    """The amounts of a PAC solution's limit rows (Asset minimum and maximum, cash entry value and limits): all in the valuation currency."""
-    if not isinstance(solution, PacPlanSolution):
-        return []
+def _limit_row_money(solution: PacPlanSolution | RebalancerPlanSolution) -> list:
+    """The amounts of a solution's limit rows (Asset minimum and maximum, cash entry or item values and limits): all in the valuation currency."""
     amounts = [money for row in solution.asset_rows for money in (row.minimum, row.maximum)]
-    amounts += [money for row in solution.cash_rows for money in (row.final_value, row.minimum, row.maximum)]
+    cash_fields = ("final_value", "minimum", "maximum") if isinstance(solution, PacPlanSolution) else ("before_value", "target_value", "final_value", "residual", "minimum", "maximum")
+    amounts += [getattr(row, name) for row in solution.cash_rows for name in cash_fields]
     return [money for money in amounts if money is not None]
+
+
+def _rebalancer_valuation_money(solution: PacPlanSolution | RebalancerPlanSolution) -> list:
+    """The Rebalancer's amounts in the valuation currency: the uninvested row, the plan accounts, the score, the cost basis
+    and gain of every sale, the tax parts."""
+    if not isinstance(solution, RebalancerPlanSolution):
+        return []
+    accounts = solution.plan_accounts
+    amounts = [solution.uninvested_row.before_value, solution.uninvested_row.final_value, accounts.initial_wealth, accounts.final_wealth, accounts.uninvested]
+    amounts += [getattr(accounts.money_lost, name) for name in type(accounts.money_lost).model_fields]
+    amounts += [solution.score.distance_per_wealth, solution.score.wealth_loss, *([solution.score.plan_score] if solution.score.plan_score is not None else [])]
+    amounts += [money for row in solution.order_rows if isinstance(row, PlannerSellOrderRow) for money in (row.cost_basis, row.realized_gain)]
+    amounts += [getattr(row, name) for row in solution.tax_basket_rows for name in ("weighted_gains", "weighted_losses", "carried_losses_used", "taxable", "tax", "loss_left")]
+    amounts += [getattr(row, name) for row in solution.asset_type_tax_rows for name in ("realized_gain", "realized_loss", "tax")]
+    return amounts
 
 
 def _validate_solution_financials(
@@ -211,20 +301,20 @@ def _validate_solution_financials(
         if isinstance(row, RebalancerAssetPlanRow):
             fields = ("before_value", *fields, "sell_mid_value")
         valuation_money.extend(getattr(row, name) for name in fields)
-    valuation_money.extend(_pac_limit_row_money(solution))
+    valuation_money.extend(_limit_row_money(solution))
     valuation_money.extend(row.spread_loss for row in solution.conversions)
     valuation_money.extend(row.execution_margin_cost for row in solution.order_rows)
-    top_ups = solution.rounding_top_ups if isinstance(solution, PacPlanSolution) else []
+    valuation_money.extend(_rebalancer_valuation_money(solution))
+    top_ups = solution.rounding_top_ups
     valuation_money.extend(row.valuation_amount for row in top_ups)
     if any(money.currency != valuation_currency for money in valuation_money):
         raise ValueError("Asset, accounting, and cost projections must use the valuation currency")
     if any(row.currency == valuation_currency and money_fraction(row.valuation_amount) != fixed_fraction(row.amount) for row in top_ups):
-        raise ValueError("A PAC rounding top-up in the valuation currency must be valued at its own amount")
+        raise ValueError("A rounding top-up in the valuation currency must be valued at its own amount")
     if any(exact_fraction(getattr(solution.costs, name).value) < 0 for name in type(solution.costs).model_fields):
         raise ValueError("Cost totals cannot be negative")
+    # Final invested may be zero in the Rebalancer too (contract §3): a plan may end fully in cash.
     _validate_accounting_summary(solution.accounting, top_up_value=sum((money_fraction(row.valuation_amount) for row in top_ups), Fraction()))
-    if isinstance(solution, RebalancerPlanSolution) and money_fraction(solution.accounting.final_invested) <= 0:
-        raise ValueError("Ready Rebalancer solutions require positive final invested value")
     _validate_asset_projection(solution)
     _validate_exposure_projection(solution)
     if any(stage.unit.kind in {"valuation_money", "valuation_money_squared"} and stage.unit.currency_code != valuation_currency for stage in solution.objectives.stages):
@@ -233,16 +323,23 @@ def _validate_solution_financials(
         raise ValueError("The shortfall objective must equal the authoritative accounting shortfall")
 
 
-def _validate_pac_top_up_minor_units(
+def _validate_top_up_minor_units(
     catalogs: PlannerCatalogs,
     solution: PacPlanSolution | RebalancerPlanSolution,
 ) -> None:
     """``amount <= rounded_postings x minor unit``: the one top-up bound that needs the catalogue."""
-    if not isinstance(solution, PacPlanSolution):
-        return
     minor_units = {row.currency: fixed_fraction(row.minor_unit) for row in catalogs.currencies}
     if any(fixed_fraction(row.amount) > row.rounded_postings * minor_units[row.currency] for row in solution.rounding_top_ups):
-        raise ValueError("A PAC rounding top-up cannot exceed its rounded postings times the currency minor unit")
+        raise ValueError("A rounding top-up cannot exceed its rounded postings times the currency minor unit")
+
+
+def _validate_rebalancer_references(broker_ids: set[str], solution: PacPlanSolution | RebalancerPlanSolution) -> None:
+    if not isinstance(solution, RebalancerPlanSolution):
+        return
+    if any(row.source_broker_id not in broker_ids or row.destination_broker_id not in broker_ids for row in solution.transfers):
+        raise ValueError("Transfer rows must reference catalog Broker IDs")
+    if any(row.broker_id not in broker_ids for row in solution.tax_reserves):
+        raise ValueError("Tax reserve rows must reference catalog Broker IDs")
 
 
 def _validate_ready_solution(
@@ -259,7 +356,7 @@ def _validate_ready_solution(
         raise ValueError("Solution must carry exactly one authoritative row per catalog Asset")
     if any(row.broker_id not in broker_ids or row.currency not in currencies for row in solution.ledger_rows):
         raise ValueError("Ledger rows must reference catalog Broker and currency IDs")
-    if isinstance(solution, PacPlanSolution) and any(row.broker_id not in broker_ids or row.currency not in currencies for row in solution.cash_rows):
+    if any(row.broker_id not in broker_ids or row.currency not in currencies for row in solution.cash_rows):
         raise ValueError("Cash entry rows must reference catalog Broker and currency IDs")
     if any(row.destination_broker_id not in broker_ids for row in solution.funding_actions):
         raise ValueError("Funding rows must reference catalog Broker IDs")
@@ -267,9 +364,10 @@ def _validate_ready_solution(
         raise ValueError("Conversion rows must reference catalog Broker IDs")
     if any(row.asset_id not in asset_ids or row.broker_id not in broker_ids for row in solution.order_rows):
         raise ValueError("Order rows must reference catalog Asset and Broker IDs")
+    _validate_rebalancer_references(broker_ids, solution)
     if not collect_currency_codes(solution.model_dump(mode="python")) <= currencies:
         raise ValueError("Solution rows must reference catalog currencies")
-    _validate_pac_top_up_minor_units(catalogs, solution)
+    _validate_top_up_minor_units(catalogs, solution)
     referenced_provenance = {provenance_id for row in [*solution.funding_actions, *solution.conversions, *solution.order_rows, *solution.exposure_rows] for provenance_id in row.provenance_ids}
     if not referenced_provenance <= provenance_ids:
         raise ValueError("Solution rows must reference top-level provenance IDs")
@@ -297,6 +395,11 @@ def _validate_scenario_basis_financials(
         raise ValueError("PAC scenario current invested value must be zero")
     if product == "Rebalancer" and money_fraction(scenario_basis.current_invested) <= 0:
         raise ValueError("Ready Rebalancer scenarios require positive current invested value")
+    if isinstance(scenario_basis, RebalancerScenarioBasis):
+        if scenario_basis.initial_wealth.currency != scenario_basis.valuation_currency:
+            raise ValueError("Rebalancer initial wealth must use the valuation currency")
+        if money_fraction(scenario_basis.initial_wealth) != money_fraction(scenario_basis.current_invested) + money_fraction(scenario_basis.selected_funding):
+            raise ValueError("Rebalancer initial wealth must equal current invested plus selected funding")
     if exact_fraction(scenario_basis.selected_funding.value) != exact_fraction(scenario_basis.reachable_funding.value) + exact_fraction(scenario_basis.trapped_funding.value):
         raise ValueError(f"{product} selected funding must equal reachable plus trapped funding")
     if exact_fraction(scenario_basis.fixed_reference.value) != exact_fraction(scenario_basis.current_invested.value) + exact_fraction(scenario_basis.reachable_funding.value):
@@ -332,6 +435,8 @@ def _validate_basis_solution(
     for field in ("current_invested", "selected_funding", "reachable_funding", "trapped_funding", "fixed_reference"):
         if getattr(scenario_basis, field) != getattr(accounting, field):
             raise ValueError(f"Scenario basis and solution accounting disagree on {field}")
+    if isinstance(scenario_basis, RebalancerScenarioBasis) and isinstance(solution, RebalancerPlanSolution) and scenario_basis.initial_wealth != solution.plan_accounts.initial_wealth:
+        raise ValueError("Scenario basis and plan accounts disagree on the initial wealth")
 
 
 def _validate_optimal_proof_objectives(
@@ -382,12 +487,11 @@ def _validate_rebalancer_policy_solution(
     policy: str,
     solution: RebalancerPlanSolution,
 ) -> None:
-    if policy != "invest_only":
-        return
-    if any(isinstance(row, PlannerSellOrderRow) for row in solution.order_rows):
+    sells = [row for row in solution.order_rows if isinstance(row, PlannerSellOrderRow)]
+    if policy == "invest_only" and sells:
         raise ValueError("invest_only results cannot contain SELL orders")
-    if solution.sell_irreducibility:
-        raise ValueError("invest_only results cannot contain SELL irreducibility evidence")
+    if not sells and (solution.tax_basket_rows or solution.tax_scope_rows or solution.tax_reserves or solution.asset_type_tax_rows):
+        raise ValueError("A plan that sells nothing publishes empty tax parts")
 
 
 def _validate_solver_units(
@@ -430,7 +534,11 @@ class PacScenarioBasis(PlannerScenarioBasis):
 
 
 class RebalancerScenarioBasis(PlannerScenarioBasis):
+    """The PAC's basis plus what the Rebalancer adds (contract §6.1): the target fidelity of the request and ``F``."""
+
     policy: Literal["invest_only", "invest_and_sell"]
+    target_fidelity: RebalancerFidelityInput
+    initial_wealth: ExactMoney = Field(description="F: the current invested value plus every selected cash and contribution, in the valuation currency; the reference of every weight.")
 
 
 class _PlannerFailureResultBase(AllocationStrictModel):

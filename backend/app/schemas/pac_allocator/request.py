@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Annotated, Literal, Union
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from backend.app.schemas.common import Currency
 from backend.app.schemas.pac_allocator.base import (
@@ -19,6 +19,7 @@ from backend.app.schemas.pac_allocator.base import (
     PlannerId,
     PlannerLabel,
     PlannerMoneyInput,
+    PlannerPositiveDecimal,
     PlannerRef,
     PlannerSafeInteger,
     PlannerTimestamp,
@@ -356,37 +357,112 @@ class PlannerCashTargetInput(AllocationStrictModel):
 type PlannerTargetEntryInput = Annotated[Union[PlannerAssetTargetInput, PlannerCashTargetInput], Field(discriminator="kind")]
 
 
-class PlannerCostBasisInput(AllocationStrictModel):
+# ---------------------------------------------------------------------------
+# The Rebalancer's request, in its final form (contract 2.0.0 §5.4, S1 of project 67)
+# ---------------------------------------------------------------------------
+
+
+class RebalancerLevelFidelityInput(AllocationStrictModel):
+    """A fidelity level: «cost-aware», «balanced» or «faithful». The normalizer maps it to its ``λ`` (specifica §6.3)."""
+
+    kind: Literal["level"]
+    level: Literal["cost_aware", "balanced", "faithful"]
+
+
+class RebalancerCustomFidelityInput(AllocationStrictModel):
+    """A custom fidelity: the distance weight ``λ`` itself, greater than zero. The interface converts the user's figure in money
+    into it (the ``preview`` operation); the plan receives only ``λ``.
+
+    ``lambda`` is a Python keyword, so the field is ``lambda_`` with the wire name as its alias, read and written by it."""
+
+    model_config = AllocationStrictModel.model_config | ConfigDict(serialize_by_alias=True)
+
+    kind: Literal["custom"]
+    lambda_: PlannerPositiveDecimal = Field(alias="lambda", description="The distance weight λ of the score J = λ·D/F + (F − W); greater than zero.")
+
+
+class RebalancerTargetFirstFidelityInput(AllocationStrictModel):
+    """«Target first»: the distance first, then the money lost; no ``λ``."""
+
+    kind: Literal["target_first"]
+
+
+type RebalancerFidelityInput = Annotated[
+    Union[RebalancerLevelFidelityInput, RebalancerCustomFidelityInput, RebalancerTargetFirstFidelityInput],
+    Field(discriminator="kind"),
+]
+
+
+class RebalancerTaxBasketInput(AllocationStrictModel):
+    """A basket of gains and losses that offset each other, with its reference rate. No basket = no offsetting."""
+
+    basket_id: PlannerId
+    name: PlannerLabel
+    reference_rate: PlannerFixedDecimal
+
+
+class RebalancerAssetTaxInput(AllocationStrictModel):
+    """How a sale of one Asset is taxed: the basket its gains and its losses go to (or none), the rate, the foreign withholding
+    on gains. One row per Asset a plan may sell."""
+
+    asset_id: PlannerId
+    gain_basket_id: PlannerId | None = Field(description="The basket a realized gain of this Asset goes to; null = none.")
+    loss_basket_id: PlannerId | None = Field(description="The basket a realized loss of this Asset goes to; null = none.")
+    tax_rate: PlannerFixedDecimal
+    foreign_withholding_rate: PlannerFixedDecimal = Field(default="0", description="Tax a foreign source withholds on a realized gain, before the domestic tax.")
+    provenance_id: PlannerId
+
+
+class RebalancerBrokerTaxInput(AllocationStrictModel):
+    """Who pays the tax of a Broker's sales: ``administered``, the Broker withholds it; ``declarative``, the plan sets it aside.
+    One row per Broker with sale routes; the interface writes the default, ``declarative``."""
+
+    broker_id: PlannerId
+    tax_regime: Literal["administered", "declarative"]
+    provenance_id: PlannerId
+
+
+class RebalancerBrokerLossScopeInput(AllocationStrictModel):
+    kind: Literal["broker"]
+    broker_id: PlannerId
+
+
+class RebalancerDeclaredLossScopeInput(AllocationStrictModel):
+    kind: Literal["declared"]
+
+
+type RebalancerLossScopeInput = Annotated[Union[RebalancerBrokerLossScopeInput, RebalancerDeclaredLossScopeInput], Field(discriminator="kind")]
+
+
+class RebalancerCarriedLossInput(AllocationStrictModel):
+    """Losses carried from earlier years, in one scope (a Broker that withholds, or the declared income) and one basket."""
+
+    scope: RebalancerLossScopeInput
+    basket_id: PlannerId
+    amount: PlannerMoneyInput
+    provenance_id: PlannerId
+
+
+class RebalancerCostBasisInput(AllocationStrictModel):
+    """The average unit cost of one holding, in the valuation currency (the source gives it so)."""
+
     holding_id: PlannerId
     average_unit_cost: PlannerMoneyInput
-    reference_date: ReferenceDate
     provenance_id: PlannerId
 
 
-class PlannerAssetTaxInput(AllocationStrictModel):
-    asset_id: PlannerId
-    tax_rate: PlannerFixedDecimal
-    fiscal_currency: CurrencyCode | None = Field(description="Persisted fiscal currency when known; null is explicit and must produce needs_input rather than target-currency substitution.")
-    provenance_id: PlannerId
+class RebalancerTaxInput(AllocationStrictModel):
+    """The tax facts of the Rebalancer's sales (contract §5.4). Required only with sale routes under «Invest and sell», which
+    the schema admits from C1 on; under «Invest only» it is empty."""
+
+    baskets: list[RebalancerTaxBasketInput] = []
+    assets: list[RebalancerAssetTaxInput] = []
+    brokers: list[RebalancerBrokerTaxInput] = []
+    carried_losses: list[RebalancerCarriedLossInput] = []
+    cost_bases: list[RebalancerCostBasisInput] = []
 
 
-class PlannerBrokerWithholdingInput(AllocationStrictModel):
-    broker_id: PlannerId
-    withholding_kind: Literal["broker_withheld", "self_reserved"]
-    carried_loss: PlannerMoneyInput
-    reference_date: ReferenceDate
-    provenance_id: PlannerId
-
-
-class PlannerSellContextInput(AllocationStrictModel):
-    """Complete explicit SELL facts; missing fiscal, tax, or withholding facts block assembly."""
-
-    cost_bases: list[PlannerCostBasisInput] = []
-    asset_taxes: list[PlannerAssetTaxInput] = []
-    broker_withholding: list[PlannerBrokerWithholdingInput] = []
-
-
-class _PlannerRequestBase(AllocationStrictModel):
+class _PlannerScenarioInputBase(AllocationStrictModel):
     operation: Literal["plan"]
     snapshot: PlannerSnapshotInput
     as_of: ReferenceDate
@@ -401,11 +477,10 @@ class _PlannerRequestBase(AllocationStrictModel):
     brokers: list[PlannerBrokerInput]
     existing_cash: list[PlannerExistingCashInput] = []
     contributions: list[PlannerContributionInput] = []
-    funding_routes: list[PlannerFundingRouteInput] = []
     target_weights: list[PlannerTargetEntryInput]
 
     @model_validator(mode="after")
-    def _validate_fx_rate_pair_keys(self) -> _PlannerRequestBase:
+    def _validate_fx_rate_pair_keys(self) -> _PlannerScenarioInputBase:
         # `fx_rates` is a plain `dict[str, ...]` (unconstrained key) rather than a
         # pattern-keyed dict, so the tool-schema codegen allow-list never sees a
         # `patternProperties` keyword; this validator reapplies the same pair
@@ -421,35 +496,32 @@ class _PlannerRequestBase(AllocationStrictModel):
         return self
 
 
-class PacPlannerRequest(_PlannerRequestBase):
+class PacPlannerRequest(_PlannerScenarioInputBase):
+    # The PAC declares its funding routes (specification §15 n. 2); the Rebalancer's are generated by the normalizer.
+    funding_routes: list[PlannerFundingRouteInput] = []
     order_routes: list[PacOrderRouteInput]
     # `min_fragmentation` is deferred (TODO_FUTURI): the exact model keeps the
     # branch, the wire does not accept it.
     policy: Literal["proportional"]
 
 
-class _RebalancerPlannerRequestBase(_PlannerRequestBase):
+class RebalancerPlannerRequest(_PlannerScenarioInputBase):
+    """One request for both strategies (contract 2.0.0 §5.4): the strategy is a field, with the target fidelity beside it.
+
+    No funding routes: the normalizer generates the deposits of the contributions and the transfers between Brokers. Until
+    C1 the strategy admits only ``invest_only`` and no sale route: the schema refuses the rest, so a sale never reaches the
+    engine before the engine models it (S1, D10 of project 67).
+    """
+
+    policy: Literal["invest_only"]
+    target_fidelity: RebalancerFidelityInput
     holdings: list[PlannerHoldingInput] = []
     order_routes: list[RebalancerOrderRouteInput]
-
-
-class RebalancerInvestOnlyRequest(_RebalancerPlannerRequestBase):
-    policy: Literal["invest_only"]
-    order_routes: list[PacOrderRouteInput]
-
-
-class RebalancerInvestAndSellRequest(_RebalancerPlannerRequestBase):
-    policy: Literal["invest_and_sell"]
-    sell_context: PlannerSellContextInput
+    tax: RebalancerTaxInput = RebalancerTaxInput()
 
     @model_validator(mode="after")
-    def require_sell_route(self) -> RebalancerInvestAndSellRequest:
-        if not any(route.side == "sell" for route in self.order_routes):
-            raise ValueError("invest_and_sell requires at least one SELL order route")
+    def _invest_only_has_no_sale_route(self) -> RebalancerPlannerRequest:
+        # «Invest only» sells nothing; C1 lifts this with the strategy field. A validator, so the fingerprint does not move then.
+        if any(route.side == "sell" for route in self.order_routes):
+            raise ValueError("invest_only takes no SELL order route")
         return self
-
-
-type RebalancerPlannerRequest = Annotated[
-    Union[RebalancerInvestOnlyRequest, RebalancerInvestAndSellRequest],
-    Field(discriminator="policy"),
-]

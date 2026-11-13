@@ -20,12 +20,20 @@ from backend.app.schemas.pac_allocator.rows import (
     PlannerFundingAction,
     PlannerLedgerRow,
     PlannerObjectiveResults,
+    PlannerPlanAccounts,
     PlannerRoundingTopUp,
     PlannerSellOrderRow,
+    PlannerTransfer,
     RebalancerAssetPlanRow,
+    RebalancerAssetTypeTaxRow,
+    RebalancerCashItemRow,
     RebalancerExposurePlanRow,
     RebalancerOrderRow,
-    SellIrreducibilityEvidence,
+    RebalancerScoreSummary,
+    RebalancerTaxBasketRow,
+    RebalancerTaxReserveRow,
+    RebalancerTaxScopeRow,
+    RebalancerUninvestedRow,
 )
 
 
@@ -34,15 +42,19 @@ def _validate_action_ids_and_sequences(solution: PacPlanSolution | RebalancerPla
 
     A manual conversion is a step of its own; an automatic one happens inside the orders, so it has no sequence.
     """
+    # The PAC has no transfers (specification §15 n. 2); the Rebalancer's are numbered steps like its deposits.
+    transfers = solution.transfers if isinstance(solution, RebalancerPlanSolution) else []
     ids = [
         *(row.action_id for row in solution.funding_actions),
         *(row.conversion_id for row in solution.conversions),
+        *(row.transfer_id for row in transfers),
         *(row.order_id for row in solution.order_rows),
     ]
     require_unique(ids, f"{label} action IDs")
     sections = (
         [row.sequence for row in solution.funding_actions],
         [row.sequence for row in solution.conversions if row.sequence is not None],
+        [row.sequence for row in transfers],
         [row.sequence for row in solution.order_rows],
     )
     require_unique([sequence for section in sections for sequence in section], f"{label} action sequences")
@@ -66,26 +78,35 @@ def _validate_conversions(solution: PacPlanSolution | RebalancerPlanSolution, la
         raise ValueError(f"{label} conversions: a currency that receives a conversion cannot give one at the same Broker")
 
 
-def _validate_pac_rounding_top_ups(solution: PacPlanSolution) -> None:
-    """Bind the top-ups to the ledger pools they excuse.
+# The rounded postings an order can carry in its own pool: a BUY its debit and its fee; a SELL its credit, its fee, the
+# foreign withholding and the tax.
+_ROUNDED_POSTINGS_PER_ORDER = {"buy": 2, "sell": 4}
+
+
+def _order_currency(row: PlannerBuyOrderRow | PlannerSellOrderRow) -> str:
+    return row.cash_debit.currency if isinstance(row, PlannerBuyOrderRow) else row.gross_credit.currency
+
+
+def _validate_rounding_top_ups(solution: PacPlanSolution | RebalancerPlanSolution, label: str) -> None:
+    """Bind the top-ups to the ledger pools they excuse (both Tools, contract §6.5).
 
     One top-up per negative pool, for exactly the missing amount; its rounded
-    postings can be no more than the pool's own rows carry: a BUY debit and a
-    fee per order paying from the pool, a credit per conversion into it. It is
-    only a cap: a fee that rounds to zero is not posted, and still counts in
-    the order row. The minor-unit bound needs the catalogue, so it lives in
-    ``_validate_ready_solution``.
+    postings can be no more than the pool's own rows carry: per order paying
+    from the pool its postings (``_ROUNDED_POSTINGS_PER_ORDER``), a credit per
+    conversion into it. It is only a cap: a fee that rounds to zero is not
+    posted, and still counts in the order row. The minor-unit bound needs the
+    catalogue, so it lives in ``_validate_ready_solution``.
     """
-    require_unique([(row.broker_id, row.currency) for row in solution.rounding_top_ups], "PAC rounding top-up scopes")
+    require_unique([(row.broker_id, row.currency) for row in solution.rounding_top_ups], f"{label} rounding top-up scopes")
     deficits = {(row.broker_id, row.currency): -fixed_fraction(row.final_spendable) for row in solution.ledger_rows if fixed_fraction(row.final_spendable) < 0}
     if {(row.broker_id, row.currency): fixed_fraction(row.amount) for row in solution.rounding_top_ups} != deficits:
-        raise ValueError("PAC rounding top-ups must cover exactly the negative ledger balances")
+        raise ValueError(f"{label} rounding top-ups must cover exactly the negative ledger balances")
     for top_up in solution.rounding_top_ups:
         scope = (top_up.broker_id, top_up.currency)
-        orders = sum(1 for row in solution.order_rows if (row.broker_id, row.cash_debit.currency) == scope)
+        postings = sum(_ROUNDED_POSTINGS_PER_ORDER[row.kind] for row in solution.order_rows if (row.broker_id, _order_currency(row)) == scope)
         fx_credits = sum(1 for row in solution.conversions if (row.broker_id, row.destination_credit.currency) == scope)
-        if top_up.rounded_postings > 2 * orders + fx_credits:
-            raise ValueError("A PAC rounding top-up cannot count more rounded postings than its ledger scope carries")
+        if top_up.rounded_postings > postings + fx_credits:
+            raise ValueError(f"A {label} rounding top-up cannot count more rounded postings than its ledger scope carries")
 
 
 class PacPlanSolution(AllocationStrictModel):
@@ -115,43 +136,55 @@ class PacPlanSolution(AllocationStrictModel):
         _validate_conversions(self, "PAC")
         require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "PAC ledger scopes")
         require_unique([(row.dimension, row.category_id) for row in self.exposure_rows], "PAC exposure rows")
-        _validate_pac_rounding_top_ups(self)
+        _validate_rounding_top_ups(self, "PAC")
         return self
 
 
 class RebalancerPlanSolution(AllocationStrictModel):
+    """A Rebalancer plan (contract §6): the items before, at their target and after (Asset rows, cash items, uninvested),
+    the steps in one executable order (deposits, conversions, transfers, orders), the ledger with its rounding top-ups, the
+    plan's accounts, the score and the tax parts. In «Invest only» the tax parts are empty."""
+
     solution_id: PlannerId
     solution_kind: Literal["primary"]
     validation: Literal["decimal_verified"]
     asset_rows: list[RebalancerAssetPlanRow]
+    cash_rows: list[RebalancerCashItemRow] = Field(description="One row per cash item of the request (a weight or a limit on a Broker's cash in one currency).")
+    uninvested_row: RebalancerUninvestedRow
     funding_actions: list[PlannerFundingAction]
     conversions: list[PlannerConversion] = Field(description="One conversion per Broker x ordered currency pair, the engine's own decision; manual ones are numbered steps.")
+    transfers: list[PlannerTransfer] = Field(description="One transfer per lane the plan uses: from a Broker to another, in one currency.")
     order_rows: list[RebalancerOrderRow]
-    sell_irreducibility: list[SellIrreducibilityEvidence]
     ledger_rows: list[PlannerLedgerRow]
+    rounding_top_ups: list[PlannerRoundingTopUp] = Field(description="One top-up per ledger pool left short by rounding against the plan; empty when every pool balances.")
     exposure_rows: list[RebalancerExposurePlanRow]
     accounting: PlannerAccountingSummary
     costs: PlannerCostTotals
+    plan_accounts: PlannerPlanAccounts
+    score: RebalancerScoreSummary
+    tax_basket_rows: list[RebalancerTaxBasketRow] = Field(description="Per tax scope and basket; empty when the plan sells nothing.")
+    tax_scope_rows: list[RebalancerTaxScopeRow] = Field(description="Per tax scope with a sale; empty when the plan sells nothing.")
+    tax_reserves: list[RebalancerTaxReserveRow] = Field(description="Per Broker and currency where the plan sets tax aside; empty when nothing is set aside.")
+    asset_type_tax_rows: list[RebalancerAssetTypeTaxRow] = Field(description="Per asset type with a sale; empty when the plan sells nothing.")
     objectives: PlannerObjectiveResults
 
     @model_validator(mode="after")
     def validate_authoritative_rows(self) -> RebalancerPlanSolution:
         require_unique([row.asset_id for row in self.asset_rows], "Rebalancer Asset rows")
+        require_unique([(row.broker_id, row.currency) for row in self.cash_rows], "Rebalancer cash item rows")
+        for row in [*self.asset_rows, *self.cash_rows]:
+            if row.minimum is not None and row.maximum is not None and money_fraction(row.minimum) > money_fraction(row.maximum):
+                raise ValueError("A row's minimum cannot exceed its maximum")
         _validate_action_ids_and_sequences(self, "Rebalancer")
         _validate_conversions(self, "Rebalancer")
+        require_unique([(row.source_broker_id, row.destination_broker_id, row.amount.currency) for row in self.transfers], "Rebalancer transfer lanes")
         require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "Rebalancer ledger scopes")
-        # The Rebalancer has no rounding top-ups, so no pool of it may end short.
-        if any(fixed_fraction(row.final_spendable) < 0 or fixed_fraction(row.final_physical) < 0 for row in self.ledger_rows):
-            raise ValueError("Rebalancer ledger balances cannot be negative")
+        _validate_rounding_top_ups(self, "Rebalancer")
         require_unique([(row.dimension, row.category_id) for row in self.exposure_rows], "Rebalancer exposure rows")
-        require_unique([row.evidence_id for row in self.sell_irreducibility], "SELL evidence IDs")
-        require_unique([row.order_id for row in self.sell_irreducibility], "SELL evidence order IDs")
-        evidence = {row.evidence_id: row.order_id for row in self.sell_irreducibility}
-        sell_orders = {row.order_id: row.irreducibility_evidence_ref for row in self.order_rows if isinstance(row, PlannerSellOrderRow)}
-        if set(evidence.values()) != set(sell_orders):
-            raise ValueError("SELL orders and irreducibility evidence must be one-to-one")
-        if any(evidence.get(evidence_id) != order_id for order_id, evidence_id in sell_orders.items()):
-            raise ValueError("SELL orders must reference their own irreducibility evidence")
+        require_unique([(row.scope.model_dump_json(), row.basket_id) for row in self.tax_basket_rows], "Rebalancer tax basket rows")
+        require_unique([row.scope.model_dump_json() for row in self.tax_scope_rows], "Rebalancer tax scope rows")
+        require_unique([(row.broker_id, row.amount.currency) for row in self.tax_reserves], "Rebalancer tax reserves")
+        require_unique([row.asset_class or "" for row in self.asset_type_tax_rows], "Rebalancer asset type tax rows")
         return self
 
 
@@ -191,6 +224,8 @@ def _validate_pac_no_op(solution: PacPlanSolution) -> None:
 
 
 def _validate_rebalancer_no_op(solution: RebalancerPlanSolution) -> None:
+    if solution.rounding_top_ups:
+        raise ValueError("No-op Rebalancer solutions have nothing to top up")
     if money_fraction(solution.accounting.final_invested) != money_fraction(solution.accounting.current_invested):
         raise ValueError("No-op Rebalancer final invested value must equal its current value")
     if any(money_fraction(row.buy_mid_value) != 0 or money_fraction(row.sell_mid_value) != 0 or money_fraction(row.final_value) != money_fraction(row.before_value) for row in solution.asset_rows):
@@ -211,10 +246,11 @@ class PacNoOpSolution(PacPlanSolution):
 
 
 class RebalancerNoOpSolution(RebalancerPlanSolution):
+    # A plan of conversions or transfers alone is not «no operation» (contract §6.3).
     funding_actions: Annotated[list[PlannerFundingAction], Field(max_length=0)]
     conversions: Annotated[list[PlannerConversion], Field(max_length=0)]
+    transfers: Annotated[list[PlannerTransfer], Field(max_length=0)]
     order_rows: Annotated[list[RebalancerOrderRow], Field(max_length=0)]
-    sell_irreducibility: Annotated[list[SellIrreducibilityEvidence], Field(max_length=0)]
 
     @model_validator(mode="after")
     def validate_no_op_projection(self) -> RebalancerNoOpSolution:
@@ -228,7 +264,13 @@ class PacIncumbentSolution(PacPlanSolution):
 
 
 class RebalancerIncumbentSolution(RebalancerPlanSolution):
-    order_rows: Annotated[list[RebalancerOrderRow], Field(min_length=1)]
+    """A plan with at least one step: an order, a deposit, a conversion or a transfer (contract §6.3)."""
+
+    @model_validator(mode="after")
+    def validate_has_a_step(self) -> RebalancerIncumbentSolution:
+        if not (self.order_rows or self.funding_actions or self.conversions or self.transfers):
+            raise ValueError("A Rebalancer plan with no step is a no-op solution")
+        return self
 
 
 class PacDeploymentSolution(PacPlanSolution):
