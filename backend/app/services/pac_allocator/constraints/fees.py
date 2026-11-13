@@ -129,11 +129,18 @@ def _add_fee_upper_rows(model: Model, route_id: str, fee, fixed: float, floor: f
     ``fee <= fixed + floor`` on the floor branch, ``fee <= fixed + rate * notional`` on the linear one (relieved by ``big_m``
     on the other branch and, where the cap can bind, on the cap branch, which has ``fee <= fixed + cap``). With the lower
     rows the fee has one value; when the order is off, ``fee_active_upper`` already holds it at zero.
+
+    The cap branch is tied to the notional by ``fee_cap_reached``: ``rate * notional >= cap * capped``. Without it ``capped = 1``
+    gives ``fee = fixed + cap`` on any order, since the lower linear row is relieved by ``cap_excess * capped``, and a small
+    order could pay the whole cap to lower a cash cell (the B2 review, 1(b)). The floor branch needs no such row: a floor
+    above the formula is never cheaper than the formula, and the lower floor row holds on every branch.
     """
     floor_binds = model.addVar(vtype="B", name=f"fee_floor_binds:{route_id}")
     model.addCons(fee <= fixed + floor + big_m * (1 - floor_binds), name=f"fee_floor_upper:{route_id}")
     relief: LinearTerm = big_m * floor_binds
     if capped is not None:
         relief = relief + big_m * capped
-        model.addCons(fee <= fixed + as_float(fee_schedule.maximum_fee.amount) + big_m * (1 - capped), name=f"fee_cap_upper:{route_id}")
+        cap = as_float(fee_schedule.maximum_fee.amount)
+        model.addCons(fee <= fixed + cap + big_m * (1 - capped), name=f"fee_cap_upper:{route_id}")
+        model.addCons(rate * notional_expr >= cap * capped, name=f"fee_cap_reached:{route_id}")
     model.addCons(fee <= fixed + rate * notional_expr + relief, name=f"fee_linear_upper:{route_id}")

@@ -1443,6 +1443,10 @@ def _rebalancer_cases() -> list:
         pytest.param(lambda **fields: cases.t6(with_usd=True, **({"target_fidelity": weighted_four} | fields)), {cases.buy_decision("asset:a"): 1, "fx:8:broker:x:EUR:USD": 10_000}, id="t6-wasted-conversion"),
         pytest.param(cases.t4_cash_over_target, {cases.buy_decision("asset:b"): 40}, id="cash-over-target"),
         pytest.param(lambda **fields: cases.t4_cash_over_target(fee_rate=R(1, 100), **fields), {cases.buy_decision("asset:b"): 40}, id="cash-over-target-fee-rate"),
+        # The B2 review, 1(b): a cap the order is far from (1 % of 40 EUR is 0.40, the cap 2): the cap branch must not be open.
+        pytest.param(lambda **fields: cases.t4_cash_over_target(fee_rate=R(1, 100), fee_cap=R(2), **fields), {cases.buy_decision("asset:b"): 40}, id="cash-over-target-fee-cap"),
+        # ... and one where it binds (1 % of 250 EUR is 2.50, above the cap): the row must not shut the branch, the fee is 7.
+        pytest.param(lambda **fields: cases.t4_cash_over_target(fee_rate=R(1, 100), fee_cap=R(2), **fields), {cases.buy_decision("asset:b"): 250}, id="cash-over-target-fee-cap-binds"),
     ]
 
 
@@ -1466,6 +1470,23 @@ def test_rebalancer_stage_values_match_the_exact_replay(build, quanta: dict[str,
         scip_value = _stage_value(scenario, view, _quanta_map(candidate), stage.code)
         expected = float(stage.scale * Fraction(exact[stage.code].numerator, exact[stage.code].denominator))
         assert scip_value == pytest.approx(expected, rel=1e-9, abs=1e-6), f"stage {stage.code!r}: scip={scip_value} exact×scale={expected}"
+
+
+def test_small_capped_order_cannot_pay_the_cap_fee_to_lower_a_cash_cell() -> None:
+    """The B2 review, 1(b): with the cap branch open, the fee rows from above allow ``fee = fixed + cap`` for any order.
+    Under «Target first», with the cell above its target, the distance stage then gains by paying 7 EUR on a 40 EUR order
+    whose fee is 5.40. The row ``rate·notional >= cap·capped`` ties the branch to the notional, so SCIP keeps it closed."""
+    scenario = cases.t4_cash_over_target(fee_rate=R(1, 100), fee_cap=R(2), target_fidelity=_TARGET_FIRST)
+    view = build_exact_policy_view(scenario)
+    program = _fresh_program(scenario, view)
+    assert any(variable.name == "fee_capped:route:buy:asset:b" for variable in program.model.getVars()), "the cap must be able to bind on this route"
+    for decision_id, value in {cases.buy_decision("asset:a"): 0, cases.buy_decision("asset:b"): 40}.items():
+        _pin(program.model, program.variables.quanta[decision_id], value)
+    program.model.setObjective(program.objective_stages[0].expression, sense="minimize")
+    program.model.optimize()
+    values = {var.name: program.model.getVal(var) for var in program.model.getVars()}
+    assert round(values["fee_capped:route:buy:asset:b"]) == 0
+    assert values["fee:route:buy:asset:b"] == pytest.approx(5.4, abs=1e-6)
 
 
 def test_rounding_at_an_exact_multiple_posts_the_true_unit_under_the_score() -> None:

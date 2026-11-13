@@ -74,13 +74,14 @@ def scenario(
     usd_asset: str | None = None,
     caps: dict[str, ExactRatio] | None = None,
     fee_rate: ExactRatio = ZERO,
+    fee_cap: ExactRatio | None = None,
     **scenario_fields,
 ) -> pac_models.ExactPlannerScenario:
     """A Rebalancer «Invest only» scenario on one Broker, by the conventions of the module docstring.
 
     ``whole_units`` buy by whole units instead of by amount; ``usd_asset`` names an Asset quoted in USD (weight zero), whose
     buy route gives the Broker an EUR → USD conversion decision. ``caps`` bound the purchase of an Asset by amount (EUR), which
-    keeps the oracle's domain small; ``fee_rate`` adds a proportional part to the 5 EUR fixed fee. ``scenario_fields`` go to ``ExactPlannerScenario`` as they are (the fidelity, the cash
+    keeps the oracle's domain small; ``fee_rate`` adds a proportional part to the 5 EUR fixed fee, ``fee_cap`` caps that part. ``scenario_fields`` go to ``ExactPlannerScenario`` as they are (the fidelity, the cash
     entries).
     """
     price_by_asset = dict.fromkeys(weights, ONE) | (prices or {})
@@ -101,7 +102,7 @@ def scenario(
                 fixed_fee=money(FEE, currency),
                 proportional_rate=fee_rate,
                 minimum_fee=money(ZERO, currency),
-                maximum_fee=None,
+                maximum_fee=None if fee_cap is None else money(fee_cap, currency),
             )
         )
     broker = pac_models.ExactBroker(
@@ -198,7 +199,7 @@ def t6(*, with_usd: bool = False, **fields) -> pac_models.ExactPlannerScenario:
     )
 
 
-def t4_cash_over_target(*, fee_rate: ExactRatio = ZERO, **fields) -> pac_models.ExactPlannerScenario:
+def t4_cash_over_target(*, fee_rate: ExactRatio = ZERO, fee_cap: ExactRatio | None = None, **fields) -> pac_models.ExactPlannerScenario:
     """T4 with 300 of cash and a target on it: A 50 %, B 48 %, the cell 2 %. ``F`` = 10 100, so the cell aims at 202 while it
     holds 300: a plan that leaves it above its target is where a model could lower the cell's cash for free and shorten
     ``D`` (the slack of a fee or of a posting rounded against the plan)."""
@@ -208,5 +209,6 @@ def t4_cash_over_target(*, fee_rate: ExactRatio = ZERO, **fields) -> pac_models.
         cash=R(300),
         weights={"asset:a": HALF, "asset:b": R(12, 25)},
         fee_rate=fee_rate,
+        fee_cap=fee_cap,
         **({"cash_entries": (pac_models.ExactCashEntry(broker_id=BROKER, currency="EUR", minimum=None, maximum=None, weight=R(1, 50)),)} | fields),
     )
