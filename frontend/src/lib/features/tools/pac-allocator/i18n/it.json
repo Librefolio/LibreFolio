@@ -239,7 +239,7 @@
           "allocation": {
             "asset_inactive_not_buyable": "L’Asset è inattivo: non può essere acquistato.",
             "asset_type_missing": "Manca il tipo di Asset.",
-            "broker_execution_profile_unsupported": "Questo Broker non ha un profilo operativo registrato sul conto: compila i suoi modi d’ordine e le commissioni nello scenario.",
+            "broker_execution_profile_unsupported": "Il conto di questo Broker non ha un profilo operativo, o ne ha uno senza modi d’ordine: compila i suoi modi d’ordine e le commissioni nello scenario.",
             "broker_inactive": "Il Broker è inattivo.",
             "capacity_unsupported": "Lo scenario supera le dimensioni supportate dallo strumento.",
             "cash_selection_invalid": "L’importo da usare non è valido per questa riga di cassa.",

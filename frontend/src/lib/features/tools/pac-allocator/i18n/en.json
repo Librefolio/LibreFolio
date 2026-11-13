@@ -239,7 +239,7 @@
           "allocation": {
             "asset_inactive_not_buyable": "The Asset is inactive: it cannot be bought.",
             "asset_type_missing": "The Asset type is missing.",
-            "broker_execution_profile_unsupported": "This Broker has no operating profile on its account: fill in its order modes and fees in the scenario.",
+            "broker_execution_profile_unsupported": "This Broker's account has no operating profile, or one without order modes: fill in its order modes and fees in the scenario.",
             "broker_inactive": "The Broker is inactive.",
             "capacity_unsupported": "The scenario exceeds the size the Tool supports.",
             "cash_selection_invalid": "The amount to use is not valid for this cash row.",

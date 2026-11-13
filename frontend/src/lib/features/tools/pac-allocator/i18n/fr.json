@@ -239,7 +239,7 @@
           "allocation": {
             "asset_inactive_not_buyable": "L’actif est inactif : il ne peut pas être acheté.",
             "asset_type_missing": "Le type d’actif est manquant.",
-            "broker_execution_profile_unsupported": "Ce courtier n’a pas de profil opérationnel enregistré sur le compte : remplissez ses modes d’ordre et ses frais dans le scénario.",
+            "broker_execution_profile_unsupported": "Le compte de ce courtier n’a pas de profil opérationnel, ou en a un sans modes d’ordre : remplissez ses modes d’ordre et ses frais dans le scénario.",
             "broker_inactive": "Le courtier est inactif.",
             "capacity_unsupported": "Le scénario dépasse la taille prise en charge par l’outil.",
             "cash_selection_invalid": "Le montant à utiliser n’est pas valide pour cette ligne de liquidités.",

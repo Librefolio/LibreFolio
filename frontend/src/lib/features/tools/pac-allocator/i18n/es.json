@@ -239,7 +239,7 @@
           "allocation": {
             "asset_inactive_not_buyable": "El activo está inactivo: no se puede comprar.",
             "asset_type_missing": "Falta el tipo de activo.",
-            "broker_execution_profile_unsupported": "Este bróker no tiene un perfil operativo registrado en la cuenta: rellena sus modos de orden y sus comisiones en el escenario.",
+            "broker_execution_profile_unsupported": "La cuenta de este bróker no tiene un perfil operativo, o tiene uno sin modos de orden: rellena sus modos de orden y sus comisiones en el escenario.",
             "broker_inactive": "El bróker está inactivo.",
             "capacity_unsupported": "El escenario supera el tamaño que admite la herramienta.",
             "cash_selection_invalid": "El importe a usar no es válido para esta fila de efectivo.",
