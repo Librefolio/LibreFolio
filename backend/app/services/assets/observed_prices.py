@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import PriceHistory
 from backend.app.schemas import FAPricePoint
 from backend.app.schemas.prices import AssetBackwardFillInfo
+from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.stretch_conversion import rate_not_found_error
 
@@ -80,11 +81,11 @@ def point_of(day: date_type, row: PriceHistory, conversion: object, target: str 
             backward_fill_info=AssetBackwardFillInfo(actual_rate_date=row.date, days_back=days_back, fx_rate_date=None, fx_days_back=None),
         )
     assert isinstance(conversion, _Conversion)
-    fx_days_back = (day - conversion.rate_date).days if conversion.rate_date < day else 0
+    fx_back = fx_days_back(day, conversion.rate_date)
     if days_back:
-        backward_fill = AssetBackwardFillInfo(actual_rate_date=row.date, days_back=days_back, fx_rate_date=conversion.rate_date, fx_days_back=fx_days_back)
-    elif fx_days_back > 0:
-        backward_fill = AssetBackwardFillInfo(actual_rate_date=day, days_back=0, fx_rate_date=conversion.rate_date, fx_days_back=fx_days_back)
+        backward_fill = AssetBackwardFillInfo(actual_rate_date=row.date, days_back=days_back, fx_rate_date=conversion.rate_date, fx_days_back=fx_back)
+    elif fx_back > 0:
+        backward_fill = AssetBackwardFillInfo(actual_rate_date=day, days_back=0, fx_rate_date=conversion.rate_date, fx_days_back=fx_back)
     else:
         backward_fill = None
     return FAPricePoint(
@@ -192,14 +193,11 @@ async def resolve_days(session: AsyncSession, rows: Sequence[PriceHistory], days
 
     resolved: list[_Resolved] = []
     position = 0  # index among the points that ask a conversion: the day-by-day pass numbered its errors by it
-    rate_less = 0
     messages: list[str] = []
     for day, row, key in plan:
         if row.currency != target:
             if key is not None and key[1] == _NO_RATE_DAY:
-                if len(messages) < MAX_CONVERSION_ERRORS:
-                    messages.append(rate_not_found_error(position, row.currency, target, day))
-                rate_less += 1
+                messages.append(rate_not_found_error(position, row.currency, target, day))
                 resolved.append(_Resolved(day, row, _FAILED))
             elif key is None:
                 resolved.append(_Resolved(day, row, None))
@@ -208,21 +206,23 @@ async def resolve_days(session: AsyncSession, rows: Sequence[PriceHistory], days
             position += 1
         else:
             resolved.append(_Resolved(day, row, None))
-    errors = _capped(messages, rate_less, errors)
+    errors = _capped(messages, errors)
     return resolved, errors
 
 
-def _capped(first_messages: list[str], count: int, other: list[str]) -> list[str]:
-    """The errors of a series as the day-by-day pass kept them: the distinct ones, the first ``MAX_CONVERSION_ERRORS`` and a
-    line saying how many more."""
-    errors = list(first_messages)
+def _capped(first_messages: list[str], other: list[str]) -> list[str]:
+    """The errors of a series: every no-rate failure (each carries its issue, which the endpoint groups by pair, so none is dropped), then
+    the other distinct ones, the first ``MAX_CONVERSION_ERRORS`` of them and a line saying how many more."""
+    failures = list(first_messages)
+    others: list[str] = []
     for message in other:
-        if message not in errors:
-            errors.append(message)
-            count += 1
-    if count > MAX_CONVERSION_ERRORS:
-        return errors[:MAX_CONVERSION_ERRORS] + [f"… and {count - MAX_CONVERSION_ERRORS} more FX conversion failures"]
-    return errors
+        if hasattr(message, "issue"):
+            failures.append(message)
+        elif message not in others:
+            others.append(message)
+    if len(others) > MAX_CONVERSION_ERRORS:
+        others = others[:MAX_CONVERSION_ERRORS] + [f"… and {len(others) - MAX_CONVERSION_ERRORS} more FX conversion failures"]
+    return failures + others
 
 
 async def series_points(session: AsyncSession, rows: Sequence[PriceHistory], days: Sequence[date_type], target: str | None) -> tuple[list[FAPricePoint], list[str]]:

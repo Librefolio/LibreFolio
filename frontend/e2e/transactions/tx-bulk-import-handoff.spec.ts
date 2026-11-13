@@ -46,11 +46,11 @@
  */
 
 import {expect, test, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {navigateTo} from '../fixtures/auth-helpers';
 import {validateRuns, waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
-import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {SUPPORTED_LANGUAGES, t as catalogueText} from '../fixtures/i18n-data';
 import {mkdirSync, rmSync, writeFileSync} from 'fs';
 import path from 'path';
@@ -421,19 +421,28 @@ test.describe('Bulk editor after an import hand-over (F1: D4, D5)', () => {
     let ownedBrokerId: number | undefined;
     let ownedSince = 0;
     let writtenFiles: string[] = [];
+    /** The account the running test writes with: its own, so its broker and files are seen by no other spec. */
+    let account: DisposableUser | null = null;
 
-    test.beforeEach(async ({page}) => {
+    test.beforeEach(async ({page, request}) => {
         ownedBrokerId = undefined;
         writtenFiles = [];
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, 'bho');
+        await prepareOnboardingAccount(page, account, []);
     });
 
     // afterEach, not `finally`: a cleanup throwing from `finally` would replace the assertion error it follows.
-    test.afterEach(async ({page}) => {
+    test.afterEach(async ({page, request}) => {
         for (const file of writtenFiles) rmSync(file, {force: true});
-        if (ownedBrokerId === undefined) return;
-        await page.goto('about:blank');
-        await deleteOwnedBrokerAndFiles(page, ownedBrokerId, ownedSince);
+        try {
+            if (ownedBrokerId !== undefined) {
+                await page.goto('about:blank');
+                await deleteOwnedBrokerAndFiles(page, ownedBrokerId, ownedSince);
+            }
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     /** Own a broker, then open the wizard from the toolbar: the broker exists before the wizard reads the list. */

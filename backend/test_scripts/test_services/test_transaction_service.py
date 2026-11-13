@@ -2068,8 +2068,8 @@ class TestBalanceQueryMethods:
     """Test balance aggregation methods."""
 
     @pytest.mark.asyncio
-    async def test_get_cash_balances(self, session, test_broker):
-        """TX-U-120: get_cash_balances returns correct sums."""
+    async def test_balances_at_end_of_sum_the_cash(self, session, test_broker):
+        """TX-U-120: get_balances_at_end_of returns correct cash sums."""
         service = TransactionService(session)
 
         items = [
@@ -2094,13 +2094,13 @@ class TestBalanceQueryMethods:
         ]
         await create_bulk(service, items)
 
-        balances = await service.get_cash_balances(test_broker.id)
+        balances, _holdings = await service.get_balances_at_end_of(test_broker.id, date.max)
 
         assert balances.get("EUR") == Decimal("1300")
 
     @pytest.mark.asyncio
-    async def test_get_asset_holdings(self, session, test_broker, test_asset):
-        """TX-U-121: get_asset_holdings returns correct sums."""
+    async def test_balances_at_end_of_sum_the_holdings(self, session, test_broker, test_asset):
+        """TX-U-121: get_balances_at_end_of returns correct holdings."""
         service = TransactionService(session)
 
         items = [
@@ -2129,7 +2129,7 @@ class TestBalanceQueryMethods:
         ]
         await create_bulk(service, items)
 
-        holdings = await service.get_asset_holdings(test_broker.id)
+        _balances, holdings = await service.get_balances_at_end_of(test_broker.id, date.max)
 
         assert holdings.get(test_asset.id) == Decimal("70")
 

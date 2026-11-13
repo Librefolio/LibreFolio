@@ -6,6 +6,7 @@ The messages LibreFolio sends once email works, flow by flow:
 - **forgotten passwords**;
 - the **limits** on those emails;
 - the **verification** of new addresses;
+- the **confirmation** of a new address asked from Profile;
 - the notice of an **address change**.
 
 Email has to work first: the SMTP variables, the **Email** tab and the test email are in [Email](email.md).
@@ -600,9 +601,40 @@ Besides:
 
 ---
 
+## 📬 Verified Email Changes {: #email-change-verified }
+
+With email working **and** a usable `LIBREFOLIO_PUBLIC_URL` ([Emails with a Link](#public-url)) — the very condition that **Email** shows as «links ready» — a new address typed in [Profile](../user/settings/profile.md#email-change-verified) does not change the account. The change waits for a link sent to the new address, and the account keeps its address and its sessions until it is clicked.
+
+```mermaid
+flowchart TD
+    A["New address saved in Profile,<br>with the current password"] --> B{"Email and LIBREFOLIO_PUBLIC_URL<br>both usable?"}
+    B -->|"no"| C["The address changes at once<br>(Email Address Changes, below)"]
+    B -->|"yes"| D["Link of 24 hours to the NEW address,<br>notice to the old one"]
+    D --> E{"Click on Confirm,<br>signed in to that account?"}
+    E -->|"no session, or another account"| F["The page asks to sign in:<br>the link is left untouched"]
+    F --> E
+    E -->|"yes"| G["The address changes, verified;<br>the other sessions end"]
+    classDef ok fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    class G ok
+```
+
+| | The change that waits |
+| --- | --- |
+| **The two emails** | A **confirmation** with the link to the new address, and a **notice** «a change was requested» to the address the account has now, sent after the answer. Both open with a plain «Hello,» and say nothing of the other address; the notice has no link. The confirmation also writes the link out in full under its button, for mail programs that remove links from buttons. |
+| **The link** | 24 hours, once. It is replaced, never accumulated: a new request, a «Send again» or a cancellation leaves only the newest valid; a password change or reset, a deactivation or an administrator's revocation ([Account Links](users.md#account-links)) ends it. |
+| **Who can confirm** | Only the account that asked, signed in. A link opened without that session, or with another account's, asks to sign in and changes nothing; a link that is no longer valid says why to anyone. |
+| **A taken address** | Not reserved while it waits. If another account takes it first, the link stops working, and a «Send again» is refused. |
+| **Limits** | Per account: 5 confirmation emails an hour, and «Send again» not within 60 seconds of the last one. Per new mailbox: 3 an hour, however the address is written ([Forgotten Passwords](#forgot-password)). Per old mailbox: 3 notices «a change was requested» an hour, apart from the notices of a completed change. And the [hourly limit](email.md) of the instance. Past a limit the request is refused (`429`, with the wait) and nothing is written. |
+| **When the email does not go** | The server's refusal or silence ends the request: the link is revoked and nothing waits (`502`); a spent limit is a `429`. **Never** a fallback to the immediate change: that would skip the check. Emails that did not go count for no limit. |
+| **The owner of a managed instance** | Unchanged: it cannot change its address from Profile, and the host's change is confirmed with a link it receives at the new address, with no session needed ([Email Address Changes](#email-change-notice)). |
+
+The administrator sees the account marked **Email change pending** in the [Users](users.md) tab, and can revoke the link. The emails of a **completed** change follow when the click confirms: see below.
+
+---
+
 ## 🔔 Email Address Changes {: #email-change-notice }
 
-When the email address of an account has changed, in [Profile](../user/settings/profile.md), LibreFolio writes two short emails, in the account's language: a **notice** to the address the account had **before**, and a **confirmation** to the **new** address, which is now the account's.
+When the email address of an account has changed, in [Profile](../user/settings/profile.md), LibreFolio writes two short emails, in the account's language: a **notice** to the address the account had **before**, and a **confirmation** to the **new** address, which is now the account's. When the change waited for a [confirmation](#email-change-verified), these two go once it is clicked.
 
 ```mermaid
 ---

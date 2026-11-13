@@ -37,16 +37,15 @@
  * Mock data contract: e2e_test_user has OWNER/EDITOR on Interactive Brokers.
  */
 import {randomUUID} from 'crypto';
-import {expect, test, type Locator, type Page, type Request} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {expect, test, type APIRequestContext, type Locator, type Page, type Request} from '../fixtures/playwright';
+import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
-import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(90_000);
 
 const API = '/api/v1';
-const BROKER_NAME = 'Interactive Brokers';
 const ROW_COUNT = 5;
 
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
@@ -75,16 +74,6 @@ async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
     await expect(page.getByTestId('tx-table')).toBeVisible({timeout: 20_000});
-}
-
-/** The id the seeded broker has in this database — read, never assumed. */
-async function brokerIdByName(page: Page, name: string): Promise<number> {
-    const response = await page.request.get(`${API}/brokers`);
-    expect(response.ok(), `GET ${API}/brokers: HTTP ${response.status()}`).toBeTruthy();
-    const body = (await response.json()) as {items: Array<{id: number; name: string}>};
-    const broker = body.items.find((item) => item.name === name);
-    if (!broker) throw new Error(`Seeded broker "${name}" is not accessible to ${TEST_USER.username}: see populate_mock_data.py`);
-    return broker.id;
 }
 
 /**
@@ -399,78 +388,108 @@ async function closeEditorWithoutGuard(page: Page) {
 // Tests
 // ---------------------------------------------------------------------------
 
+/** The account a describe's tests write with: its own, so its brokers and rows are seen by no other spec. */
+let account: DisposableUser | null = null;
+
+async function signInDisposable(page: Page, request: APIRequestContext, tag: string): Promise<void> {
+    account = await registerDisposableUser(request, tag);
+    await prepareOnboardingAccount(page, account, []);
+}
+
+async function deleteAccount(request: APIRequestContext): Promise<void> {
+    if (account) await deleteDisposableUser(request, account);
+    account = null;
+}
+
 test.describe('Bulk editor row order', () => {
-    test.beforeEach(async ({page}) => {
-        await login(page, TEST_USER);
-        await goToTransactions(page);
+    test.beforeEach(async ({page, request}) => {
+        await signInDisposable(page, request, 'bro');
+    });
+
+    test.afterEach(async ({request}) => {
+        await deleteAccount(request);
     });
 
     test('E-order — five new rows on one date keep the order they were added in', async ({page}) => {
-        const suffix = uniqueSuffix();
-        const created = Array.from({length: ROW_COUNT}, (_, i) => ({label: `r${i + 1}`, description: `E-order r${i + 1} ${suffix}`}));
-        const brokerId = await brokerIdByName(page, BROKER_NAME);
-        const bulk = page.getByTestId('tx-bulk-modal');
-        const body = page.getByTestId('tx-bulk-body');
-        const rows = body.locator('tbody tr[data-row-id]');
+        // The broker is the account's own, made before the page loads it (the page keeps its brokers in a session cache).
+        await withOwned(
+            page,
+            async (owned, ownedSuffix) => {
+                const id = await createOwnedBroker(page, owned, `E-order ${ownedSuffix}`);
+                await goToTransactions(page);
+                return id;
+            },
+            async (brokerId) => {
+                const suffix = uniqueSuffix();
+                const created = Array.from({length: ROW_COUNT}, (_, i) => ({label: `r${i + 1}`, description: `E-order r${i + 1} ${suffix}`}));
+                const bulk = page.getByTestId('tx-bulk-modal');
+                const body = page.getByTestId('tx-bulk-body');
+                const rows = body.locator('tbody tr[data-row-id]');
 
-        for (const [index, row] of created.entries()) {
-            // The first row opens the editor from the page, the others come from its own Add row.
-            await page.getByTestId(index === 0 ? 'tx-add-button' : 'tx-bulk-add-row').click();
-            await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
-            await selectType(page, 'DEPOSIT');
-            await pickBroker(page, brokerId);
-            await fillCash(page, String(101 + index));
-            await fillDescription(page, row.description);
-            await applyFormModal(page);
-            await expect(bulk).toBeVisible({timeout: 5_000});
-            // Each row is in the grid before the next one is born: "added before" is unambiguous.
-            await expect(rows.filter({hasText: row.description})).toHaveCount(1, {timeout: 5_000});
-        }
+                for (const [index, row] of created.entries()) {
+                    // The first row opens the editor from the page, the others come from its own Add row.
+                    await page.getByTestId(index === 0 ? 'tx-add-button' : 'tx-bulk-add-row').click();
+                    await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+                    await selectType(page, 'DEPOSIT');
+                    await pickBroker(page, brokerId);
+                    await fillCash(page, String(101 + index));
+                    await fillDescription(page, row.description);
+                    await applyFormModal(page);
+                    await expect(bulk).toBeVisible({timeout: 5_000});
+                    // Each row is in the grid before the next one is born: "added before" is unambiguous.
+                    await expect(rows.filter({hasText: row.description})).toHaveCount(1, {timeout: 5_000});
+                }
 
-        // The editor opened empty, so every row in it is one this test added.
-        await expect(rows).toHaveCount(ROW_COUNT);
-        const labelById = new Map<string, string>();
-        for (const row of created) {
-            const id = await rows.filter({hasText: row.description}).getAttribute('data-row-id');
-            if (!id) throw new Error(`${row.label} has no workspace row id`);
-            labelById.set(id, row.label);
-        }
+                // The editor opened empty, so every row in it is one this test added.
+                await expect(rows).toHaveCount(ROW_COUNT);
+                const labelById = new Map<string, string>();
+                for (const row of created) {
+                    const id = await rows.filter({hasText: row.description}).getAttribute('data-row-id');
+                    if (!id) throw new Error(`${row.label} has no workspace row id`);
+                    labelById.set(id, row.label);
+                }
 
-        // Precondition: the subject is the tie-break, so there must be a tie — one
-        // date, no pair, and the default (ascending, unsorted header) order.
-        const dateCells = await body.getByTestId('tx-bulk-date').evaluateAll((cells) => cells.map((cell) => ({date: cell.getAttribute('data-date'), partner: cell.getAttribute('data-partner-date')})));
-        expect(new Set(dateCells.map((cell) => cell.date)).size, `all ${ROW_COUNT} rows share one date: ${JSON.stringify(dateCells)}`).toBe(1);
-        expect(
-            dateCells.map((cell) => cell.partner),
-            'no row is half of a pair',
-        ).toEqual(Array(ROW_COUNT).fill(''));
-        await expect(body.getByTestId('dt-header-date')).toHaveAttribute('data-sort', 'none');
+                // Precondition: the subject is the tie-break, so there must be a tie — one
+                // date, no pair, and the default (ascending, unsorted header) order.
+                const dateCells = await body.getByTestId('tx-bulk-date').evaluateAll((cells) => cells.map((cell) => ({date: cell.getAttribute('data-date'), partner: cell.getAttribute('data-partner-date')})));
+                expect(new Set(dateCells.map((cell) => cell.date)).size, `all ${ROW_COUNT} rows share one date: ${JSON.stringify(dateCells)}`).toBe(1);
+                expect(
+                    dateCells.map((cell) => cell.partner),
+                    'no row is half of a pair',
+                ).toEqual(Array(ROW_COUNT).fill(''));
+                await expect(body.getByTestId('dt-header-date')).toHaveAttribute('data-sort', 'none');
 
-        // The visible order, top to bottom, read by content. Every row is present
-        // (barriers above) and the order is derived synchronously from them.
-        const observedIds = await rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute('data-row-id') ?? ''));
-        const observed = observedIds.map((id) => labelById.get(id) ?? `unknown:${id}`);
+                // The visible order, top to bottom, read by content. Every row is present
+                // (barriers above) and the order is derived synchronously from them.
+                const observedIds = await rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute('data-row-id') ?? ''));
+                const observed = observedIds.map((id) => labelById.get(id) ?? `unknown:${id}`);
 
-        // Discard before judging, so the editor goes through its own guard whatever the verdict.
-        await page.getByTestId('tx-bulk-cancel').click();
-        const discard = page.getByTestId('confirm-modal-confirm');
-        await expect(discard).toBeVisible({timeout: 5_000});
-        await discard.click();
-        await expect(bulk).toBeHidden({timeout: 5_000});
+                // Discard before judging, so the editor goes through its own guard whatever the verdict.
+                await page.getByTestId('tx-bulk-cancel').click();
+                const discard = page.getByTestId('confirm-modal-confirm');
+                await expect(discard).toBeVisible({timeout: 5_000});
+                await discard.click();
+                await expect(bulk).toBeHidden({timeout: 5_000});
 
-        // Nothing reached the ledger: validate is a dry run and the editor was never saved.
-        const ledger = await page.request.get(`${API}/transactions`, {params: {broker_id: brokerId, types: 'DEPOSIT'}});
-        expect(ledger.ok(), `GET ${API}/transactions: HTTP ${ledger.status()}`).toBeTruthy();
-        const leaked = ((await ledger.json()) as Array<{id: number; description?: string | null}>).filter((tx) => (tx.description ?? '').includes(suffix));
-        expect(leaked, 'a discarded editor must not have saved any row').toEqual([]);
+                // Nothing reached the ledger: validate is a dry run and the editor was never saved.
+                const ledger = await page.request.get(`${API}/transactions`, {params: {broker_id: brokerId, types: 'DEPOSIT'}});
+                expect(ledger.ok(), `GET ${API}/transactions: HTTP ${ledger.status()}`).toBeTruthy();
+                const leaked = ((await ledger.json()) as Array<{id: number; description?: string | null}>).filter((tx) => (tx.description ?? '').includes(suffix));
+                expect(leaked, 'a discarded editor must not have saved any row').toEqual([]);
 
-        expect(observed, `same-date new rows must read top to bottom in the order they were added (row ids top to bottom: ${observedIds.join(', ')})`).toEqual(created.map((row) => row.label));
+                expect(observed, `same-date new rows must read top to bottom in the order they were added (row ids top to bottom: ${observedIds.join(', ')})`).toEqual(created.map((row) => row.label));
+            },
+        );
     });
 });
 
 test.describe('Bulk editor close guard', () => {
-    test.beforeEach(async ({page}) => {
-        await login(page, TEST_USER);
+    test.beforeEach(async ({page, request}) => {
+        await signInDisposable(page, request, 'brg');
+    });
+
+    test.afterEach(async ({request}) => {
+        await deleteAccount(request);
     });
 
     test('E-reset — edit a saved row, Reset all, close: nothing is left to discard, so the editor closes without asking', async ({page}) => {

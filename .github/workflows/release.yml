@@ -191,6 +191,20 @@ jobs:
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs translate-validate --hide-localized
 
+      # Nightly (dev) only: the release's CHANGELOG check, run now. Until its tag exists the newest
+      # chapter counts as open, and its untranslated or stale pieces are information only; the release
+      # (tag pushed) makes them errors. Here the newest numbered chapter is checked as if tagged, so a
+      # nightly shows, soft-failed, what would stop the release (1.3.0: the stamps of a renamed chapter).
+      - name: CHANGELOG translations ready for the release (preview)
+        id: check-changelog-release
+        if: ${{ github.ref_name == 'dev' }}
+        continue-on-error: true
+        run: |
+          VERSION=$(grep -m1 -oE '^## \[[0-9][^]]*' CHANGELOG.md | sed 's/^## \[//')
+          if [ -z "$VERSION" ]; then echo "No numbered chapter in CHANGELOG.md"; exit 0; fi
+          echo "Checking the CHANGELOG translations as if v$VERSION were tagged"
+          GITHUB_REF="refs/tags/v$VERSION" pipenv run ./dev.py mkdocs translate-validate --file CHANGELOG.md --hide-localized
+
       - name: Validate cross-boundary links
         id: check-cross-links
         continue-on-error: ${{ github.ref_name == 'dev' }}
@@ -260,6 +274,7 @@ jobs:
           steps = [
               ("Check MkDocs translation structure consistency", "${{ steps.check-translate-diff.outcome }}"),
               ("Validate broken MkDocs translation links", "${{ steps.check-translate-validate.outcome }}"),
+              ("CHANGELOG translations ready for the release (preview)", "${{ steps.check-changelog-release.outcome }}"),
               ("Validate cross-boundary links", "${{ steps.check-cross-links.outcome }}"),
               ("Build MkDocs Documentation", "${{ steps.build-mkdocs.outcome }}"),
               ("Generate Screenshots with Playwright", "${{ steps.gallery.outcome }}"),

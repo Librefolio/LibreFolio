@@ -39,18 +39,18 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import pytest
 
-from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput
-from backend.app.services.brim.brim_provider import write_combined_csv
+from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as brim_io
+from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
 
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 BROKER_ID = 1
 ROWS_NOT_RECOGNIZED = "rows_not_recognized"
 ROWS_UNREADABLE = "rows_unreadable"
@@ -94,7 +94,7 @@ NEW_VERSIONS = {
     "broker_revolut": "1.3.0",
     "broker_trading212": "1.2.0",
     "broker_etoro": "1.4.0",
-    "broker_traderepublic": "1.1.0",
+    "broker_traderepublic": "1.2.0",  # lane 73: the Transaction export
     "broker_swissquote": "1.2.0",
     "broker_ibkr": "1.1.0",
     "broker_fineco": "1.5.0",
@@ -355,6 +355,24 @@ _IBKR_ROW = ["BUY", "20240130", "US0378331005", "5", "190", "950", "USD", "-1", 
 # A Fineco «Movimenti Dossier Titoli» row (15 cells, the sample's header is physical line 6): a settled purchase, long past, so the N74 rule «only settled rows» never leaves it out first.
 _FINECO_ROW = ["15/01/2024", "17/01/2024", "Compravendita titoli", "ISHARES MSCI WORLD ACC", "IE00B4L5Y983", "A", "5", "EUR", "106.30000", "", "531.50", "", "", "", "2.95"]
 _TR_ROW = ["2025-02-03", "Aankoop", "-10", "Test fund", "IE00BKX55T58", "1", "", ""]
+# A buy of the Transaction export (lane 73), laid out by column name under the clean sample's header
+_TRX_ROW = {
+    "datetime": "2025-04-01T09:00:00.000Z",
+    "date": "2025-04-01",
+    "account_type": "DEFAULT",
+    "category": "TRADING",
+    "type": "BUY",
+    "asset_class": "STOCK",
+    "name": "Test stock",
+    "symbol": "US0378331005",
+    "shares": "1.0000000000",
+    "price": "100.0000000000",
+    "amount": "-100.00",
+    "currency": "EUR",
+    "description": "Buy trade test",
+    "transaction_id": "00000000-0000-4000-8000-0000000000f1",
+}
+_TRX = "traderepublic-transactions.csv"
 
 
 def _with(cells: Sequence[str], **positions: str) -> List[str]:
@@ -417,6 +435,13 @@ SKIP_CASES: Tuple[SkipCase, ...] = (
     SkipCase("traderepublic-invalid-date", "broker_traderepublic", "traderepublic-export.csv", _with(_TR_ROW, c0="03/02/xx"), ROWS_UNREADABLE, kind="unreadable"),
     SkipCase("traderepublic-invalid-amount", "broker_traderepublic", "traderepublic-export.csv", _with(_TR_ROW, c2="abc"), ROWS_UNREADABLE, kind="unreadable"),
     SkipCase("traderepublic-missing-isin", "broker_traderepublic", "traderepublic-export.csv", _with(_TR_ROW, c4=""), ROWS_UNREADABLE, kind="unreadable"),
+    # --- Trade Republic, Transaction export (lane 73): a (category, type) it does not map, a reversed dividend and a positive fee are unknown; date, amount and symbol are unreadable
+    SkipCase("traderepublic-transactions-unknown-type", "broker_traderepublic", _TRX, {**_TRX_ROW, "category": "CORPORATE_ACTION", "type": "SPLIT", "amount": ""}, ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="corporate_action/split"),
+    SkipCase("traderepublic-transactions-dividend-reversal", "broker_traderepublic", _TRX, {**_TRX_ROW, "category": "CASH", "type": "DIVIDEND", "shares": "", "price": "", "amount": "-3.00"}, ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="dividend"),
+    SkipCase("traderepublic-transactions-positive-fee", "broker_traderepublic", _TRX, {**_TRX_ROW, "fee": "1.00"}, ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="positive fee"),
+    SkipCase("traderepublic-transactions-invalid-date", "broker_traderepublic", _TRX, {**_TRX_ROW, "date": "03/02/xx"}, ROWS_UNREADABLE, kind="unreadable", delimiter=","),
+    SkipCase("traderepublic-transactions-invalid-amount", "broker_traderepublic", _TRX, {**_TRX_ROW, "amount": "abc"}, ROWS_UNREADABLE, kind="unreadable", delimiter=","),
+    SkipCase("traderepublic-transactions-missing-symbol", "broker_traderepublic", _TRX, {**_TRX_ROW, "symbol": ""}, ROWS_UNREADABLE, kind="unreadable", delimiter=","),
     # --- Swissquote: a lone forex leg (a credit or a debit with no partner of its Order #; a whole pair is imported, W-B87 block 1, test_brim_economic_rows.py) and an unknown transaction are unknown; the values a row needs are unreadable
     SkipCase("swissquote-forex-credit", "broker_swissquote", "swissquote-export.csv", _with(_SWISSQUOTE_ROW, c2="Forex Credit"), ROWS_NOT_RECOGNIZED, reason_has="forex credit"),
     SkipCase("swissquote-forex-debit", "broker_swissquote", "swissquote-export.csv", _with(_SWISSQUOTE_ROW, c2="Forex Debit"), ROWS_NOT_RECOGNIZED, reason_has="forex debit"),
@@ -597,6 +622,9 @@ SAMPLE_LISTINGS: Tuple[SampleListing, ...] = (
     SampleListing("broker_etoro", "etoro-export.csv"),
     # The two rows with a fee: they are imported, their fee is not
     SampleListing("broker_traderepublic", "traderepublic-export.csv", not_recognized={9: "Sell", 10: "Buy"}),
+    # The Transaction export (lane 73): every fee and tax is imported, the samples list nothing
+    SampleListing("broker_traderepublic", "traderepublic-transactions.csv"),
+    SampleListing("broker_traderepublic", "traderepublic-transactions-excel.csv"),
     # The two forex pairs (lines 3-4 and 10-11) are imported as linked FX_CONVERSION legs (W-B87 block 1): the sample lists nothing
     SampleListing("broker_swissquote", "swissquote-export.csv"),
     # The three FX trades of the trades sample (no ISIN)
@@ -624,6 +652,8 @@ SAMPLE_TRANSACTIONS = {
     ("broker_trading212", "trading212-export.csv"): 12,
     ("broker_etoro", "etoro-export.csv"): 27,  # 23 + two overnight fees + the SDRT row (W-B87 block 1) + the overnight refund (lot W5-2c)
     ("broker_traderepublic", "traderepublic-export.csv"): 9,
+    ("broker_traderepublic", "traderepublic-transactions.csv"): 15,  # 9 rows: each amount, fee and tax column is a transaction
+    ("broker_traderepublic", "traderepublic-transactions-excel.csv"): 15,
     ("broker_swissquote", "swissquote-export.csv"): 21,  # 17 + two forex pairs, two legs each (W-B87 block 1)
     ("broker_ibkr", "ibkr-trades-export.csv"): 16,
     ("broker_ibkr", "ibkr-default-currency-export.csv"): 2,
@@ -679,7 +709,7 @@ class TestSamples:
 
         assert [(notice.code, notice.message) for notice in out.warnings if notice.code == "legacy"] == []
 
-    @pytest.mark.parametrize("sample", ["traderepublic-export.csv"])
+    @pytest.mark.parametrize("sample", ["traderepublic-export.csv", "traderepublic-transactions.csv", "traderepublic-transactions-excel.csv"])
     def test_the_traderepublic_sample_has_no_plain_string_warning_left(self, sample: str):
         out = _parse_sample("broker_traderepublic", sample)
 

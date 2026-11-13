@@ -336,13 +336,14 @@ def _run_playwright_body(  # noqa: C901 — flat command/env assembly + error ha
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
 
     try:
-        env = None
+        env = os.environ.copy()
+        # One artifacts folder per category (C-68): the next category must not wipe this one's evidence.
+        if _common.get_log_category() and "E2E_OUTPUT_CATEGORY" not in env:
+            env["E2E_OUTPUT_CATEGORY"] = re.sub(r"[^A-Za-z0-9._-]+", "-", _common.get_log_category())
         # `--workers` decided by the runner, not read from the shell.
         if getattr(_common, "_E2E_WORKERS", 1) > 1 and "E2E_WORKERS" not in os.environ:
-            env = _common.apply_e2e_workers(os.environ.copy())
+            env = _common.apply_e2e_workers(env)
         if cov_py or cov_js:
-            if env is None:
-                env = os.environ.copy()
             if cov_py:
                 env["COVERAGE_BACKEND"] = "1"
                 # Playwright merges this env into its webServer (`dev.py server

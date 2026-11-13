@@ -5,12 +5,15 @@ The backend decides every action (it refuses the last active administrator, a pr
 the row only turns off, with the reason, what would certainly be refused. One's own account has no action here: it is
 managed from the Profile tab.
 
+An account that asked for a new address from its Profile wears the badge «Email change pending» (release 1.4, project 71):
+the address shown is still the old one, and the link waits in the account links, where it can be revoked.
+
 An account waiting for its email verification wears an information icon beside its badge (E7-Q4, 23/10/2026): its
 explanation opens in a tooltip on hover, focus, click and tap. The icon is outside the toggle button, which cannot hold
 another button.
 -->
 <script lang="ts">
-    import {ChevronRight, Info, KeyRound, Link2Off, LogOut, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX} from 'lucide-svelte';
+    import {ChevronRight, Clock, Info, KeyRound, Link2Off, LogOut, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import UserAvatar from '$lib/components/ui/media/UserAvatar.svelte';
@@ -49,6 +52,9 @@ another button.
     // An account waiting for its email verification, its link live or expired (E-7): badged instead of «Deactivated»; its
     // actions are a deactivated account's. The setup's wait comes first, and an active account never waits
     const pendingVerification = $derived(account.pending_verification === true && !account.is_active && !pendingSetup);
+    // A change of address the account asked for from its Profile waits for its link (project 71): a sign beside the
+    // account's state, whatever that is, so it never replaces another badge
+    const pendingEmailChange = $derived(account.pending_email_change === true);
     const deactivateReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_superuser && isOnlyActiveAdmin ? 'last-admin' : null);
     // An account waiting for its email verification with a live link already holds its place (workstream E)
     const reactivateReason = $derived<Reason | null>(full && !account.holds_place ? 'limit' : null);
@@ -68,6 +74,7 @@ another button.
     data-active={String(account.is_active)}
     data-admin={String(account.is_superuser)}
     data-pending-setup={String(pendingSetup)}
+    data-pending-email-change={String(pendingEmailChange)}
     data-pending-verification={String(pendingVerification)}
     data-protected={String(account.protected)}
     data-self={String(isSelf)}
@@ -94,6 +101,11 @@ another button.
                         <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-pending-verification">{$_('settings.usersTab.badges.pendingVerification')}</span>
                     {:else if !account.is_active}
                         <span class="rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary" data-testid="users-badge-inactive">{$_('settings.usersTab.badges.inactive')}</span>
+                    {/if}
+                    {#if pendingEmailChange}
+                        <span class="inline-flex items-center gap-1 rounded-full border border-lf-info-line bg-lf-info-soft px-2 py-0.5 text-xs text-lf-info-on-soft" data-testid="users-badge-pending-email-change">
+                            <Clock aria-hidden="true" class="h-3 w-3" />{$_('settings.usersTab.badges.pendingEmailChange')}
+                        </span>
                     {/if}
                     {#if account.protected}
                         <span class="rounded-full border border-lf-warning-line bg-lf-warning-soft px-2 py-0.5 text-xs text-lf-warning-on-soft">{$_('settings.usersTab.badges.protected')}</span>

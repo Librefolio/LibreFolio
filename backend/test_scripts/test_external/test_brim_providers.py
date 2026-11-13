@@ -53,7 +53,8 @@ from backend.app.schemas.brim import (
     is_fake_asset_id,
 )
 from backend.app.schemas.transactions.transactions import TXCreateItem
-from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
+from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers._brim_io import MATURITY_NOTICE_KIND, model_bond_maturity, read_rows
 from backend.app.services.brim_providers.broker_coinbase.plugin import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
@@ -75,13 +76,14 @@ from backend.app.services.brim_providers.broker_trading212.plugin import Trading
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS & HELPERS
 # =============================================================================
 
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 DEGIRO_SAMPLE = SAMPLE_DIR / "degiro-export.csv"
 DIRECTA_SAMPLE = SAMPLE_DIR / "directa-export.csv"
 CA_SAMPLE = SAMPLE_DIR / "credit_agricole-export.csv"
@@ -549,7 +551,7 @@ class TestBRIMPlugin:
             out = plugin.parse(sample, broker_id=1)
             if out.validation_issues:
                 details = "\n".join(f"  Row {issue.row}: {issue.code}" + (f" field={issue.field}" if issue.field else "") + (f" ctx={issue.params}" if issue.params else "") + f" — {issue.message}" for issue in out.validation_issues)
-                pytest.fail(f"{code} [{sample.name}] produced {len(out.validation_issues)}" f" schema validation issue(s):\n{details}\n" f"Fix the plugin's sign rules or add an explicit skip/warning" f" for rows that cannot be imported.")
+                pytest.fail(f"{code} [{sample.name}] produced {len(out.validation_issues)} schema validation issue(s):\n{details}\nFix the plugin's sign rules or add an explicit skip/warning for rows that cannot be imported.")
 
         """Plugin must parse ALL its compatible sample files without raising."""
         if code == "broker_generic_csv":
@@ -684,7 +686,7 @@ class TestGenericMalformedRow:
     MALFORMED_SAMPLE = SAMPLE_DIR / "malformed" / "generic_malformed_row.csv"
 
     def test_malformed_sample_file_exists(self):
-        assert self.MALFORMED_SAMPLE.exists(), f"Required sample missing: {self.MALFORMED_SAMPLE.name}. " "Add a minimal CSV with one row that has an unparseable date or missing required column."
+        assert self.MALFORMED_SAMPLE.exists(), f"Required sample missing: {self.MALFORMED_SAMPLE.name}. Add a minimal CSV with one row that has an unparseable date or missing required column."
 
     def test_parse_malformed_either_warns_or_raises_brim_error(self):
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
@@ -2424,7 +2426,7 @@ class TestBrokerParserCoverageHelpers:
         assert out.warnings[0].message == "riga saltata"
         assert out.warnings[0].evidence == []
 
-        untouched = FinecoBrokerProvider().parse(PROJECT_ROOT / "backend/app/services/brim_providers/sample_reports/fineco-export.csv", broker_id=1)
+        untouched = FinecoBrokerProvider().parse(SAMPLE_DIR / "fineco-export.csv", broker_id=1)
         assert all(isinstance(n, BRIMNotice) for n in untouched.warnings)
 
     def test_credit_agricole_account_carries_causale_tag_and_currency(self):
@@ -5667,7 +5669,7 @@ class TestWindows1252Invariance:
             outcome = _parse_outcome(plugin, copy)
         except Exception as exc:
             pytest.fail(f"{code}.parse() crashes on the Windows-1252 copy of {sample.name}: {type(exc).__name__}: {exc}")
-        actual = _relocated(outcome, str(tmp_path), str(SAMPLE_DIR))
+        actual = _relocated(outcome, str(tmp_path), str(sample.parent))
 
         assert actual[0] == expected[0], f"{code} on {sample.name}: the original gives {_summary(expected)}, its Windows-1252 copy gives {_summary(actual)}"
         assert actual == expected, f"{code} on {sample.name}: the Windows-1252 copy gives a different {expected[0]} than the original"
@@ -5837,12 +5839,13 @@ class TestFallbackPluginPriorityLimit:
 _BRIM_STATIC_URL_PREFIX = "/api/v1/uploads/plugin/brim/"
 
 
-def _served_brim_static_folder() -> Path:
-    """The folder ``GET /api/v1/uploads/plugin/brim/{path}`` serves, ``PLUGIN_STATIC_DIRS["brim"]`` of the uploads API: the files checked here are the
-    files the app serves. Imported here rather than at the top: the uploads module loads the whole API router, which nothing else in this file needs."""
+def _served_brim_static_file(relative: str) -> Path | None:
+    """The file ``GET /api/v1/uploads/plugin/brim/{relative}`` serves (``<plugin folder>/<file>``, inside the plugin's own ``static/``), or None when the path
+    leaves the plugin's folder: the files checked here are the files the app serves. Imported here rather than at the top: the uploads module loads the whole
+    API router, which nothing else in this file needs."""
     from backend.app.api.v1 import uploads  # noqa: PLC0415 — the API router is loaded only by the test that needs the served folder
 
-    return uploads.PLUGIN_STATIC_DIRS["brim"]
+    return uploads.plugin_static_file("brim", relative)
 
 
 class TestBundledPluginIcons:
@@ -5860,17 +5863,16 @@ class TestBundledPluginIcons:
         """For every registered plugin whose ``icon_url``, as ``GET /brokers/import/plugins`` lists it, is a file of the BRIM static folder: the path
         resolves inside the folder and a file is there. Otherwise the endpoint answers 403 or 404 and the broker icon never shows the plugin's: it falls
         back to the next step of its chain (``frontend/src/lib/utils/broker/brokerIconChain.svelte.ts``)."""
-        folder = _served_brim_static_folder().resolve()
         bundled = {info.code: info.icon_url.removeprefix(_BRIM_STATIC_URL_PREFIX) for info in BRIMProviderRegistry.list_plugin_info() if (info.icon_url or "").startswith(_BRIM_STATIC_URL_PREFIX)}
         assert bundled, "premise: one registered plugin at least bundles its icon (broker_scalable and broker_scalable_deposit do), or this check passes on nothing"
 
         problems = []
         for code, relative in sorted(bundled.items()):
-            path = (folder / relative).resolve()
-            if not path.is_relative_to(folder):
-                problems.append(f"{code}: {relative!r} resolves outside {folder}, to {path}")
+            path = _served_brim_static_file(relative)
+            if path is None:
+                problems.append(f"{code}: {relative!r} resolves outside the plugin's static folder")
             elif not path.is_file():
-                problems.append(f"{code}: {relative!r} is not a file of {folder}")
+                problems.append(f"{code}: {relative!r} is not a file of the plugin's static folder")
 
         assert not problems, f"{len(problems)} bundled icon(s) the app cannot serve:\n" + "\n".join(f"  {problem}" for problem in problems)
 

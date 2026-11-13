@@ -19,7 +19,7 @@
  * maps — the matrix then simply offers fewer orderings.
  */
 import {zodiosApi} from '$lib/api';
-import {normalizeDistribution, type Distribution} from '$lib/components/assets/assetPayload';
+import {normalizeDistribution, type Distribution} from '$lib/features/assets/assetPayload';
 import {ensureCountriesLoaded} from '$lib/stores/reference/countryStore';
 import {safeScalar, safeString} from '$lib/types/common';
 

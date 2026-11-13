@@ -37,7 +37,7 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportSnapshotStats,
     AiExportTechnicalSamplingManifest,
 )
-from backend.app.schemas.signals import SignalTemporalClass
+from backend.app.schemas.signals.vocabulary import SignalTemporalClass
 
 START = date(2026, 1, 1)
 END = date(2026, 3, 31)

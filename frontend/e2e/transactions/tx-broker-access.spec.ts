@@ -135,6 +135,7 @@ test.describe('Transaction Broker Access Visibility', () => {
                 await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 
                 const dualSplit = page.getByTestId('tx-form-dual-split');
+                // Optional by design: a scan over rows, only the paired ones render the dual layout.
                 if (!(await appears(dualSplit))) {
                     await page.getByTestId('tx-form-cancel').click();
                     // The next loop iteration double-clicks another row, so the modal
@@ -147,13 +148,13 @@ test.describe('Transaction Broker Access Visibility', () => {
                 const lockedPartner = page.getByTestId('tx-form-partner-locked');
                 const readonlyBroker = page.getByTestId('tx-form-broker-to-readonly');
 
-                if (await lockedPartner.isVisible({timeout: 1_500}).catch(() => false)) {
+                if (await appears(lockedPartner, 1_500)) {
                     expect(await lockedPartner.textContent()).toContain('Hidden Admin Broker');
                     foundLocked = true;
                     await page.getByTestId('tx-form-cancel').click();
                     break;
                 }
-                if (await readonlyBroker.isVisible({timeout: 1_000}).catch(() => false)) {
+                if (await appears(readonlyBroker, 1_000)) {
                     const brokerText = (await readonlyBroker.textContent()) ?? '';
                     if (brokerText.includes('Hidden Admin Broker')) {
                         foundLocked = true;

@@ -62,10 +62,10 @@ accepted:
 |------|------|
 | Range picker | `frontend/src/lib/components/ui/date/DateRangePicker.svelte` |
 | Day grid | `frontend/src/lib/components/ui/date/CalendarMonth.svelte` |
-| Measuring ruler | `frontend/src/lib/components/charts/MeasurePanel.svelte` |
+| Measuring ruler | `frontend/src/lib/features/signals/components/MeasurePanel.svelte` |
 | Chart cursor (line view) | `frontend/src/lib/components/charts/PriceChartFull.svelte` |
 | Chart cursor (candles) | `frontend/src/lib/components/charts/CandlestickChart.svelte` |
-| Tests | `frontend/src/lib/components/ui/date/DateRangePicker.test.ts`, `frontend/src/lib/components/ui/date/CalendarMonth.test.ts`, `frontend/src/lib/components/charts/MeasurePanel.test.ts`, `frontend/src/lib/components/charts/PriceChartFull.test.ts` |
+| Tests | `frontend/src/lib/components/ui/date/DateRangePicker.test.ts`, `frontend/src/lib/components/ui/date/CalendarMonth.test.ts`, `frontend/src/lib/features/signals/components/MeasurePanel.test.ts`, `frontend/src/lib/components/charts/PriceChartFull.test.ts` |
 
 ## Links
 - [[features/F-045]]

@@ -13,6 +13,7 @@ import {expect, test} from '../fixtures/playwright';
 import type {Locator, Page, Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 import {assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
@@ -147,9 +148,7 @@ test.describe('Asset List Page', () => {
         // Wait for either card grid or table view
         const cards = page.locator('[data-testid^="asset-card-"]');
         const table = page.locator('[data-testid="assets-table"]');
-        const cardCount = await cards.count();
-        const tableVisible = await table.isVisible().catch(() => false);
-        expect(cardCount > 0 || tableVisible).toBeTruthy();
+        await expect(cards.first().or(table)).toBeVisible({timeout: 10_000});
     });
 
     // ========================================================================
@@ -2096,13 +2095,22 @@ test.describe('Assets list — a delete that transactions block opens already bl
     /** What the running test created; deleted after it, whatever its outcome. */
     let owned: Owned = {assetIds: [], brokerIds: []};
 
-    test.beforeEach(async ({page}) => {
+    /** The account the running test writes with: its own, so its broker and rows are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
         owned = {assetIds: [], brokerIds: []};
-        await login(page, TEST_USER);
+        account = await registerDisposableUser(request, 'alx');
+        await prepareOnboardingAccount(page, account, []);
     });
 
-    test.afterEach(async ({page}) => {
-        await deleteOwned(page, owned);
+    test.afterEach(async ({page, request}) => {
+        try {
+            await deleteOwned(page, owned);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     for (const entry of ['card', 'list row'] as const) {
@@ -2618,6 +2626,46 @@ test.describe('Assets list — a compared pair is drawn at the first load (Y-41)
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
         await expect(page.getByTestId(`asset-card-${appleId}`), 'the pair is drawn without a later redraw').toHaveAttribute('data-overlay-count', '1', {timeout: 15_000});
+    });
+});
+
+/**
+ * Assets list — a pair compared on a card is drawn in the rolling-return view (FB-11 follow-up).
+ *
+ * In the rolling-return view the cards compared only assets: the FX pair of a saved comparison was left out. Now the page asks the
+ * rolling return of the pairs of all its cards in one `POST /fx/currencies/convert` (not one per card) and each card draws its pair.
+ * The card publishes how many overlay lines it draws (`data-overlay-count`). The comparisons are seeded in this browser's storage.
+ *
+ * Red before: 0 lines on the card, and no conversion asked.
+ */
+test.describe('Assets list — a compared FX pair is drawn in the rolling-return view (FB-11)', () => {
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('two cards with a compared pair each: one conversion request for the list, each card draws its line', async ({page}) => {
+        await goToAssetsPage(page);
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        const otherId = await assetIdByName(page, 'Microsoft Corporation');
+        await seedChartComparisons(page, [[`asset-${appleId}`, [pairComparison('e2e-fb11-pair-a', 'EUR-USD')]]]);
+
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        const conversions: string[] = [];
+        page.on('request', (request) => {
+            if (request.method() === 'POST' && request.url().includes('/fx/currencies/convert') && (request.postData() ?? '').includes('ASSET_CALENDAR_ROLLING_RETURN')) conversions.push(request.postData() ?? '');
+        });
+        await page.getByTestId('assets-global-view-calendar-return').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        await expect(page.getByTestId(`asset-card-${appleId}`), 'the pair is drawn in the rolling-return view').toHaveAttribute('data-overlay-count', '1', {timeout: 15_000});
+        expect(conversions, 'one conversion request for the whole list, not one per card').toHaveLength(1);
+        expect(JSON.parse(conversions[0]), 'it asks the compared pair once').toHaveLength(1);
+        await expect(page.getByTestId(`asset-card-${otherId}`), 'a card with no comparison draws no line').toHaveAttribute('data-overlay-count', '0');
     });
 });
 

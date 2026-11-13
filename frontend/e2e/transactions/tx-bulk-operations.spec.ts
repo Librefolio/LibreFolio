@@ -31,6 +31,7 @@
 import {expect, test, type Page, type Locator} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {appears} from '../fixtures/probe';
 import {validateRuns, waitForSettled, waitForValidateRun} from '../fixtures/app-events';
 import {daysAgoIso} from '../fixtures/dates';
 import {uniqueSuffix} from '../fixtures/unique';
@@ -91,18 +92,21 @@ async function getEditableRowIds(page: Page, n: number): Promise<string[]> {
 
 /** Close all modals. */
 async function closeModals(page: Page) {
+    // Optional by design: a cleanup helper, called whatever the test left open. The end state is asserted below.
     const cancelForm = page.getByTestId('tx-form-cancel');
-    if (await cancelForm.isVisible({timeout: 500}).catch(() => false)) {
+    if (await appears(cancelForm, 500)) {
         await cancelForm.click();
     }
     const cancelBulk = page.getByTestId('tx-bulk-cancel');
-    if (await cancelBulk.isVisible({timeout: 500}).catch(() => false)) {
+    if (await appears(cancelBulk, 500)) {
         await cancelBulk.click();
+        // Optional: the discard confirmation is asked only when the batch holds a change.
         const discard = page.getByTestId('confirm-modal-confirm');
-        if (await discard.isVisible({timeout: 1_000}).catch(() => false)) {
+        if (await appears(discard, 1_000)) {
             await discard.click();
         }
     }
+    await expect(cancelBulk, 'every modal is closed at the end of the helper').toBeHidden({timeout: 3_000});
 }
 
 /** Hover a BulkModal row and click its action via the kebab menu (row-actions-{id} → context-menu-action-{actionId}). */
@@ -119,11 +123,13 @@ async function clickRowAction(row: Locator, actionId: string) {
 
 /** Close FormModal if it auto-opened (single-row edit). */
 async function closeFormModalIfOpen(page: Page) {
+    // Optional by design: only a one-row edit auto-opens the form; the callers pass either. End state asserted.
     const formModal = page.getByTestId('tx-form-modal');
-    if (await formModal.isVisible({timeout: 1_500}).catch(() => false)) {
+    if (await appears(formModal, 1_500)) {
         const cancelForm = page.getByTestId('tx-form-cancel');
         await cancelForm.click();
     }
+    await expect(formModal).toBeHidden({timeout: 3_000});
 }
 
 // ---------------------------------------------------------------------------
@@ -373,8 +379,7 @@ test.describe('Transaction Bulk Operations', () => {
 
         // FormModal should NOT auto-open (bulk edit = grid only)
         const formModal = page.getByTestId('tx-form-modal');
-        const formVisible = await formModal.isVisible({timeout: 1_500}).catch(() => false);
-        expect(formVisible).toBe(false);
+        await expect(formModal).toBeHidden();
 
         await closeModals(page);
     });
@@ -422,12 +427,11 @@ test.describe('Transaction Bulk Operations', () => {
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
-        // Close FormModal if auto-opened (single row edit auto-opens)
+        // A one-row edit auto-opens the FormModal: assert it, then close it.
         const formModal = page.getByTestId('tx-form-modal');
-        if (await formModal.isVisible({timeout: 1_500}).catch(() => false)) {
-            const cancelForm = page.getByTestId('tx-form-cancel');
-            await cancelForm.click();
-        }
+        await expect(formModal).toBeVisible({timeout: 5_000});
+        await page.getByTestId('tx-form-cancel').click();
+        await expect(formModal).toBeHidden({timeout: 3_000});
 
         // Select the row in BulkModal grid and mark for delete
         const bulkRows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
@@ -435,31 +439,11 @@ test.describe('Transaction Bulk Operations', () => {
         const checkbox = firstRow.locator('.checkbox-btn').first();
         await checkbox.click();
 
-        // Look for delete action in bulk modal toolbar — context menu or action button
-        // The "mark delete" is done via right-click context menu or selection action
-        // Let's try right-click context menu on the row
-        await firstRow.click({button: 'right'});
-
-        // Context menu should appear with "Mark delete" option
-        const deleteOption = page.locator('[data-action="toggle-delete"], [data-action="mark-delete"]').first();
-        if (await deleteOption.isVisible({timeout: 1_000}).catch(() => false)) {
-            await deleteOption.click();
-
-            // Should now show "del" badge
-            const rowText = (await firstRow.textContent()) ?? '';
-            expect(rowText).toContain('del');
-
-            // Right-click again to unmark
-            await firstRow.click({button: 'right'});
-            const undeleteOption = page.locator('[data-action="toggle-delete"], [data-action="unmark-delete"]').first();
-            if (await undeleteOption.isVisible({timeout: 1_000}).catch(() => false)) {
-                await undeleteOption.click();
-
-                // Should no longer contain "del"
-                const rowTextAfter = (await firstRow.textContent()) ?? '';
-                expect(rowTextAfter).not.toContain('del');
-            }
-        }
+        // The row action toggles the delete mark: it labels the row "del", and the same action restores it.
+        await clickRowAction(firstRow, 'mark-delete');
+        await expect(firstRow).toContainText('del');
+        await clickRowAction(firstRow, 'mark-delete');
+        await expect(firstRow).not.toContainText('del');
 
         await closeModals(page);
     });
@@ -481,9 +465,9 @@ test.describe('Transaction Bulk Operations', () => {
 
         // Modify description
         const optionalToggle = page.getByTestId('tx-form-optional-toggle');
-        if (await optionalToggle.isVisible({timeout: 1_000}).catch(() => false)) {
-            await optionalToggle.click();
-        }
+        // The optional section's summary is always rendered in the form.
+        await expect(optionalToggle).toBeVisible({timeout: 3_000});
+        await optionalToggle.click();
         const descInput = page.getByTestId('tx-form-description');
         await expect(descInput).toBeVisible({timeout: 2_000});
         const originalDesc = await descInput.inputValue();
@@ -523,12 +507,11 @@ test.describe('Transaction Bulk Operations', () => {
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
-        // Close FormModal if auto-opened
+        // A one-row edit auto-opens the FormModal: assert it, then close it.
         const formModal = page.getByTestId('tx-form-modal');
-        if (await formModal.isVisible({timeout: 1_500}).catch(() => false)) {
-            const cancelForm = page.getByTestId('tx-form-cancel');
-            await cancelForm.click();
-        }
+        await expect(formModal).toBeVisible({timeout: 5_000});
+        await page.getByTestId('tx-form-cancel').click();
+        await expect(formModal).toBeHidden({timeout: 3_000});
 
         // Open Picker
         const pickerBtn = page.getByTestId('tx-bulk-picker');
@@ -558,8 +541,7 @@ test.describe('Transaction Bulk Operations', () => {
         // Deliberate: see above — absence is only meaningful after a wait.
         await page.waitForTimeout(300);
         const contextMenu = page.locator('[data-testid="context-menu"], .context-menu');
-        const menuVisible = await contextMenu.isVisible({timeout: 500}).catch(() => false);
-        expect(menuVisible).toBe(false);
+        await expect(contextMenu).toBeHidden();
 
         // Close picker: its Cancel button is always in the footer, so it is clicked, not probed for,
         // and the step ends on the state it promises.
@@ -589,24 +571,11 @@ test.describe('Transaction Bulk Operations', () => {
         await expect(formModal).toBeVisible({timeout: 5_000});
 
         // Fill minimal fields for a BUY (simplest type)
-        // Select broker
-        const brokerSelect = page.getByTestId('tx-form-broker');
-        if (await brokerSelect.isVisible({timeout: 1_000}).catch(() => false)) {
-            // Click the broker dropdown and pick the first editable one
-            await brokerSelect.click();
-            const firstBrokerOpt = page.locator('[data-testid="tx-form-broker"] option:not([value=""])').first();
-            if (await firstBrokerOpt.isVisible({timeout: 500}).catch(() => false)) {
-                const val = await firstBrokerOpt.getAttribute('value');
-                if (val) await brokerSelect.selectOption(val);
-            }
-        }
-
         // We verify that the issues banner testid is present in the BulkModal markup
         // (it may not be visible until validation returns errors, but the container exists)
         const bulkIssues = page.getByTestId('tx-bulk-issues');
         // Issues are not visible yet (no errors)
-        const issuesVisible = await bulkIssues.isVisible({timeout: 500}).catch(() => false);
-        expect(issuesVisible).toBe(false);
+        await expect(bulkIssues).toBeHidden();
 
         // Close without committing — the pair description validation is fully covered
         // by backend API test `test_create_pair_different_description_rejected`
@@ -707,9 +676,9 @@ test.describe('Transaction Bulk Operations', () => {
         const formModal = page.getByTestId('tx-form-modal');
         await expect(formModal).toBeVisible({timeout: 5_000});
         const optionalToggle = page.getByTestId('tx-form-optional-toggle');
-        if (await optionalToggle.isVisible({timeout: 1_000}).catch(() => false)) {
-            await optionalToggle.click();
-        }
+        // The optional section's summary is always rendered in the form.
+        await expect(optionalToggle).toBeVisible({timeout: 3_000});
+        await optionalToggle.click();
         const descInput = page.getByTestId('tx-form-description');
         await expect(descInput).toBeVisible({timeout: 2_000});
         await descInput.fill(`E2E-resetall-row1-${Date.now()}`);
@@ -718,9 +687,9 @@ test.describe('Transaction Bulk Operations', () => {
         // Edit row 1: dblclick → change description → Save
         await bulkRows.nth(1).dblclick();
         await expect(formModal).toBeVisible({timeout: 5_000});
-        if (await optionalToggle.isVisible({timeout: 1_000}).catch(() => false)) {
-            await optionalToggle.click();
-        }
+        // The optional section's summary is always rendered in the form.
+        await expect(optionalToggle).toBeVisible({timeout: 3_000});
+        await optionalToggle.click();
         await expect(descInput).toBeVisible({timeout: 2_000});
         await descInput.fill(`E2E-resetall-row2-${Date.now()}`);
         await page.getByTestId('tx-form-save').click();
@@ -788,9 +757,9 @@ test.describe('Transaction Bulk Operations', () => {
         const formModal = page.getByTestId('tx-form-modal');
         await expect(formModal).toBeVisible({timeout: 5_000});
         const optionalToggle = page.getByTestId('tx-form-optional-toggle');
-        if (await optionalToggle.isVisible({timeout: 1_000}).catch(() => false)) {
-            await optionalToggle.click();
-        }
+        // The optional section's summary is always rendered in the form.
+        await expect(optionalToggle).toBeVisible({timeout: 3_000});
+        await optionalToggle.click();
         const descInput = page.getByTestId('tx-form-description');
         await expect(descInput).toBeVisible({timeout: 2_000});
         await descInput.fill(`E2E-status-css-${Date.now()}`);

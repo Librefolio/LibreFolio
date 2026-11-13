@@ -25,13 +25,13 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
+import {samplePath} from '../fixtures/brimSamples';
 
 test.setTimeout(120_000);
 
-const SAMPLES = resolve(process.cwd(), '../backend/app/services/brim_providers/sample_reports');
 const FIXTURES = [
-    {path: `${SAMPLES}/fineco_btp_placement.csv`, label: 'placement'},
-    {path: `${SAMPLES}/fineco_btp_market.csv`, label: 'market'},
+    {path: samplePath('fineco_btp_placement.csv'), label: 'placement'},
+    {path: samplePath('fineco_btp_market.csv'), label: 'market'},
 ];
 const API = `http://localhost:${process.env.TEST_PORT || '6041'}/api/v1`;
 
@@ -241,7 +241,7 @@ async function goToAssetStep(page: Page, target: {brokerName: string; fileNames:
     await page.getByTestId('import-wizard-continue').click();
 
     const confirm = page.getByTestId('import-wizard-warning-confirm');
-    if (await confirm.isVisible({timeout: 2_500}).catch(() => false)) {
+    if (await appears(confirm, 3_000)) {
         await confirm.click();
     }
     await page.getByTestId('asset-group-step').waitFor({state: 'visible', timeout: 10_000});

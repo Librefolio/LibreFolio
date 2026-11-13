@@ -88,7 +88,7 @@ the plugin combines them, and phase 2 parses the combined file. See
 ### ♻️ The lifecycle of `compatible_plugins` {: #compatible-plugins-lifecycle }
 
 A file's `compatible_plugins` is detected once per app version, not once for the file's whole life
-(`brim_provider.py`):
+(`storage.py`):
 
 1. **At upload**, `save_uploaded_file` asks every plugin
    (`BRIMProviderRegistry.get_compatible_plugins`) and stores the list in the file's sidecar with
@@ -134,7 +134,7 @@ never undone. Because a read may now open the file, the API calls `list_files` a
 ### 🔒 The broker metadata lock {: #broker-metadata-lock }
 
 Every write of a broker's sidecars holds that broker's lock, `broker_metadata_lock(broker_id)`
-(`_broker_metadata_lock` inside `brim_provider.py`). A plugin never takes it: the core does, around
+(`_broker_metadata_lock` inside `storage.py`). A plugin never takes it: the core does, around
 its own writes.
 
 - **Two layers.** In the process, a re-entrant `threading.RLock` per broker; across processes, an
@@ -257,8 +257,8 @@ mandatory for every new plugin:
       the rows whose `Tila` is neither executed nor booked.
     - **Never silently** leave out a row that may carry an economic effect (a split, a fee, a
       tax, a currency conversion) unless the plugin knows that is safe: a row it cannot
-      import is unknown. A row the plugin reads but only in part (Trade Republic's fee and tax
-      columns, not imported) is unknown too: list it.
+      import is unknown. A row the plugin reads but only in part (the fee and tax columns of
+      Trade Republic's older Dutch CSV, not imported) is unknown too: list it.
     - **A stable plugin follows the rule**: it uses `RowSkips`, or its own codes with
       `context.report_issue`.
     - **A plugin in beta may not yet.** The plugins the lot W-B86 did not reach (the *pending* set of
@@ -358,7 +358,7 @@ when the user saves it (`costBasisNegative`, J-60, see
 | `test_file_pattern` | `None` | Single filename substring used by the test suite to map a sample → this plugin |
 | `test_file_patterns` | derived from `test_file_pattern` | **List** of filename substrings when one plugin owns several export formats (e.g. `["revolut-invest", "revolut-crypto"]`) |
 | `report_roles` (and the rest of the report-set contract) | `[]` | Non-empty turns the plugin into a **report-set plugin**: see [Multi-report plugins](#report-sets) |
-| `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/brim/{path}` |
+| `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/brim/{path}`, with `path` = `<plugin folder>/<file>` (the file is in the plugin's own `static/` folder) |
 
 ### 🗣️ Saying why a file is refused {: #cannot-parse-reason }
 
@@ -367,7 +367,7 @@ abstract one: it returns `None` by default, so a plugin written without it stays
 when your `can_parse` refuses a file for a cause the user can fix in the file — a missing column,
 say.
 
-- **When the core asks.** In the guard of `parse_file` (`brim_provider.py`), after
+- **When the core asks.** In the guard of `parse_file` (`parsing.py`), after
   `can_parse` answered `False` for the file the parse runs your plugin on. The guard asks about
   the path it checked last: the relocated one, when a concurrent parse moved the file in the
   meantime. The default [`cannot_parse_detail`](#cannot-parse-detail) asks it too, when the
@@ -443,7 +443,7 @@ unchanged. Override it when the user should read your reason in their own langua
     ```
 
 **The endpoint.** `GET /api/v1/brokers/import/files/{file_id}/plugin-check?plugin_code=<code>`
-(`check_file_plugin` in `api/v1/brokers.py`) asks one plugin about one uploaded file and answers a
+(`check_file_plugin` in `api/v1/brokers/files.py`) asks one plugin about one uploaded file and answers a
 `BRIMPluginCheck`: `plugin_code`, `can_parse` and `refusal`.
 
 ```json
@@ -459,7 +459,7 @@ unchanged. Override it when the user should read your reason in their own langua
 ```
 
 - **Nothing is parsed**, and the file keeps its status. The work is `check_file_with_plugin`
-  (`brim_provider.py`), run off the event loop (`asyncio.to_thread`) because the plugin reads the
+  (`parsing.py`), run off the event loop (`asyncio.to_thread`) because the plugin reads the
   file.
 - **`refusal`** comes only with `can_parse: false`, and stays `null` when the plugin has nothing to
   add. A `can_parse` that raises counts as `false`, and a `cannot_parse_detail` that raises leaves
@@ -517,7 +517,7 @@ input format*, below), a refusal is shown in the UI language: a file the plugin 
 language it recognised.
 
 **Where the translations live.** Every code is a key of `importWizard.parseRefusal`, in the import
-wizard's sources (`frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json`), whether it is shared or
+wizard's sources (`frontend/src/lib/features/transactions/import/i18n/{en,it,fr,es}.json`), whether it is shared or
 a plugin's own: a plugin's fragment holds only its `brimPlugins.<code>` keys
 ([The Ownership Gate](registry_pattern.md#plugin-i18n-gate)). Add one with the i18n tool, which finds
 the source from the prefix:
@@ -618,7 +618,7 @@ except Exception as e:
 **Plugin-specific codes** are prefixed with the plugin's name, so they never collide: `danske_*` (Danske Bank: the cash,
 custody and combined layouts), `degiro_*` (`degiro_csv_only`, `degiro_not_account_statement`), `intesa_layout_unknown` and
 `scalable_*` (the [Scalable refusals](#cannot-parse-detail), plus `scalable_not_export`). The catalogue
-`frontend/src/lib/i18n/importWizard/en.json`, under `parseRefusal`, is the list that is always current.
+`frontend/src/lib/features/transactions/import/i18n/en.json`, under `parseRefusal`, is the list that is always current.
 
 **The tests that guard it.** `./dev.py test services brim-parse-error-codes`
 (`backend/test_scripts/test_services/test_brim_parse_error_codes.py`) reads every plugin file statically (`ast`), so a new
@@ -634,7 +634,7 @@ plugin or a new raise is caught without anybody remembering it, and names each o
 
 `POST /brokers/import/gap-fix` ([below](#report-sets)) refuses with **409**
 `{code: "ledger_unreadable", message, reason: "values" | "currency_codes", params}` when LibreFolio's side of the comparison
-cannot be computed (`BRIMLedgerUnreadable`, `_set_error_detail` in `api/v1/brokers.py`). The wizard shows it through
+cannot be computed (`BRIMLedgerUnreadable`, `_set_error_detail` in `api/v1/brokers/sets.py`). The wizard shows it through
 `resolveGapFixFailureMessage` (`parseFailure.ts`) as `importWizard.reportSet.gapFix.ledgerUnreadable.<reason>` with `params`
 (`values`: `count`; `currency_codes`: `codes` and `more`). `message` stays English, the fallback when the key or the `reason`
 is missing; every other set error still shows its `message`.
@@ -660,7 +660,7 @@ Defined on `BRIMProvider` — call these instead of re-implementing:
 from pathlib import Path
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim.brim_provider import BRIMProvider
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.schemas.brim import BRIMExtractedAssetInfo, BRIMParseOutput
 from backend.app.schemas.transactions.transactions import TXCreateItem
 
@@ -713,11 +713,12 @@ A plugin is a folder named after its `provider_code` — here `brim_providers/br
 ```text
 backend/app/services/brim_providers/
 ├── _brim_io.py, _brim_output.py, _scalable.py   ← helpers shared by the plugins
-├── static/                                      ← icons, served under /api/v1/uploads/plugin/brim/…
-├── sample_reports/                              ← every plugin's sample exports (see below)
+├── sample_reports/                              ← what belongs to no plugin: README and malformed/ fixtures
 └── broker_mybroker/
     ├── __init__.py   ← its docstring and nothing else: """BRIM import plugin ``broker_mybroker``: …"""
     ├── plugin.py     ← the code above
+    ├── sample_reports/ ← its sample exports (see below)
+    ├── static/       ← optional: its icons, served as /api/v1/uploads/plugin/brim/broker_mybroker/<file>
     └── i18n/         ← en.json, it.json, fr.json, es.json: its name and description (see below)
 ```
 
@@ -783,7 +784,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 ```
@@ -808,6 +809,7 @@ transaction breaks these rules, so flip source signs as needed:
 
 - `DIVIDEND`/`INTEREST` carry **no** quantity — set `quantity=0` and discard any token
   amount with a warning (see coinbase).
+- **A tax given back is `INTEREST`**, never a `DEPOSIT`: see [A tax refund is interest](#tax-refund-interest).
 - **Crypto — the fiat leg decides the type.** If a row settles in **fiat** (your account
   currency) use a cash type: buy crypto with fiat → `BUY`, sell for fiat → `SELL`, a reward
   paid out in fiat → `INTEREST`, a stock payout → `DIVIDEND`, plain cash in/out →
@@ -853,6 +855,15 @@ transaction breaks these rules, so flip source signs as needed:
     without one, the plugin's `message` is shown as written. The `degiro_*` codes have no
     key on purpose, and `test_no_i18n_key_overrides_the_language_of_the_file`
     (`test_brim_degiro.py`) fails if one is added.
+
+    **An info note the user must read is in the four languages** (the developer, 11/11/2026). A
+    note that explains what the import did on purpose — a tax refund booked as interest, rows not
+    settled yet, rows of another account left out — gets both keys, `importWizard.brimNotice.<code>`
+    and `importWizard.brimEvidence.<code>`, in the four catalogues, whatever the file's language: the
+    plugin's own `message` and `comment` stay as the English fallback. Trade Republic's three notes
+    (`traderepublic_tax_refund`, `traderepublic_not_yet_settled`, `traderepublic_other_account`) and
+    the Scalable notices follow it; the notes of the plugins written before the rule (DEGIRO, Fineco,
+    Crédit Agricole, Danske Bank) keep the file's language until they are revisited.
 
     Field todos follow the same rule, keyed by their `reason_code` under the same namespace
     and resolved by `resolveBrimTodoMessage` (same file), wherever the wizard and the bulk
@@ -973,6 +984,26 @@ transaction breaks these rules, so flip source signs as needed:
     with the position pre-computed from succession legs, **and** the account cash-only
     `TITOLI SCADUTI O ESTRATTI` with the nominal recovered from the same-day coupon) and
     `broker_fineco/plugin.py` (`Rimborso` above par, nominal from the row).
+
+### 💸 A tax refund is interest {: #tax-refund-interest }
+
+A tax the broker **gives back** — a positive tax column, a tax row with the sign of a credit, a tax
+optimisation refund — is imported as an **`INTEREST`**, described `Tax refund` (the developer's rule,
+11/11/2026). It is money given back from the investment's gain, so it belongs in the P&L; a
+`DEPOSIT` would count it as new capital and hide it from the returns. `TAX` cannot carry it, since
+its cash is always negative.
+
+- **Asset:** the refund of a trade's tax goes on the trade's asset; a refund on a cash row has none.
+- **Verbatim:** the amount is the one the report gives, with its sign turned positive; nothing is
+  netted against an earlier tax.
+- **Say so:** one `severity="info"` notice per file that lists the rows (a `code`, `context.count`,
+  the rows as evidence), so the user sees why a tax line became interest.
+- **Only for what comes next:** transactions imported before the rule keep their type; a plugin
+  never migrates or rewrites rows already saved.
+
+Plugins that follow it: `_scalable.py` (`scalable_tax_refund`, version 1.2.0) and
+`broker_traderepublic/_transactions_export.py` (`traderepublic_tax_refund`). eToro's overnight-fee refund,
+money given back in the same spirit, is an `INTEREST` too (decision D1, 24/10/2026).
 
 ## 🔗 Linked pairs from a plugin {: #linked-pairs }
 
@@ -1158,7 +1189,7 @@ return BRIMParseOutput(transactions=transactions, warnings=[*warnings, *skips.no
   *Reason*, the rows, their line numbers). A row shorter than the header is padded; a longer one gets
   numbered headers.
 - **The wizard words them once for every plugin**: `importWizard.brimNotice.<code>` and
-  `importWizard.brimEvidence.<code>`, in the four catalogues (`frontend/src/lib/i18n/importWizard/`), with
+  `importWizard.brimEvidence.<code>`, in the four catalogues (`frontend/src/lib/features/transactions/import/i18n/`), with
   `{count}` as an ICU variable. The message in `RowSkips` is the English fallback.
 - A known row that is safe to drop is **not** collected: count it and write one log line at the end
   (`logger.info(…, count=…)`), as Revolut and Trading 212 do for `Transfer`, and Scalable for a cancelled order.
@@ -1497,7 +1528,7 @@ of the rows, the pairing key, the truth points.
 | Reading | `xlsx_rows`, `csv_rows`, `layout`, `find_layout` | first worksheet with data; header scan by normalised label |
 | Rule M | `RoleMerge`, `coverage`, `by_day`, `same_rows`, `contained_rows` | several files of one role, day by day (below) |
 | Pairing | `assign`, `best_assignment`, `pair_by_key`, `assignments` | one to one, never a guess |
-| Timeline | `merge_spans`, `Segment`, `build_timeline`, `zone` | segments, checkpoint on the eve, windows; used by Danske |
+| Timeline | `Segment`, `build_timeline`, `zone` | segments, checkpoint on the eve, windows; used by Danske |
 
 **`RoleMerge(files, day_of, owner=…, contradiction=…)`** — the two policies of rule M, both with the
 default Danske uses:
@@ -1541,7 +1572,8 @@ ambiguous unless the partners are interchangeable.
     Danske's choices follow from its data, not from the pattern. Do not carry them over without checking
     them against your bank's:
 
-    - the **axis**: Danske places every row on the **value date**; Crédit Agricole's zones, intervals and
+    - the **axis**: Danske pairs rows and places them in zones on the **value date**, yet records each
+      transaction on its trade date (`Kauppapäivä`, since 1.1.0); Crédit Agricole's zones, intervals and
       balances are on the **operation date**, and the value date only pairs rows;
     - the **zones** tied to *segments* of the custody history, the settlement lag of 5 business days and the
       `deferred` outcome: Crédit Agricole has none (its zones come from the balances of the account);
@@ -1735,8 +1767,9 @@ Danske places every row on the **value-date** axis:
 
 The axis places the rows; it does not date them. The parse records each transaction on its
 operation date, under the rule *The operation date, and only settled rows*
-([Import philosophy](#import-philosophy-currency-rules)): the custody trade date, or the `Pvm` of
-a cash-only row, its only date. Pairing, zones, `not_yet_settled` and `deferred` read the value
+([Import philosophy](#import-philosophy-currency-rules)): the custody trade date (`Kauppapäivä`,
+since 1.1.0; before it the pairs took the cash `Pvm`), or the `Pvm` of a cash-only row, its only
+date. Pairing, zones, `not_yet_settled` and `deferred` read the value
 date, because the bank moves the cash on that day.
 
 Every row gets exactly one outcome, with a reason when it is excluded: no row leaves the set's
@@ -1950,11 +1983,12 @@ The framework has its own suites: `./dev.py test services brim-report-sets`,
 
 The parametrized suite in `backend/test_scripts/test_external/test_brim_providers.py`
 auto-covers your plugin — **but only if a sample is present**. Copy one real (anonymized)
-export into `backend/app/services/brim_providers/sample_reports/`, with a filename that
+export into `backend/app/services/brim_providers/broker_mybroker/sample_reports/`, with a filename that
 contains your `test_file_pattern`/`test_file_patterns` substring:
 
 ```bash
-cp mybroker-export.csv backend/app/services/brim_providers/sample_reports/mybroker-export.csv
+mkdir -p backend/app/services/brim_providers/broker_mybroker/sample_reports
+cp mybroker-export.csv backend/app/services/brim_providers/broker_mybroker/sample_reports/mybroker-export.csv
 ```
 
 Then run just the BRIM suite:

@@ -485,7 +485,7 @@ set*) is generic:
 
 ## 🧪 Samples and tests
 
-- `backend/app/services/brim_providers/sample_reports/` holds the **main** set
+- `backend/app/services/brim_providers/broker_danske_bank/sample_reports/` holds the **main** set
   (`danske_bank-custody.xlsx`, `danske_bank-cash.csv`) and the **gap** set
   (`danske_bank-gap-custody-1.xlsx`, `danske_bank-gap-custody-2.xlsx`, `danske_bank-gap-cash.csv`):
   synthetic values on the real column layout, declared in `test_sample_sets` and described in the

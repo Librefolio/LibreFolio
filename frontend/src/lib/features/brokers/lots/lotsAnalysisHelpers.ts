@@ -108,3 +108,14 @@ export function collectInvolvedLotIds(events: readonly InvolvedEventRow[], click
     });
     return Array.from(new Set<number>([clicked.lot_id, ...involved.map((row) => row.lot_id)]));
 }
+
+/**
+ * The selection kept when the lots on screen change: a new answer, or another matching method (project 69, D12). The
+ * lots are the same in FIFO and in LIFO — a lot is born of a purchase — so one selection serves both: the ids still among
+ * `lots`, in the order the user chose them. When none drops it is `selected` itself, so a switch of method hands nothing
+ * new to the charts and the table.
+ */
+export function keepSelection(selected: number[], lots: readonly {lot_id: number}[]): number[] {
+    const valid = new Set(lots.map((lot) => lot.lot_id));
+    return selected.every((id) => valid.has(id)) ? selected : selected.filter((id) => valid.has(id));
+}

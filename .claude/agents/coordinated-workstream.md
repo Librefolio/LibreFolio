@@ -161,14 +161,26 @@ lsof -nP -iTCP:<YOUR_PORT> -sTCP:LISTEN
 Your lane keeps your data apart from the others, not your CPU: many sessions run on the
 same laptop.
 
-- **Heavy runs only in a slot.** `all-backend`, a whole category, an E2E block or the
-  gallery need a slot from the coordinator, with a cut-off time. Ask for it with the list
-  of runs and their expected duration, and say when the slot is free again.
+- **Run what you touched, never the whole** (developer decision, 11/11/2026). A checkpoint carries the suites of the
+  files you changed and their direct neighbours: the runner actions for those files, Vitest of those files, the E2E of
+  the pages you touched, `front check` after a move. Never `all-backend`, `all-frontend` or a whole category: the
+  coordinator runs the full suites on the merged result, once enough changes have piled up across subsystems. A red
+  found after the merge is fixed then.
+- **The heavy lock is for the server.** A targeted run that starts the shared backend or Playwright goes under
+  `flock /tmp/librefolio-heavy.lock`; docs builds, pure pytest and Vitest do not. The gallery still needs a slot from
+  the coordinator, with a cut-off time. If a wait passes one hour, tell the coordinator.
 - **Light checks wait for the load.** `front check`, single test files, linters and docs
   builds run only while the 1-minute load (`sysctl -n vm.loadavg`) is below 50.
 - **A timeout under load is not yet a verdict.** Use `test-triage` and re-run alone at
   normal load before calling a red product or flaky.
 - Keep scripts and logs in your session folder, not `/tmp`: a reboot wipes `/tmp`.
+- **Test temp files go to disk, not `/tmp`** (developer decision, 11/11/2026). `/tmp` is a 7.8 GB RAM disk and stays so.
+  Run every test command (`dev.py test`, pytest, Vitest, Playwright, `mkdocs gallery`) with
+  `TMPDIR=~/.cache/librefolio-test-tmp/<lane-name>` (create it first): pytest's basetemp, Playwright and Node write there.
+  `dev.py test`, `server --test` and `mkdocs gallery` set it by themselves (`~/.cache/librefolio-test-tmp/<port>`, WT-T1);
+  set it by hand only for pytest, Vitest or Playwright run directly. pytest keeps `tmp_path` of failed tests only.
+  Locks and the small lane data directory stay in `/tmp`. Delete your subfolder when your lane ends; the coordinator,
+  when space runs short, deletes the subfolders no process holds open, oldest first.
 
 ### Real data
 

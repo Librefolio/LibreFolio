@@ -30,9 +30,9 @@ from typing import AbstractSet, Iterable, Mapping, Optional, Sequence
 from sqlalchemy import and_, case, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, PriceHistory
+from backend.app.db.models import Asset, FxRate, PriceHistory
 from backend.app.schemas.common import Currency
-from backend.app.schemas.risk import RiskEligibilityLevel, RiskEligibilityReason, RiskHistoricalReplayExclusionReason
+from backend.app.schemas.risk.vocabulary import RiskEligibilityLevel, RiskEligibilityReason, RiskHistoricalReplayExclusionReason
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 
@@ -62,6 +62,10 @@ class PriceWindowFacts:
     """Earliest quote of the asset's whole history, even after the window."""
     last_quote_ever: Optional[date] = None
     """Latest quote of the asset's whole history, even after the window."""
+    currency: Optional[str] = None
+    """The asset's currency: the start of the conversion `fx_available` speaks of; None when the asset has none."""
+    fx_first_rate_date: Optional[date] = None
+    """When `fx_available` is False: the date of the earliest rate stored for the pair, either way round; None when no rate is stored at all."""
 
 
 def _days(later: date, earlier: date) -> int:
@@ -266,10 +270,13 @@ async def load_price_window_facts(
 
     currencies = dict((await session.execute(select(Asset.id, Asset.currency).where(Asset.id.in_(ids)))).all())
     fx_ok: dict[str, bool] = {}
+    fx_first_rate: dict[str, Optional[date]] = {}
     for currency in sorted({code for code in currencies.values() if code and code != target_currency}):
         probes = [(Currency(code=currency, amount=1), target_currency, window_start), (Currency(code=currency, amount=1), target_currency, window_end)]
         results, _errors = await convert_bulk(session, probes, raise_on_error=False)
         fx_ok[currency] = all(result is not None for result in results)
+        if not fx_ok[currency]:
+            fx_first_rate[currency] = await _first_rate_date(session, currency, target_currency)
 
     facts: dict[int, PriceWindowFacts] = {}
     for asset_id in ids:
@@ -284,5 +291,13 @@ async def load_price_window_facts(
             first_quote_in_window=first_in,
             first_quote_ever=first_ever,
             last_quote_ever=last_ever,
+            currency=currency,
+            fx_first_rate_date=fx_first_rate.get(currency) if currency else None,
         )
     return facts
+
+
+async def _first_rate_date(session: AsyncSession, currency: str, target_currency: str) -> Optional[date]:
+    """The date of the earliest rate stored for the pair of ``currency`` and ``target_currency``, whichever way round it is stored; None when none is."""
+    base, quote = sorted((currency, target_currency))
+    return (await session.execute(select(func.min(FxRate.date)).where(FxRate.base == base, FxRate.quote == quote))).scalar_one_or_none()

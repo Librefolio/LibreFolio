@@ -138,7 +138,7 @@ related:
 | FormModal | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
 | WacPreviewSection | `frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte` |
 | AssetEventPicker | `frontend/src/lib/features/transactions/events/AssetEventPicker.svelte` |
-| FxSyncModal | `frontend/src/lib/components/fx/FxSyncModal.svelte` |
+| FxSyncModal | `frontend/src/lib/features/fx/FxSyncModal.svelte` |
 | ValidateScheduler | `frontend/src/lib/features/transactions/useValidateScheduler.svelte.ts` |
 | E2E WAC FX | `frontend/e2e/transactions/tx-wac-fx.spec.ts` |
 | E2E WAC mode | `frontend/e2e/transactions/tx-wac-mode.spec.ts` |

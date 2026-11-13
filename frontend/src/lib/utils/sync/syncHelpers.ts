@@ -13,7 +13,7 @@ import type {Component, Snippet} from 'svelte';
 import {AlertCircle, AlertTriangle, Check, SkipForward} from 'lucide-svelte';
 import type {LegDetail} from '$lib/utils/providerHelpers';
 import {formatFixed} from '$lib/utils/core/formatFixed';
-import {extractDaysBack, type RawPricePoint} from '$lib/utils/assetPriceDerived';
+import {extractDaysBack, type RawPricePoint} from '$lib/features/assets/assetPriceDerived';
 import {addDays} from '$lib/utils/dateOnly';
 
 // =========================================================================

@@ -2,7 +2,7 @@
     import {onDestroy} from 'svelte';
     import {goto} from '$app/navigation';
 
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {_ as t} from '$lib/i18n';

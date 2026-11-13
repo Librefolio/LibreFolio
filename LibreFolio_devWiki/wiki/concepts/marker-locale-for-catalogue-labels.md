@@ -41,5 +41,5 @@ literal fail in any language.
 |------|------|
 | `MARKER_LOCALE = 'qaa'` and the `marked()` helper | `frontend/src/lib/components/ui/data-editor/DataEditor.test.ts` |
 | The presets, tested the same way | `frontend/src/lib/components/ui/date/DateRangePicker.test.ts` |
-| «Auto», «Min», «Max» | `frontend/src/lib/components/charts/ChartSignalsSection.test.ts` |
+| «Auto», «Min», «Max» | `frontend/src/lib/features/signals/components/ChartSignalsSection.test.ts` |
 | The rolling-return window's keys | `frontend/src/lib/components/charts/calendarReturnWindow.ts` |

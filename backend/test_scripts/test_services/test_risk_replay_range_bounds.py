@@ -81,7 +81,9 @@ from sqlalchemy.pool import NullPool
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import Asset, AssetType, PriceHistory
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.risk import RiskAnalyticResult, RiskQueryRequest, RiskResultStatus
+from backend.app.schemas.risk.results import RiskAnalyticResult
+from backend.app.schemas.risk.scope import RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskResultStatus
 from backend.app.services.assets import price_query
 from backend.app.services.risk import service as risk_service_module
 from backend.app.services.risk.service import RiskService

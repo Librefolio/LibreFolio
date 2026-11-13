@@ -95,7 +95,7 @@ in the developer page `mkdocs_src/docs/developer/frontend/state/app-state.md`, s
 | Dashboard triggers | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | Broker page triggers | `frontend/src/routes/(app)/brokers/[id]/+page.svelte` |
 | Asset page triggers (N64, post-sync) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
-| Asset toolbar button (`busy` prop) | `frontend/src/lib/components/assets/detail/AssetDetailToolbarActions.svelte` |
+| Asset toolbar button (`busy` prop) | `frontend/src/lib/features/assets/detail/AssetDetailToolbarActions.svelte` |
 | Assets list, Correlation «Reload All» | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Risk panels' own tokens | `frontend/src/lib/features/risk/riskPanelController.svelte.ts` |
 | Lots panel's own tokens | `frontend/src/lib/features/brokers/lots/LotsAnalysisPanel.svelte` |

@@ -16,10 +16,10 @@
  */
 
 import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays} from '$lib/api/bulkBatches';
-import type {SignalConfig} from '$lib/charts/signals';
-import type {ComparisonTarget} from '$lib/charts/chartSignalRendering';
+import type {SignalConfig} from '$lib/features/signals';
+import type {ComparisonTarget} from '$lib/features/signals/chartSignalRendering';
 import {compactMaxPoints, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
-import type {DerivedPriceState} from '$lib/utils/assetPriceDerived';
+import type {DerivedPriceState} from '$lib/features/assets/assetPriceDerived';
 
 /** An item of the request, as the backend takes it (`FAPriceQueryItem`) for a card or a card's target. */
 export interface ReducedQueryItem {

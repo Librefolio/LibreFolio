@@ -205,7 +205,7 @@ with matching currency instead.
 | Role | Path |
 |------|------|
 | saveWithRetry helper | `frontend/src/lib/utils/trySave.ts` (renamed from saveWithRetry.ts on 2026-05-21; the helper is now `trySave`) |
-| AssetModal | `frontend/src/lib/components/assets/AssetModal.svelte` |
+| AssetModal | `frontend/src/lib/features/assets/AssetModal.svelte` |
 | BrokerImportFilesModal | `frontend/src/lib/features/brokers/BrokerImportFilesModal.svelte` |
 | BrokerSharingModal | `frontend/src/lib/features/brokers/BrokerSharingModal.svelte` |
 | CsvEditor | `frontend/src/lib/components/ui/data-editor/CsvEditor.svelte` |

@@ -74,7 +74,7 @@
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';

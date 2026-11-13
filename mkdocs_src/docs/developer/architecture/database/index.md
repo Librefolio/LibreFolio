@@ -172,26 +172,27 @@ timezone type, and the text on disk reads `2026-10-22 10:00:00.123456`.
 quote equal to today's row stamps nothing
 ([Current Quotes and Today's OHLC](../../backend/assets/architecture.md#current-quotes-and-todays-ohlc), MF-FA).
 
-- **Write.** The application writes `utcnow()` (`backend/app/utils/datetime_utils.py`), an
-  aware UTC datetime. The plain `DateTime` column drops the offset when it binds the value:
-  an aware datetime in another zone would be stored as its local wall-clock time, so convert
-  it to UTC first.
-- **Read.** A value read back is naive. Treat it as UTC: `ensure_utc()` adds the offset, and
-  the API schemas' `UTCDateTime` type serializes it with `Z`.
-- **Declare the column.** Every `datetime` field of a model sets `sa_type=DateTime`. Since
-  SQLModel 0.0.48 a field without it maps to SQLModel's `UTCDateTime`, which refuses a naive
-  value on write and in a filter, and reads every value back aware: the same column would
-  then answer differently from the rest of the schema. A new timestamp field follows the
-  same pattern:
+- **Column type.** Every `datetime` field of a model declares `sa_type=UtcDateTime`
+  (`backend/app/db/utc_datetime.py`), a column over `DateTime` that keeps the text above on disk
+  and speaks aware UTC in Python. A new timestamp field follows the same pattern, and a test
+  fails for any field left on the plain `DateTime`:
 
     ```python
-    created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
+    created_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime)
     ```
 
-- **Moving to aware datetimes** (backlog D-UTC, release 1.4) needs no migration: both
-  mappings store the same text and declare the same `DATETIME` column. What changes is
-  every naive value written or compared by the tests, and the API fields that format a
-  stored value with `isoformat()`.
+- **Write.** The application writes `utcnow()` (`backend/app/utils/datetime_utils.py`), an
+  aware UTC datetime. An aware datetime in another zone is converted to UTC by the column; a
+  **naive** datetime is refused with `ValueError`: its zone is unknown, so the writer must say
+  what it meant (`utcnow()`, or `.replace(tzinfo=UTC)` when it is known to be UTC).
+- **Read.** A value read back is an **aware UTC** datetime, also from a row written before the
+  column type existed: the text on disk is the same. It compares with `utcnow()` as it is, and
+  `isoformat()` ends in `+00:00`; the API schemas' `UTCDateTime` type serializes it with `Z`.
+  `ensure_utc()` stays for values that come from outside the database (an ISO string, a naive
+  value of a file); on a column value it is redundant.
+- **No migration.** The type changed what Python sees, not what the file holds (D-UTC, release
+  1.4): databases, backups and restores are read as they are. SQL written by hand
+  (`post_migration`, the restore) writes the text itself and does not pass through the type.
 
 ## 🧬 Migrations {: #migrations }
 
@@ -469,7 +470,7 @@ The admin view of the same layout is [Filesystem Structure](../../../admin/files
 | `sqlite/app.db.pre-<fix ids>-<UTC>.bak` | `db/post_migration/` | Backup kept after a failed fix |
 | `custom-uploads/<uuid>.<ext>` + `<uuid>.json` | `services/files/static_uploads.py` | Uploaded file and its sidecar: `id`, `original_name`, `extension`, `mime_type`, `size_bytes`, `uploaded_at`, `uploaded_by_user_id`, `description` and `scope`, absent from older sidecars and from the seeded avatars' ([Uploaded Files: Common and Personal](../security.md#upload-scope)); the sidecar is written to a temporary file, then renamed ([File Upload](../../frontend/components/core-ui/file-upload.md)) |
 | `custom-uploads/.avatars_seeded` | `seed_default_avatars()` in `services/files/static_uploads.py` | Marker: the PNGs of `backend/staticResources/Avatars/` were copied, uploader `0` (system); without it the next start copies them again |
-| `broker_reports/` | `services/brim/brim_provider.py` | Reports and sidecars by status and broker, plus `.locks/` ([File Lifecycle](../../backend/brim/architecture.md#file-lifecycle)) |
+| `broker_reports/` | `services/brim/storage.py` | Reports and sidecars by status and broker, plus `.locks/` ([File Lifecycle](../../backend/brim/architecture.md#file-lifecycle)) |
 | `logs/librefolio.log` | `logging_config.py` | structlog `JSONRenderer` lines; `TimedRotatingFileHandler` (`when="W0"`, `utc=True`, `backupCount=52`) whose rotator gzips each archive to `librefolio.log.<date>.gz` |
 | `scheduler_state.json` | `services/platform/scheduler/state.py` | Last run of the `current_price` and `history_sync` jobs, with the count of items a provider's pause deferred (`last_items_deferred`) and their `retry_at`, and the failures in a row (`consecutive_failures`) and `next_attempt_at`, the end of the wait after them ([Provider Pauses and Failures](../../backend/scheduler.md#pauses-and-failures)); written then renamed; a missing or corrupt file means a fresh state |
 | `.scheduler.lock` | `services/platform/scheduler/run_lock.py` | Empty lock that serialises the scheduler's runs across the worker processes ([Several Workers](../../backend/scheduler.md#cross-process-lock)): an exclusive `flock`, the file created `0600` by the first run that takes it and opened with `O_NOFOLLOW`, never deleted. Safe to leave in place; never delete it while LibreFolio runs. Not used where Python has no `fcntl` |

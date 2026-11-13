@@ -7,12 +7,7 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    PortfolioPlannerSourceDateParam,
-    PortfolioPlannerSourceFieldPath,
-    PortfolioPlannerSourceIssue,
-    PortfolioPlannerSourceTextParam,
-)
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceDateParam, PortfolioPlannerSourceFieldPath, PortfolioPlannerSourceIssue, PortfolioPlannerSourceTextParam
 
 PORTFOLIO_PROVENANCE_ID = "source:portfolio-ledger"
 MARKET_PROVENANCE_ID = "source:market-data"

@@ -40,19 +40,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.ai_export.components.fx_core as fx_core_module
 import backend.app.services.ai_export.components.technical_shared as technical_shared_module
-import backend.app.services.portfolio_service as portfolio_service_module
+import backend.app.services.portfolio.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    PortfolioHolding,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    YieldOnCostProvenance,
-    YieldOnCostResult,
-    YieldOnCostStatus,
-)
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.services.ai_export.components.fx_core import FX_CORE_COMPONENTS
 from backend.app.services.ai_export.components.fx_payloads import (
     FxExposureBaseQuotePayload,
@@ -78,7 +72,9 @@ from backend.app.services.ai_export.components.types import BuildScope, DetailLe
 from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, ResourceLoadError, build_bucket_plan_for_scope
 from backend.app.services.fx.base import RateNotFoundError
 from backend.app.services.fx.conversion import convert_bulk
-from backend.app.services.portfolio_service import PortfolioService, _portfolio_l2_cache, _wac_cache
+from backend.app.services.portfolio.portfolio_service import PortfolioService
+from backend.app.services.portfolio.report import _portfolio_l2_cache
+from backend.app.services.portfolio.wac import _wac_cache
 from backend.app.utils.datetime_utils import utcnow
 
 # =============================================================================

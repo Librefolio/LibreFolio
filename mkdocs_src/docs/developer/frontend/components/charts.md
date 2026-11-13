@@ -261,12 +261,12 @@ the chart is converted, and each Asset comparison gets an item of its own — `i
 `include_events: true`, `target_currency` set to the chart currency — with the same signal request,
 so every line uses one window and one currency. The page's `queryAssetPricesBulkWithSignalIsolation()`
 sends it, and `parseAssetPriceQueryWithSignalIsolation()`
-(`lib/components/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
+(`lib/features/assets/detail/assetDetailPriceQuery.ts`) validates each signal result on its own, so one
 malformed result does not discard the response. The page then reads the signal results inside a `try` of
 their own (X-R16): a malformed one fails the signals only, with the panel's notice «Technical signals could
 not be updated», while the prices still reach the chart, the price cache and the **All** start. The FX
 detail page reads `POST /api/v1/fx/currencies/convert` the same way, through
-`parseFxConvertWithSignalIsolation()` (`lib/components/fx/fxDetailConvertQuery.ts`), so its rates survive a
+`parseFxConvertWithSignalIsolation()` (`lib/features/fx/fxDetailConvertQuery.ts`), so its rates survive a
 malformed signal result too.
 
 The same plugin is also in the signal catalog (see
@@ -310,7 +310,7 @@ computable point it is `unavailable` (`undefined_metric`).
   list reads, so a card in the rolling return opens the detail in it. The window is the shared
   `calendarReturnWindow` / `calendarReturnWindowAuto` of the same settings
   (`effectiveCalendarReturnWindow()`).
-- **Request builder.** `lib/charts/fxDetailCalendar.ts` (pure) builds the body of
+- **Request builder.** `lib/features/signals/fxDetailCalendar.ts` (pure) builds the body of
   `POST /api/v1/fx/currencies/convert`: `buildFxDetailCalendarQuery()` returns a conversion of 1 unit
   of the page's base into its quote, in the direction the page shows (`data.urlBase` /
   `data.urlQuote`), daily over `dateStart`..`dateEnd`, with one signal, the calendar rolling return
@@ -357,7 +357,7 @@ only its own layout (page size, column widths, order and visibility) under its `
 
 #### Asset detail: page sync and comparison sync
 
-`requiredFxPairs` (built by `buildRequiredFxPairs()`, `lib/components/assets/detail/assetDetailFxRequirements.ts`)
+`requiredFxPairs` (built by `buildRequiredFxPairs()`, `lib/features/assets/detail/assetDetailFxRequirements.ts`)
 lists the FX pairs the page needs to convert into the chart currency: the
 asset's, each Asset comparison's, and those of their events' currencies. Each pair has a status
 (`ok`, `missing`, `no-data`, `partial-gap`) that drives the data-quality banners. The toolbar
@@ -379,7 +379,7 @@ a comparison line never mixes currencies.
 #### Measure mode {: #measure-mode }
 
 The asset detail and FX pair pages measure on their chart through `MeasurePanel`
-(`lib/components/charts/MeasurePanel.svelte`). The asset page mounts one panel per primary mode and
+(`lib/features/signals/components/MeasurePanel.svelte`). The asset page mounts one panel per primary mode and
 talks to the one on screen (`activeMeasurePanel()`). 📏 calls the panel's `startMeasureMode()` or
 `stopMeasureMode()`; the panel reports its mode through `onmeasuremodechange`, and the page hands it
 to the chart as `measureMode`, with the chart's two measure callbacks wired to the panel:
@@ -488,7 +488,7 @@ class then only resets the line height.
 
 ### Signal rendering shared by cards, preview and detail pages {: #signal-rendering }
 
-`lib/charts/chartSignalRendering.ts` is the one place that turns a chart's saved signals into
+`lib/features/signals/chartSignalRendering.ts` is the one place that turns a chart's saved signals into
 `RenderedSignal[]`. It is pure (no Svelte state, no store read): the caller says where the series
 come from.
 
@@ -510,7 +510,7 @@ use the same functions: `renderLocalSignals` for their saved local signals, `ren
 for their backend results and, on the FX page, the module's `fxPointToLineDataPoint` to turn store
 points into chart points. They build their `SignalDataSources` with the pure helper
 `detailPageSignalSources({configs, assets, fxPairPoints, selfAssetId?})`
-(`lib/charts/chartPageSignals.ts`):
+(`lib/features/signals/chartPageSignals.ts`):
 
 - an FX pair reads the points of the FX store, straight (the signal's own `_inverted` turns them),
   asked lazily, one pair at a time;
@@ -530,7 +530,7 @@ A saved comparison names its target; it never carries the series. The settings s
 config (`params.assetId` for an `asset-comparison`, `params.pairSlug` for an `fx-pair`), and the
 renderers read the series through `SignalDataSources` (`comparisonTarget(assetId)` and
 `fxPairData(slug)`, see [above](#signal-rendering)). A chart that holds no series of its own (the
-cards of both lists and the settings preview) gets them from `lib/charts/comparisonSeries.ts`, the
+cards of both lists and the settings preview) gets them from `lib/features/signals/comparisonSeries.ts`, the
 one door:
 
 | Function | Role |
@@ -853,7 +853,7 @@ ECharts sets what a tooltip formatter returns as `innerHTML`. Every value a form
 the data or from currency metadata (names, captions, currency codes, flags, event types) goes
 through the shared `escapeHtml` (`lib/utils/core/escapeHtml.ts`) where it is interpolated; a flag
 is such a value, read from `getCurrencyInfo(code).flag_emoji`. A series label with its icon goes
-through `signalLabelToHtml` (`lib/charts/signalLabel.ts`), which escapes it.
+through `signalLabelToHtml` (`lib/components/charts/signalLabel.ts`), which escapes it.
 
 The frontend sources hold one HTML escaper: write no local copy. `escapeHtml` escapes `&`, `<`,
 `>`, `"` and `'`, so its output is also safe inside an attribute, whichever quote the call site
@@ -906,15 +906,20 @@ detail page. It uses **segment morph** animation:
   arcs of at least 18° (`minShowLabelAngle`); the outer ring captions each member outside with its
   share, the generic member as `dashboard.allocationGeneric` ("Generic ETF"), and its tooltip adds
   a `↳ <family> <share>%` line.
-- Shades (`shadeForDepth`, `allocationHierarchy.ts`): the generic member keeps the family colour,
-  each subtype is shaded by its rank among the subtypes. With one or two subtypes the lightness
-  walks away from the nearer extreme; from three on, the shades spread on both sides of the base
-  within lightness 10–90, every other one at half saturation.
+- Colours and shades: the family's colour is `categoryColor('type', family, …)` of
+  `lib/theme/chartCategories.ts`, one fixed colour per key (asset types read the roles `--lf-cat-*`
+  of `tokens.css`). The generic member keeps it; each subtype is the shade `familyShade` of
+  `lib/theme/chartShades.ts` gives for its rank among the subtypes (`allocationRings.ts` counts the
+  rank, `AllocationPieChart.svelte` passes the function in). Ranks 1-3 mix toward the near pole, 4-6
+  toward the far one (the poles come from `shadePoles(isDark, card)`, the card read as a role), and
+  the cycle restarts after the sixth. The mix is done in OKLab (`mixOklab`). The chart rebuilds on
+  a theme change (`onThemeClassChange`) and on a Designer Lab colour edit (`onChartColorsChange`),
+  both from `lib/theme/themeMode.ts`.
 
 `AllocationPanel` persists its view and tab per user (`dashboard-allocation-view`,
 `dashboard-allocation-tab`), shared with Broker detail; a restored History requests its data on
 mount, as the click does. Its History view, `AllocationHistoryChart`, groups types by the same
-families but draws one area per family, without shades; the tooltip lists each family's members,
+families but draws one area per family, without shades (it passes `shade: (base) => base`); the tooltip lists each family's members,
 the generic one as `dashboard.allocationGeneric`.
 
 ## Numeric Values (TweenedValue)

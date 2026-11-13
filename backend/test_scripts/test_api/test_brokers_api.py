@@ -13,7 +13,7 @@ Creator becomes OWNER automatically.
 Users only see brokers they have access to.
 
 See checklist: 01_test_broker_transaction_subsystem.md - Category 5
-Reference: backend/app/api/v1/brokers.py
+Reference: backend/app/api/v1/brokers/
 """
 
 import uuid
@@ -24,7 +24,8 @@ from typing import Optional
 import httpx
 import pytest
 
-from backend.app.config import PROJECT_ROOT, get_settings
+from backend.app.config import get_settings
+from backend.test_scripts.brim_samples import SampleDir
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -1329,7 +1330,7 @@ class TestBrokerImportEndpoints:
             assert create_resp.status_code == 200, create_resp.text
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
-            sample_report = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "generic_simple.csv"
+            sample_report = SampleDir() / "generic_simple.csv"
             upload_resp = await client.post(
                 f"{API_BASE}/brokers/import/upload",
                 files={"file": (sample_report.name, sample_report.read_bytes(), "text/csv")},
@@ -1372,7 +1373,7 @@ class TestBrokerImportEndpoints:
             assert create_resp.status_code == 200, create_resp.text
             broker_id = create_resp.json()["results"][0]["broker_id"]
 
-            sample_report = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "generic_with_assets.csv"
+            sample_report = SampleDir() / "generic_with_assets.csv"
             upload_resp = await client.post(
                 f"{API_BASE}/brokers/import/upload",
                 files={"file": (sample_report.name, sample_report.read_bytes(), "text/csv")},

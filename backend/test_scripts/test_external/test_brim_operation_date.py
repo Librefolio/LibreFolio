@@ -45,16 +45,16 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import BRIMParseOutput
-from backend.app.services.brim.brim_provider import write_combined_csv
+from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_samples import SampleDir
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
 
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 BROKER_ID = 1
 ACCOUNT_HEADER = "Data Op.;Data Val.;Causale;Descrizione;Importo;Divisa"
 

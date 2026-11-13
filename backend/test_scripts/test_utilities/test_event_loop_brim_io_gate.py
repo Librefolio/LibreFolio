@@ -1,13 +1,14 @@
 """
 Gate: no synchronous BRIM file-store call runs on the event loop (L5).
 
-``backend/app/services/brim/brim_provider.py`` is the BRIM file store. Its module-level functions read and write
+``backend/app/services/brim/`` holds the BRIM file store (``storage.py``, ``combined_files.py``, ``parsing.py``, with ``candidates.py`` and
+``duplicates.py``). Their module-level functions read and write
 ``broker_reports/`` — data files, metadata sidecars, the per-broker ``flock`` under ``.locks/`` — synchronously;
 the coroutines among them (asset search, duplicate detection) are the exception, and are awaited. An
 ``async def`` handler that calls one of the synchronous ones directly runs that I/O on uvicorn's single event
 loop, and every other request waits for it. The project rule
 (``LibreFolio_devWiki/wiki/problems/event-loop-blocking.md``): in an ``async def``, sync I/O goes through
-``await asyncio.to_thread(fn, ...)``. The BRIM routes of ``api/v1/brokers.py`` follow it almost everywhere; this
+``await asyncio.to_thread(fn, ...)``. The BRIM routes of ``api/v1/brokers/`` follow it almost everywhere; this
 gate makes the exceptions visible and keeps new ones out.
 
 What it reads, with ``ast`` only — nothing is imported:
@@ -15,12 +16,12 @@ What it reads, with ``ast`` only — nothing is imported:
 - the module's synchronous functions: its top-level ``def`` (not ``async def``), and the module-level aliases of
   one (``broker_metadata_lock = _broker_metadata_lock``);
 - in every ``backend/app/api/v1/**/*.py``, the names bound to the module (``from backend.app.services.brim import
-  brim_provider [as x]``, ``import backend.app.services.brim.brim_provider [as x]``, the relative forms) and the
+  storage [as x]``, ``import backend.app.services.brim.storage [as x]``, the relative forms) and the
   synchronous functions imported from it by name;
 - inside every ``async def``, each call to one of them: ``<alias>.<fn>(...)``, or ``<fn>(...)`` for a function
   imported by name.
 
-A reference is not a call: ``await asyncio.to_thread(brim_provider.fn, ...)`` hands the function to a worker
+A reference is not a call: ``await asyncio.to_thread(storage.fn, ...)`` hands the function to a worker
 thread, which is the rule. The body of a nested ``def`` or ``lambda`` runs wherever it is called — handed to
 ``to_thread``, on a thread — so it is not part of the handler's own body; a nested ``async def`` is scanned on its
 own. A synchronous handler (``def``) runs in FastAPI's threadpool and is never flagged.
@@ -44,8 +45,12 @@ from backend.test_scripts.test_utils import print_section, print_success
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 # The guarded module, by path: if it moves, the gate fails loudly instead of scanning for nothing.
-BRIM_PROVIDER = REPO_ROOT / "backend" / "app" / "services" / "brim" / "brim_provider.py"
-BRIM_PROVIDER_MODULE = "backend.app.services.brim.brim_provider"
+BRIM_DIR = REPO_ROOT / "backend" / "app" / "services" / "brim"
+GUARDED_MODULES = ("storage", "combined_files", "parsing", "candidates", "duplicates")
+BRIM_PACKAGE = "backend.app.services.brim"
+# The module the control cases are written against; the repository scan covers every one of GUARDED_MODULES.
+BRIM_PROVIDER = BRIM_DIR / "storage.py"
+BRIM_PROVIDER_MODULE = f"{BRIM_PACKAGE}.storage"
 API_DIR = REPO_ROOT / "backend" / "app" / "api" / "v1"
 # The package of the API modules, for the relative imports of the control cases.
 API_PACKAGE = "backend.app.api.v1"
@@ -75,7 +80,7 @@ def package_of(path: Path) -> str:
 class Bindings:
     """How one source file reaches the module."""
 
-    # Dotted names that denote the module itself: "brim_provider", "store", "backend.app.services.brim.brim_provider".
+    # Dotted names that denote the module itself: "storage", "store", "backend.app.services.brim.storage".
     modules: frozenset[str]
     # Local name → function name, for the module's synchronous functions imported by name.
     functions: dict[str, str] = field(default_factory=dict)
@@ -113,9 +118,10 @@ class BlockingCall:
     line: int
     function: str
     target: str
+    module: str = "storage"
 
     def __str__(self) -> str:
-        return f"{self.path}:{self.line} {self.function} -> brim_provider.{self.target} — use await asyncio.to_thread(...)"
+        return f"{self.path}:{self.line} {self.function} -> {self.module}.{self.target} — use await asyncio.to_thread(...)"
 
 
 def _dotted(node: ast.AST) -> str | None:
@@ -152,13 +158,13 @@ def _calls_in_own_body(handler: ast.AsyncFunctionDef, found: Bindings, sync_name
     return hits
 
 
-def blocking_calls(source: str, path: str, package: str, sync_names: frozenset[str]) -> list[BlockingCall]:
+def blocking_calls(source: str, path: str, package: str, sync_names: frozenset[str], module: str = BRIM_PROVIDER_MODULE) -> list[BlockingCall]:
     """Every call of the module's synchronous functions inside an ``async def`` of ``source``, in line order."""
     tree = ast.parse(source, filename=path)
-    found = bindings(tree, package, sync_names)
+    found = bindings(tree, package, sync_names, module)
     if not found:
         return []
-    return sorted(BlockingCall(path, line, node.name, target) for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef) for line, target in _calls_in_own_body(node, found, sync_names))
+    return sorted(BlockingCall(path, line, node.name, target, module.rpartition(".")[2]) for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef) for line, target in _calls_in_own_body(node, found, sync_names))
 
 
 # =============================================================================
@@ -167,9 +173,14 @@ def blocking_calls(source: str, path: str, package: str, sync_names: frozenset[s
 
 
 @functools.cache
+def _module_sync_functions(name: str) -> frozenset[str]:
+    path = BRIM_DIR / f"{name}.py"
+    assert path.is_file(), f"{path.relative_to(REPO_ROOT)} is gone: point the gate at the BRIM file store again, never let it scan for nothing"
+    return sync_functions(path.read_text(encoding="utf-8"))
+
+
 def _store_sync_functions() -> frozenset[str]:
-    assert BRIM_PROVIDER.is_file(), f"{BRIM_PROVIDER.relative_to(REPO_ROOT)} is gone: point the gate at the BRIM file store again, never let it scan for nothing"
-    return sync_functions(BRIM_PROVIDER.read_text(encoding="utf-8"))
+    return _module_sync_functions("storage")
 
 
 def _api_sources() -> list[Path]:
@@ -209,48 +220,48 @@ class BRIMProvider:
 """
 
 DIRECT_CALL = """
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 
 
 async def preview(file_id):
-    path = brim_provider.get_file_path(file_id)
+    path = storage.get_file_path(file_id)
     return path
 """
 
 ALLOWED_SHAPES = """
 import asyncio
 
-from backend.app.services.brim import brim_provider, brim_report_sets
+from backend.app.services.brim import storage, brim_report_sets
 
 
 async def preview(file_id):
-    path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
+    path = await asyncio.to_thread(storage.get_file_path, file_id)
 
     def work():
-        return brim_provider.get_file_path(file_id)
+        return storage.get_file_path(file_id)
 
     other = await asyncio.to_thread(work)
-    third = await asyncio.to_thread(lambda: brim_provider.get_file_path(file_id))
-    found = await brim_provider.search_asset_candidates("x")
+    third = await asyncio.to_thread(lambda: storage.get_file_path(file_id))
+    found = await storage.search_asset_candidates("x")
     unrelated = brim_report_sets.get_file_path(file_id)
     return path, other, third, found, unrelated
 
 
 def sync_route(file_id):
-    return brim_provider.get_file_path(file_id)
+    return storage.get_file_path(file_id)
 """
 
 # Every way to reach the module or a sync function of it; each source makes exactly one call on the loop.
 IMPORT_FORMS = {
-    "from-import as": ("from backend.app.services.brim import brim_provider as store\n\n\nasync def h(f):\n    return store.get_file_path(f)\n", "h", "get_file_path"),
-    "import as": ("import backend.app.services.brim.brim_provider as store\n\n\nasync def h(f):\n    return store.get_file_path(f)\n", "h", "get_file_path"),
-    "plain import": ("import backend.app.services.brim.brim_provider\n\n\nasync def h(f):\n    return backend.app.services.brim.brim_provider.get_file_path(f)\n", "h", "get_file_path"),
-    "relative import": ("from ...services.brim import brim_provider\n\n\nasync def h(f):\n    return brim_provider.get_file_path(f)\n", "h", "get_file_path"),
-    "function by name": ("from backend.app.services.brim.brim_provider import get_file_path as locate\n\n\nasync def h(f):\n    return locate(f)\n", "h", "get_file_path"),
-    "lazy import": ("async def h(f):\n    from backend.app.services.brim import brim_provider\n\n    return brim_provider.get_file_path(f)\n", "h", "get_file_path"),
-    "alias of a function": ("from backend.app.services.brim import brim_provider\n\n\nasync def h(b):\n    with brim_provider.broker_lock(b):\n        return b\n", "h", "broker_lock"),
-    "nested async def": ("from backend.app.services.brim import brim_provider\n\n\ndef outer():\n    async def inner(f):\n        return brim_provider.get_file_path(f)\n\n    return inner\n", "inner", "get_file_path"),
-    "async method": ("from backend.app.services.brim import brim_provider\n\n\nclass Routes:\n    async def h(self, f):\n        return brim_provider.get_file_path(f)\n", "h", "get_file_path"),
+    "from-import as": ("from backend.app.services.brim import storage as store\n\n\nasync def h(f):\n    return store.get_file_path(f)\n", "h", "get_file_path"),
+    "import as": ("import backend.app.services.brim.storage as store\n\n\nasync def h(f):\n    return store.get_file_path(f)\n", "h", "get_file_path"),
+    "plain import": ("import backend.app.services.brim.storage\n\n\nasync def h(f):\n    return backend.app.services.brim.storage.get_file_path(f)\n", "h", "get_file_path"),
+    "relative import": ("from ...services.brim import storage\n\n\nasync def h(f):\n    return storage.get_file_path(f)\n", "h", "get_file_path"),
+    "function by name": ("from backend.app.services.brim.storage import get_file_path as locate\n\n\nasync def h(f):\n    return locate(f)\n", "h", "get_file_path"),
+    "lazy import": ("async def h(f):\n    from backend.app.services.brim import storage\n\n    return storage.get_file_path(f)\n", "h", "get_file_path"),
+    "alias of a function": ("from backend.app.services.brim import storage\n\n\nasync def h(b):\n    with storage.broker_lock(b):\n        return b\n", "h", "broker_lock"),
+    "nested async def": ("from backend.app.services.brim import storage\n\n\ndef outer():\n    async def inner(f):\n        return storage.get_file_path(f)\n\n    return inner\n", "inner", "get_file_path"),
+    "async method": ("from backend.app.services.brim import storage\n\n\nclass Routes:\n    async def h(self, f):\n        return storage.get_file_path(f)\n", "h", "get_file_path"),
 }
 
 
@@ -271,8 +282,8 @@ def test_a_direct_call_in_an_async_handler_is_flagged() -> None:
     calls = blocking_calls(DIRECT_CALL, "api/v1/sample.py", API_PACKAGE, sync_functions(STORE_SOURCE))
     assert [(call.function, call.target) for call in calls] == [("preview", "get_file_path")], calls
     (call,) = calls
-    assert "brim_provider.get_file_path(" in DIRECT_CALL.splitlines()[call.line - 1], call
-    assert str(call) == f"api/v1/sample.py:{call.line} preview -> brim_provider.get_file_path — use await asyncio.to_thread(...)"
+    assert "storage.get_file_path(" in DIRECT_CALL.splitlines()[call.line - 1], call
+    assert str(call) == f"api/v1/sample.py:{call.line} preview -> storage.get_file_path — use await asyncio.to_thread(...)"
     print_success("✓ Direct call flagged")
 
 
@@ -294,16 +305,14 @@ def test_every_way_of_reaching_the_module_is_followed(form: str) -> None:
 def test_the_scan_reaches_api_files_that_import_the_store() -> None:
     """Non-vacuity: at least one API module binds the store, so the gate below is about something."""
     print_section("Event loop gate: the scan is not empty")
-    sync_names = _store_sync_functions()
-    importers = [_relative(path) for path in _api_sources() if bindings(ast.parse(path.read_text(encoding="utf-8")), package_of(path), sync_names)]
-    assert importers, f"no module under {_relative(API_DIR)} imports {BRIM_PROVIDER_MODULE}: the gate would be green about nothing — point it at the BRIM routes again"
+    importers = [_relative(path) for path in _api_sources() for name in GUARDED_MODULES if bindings(ast.parse(path.read_text(encoding="utf-8")), package_of(path), _module_sync_functions(name), f"{BRIM_PACKAGE}.{name}")]
+    assert importers, f"no module under {_relative(API_DIR)} imports a BRIM store module: the gate would be green about nothing — point it at the BRIM routes again"
     print_success(f"✓ API modules binding the store: {', '.join(importers)}")
 
 
 def test_no_sync_brim_file_store_call_runs_on_the_event_loop() -> None:
     """The gate: no API ``async def`` calls a synchronous function of the BRIM file store directly."""
     print_section("Event loop gate: API async handlers vs the BRIM file store")
-    sync_names = _store_sync_functions()
-    calls = [call for path in _api_sources() for call in blocking_calls(path.read_text(encoding="utf-8"), _relative(path), package_of(path), sync_names)]
+    calls = [call for path in _api_sources() for name in GUARDED_MODULES for call in blocking_calls(path.read_text(encoding="utf-8"), _relative(path), package_of(path), _module_sync_functions(name), f"{BRIM_PACKAGE}.{name}")]
     assert not calls, "Synchronous BRIM file-store calls inside async handlers block the event loop:\n" + "\n".join(f"  {call}" for call in calls)
     print_success("✓ No synchronous BRIM file-store call on the event loop")

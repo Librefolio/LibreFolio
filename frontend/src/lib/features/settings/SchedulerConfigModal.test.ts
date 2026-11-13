@@ -28,7 +28,9 @@ import {readable} from 'svelte/store';
 import {tick} from 'svelte';
 import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
-vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
+vi.mock('$lib/i18n', () => ({_: readable((key: string, opts?: {values?: Record<string, unknown>}) => (opts?.values ? `${key} ${Object.values(opts.values).join(' ')}` : key))}));
+
+const REMOVE = 'settings.global.scheduler.historyTimesRemove';
 vi.mock('$lib/api', () => ({zodiosApi: {axios: {patch: vi.fn()}}}));
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
 
@@ -71,7 +73,7 @@ function mount(overrides: Record<string, unknown> = {}): Mounted {
 
 /** The time chips, in DOM order, read off the accessible name of their × button. */
 function slots(): string[] {
-    return screen.queryAllByRole('button', {name: /^Remove /}).map((b) => (b.getAttribute('aria-label') ?? '').replace('Remove ', ''));
+    return screen.queryAllByRole('button', {name: new RegExp(`^${REMOVE} `)}).map((b) => (b.getAttribute('aria-label') ?? '').replace(`${REMOVE} `, ''));
 }
 
 function saveButton(): HTMLElement {
@@ -268,7 +270,7 @@ describe('time slots', () => {
     it('removes the slot the user pointed at', async () => {
         mount();
 
-        await fireEvent.click(screen.getByRole('button', {name: 'Remove 09:00'}));
+        await fireEvent.click(screen.getByRole('button', {name: `${REMOVE} 09:00`}));
 
         expect(slots()).toEqual(['17:30']);
     });
@@ -276,7 +278,7 @@ describe('time slots', () => {
     it('blocks the save once the last slot is gone', async () => {
         mount({currentValues: {...DEFAULTS, times: '09:00'}});
 
-        await fireEvent.click(screen.getByRole('button', {name: 'Remove 09:00'}));
+        await fireEvent.click(screen.getByRole('button', {name: `${REMOVE} 09:00`}));
 
         expect(slots()).toEqual([]);
         expect(saveButton()).toBeDisabled();

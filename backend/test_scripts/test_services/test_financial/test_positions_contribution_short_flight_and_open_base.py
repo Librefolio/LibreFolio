@@ -1,6 +1,6 @@
 """MF-A3 (workstream MF, wave 6) — the Performance table's annualized column on a closed flight too short to annualize.
 
-What changed. ``PortfolioService.get_positions_contribution`` (``backend/app/services/portfolio_service.py``), the
+What changed. ``PortfolioService.get_positions_contribution`` (``backend/app/services/portfolio/portfolio_service.py``), the
 ``annualized_return`` of a row:
 
 * MF-A3 — a row fully sold in the period whose closed rule (``closed_position_annualized``) gives no value and whose
@@ -38,7 +38,7 @@ WAC and engine blob caches (process-global) are emptied around each test. No sle
 Runs in ``./dev.py test services roi-fifo-utils``; alone:
 ``./dev.py test services roi-fifo-utils test_positions_contribution_short_flight_and_open_base``.
 
-Reference: backend/app/services/portfolio_service.py (get_positions_contribution),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_positions_contribution),
 backend/app/services/financial_math/portfolio/contributions.py (annualized_period_return, closed_flight_too_short,
 closed_position_base), test_financial_math/test_contributions_short_flight_and_open_base.py (the pure
 numbers).
@@ -61,9 +61,10 @@ from sqlalchemy.pool import NullPool
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
-from backend.app.schemas.portfolio import AssetPeriodContribution
-from backend.app.services import portfolio_service as portfolio_service_module
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 D = Decimal
 EUR = "EUR"
@@ -169,8 +170,8 @@ async def _private_book(directory: Path, scenario: _Scenario) -> AsyncIterator[_
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

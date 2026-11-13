@@ -86,6 +86,8 @@ Import each file into its own broker, in the same import or at different times: 
 
 Only **executed** orders are imported. Orders that are pending, cancelled, expired or rejected are left out quietly, without a note: an order executed later comes with the next export. A row with a status LibreFolio does not know is listed in an amber warning, with a link to open an issue on GitHub.
 
+A **tax given back** — a negative tax on a sale, or a positive *Taxes* row — is imported as **Interest**, described *Tax refund*: it is money given back from your investment's gain, so it counts in your returns. A blue note lists these rows during the import.
+
 !!! note "💡 A file in the wrong broker"
 
     If a broker has a **Default Import Plugin**, the wizard checks every file assigned to it right after the upload. When that plugin cannot read a file, the wizard says why, shows which broker can read it, and offers to move the file, keep it or remove it.

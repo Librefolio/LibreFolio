@@ -29,6 +29,7 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {waitForSettled} from '../fixtures/app-events';
 import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 import {todayIso} from '../fixtures/dates';
@@ -365,6 +366,58 @@ test.describe('Transaction Clone', () => {
         await expect(dateCell).toHaveAttribute('data-partner-date', receiver.date);
     });
 
+    test('clone from view-only broker → no edit/delete actions on row', async ({page}) => {
+        // A row on DEGIRO, where e2e_test_user is a VIEWER — the role read from the API, not
+        // assumed. Any row there will do: the oldest, so the choice is the same on every run.
+        const brokers = (await listBrokers(page)).filter((broker) => broker.name === VIEWER_BROKER);
+        expect(
+            brokers.map((broker) => broker.user_role),
+            `premise: one broker named ${VIEWER_BROKER}, which this user only views — check populate_mock_data.py`,
+        ).toEqual(['VIEWER']);
+        const rows = await readTransactions(page, {broker_id: brokers[0].id});
+        if (rows.length === 0) throw new Error(`${VIEWER_BROKER} holds no transaction visible to this user — check populate_mock_data.py`);
+        const viewOnly = rows.reduce((oldest, row) => (row.id < oldest.id ? row : oldest));
+        await goToRows(page, [viewOnly.id]);
+
+        // Every row offers "view", so every row has its kebab: asserted, not probed.
+        const row = txRow(page, viewOnly.id);
+        await row.hover();
+        const kebabBtn = row.getByTestId(`row-actions-tx-${viewOnly.id}`);
+        await expect(kebabBtn).toBeVisible({timeout: 2_000});
+        await kebabBtn.click();
+        const menu = page.getByTestId('context-menu');
+        await expect(menu).toBeVisible({timeout: 3_000});
+
+        // The menu is drawn and offers what a viewer may do, so the absences below are facts
+        // about this row, not about a menu still on its way. View-only rows should NOT show
+        // delete/edit actions in the kebab menu.
+        await expect(menu.getByTestId('context-menu-action-view')).toBeVisible();
+        await expect(menu.getByTestId('context-menu-action-delete')).toHaveCount(0);
+        await expect(menu.getByTestId('context-menu-action-edit')).toHaveCount(0);
+    });
+});
+
+// Own brokers: the tests below create their broker and the rows on it, so they sign in as an account of their own,
+// not as the shared user — no other spec sees them, and deleting the account takes whatever the cleanup missed.
+test.describe('Transaction Clone — owned brokers', () => {
+    let txWrites: TransactionWriteTracker;
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
+        account = await registerDisposableUser(request, 'cln');
+        await prepareOnboardingAccount(page, account, []);
+        txWrites = await trackTransactionWrites(page);
+    });
+
+    test.afterEach(async ({request}) => {
+        try {
+            await txWrites.cleanup();
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
+    });
+
     test('clone INTEREST sets quantity to 0', async ({page}) => {
         test.setTimeout(60_000);
         await withOwnedBroker(page, txWrites, 'INTEREST', async (owned) => {
@@ -463,36 +516,6 @@ test.describe('Transaction Clone', () => {
             await expect(appended.getByTestId('tx-bulk-row-status')).toHaveAttribute('data-status', 'new');
             await expect(appended.getByTestId('tx-bulk-date'), 'the in-workspace clone must carry the source date').toHaveAttribute('data-date', sourceDate);
         });
-    });
-
-    test('clone from view-only broker → no edit/delete actions on row', async ({page}) => {
-        // A row on DEGIRO, where e2e_test_user is a VIEWER — the role read from the API, not
-        // assumed. Any row there will do: the oldest, so the choice is the same on every run.
-        const brokers = (await listBrokers(page)).filter((broker) => broker.name === VIEWER_BROKER);
-        expect(
-            brokers.map((broker) => broker.user_role),
-            `premise: one broker named ${VIEWER_BROKER}, which this user only views — check populate_mock_data.py`,
-        ).toEqual(['VIEWER']);
-        const rows = await readTransactions(page, {broker_id: brokers[0].id});
-        if (rows.length === 0) throw new Error(`${VIEWER_BROKER} holds no transaction visible to this user — check populate_mock_data.py`);
-        const viewOnly = rows.reduce((oldest, row) => (row.id < oldest.id ? row : oldest));
-        await goToRows(page, [viewOnly.id]);
-
-        // Every row offers "view", so every row has its kebab: asserted, not probed.
-        const row = txRow(page, viewOnly.id);
-        await row.hover();
-        const kebabBtn = row.getByTestId(`row-actions-tx-${viewOnly.id}`);
-        await expect(kebabBtn).toBeVisible({timeout: 2_000});
-        await kebabBtn.click();
-        const menu = page.getByTestId('context-menu');
-        await expect(menu).toBeVisible({timeout: 3_000});
-
-        // The menu is drawn and offers what a viewer may do, so the absences below are facts
-        // about this row, not about a menu still on its way. View-only rows should NOT show
-        // delete/edit actions in the kebab menu.
-        await expect(menu.getByTestId('context-menu-action-view')).toBeVisible();
-        await expect(menu.getByTestId('context-menu-action-delete')).toHaveCount(0);
-        await expect(menu.getByTestId('context-menu-action-edit')).toHaveCount(0);
     });
 
     test('C5a two single rows of one type clone into two independent rows, never one pair', async ({page}) => {

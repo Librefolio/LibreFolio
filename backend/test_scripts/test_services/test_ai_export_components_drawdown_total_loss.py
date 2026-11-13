@@ -54,16 +54,11 @@ import pytest
 from pydantic import ValidationError
 
 import backend.app.services.ai_export.components.drawdown_context as drawdown_module
-from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.risk import (
-    RiskAnalyticResult,
-    RiskDrawdownOutput,
-    RiskDrawdownRecoveryStatus,
-    RiskResultStatus,
-    RiskReturnBasis,
-    RiskWarning,
-)
+from backend.app.schemas.risk.outputs import RiskDrawdownOutput
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskWarning
+from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskResultStatus, RiskReturnBasis
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.drawdown_context import (
     REASON_RISK_ERROR,

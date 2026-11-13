@@ -16,7 +16,7 @@ def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "run",
         "src/lib/stores/__tests__/EditBuffer.test.ts",
         "src/lib/stores/__tests__/TimeSeriesStore.test.ts",
-        "src/lib/stores/__tests__/fxStoreRegistry.test.ts",
+        "src/lib/features/fx/fxStoreRegistry.test.ts",
         "src/lib/stores/currencyGraphStore.test.ts",
         # K step 12b: one global font rule for flags ('LF Flags'), no emoji font ahead of text.
         "src/flagFont.gate.test.ts",

@@ -106,7 +106,7 @@ Another `OWNER` row counts whether or not its account is active: an inactive co-
   `AccountDeletionResult(deleted_broker_ids, files_removed)`. It calls `delete_user()`, which applies the rule
   to each broker of the account in order of id, deletes the account and commits once; on any failure it rolls
   back and re-raises, so nothing is deleted and the route answers `500` *Account deletion failed: nothing was
-  deleted*. The report files live on disk, outside the transaction: `brim_provider.delete_files_for_brokers()`
+  deleted*. The report files live on disk, outside the transaction: `storage.delete_files_for_brokers()`
   removes those of the deleted brokers after the commit, in a worker thread (`asyncio.to_thread`). A failure
   there is logged and leaves the deletion done: the request still succeeds.
 - **The preview.** `user_service.preview_user_deletion(session, user_id)` computes, by the same rule and

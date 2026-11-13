@@ -34,8 +34,8 @@ from backend.app.schemas.prices import (
 from backend.app.schemas.provider import FAQuoteBaseSuggestion
 from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.platform.provider_registry import register_provider
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
-from backend.app.services.provider_registry import register_provider
 
 #: The search query that makes the mock describe the settings it received.
 SETTINGS_ECHO_QUERY = "lf-settings-echo"

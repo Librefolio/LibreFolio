@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 
 import {describe, expect, it} from 'vitest';
 
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/features/signals';
 
 import type {LineDataPoint} from '../LineChart.svelte';
 import {

@@ -16,7 +16,7 @@ Click **Administration**: it opens **Global Settings** and a second row of tabs 
 |---|---|
 | ⚙️ **Global Settings** | The settings of this page |
 | 👥 **Users** | The accounts, the invitations and the password-reset links: [Users & Invitations](users.md) |
-| 💾 **Backup** | The whole instance in one archive, and its restore: [Backup, Restore & Moving](backup_restore.md) |
+| 💾 **Backup** | The whole instance in one archive, and its restore: [Backup, Restore & Moving](backup_restore.md); to make one from the app, start from the [quick start](backup_restore.md#quick-start) |
 | ✉️ **Email** | Whether LibreFolio can send emails, and a test email: [Email](email.md) |
 | 🛡️ **Security** | How the instance is configured and what needs your attention: [Security](#security-tab), below |
 

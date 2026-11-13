@@ -129,7 +129,7 @@ def schemas_fx_routes(verbose: bool = False, test_names: list = None) -> bool:
 def schemas_signals(verbose: bool = False, test_names: list = None) -> bool:
     """Test library-independent technical signal schemas."""
     print_section("Schemas: Technical Signals")
-    print_info("Testing: backend/app/schemas/signals.py")
+    print_info("Testing: backend/app/schemas/signals/")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_signal_schemas.py", test_names)
     return run_command(cmd, "Signal schemas tests", verbose=verbose)
@@ -138,7 +138,7 @@ def schemas_signals(verbose: bool = False, test_names: list = None) -> bool:
 def schemas_risk(verbose: bool = False, test_names: list = None) -> bool:
     """Test canonical risk-series and metadata schemas."""
     print_section("Schemas: Risk Analysis")
-    print_info("Testing: backend/app/schemas/risk.py and DataQualityReport extensions")
+    print_info("Testing: backend/app/schemas/risk/ and DataQualityReport extensions")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_risk_schemas.py", test_names)
     return run_command(cmd, "Risk schemas tests", verbose=verbose)

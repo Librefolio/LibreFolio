@@ -115,4 +115,4 @@ graph TD
 | Asset providers | `backend/app/services/asset_source_providers/` |
 | DB models (Asset, PriceHistory, AssetEvent) | `backend/app/db/models.py` |
 | Asset pages | `frontend/src/routes/(app)/assets/` |
-| Asset components | `frontend/src/lib/components/assets/` |
+| Asset components | `frontend/src/lib/features/assets/` |

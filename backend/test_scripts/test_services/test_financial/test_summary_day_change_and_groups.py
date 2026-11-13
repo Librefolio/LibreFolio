@@ -52,7 +52,7 @@ Isolation: every test owns its user, brokers and assets (unique names) and write
 back: nothing is committed. The report (layer 2), WAC and engine blob caches are emptied around each test. Holdings and
 groups are found by the test's own broker and asset ids; a history belongs to the test's user alone and is read by date.
 
-Reference: backend/app/services/portfolio_service.py (get_summary), backend/app/services/financial_math/returns.py
+Reference: backend/app/services/portfolio/portfolio_service.py (get_summary), backend/app/services/financial_math/returns.py
 (change_ratio, group_gain_loss, timing_effect), backend/app/services/financial_math/portfolio/period.py (day_change).
 """
 
@@ -77,12 +77,14 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioHolding, PortfolioReportQuery, PortfolioReportResponse, PortfolioSummary
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 D = Decimal
 EUR = "EUR"
@@ -129,8 +131,8 @@ class _Book:
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

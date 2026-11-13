@@ -8,7 +8,8 @@ from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
 
-from backend.app.schemas.portfolio import LotsAnalysisResponse, PortfolioReportResponse
+from backend.app.schemas.portfolio.lots import LotsAnalysisResponse
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
 from backend.app.schemas.prices import FAPriceQueryResult
 from backend.app.services.ai_export.components.types import ResourceKey
 

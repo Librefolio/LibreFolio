@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.app.schemas.risk import RiskErrorCode
+from backend.app.schemas.risk.vocabulary import RiskErrorCode
 from backend.app.services.risk.base import RiskExecutionContext, RiskUnavailableError
 
 

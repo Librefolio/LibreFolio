@@ -17,6 +17,35 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Protocol
 
+from backend.app.schemas.common import DateSpan
+from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.utils.day_spans import merged_spans
+
+
+def fx_days_back(requested_date: date, rate_date: date) -> int:
+    """How many days before ``requested_date`` the stored rate row used for it is: ``0`` when the row is of that very day.
+
+    The one reader of the provenance ``convert_bulk`` returns as ``(converted, rate_date, backward_fill_applied)``: a row is never
+    newer than the day asked, and ``backward_fill_applied`` is exactly ``fx_days_back(...) > 0``, so the days are all a caller needs.
+    """
+    return max((requested_date - rate_date).days, 0)
+
+
+def missing_pair_infos(dates_by_pair: Mapping[str, Iterable[date]], spans_by_pair: Mapping[str, Iterable[tuple[date, date]]]) -> list[WACMissingPairInfo]:
+    """The conversions asked and not made, one entry per ``FROM/TO`` pair, as the data-quality report lists them.
+
+    ``dates_by_pair`` are the days a movement asked for a rate and none was found; ``spans_by_pair`` the stretches of valuation days with no
+    rate, merged here (D-P4). Pairs sorted, dates sorted and unique.
+    """
+    return [
+        WACMissingPairInfo(
+            pair=pair,
+            dates=sorted(set(dates_by_pair.get(pair, ()))),
+            ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans_by_pair.get(pair, ()))],
+        )
+        for pair in sorted({*dates_by_pair, *spans_by_pair})
+    ]
+
 
 def oriented_rate[R](rate: R, source: str, destination: str) -> R:
     """The rate from ``source`` to ``destination`` of a pair whose rate is kept in alphabetical order (J-1).
@@ -40,18 +69,6 @@ class UnitRateReader(Protocol):
     def at(self, day: date) -> Decimal | None: ...
 
 
-def merged_windows(windows: Iterable[tuple[date, date]]) -> tuple[tuple[date, date], ...]:
-    """Ascending windows of days (both ends included), overlapping or touching ones joined; a window that ends before it
-    starts holds no day and is left out."""
-    merged: list[tuple[date, date]] = []
-    for first, last in sorted(window for window in windows if window[0] <= window[1]):
-        if merged and first <= merged[-1][1] + timedelta(days=1):
-            merged[-1] = (merged[-1][0], max(merged[-1][1], last))
-        else:
-            merged.append((first, last))
-    return tuple(merged)
-
-
 class AskedDayRates(Mapping[tuple, Decimal]):
     """Unit rates on the days asked only (P3, «formule veloci»): a map built day by day, read from steps.
 
@@ -66,7 +83,7 @@ class AskedDayRates(Mapping[tuple, Decimal]):
 
     def __init__(self, steps: Mapping[tuple[str, str], UnitRateReader], windows: Mapping[tuple[str, str], Iterable[tuple[date, date]]], *, fixed_destination: str | None = None) -> None:
         self._steps = {pair: reader for pair, reader in steps.items() if fixed_destination is None or pair[1] == fixed_destination}
-        self._windows = {pair: merged_windows(asked) for pair, asked in windows.items() if fixed_destination is None or pair[1] == fixed_destination}
+        self._windows = {pair: tuple(merged_spans(asked, skip_reversed=True)) for pair, asked in windows.items() if fixed_destination is None or pair[1] == fixed_destination}
         self._starts = {pair: tuple(first for first, _last in asked) for pair, asked in self._windows.items()}
         self._fixed_destination = fixed_destination
 

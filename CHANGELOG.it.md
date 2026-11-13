@@ -7,6 +7,57 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ---
 
+## [Unreleased]
+
+### ✨ Aggiunto
+
+- Trade Republic: importa il nuovo CSV «Esportazione transazioni» (profilo › Estratti conto › Esportazione transazioni), anche quando è stato risalvato da Excel: acquisti e vendite di fondi, azioni e crypto con commissioni e imposte, interessi con la ritenuta, imposta di bollo, rimborsi d'imposta come interessi, dividendi e bonifici. L'importatore non è più in beta, e la sua guida mostra come scaricare il file. Le righe di un altro conto, come quello di un figlio, restano fuori con una nota: quel conto va esportato dal suo accesso.
+- Modifica di più asset insieme: selezionali nella tabella Asset e usa «Modifica selezionati» per cambiare a tutti il tipo, il benchmark, lo stato attivo, le unità per singolo prezzo, l'icona o l'URL personale. «Verifica ora» mostra cosa blocca il salvataggio (un asset con transazioni non può diventare un Indice) e cosa merita un'occhiata (un tipo che passa a un'altra famiglia, come crowdfunding → ETF), e un riepilogo mostra ogni modifica prima del salvataggio, che è tutto o niente.
+- Analisi dei lotti in FIFO e in LIFO: il pannello dei lotti calcola i due metodi in una sola richiesta e passa dall'uno all'altro con un selettore nell'intestazione (FIFO all'apertura, non salvato). I lotti selezionati restano selezionati; cambiano col metodo il lotto chiuso da una vendita e le cifre che ne seguono. Le pagine di teoria spiegano la regola italiana (LIFO nel regime dichiarativo, costo medio nell'amministrato) e i limiti del calcolo.
+- Il banner della qualità dei dati del pannello dei lotti offre «Aggiungi coppia FX» e «Sincronizza tassi» su un cambio mancante o vecchio, come il banner della Dashboard.
+- Cambio email in attesa nel Profilo: l'indirizzo che aspetta la conferma, scritto per intero, la scadenza del link, «Invia di nuovo» e «Annulla la richiesta».
+- Gli amministratori vedono i cambi email in attesa: un badge «Cambio email in attesa» sull'account, e il link in «Link degli account» si può revocare.
+
+### 🔄 Modifiche
+
+- Scalable Capital: un'imposta restituita (un'imposta negativa su una vendita, o una riga Taxes positiva) ora si importa come Interesse «Tax refund» invece che come Deposito: sono soldi resi dal guadagno dell'investimento, quindi contano nei rendimenti. Le transazioni importate prima mantengono il loro tipo.
+- La guida admin ora apre il capitolo sul backup con una guida rapida per farlo dall'app, con le schermate: la riga di comando non è più la prima cosa che si vede.
+- Un tasso di cambio vecchio di più di una settimana ora viene segnalato ovunque un valore ne dipende: l'analisi dei lotti mostra lo stesso avviso «tassi di cambio non aggiornati» della Dashboard, e il tooltip del Yield on Cost indica il tasso vecchio che ha usato. Nessun numero cambia, solo l'avviso.
+- Le coppie di valute si scrivono allo stesso modo ovunque, con simboli e bandiere: `$ 🇺🇸 USD / EUR 🇪🇺 €` per una coppia, `$ 🇺🇸 USD → EUR 🇪🇺 €` per una conversione, nel suo verso.
+- Analisi del rischio: quando un asset resta fuori perché manca un cambio, il messaggio ora nomina la coppia di valute e dice da quale data c'è un cambio salvato, oppure che non ce n'è nessuno.
+- Liste Asset e Cambi, vista Rolling Return: le card ora confrontano anche l'altro tipo, come già le pagine di dettaglio. La card di un asset può mostrare coppie di cambi e la card di una coppia può mostrare asset, scelti da «Impostazioni Grafico» della card.
+- Analisi dei lotti: nello stesso giorno gli acquisti e le rettifiche in entrata ora vengono prima delle vendite e delle rettifiche in uscita. Una vendita registrata prima dell'acquisto dello stesso giorno non fa più fallire l'analisi; su un broker che permette le vendite allo scoperto, uno scoperto aperto e chiuso nello stesso giorno ora appare come un lotto long, con lo stesso guadagno realizzato.
+- Intestazione del dettaglio asset: Transazioni ora è un badge con un'icona e il numero di transazioni, così si capisce che è un link; il badge del provider apre direttamente la pagina web dell'asset (quella impostata da te, altrimenti quella del provider) in una nuova scheda, e il suo suggerimento dice dove porta. L'icona ↗ separata non c'è più.
+- Intestazione del dettaglio asset su tablet e telefono: sotto i 1024 px i badge hanno una riga loro sotto il nome; sul telefono ← e ‹ n/N › stanno sulla prima riga, il nome ha tutta la larghezza e i badge seguono in due gruppi (tipo e valuta; Transazioni e provider).
+- Un asset con transazioni non può più diventare un Indice dall'editor dell'asset: l'editor dice quante transazioni ha e non salva niente.
+- Il cambio di email aspetta la conferma quando l'email funziona: con l'email configurata e `LIBREFOLIO_PUBLIC_URL` impostato, un nuovo indirizzo nel Profilo non vale finché non clicchi il link mandato a quell'indirizzo (valido 24 ore) mentre sei dentro il tuo account. Se sei già dentro basta un clic; altrimenti la pagina ti chiede prima di accedere e poi ti riporta lì. Il vecchio indirizzo viene avvisato subito. Senza email non cambia nulla: il nuovo indirizzo vale subito.
+
+### 🐛 Corretto
+
+- Caricare un file `.json` non ne perde più il contenuto, e i file con un'estensione insolita o molto lunga vengono salvati in modo sicuro.
+- Le liste di Cambi, File e Asset non si svuotano più mostrando la rotellina dopo un aggiornamento o una modifica: restano a schermo mentre arrivano i dati nuovi.
+- Cambiare scheda nella pagina di un asset mantiene l'intervallo di date che hai scelto.
+- Nel passo «Correzioni» dell'import, un possibile frazionamento mostra il ticker e la quantità invece dei segnaposti grezzi.
+- Esc dentro il menu dell'AI Export chiude solo il menu, non il pannello sotto.
+- Dopo Esc o una scelta in un elenco a due livelli (come il tipo di asset), il focus della tastiera torna sul campo.
+- Le conferme con molti elementi scrivono il loro numero nella tua lingua.
+- Obbligazioni di Borsa Italiana: la scadenza nella descrizione ora è giusta anche sulle pagine in inglese e per le scadenze dopo il 2068. Un asset già salvato con la data sbagliata si corregge chiedendo di nuovo i metadati al suo provider.
+- Impostazioni › Informazioni ora elenca anche i plugin di Rischio e Strumenti che non si caricano.
+- Mentre la Dashboard aspetta di ricaricarsi dopo un cambio del filtro broker, mostra che sta lavorando invece di tenere in silenzio i totali vecchi.
+- Nel grafico di confronto dei lotti, il tratteggio in legenda di «stimato al costo» ha lo stesso colore della sua linea.
+- I pulsanti dello scheduler che tolgono un orario hanno un nome tradotto per i lettori di schermo.
+- «Analizza Lotti» ora scorre fino in fondo al pannello dei lotti anche sulle macchine lente.
+- Il comando di backup legge `--password-file` e `--instance-key-file` con una sola apertura: un file scambiato dopo il controllo non può più essere letto al suo posto.
+
+- Su un'istanza bloccata dal fornitore di hosting l'amministratore vede anche i «Backup già conservati» e può scaricarli, non solo farne uno nuovo.
+- L'importazione di un report non mostra più un messaggio di successo quando la modifica degli identificativi di un asset non è stata salvata.
+
+### ⚠️ Modifiche incompatibili
+
+- Gli endpoint della query dei prezzi, della query degli eventi e della conversione non riportano più i cambi mancanti come testo in `errors`: arrivano in una nuova lista `fx_issues` di `{code, from_currency, to_currency, first_date, last_date, count}`, nel verso della conversione.
+- `PATCH /api/v1/assets` salva tutto o niente: se un elemento ha un problema, non si salva nulla. La risposta aggiunge `committed`, `issues` e `warnings` (codici `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; avviso `assetFamilyChange`). Un nome già usato da un altro asset è segnalato come `assetNameTaken` invece che come errore generico. Il nuovo `POST /api/v1/assets/validate` fa gli stessi controlli e non salva mai.
+- `POST /api/v1/portfolio/lots/analysis` risponde con una forma nuova: le parti che non dipendono dal metodo di abbinamento (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) restano in cima; tutto ciò che viene dal replay dei lotti (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, le storie di valore, rendimento, prezzo e performance, `income_events`, `economic_allocation_groups`, gli orfani) passa sotto `methods.FIFO` / `methods.LIFO`. La richiesta accetta `matching_methods` (predefinito `["FIFO"]`).
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** è la versione per chi gestisce l'istanza: dà all'amministratore quello che serve per aprire LibreFolio a famiglia e amici, e per tenerlo al sicuro.

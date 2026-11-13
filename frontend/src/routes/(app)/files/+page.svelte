@@ -52,7 +52,7 @@
     import {matchesColumnFilter} from '$lib/components/table/dataTableLogic';
     import FileGrid from '$lib/features/files/FileGrid.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
-    import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
+    import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/features/files/urlFilters';
     import {fetchFilePreview} from '$lib/utils/files/filePreview';
     import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
     import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile, UploadScope} from '$lib/types';
@@ -344,12 +344,13 @@
     onDestroy(() => _brokerStoreUnsub());
 
     /** A reload the page decides on (Refresh, tab, after an upload or a delete): it holds the Refresh button (Y11). */
-    function reloadFiles(label: string): Promise<void> {
-        return pageBusy.track(label, loadFiles);
+    function reloadFiles(label: string, opts?: {soft?: boolean}): Promise<void> {
+        return pageBusy.track(label, () => loadFiles(opts));
     }
 
-    async function loadFiles() {
-        loading = true;
+    /** `soft` (N-1): the same tab after a Refresh, an upload or a delete keeps its table on screen. A tab change is not soft. */
+    async function loadFiles(opts?: {soft?: boolean}) {
+        if (!opts?.soft) loading = true;
         error = null;
 
         try {
@@ -383,7 +384,7 @@
             // Close uploader and refresh
             showUploader = false;
             pendingStaticFiles = [];
-            await reloadFiles('files-reload');
+            await reloadFiles('files-reload', {soft: true});
             // No toast: the new rows appear in the list, which is the confirmation.
             notify({name: 'file.uploaded', detail: {count: files.length}});
         } catch (e) {
@@ -428,7 +429,7 @@
             // All images processed, close uploader and refresh
             showUploader = false;
             pendingStaticFiles = [];
-            await reloadFiles('files-reload');
+            await reloadFiles('files-reload', {soft: true});
         }
     }
 
@@ -562,7 +563,7 @@
 
             // Reset state
             closeBrimUploadModal();
-            await reloadFiles('files-reload');
+            await reloadFiles('files-reload', {soft: true});
         } catch (e) {
             // The space limit refused a report: said in the dialog, with what to do (C9-1); any other error in the page.
             brimRefusal = storageLimitNumbersOfError(e);
@@ -645,7 +646,7 @@
             } else {
                 await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
             }
-            await reloadFiles('files-reload');
+            await reloadFiles('files-reload', {soft: true});
             notify({name: 'file.deleted', detail: {fileId, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
@@ -679,7 +680,7 @@
             const deletedCount = deletable.length;
             selectedFileIds = [];
             activeTableRef?.getTableRef()?.clearSelection();
-            await reloadFiles('files-reload');
+            await reloadFiles('files-reload', {soft: true});
             notify({name: 'file.deleted.bulk', detail: {count: deletedCount, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
@@ -812,7 +813,7 @@
                     {showBrimUploader ? $t('common.close') : $t('uploads.upload')}
                 </button>
             {/if}
-            <button class="btn btn-secondary" data-testid="files-refresh-button" data-busy={pageBusy.busy ? 'true' : 'false'} title={$t('common.refresh')} disabled={pageBusy.busy} on:click={() => reloadFiles('files-refresh')}>
+            <button class="btn btn-secondary" data-testid="files-refresh-button" data-busy={pageBusy.busy ? 'true' : 'false'} title={$t('common.refresh')} disabled={pageBusy.busy} on:click={() => reloadFiles('files-refresh', {soft: true})}>
                 <RefreshCw size={16} class={pageBusy.busy ? 'animate-spin' : ''} />
             </button>
         </div>
@@ -870,7 +871,7 @@
     <!-- Content -->
     <div class="content">
         {#if loading}
-            <div class="loading">{$t('common.loading')}</div>
+            <div class="loading" data-testid="files-loading">{$t('common.loading')}</div>
         {:else if activeTab === 'static'}
             <!-- Static Files -->
             {#if staticFiles.length === 0}

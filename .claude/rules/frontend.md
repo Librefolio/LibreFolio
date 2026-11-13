@@ -19,7 +19,7 @@ frontend/
 │   │   ├── files/             # File management
 │   │   └── settings/          # User & global settings
 │   ├── lib/
-│   │   ├── charts/signals/    # Signal Library (10 signals)
+│   │   ├── features/signals/   # Signal Library (10 signals)
 │   │   ├── components/        # Reusable components
 │   │   │   ├── ui/            # Base (select/, input/, media/, modals, banners, data-editor/)
 │   │   │   ├── charts/        # ECharts (LineChart, Candlestick, ChartSettings, etc.)
@@ -47,7 +47,7 @@ frontend/
 
 ## Financial numbers
 
-The frontend computes no financial quantity — cost, P&L, capital, NAV, returns, FX value, yields: it shows the fields the backend computes in `backend/app/services/financial_math/`; interactive measures (the measuring tool, what-if, the aggregates of the lots the user chooses — D-MF6(b)) are the only exceptions, and each must be declared where it lives.
+The frontend computes no financial quantity — cost, P&L, capital, NAV, returns, FX value, yields: it shows the fields the backend computes in `backend/app/services/financial_math/`; interactive measures (the measuring tool, what-if, the aggregates of the lots the user chooses — D-MF6(b)) and the transaction form's trade amount (`txTradeAmount.ts`: one product or quotient on exact decimals, never a route of its own) are the only exceptions, and each must be declared where it lives.
 
 ## Design System
 
@@ -203,7 +203,7 @@ test fails without it.
 | `SectorPieChart` | 190 | Sector pie chart |
 | `PriceChartCompact` | 58 | Mini-chart for cards |
 
-## Asset Components (`lib/components/assets/`)
+## Asset Components (`lib/features/assets/`)
 
 15 files, ~6300 lines. Key components:
 
@@ -224,8 +224,9 @@ test fails without it.
 - **Languages**: EN, IT, FR, ES (read the live key count from `./dev.py i18n audit`)
 - **Generated catalogue**: `lib/i18n/{en,it,fr,es}.json`, built by `scripts/i18n_catalog.py`, ignored by git and
   read-only — never edit it (a hand edit stops the build). The npm pre-hooks, Vitest and `./dev.py front build` write it
-- **Sources** (edit these, or better use the CLI): `lib/i18n/base/` (the generic vocabulary), one folder per subsystem
-  `lib/i18n/<subsystem>/` with its `prefixes.txt`, and each plugin's `backend/app/services/<family>/<plugin>/i18n/`
+- **Sources** (edit these, or better use the CLI): `lib/i18n/base/` (the generic vocabulary), one folder per global subsystem
+  (`app`, `charts`, `dataQuality`) `lib/i18n/<subsystem>/`, each feature's own `lib/features/<feature>/i18n/` (at any depth, e.g.
+  `features/transactions/import/i18n`, named after the folder that holds `i18n/`), all with their `prefixes.txt`, and each plugin's `backend/app/services/<family>/<plugin>/i18n/`
 - **CLI**: `./dev.py i18n where|add|update|remove|search|tree|audit|check|build|move|split|absorb` — `add` writes to the
   source that owns the key (see skill `devpy-i18n`)
 
@@ -236,9 +237,9 @@ test fails without it.
 | Frontend pages | `frontend/src/routes/(app)/` |
 | Base UI components | `frontend/src/lib/components/ui/` |
 | Chart components | `frontend/src/lib/components/charts/` |
-| Signal Library | `frontend/src/lib/charts/signals/` |
-| Asset components | `frontend/src/lib/components/assets/` |
+| Signal Library | `frontend/src/lib/features/signals/` |
+| Asset components | `frontend/src/lib/features/assets/` |
 | Stores | `frontend/src/lib/stores/` |
 | API Client (Zodios) | `frontend/src/lib/api/` |
-| Translations (sources) | `frontend/src/lib/i18n/base/`, `frontend/src/lib/i18n/<subsystem>/`, plugins' `i18n/` |
+| Translations (sources) | `frontend/src/lib/i18n/base/`, `frontend/src/lib/i18n/<subsystem>/`, `frontend/src/lib/features/<feature>/i18n/`, plugins' `i18n/` |
 | E2E Tests | `frontend/e2e/` |

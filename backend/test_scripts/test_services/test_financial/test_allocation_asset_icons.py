@@ -29,8 +29,9 @@ from sqlalchemy.pool import NullPool
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
-from backend.app.services import portfolio_service as portfolio_service_module
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 D0, D1 = date(2025, 9, 1), date(2025, 9, 3)
@@ -41,10 +42,10 @@ ICON = "/static/icons/test-etf.png"
 
 @pytest.fixture(autouse=True)
 def no_cached_portfolio():
-    for cache in (portfolio_service_module._portfolio_l2_cache, portfolio_service_module._wac_cache, portfolio_engine_module._portfolio_blob_cache):
+    for cache in (report_module._portfolio_l2_cache, wac_module._wac_cache, portfolio_engine_module._portfolio_blob_cache):
         cache.clear()
     yield
-    for cache in (portfolio_service_module._portfolio_l2_cache, portfolio_service_module._wac_cache, portfolio_engine_module._portfolio_blob_cache):
+    for cache in (report_module._portfolio_l2_cache, wac_module._wac_cache, portfolio_engine_module._portfolio_blob_cache):
         cache.clear()
 
 

@@ -162,7 +162,7 @@ Importers without a label are well tested and reliable for the formats they supp
     <img src="https://traderepublic.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Trade Republic">
     <span class="card-title" style="margin: 0;">Trade Republic</span>
     </div>
-    <span class="card-desc">🧪 Beta · CSV transaction history</span>
+    <span class="card-desc">The «Transaction export» CSV, also re-saved by Excel</span>
     </a>
     <a href="xtb/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">

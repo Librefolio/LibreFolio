@@ -78,9 +78,9 @@ export const LAB_PREFIXES = ['lib/dev/designer-lab/', 'routes/designer-lab/'];
 export const LITERAL_EXCEPTIONS = [
     {file: 'lib/features/brokers/lots/lotComparisonChartHelpers.ts', value: /^hsla?\(.*\$\{/, reason: "lotColor: an hsl() generated from the lot's id (R)"},
     {file: 'lib/utils/colors.ts', value: /^hsla?\(.*\$\{/, reason: 'hsl() and hsla() generators with a computed hue (R)'},
-    {file: 'lib/components/charts/ChartSettingsModal.svelte', value: '#000000', reason: 'the colour of a demo signal, never drawn (R)'},
-    {file: 'lib/components/assets/AssetDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
-    {file: 'lib/components/fx/FxDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
+    {file: 'lib/features/signals/components/ChartSettingsModal.svelte', value: '#000000', reason: 'the colour of a demo signal, never drawn (R)'},
+    {file: 'lib/features/assets/AssetDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
+    {file: 'lib/features/fx/FxDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
     {file: 'lib/features/support/supportLinks.ts', value: /^#/, reason: 'the brand colours of Reddit, Facebook, Instagram and TikTok on their share buttons: not ours to theme'},
 ];
 
@@ -1372,7 +1372,7 @@ function underSrc(/** @type {string} */ path) {
         .replace(/^(?:\.\/)?(?:frontend\/)?(?:src\/)?/, '');
 }
 
-/** The area of a file, for the report: `lib/components/assets`, `routes/(app)/fx`, `lib/utils`. */
+/** The area of a file, for the report: `lib/features/assets`, `routes/(app)/fx`, `lib/utils`. */
 function areaOf(/** @type {string} */ rel) {
     const parts = rel.split('/');
     if ((parts[0] === 'lib' && (parts[1] === 'components' || parts[1] === 'features')) || (parts[0] === 'routes' && parts[1] === '(app)')) return parts.slice(0, 3).join('/');

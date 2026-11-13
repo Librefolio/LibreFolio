@@ -1,0 +1,1716 @@
+from __future__ import annotations
+
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import date as date_type
+from datetime import timedelta
+from decimal import Decimal
+from types import MappingProxyType
+from typing import Mapping, Sequence
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app.db.models import Asset, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
+from backend.app.schemas.common import DateSpan
+from backend.app.schemas.portfolio.data_quality import DataQualityIssue, DataQualityReport, IssueCode, IssueDomain, IssueSeverity, StaleFxPair
+from backend.app.schemas.portfolio.lots import GanttSegmentSchema, LotAnalysisStatus, LotAnalysisType, LotIncomeEventSchema, LotsAnalysisMetadata, LotsAnalysisMethodsResponse, LotsAnalysisResponse, LotsMethodAnalysis, LotSummarySchema, LotTimelineEventKind, LotTimelineEventSchema
+from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.accounts.settings_service import get_effective_base_currency
+from backend.app.services.financial_math import fx_rates
+from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
+from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
+from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, LotMatchingMethod, ReferencePriceLookup, ReferencePriceResolution, fails_the_replay
+from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, build_broker_wac_history, build_cumulative_wac_history
+from backend.app.services.financial_math.lots.change_days import DayRange, analysis_event_dates, history_steps, lot_change_days, price_candidate_days
+from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, convert_closure, needs_market_series, unconvertible_ids
+from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics, build_cost_economic_events, build_engine_transactions, build_income_economic_events, extract_cost_outputs, extract_income_outputs, map_economic_groups, withheld_economics
+from backend.app.services.financial_math.lots.histories import (
+    PerformanceSourceContext,
+    build_market_price_history,
+    build_performance_history,
+    build_price_history,
+    build_return_history,
+    build_value_history,
+    fragment_active_on_date,
+    group_closures,
+    group_fragments,
+    known_buyback_cost,
+    known_cumulative_proceeds,
+    known_realized_pnl,
+)
+from backend.app.services.financial_math.lots.prices import last_day_without_observation, opening_reference_price
+from backend.app.services.financial_math.lots.scope_boundary import BoundaryDirection, BoundaryLeg, ScopeBoundaryReading, TransferPartner, partner_ids_to_load, read_transfers_at_scope_boundary
+from backend.app.services.financial_math.lots.summary import lot_summary_figures
+from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
+from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
+from backend.app.services.financial_math.splits import load_split_links
+from backend.app.services.financial_math.valuation import normalize_quote_base_quantity
+from backend.app.utils.datetime_utils import latest_range_end
+
+_WARNING_ISSUE_CODES = {
+    IssueCode.REFERENCE_PRICE_FALLBACK,
+    IssueCode.REFERENCE_PRICE_UNAVAILABLE,
+    IssueCode.CURRENT_PRICE_ASSUMED_AT_COST,
+    IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
+    IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS,
+}
+
+# The analyses a FAILED replay still answers (J-12): the average-cost lines come from the transactions, and the market
+# price line from the asset's prices (Y-30), not from the lots.
+_REPLAY_FREE_ANALYSES = frozenset({LotAnalysisType.BROKER_WAC_HISTORY, LotAnalysisType.CUMULATIVE_WAC_HISTORY, LotAnalysisType.MARKET_PRICE_HISTORY})
+
+_ORPHAN_ISSUE_CODES = {
+    IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
+    IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS,
+}
+
+_CUSTODY_KINDS = {
+    LotTimelineEventKind.BUY,
+    LotTimelineEventKind.ADJUSTMENT_IN,
+    LotTimelineEventKind.TRANSFER_DEPART,
+    LotTimelineEventKind.TRANSFER_ARRIVE,
+}
+
+_NO_BOUNDARY_LEGS: Mapping[int, BoundaryLeg] = MappingProxyType({})
+_NO_FRAGMENT_BROKERS: Mapping[str, int | None] = MappingProxyType({})
+_NO_TRANSFER_BROKERS: Mapping[int, tuple[int | None, int | None]] = MappingProxyType({})
+
+
+@dataclass(frozen=True, slots=True)
+class PerformanceScopeInputs:
+    """The rows of every broker the user can see, for the performance history of a broker filter (read at their edge)."""
+
+    boundary: ScopeBoundaryReading
+    late_legs: list[FifoInputTransaction]
+    split_ratios_by_tx_id: dict[int, Decimal]
+    broker_shorting: dict[int, bool]
+
+
+@dataclass(frozen=True, slots=True)
+class LotsAnalysisInputs:
+    """What ``LotsAnalysisService._load_inputs`` reads once, for every replay ``_derive`` makes of it.
+
+    Nothing here depends on the matching method. ``fx_resolver`` is the one part that keeps changing: it holds the
+    rates of the income and cost rows; the derive step asks it the rates of every replay's lots, loads them at once,
+    converts the market price through it and gives each method a read-only copy that records its own gaps.
+    """
+
+    asset_id: int
+    asset: Asset
+    date_from: date_type | None
+    selected_lot_ids: list[int] | None
+    normalized_analyses: list[LotAnalysisType]
+    target_currency: str
+    actual_to: date_type
+    scope_broker_ids: list[int]
+    computed_from: date_type
+    #: The scope's rows, each transfer leg whose partner is outside the scope read at its edge (J-10).
+    transactions: list[Transaction | FifoInputTransaction]
+    boundary: ScopeBoundaryReading
+    late_legs: list[FifoInputTransaction]
+    split_ratios_by_tx_id: dict[int, Decimal]
+    broker_shorting: dict[int, bool]
+    prices: list[PriceHistory]
+    quote_base_quantity: int
+    price_series: AssetPriceSeries
+    reference_price_lookup: ReferencePriceLookup
+    income_transactions: list[Transaction]
+    cost_transactions: list[Transaction]
+    fx_resolver: FxRateResolver
+    needs_income_alloc: bool
+    #: ``transactions`` with each trade's target controvalue when a cost row is weighted on the trades (FEE weights).
+    engine_transactions: Sequence[Transaction | FifoInputTransaction]
+    income_events_input: list[EconomicEvent]
+    cost_events_input: list[EconomicEvent]
+    unconvertible_event_ids: set[int]
+    unconvertible_trade_ids: set[int]
+    average_cost_lines: dict[int | str, AverageCost]
+    performance_scope: PerformanceScopeInputs | None
+
+
+@dataclass(frozen=True, slots=True)
+class _MethodReplay:
+    """One matching method's replay of the scope (``LotsAnalysisService._replay``) and what derives from it without a
+    rate: the lots, their fragments and closures, the economics withheld, the performance context."""
+
+    matching_method: LotMatchingMethod
+    engine_result: FifoEngineResult
+    failed: bool
+    #: The analyses this replay answers: on FAILED only the replay-free ones (J-12).
+    shown_analyses: list[LotAnalysisType]
+    lots_by_id: dict[int, FifoLot]
+    selected_ids: list[int]
+    fragments_by_lot: dict[int, list[FragmentInterval]]
+    closures_by_lot: dict[int, list[LotClosure]]
+    withheld: WithheldEconomics
+    performance_context: PerformanceSourceContext
+    income_by_lot: dict[int, Decimal]
+    income_prefix_by_lot: dict[int, dict[date_type, Decimal]]
+    income_events_payload: list[LotIncomeEventSchema]
+    fees_by_lot: dict[int, Decimal]
+    taxes_by_lot: dict[int, Decimal]
+    fees_prefix_by_lot: dict[int, dict[date_type, Decimal]]
+    taxes_prefix_by_lot: dict[int, dict[date_type, Decimal]]
+
+
+class _ConfiguredFxPairs:
+    """The configured and real-provider FX pairs a gap report classifies its missing rates with: read at most once per
+    request, whatever the number of matching methods with a gap (D1b)."""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
+        self._pairs: tuple[set[str], set[str]] | None = None
+
+    async def read(self) -> tuple[set[str], set[str]]:
+        if self._pairs is None:
+            self._pairs = await load_configured_fx_pair_sets(self._db)
+        return self._pairs
+
+
+class LotsAnalysisService:
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def get_lots_analysis(
+        self,
+        user_id: int,
+        asset_id: int,
+        broker_ids: list[int] | None,
+        date_from: date_type | None,
+        date_to: date_type | None,
+        target_currency: str | None,
+        selected_lot_ids: list[int] | None,
+        requested_analyses: list[str | LotAnalysisType],
+        matching_method: LotMatchingMethod = LotMatchingMethod.FIFO,
+    ) -> LotsAnalysisResponse:
+        """The analysis in one matching method, read flat (``LotsAnalysisMethodsResponse.reading``): the reading the Python
+        callers keep. The AI Export reads it in FIFO (project 69, D7)."""
+        response = await self.get_lots_analysis_methods(
+            user_id=user_id,
+            asset_id=asset_id,
+            broker_ids=broker_ids,
+            date_from=date_from,
+            date_to=date_to,
+            target_currency=target_currency,
+            selected_lot_ids=selected_lot_ids,
+            requested_analyses=requested_analyses,
+            matching_methods=[matching_method],
+        )
+        return response.reading(matching_method)
+
+    async def get_lots_analysis_methods(
+        self,
+        *,
+        user_id: int,
+        asset_id: int,
+        broker_ids: list[int] | None,
+        date_from: date_type | None,
+        date_to: date_type | None,
+        target_currency: str | None,
+        selected_lot_ids: list[int] | None,
+        requested_analyses: list[str | LotAnalysisType],
+        matching_methods: Sequence[LotMatchingMethod] = (LotMatchingMethod.FIFO,),
+    ) -> LotsAnalysisMethodsResponse:
+        """The analysis of one asset's lots in a broker scope, in every matching method asked (project 69, D1b, D11).
+
+        ``_load_inputs`` reads, once, what does not depend on the order in which outflows are matched to lots;
+        ``_derive`` replays the lots once per method and answers the common parts once, each method in its own block.
+        """
+        normalized_analyses = [analysis if isinstance(analysis, LotAnalysisType) else LotAnalysisType(str(analysis)) for analysis in requested_analyses]
+        if not normalized_analyses:
+            raise ValueError("requested_analyses must not be empty")
+        methods = [LotMatchingMethod(method) for method in matching_methods]
+        if not methods:
+            raise ValueError("matching_methods must not be empty")
+        if len(set(methods)) != len(methods):
+            raise ValueError("matching_methods must not repeat a method")
+
+        inputs = await self._load_inputs(
+            user_id=user_id,
+            asset_id=asset_id,
+            broker_ids=broker_ids,
+            date_from=date_from,
+            date_to=date_to,
+            target_currency=target_currency,
+            selected_lot_ids=selected_lot_ids,
+            normalized_analyses=normalized_analyses,
+            matching_methods=methods,
+        )
+        if isinstance(inputs, LotsAnalysisMethodsResponse):
+            return inputs
+        return await self._derive(inputs, methods)
+
+    async def _load_inputs(  # noqa: C901 — one load per input of the analysis, each behind the analyses that read it
+        self,
+        *,
+        user_id: int,
+        asset_id: int,
+        broker_ids: list[int] | None,
+        date_from: date_type | None,
+        date_to: date_type | None,
+        target_currency: str | None,
+        selected_lot_ids: list[int] | None,
+        normalized_analyses: list[LotAnalysisType],
+        matching_methods: Sequence[LotMatchingMethod] = (LotMatchingMethod.FIFO,),
+    ) -> LotsAnalysisInputs | LotsAnalysisMethodsResponse:
+        """Step 1, «load once»: every input of the analysis that the replay's matching method does not change.
+
+        The transactions in the scope (read at its edge), the splits, the prices and the asset's price series, the
+        income and cost rows with the rates they are converted at, the average-cost lines and, for the performance
+        history, the rows of every broker the user can see. A scope with no broker or no transaction answers at once
+        with the empty response, one empty block per matching method asked.
+        """
+        target_currency = target_currency or await self._get_base_currency(user_id)
+        # R13-SEC7-1: the histories walk every day to actual_to, so it ends by latest_range_end()
+        actual_to = min(date_to or date_type.today(), latest_range_end())
+        asset = await self.db.get(Asset, asset_id)
+        if asset is None:
+            raise ValueError(f"Asset {asset_id} not found")
+
+        scope_broker_ids = await self._get_scope_broker_ids(user_id=user_id, broker_ids=broker_ids)
+        if not scope_broker_ids:
+            return self._empty_response(
+                asset_id=asset_id,
+                target_currency=target_currency,
+                requested_analyses=normalized_analyses,
+                broker_ids=[],
+                selected_lot_ids=selected_lot_ids,
+                requested_date_from=date_from,
+                requested_date_to=actual_to,
+                computed_date_from=None,
+                computed_date_to=actual_to,
+                status="COMPLETE",
+                matching_methods=matching_methods,
+            )
+
+        transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
+        if not transactions:
+            return self._empty_response(
+                asset_id=asset_id,
+                target_currency=target_currency,
+                requested_analyses=normalized_analyses,
+                broker_ids=scope_broker_ids,
+                selected_lot_ids=selected_lot_ids,
+                requested_date_from=date_from,
+                requested_date_to=actual_to,
+                computed_date_from=None,
+                computed_date_to=actual_to,
+                status="COMPLETE",
+                matching_methods=matching_methods,
+            )
+
+        # The window starts on the scope's first transaction, whatever its year (D-P4, L2): the histories are steps and
+        # the prices and rates are read on the days that change something, so a row of 1850 or of year 1 costs its changes.
+        computed_from = transactions[0].date
+        split_ratios_by_tx_id = await self._load_split_ratios(transactions)
+        broker_shorting = await self._load_broker_shorting(scope_broker_ids)
+        prices = await self._load_prices(
+            asset_id=asset_id,
+            date_from=computed_from,
+            date_to=actual_to,
+        )
+        quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
+        # The unified price resolver is the SINGLE valuation brain for this asset: fed the
+        # asset-system price rows AND every observed trade (BUY/SELL; an ADJUSTMENT is never a price)
+        # in native currency, it resolves each day to a real quote (exact or carried/LOCF) or, when
+        # none exists, to the same-day / last-observed trade mark. Built before the FIFO engine, it
+        # gives a lot opened by an ADJUSTMENT its reference price (CP-7b), and after the engine it
+        # values the open lots and draws the chart price line, so lots-analysis shares one price
+        # model with the portfolio engine.
+        price_series = build_asset_price_series(
+            price_rows=[(row.date, row.close, row.currency) for row in prices],
+            transactions=transactions,
+            split_linked_tx_ids=set(split_ratios_by_tx_id),
+            asset_currency=asset.currency,
+            quote_base_quantity=quote_base_quantity,
+        )
+        # J-10 (N76): a TRANSFER leg whose partner pairs back from a broker outside the scope is read the way the scope
+        # sees it, for every reader below: the engine, the histories, the conversions and the average-cost lines. The
+        # series above is not touched: an ADJUSTMENT is never an observation, and a TRANSFER only as the estimate of an asset
+        # with nothing else yet (W-B94, price_marks._transfer_cost_estimates), read from the scope's own rows.
+        boundary = await self._read_at_scope_boundary(transactions, scope_broker_ids=scope_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
+        transactions = boundary.transactions
+        # J-47: a transfer still in transit on actual_to has its arriving leg dated later. That leg goes to the engine
+        # only, which replays up to actual_to (``replay_until``): the units stay in transit, as the Dashboard keeps them.
+        late_legs = await self._load_late_transfer_legs(transactions, asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
+        income_transactions = await self._load_income_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
+        cost_transactions = await self._load_cost_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
+
+        def reference_price_lookup(resolved_asset_id: int, opened_at: date_type) -> ReferencePriceResolution | None:
+            if resolved_asset_id != asset_id:
+                return None
+            mark = price_series.resolve(opened_at)
+            if mark.is_missing:
+                return None
+            # ``exact`` only for a market quote of that day; a carried quote or a trade mark is a fallback.
+            return ReferencePriceResolution(price=mark.unit_price, source="exact" if mark.source is MarkSource.MARKET else "fallback")
+
+        # Resolve economic FX and build events BEFORE the engine run: the engine is target-value
+        # aware (Option B), so it needs each event's pre-converted target amount and each trade's
+        # target controvalue (FEE weights, §3.5). Eligibility (D-1 open quantity, broker-scoped,
+        # transfer-aware) and matching are computed inside the engine from the replayed fragments.
+        # Valuation FX is resolved after the runs (``_derive``).
+        fx_resolver = FxRateResolver(target_currency)
+        needs_income_alloc = any(analysis in normalized_analyses for analysis in (LotAnalysisType.LOT_SUMMARY, LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.INCOME_EVENTS))
+        income_events_input: list[EconomicEvent] = []
+        cost_events_input: list[EconomicEvent] = []
+        engine_transactions: Sequence[Transaction | FifoInputTransaction] = transactions
+        unconvertible_event_ids: set[int] = set()
+        unconvertible_trade_ids: set[int] = set()
+        if needs_income_alloc and (income_transactions or cost_transactions):
+            for tx in income_transactions:
+                fx_resolver.need(tx.currency or asset.currency, tx.date)
+            for tx in cost_transactions:
+                fx_resolver.need(tx.currency or asset.currency, tx.date)
+            if cost_transactions:
+                for tx in transactions:
+                    if tx.type in (TransactionType.BUY, TransactionType.SELL):
+                        fx_resolver.need(tx.currency or asset.currency, tx.date)
+            await fx_resolver.load(self.db)
+            # An event or a trade weight without a rate still reaches the engine, which places it; every
+            # figure of the pools it touches is withheld below (``withheld_economics``).
+            unconvertible_event_ids = unconvertible_ids([*income_transactions, *cost_transactions], fx_resolver, asset.currency)
+            if income_transactions:
+                income_events_input = build_income_economic_events(
+                    income_transactions=income_transactions,
+                    fx_resolver=fx_resolver,
+                    asset_currency=asset.currency,
+                    target_currency=target_currency,
+                )
+            if cost_transactions:
+                cost_events_input = build_cost_economic_events(
+                    cost_transactions=cost_transactions,
+                    fx_resolver=fx_resolver,
+                    asset_currency=asset.currency,
+                    target_currency=target_currency,
+                )
+                engine_transactions = build_engine_transactions(transactions, fx_resolver, asset.currency, target_currency)
+                unconvertible_trade_ids = unconvertible_ids([tx for tx in transactions if tx.type in (TransactionType.BUY, TransactionType.SELL)], fx_resolver, asset.currency)
+
+        # The average-cost lines come from the transactions, not from the replay (J-12): both are replay-free analyses,
+        # so a FAILED replay still shows them and asking ``normalized_analyses`` is asking what the replay will show.
+        average_cost_lines: dict[int | str, AverageCost] = {}
+        if LotAnalysisType.BROKER_WAC_HISTORY in normalized_analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in normalized_analyses:
+            average_cost_lines = await self._compute_average_cost_lines(
+                transactions=transactions,
+                split_ratios_by_tx_id=split_ratios_by_tx_id,
+                asset_currency=asset.currency,
+                target_currency=target_currency,
+            )
+
+        # The performance history of a broker filter is the position's, over every broker the user can see: its rows are
+        # loaded here, and replayed beside the scope's (``_replay``). A FAILED replay of the scope then does
+        # not draw it, but its rows were read: the load does not wait for the replay.
+        performance_scope: PerformanceScopeInputs | None = None
+        if LotAnalysisType.PERFORMANCE_HISTORY in normalized_analyses and broker_ids is not None:
+            accessible_broker_ids = await self._get_scope_broker_ids(user_id=user_id, broker_ids=None)
+            if accessible_broker_ids != scope_broker_ids:
+                accessible_transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
+                performance_split_ratios = await self._load_split_ratios(accessible_transactions)
+                # The brokers the user can see have an edge too, for a partner at a broker the user cannot see.
+                performance_boundary = await self._read_at_scope_boundary(accessible_transactions, scope_broker_ids=accessible_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
+                performance_late_legs = await self._load_late_transfer_legs(performance_boundary.transactions, asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
+                performance_broker_shorting = await self._load_broker_shorting(accessible_broker_ids)
+                performance_scope = PerformanceScopeInputs(
+                    boundary=performance_boundary,
+                    late_legs=performance_late_legs,
+                    split_ratios_by_tx_id=performance_split_ratios,
+                    broker_shorting=performance_broker_shorting,
+                )
+
+        return LotsAnalysisInputs(
+            asset_id=asset_id,
+            asset=asset,
+            date_from=date_from,
+            selected_lot_ids=selected_lot_ids,
+            normalized_analyses=normalized_analyses,
+            target_currency=target_currency,
+            actual_to=actual_to,
+            scope_broker_ids=scope_broker_ids,
+            computed_from=computed_from,
+            transactions=transactions,
+            boundary=boundary,
+            late_legs=late_legs,
+            split_ratios_by_tx_id=split_ratios_by_tx_id,
+            broker_shorting=broker_shorting,
+            prices=prices,
+            quote_base_quantity=quote_base_quantity,
+            price_series=price_series,
+            reference_price_lookup=reference_price_lookup,
+            income_transactions=income_transactions,
+            cost_transactions=cost_transactions,
+            fx_resolver=fx_resolver,
+            needs_income_alloc=needs_income_alloc,
+            engine_transactions=engine_transactions,
+            income_events_input=income_events_input,
+            cost_events_input=cost_events_input,
+            unconvertible_event_ids=unconvertible_event_ids,
+            unconvertible_trade_ids=unconvertible_trade_ids,
+            average_cost_lines=average_cost_lines,
+            performance_scope=performance_scope,
+        )
+
+    def _replay(self, inputs: LotsAnalysisInputs, matching_method: LotMatchingMethod) -> _MethodReplay:
+        """Replay the scope's lots in ``matching_method`` and derive what needs no rate: the lots, their fragments and
+        closures, the economics withheld, and the performance context (the brokers the user can see, replayed in the same
+        method). Pure: no read, no rate."""
+        asset = inputs.asset
+        engine_result = run_fifo_lot_engine(
+            transactions=[*inputs.engine_transactions, *inputs.late_legs],
+            broker_shorting=inputs.broker_shorting,
+            split_ratios_by_tx_id=inputs.split_ratios_by_tx_id,
+            reference_price_lookup=inputs.reference_price_lookup,
+            economic_events=[*inputs.income_events_input, *inputs.cost_events_input],
+            target_currency=inputs.target_currency,
+            replay_until=inputs.actual_to,
+            matching_method=matching_method,
+        )
+        # J-12 (N81): a FAILED replay is unreliable as a whole, so no lot figure leaves the analysis: only the failure, the
+        # row to fix, the average-cost lines and the market price line (Y-30), which do not come from the replay. From here
+        # on only those analyses run.
+        failed = engine_result.analysis_status == "FAILED"
+        shown_analyses = [analysis for analysis in inputs.normalized_analyses if analysis in _REPLAY_FREE_ANALYSES] if failed else list(inputs.normalized_analyses)
+
+        lots_by_id = {lot.lot_id: lot for lot in engine_result.lots}
+        selected_ids = self._resolve_selected_lot_ids(inputs.selected_lot_ids, lots_by_id)
+        fragments_by_lot = group_fragments(engine_result.fragment_intervals)
+        closures_by_lot = group_closures(engine_result.closures)
+        tx_by_id = {tx.id: tx for tx in inputs.transactions if tx.id is not None}
+        withheld = withheld_economics(
+            engine_result.economic_allocation_groups,
+            unconvertible_event_ids=inputs.unconvertible_event_ids,
+            unconvertible_trade_ids=inputs.unconvertible_trade_ids,
+            trade_currency_by_id={tx_id: tx.currency or asset.currency for tx_id, tx in tx_by_id.items()},
+        )
+
+        performance_context = PerformanceSourceContext(
+            transactions=inputs.transactions,
+            engine_result=engine_result,
+            lots_by_id=lots_by_id,
+            fragments_by_lot=fragments_by_lot,
+            closures_by_lot=closures_by_lot,
+            tx_by_id=tx_by_id,
+            boundary_legs=inputs.boundary.legs,
+        )
+        performance_scope = inputs.performance_scope
+        if LotAnalysisType.PERFORMANCE_HISTORY in shown_analyses and performance_scope is not None:
+            # The rows of every broker the user can see, replayed in the same matching method as the scope's.
+            performance_transactions = performance_scope.boundary.transactions
+            performance_engine_result = run_fifo_lot_engine(
+                transactions=[*performance_transactions, *performance_scope.late_legs],
+                broker_shorting=performance_scope.broker_shorting,
+                split_ratios_by_tx_id=performance_scope.split_ratios_by_tx_id,
+                reference_price_lookup=inputs.reference_price_lookup,
+                target_currency=inputs.target_currency,
+                replay_until=inputs.actual_to,
+                matching_method=matching_method,
+            )
+            performance_lots_by_id = {lot.lot_id: lot for lot in performance_engine_result.lots}
+            performance_context = PerformanceSourceContext(
+                transactions=performance_transactions,
+                engine_result=performance_engine_result,
+                lots_by_id=performance_lots_by_id,
+                fragments_by_lot=group_fragments(performance_engine_result.fragment_intervals),
+                closures_by_lot=group_closures(performance_engine_result.closures),
+                tx_by_id={tx.id: tx for tx in performance_transactions if tx.id is not None},
+                boundary_legs=performance_scope.boundary.legs,
+            )
+
+        income_by_lot, income_prefix_by_lot, income_events_payload = extract_income_outputs(engine_result, inputs.income_events_input, withheld)
+        fees_by_lot, taxes_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot = extract_cost_outputs(engine_result)
+        return _MethodReplay(
+            matching_method=matching_method,
+            engine_result=engine_result,
+            failed=failed,
+            shown_analyses=shown_analyses,
+            lots_by_id=lots_by_id,
+            selected_ids=selected_ids,
+            fragments_by_lot=fragments_by_lot,
+            closures_by_lot=closures_by_lot,
+            withheld=withheld,
+            performance_context=performance_context,
+            income_by_lot=income_by_lot,
+            income_prefix_by_lot=income_prefix_by_lot,
+            income_events_payload=income_events_payload,
+            fees_by_lot=fees_by_lot,
+            taxes_by_lot=taxes_by_lot,
+            fees_prefix_by_lot=fees_prefix_by_lot,
+            taxes_prefix_by_lot=taxes_prefix_by_lot,
+        )
+
+    @staticmethod
+    def _event_dates(inputs: LotsAnalysisInputs, replay: _MethodReplay) -> set[date_type]:
+        """The dates an input of a daily series changes on in ``replay``, other than the market price (D-P4)."""
+        return analysis_event_dates(
+            transactions=[*inputs.transactions, *inputs.late_legs, *replay.performance_context.transactions, *inputs.income_transactions, *inputs.cost_transactions],
+            engine_results=(replay.engine_result, replay.performance_context.engine_result),
+            prefixes=(replay.income_prefix_by_lot, replay.fees_prefix_by_lot, replay.taxes_prefix_by_lot),
+            withheld=replay.withheld,
+            average_cost_lines=inputs.average_cost_lines.values(),
+        )
+
+    def _collect_fx_needs(self, inputs: LotsAnalysisInputs, replay: _MethodReplay, *, at_cost_until: date_type | None) -> None:
+        """Ask the resolver of ``inputs`` every rate the sections of ``replay`` will convert (loaded at once, after every
+        method has asked its own)."""
+        fx_resolver = inputs.fx_resolver
+        collect_fx_needs(
+            fx_resolver=fx_resolver,
+            analyses=replay.shown_analyses,
+            lots_by_id=replay.lots_by_id,
+            selected_ids=replay.selected_ids,
+            transactions=inputs.transactions,
+            price_series=inputs.price_series,
+            prices=inputs.prices,
+            fragments=replay.engine_result.fragment_intervals,
+            events=replay.engine_result.classified_events,
+            closures=replay.engine_result.closures,
+            split_ratios_by_tx_id=inputs.split_ratios_by_tx_id,
+            actual_to=inputs.actual_to,
+            computed_from=inputs.computed_from,
+            asset_currency=inputs.asset.currency,
+        )
+        collect_performance_fx_needs(
+            fx_resolver=fx_resolver,
+            analyses=replay.shown_analyses,
+            transactions=replay.performance_context.transactions,
+            closures=replay.performance_context.engine_result.closures,
+            lots_by_id=replay.performance_context.lots_by_id,
+            asset_currency=inputs.asset.currency,
+            at_cost_until=at_cost_until,
+        )
+        if inputs.needs_income_alloc and not replay.failed and at_cost_until is not None:
+            # Estimated-at-cost values the open portion at converted opening cost -> needs fx@opening.
+            for lot in replay.lots_by_id.values():
+                fx_resolver.need(lot.currency, lot.opening_date)
+
+    async def _derive(  # noqa: C901 — TODO(P2-refactor): long orchestrator; extract per-analysis stage helpers
+        self,
+        inputs: LotsAnalysisInputs,
+        matching_methods: Sequence[LotMatchingMethod],
+    ) -> LotsAnalysisMethodsResponse:
+        """Step 2, «derive»: one replay per matching method, one load of the rates they all ask, then the common parts
+        once and every other section once per method (project 69, D1b, D11; consultant's opinion on L3).
+
+        Nothing is read from the database but those rates, through the resolver the load step filled, and the configured
+        pairs of a conversion gap (``_report_gaps``), at most once. The market price is converted once, on the base
+        resolver, over the days both replays change on; each method then converts through its own read-only copy, which
+        starts with the gaps recorded so far and keeps its own: a rate only one method asks degrades that method alone.
+        """
+        asset_id = inputs.asset_id
+        normalized_analyses = inputs.normalized_analyses
+        target_currency = inputs.target_currency
+        actual_to = inputs.actual_to
+        computed_from = inputs.computed_from
+        price_series = inputs.price_series
+        fx_resolver = inputs.fx_resolver
+        average_cost_lines = inputs.average_cost_lines
+
+        display_from = inputs.date_from or computed_from
+        # The days the histories cover: no row before the scope's first transaction, none past the end of the window.
+        range_start = max(display_from, computed_from)
+        calendar = DayRange(computed_from, actual_to)
+        # A day with no observation on or before it — no quote, no BUY or SELL — values the open lots at cost, as the
+        # Dashboard values a holding (J-17). Those days run from the first transaction to the day before the first
+        # observation, or to the end when the asset has none: then the current price too is assumed at cost.
+        at_cost_until = last_day_without_observation(price_series, calendar)
+
+        replays = [self._replay(inputs, method) for method in matching_methods]
+        for replay in replays:
+            self._collect_fx_needs(inputs, replay, at_cost_until=at_cost_until)
+        await fx_resolver.load(self.db)
+
+        # The common parts follow what the replays show: a FAILED replay shows only the replay-free analyses (J-12), so a
+        # market series nobody shows is never valued and the report holds no gap of it. With one method, exactly its own.
+        shown_by_any = [analysis for analysis in normalized_analyses if any(analysis in replay.shown_analyses for replay in replays)]
+        # D-P4: no series is read on every calendar day. The days one of its inputs can change on are known without
+        # walking the window: an observation (``AssetPriceSeries.observation_dates``), a rate step, an event, the end of
+        # the days valued at cost, each with the day after it; everything between two of them repeats the day before.
+        # The event dates of every replay are one grid: the same set in both methods (L3 test 4).
+        event_dates: set[date_type] = set()
+        for replay in replays:
+            event_dates |= self._event_dates(inputs, replay)
+        candidate_days = price_candidate_days(
+            first=computed_from,
+            last=actual_to,
+            observation_dates=price_series.observation_dates,
+            rate_days=fx_resolver.rate_change_days(),
+            event_dates=event_dates,
+            at_cost_until=at_cost_until,
+        )
+        # The histories read the price on each of them, the summary only the last day: value no other day, so the
+        # report never holds the gap of a day nobody reads.
+        daily_series = any(analysis in shown_by_any for analysis in (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.MARKET_PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY))
+        active_price_dates = candidate_days if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in shown_by_any else [])
+        # Both the open-lot valuation (``market_prices`` -> NAV / value / return / performance) and the
+        # chart price lines (``estimated_market_prices``: per lot, and the lot-free market line of Y-30)
+        # read the series built above. Each native mark is
+        # converted to the target currency at *its own valuation date* (per-day FX, never frozen at the
+        # observation date); ``None`` marks a day the resolver has no observation for (genuine MISSING),
+        # or whose price cannot be converted: that day is not valued, never at the native price.
+        # Downstream only a day with no observation on or before it (``at_cost_until``) falls back to cost.
+        market_prices: dict[date_type, Decimal | None] = {}
+        estimated_market_prices: dict[date_type, tuple[Decimal, bool]] = {}
+        for index, current_date in enumerate(active_price_dates):
+            mark = price_series.resolve(current_date)
+            if mark.is_missing:
+                market_prices[current_date] = None
+                continue
+            # The rate does not move before the next day read: a gap of the pair holds until then.
+            held_through = active_price_dates[index + 1] - timedelta(days=1) if index + 1 < len(active_price_dates) else current_date
+            converted = fx_resolver.convert_through(mark.unit_price, mark.currency, current_date, held_through)
+            market_prices[current_date] = converted
+            if converted is not None:
+                estimated_market_prices[current_date] = (converted, mark.estimated)
+
+        # L1a: the daily series are computed on the days one of their inputs changes, and each is given as steps
+        # (``financial_math/lots/change_days.py``): the same figures, byte for byte, without computing every lot on every
+        # day since the first transaction.
+        change_days = lot_change_days(
+            days=candidate_days,
+            market_prices=market_prices,
+            estimated_market_prices=estimated_market_prices,
+            at_cost_until=at_cost_until,
+            event_dates=event_dates,
+        )
+
+        market_price_history = None
+        if LotAnalysisType.MARKET_PRICE_HISTORY in shown_by_any:
+            market_price_history = history_steps(
+                build_market_price_history(estimated_market_prices=estimated_market_prices, history_dates=change_days, target_currency=target_currency),
+                key=lambda row: None,
+                change_days=change_days,
+                range_start=range_start,
+                range_end=actual_to,
+            )
+
+        broker_wac_history = None
+        if LotAnalysisType.BROKER_WAC_HISTORY in shown_by_any:
+            broker_wac_history = history_steps(
+                build_broker_wac_history(inputs.scope_broker_ids, average_cost_lines, change_days),
+                key=lambda row: row.broker_id,
+                change_days=change_days,
+                range_start=range_start,
+                range_end=actual_to,
+            )
+
+        cumulative_wac_history = None
+        if LotAnalysisType.CUMULATIVE_WAC_HISTORY in shown_by_any:
+            cumulative_wac_history = history_steps(
+                build_cumulative_wac_history(average_cost_lines, change_days),
+                key=lambda row: None,
+                change_days=change_days,
+                range_start=range_start,
+                range_end=actual_to,
+            )
+
+        # The rates read on the last day of the analysis that are old: a notice, no value changes (CP-11a); on every
+        # currency asked, by either method. The union may list in one block a pair read on the last day only by the other
+        # method (opinion on L3, Q4: a copy shares the needs, so a per-method list would read the same union).
+        stale_fx_pairs = fx_resolver.stale_pairs(actual_to)
+        configured_pairs = _ConfiguredFxPairs(self.db)
+        methods: dict[LotMatchingMethod, LotsMethodAnalysis] = {}
+        for replay in replays:
+            methods[replay.matching_method] = await self._method_analysis(
+                inputs,
+                replay,
+                fx_resolver=fx_resolver.read_only_copy(),
+                market_prices=market_prices,
+                estimated_market_prices=estimated_market_prices,
+                change_days=change_days,
+                at_cost_until=at_cost_until,
+                display_from=display_from,
+                range_start=range_start,
+                stale_fx_pairs=stale_fx_pairs,
+                configured_pairs=configured_pairs,
+            )
+
+        # The lots are the same in every method (L1): the selection resolved by the first is the selection of all (D12).
+        selected_ids = replays[0].selected_ids
+        return LotsAnalysisMethodsResponse(
+            asset_id=asset_id,
+            target_currency=target_currency,
+            quote_base_quantity=inputs.quote_base_quantity,
+            calculation_metadata=LotsAnalysisMetadata(
+                broker_ids=inputs.scope_broker_ids,
+                selected_lot_ids=selected_ids if inputs.selected_lot_ids is not None else None,
+                requested_analyses=normalized_analyses,
+                matching_methods=list(matching_methods),
+                requested_date_from=inputs.date_from,
+                requested_date_to=actual_to,
+                computed_date_from=computed_from,
+                computed_date_to=actual_to,
+                generated_at=date_type.today(),
+            ),
+            range=DateSpan(start=range_start, end=actual_to) if range_start <= actual_to else None,
+            market_price_history=market_price_history,
+            broker_wac_history=broker_wac_history,
+            cumulative_wac_history=cumulative_wac_history,
+            methods=methods,
+        )
+
+    async def _method_analysis(  # noqa: C901 — one block per analysis the replay shows, each behind its own type
+        self,
+        inputs: LotsAnalysisInputs,
+        replay: _MethodReplay,
+        *,
+        fx_resolver: FxRateResolver,
+        market_prices: dict[date_type, Decimal | None],
+        estimated_market_prices: dict[date_type, tuple[Decimal, bool]],
+        change_days: list[date_type],
+        at_cost_until: date_type | None,
+        display_from: date_type,
+        range_start: date_type,
+        stale_fx_pairs: list[StaleFxPair],
+        configured_pairs: _ConfiguredFxPairs,
+    ) -> LotsMethodAnalysis:
+        """One method's block: every section read from its replay, converted through ``fx_resolver`` (that method's
+        read-only copy), its status, and its complete data quality — its replay's issues and gaps, and those of the common
+        parts."""
+        asset = inputs.asset
+        asset_id = inputs.asset_id
+        target_currency = inputs.target_currency
+        actual_to = inputs.actual_to
+        computed_from = inputs.computed_from
+        quote_base_quantity = inputs.quote_base_quantity
+        price_series = inputs.price_series
+        average_cost_lines = inputs.average_cost_lines
+        engine_result = replay.engine_result
+        shown_analyses = replay.shown_analyses
+        failed = replay.failed
+        lots_by_id = replay.lots_by_id
+        selected_ids = replay.selected_ids
+        fragments_by_lot = replay.fragments_by_lot
+        closures_by_lot = replay.closures_by_lot
+        withheld = replay.withheld
+        income_prefix_by_lot = replay.income_prefix_by_lot
+        fees_prefix_by_lot = replay.fees_prefix_by_lot
+        taxes_prefix_by_lot = replay.taxes_prefix_by_lot
+
+        # On FAILED the other engine issues speak of lots and of an eligibility the response withholds (J-12).
+        engine_issues = [issue for issue in engine_result.issues if fails_the_replay(issue.code)] if failed else engine_result.issues
+        dates_by_id = {tx.id: tx.date for tx in [*inputs.transactions, *inputs.late_legs] if tx.id is not None}
+        data_quality = self._build_data_quality_report(engine_issues, engine_result.economic_allocation_groups, withheld, dates_by_id=dates_by_id)
+        if at_cost_until is not None and needs_market_series(shown_analyses):
+            # [computed_from, at_cost_until] has no observation (no quote, no BUY or SELL), so it is valued at
+            # cost: the whole window when the asset has none. Surface it in the message so the user knows which
+            # period is uncovered (per user feedback on delisted/matured titles).
+            data_quality.issues.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=IssueCode.CURRENT_PRICE_ASSUMED_AT_COST,
+                    severity=IssueSeverity.WARNING,
+                    message_i18n_key="dataQuality.currentPriceAssumedAtCostRange",
+                    message_params={"asset_id": asset_id, "date_from": computed_from.isoformat(), "date_to": at_cost_until.isoformat()},
+                )
+            )
+
+        lots = None
+        if LotAnalysisType.LOT_SUMMARY in shown_analyses:
+            lots = self._build_lot_summaries(
+                engine_result=engine_result,
+                lots_by_id=lots_by_id,
+                selected_ids=selected_ids,
+                fx_resolver=fx_resolver,
+                market_prices=market_prices,
+                price_series=price_series,
+                closures_by_lot=closures_by_lot,
+                income_by_lot=replay.income_by_lot,
+                fees_by_lot=replay.fees_by_lot,
+                taxes_by_lot=replay.taxes_by_lot,
+                estimated_mode=at_cost_until == actual_to,
+                quote_base_quantity=quote_base_quantity,
+                analysis_end=actual_to,
+                withheld=withheld,
+            )
+
+        gantt_segments = None
+        if LotAnalysisType.GANTT_TOPOLOGY in shown_analyses:
+            gantt_segments = self._build_gantt_segments(engine_result.fragment_intervals, selected_ids, lots_by_id, fx_resolver)
+
+        # Event rows are built only when returned: the report holds no gap of a figure nobody asked for.
+        lot_events: list[LotTimelineEventSchema] = []
+        if LotAnalysisType.CUSTODY_HISTORY in shown_analyses or LotAnalysisType.EVENT_HISTORY in shown_analyses:
+            lot_events = self._build_lot_event_rows(
+                engine_result=engine_result,
+                selected_ids=selected_ids,
+                fx_resolver=fx_resolver,
+                lots_by_id=lots_by_id,
+                boundary_legs=inputs.boundary.legs,
+            )
+
+        custody_history = None
+        if LotAnalysisType.CUSTODY_HISTORY in shown_analyses:
+            custody_history = [row for row in lot_events if row.kind in _CUSTODY_KINDS]
+
+        event_history = None
+        if LotAnalysisType.EVENT_HISTORY in shown_analyses:
+            event_history = lot_events
+
+        value_history = None
+        if LotAnalysisType.VALUE_HISTORY in shown_analyses:
+            value_history = history_steps(
+                build_value_history(
+                    selected_ids=selected_ids,
+                    lots_by_id=lots_by_id,
+                    fragments_by_lot=fragments_by_lot,
+                    closures_by_lot=closures_by_lot,
+                    market_prices=market_prices,
+                    history_dates=change_days,
+                    fx_resolver=fx_resolver,
+                    income_prefix_by_lot=income_prefix_by_lot,
+                    fees_prefix_by_lot=fees_prefix_by_lot,
+                    taxes_prefix_by_lot=taxes_prefix_by_lot,
+                    at_cost_until=at_cost_until,
+                    quote_base_quantity=quote_base_quantity,
+                    withheld=withheld,
+                ),
+                key=lambda row: row.lot_id,
+                change_days=change_days,
+                range_start=range_start,
+                range_end=actual_to,
+            )
+
+        return_history = None
+        if LotAnalysisType.RETURN_HISTORY in shown_analyses:
+            return_history = history_steps(
+                build_return_history(
+                    selected_ids=selected_ids,
+                    lots_by_id=lots_by_id,
+                    fragments_by_lot=fragments_by_lot,
+                    market_prices=market_prices,
+                    price_series=price_series,
+                    fx_resolver=fx_resolver,
+                    history_dates=change_days,
+                    closures_by_lot=closures_by_lot,
+                    income_prefix_by_lot=income_prefix_by_lot,
+                    fees_prefix_by_lot=fees_prefix_by_lot,
+                    taxes_prefix_by_lot=taxes_prefix_by_lot,
+                    at_cost_until=at_cost_until,
+                    quote_base_quantity=quote_base_quantity,
+                    withheld=withheld,
+                ),
+                key=lambda row: row.lot_id,
+                change_days=change_days,
+                range_start=range_start,
+                range_end=actual_to,
+            )
+
+        price_history = None
+        if LotAnalysisType.PRICE_HISTORY in shown_analyses:
+            price_history = history_steps(
+                build_price_history(
+                    selected_ids=selected_ids,
+                    lots_by_id=lots_by_id,
+                    estimated_market_prices=estimated_market_prices,
+                    history_dates=change_days,
+                    target_currency=target_currency,
+                    closures_by_lot=closures_by_lot,
+                ),
+                key=lambda row: row.lot_id,
+                change_days=change_days,
+                range_start=range_start,
+                range_end=actual_to,
+            )
+
+        performance_history = None
+        if LotAnalysisType.PERFORMANCE_HISTORY in shown_analyses:
+            performance_history = history_steps(
+                build_performance_history(
+                    scope_broker_ids=inputs.scope_broker_ids,
+                    history_dates=change_days,
+                    market_prices=market_prices,
+                    asset_currency=asset.currency,
+                    fx_resolver=fx_resolver,
+                    context=replay.performance_context,
+                    quote_base_quantity=quote_base_quantity,
+                    at_cost_until=at_cost_until,
+                ),
+                key=lambda row: None,
+                change_days=change_days,
+                range_start=range_start,
+                range_end=actual_to,
+            )
+
+        income_events = None
+        if LotAnalysisType.INCOME_EVENTS in shown_analyses:
+            # Only markers within the visualized window; events before display_from already
+            # contributed to the opening state and would clutter the chart.
+            income_events = [event for event in replay.income_events_payload if display_from <= event.date <= actual_to]
+
+        economic_allocation_groups = None
+        if LotAnalysisType.LOT_SUMMARY in shown_analyses and engine_result.economic_allocation_groups:
+            economic_allocation_groups = map_economic_groups(engine_result.economic_allocation_groups, withheld)
+
+        # Every builder has converted what it needed: report, once, what could not be converted or costed.
+        conversion_gaps = fx_resolver.missing_pairs()
+        await self._report_gaps(data_quality, average_cost_lines, conversion_gaps, target_currency, asset, configured_pairs=configured_pairs)
+        data_quality.stale_fx_pairs = list(stale_fx_pairs)
+
+        return LotsMethodAnalysis(
+            # A gap (a missing rate or cost basis) is isolable: DEGRADED.
+            calculation_status=("DEGRADED" if engine_result.analysis_status == "COMPLETE" and (conversion_gaps or any(line.has_missing_report_fx or line.unknown_cost_movement_ids for line in average_cost_lines.values())) else engine_result.analysis_status),
+            data_quality=data_quality,
+            lots=lots,
+            gantt_segments=gantt_segments,
+            custody_history=custody_history,
+            lot_events=event_history,
+            value_history=value_history,
+            return_history=return_history,
+            price_history=price_history,
+            performance_history=performance_history,
+            income_events=income_events,
+            economic_allocation_groups=economic_allocation_groups,
+            asset_orphan_income=None if failed or "income" in withheld.orphan_unknown else engine_result.asset_orphan_income,
+            asset_orphan_fees=None if failed or "fees" in withheld.orphan_unknown else engine_result.asset_orphan_fees,
+            asset_orphan_taxes=None if failed or "taxes" in withheld.orphan_unknown else engine_result.asset_orphan_taxes,
+        )
+
+    async def _get_base_currency(self, user_id: int) -> str:
+        """Effective base currency: per-user setting, global default, EUR (P0-1)."""
+        return await get_effective_base_currency(self.db, user_id)
+
+    async def _get_scope_broker_ids(self, user_id: int, broker_ids: list[int] | None) -> list[int]:
+        stmt = select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id)
+        if broker_ids:
+            stmt = stmt.where(BrokerUserAccess.broker_id.in_(broker_ids))
+        rows = (await self.db.execute(stmt)).scalars().all()
+        return sorted(set(rows))
+
+    async def _load_transactions(self, asset_id: int, scope_broker_ids: Sequence[int], date_to: date_type) -> list[Transaction]:
+        stmt = select(Transaction).where(Transaction.asset_id == asset_id).where(Transaction.broker_id.in_(scope_broker_ids)).where(Transaction.date <= date_to).where(Transaction.quantity.is_not(None)).where(Transaction.quantity != 0).order_by(Transaction.date, Transaction.id)
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def _read_at_scope_boundary(
+        self,
+        transactions: Sequence[Transaction],
+        *,
+        scope_broker_ids: Sequence[int],
+        price_series: AssetPriceSeries,
+        quote_base_quantity: int,
+    ) -> ScopeBoundaryReading:
+        """The scope's rows with each transfer leg whose partner sits outside the scope read at its edge (J-10, N76).
+
+        Of the partners only the pairing columns are loaded, never an amount or a cost: nothing of a broker outside
+        the scope reaches the figures.
+        """
+        partner_ids = partner_ids_to_load(transactions)
+        partners: dict[int, TransferPartner] = {}
+        if partner_ids:
+            stmt = select(Transaction.id, Transaction.broker_id, Transaction.asset_id, Transaction.type, Transaction.quantity, Transaction.related_transaction_id).where(Transaction.id.in_(partner_ids))
+            for row in (await self.db.execute(stmt)).all():
+                partners[row.id] = TransferPartner(id=row.id, broker_id=row.broker_id, asset_id=row.asset_id, type=str(getattr(row.type, "value", row.type)), quantity=row.quantity, related_transaction_id=row.related_transaction_id)
+        return read_transfers_at_scope_boundary(transactions, partners=partners, scope_broker_ids=scope_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
+
+    async def _load_late_transfer_legs(self, transactions: Sequence[Transaction | FifoInputTransaction], *, asset_id: int, scope_broker_ids: Sequence[int], date_to: date_type) -> list[FifoInputTransaction]:
+        """The partners of the scope's TRANSFER legs that sit in the scope but are dated after ``date_to`` (J-47).
+
+        A transfer still in transit on ``date_to`` has its arriving leg dated later, so ``_load_transactions`` cut it
+        and the engine could not pair the departure. The engine alone gets these legs, as detached copies, and replays
+        up to ``date_to``: the arrival is not applied. No other reader of the analysis sees them, so no history, WAC
+        line or rate reaches past ``date_to``. A partner outside the scope is read at its edge instead (J-10).
+        """
+        partner_ids = partner_ids_to_load(transactions)
+        if not partner_ids:
+            return []
+        stmt = (
+            select(Transaction)
+            .where(Transaction.id.in_(partner_ids))
+            .where(Transaction.asset_id == asset_id)
+            .where(Transaction.broker_id.in_(scope_broker_ids))
+            .where(Transaction.type == TransactionType.TRANSFER)
+            .where(Transaction.date > date_to)
+            .where(Transaction.quantity.is_not(None))
+            .where(Transaction.quantity != 0)
+        )
+        return [FifoInputTransaction.from_transaction(row) for row in (await self.db.execute(stmt)).scalars().all()]
+
+    async def _load_income_transactions(self, asset_id: int, scope_broker_ids: Sequence[int], date_to: date_type) -> list[Transaction]:
+        """Load asset-linked DIVIDEND/INTEREST cash transactions for pro-rata lot allocation.
+
+        These are cash-only events (no quantity) so they never enter the FIFO engine load;
+        they are attributed to open LONG lots as of ``transaction.date - 1`` (D-1 semantics), scoped
+        to the paying broker and transfer-aware, by the engine economic stage (see
+        ``FifoLotEngine._allocate_income_pools`` and ``build_income_economic_events``).
+        Income without ``asset_id`` is intentionally excluded here — it is handled broker-level
+        by the Portfolio Engine ("Altri effetti del periodo").
+        """
+        stmt = (
+            select(Transaction)
+            .where(Transaction.asset_id == asset_id)
+            .where(Transaction.broker_id.in_(scope_broker_ids))
+            .where(Transaction.date <= date_to)
+            .where(Transaction.type.in_([TransactionType.DIVIDEND, TransactionType.INTEREST]))
+            .where(Transaction.amount != 0)
+            .order_by(Transaction.date, Transaction.id)
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def _load_cost_transactions(self, asset_id: int, scope_broker_ids: Sequence[int], date_to: date_type) -> list[Transaction]:
+        """Load asset-linked FEE/TAX cash transactions for deterministic cost allocation.
+
+        Like income these are cash-only events (no quantity) and never enter the FIFO quantitative
+        load; they are pooled and matched to trades/income/holdings by the engine economic stage
+        (see ``FifoLotEngine._allocate_cost_pools`` and ``build_cost_economic_events``). FEE/TAX
+        without ``asset_id`` are intentionally excluded — those are broker-level costs handled by the
+        Portfolio Engine, not attributable to a specific lot.
+        """
+        stmt = (
+            select(Transaction)
+            .where(Transaction.asset_id == asset_id)
+            .where(Transaction.broker_id.in_(scope_broker_ids))
+            .where(Transaction.date <= date_to)
+            .where(Transaction.type.in_([TransactionType.FEE, TransactionType.TAX]))
+            .where(Transaction.amount != 0)
+            .order_by(Transaction.date, Transaction.id)
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def _load_split_ratios(self, transactions: Sequence[Transaction]) -> dict[int, Decimal]:
+        return {link.transaction_id: link.ratio for link in await load_split_links(self.db, transactions)}
+
+    async def _load_broker_shorting(self, scope_broker_ids: Sequence[int]) -> dict[int, bool]:
+        stmt = select(Broker.id, Broker.allow_asset_shorting).where(Broker.id.in_(scope_broker_ids))
+        rows = (await self.db.execute(stmt)).all()
+        return dict(rows)
+
+    async def _load_prices(
+        self,
+        asset_id: int,
+        date_from: date_type,
+        date_to: date_type,
+    ) -> list[PriceHistory]:
+        previous_price_date = select(func.max(PriceHistory.date)).where(PriceHistory.asset_id == asset_id).where(PriceHistory.date < date_from).where(PriceHistory.close.is_not(None)).scalar_subquery()
+        stmt = (
+            select(PriceHistory)
+            .where(PriceHistory.asset_id == asset_id)
+            .where(
+                or_(
+                    PriceHistory.date >= date_from,
+                    PriceHistory.date == previous_price_date,
+                )
+            )
+            .where(PriceHistory.date <= date_to)
+            .where(PriceHistory.close.is_not(None))
+            .order_by(PriceHistory.date)
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    def _empty_response(
+        self,
+        *,
+        asset_id: int,
+        target_currency: str,
+        requested_analyses: list[LotAnalysisType],
+        broker_ids: list[int],
+        selected_lot_ids: list[int] | None,
+        requested_date_from: date_type | None,
+        requested_date_to: date_type | None,
+        computed_date_from: date_type | None,
+        computed_date_to: date_type | None,
+        status: LotAnalysisStatus,
+        matching_methods: Sequence[LotMatchingMethod] = (LotMatchingMethod.FIFO,),
+    ) -> LotsAnalysisMethodsResponse:
+        return LotsAnalysisMethodsResponse(
+            asset_id=asset_id,
+            target_currency=target_currency,
+            calculation_metadata=LotsAnalysisMetadata(
+                broker_ids=broker_ids,
+                selected_lot_ids=selected_lot_ids,
+                requested_analyses=requested_analyses,
+                matching_methods=list(matching_methods),
+                requested_date_from=requested_date_from,
+                requested_date_to=requested_date_to,
+                computed_date_from=computed_date_from,
+                computed_date_to=computed_date_to,
+                generated_at=date_type.today(),
+            ),
+            methods={method: LotsMethodAnalysis(calculation_status=status, data_quality=DataQualityReport(issues=[])) for method in matching_methods},
+        )
+
+    def _resolve_selected_lot_ids(self, selected_lot_ids: list[int] | None, lots_by_id: dict[int, FifoLot]) -> list[int]:
+        if selected_lot_ids is None:
+            return list(lots_by_id)
+        missing = [lot_id for lot_id in selected_lot_ids if lot_id not in lots_by_id]
+        if missing:
+            raise ValueError(f"Unknown lot ids requested: {missing}")
+        return list(dict.fromkeys(selected_lot_ids))
+
+    async def _compute_average_cost_lines(
+        self,
+        *,
+        transactions: Sequence[Transaction | FifoInputTransaction],
+        split_ratios_by_tx_id: dict[int, Decimal],
+        asset_currency: str,
+        target_currency: str,
+    ) -> dict[int | str, AverageCost]:
+        """Average cost per broker and for all the brokers together, in target currency.
+
+        One financial_math.average_cost call: each acquisition converted at its own date,
+        missing conversions reported instead of falling back to the unconverted cost.
+        ``transactions`` arrive ordered by (date, id), the replay order of the pools.
+        """
+        movements_by_broker: dict[int, list] = defaultdict(list)
+        all_movements: list = []
+        for tx in transactions:
+            movement = cost_movement_from_transaction(tx, asset_currency=asset_currency, split_linked=tx.id in split_ratios_by_tx_id)
+            if movement is None:
+                continue
+            movements_by_broker[tx.broker_id].append(movement)
+            all_movements.append(movement)
+        positions = [CostPosition(key=broker_id, asset_currency=asset_currency, movements=tuple(movements)) for broker_id, movements in movements_by_broker.items()]
+        positions.append(CostPosition(key=ALL_BROKERS, asset_currency=asset_currency, movements=tuple(all_movements)))
+        return await compute_average_costs(self.db, positions, report_currency=target_currency, asset_leg=False)
+
+    async def _report_gaps(
+        self,
+        data_quality: DataQualityReport,
+        lines: dict[int | str, AverageCost],
+        conversion_gaps: Sequence[WACMissingPairInfo],
+        target_currency: str,
+        asset: Asset,
+        *,
+        configured_pairs: _ConfiguredFxPairs,
+    ) -> None:
+        """Put what the analysis could not compute in the data quality, as the portfolio banner does.
+
+        Conversions that could not be made — by the average-cost lines and by every other figure of the
+        analysis — become ``missing_fx_pairs`` (pair and dates, merged) and their FX issues; an
+        acquisition without a known cost becomes a ``MISSING_COST_BASIS`` issue.
+        """
+        dates_by_pair: dict[str, set[date_type]] = defaultdict(set)
+        spans_by_pair: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
+        for line in lines.values():
+            for missing in line.missing:
+                if missing.leg == "report":
+                    dates_by_pair[missing.pair].update(missing.dates)
+        for gap in conversion_gaps:
+            dates_by_pair[gap.pair].update(gap.dates)
+            spans_by_pair[gap.pair].extend((span.start, span.end) for span in gap.ranges)
+        unknown_cost = any(line.unknown_cost_movement_ids for line in lines.values())
+        if not dates_by_pair and not spans_by_pair and not unknown_cost:
+            return
+        # The movements' dates, and the valuation days with no rate as ranges (D-P4)
+        missing_pairs = fx_rates.missing_pair_infos(dates_by_pair, spans_by_pair)
+        configured_fx_pairs, real_provider_pairs = await configured_pairs.read() if missing_pairs else (set(), set())
+        gap_report = build_data_quality_report(
+            [],
+            missing_fx_pairs_dto=missing_pairs or None,
+            missing_cost_basis_assets=[(asset.id, asset.display_name)] if unknown_cost else None,
+            configured_fx_pairs=configured_fx_pairs,
+            real_provider_fx_pairs=real_provider_pairs,
+        )
+        data_quality.issues.extend(gap_report.issues)
+        data_quality.missing_fx_pairs.extend(missing_pairs)
+
+    def _build_lot_summaries(  # noqa: C901 — flat per-lot field packing, valuation-variant if/elif
+        self,
+        *,
+        engine_result: FifoEngineResult,
+        lots_by_id: dict[int, FifoLot],
+        selected_ids: Sequence[int],
+        fx_resolver: FxRateResolver,
+        market_prices: dict[date_type, Decimal | None],
+        price_series: AssetPriceSeries,
+        closures_by_lot: dict[int, list[LotClosure]],
+        income_by_lot: dict[int, Decimal],
+        fees_by_lot: dict[int, Decimal],
+        taxes_by_lot: dict[int, Decimal],
+        estimated_mode: bool,
+        quote_base_quantity: int,
+        analysis_end: date_type,
+        withheld: WithheldEconomics = NOTHING_WITHHELD,
+    ) -> list[LotSummarySchema]:
+        latest_market_price = market_prices.get(max(market_prices)) if market_prices else None
+        out: list[LotSummarySchema] = []
+        for lot_id in selected_ids:
+            lot = lots_by_id[lot_id]
+            current_custody = [
+                {
+                    "broker_id": fragment.broker_id,
+                    "custody_type": fragment.custody_type,
+                    "quantity": fragment.quantity,
+                }
+                for fragment in engine_result.active_fragments(lot_id=lot_id)
+            ]
+            known_proceeds = known_cumulative_proceeds(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            # A short lot's closing purchases (0 for a long lot): its P&L is what it sold minus what it bought back.
+            known_buybacks = known_buyback_cost(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
+            opening_unit_price = fx_resolver.convert(lot.opening_unit_price, lot.currency, lot.opening_date)
+            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = opening_reference_price(lot, price_series, quote_base_quantity)
+            reference_unit_price = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
+            lot_realized_pnl = known_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            # A lot reached by an economic pool without a rate has that income, fee or tax unknown.
+            asset_income = None if lot_id in withheld.income_from else income_by_lot.get(lot_id, Decimal("0"))
+            allocated_fees = None if lot_id in withheld.fees_from else fees_by_lot.get(lot_id, Decimal("0"))
+            allocated_taxes = None if lot_id in withheld.taxes_from else taxes_by_lot.get(lot_id, Decimal("0"))
+            closing_date = None
+            if lot.open_quantity == Decimal("0"):
+                lot_closures = closures_by_lot.get(lot_id, [])
+                if lot_closures:
+                    closing_date = max(closure.close_date for closure in lot_closures)
+            # Every figure reads converted amounts only (financial_math.lots.summary): a missing rate leaves it
+            # unknown, never computed from the native cost, proceeds, realized P&L, income or costs.
+            figures = lot_summary_figures(
+                lot=lot,
+                original_cost=converted_original_cost,
+                known_proceeds=known_proceeds,
+                known_buybacks=known_buybacks,
+                realized_pnl=lot_realized_pnl,
+                latest_market_price=latest_market_price,
+                reference_unit_price=reference_unit_price,
+                income=asset_income,
+                fees=allocated_fees,
+                taxes=allocated_taxes,
+                estimated_mode=estimated_mode,
+                quote_base_quantity=quote_base_quantity,
+                closing_date=closing_date,
+                analysis_end=analysis_end,
+            )
+            out.append(
+                LotSummarySchema(
+                    lot_id=lot.lot_id,
+                    opening_transaction_id=lot.opening_transaction_id,
+                    asset_id=lot.asset_id,
+                    direction=lot.direction,
+                    opening_broker_id=lot.opening_broker_id,
+                    opening_date=lot.opening_date,
+                    closing_date=closing_date,
+                    opening_unit_price=opening_unit_price,
+                    original_quantity=lot.original_quantity,
+                    original_cost=converted_original_cost,
+                    currency=lot.currency,
+                    open_quantity=lot.open_quantity,
+                    realized_quantity=lot.realized_quantity,
+                    realized_pnl=lot_realized_pnl,
+                    cumulative_proceeds=known_proceeds,
+                    reference_unit_price=reference_unit_price,
+                    # T-B6: a reference that could not be converted has no source, as in the return history.
+                    reference_price_source=reference_price_source if reference_unit_price is not None else None,
+                    states=sorted(engine_result.get_lot_states(lot_id)),
+                    current_custody=current_custody,
+                    open_value=figures.open_value,
+                    total_value=figures.total_value,
+                    pnl=figures.pnl,
+                    relative_return=figures.relative_return,
+                    asset_income=asset_income,
+                    market_pnl=figures.market_pnl,
+                    total_pnl=figures.total_pnl,
+                    cash_yield=figures.cash_yield,
+                    total_return=figures.total_return,
+                    annualized_return=figures.annualized_return,
+                    value_source=figures.value_source,
+                    allocated_fees=allocated_fees,
+                    allocated_taxes=allocated_taxes,
+                    net_total_pnl=figures.net_total_pnl,
+                    net_total_return=figures.net_total_return,
+                    net_metrics_status="UNAVAILABLE" if withheld.reaches(lot_id) else "AVAILABLE",
+                )
+            )
+        return out
+
+    def _build_gantt_segments(
+        self,
+        fragments: Sequence[FragmentInterval],
+        selected_ids: Sequence[int],
+        lots_by_id: dict[int, FifoLot],
+        fx_resolver: FxRateResolver,
+    ) -> list[GanttSegmentSchema]:
+        out: list[GanttSegmentSchema] = []
+        selected = set(selected_ids)
+        for fragment in fragments:
+            if fragment.lot_id not in selected:
+                continue
+            lot = lots_by_id[fragment.lot_id]
+            converted_unit_price = fx_resolver.convert(fragment.unit_price, lot.currency, fragment.start_date)
+            out.append(
+                GanttSegmentSchema(
+                    fragment_id=fragment.fragment_id,
+                    lot_id=fragment.lot_id,
+                    direction=fragment.direction,
+                    custody_type=fragment.custody_type,
+                    broker_id=fragment.broker_id,
+                    source_broker_id=fragment.source_broker_id,
+                    destination_broker_id=fragment.destination_broker_id,
+                    quantity=fragment.quantity,
+                    unit_price=converted_unit_price,
+                    start_date=fragment.start_date,
+                    end_date=fragment.end_date,
+                )
+            )
+        return out
+
+    def _build_lot_event_rows(
+        self,
+        *,
+        engine_result: FifoEngineResult,
+        selected_ids: Sequence[int],
+        fx_resolver: FxRateResolver,
+        lots_by_id: dict[int, FifoLot],
+        boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
+    ) -> list[LotTimelineEventSchema]:
+        selected = set(selected_ids)
+        rows: list[LotTimelineEventSchema] = []
+        rows.extend(self._build_opening_and_split_rows(engine_result, selected, fx_resolver, lots_by_id, boundary_legs))
+        rows.extend(self._build_transfer_rows(engine_result.fragment_intervals, selected, lots_by_id, fx_resolver, transfer_brokers=_transfer_brokers(engine_result.classified_events)))
+        fragment_brokers = {fragment.fragment_id: fragment.broker_id for fragment in engine_result.fragment_intervals}
+        rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver, boundary_legs, fragment_brokers=fragment_brokers))
+        # A departure reads before the arrival of a move that takes one day (J-68): both rows carry the pair id as their
+        # transaction id, so the name of the kind would put the arrival first.
+        return sorted(rows, key=lambda row: (row.date, row.lot_id, row.transaction_id, row.kind != LotTimelineEventKind.TRANSFER_DEPART, row.kind))
+
+    def _build_opening_and_split_rows(
+        self,
+        engine_result: FifoEngineResult,
+        selected: set[int],
+        fx_resolver: FxRateResolver,
+        lots_by_id: dict[int, FifoLot],
+        boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
+    ) -> list[LotTimelineEventSchema]:
+        rows: list[LotTimelineEventSchema] = []
+        for event in engine_result.classified_events:
+            if event.kind in {"BUY", "ADJUSTMENT_IN"}:
+                lot_id = event.transaction_id
+                if lot_id not in selected:
+                    continue
+                # The opening price is in the lot's currency: a BUY's own, the cost basis's for a priced ADJUSTMENT.
+                lot = lots_by_id[lot_id]
+                converted_unit_price = fx_resolver.convert(event.unit_price, lot.currency, event.date)
+                # V11: the value the lot opened at, the summary's original cost, in the same currency as the price.
+                opening_value = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
+                rows.append(
+                    LotTimelineEventSchema(
+                        lot_id=lot_id,
+                        date=event.date,
+                        kind=LotTimelineEventKind(event.kind),
+                        transaction_id=event.transaction_id,
+                        related_transaction_id=event.pair_id,
+                        broker_id=event.broker_id,
+                        source_broker_id=event.source_broker_id,
+                        destination_broker_id=event.destination_broker_id,
+                        fragment_id=None,
+                        quantity=event.quantity or Decimal("0"),
+                        unit_price=converted_unit_price,
+                        open_unit_price=None,
+                        close_unit_price=None,
+                        realized_pnl=None,
+                        proceeds=None,
+                        ratio=event.ratio,
+                        opening_value=opening_value,
+                        scope_boundary=_boundary_direction(boundary_legs, event.transaction_id),
+                    )
+                )
+            elif event.kind == "SPLIT":
+                impacted_lot_ids = self._impacted_lot_ids_for_split(event, engine_result.fragment_intervals)
+                for lot_id in sorted(impacted_lot_ids & selected):
+                    rows.append(
+                        LotTimelineEventSchema(
+                            lot_id=lot_id,
+                            date=event.date,
+                            kind=LotTimelineEventKind.SPLIT,
+                            transaction_id=event.transaction_id,
+                            related_transaction_id=None,
+                            broker_id=event.broker_id,
+                            source_broker_id=None,
+                            destination_broker_id=None,
+                            fragment_id=None,
+                            quantity=lots_by_id[lot_id].open_quantity,
+                            unit_price=None,
+                            open_unit_price=None,
+                            close_unit_price=None,
+                            realized_pnl=None,
+                            proceeds=None,
+                            ratio=event.ratio,
+                        )
+                    )
+        return rows
+
+    def _build_transfer_rows(
+        self,
+        fragments: Sequence[FragmentInterval],
+        selected: set[int],
+        lots_by_id: dict[int, FifoLot],
+        fx_resolver: FxRateResolver,
+        *,
+        transfer_brokers: Mapping[int, tuple[int | None, int | None]] = _NO_TRANSFER_BROKERS,
+    ) -> list[LotTimelineEventSchema]:
+        """The TRANSFER rows of the history, off the fragments of the replay.
+
+        A move that takes days leaves an IN_TRANSIT fragment, which names its source and destination: one departure row
+        and one arrival row. A move that leaves and arrives on one day leaves only its destination piece, which names
+        neither; the pair's brokers come from ``transfer_brokers`` (the engine's classified events, ``pair id`` →
+        (source, destination), J-68) and give it the same two rows, on that day. A piece whose pair is not in
+        ``transfer_brokers`` (a leg read at the scope's edge, whose partner sits outside it) keeps its one arrival row and
+        invents no origin.
+        """
+        rows: list[LotTimelineEventSchema] = []
+        fragment_ids = {fragment.fragment_id for fragment in fragments}
+        earliest_by_fragment: dict[str, FragmentInterval] = {}
+        for fragment in fragments:
+            previous = earliest_by_fragment.get(fragment.fragment_id)
+            if previous is None or fragment.start_date < previous.start_date:
+                earliest_by_fragment[fragment.fragment_id] = fragment
+        for fragment_id, fragment in earliest_by_fragment.items():
+            if fragment.lot_id not in selected or "/transfer:" not in fragment_id:
+                continue
+            lot = lots_by_id[fragment.lot_id]
+            converted_unit_price = fx_resolver.convert(fragment.unit_price, lot.currency, fragment.start_date)
+            if fragment.custody_type == "IN_TRANSIT":
+                transfer_pair_id = _parse_transfer_pair_id(fragment_id)
+                rows.append(
+                    LotTimelineEventSchema(
+                        lot_id=fragment.lot_id,
+                        date=fragment.start_date,
+                        kind=LotTimelineEventKind.TRANSFER_DEPART,
+                        transaction_id=transfer_pair_id,
+                        related_transaction_id=transfer_pair_id,
+                        broker_id=None,
+                        source_broker_id=fragment.source_broker_id,
+                        destination_broker_id=fragment.destination_broker_id,
+                        fragment_id=fragment.fragment_id,
+                        quantity=fragment.quantity,
+                        unit_price=converted_unit_price,
+                        open_unit_price=None,
+                        close_unit_price=None,
+                        realized_pnl=None,
+                        proceeds=None,
+                        ratio=None,
+                    )
+                )
+                # Still in transit at the end of the replay (J-47): no arrival yet.
+                if fragment.end_date is None:
+                    continue
+                rows.append(
+                    LotTimelineEventSchema(
+                        lot_id=fragment.lot_id,
+                        date=fragment.end_date,
+                        kind=LotTimelineEventKind.TRANSFER_ARRIVE,
+                        transaction_id=transfer_pair_id,
+                        related_transaction_id=transfer_pair_id,
+                        broker_id=None,
+                        source_broker_id=fragment.source_broker_id,
+                        destination_broker_id=fragment.destination_broker_id,
+                        fragment_id=fragment.fragment_id,
+                        quantity=fragment.quantity,
+                        unit_price=converted_unit_price,
+                        open_unit_price=None,
+                        close_unit_price=None,
+                        realized_pnl=None,
+                        proceeds=None,
+                        ratio=None,
+                    )
+                )
+            elif "/to:" in fragment_id and f"lot:{fragment.lot_id}/transfer:{_parse_transfer_pair_id(fragment_id)}/transit" not in fragment_ids:
+                transfer_pair_id = _parse_transfer_pair_id(fragment_id)
+                source_broker_id, destination_broker_id = transfer_brokers.get(transfer_pair_id, (fragment.source_broker_id, fragment.destination_broker_id))
+                if transfer_pair_id in transfer_brokers:
+                    rows.append(
+                        LotTimelineEventSchema(
+                            lot_id=fragment.lot_id,
+                            date=fragment.start_date,
+                            kind=LotTimelineEventKind.TRANSFER_DEPART,
+                            transaction_id=transfer_pair_id,
+                            related_transaction_id=transfer_pair_id,
+                            broker_id=None,
+                            source_broker_id=source_broker_id,
+                            destination_broker_id=destination_broker_id,
+                            fragment_id=fragment.fragment_id,
+                            quantity=fragment.quantity,
+                            unit_price=converted_unit_price,
+                            open_unit_price=None,
+                            close_unit_price=None,
+                            realized_pnl=None,
+                            proceeds=None,
+                            ratio=None,
+                        )
+                    )
+                rows.append(
+                    LotTimelineEventSchema(
+                        lot_id=fragment.lot_id,
+                        date=fragment.start_date,
+                        kind=LotTimelineEventKind.TRANSFER_ARRIVE,
+                        transaction_id=transfer_pair_id,
+                        related_transaction_id=transfer_pair_id,
+                        broker_id=fragment.broker_id,
+                        source_broker_id=source_broker_id,
+                        destination_broker_id=destination_broker_id,
+                        fragment_id=fragment.fragment_id,
+                        quantity=fragment.quantity,
+                        unit_price=converted_unit_price,
+                        open_unit_price=None,
+                        close_unit_price=None,
+                        realized_pnl=None,
+                        proceeds=None,
+                        ratio=None,
+                    )
+                )
+        return rows
+
+    def _build_closure_rows(
+        self,
+        closures: Sequence[LotClosure],
+        selected: set[int],
+        lots_by_id: dict[int, FifoLot],
+        fx_resolver: FxRateResolver,
+        boundary_legs: Mapping[int, BoundaryLeg] = _NO_BOUNDARY_LEGS,
+        *,
+        fragment_brokers: Mapping[str, int | None] = _NO_FRAGMENT_BROKERS,
+    ) -> list[LotTimelineEventSchema]:
+        rows: list[LotTimelineEventSchema] = []
+        for closure in closures:
+            if closure.lot_id not in selected:
+                continue
+            lot = lots_by_id[closure.lot_id]
+            converted = convert_closure(closure, lot, fx_resolver)
+            # §29: the broker the units leave, the closed fragment's; the opening broker only for a fragment without one
+            # (in transit) or unknown. A lot moved to B and sold there reads «SELL B», not the broker it was bought at.
+            closing_broker_id = fragment_brokers.get(closure.fragment_id)
+            rows.append(
+                LotTimelineEventSchema(
+                    lot_id=closure.lot_id,
+                    date=closure.close_date,
+                    kind=LotTimelineEventKind(closure.close_reason),
+                    transaction_id=closure.transaction_id,
+                    related_transaction_id=None,
+                    broker_id=closing_broker_id if closing_broker_id is not None else lot.opening_broker_id,
+                    source_broker_id=None,
+                    destination_broker_id=None,
+                    fragment_id=closure.fragment_id,
+                    quantity=closure.quantity,
+                    unit_price=converted.close_unit_price,
+                    open_unit_price=converted.open_unit_price,
+                    close_unit_price=converted.close_unit_price,
+                    realized_pnl=converted.realized_pnl,
+                    proceeds=converted.proceeds,
+                    ratio=None,
+                    scope_boundary=_boundary_direction(boundary_legs, closure.transaction_id),
+                )
+            )
+        return rows
+
+    def _build_data_quality_report(
+        self,
+        issues: Sequence[FifoDataQualityIssue],
+        groups: Sequence[EconomicAllocationGroup] = (),
+        withheld: WithheldEconomics = NOTHING_WITHHELD,
+        *,
+        dates_by_id: Mapping[int, date_type] | None = None,
+    ) -> DataQualityReport:
+        """The engine's issues as data-quality issues.
+
+        An issue that fails the replay also names the date of the row to fix (``transaction_date``, from
+        ``dates_by_id``) and says it fails the analysis (``fails_analysis``), so a reader needs no list of codes (J-12).
+        """
+        mapped = []
+        for issue in issues:
+            code = IssueCode(issue.code)
+            params = self._orphan_issue_params(issue, groups, withheld) if code in _ORPHAN_ISSUE_CODES else issue.params
+            if fails_the_replay(issue.code):
+                row_date = (dates_by_id or {}).get(issue.transaction_id) if issue.transaction_id is not None else None
+                params = {**params, "transaction_date": row_date.isoformat() if row_date is not None else None, "fails_analysis": True}
+            mapped.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=code,
+                    severity=IssueSeverity.WARNING if code in _WARNING_ISSUE_CODES else IssueSeverity.ERROR,
+                    message_i18n_key=_message_key_for_issue(code),
+                    message_params={
+                        "transaction_id": issue.transaction_id,
+                        "lot_id": issue.lot_id,
+                        "broker_id": issue.broker_id,
+                        "related_transaction_id": issue.related_transaction_id,
+                        **params,
+                    },
+                )
+            )
+        return DataQualityReport(issues=mapped)
+
+    @staticmethod
+    def _orphan_issue_params(issue: FifoDataQualityIssue, groups: Sequence[EconomicAllocationGroup], withheld: WithheldEconomics) -> Mapping[str, object]:
+        """The params of an orphan issue, whose amount is never the native placeholder in the target currency.
+
+        An orphan pool with an event without a rate has no target amount: the engine filled it with the native
+        placeholder. Its issue then states the pool in its own currency, the one its amount is known in; the
+        message keys keep their names. The issue's transaction is the pool's first source.
+        """
+        for index in withheld.amount_degraded:
+            group = groups[index]
+            if not group.operation_allocations and issue.transaction_id in group.source_transaction_ids:
+                return {**issue.params, "target_amount": group.native_pool_total, "target_currency": group.native_currency}
+        return issue.params
+
+    def _impacted_lot_ids_for_split(self, event: FifoEvent, fragments: Sequence[FragmentInterval]) -> set[int]:
+        impacted: set[int] = set()
+        for fragment in fragments:
+            if not fragment_active_on_date(fragment, event.date):
+                continue
+            if fragment.custody_type == "BROKER" and fragment.broker_id == event.broker_id:
+                impacted.add(fragment.lot_id)
+            elif fragment.custody_type == "IN_TRANSIT" and (fragment.source_broker_id == event.broker_id or fragment.destination_broker_id == event.broker_id):
+                impacted.add(fragment.lot_id)
+        return impacted
+
+
+async def get_lots_analysis(
+    session: AsyncSession,
+    user_id: int,
+    asset_id: int,
+    broker_ids: list[int] | None,
+    date_from: date_type | None,
+    date_to: date_type | None,
+    target_currency: str | None,
+    selected_lot_ids: list[int] | None,
+    requested_analyses: list[str | LotAnalysisType],
+) -> LotsAnalysisResponse:
+    return await LotsAnalysisService(session).get_lots_analysis(
+        user_id=user_id,
+        asset_id=asset_id,
+        broker_ids=broker_ids,
+        date_from=date_from,
+        date_to=date_to,
+        target_currency=target_currency,
+        selected_lot_ids=selected_lot_ids,
+        requested_analyses=requested_analyses,
+    )
+
+
+def analysis_failure_codes(response: LotsAnalysisResponse) -> list[str]:
+    """The sorted unique codes of the issues that failed the replay of ``response`` (``fails_analysis``, J-12)."""
+    issues = response.data_quality.issues if response.data_quality is not None else ()
+    return sorted({str(issue.code) for issue in issues if issue.message_params.get("fails_analysis") is True})
+
+
+def _message_key_for_issue(code: IssueCode) -> str:
+    mapping = {
+        IssueCode.REFERENCE_PRICE_FALLBACK: "dataQuality.referencePriceFallback",
+        IssueCode.REFERENCE_PRICE_UNAVAILABLE: "dataQuality.referencePriceUnavailable",
+        IssueCode.SHORT_TRANSFER_NOT_SUPPORTED: "dataQuality.shortTransferNotSupported",
+        IssueCode.SHORT_ADJUSTMENT_NOT_SUPPORTED: "dataQuality.shortAdjustmentNotSupported",
+        IssueCode.FIFO_SOURCE_QUANTITY_MISSING: "dataQuality.fifoSourceQuantityMissing",
+        IssueCode.TRANSFER_PAIR_MISSING: "dataQuality.transferPairMissing",
+        IssueCode.CURRENT_PRICE_ASSUMED_AT_COST: "dataQuality.currentPriceAssumedAtCost",
+        IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS: "dataQuality.assetIncomeNoEligibleLots",
+        IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS: "dataQuality.assetCostNoEligibleLots",
+    }
+    return mapping[code]
+
+
+def _boundary_direction(legs: Mapping[int, BoundaryLeg], transaction_id: int) -> BoundaryDirection | None:
+    """J-48: the direction of a TRANSFER leg read at the scope's edge, for its rows' label; None for any other row."""
+    leg = legs.get(transaction_id)
+    return leg.direction if leg is not None else None
+
+
+def _transfer_brokers(events: Sequence[FifoEvent]) -> dict[int, tuple[int | None, int | None]]:
+    """The brokers of each TRANSFER pair the replay classified: ``pair id`` → (source, destination) (J-68)."""
+    return {event.pair_id: (event.source_broker_id, event.destination_broker_id) for event in events if event.kind == "TRANSFER_DEPART" and event.pair_id is not None}
+
+
+def _parse_transfer_pair_id(fragment_id: str) -> int:
+    marker = "/transfer:"
+    if marker not in fragment_id:
+        raise ValueError(f"Fragment id does not contain transfer pair marker: {fragment_id}")
+    suffix = fragment_id.split(marker, maxsplit=1)[1]
+    raw_pair_id = suffix.split("/", maxsplit=1)[0]
+    return int(raw_pair_id)

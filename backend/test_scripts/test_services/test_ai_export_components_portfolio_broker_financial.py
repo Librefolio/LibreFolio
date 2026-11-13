@@ -33,26 +33,11 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    AllocationItem,
-    AssetPeriodContribution,
-    LotAnalysisType,
-    LotCustodySummarySchema,
-    LotsAnalysisMetadata,
-    LotsAnalysisResponse,
-    LotSummarySchema,
-    OtherPeriodEffect,
-    OtherPeriodEffectCode,
-    PortfolioHistoryPoint,
-    PortfolioHolding,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    PositionsContribution,
-    YieldOnCostProvenance,
-    YieldOnCostResult,
-    YieldOnCostStatus,
-)
+from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotCustodySummarySchema, LotsAnalysisMetadata, LotsAnalysisResponse, LotSummarySchema
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AllocationItem, AssetPeriodContribution, OtherPeriodEffect, OtherPeriodEffectCode, PortfolioHolding, PortfolioSummary, PositionsContribution
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.services.ai_export.components import asset_resources, broker_financial, fx_core, portfolio_financial
 from backend.app.services.ai_export.components.envelope import ComponentPayloadValidationError, SectionEnvelope
 from backend.app.services.ai_export.components.payloads import portfolio_broker as shared_payloads
@@ -68,8 +53,8 @@ from backend.app.services.ai_export.dependencies import (
 )
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.portfolio import period as period_math
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 CURRENCY = "USD"
 

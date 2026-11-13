@@ -25,7 +25,7 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportPortfolioSnapshotRequest,
     AiExportSectionEnvelope,
 )
-from backend.app.schemas.signals import SignalTemporalClass
+from backend.app.schemas.signals.vocabulary import SignalTemporalClass
 from backend.app.services.ai_export.analyses.spec import AnalysisRegistry, AnalysisSpec
 from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.asset_resources import AssetNotFoundError

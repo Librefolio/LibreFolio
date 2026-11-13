@@ -11,7 +11,7 @@ Contents:
 - spreadsheet and CSV readers and the header scan (``xlsx_rows``, ``csv_rows``, ``layout``, ``find_layout``);
 - rule M, several files of one role (``RoleMerge`` and its ``coverage`` / ``by_day`` / ``same_rows``);
 - one-to-one pairing without a guess (``assign``, ``best_assignment``, ``pair_by_key``);
-- the segments of a timeline and the zone of a date (``merge_spans``, ``Segment``, ``build_timeline``, ``zone``).
+- the segments of a timeline and the zone of a date (``Segment``, ``build_timeline``, ``zone``).
 
 Every function is pure and parameterised by what the bank changes (a delimiter, a day accessor,
 a settlement lag, a candidate cap): the plugin passes its own constants.
@@ -367,17 +367,6 @@ def pair_by_key[L, R](
 # =============================================================================
 # SEGMENTS AND ZONES
 # =============================================================================
-
-
-def merge_spans(spans: Iterable[Tuple[date, date]]) -> List[Tuple[date, date]]:
-    """Sort the spans and join the ones that overlap or touch (the next day counts as touching)."""
-    merged: List[Tuple[date, date]] = []
-    for start, end in sorted(spans):
-        if merged and start <= merged[-1][1] + timedelta(days=1):
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-        else:
-            merged.append((start, end))
-    return merged
 
 
 @dataclass

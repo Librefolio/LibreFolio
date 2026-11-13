@@ -8,7 +8,7 @@
 <script lang="ts">
     import type {LineDataPoint} from './LineChart.svelte';
     import LineChart from './LineChart.svelte';
-    import type {RenderedSignal} from '$lib/charts/signals';
+    import type {RenderedSignal} from '$lib/components/charts/chartSignalContract';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {PRICE_SERIES} from '$lib/theme/chartTheme';
     import ResolutionBadge from './ResolutionBadge.svelte';

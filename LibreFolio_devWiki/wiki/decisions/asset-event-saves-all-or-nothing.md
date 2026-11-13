@@ -244,14 +244,14 @@ The provider-event test had to date its event yesterday: [[problems/provider-eve
 | The post-migration fix `event_types` | `backend/app/db/post_migration/event_types.py` |
 | `row_count_changes()` | `backend/app/db/post_migration/base.py` |
 | `_expected_counts()`, the registration in `FIXES` | `backend/app/db/post_migration/__init__.py` |
-| Data editor: the one-request save | `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` |
+| Data editor: the one-request save | `frontend/src/lib/features/assets/AssetDataEditorSection.svelte` |
 | Data editor: row actions, read-only rows | `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` |
 | «+ New event» | `frontend/src/lib/features/transactions/events/EventCreateMiniModal.svelte` |
 | The events already there | `frontend/src/lib/features/transactions/events/EventExistsPanel.svelte` |
 | Refusals as sentences, `existingAmountText()` | `frontend/src/lib/features/transactions/events/eventSaveError.ts` |
 | Event picker, re-read on a write | `frontend/src/lib/features/transactions/events/AssetEventPicker.svelte` |
 | The write bus | `frontend/src/lib/stores/portfolio/portfolioMutation.ts` |
-| The new i18n keys (EN) | `frontend/src/lib/i18n/assets/en.json` |
+| The new i18n keys (EN) | `frontend/src/lib/features/assets/i18n/en.json` |
 | Store tests | `backend/test_scripts/test_services/test_asset_event_store.py` |
 | API tests | `backend/test_scripts/test_api/test_assets_events.py` |
 | Fix tests | `backend/test_scripts/test_db/test_post_migration_event_types.py` |

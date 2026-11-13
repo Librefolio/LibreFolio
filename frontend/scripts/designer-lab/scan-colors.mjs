@@ -190,7 +190,7 @@ export function listSourceFiles(root = FRONTEND_DIR) {
 /** @typedef {'css-literal' | 'chart-color' | 'script' | 'markup' | 'static'} Layer */
 /** @typedef {{start: number, end: number, prelude: string, parent: CssBlock | null}} CssBlock */
 
-const CHART_PATH_RE = /\/(components\/charts|charts|features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$/i;
+const CHART_PATH_RE = /\/(components\/charts|charts|features\/(brokers\/lots|dashboard|risk|signals|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$/i;
 
 /**
  * The chart categories with a fixed colour written in a file (contract C1–C2 with DV): the file that holds them, its
@@ -264,6 +264,92 @@ function svelteRegions(text) {
         regions.push({kind: /** @type {'script' | 'style'} */ (m[1]), start, end: start + m[2].length});
     }
     return regions;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Comments — never a colour of the app
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * `text[start, end)` with every character of a comment replaced by a space (newlines kept, so lines and columns do
+ * not move). `mode` `css` knows `/* … *\/`; `script` knows that and `// …`, and skips strings and template literals
+ * (with their `${…}`), so `'https://x'` is not a comment; `markup` knows `<!-- … -->`. Mirrored by
+ * `mask_comments` of `scripts/visual_review/color_inventory.py`: change one, change the other.
+ * @param {string} text
+ * @param {'css' | 'script' | 'markup'} mode
+ * @param {number} [start]
+ * @param {number} [end]
+ * @returns {string}
+ */
+export function maskCommentsIn(text, mode, start = 0, end = text.length) {
+    const out = text.split('');
+    /** @param {number} from @param {number} to */
+    const blank = (from, to) => {
+        for (let k = from; k < to; k++) if (out[k] !== '\n' && out[k] !== '\r') out[k] = ' ';
+    };
+    if (mode === 'markup') {
+        for (let i = start; i < end; i++) {
+            if (text.startsWith('<!--', i)) {
+                const close = text.indexOf('-->', i + 4);
+                const stop = close === -1 || close + 3 > end ? end : close + 3;
+                blank(i, stop);
+                i = stop - 1;
+            }
+        }
+        return out.join('');
+    }
+    /** Template literals nest: each `${` opens a code context whose own braces are counted. */
+    const stack = [{type: 'code', depth: 0}];
+    for (let i = start; i < end; i++) {
+        const c = text[i];
+        const top = stack[stack.length - 1];
+        if (top.type === 'tpl') {
+            if (c === '\\') i++;
+            else if (c === '`') stack.pop();
+            else if (c === '$' && text[i + 1] === '{') {
+                stack.push({type: 'code', depth: 0});
+                i++;
+            }
+            continue;
+        }
+        if (c === '/' && text[i + 1] === '*') {
+            const close = text.indexOf('*/', i + 2);
+            const stop = close === -1 || close + 2 > end ? end : close + 2;
+            blank(i, stop);
+            i = stop - 1;
+        } else if (mode === 'script' && c === '/' && text[i + 1] === '/') {
+            let stop = text.indexOf('\n', i);
+            if (stop === -1 || stop > end) stop = end;
+            blank(i, stop);
+            i = stop - 1;
+        } else if (c === '"' || c === "'") {
+            for (i++; i < end && text[i] !== c && text[i] !== '\n'; i++) if (text[i] === '\\') i++;
+        } else if (mode === 'script' && c === '`') stack.push({type: 'tpl', depth: 0});
+        else if (mode === 'script' && c === '{') top.depth++;
+        else if (mode === 'script' && c === '}') {
+            if (top.depth === 0 && stack.length > 1) stack.pop();
+            else top.depth--;
+        }
+    }
+    return out.join('');
+}
+
+/**
+ * A source with its comments blanked out, by file kind: `.css` as CSS, `.svelte` per region (its `<script>` as script,
+ * its `<style>` as CSS, the markup around them for `<!-- -->`), anything else as script.
+ * @param {string} rel `frontend/`-relative path
+ * @param {string} text
+ * @returns {string}
+ */
+export function maskComments(rel, text) {
+    if (rel.endsWith('.css')) return maskCommentsIn(text, 'css');
+    if (!rel.endsWith('.svelte')) return maskCommentsIn(text, 'script');
+    const chars = maskCommentsIn(text, 'markup').split('');
+    for (const r of svelteRegions(text)) {
+        const part = maskCommentsIn(text, r.kind === 'style' ? 'css' : 'script', r.start, r.end);
+        for (let k = r.start; k < r.end; k++) chars[k] = part[k];
+    }
+    return chars.join('');
 }
 
 /**
@@ -541,6 +627,9 @@ export function scanSource(rel, text, opts = {}) {
     const chartFile = CHART_PATH_RE.test('/' + rel) || /from\s+['"]echarts['"]/.test(text);
     const starts = lineStarts(text);
     const lines = text.split('\n').map((l) => (l.endsWith('\r') ? l.slice(0, -1) : l));
+    // The colours counted are the code's: a colour written in a comment is not one (L6-1). Same lines, same columns.
+    const masked = maskComments(rel, text);
+    const codeLines = masked.split('\n').map((l) => (l.endsWith('\r') ? l.slice(0, -1) : l));
     const regions = isSvelte ? svelteRegions(text) : [];
     /** @type {{start: number, end: number, blocks: CssBlock[]}[]} */
     const cssRegions = isCss ? [{start: 0, end: text.length, blocks: cssBlocks(text, 0, text.length)}] : regions.filter((r) => r.kind === 'style').map((r) => ({start: r.start, end: r.end, blocks: cssBlocks(text, r.start, r.end)}));
@@ -595,28 +684,29 @@ export function scanSource(rel, text, opts = {}) {
     };
 
     lines.forEach((line, i) => {
-        for (const m of line.matchAll(TW_RE)) {
+        const code = codeLines[i];
+        for (const m of code.matchAll(TW_RE)) {
             result.counts.tw++;
             result.classes.push({raw: m[0], var: paletteVar(m[3], m[4]), line: i + 1, dark: m[1].includes('dark:')});
         }
-        for (const m of line.matchAll(TW_BW_RE)) {
+        for (const m of code.matchAll(TW_BW_RE)) {
             result.counts.tw++;
             result.classes.push({raw: m[0], var: paletteVar(m[3], ''), line: i + 1, dark: m[1].includes('dark:')});
         }
-        for (const m of line.matchAll(TW_CUSTOM_RE)) {
+        for (const m of code.matchAll(TW_CUSTOM_RE)) {
             result.counts.custom++;
             result.classes.push({raw: m[0], var: `--color-${m[3]}`, line: i + 1, dark: m[1].includes('dark:')});
         }
-        for (const _ of line.matchAll(TW_ARBITRARY_RE)) result.counts.arbitrary++;
-        for (const m of line.matchAll(HEX_RE)) {
+        for (const _ of code.matchAll(TW_ARBITRARY_RE)) result.counts.arbitrary++;
+        for (const m of code.matchAll(HEX_RE)) {
             result.counts.hex++;
             addLiteral(m, i, 'hex');
         }
-        for (const m of line.matchAll(FUNC_RE)) {
+        for (const m of code.matchAll(FUNC_RE)) {
             result.counts.fn++;
             addLiteral(m, i, m[1] === 'color-mix' ? 'mix' : 'fn');
         }
-        for (const m of line.matchAll(VAR_USE_RE)) {
+        for (const m of code.matchAll(VAR_USE_RE)) {
             const offset = starts[i] + /** @type {number} */ (m.index);
             const region = cssRegions.find((r) => r.start <= offset && offset < r.end);
             result.varUses.push({name: m[1], line: i + 1, selector: region ? cssContext(text, region.blocks, offset).selector : null});
@@ -639,7 +729,7 @@ export function scanSource(rel, text, opts = {}) {
         }
     });
 
-    for (const m of text.matchAll(VAR_DEF_RE)) {
+    for (const m of masked.matchAll(VAR_DEF_RE)) {
         const nameOffset = /** @type {number} */ (m.index) + m[0].indexOf(m[1]);
         result.varDefs.push({name: m[1], value: m[2].trim(), line: lineOf(starts, nameOffset) + 1, offset: nameOffset});
     }

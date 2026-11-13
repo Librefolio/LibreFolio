@@ -47,7 +47,7 @@
     import {_} from '$lib/i18n';
     import {ExternalLink, X} from 'lucide-svelte';
     import {schemas} from '$lib/api';
-    import {fetchLotsAnalysis, peekLotsAnalysis, type LotsAnalysisResponse} from '$lib/features/brokers/lots/lotsAnalysisStore.svelte';
+    import {fetchLotsAnalysis, methodAnalysis, peekLotsAnalysis, type LotMatchingMethod, type LotsAnalysisMethodsResponse} from '$lib/features/brokers/lots/lotsAnalysisStore.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import type {z} from 'zod';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -58,10 +58,15 @@
     import LotComparisonChart from './LotComparisonChart.svelte';
     import type {LotIncomeEvent} from './LotComparisonChart.svelte';
     import {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import {type StaleFxPairLike, staleFxIssue} from '$lib/features/dashboard/staleFxIssue';
+    import {todayIso} from '$lib/utils/dateOnly';
     import LotDataQualityBanner from './LotDataQualityBanner.svelte';
+    import BannerFxPairDialog from '$lib/features/portfolio-view/BannerFxPairDialog.svelte';
+    import {PortfolioBannerActions} from '$lib/features/portfolio-view/portfolioBannerActions.svelte';
     import LotAnalysisFailedNotice from './LotAnalysisFailedNotice.svelte';
     import {partitionLotIssues} from './lotDataQualityHelpers';
-    import {asArray, asObject, collectInvolvedLotIds, filterVisibleLots, lotIsOpenish, normalizeQuoteBaseQuantity} from './lotsAnalysisHelpers';
+    import {asArray, asObject, collectInvolvedLotIds, filterVisibleLots, keepSelection, lotIsOpenish, normalizeQuoteBaseQuantity} from './lotsAnalysisHelpers';
+    import {waitForStableRect} from './waitForStableRect';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -95,9 +100,11 @@
         ready?: boolean;
         /** Bumped by the host's «Aggiorna»: both analyses are asked again. */
         refreshVersion?: number;
+        /** The banner synced rates or added a pair (project 69, L4): the host's own figures are asked again. */
+        onRatesChanged?: () => void;
     }
 
-    let {open, assetId, brokerIds, brokers, currency, assetName = null, onClose, ready = true, refreshVersion = 0}: Props = $props();
+    let {open, assetId, brokerIds, brokers, currency, assetName = null, onClose, ready = true, refreshVersion = 0, onRatesChanged}: Props = $props();
 
     let loading = $state(false);
     let error = $state<string | null>(null);
@@ -111,6 +118,8 @@
     let incomeEvents = $state<LotIncomeEvent[]>([]);
     let quoteBaseQuantity = $state<number>(1);
     let dataQualityIssues = $state<DataQualityIssue[]>([]);
+    /** The pairs the method on screen valued from an old stored rate (its block's `stale_fx_pairs`). */
+    let staleFxPairs = $state<StaleFxPairLike[] | undefined>(undefined);
     let calculationStatus = $state<string | null>(null);
     let computedRange = $state<DateRange | null>(null);
 
@@ -184,27 +193,19 @@
 
     const MAIN_ANALYSES = ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'MARKET_PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const;
     const SELECTION_ANALYSES = ['VALUE_HISTORY', 'RETURN_HISTORY'] as const;
+    /** Both methods are asked at once (project 69, D1b): the selector switches between the two blocks of one answer. */
+    const MATCHING_METHODS: LotMatchingMethod[] = ['FIFO', 'LIFO'];
+    /** The method chosen in the header: FIFO when the panel opens on an asset, never saved (project 69, D1). */
+    let activeMethod = $state<LotMatchingMethod>('FIFO');
+    /** The method whose block is on screen, published on the panel (`data-matching-method`): it follows `activeMethod` once the block is applied. */
+    let shownMethod = $state<LotMatchingMethod | null>(null);
     /** The answers last put on screen: a reload that finds the same cached answer leaves the charts alone. */
-    let shownMain: LotsAnalysisResponse | null = null;
-    let shownSelection: LotsAnalysisResponse | null = null;
+    let shownMain: LotsAnalysisMethodsResponse | null = null;
+    let shownSelection: LotsAnalysisMethodsResponse | null = null;
 
-    function applyMain(response: LotsAnalysisResponse) {
+    /** A new main answer: the parts no method changes, then the block of the method on screen (D11). */
+    function applyMain(response: LotsAnalysisMethodsResponse) {
         shownMain = response;
-        calculationStatus = typeof response.calculation_status === 'string' ? response.calculation_status : null;
-        // J-12 (N81, option A): a FAILED analysis has no reliable lot. The backend sends its lot-derived sections null;
-        // the panel takes none of them either (an answer cached before that change may still hold them), so nothing
-        // below can draw a lot and the selection empties.
-        const failed = calculationStatus === 'FAILED';
-        function lotSection<T>(value: unknown): T[] {
-            return failed ? [] : asArray<T>(value);
-        }
-        lots = lotSection<LotSummarySchema>(response.lots);
-        ganttSegments = lotSection<GanttSegmentSchema>(response.gantt_segments);
-        // EVENT_HISTORY is a superset of the old CUSTODY_HISTORY filter (backend computes the
-        // full per-lot event list unconditionally either way — see lots_analysis_service.py
-        // _build_lot_event_rows/_CUSTODY_KINDS) — fetching it once here feeds both the WAC
-        // chart's transaction markers and the Custody modal's full chronology, no double fetch.
-        lotEvents = lotSection<LotTimelineEventSchema>(response.lot_events);
         // Y-30: the asset's price, one point a day whatever lots are open — not a lot section, so it stays with FAILED,
         // as the average-cost lines do.
         marketPriceHistory = asArray<MarketPriceHistoryPoint>(response.market_price_history);
@@ -212,24 +213,59 @@
         cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
         mainRange = asObject<{start: string; end: string}>(response.range);
         quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
-        incomeEvents = lotSection<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(response.income_events).map((event) => ({
+        const metadata = response.calculation_metadata;
+        const computedFrom = asObject<string>(metadata?.computed_date_from);
+        const computedTo = asObject<string>(response.calculation_metadata?.computed_date_to);
+        computedRange = computedFrom && computedTo ? {min: computedFrom, max: computedTo} : null;
+        applyMethod(response, activeMethod);
+    }
+
+    /**
+     * The block of `method` on screen: its status, its lots and everything read from them, its report. Run for a new
+     * answer and when the method changes; the common parts stay. The selection stays too (D12): the lots are the same
+     * in both methods, so `keepSelection` drops only an id the answer no longer has (another asset, a FAILED replay).
+     */
+    function applyMethod(response: LotsAnalysisMethodsResponse, method: LotMatchingMethod) {
+        shownMethod = method;
+        const block = methodAnalysis(response, method);
+        calculationStatus = typeof block?.calculation_status === 'string' ? block.calculation_status : null;
+        // J-12 (N81, option A): a FAILED analysis has no reliable lot. The backend sends its lot-derived sections null;
+        // the panel takes none of them either (an answer cached before that change may still hold them), so nothing
+        // below can draw a lot and the selection empties.
+        const failed = calculationStatus === 'FAILED';
+        function lotSection<T>(value: unknown): T[] {
+            return failed ? [] : asArray<T>(value);
+        }
+        lots = lotSection<LotSummarySchema>(block?.lots);
+        ganttSegments = lotSection<GanttSegmentSchema>(block?.gantt_segments);
+        // EVENT_HISTORY is a superset of the old CUSTODY_HISTORY filter (backend computes the
+        // full per-lot event list unconditionally either way — see lots_analysis_service.py
+        // _build_lot_event_rows/_CUSTODY_KINDS) — fetching it once here feeds both the WAC
+        // chart's transaction markers and the Custody modal's full chronology, no double fetch.
+        lotEvents = lotSection<LotTimelineEventSchema>(block?.lot_events);
+        incomeEvents = lotSection<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(block?.income_events).map((event) => ({
             type: event.type,
             date: event.date,
             broker_id: event.broker_id ?? null,
             amount: event.amount,
             lot_ids: event.lot_ids ?? [],
         }));
-        dataQualityIssues = asArray<DataQualityIssue>(asObject<{issues?: unknown}>(response.data_quality)?.issues);
+        // The report's own issues, plus one row for the rates it read from an old stored row (`stale_fx_pairs`): a notice, the values stay.
+        const quality = asObject<{issues?: unknown; stale_fx_pairs?: StaleFxPairLike[]}>(block?.data_quality);
+        const staleFx = staleFxIssue(quality?.stale_fx_pairs, todayIso());
+        dataQualityIssues = [...asArray<DataQualityIssue>(quality?.issues), ...(staleFx ? [staleFx] : [])];
+        staleFxPairs = quality?.stale_fx_pairs;
 
-        const metadata = response.calculation_metadata;
-        const computedFrom = asObject<string>(metadata?.computed_date_from);
-        const computedTo = asObject<string>(response.calculation_metadata?.computed_date_to);
-        computedRange = computedFrom && computedTo ? {min: computedFrom, max: computedTo} : null;
-
-        // Prune a selection that no longer resolves to a real lot (e.g. asset/broker change).
-        const validIds = new Set(lots.map((lot) => lot.lot_id));
-        selectedLotIds = selectedLotIds.filter((id) => validIds.has(id));
+        selectedLotIds = keepSelection(selectedLotIds, lots);
     }
+
+    // The selector: the answer on screen already holds both blocks, so a switch asks nothing and redraws from it.
+    $effect(() => {
+        const method = activeMethod;
+        untrack(() => {
+            if (shownMain && shownMethod !== method) applyMethod(shownMain, method);
+        });
+    });
 
     function clearMain() {
         shownMain = null;
@@ -240,9 +276,11 @@
         brokerWacHistory = [];
         cumulativeWacHistory = [];
         dataQualityIssues = [];
+        staleFxPairs = undefined;
         calculationStatus = null;
         incomeEvents = [];
         quoteBaseQuantity = 1;
+        shownMethod = null;
     }
 
     async function loadMain(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, force = false) {
@@ -252,6 +290,7 @@
             broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
             target_currency: currentCurrency,
             requested_analyses: MAIN_ANALYSES,
+            matching_methods: MATCHING_METHODS,
         };
         // What the cache holds goes on screen at once; only a stale or missing answer is asked.
         const cached = peekLotsAnalysis(body);
@@ -283,14 +322,16 @@
         }
     }
 
-    function applySelection(response: LotsAnalysisResponse) {
+    /** The histories of the selected lots, asked for the method on screen only (`method`). */
+    function applySelection(response: LotsAnalysisMethodsResponse, method: LotMatchingMethod) {
         shownSelection = response;
-        valueHistory = asArray<LotValueHistoryPoint>(response.value_history);
-        returnHistory = asArray<LotReturnHistoryPoint>(response.return_history);
+        const block = methodAnalysis(response, method);
+        valueHistory = asArray<LotValueHistoryPoint>(block?.value_history);
+        returnHistory = asArray<LotReturnHistoryPoint>(block?.return_history);
         selectionRange = asObject<{start: string; end: string}>(response.range);
     }
 
-    async function loadSelectionHistories(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, ids: number[], force = false) {
+    async function loadSelectionHistories(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, ids: number[], method: LotMatchingMethod, force = false) {
         const version = ++selectionFetchVersion;
         if (ids.length === 0) {
             shownSelection = null;
@@ -305,11 +346,12 @@
             target_currency: currentCurrency,
             selected_lot_ids: ids,
             requested_analyses: SELECTION_ANALYSES,
+            matching_methods: [method],
         };
         const cached = peekLotsAnalysis(body);
         if (cached) {
             selectionLoading = false;
-            if (cached.response !== shownSelection) applySelection(cached.response);
+            if (cached.response !== shownSelection) applySelection(cached.response, method);
             if (!cached.stale && !force) return;
         } else {
             selectionLoading = true;
@@ -317,7 +359,7 @@
         try {
             const response = await fetchLotsAnalysis(body, force);
             if (version !== selectionFetchVersion || response === null) return;
-            if (response !== shownSelection) applySelection(response);
+            if (response !== shownSelection) applySelection(response, method);
         } catch (e) {
             if (version !== selectionFetchVersion) return;
             console.error('Failed to load selected-lot histories:', e);
@@ -329,30 +371,6 @@
         } finally {
             if (version === selectionFetchVersion) selectionLoading = false;
         }
-    }
-
-    function waitForStableRect(el: HTMLElement, maxFrames = 180): Promise<void> {
-        return new Promise((resolve) => {
-            let lastRect: DOMRect | null = null;
-            let stableFrames = 0;
-            let frame = 0;
-
-            function check() {
-                frame++;
-                const rect = el.getBoundingClientRect();
-                const same = lastRect !== null && rect.top === lastRect.top && rect.left === lastRect.left && rect.width === lastRect.width && rect.height === lastRect.height;
-                stableFrames = same ? stableFrames + 1 : 0;
-                lastRect = rect;
-
-                if (stableFrames >= 2 || frame >= maxFrames) {
-                    resolve();
-                    return;
-                }
-                requestAnimationFrame(check);
-            }
-
-            requestAnimationFrame(check);
-        });
     }
 
     let scrollRequestVersion = 0;
@@ -386,11 +404,11 @@
             askedSelectionKey = null;
             return;
         }
-        const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
-        const key = JSON.stringify([currentAssetId, currentBrokerIds, currentCurrency, ids]);
+        const [currentAssetId, currentBrokerIds, currentCurrency, ids, method] = [assetId, brokerIds, currency, effectiveSelectionIds, activeMethod];
+        const key = JSON.stringify([currentAssetId, currentBrokerIds, currentCurrency, ids, method]);
         if (key === askedSelectionKey) return;
         askedSelectionKey = key;
-        untrack(() => void pageBusy.track('lots-selection-load', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids)));
+        untrack(() => void pageBusy.track('lots-selection-load', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, method)));
     });
 
     let lastRefreshVersion = untrack(() => refreshVersion);
@@ -400,9 +418,9 @@
         lastRefreshVersion = version;
         untrack(() => {
             if (!(open && assetId != null && ready)) return;
-            const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
+            const [currentAssetId, currentBrokerIds, currentCurrency, ids, method] = [assetId, brokerIds, currency, effectiveSelectionIds, activeMethod];
             void pageBusy.track('lots-panel-refresh', () => loadMain(currentAssetId, currentBrokerIds, currentCurrency, true));
-            void pageBusy.track('lots-selection-refresh', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, true));
+            void pageBusy.track('lots-selection-refresh', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, method, true));
         });
     });
 
@@ -411,9 +429,9 @@
     $effect(() =>
         onPricesCaughtUp(() => {
             if (!(open && assetId != null && ready)) return;
-            const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
+            const [currentAssetId, currentBrokerIds, currentCurrency, ids, method] = [assetId, brokerIds, currency, effectiveSelectionIds, activeMethod];
             void loadMain(currentAssetId, currentBrokerIds, currentCurrency);
-            void loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids);
+            void loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, method);
         }),
     );
 
@@ -425,6 +443,8 @@
         if (!shouldScroll) return;
 
         selectedLotIds = [];
+        // Another asset, or the panel opened again: the view starts in FIFO (project 69, D1: no saved preference).
+        activeMethod = 'FIFO';
         sharedZoomStart = null;
         sharedZoomEnd = null;
         computedRange = null;
@@ -494,19 +514,63 @@
     function handleLotWarningClick(lotId: number) {
         wacRef?.pulseLot(lotId);
     }
+
+    /** False once the panel is gone: a sync answering later writes nothing. */
+    let panelAlive = true;
+    $effect(() => () => {
+        panelAlive = false;
+    });
+
+    /**
+     * The banner's pair actions (project 69, L4): the Dashboard's own handler, on this panel's answer. A sync or a new pair
+     * ends in a forced `reload`: it asks the panel's analyses again (the sync's verdict reads the panel's issues once they
+     * are back) and tells the host, whose report changes too — once per path, a sync and an added pair alike, which is why
+     * `onDataChanged` (a sync only) does nothing here.
+     */
+    const bannerActions = new PortfolioBannerActions({
+        issues: () => dataQualityIssues,
+        staleFxPairs: () => staleFxPairs,
+        periodEnd: () => todayIso(),
+        alive: () => panelAlive && open && assetId != null,
+        busyKey: 'lots-panel-reload',
+        reload: async (force = false) => {
+            if (force) onRatesChanged?.();
+            if (!(open && assetId != null && ready)) return;
+            const [currentAssetId, currentBrokerIds, currentCurrency, ids, method] = [assetId, brokerIds, currency, effectiveSelectionIds, activeMethod];
+            await Promise.all([loadMain(currentAssetId, currentBrokerIds, currentCurrency, force), loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, method, force)]);
+        },
+        onDataChanged: () => {},
+        translate: (key, options) => $_(key, options as never),
+        origin: 'lots-banner',
+    });
 </script>
 
 {#if open && assetId != null}
-    <div bind:this={panelEl} class="mt-4 bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-hidden" data-testid="lots-analysis-panel" transition:slide={{duration: 200}}>
+    <div bind:this={panelEl} class="mt-4 bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-hidden" data-testid="lots-analysis-panel" data-matching-method={shownMethod} transition:slide={{duration: 200}}>
         <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-lf-subtle">
             <h3 class="min-w-0 font-semibold text-lf-secondary" data-testid="lots-analysis-panel-title">
-                {$_('brokers.lots.detailTitle')}
+                {$_('brokers.lots.detailTitle', {values: {method: activeMethod}})}
                 {#if assetName}
                     —
                     {assetName}
                 {/if}
             </h3>
             <div class="flex shrink-0 items-center gap-1">
+                <!-- The matching method on screen (project 69): both blocks are in the answer, the switch asks nothing. -->
+                <div class="mr-1 flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" role="group" aria-label={$_('brokers.lots.matchingMethod')} data-testid="lots-method-selector">
+                    {#each MATCHING_METHODS as method, index (method)}
+                        <button
+                            type="button"
+                            class="px-2.5 py-1 transition-colors focus-visible:outline-lf-focus {index > 0 ? 'border-l border-lf-subtle' : ''} {activeMethod === method ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            onclick={() => (activeMethod = method)}
+                            aria-pressed={activeMethod === method}
+                            title={$_(method === 'FIFO' ? 'brokers.lots.methodFifoHint' : 'brokers.lots.methodLifoHint')}
+                            data-testid="lots-method-{method}"
+                        >
+                            {method}
+                        </button>
+                    {/each}
+                </div>
                 <button aria-label={$_('brokers.lots.viewAsset')} class="p-1.5 rounded-lg text-lf-muted hover:text-lf-link hover:bg-lf-hover transition-colors" onclick={() => goto(`/assets/${assetId}`)} data-testid="lots-analysis-panel-asset-link" title={$_('brokers.lots.viewAsset')}>
                     <ExternalLink size={16} />
                 </button>
@@ -522,7 +586,7 @@
             {/if}
 
             {#if issueParts.banner.length > 0}
-                <LotDataQualityBanner issues={issueParts.banner} lotDates={visibleLotDates} onLotClick={handleLotWarningClick} />
+                <LotDataQualityBanner issues={issueParts.banner} lotDates={visibleLotDates} onLotClick={handleLotWarningClick} onaction={(action, target, issue) => bannerActions.handleAction(action, target, issue)} busyCode={bannerActions.syncingCode} />
             {/if}
 
             {#if error}
@@ -592,13 +656,17 @@
                         onViewGanttLot={handleTableRowDoubleClick}
                         onGotoOpeningTransaction={handleGotoOpeningTransaction}
                         onRowDoubleClick={handleTableRowDoubleClick}
+                        matchingMethod={activeMethod}
                     />
 
-                    <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} range={selectionRange} {incomeEvents} {brokers} {currency} {xAxisRange} />
+                    <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} range={selectionRange} {incomeEvents} {brokers} {currency} {xAxisRange} matchingMethod={activeMethod} />
                 {/if}
             {/if}
         </div>
     </div>
 
-    <LotCustodyModal open={modalOpen} lot={modalLot} history={lotEvents.filter((event) => event.lot_id === modalLot?.lot_id)} {brokers} {currency} onClose={() => (modalOpen = false)} onGotoTransaction={handleGotoTransaction} />
+    <LotCustodyModal open={modalOpen} lot={modalLot} history={lotEvents.filter((event) => event.lot_id === modalLot?.lot_id)} {brokers} {currency} onClose={() => (modalOpen = false)} onGotoTransaction={handleGotoTransaction} matchingMethod={activeMethod} />
+
+    <!-- The dialog the banner's «add pair» chip opens (L4). -->
+    <BannerFxPairDialog actions={bannerActions} />
 {/if}

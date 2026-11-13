@@ -37,7 +37,8 @@ What is tested (pure: no database, no server, no network; steps built by hand):
    as a one-shot iterator are read once and fully.
 1b. ``TestTheContractPoints`` — MF's answers to the first hand-over's ambiguities, one test each: ``step_series()``
    raises ``ValueError`` without ``fixed_destination`` (1); a pair without steps is absent from it (3);
-   ``merged_windows`` leaves out a window that ends before it starts and joins overlapping and touching ones (4); a
+   ``merged_spans(…, skip_reversed=True)`` (the merge of the windows, shared with every day span) leaves out a window that
+   ends before it starts and joins overlapping and touching ones (4); a
    ``datetime`` day or a malformed key is ``KeyError`` (6); with ``fixed_destination`` the pairs into another
    destination are ignored, steps and windows (7); the view is a ``Mapping``, never a ``MutableMapping`` (8).
 2. ``TestStepSeries`` — ``step_series()`` is each pair's ``(days, values)``, the anchor step of every window included.
@@ -60,6 +61,8 @@ fails with that message (``_asked_day_rates_class``, ``_merged_windows``). GREEN
 After a cure that adds ``AskedDayRates`` but keeps ``NativeCash.__post_init__`` on ``_rate_series`` for every Mapping,
 every parity test is green and ``TestTheNativeCashCost`` stays red: that is the cost red.
 
+(Names as of the cure: the merge was then ``fx_rates.merged_windows``, since unified into ``utils.day_spans.merged_spans``.)
+
 Mutants, measured first on a scratch reference cure (green 187/187), then on MF's cure (2026-10-20, a scratch copy of
 HEAD 4f406d5ef + the cure: green 197/197); the counts are MF's cure's:
 - the view not limited to the windows (``at`` read on any day) — 80 reds, ``TestTheViewIsTheDictOfToday`` and (7);
@@ -68,12 +71,12 @@ HEAD 4f406d5ef + the cure: green 197/197); the counts are MF's cure's:
 - ``step_series`` with the anchor day dropped — 53 reds, ``TestStepSeries`` and ``value_at`` parity;
 - ``NativeCash._rate_at`` reading the exact day only, or forward — 27 reds each, the native-cash parity;
 - the contract points: ``step_series`` without the destination check (1), a pair without steps kept as an empty series
-  (15), ``merged_windows`` keeping a reversed window (2), a ``datetime`` day raising ``TypeError`` (1), the
+  (15), the merge keeping a reversed window (2), a ``datetime`` day raising ``TypeError`` (1), the
   fixed-destination filter of the steps removed (1). Two survive, equivalent by construction: the same filter removed
   from the windows alone (a window whose pair has no steps is skipped by the walk, and ``[]`` looks up only
-  ``(source, fixed destination)``), and ``merged_windows`` keeping a reversed window seen through the mapping only (it
+  ``(source, fixed destination)``), and the merge keeping a reversed window seen through the mapping only (it
   covers no day, and cannot widen a merge: that would need ``previous_last < last < first <= previous_last + 1``), which
-  is why (4) tests ``merged_windows`` itself.
+  is why (4) tests the merge itself.
 
 Runs in ``./dev.py test services financial-math`` (the runner collects the whole ``test_financial_math/`` directory);
 alone: ``./dev.py test services financial-math test_asked_day_rates``.
@@ -99,6 +102,7 @@ import pytest
 from backend.app.services.financial_math import fx_rates as fx_rates_module
 from backend.app.services.financial_math.native_cash import CashMovement, NativeCash
 from backend.app.services.fx.conversion import UnitRateSteps
+from backend.app.utils.day_spans import merged_spans
 from backend.test_scripts.test_utils import print_section, print_success
 
 Pair = tuple[str, str]
@@ -521,17 +525,14 @@ class TestTheViewIsTheDictOfToday:
 
 
 def _merged_windows() -> Any:
-    """``financial_math/fx_rates.py::merged_windows``, read when a test runs (absent before the cure)."""
-    merged = getattr(fx_rates_module, "merged_windows", None)
-    if merged is None:
-        pytest.fail("P3: financial_math/fx_rates.py has no merged_windows yet (red by absence, before the cure)")
-    return merged
+    """The one day-span merge (``utils.day_spans.merged_spans``) as ``AskedDayRates`` calls it: a reversed window left out."""
+    return lambda windows: merged_spans(windows, skip_reversed=True)
 
 
 class TestTheContractPoints:
     """MF's answers to the ambiguities of the first hand-over, each pinned so that a mutant of it shows:
     (1) ``step_series()`` raises ``ValueError`` without ``fixed_destination``; (3) a pair with no steps is absent from it;
-    (4) ``merged_windows`` leaves out a window that ends before it starts, joins overlapping and touching ones;
+    (4) ``merged_spans(…, skip_reversed=True)`` (the windows' merge) leaves out a window that ends before it starts, joins overlapping and touching ones;
     (6) a day of another type is ``KeyError`` (``.get`` None); (7) with ``fixed_destination``, the pairs into another
     destination are ignored — steps and windows; (8) read-only: a ``Mapping``, never a ``MutableMapping``."""
 
@@ -562,11 +563,11 @@ class TestTheContractPoints:
             pytest.param([], (), id="no-window"),
         ],
     )
-    def test_merged_windows(self, windows, expected):
-        """(4) ``merged_windows``: ascending, overlapping or touching windows joined, a window ending before it starts
+    def test_merged_spans_skipping_reversed_windows(self, windows, expected):
+        """(4) ``merged_spans(…, skip_reversed=True)``: ascending, overlapping or touching windows joined, a window ending before it starts
         left out."""
         merged = tuple(tuple(window) for window in _merged_windows()(iter(windows)))
-        assert merged == expected, f"merged_windows({windows}) is {merged}, expected {expected}"
+        assert merged == expected, f"merged_spans({windows}, skip_reversed=True) is {merged}, expected {expected}"
 
     def test_a_day_of_another_type_is_absent(self):
         """(6) A ``datetime`` day, a key of the wrong length, a string: ``KeyError``, so ``.get`` None — as a dict keyed

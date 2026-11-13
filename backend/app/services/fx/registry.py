@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.app.services.provider_registry import AbstractProviderRegistry
+from backend.app.services.platform.provider_registry import AbstractProviderRegistry
 
 
 class FXProviderRegistry(AbstractProviderRegistry):

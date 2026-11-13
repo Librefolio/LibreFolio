@@ -1,6 +1,6 @@
 # 🧬 FIFO Lot Engine
 
-The package `backend/app/services/financial_math/fifo/` contains LibreFolio's **pure, event-sourced FIFO engine** for one asset across many brokers. Unlike [`wac.md`](wac.md), which computes an aggregated **per-position** weighted average cost, `FifoLotEngine` keeps **individual lots** alive through buys, sells, splits, transfers, and adjustments so the "FIFO Lots Analysis" panel can explain **which lot moved where, when, and why**.
+The package `backend/app/services/financial_math/fifo/` contains LibreFolio's **pure, event-sourced lot engine** for one asset across many brokers. Each replay matches outflows to lots in one method, FIFO (the default) or LIFO (`LotMatchingMethod`, project 69); the package and its classes keep their `fifo` / `Fifo*` names (decision D5). Unlike [`wac.md`](wac.md), which computes an aggregated **per-position** weighted average cost, `FifoLotEngine` keeps **individual lots** alive through buys, sells, splits, transfers, and adjustments so the "FIFO Lots Analysis" panel can explain **which lot moved where, when, and why**.
 
 The package belongs to the [financial math layer](../financial_math.md) and re-exports nothing: import each name from the module that defines it — the data types (input transactions, events, lots, fragments, closures, economic allocations, `FifoEngineResult`) from `models.py`, `eligible_income_quantity()` from `eligibility.py`, `FifoLotEngine` and `run_fifo_lot_engine()` from `engine.py`.
 
@@ -35,6 +35,7 @@ def run_fifo_lot_engine(
     economic_events: Sequence[EconomicEvent] = (),
     target_currency: str = "",
     replay_until: date | None = None,
+    matching_method: LotMatchingMethod = LotMatchingMethod.FIFO,
 ) -> FifoEngineResult:
 ```
 
@@ -49,6 +50,7 @@ def run_fifo_lot_engine(
 | `reference_price_lookup` | Optional pure lookup used by current implementation when `ADJUSTMENT_IN` opens a new LONG lot. The lots analysis passes one that reads the asset's daily marks (see [Reference Price](lots_analysis_service.md#reference-price)); without a lookup, or when it returns `None`, the lot gets `reference_price_source = "unavailable"`. |
 | `economic_events` | Asset-linked `DIVIDEND` / `INTEREST` / `FEE` / `TAX` as `EconomicEvent`s, each with its native amount and the target-currency amount its caller resolved; consumed by the [economic allocation stage](#economic-allocation-stage). |
 | `target_currency` | The caller's report currency; each `EconomicEvent` also carries its own `target_currency`. `_close_position_piece()` also reads it: a lot or a closing price without a currency counts in it when a closure's currency is compared with its lot's (see [Closure currency](#closure-currency)). |
+| `matching_method` | `LotMatchingMethod.FIFO` (the default: every caller that passes none replays as before) or `LotMatchingMethod.LIFO`: which open lot of a broker an outflow takes first (see [Matching: FIFO or LIFO](#matching-fifo-or-lifo)). One method per replay; the lots analysis runs one replay per method it is asked. |
 | `replay_until` | The last day the replay reaches; `None` reaches every event. An event dated after it is neither applied nor returned in `classified_events`: a lots analysis passes its `date_to`, so a transfer whose arriving leg is dated later departs and stays `IN_TRANSIT` (see [Transfers In Transit at the End](lots_analysis_service.md#in-transit-at-date-to)). The pairing still reads both legs. |
 
 ### 📤 Output
@@ -209,36 +211,54 @@ EventKind = Literal[
 | Event kind | Effect on inventory |
 |-----------|---------------------|
 | `BUY` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`). Any remainder opens new `LONG` lot. |
-| `SELL` | Closes `LONG` fragments FIFO on same broker. Any remainder opens new `SHORT` lot only if `broker_shorting[broker_id]` is true; otherwise emits `FIFO_SOURCE_QUANTITY_MISSING`. |
+| `SELL` | Closes `LONG` fragments in the replay's order (FIFO or LIFO) on same broker. Any remainder opens new `SHORT` lot only if `broker_shorting[broker_id]` is true; otherwise emits `FIFO_SOURCE_QUANTITY_MISSING`. |
 | `ADJUSTMENT_IN` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`) at the event's `unit_price` — the row's `cost_basis_override`, 0 without one — in the cost basis's currency when the row carries one (`cost_basis_currency`, else the row's `currency`), else in the row's `currency`. Any remainder opens a new `LONG` lot at that price, in that currency, and resolves its reference price. |
-| `ADJUSTMENT_OUT` | Closes `LONG` fragments FIFO on same broker (`close_reason="ADJUSTMENT_OUT"`): a row read from the database at `close_unit_price = 0` in the lot's currency — it has no value, so it realizes minus the fragments' cost; a transfer leg read at the scope's edge on a day with a price, at its copy's `cost_basis_override`, the market value of one unit that day, in `cost_basis_currency` (the lot's currency when empty); flagged `hands_over_at_own_cost` (a transfer leg leaving the lots' scope on a day without a price, see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), every fragment at its own FIFO unit cost in the lot's currency — realized 0. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
-| `TRANSFER_DEPART` | Extracts `LONG` broker fragments FIFO from source broker, optionally opens `IN_TRANSIT` fragments, records pending transfer pieces, realizes **no P&L**. |
+| `ADJUSTMENT_OUT` | Closes `LONG` fragments in the replay's order on same broker (`close_reason="ADJUSTMENT_OUT"`): a row read from the database at `close_unit_price = 0` in the lot's currency — it has no value, so it realizes minus the fragments' cost; a transfer leg read at the scope's edge on a day with a price, at its copy's `cost_basis_override`, the market value of one unit that day, in `cost_basis_currency` (the lot's currency when empty); flagged `hands_over_at_own_cost` (a transfer leg leaving the lots' scope on a day without a price, see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), every fragment at its own FIFO unit cost in the lot's currency — realized 0. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
+| `TRANSFER_DEPART` | Extracts `LONG` broker fragments in the replay's order from source broker, optionally opens `IN_TRANSIT` fragments, records pending transfer pieces, realizes **no P&L**. |
 | `TRANSFER_ARRIVE` | Closes matching transit fragments and reopens broker custody at destination with same quantity and unit price. |
 | `SPLIT` | Multiplies active fragment quantities by ratio, divides unit prices by ratio, then recomputes lot-level quantities/reference price while preserving cost. |
 
 !!! info "Event ordering on same date"
 
-    `classify_events()` sorts same-day events as `TRANSFER_DEPART` → `TRANSFER_ARRIVE` → `SPLIT` → ordinary transactions. This preserves half-open transfer intervals and lets same-day splits see post-transfer custody state.
+    `classify_events()` sorts events by date, then by phase (`_EVENT_PHASES` in `engine.py`), then by transaction id:
+    `TRANSFER_DEPART` → `TRANSFER_ARRIVE` → `SPLIT` → the inflows (`BUY`, `ADJUSTMENT_IN`) → the outflows (`SELL`,
+    `ADJUSTMENT_OUT`). The first three preserve half-open transfer intervals and let same-day splits see post-transfer
+    custody state. **Inflows before outflows** (decision D4, the same in both methods, since project 69): a sale recorded
+    before the purchase of its day no longer fails a broker without shorting, which matches the balance check at saving
+    time (it reads the quantity at the end of the day); on a broker with shorting, selling and buying back the same day
+    opens a LONG lot closed that day, with the same realized P&L the old short had («if in doubt, opening a long lot is
+    preferable»). Before project 69, ordinary transactions of a day ran by id.
 
 ---
 
-## ⛏️ FIFO Matching Algorithm
+## ⛏️ Matching: FIFO or LIFO {: #matching-fifo-or-lifo }
 
-FIFO is enforced by `_broker_fragments()`, which sorts active broker fragments by lot age:
+The order is decided in one place, `_broker_fragments()`: the queue of one broker that every outflow takes from — sales,
+outgoing adjustments, short covers and transfer departures alike (decision D2). The queue stays **per broker** in both
+methods (decision D3).
 
 ```python
-return sorted(
-    [fragment for fragment in self._active_fragments.values() if ...],
-    key=lambda fragment: (
-        self._lots[fragment.lot_id].opening_date,
-        fragment.lot_id,
-        fragment.start_date,
-        fragment.fragment_id,
-    ),
-)
+fragments = [fragment for fragment in self._active_fragments.values() if ...]
+in_lot_order = sorted(fragments, key=lambda fragment: (fragment.start_date, fragment.fragment_id))
+if self.matching_method is LotMatchingMethod.LIFO:
+    return sorted(in_lot_order, key=lambda fragment: (self._lots[fragment.lot_id].opening_date, fragment.lot_id), reverse=True)
+return sorted(in_lot_order, key=lambda fragment: (self._lots[fragment.lot_id].opening_date, fragment.lot_id))
 ```
 
-Then `_consume_broker_fragments()` walks oldest fragments first:
+- **FIFO**: the oldest lot first, by opening date then lot id.
+- **LIFO**: the most recent lot first, both keys descending.
+- Within one lot its fragments stay in the order they started, in both methods: the method changes which lot closes,
+  never the price a fragment carries.
+- A lot that arrived by transfer keeps its purchase date in the arrival broker's queue (decision D10). Seen from one
+  broker only, the arriving leg is read at the scope's edge as an `ADJUSTMENT_IN` dated at the arrival (see
+  [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), so there the lot is born at its
+  arrival: the Dashboard and a broker's page may date it differently, and close a different lot in either method.
+- **The lots are the same in both methods**: a lot is born of an inflow, so ids, opening dates, quantities and costs do
+  not depend on the method (pinned by `test_lifo_lot_engine.py`). A position closed in full realizes the same total.
+- The four codes that fail a replay read a broker's quantity, which does not depend on which lot closes: a book that
+  fails in one method fails in the other with the same issues (pinned there too).
+
+Then `_consume_broker_fragments()` walks the queue in that order:
 
 1. Select matching broker fragments for one `direction`
 2. Take `matched = min(remaining, fragment.quantity)`
@@ -447,5 +467,6 @@ The engine returns realized P&L plus economic accumulators; `lot_summary_figures
 - 🧮 **[Lots Analysis Service](lots_analysis_service.md)** — Service layer that adds FX, `quote_base_quantity`, income allocation, and DTO building on top of engine output
 - ⚖️ **[WAC & Cost Basis](wac.md)** — Complementary per-position cost-basis engine
 - 🧮 **[Financial Math Layer](../financial_math.md)** — The layer this package belongs to: rules, package map, guards
+- 🧪 `backend/test_scripts/test_services/test_financial/test_lifo_lot_engine.py` — the LIFO replay, the in-day order (D4), the transfer rule (D10), what both methods share (`services lifo-lot-engine`)
 - 🧬 **[FIFO Engine Theory](../../../financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md)** — Theoretical mirror of this page: lot lifecycle, matching, splits, transfers in financial terms
 - 📖 **[FIFO Lot Analysis Theory](../../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)** — Financial meaning of lot-level FIFO analysis

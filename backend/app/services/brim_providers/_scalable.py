@@ -116,7 +116,7 @@ _NOTICES: Dict[str, Tuple[str, str, str]] = {
     ),
     "scalable_tax_refund": (
         "info",
-        "{n} tax refunds were imported as deposits: in LibreFolio a tax always takes money out.",
+        "{n} tax refunds were imported as interest («Tax refund»): money given back from the investment's gain, so it counts in the P&L.",
         "A positive tax amount is money given back.",
     ),
     "scalable_cash_by_sign": (
@@ -399,12 +399,16 @@ class _Reader:
         self._tax_leg(row, tax)
 
     def _tax_leg(self, row: _Row, tax: Decimal) -> None:
-        """The tax of a trade: paid (> 0) is a TAX of the security; given back (< 0) is a deposit."""
+        """The tax of a trade: paid (> 0) is a TAX of the security; given back (< 0) is an INTEREST of the security.
+
+        A tax refund is money given back from the investment's gain: it counts in the P&L, it is not new capital (the BRIM rule
+        «a tax refund is INTEREST», the developer, 11/11/2026).
+        """
         if tax > 0:
             self._create(row, TransactionType.TAX, Decimal("0"), -tax, asset=True, prefix="Tax")
         elif tax < 0:
             self._flag("scalable_tax_refund", row)
-            self._create(row, TransactionType.DEPOSIT, Decimal("0"), -tax, asset=False, prefix="Tax refund")
+            self._create(row, TransactionType.INTEREST, Decimal("0"), -tax, asset=True, prefix="Tax refund")
 
     def _income(self, row: _Row, tx_type: TransactionType) -> None:
         amount = row.number("amount")
@@ -440,9 +444,9 @@ class _Reader:
             self._create(row, TransactionType.FEE, Decimal("0"), amount, asset=False)
         elif kind in _TAX_TYPES and amount < 0:
             self._create(row, TransactionType.TAX, Decimal("0"), amount, asset=False)
-        elif kind in _TAX_TYPES:
+        elif kind in _TAX_TYPES:  # a tax given back: INTEREST, like the refund of a trade's tax
             self._flag("scalable_tax_refund", row)
-            self._create(row, TransactionType.DEPOSIT, Decimal("0"), amount, asset=False)
+            self._create(row, TransactionType.INTEREST, Decimal("0"), amount, asset=False, prefix="Tax refund")
         else:
             self._by_sign(row)
 

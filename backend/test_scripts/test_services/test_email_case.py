@@ -85,7 +85,7 @@ PASSWORD = "Email-Case-2026!"
 #: What the accounts written as rows hold for a hash: nobody signs in with them.
 MARKER_HASH = "$argon2id$email-case-marker"
 #: When an address was verified: any value that is not NULL; what a kept verification keeps is the value read back.
-VERIFIED_AT = datetime(2026, 10, 2, 8, 0, 0)
+VERIFIED_AT = datetime(2026, 10, 2, 8, 0, 0, tzinfo=UTC)
 #: A session version of its own: a raised one would show as one more, a kept one shows as itself.
 SESSION_VERSION = 4
 #: Months before the real clock, as in test_admin_bootstrap: a ``now`` dropped on the way shows.

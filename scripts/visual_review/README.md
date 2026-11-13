@@ -191,7 +191,7 @@ reports: a scan error is a record, never a red, and the PNG does not change.
 ```bash
 pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand                # by folder of the candidate file
 pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand --by section    # by gallery section
-pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand --area lib/components/assets --on-screen
+pipenv run python -m scripts.visual_review.gallery_tool mixed $W/snapshots/cand --area lib/features/assets --on-screen
 ```
 - The summary checks that every PNG has its record, and prints each distinct mixed element once, with its shots.
 - **The candidate file is a hint, not a proof.** It is the file that writes the element's test id, or its nearest

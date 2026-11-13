@@ -71,12 +71,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.app.services.financial_math.portfolio.models as portfolio_models
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import IssueDomain, IssueSeverity, PortfolioReportQuery, YieldOnCostStatus, YieldOnCostUnavailableReason
+from backend.app.schemas.portfolio.data_quality import IssueDomain, IssueSeverity
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostStatus, YieldOnCostUnavailableReason
 from backend.app.services.financial_math.average_cost import CostEffect
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.yield_on_cost import YieldOnCostPositionInput, calculate_yield_on_cost_for_positions
-from backend.app.services.lots_analysis_service import get_lots_analysis
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 D0 = date(2025, 1, 2)  # DEPOSIT 1000

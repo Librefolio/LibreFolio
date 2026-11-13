@@ -12773,5 +12773,1536 @@
         "index": 1
       }
     }
+  },
+  "CHANGELOG.md#1.3.0/intro": {
+    "md5": "6938dfb80effa7f8a9c6bc7236985ff9",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 0
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 0
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 0
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/imports-and-transaction-editing": {
+    "md5": "19461b3b9e5318e8ca4019d9667946c1",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 1
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 1
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 1
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/dashboard-lots-and-portfolio": {
+    "md5": "0666c82ecbf2958abd9e082992a09c2e",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 2
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 2
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 2
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/charts": {
+    "md5": "14062649b784c1e6718911c2b8851646",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 3
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 3
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 3
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/risk-analysis": {
+    "md5": "5a05599e3aeace040e3d9c6e6c5dc733",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 4
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 4
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 4
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/price-and-exchange-rate-sources": {
+    "md5": "645b66b83dab40c582c54ae8fafe5b0a",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 5
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 5
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 5
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/asset-events-and-the-data-editor": {
+    "md5": "a44729f513fcfc79df931b2f750d18a7",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 6
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 6
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 6
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/currency-codes": {
+    "md5": "bc1b219f30545acaf5bd9eabd664150c",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 7
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 7
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 7
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/files-and-storage": {
+    "md5": "d3c7c49f680b51846257a454b0233f51",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 8
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 8
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 8
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/backup-and-restore": {
+    "md5": "675e38cc149d40172ea0e3eae746820c",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 9
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 9
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 9
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/accounts-sign-up-and-administrators": {
+    "md5": "e7485560376959780e61943621477539",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 10
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 10
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 10
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/email": {
+    "md5": "2f24ddaa1033d22f4375e54b80e651cf",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 11
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 11
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 11
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/security-and-secrets": {
+    "md5": "cc765e6c76cb69cf8bc1b9e558598d0a",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 12
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 12
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 12
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/hosting-providers-and-managed-instances": {
+    "md5": "0f7a0c085adbdb58a5119b80f67f7859",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 13
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 13
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 13
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/server-api-and-command-line": {
+    "md5": "84a93cf51afb04095c94421f12a5f5fd",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 14
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 14
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 14
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/the-app-and-its-notices": {
+    "md5": "feb62d4d5cb555a894936121ac4278bd",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 15
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 15
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 15
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/added/documentation": {
+    "md5": "7d945d5cde4fea4463dca67b0c6730b0",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 16
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 16
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 16
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/transactions-and-adjustments": {
+    "md5": "818f65138170e144c71fb1d45f2070de",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 17
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 17
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 17
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/broker-imports": {
+    "md5": "d9dd39e66e44a6a6f6432d0e05fe5656",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 18
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 18
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 18
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/dashboard-lots-and-portfolio": {
+    "md5": "30001cd4859bbb2f481baccd0771f485",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 19
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 19
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 19
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/charts": {
+    "md5": "e354fa939486d001ae689475fcc24e67",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 20
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 20
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 20
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/risk-analysis": {
+    "md5": "4684f91a0980cdb93feb248f9f322ba5",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 21
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 21
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 21
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/ai-export": {
+    "md5": "d0a6e9b50584ced54bb0058756554ebb",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 22
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 22
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 22
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/price-and-exchange-rate-sources": {
+    "md5": "2f4c62e798ff9f0faa549fc93e70b991",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 23
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 23
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 23
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/asset-events-and-the-data-editor": {
+    "md5": "007794fedc50744adb87f89c2158b766",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 24
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 24
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 24
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/files-and-storage": {
+    "md5": "c3320fcbf8513b55643b80c9105e2033",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 25
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 25
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 25
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/currency-codes": {
+    "md5": "61be6e46dfdbfce08b9ea0912a04177e",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 26
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 26
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 26
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/performance": {
+    "md5": "d4e0e9a2eab0e685e3d6d0a64508ed49",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 27
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 27
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 27
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/a-new-colour-palette": {
+    "md5": "884886a95264fb6d5b6973922895505a",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 28
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 28
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 28
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/interface-and-accessibility": {
+    "md5": "2a0e4e89706cf6769b777e623ff81e5c",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 29
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 29
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 29
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/accounts-and-sign-in": {
+    "md5": "11f8f3124e99d7d248563bf5e579566c",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 30
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 30
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 30
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/security-and-secrets": {
+    "md5": "2abc3f5898b3139a37ecb2bc8475eb84",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 31
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 31
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 31
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/hosting-providers-and-managed-instances": {
+    "md5": "82ed7be855e0ee6421ebe2afa9edaf37",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 32
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 32
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 32
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/server-api-and-command-line": {
+    "md5": "6ed3f203dd46379a5f56ba866f3ac740",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 33
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 33
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 33
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/documentation": {
+    "md5": "421f109c9c2acf596583870a41a959e5",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 34
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 34
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 34
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/changed/pac-allocator": {
+    "md5": "e3d4608591c8eb7d7b60ec5050a3e722",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 35
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 35
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 35
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/transactions-and-the-bulk-editor": {
+    "md5": "6845a207bf0d920d5f0b53cbdd196c32",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 36
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 36
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 36
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/broker-imports": {
+    "md5": "65c7947936822e5f71b3be8503326f5f",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 37
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 37
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 37
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/brokers-and-transfers": {
+    "md5": "c4f893934cf210fa746c745ca7e973db",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 38
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 38
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 38
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/dashboard-lots-and-portfolio": {
+    "md5": "7150ec640aa895ca9a5c271be7dbfe01",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 39
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 39
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 39
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/lots": {
+    "md5": "1e6a899af7f6774941dd52ba79a9e811",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 40
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 40
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 40
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/charts": {
+    "md5": "f3264f78b697cbc20512fcb03b5e63ed",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 41
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 41
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 41
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/assets-prices-and-exchange-rates": {
+    "md5": "c318d8fa86bd4647a89131e8a185b576",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 42
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 42
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 42
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/asset-events-and-scheduled-investments": {
+    "md5": "28f8e88b30c26331802195d7238fadd9",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 43
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 43
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 43
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/pac-allocator": {
+    "md5": "16a96eacb4730bfdc46670eb834c1621",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 44
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 44
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 44
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/risk-analysis": {
+    "md5": "ea5f13203e727aa6e7114ca609a6ee51",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 45
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 45
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 45
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/ai-export": {
+    "md5": "b8c7b544469eebf13105fede64aa2126",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 46
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 46
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 46
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/interface-and-accessibility": {
+    "md5": "9fe4f11137854bb36fc7b3cfc548d9a0",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 47
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 47
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 47
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/accounts-and-sign-in": {
+    "md5": "84f084d3a28fbb04c38fb3eac516750b",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 48
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 48
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 48
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/backup-and-restore": {
+    "md5": "c6db4d5b447a7f9db445c3097be3ba7e",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 49
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 49
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 49
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/hosting-providers-and-managed-instances": {
+    "md5": "c39d55f061519b0b314472bbb299edcc",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 50
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 50
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 50
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/server-api-and-command-line": {
+    "md5": "e2197290fb0f693d519c7873e36a6558",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 51
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 51
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 51
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/documentation": {
+    "md5": "904c852bb83957c3770a447c846079c1",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 52
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 52
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 52
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/security-accounts-and-sign-in": {
+    "md5": "55fdb1dd8d06b22aaa8e13117d241ccd",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 53
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 53
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 53
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/security-backups-and-restore": {
+    "md5": "0d9e1bccf96cbd18a63979ef633d30fe",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 54
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 54
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 54
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/security-web-protections-and-files": {
+    "md5": "2ec0de31668c1b34b4776a3230a75661",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 55
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 55
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 55
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/fixed/security-limits-and-bad-input": {
+    "md5": "04ca23d582eadd488ab0036e2204041d",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 56
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 56
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 56
+      }
+    }
+  },
+  "CHANGELOG.md#1.3.0/breaking-changes": {
+    "md5": "a2cfc9c9933e56a20cce00633a3df548",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-10T12:42:07.840068+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 57
+      },
+      "fr": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 57
+      },
+      "es": {
+        "stamped_at": "2026-11-10T12:42:07.840068+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 57
+      }
+    }
+  },
+  "developer/architecture/patterns/tool_plugins.en.md": {
+    "md5": "0de105851bdfc9085a616e9f82f8a81a",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-11-11T11:48:56.986718+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-11-11T11:48:56.986718+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-11-11T11:48:56.986718+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-11-11T11:48:56.986718+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
   }
 }

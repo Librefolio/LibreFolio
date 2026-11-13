@@ -13,9 +13,9 @@ must meet. A 422 never repeats the body (``api/no_echo.py``): it may hold the pa
 
 ``backup_router`` (``__init__.py``) gives these routes the ``/backup`` prefix and the ``Backup & Export`` tag, before the
 hosting panel's routes of ``panel.py`` and the per-series exports of ``exports.py``. The jobs, their views and the
-errors, with their stable ``code`` in ``detail``, are shared with ``panel.py`` (``job_views.py``). The five routes
-(start, options, job, file, delete) stay allowed on an instance its hosting provider blocked
-(``api/v1/instance_block.py``, decision 12); the list of the kept backups (FB-24) is not among them.
+errors, with their stable ``code`` in ``detail``, are shared with ``panel.py`` (``job_views.py``). The six routes
+(start, options, the list of the kept backups, job, file, delete) stay allowed on an instance its hosting provider blocked
+(``api/v1/instance_block.py``, decisions 12 and FB-24); the storage figures are not among them.
 """
 
 from dataclasses import asdict

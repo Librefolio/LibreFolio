@@ -1,4 +1,4 @@
-"""Asset price endpoints (``/assets/prices``): manual upsert and delete, signal catalog, bulk and current queries, provider sync."""
+"""Asset price endpoints (``/assets/prices``): manual upsert and delete, bulk and current queries, provider sync."""
 
 from datetime import date as date_type
 from typing import Annotated, List, Optional
@@ -26,16 +26,11 @@ from backend.app.schemas.prices import (
     FAUpsertResult,
 )
 from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem, FAStoredPriceCountItem, FAStoredPriceCountResponse
-from backend.app.schemas.signals import (
-    SignalCatalogResponse,
-    SignalDomain,
-)
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.period_changes import get_period_changes_bulk, live_range_changes
 from backend.app.services.assets.price_sampling import SampleReferenceError, sample_reference_detail
 from backend.app.services.assets.price_store import PriceCurrencyMismatchError, price_currency_mismatch_detail
 from backend.app.services.signals.planning import SignalRequestValidationError
-from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, BulkTooManyDaysError, DateOutOfRangeError, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail
 from backend.app.utils.datetime_utils import latest_range_end
 
@@ -136,14 +131,6 @@ async def delete_prices_bulk(
 #   GET /api/v1/backup/asset/{id}/prices?format=csv|json
 #   GET /api/v1/backup/asset/{id}/events?format=csv|json
 #   GET /api/v1/backup/fx/{base}/{quote}/rates?format=csv|json
-
-
-@price_router.get("/signals", response_model=SignalCatalogResponse)
-async def list_asset_signal_catalog(
-    _current_user: User = Depends(get_current_user),
-) -> SignalCatalogResponse:
-    """Return static signal definitions compatible with Asset price data."""
-    return SignalCatalogResponse(items=[definition for definition in SignalPluginRegistry.list_definitions() if SignalDomain.ASSET in definition.compatible_domains])
 
 
 @price_router.post("/query", response_model=FAPriceQueryResponse)

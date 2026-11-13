@@ -42,7 +42,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
-from backend.app.api.v1.brokers import _set_error_detail
+from backend.app.api.v1.brokers.sets import _set_error_detail
 from backend.app.db.models import Asset, Broker, Transaction, TransactionType
 from backend.app.schemas.brim import BRIMAbsorbed, BRIMCheckpoint, BRIMGapFixRequest, BRIMTruthCash, BRIMTruthPosition
 from backend.app.services.brim import brim_report_sets

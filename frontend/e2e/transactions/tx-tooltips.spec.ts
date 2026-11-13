@@ -12,6 +12,7 @@
  * pairs. If a test fails because expected rows are missing, fix
  * populate_mock_data.py — never skip.
  */
+import {appears} from '../fixtures/probe';
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
@@ -95,7 +96,8 @@ test.describe('Transaction Linked Pair Tooltips', () => {
         for (let i = 0; i < count; i++) {
             const row = rows.nth(i);
             const linkIcon = row.locator('.tx-link-icon, .tx-links-slot').first();
-            if (!(await linkIcon.isVisible().catch(() => false))) continue;
+            // Optional by design: a scan over rows, most of which are not linked; the test asserts it found one below.
+            if (!(await appears(linkIcon, 500))) continue;
 
             await linkIcon.hover();
 

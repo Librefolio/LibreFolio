@@ -59,7 +59,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
 import backend.app.db.models  # noqa: F401 — registers the app tables on SQLModel.metadata (the end-to-end proofs of step 6)
-from backend.app.config import PROJECT_ROOT
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import BRIMCheckpoint, BRIMCombinedTable, BRIMCoverage, BRIMGapFixRequest, BRIMParseOutput, BRIMTruthCash, is_fake_asset_id
 from backend.app.schemas.common import Currency, DateRangeModel
@@ -67,7 +66,8 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim import brim_report_set_core as core
 from backend.app.services.brim import brim_report_sets
 from backend.app.services.brim.brim_gap_fix import compute_gap_fix
-from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
+from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers.broker_credit_agricole import _classify as classify_module
 from backend.app.services.brim_providers.broker_credit_agricole._report_set import (
@@ -99,6 +99,7 @@ from backend.app.services.brim_providers.broker_credit_agricole._rows import (
 from backend.app.services.brim_providers.broker_credit_agricole._rows import (
     Testata as Header,
 )
+from backend.test_scripts.brim_samples import SampleDir
 
 # =============================================================================
 # CONSTANTS
@@ -2220,7 +2221,7 @@ class TestPairingKeyRoundsHalfUp:
 # What is NOT here: the optional ``portfolio`` role (step 7).
 
 PLUGIN_CODE = "broker_credit_agricole"
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 BROKER_ID = 1
 REAL_ASSET_BASE = 101
 

@@ -45,8 +45,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Transaction, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
-from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
+from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
 from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_services._scope_boundary_books import (
     L2_ARRIVAL_DAY,

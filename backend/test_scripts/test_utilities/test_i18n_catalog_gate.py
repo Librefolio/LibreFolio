@@ -290,6 +290,37 @@ def test_every_key_belongs_to_the_owner_the_rule_names(tmp_path):
     assert [source.name for source in catalog.load(root)[1]] == SOURCES
 
 
+FEATURES = "frontend/src/lib/features"
+
+
+def test_a_feature_holds_its_own_source_named_after_its_folder(tmp_path):
+    """U-B2: ``lib/features/**/i18n/`` is a subsystem source, at any depth, named after the folder that holds ``i18n/``;
+    it owns its declared prefix like one under ``lib/i18n/`` and nothing else changes in the merge."""
+    root = healthy_tree(tmp_path)
+    write_catalogs(root, f"{FEATURES}/pac-allocator/i18n", {"en": {"pac": {"title": "Allocator"}}})
+    write(root, f"{FEATURES}/pac-allocator/i18n/prefixes.txt", "pac\n")
+    write_catalogs(root, f"{FEATURES}/tools/stress-lab/i18n", {"en": {"lab": {"title": "Lab"}}})
+    write(root, f"{FEATURES}/tools/stress-lab/i18n/prefixes.txt", "lab\n")
+
+    result = merged(root)
+
+    assert {source.name for source in catalog.load(root)[1] if source.kind == "subsystem"} == {"risk", "riskcharts", "pac-allocator", "stress-lab"}
+    assert result.owners["pac.title"].name == "pac-allocator"
+    assert result.owners["lab.title"].name == "stress-lab"
+    assert catalog.resolve_target("stress-lab", catalog.discover(root), root).folder == root / FEATURES / "tools/stress-lab/i18n"
+
+
+def test_two_sources_with_one_name_are_refused(tmp_path):
+    """A name is the one address of a source (``--into <name>``, the messages): a feature folder named like another
+    subsystem is an error, not a silent second source."""
+    root = healthy_tree(tmp_path)
+    write_catalogs(root, f"{FEATURES}/risk/i18n", {"en": {"other": {"title": "x"}}})
+    write(root, f"{FEATURES}/risk/i18n/prefixes.txt", "other\n")
+
+    with pytest.raises(CatalogError, match="subsystem 'risk' is in two folders"):
+        catalog.discover(root)
+
+
 @pytest.mark.parametrize(
     ("folder", "key", "problem"),
     [

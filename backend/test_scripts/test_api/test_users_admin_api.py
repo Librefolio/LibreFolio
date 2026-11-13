@@ -177,8 +177,8 @@ decision of 21/10/2026, Q1 yes) adds:
     the one ``GET /users`` lists right after: a waiting account with a live link, promoted, stays inactive and waiting
     (``pending_verification`` and ``holds_place`` true); ``{is_active: false}`` on it ends the wait, its links revoked, and
     the answer says false and false; an account whose link expired, reactivated on an instance with a free place, is
-    active and not pending. Nothing else changes in either answer: an account is exactly its eleven fields, A7b's nine,
-    ``avatar_url`` and ``pending_verification``; ``usage`` counts as before.
+    active and not pending. Nothing else changes in either answer: an account is exactly its twelve fields, A7b's nine,
+    ``avatar_url``, ``pending_verification`` and (project 71, point 22) ``pending_email_change``; ``usage`` counts as before.
 
 Lot UA3 (the Users tab lists every account link, and revokes the open ones) adds UADM-LINK-01 to UADM-LINK-03 and moves
 UADM-001, UADM-004 to UADM-006, UADM-028 to UADM-030 to the two routes of points 1 and 3. A link is listed in every
@@ -219,7 +219,7 @@ process, once for the module, then copied per test —: the models do not declar
 ``broker_user_access`` has in ``001_initial``, and a deletion relies on it. The BRIM report directory moves under
 ``tmp_path`` there, because private broker ids start at 1 like the lane's, and ``delete_files_for_brokers`` is replaced
 by a spy. Assumed: the routes reach the hook as ``user_service.account_protection`` and the report cleanup as
-``brim_provider.delete_files_for_brokers`` or a name ``user_service`` imported, the two names the spy replaces.
+``storage.delete_files_for_brokers`` or a name ``user_service`` imported, the two names the spy replaces.
 
 A7b's cases run in-process only, on the private instance of ``create_all``. A pending administrator is an inactive
 superuser that ``pending_admin``, ``issue_setup_link`` and ``user_usage`` read: in the lane's database every concurrent
@@ -318,7 +318,7 @@ list is asserted, and each settings row is written with the id of another accoun
 Red until E-7 (label ``# red until E-7``; point 21): UADM-VER-01 to UADM-VER-05 — ``pending_verification`` is no field of
 ``AdminUserRead`` today, and no item carries it —; and, by construction, every case that reads an account through
 ``_user_item_violations`` or ``USER_ITEM_KEYS`` — UADM-003, 007, 008, 028, 052, 060 to 064, 068 to 071, 073 to 075, 079,
-A51-001, A51-003, UADM-LOCK-06 and UADM-AV-01 to UADM-AV-04 —: an account is now exactly eleven fields, its
+A51-001, A51-003, UADM-LOCK-06 and UADM-AV-01 to UADM-AV-04 —: an account is now exactly eleven fields (twelve since project 71's ``pending_email_change``), its
 ``pending_verification`` false for every account of theirs, none of which waits for a verification link (their
 docstrings, older than point 21, still say nine or ten). Left alone, those cases would turn red the day
 ``pending_verification`` lands. The cases of E-7 run in-process only, on the private instance of ``create_all`` — none on
@@ -377,7 +377,7 @@ from backend.app.services.accounts.bootstrap_admin_service import BootstrapActio
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, hash_token, inspect_token, issue_token, revoke_tokens
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.email import verification as email_verification
 from backend.app.utils.datetime_utils import utcnow
@@ -410,8 +410,8 @@ PUBLIC_URL = "https://librefolio.example.test/base/"
 PUBLIC_ORIGIN = "https://librefolio.example.test/base"
 BILLING_LINK = "https://billing.example.test/plans/family"
 
-#: An account as GET /users lists it and PATCH /users/{user_id} answers it; ``avatar_url`` is lot N69-4's (point 20), ``pending_verification`` lot E-7's (point 21).
-USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup", "pending_verification", "avatar_url"})
+#: An account as GET /users lists it and PATCH /users/{user_id} answers it; ``avatar_url`` is lot N69-4's (point 20), ``pending_verification`` lot E-7's (point 21), ``pending_email_change`` project 71's (point 22).
+USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup", "pending_verification", "pending_email_change", "avatar_url"})
 INVITE_ITEM_KEYS = frozenset({"id", "grants_admin", "email", "created_at", "expires_at", "created_by_user_id"})
 #: An account link as GET /users/account-links lists it (lot UA3): never its token nor its hash.
 ACCOUNT_LINK_KEYS = frozenset({"id", "purpose", "state", "revocable", "user_id", "username", "email", "grants_admin", "created_by_user_id", "created_by_username", "created_at", "expires_at", "used_at", "used_by_user_id", "used_by_username", "revoked_at"})
@@ -553,7 +553,7 @@ def _comparable(item: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
 
 
 def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False, holds_place: bool = False, pending_setup: bool = False, pending_verification: bool = False, avatar_url: Optional[str] = None) -> list[str]:
-    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its eleven fields, with these values.
+    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its twelve fields, with these values.
 
     ``protected`` is False unless the test replaced the hook: today the hook protects nobody (lot A6a).
     ``holds_place`` is workstream E's flag, true only for an inactive account whose live verification link holds its place (``api email-verification-hooks``, EVH-006…012); false unless the case wrote such a link (UADM-060).
@@ -2336,7 +2336,7 @@ async def private_head(head_template: Path, tmp_path: Path, monkeypatch: pytest.
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
     reports = tmp_path / "broker_reports"
-    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: reports)
+    monkeypatch.setattr(storage, "get_broker_reports_dir", lambda: reports)
     database = tmp_path / "instance.db"
     with contextlib.closing(sqlite3.connect(head_template)) as source, contextlib.closing(sqlite3.connect(database)) as copy:
         source.backup(copy)
@@ -2370,7 +2370,7 @@ def _spy_on_report_cleanup(monkeypatch: pytest.MonkeyPatch) -> list[list[int]]:
         calls.append([int(broker_id) for broker_id in broker_ids])
         return FILES_REMOVED
 
-    monkeypatch.setattr(brim_provider, "delete_files_for_brokers", delete_files_for_brokers)
+    monkeypatch.setattr(storage, "delete_files_for_brokers", delete_files_for_brokers)
     monkeypatch.setattr(user_service, "delete_files_for_brokers", delete_files_for_brokers, raising=False)
     return calls
 
@@ -5127,7 +5127,7 @@ async def _unspent_verification_links(private: _Private, user_id: int) -> list[i
 
 
 def _waiting_answer_violations(step: str, response: httpx.Response, listed: Optional[dict[str, Any]], account: _Account, *, active: bool, superuser: bool, holds_place: bool, pending_verification: bool) -> list[str]:
-    """What is wrong with the answer of a PATCH on ``account`` and with the item GET /users listed right after (``listed``): a 200, the account exactly its eleven fields with these values, whatever state the PATCH left it in, and the answer the very item listed — it replaces the account's row in the Users tab."""
+    """What is wrong with the answer of a PATCH on ``account`` and with the item GET /users listed right after (``listed``): a 200, the account exactly its twelve fields with these values, whatever state the PATCH left it in, and the answer the very item listed — it replaces the account's row in the Users tab."""
     if response.status_code != 200:
         return [f"{step}: expected 200, got {response.status_code} {response.text}"]
     answer = response.json()
@@ -5145,7 +5145,7 @@ class TestAnAccountWaitingForItsVerificationInTheUsersTab:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("scene", VERIFICATION_SCENES)
     async def test_pending_verification_is_an_inactive_account_with_an_unspent_verification_link(self, private: _Private, scene: _VerificationScene) -> None:
-        """UADM-VER-01: an account in one state of its links, beside root, the caller. GET /users → its pending_verification is true exactly when it is inactive and holds an email_verification token neither consumed nor revoked — live or expired alike: the badge stays after the link expired — (the criterion of email_verification.awaiting_verification, which the sign-in's 403 EMAIL_NOT_VERIFIED reads); its holds_place is true only with a live link (an expired one holds no place), its pending_setup true only for the initial administrator waiting for its setup, which waits for no verification. The whole item is read, its eleven fields with the three flags together; root's are all false.
+        """UADM-VER-01: an account in one state of its links, beside root, the caller. GET /users → its pending_verification is true exactly when it is inactive and holds an email_verification token neither consumed nor revoked — live or expired alike: the badge stays after the link expired — (the criterion of email_verification.awaiting_verification, which the sign-in's 403 EMAIL_NOT_VERIFIED reads); its holds_place is true only with a live link (an expired one holds no place), its pending_setup true only for the initial administrator waiting for its setup, which waits for no verification. The whole item is read, its twelve fields with the flags together; root's are all false.
 
         The scenes: one live link; one expired; one revoked only — what an administrator's deactivation of a waiting account
         leaves, an ordinary deactivated account —; one consumed only; a revoked link then a live one — «send the link
@@ -5180,7 +5180,7 @@ class TestAnAccountWaitingForItsVerificationInTheUsersTab:
     # red until E-7
     @pytest.mark.asyncio
     async def test_pending_verification_is_decided_per_account(self, private: _Private) -> None:
-        """UADM-VER-02: root (the caller), an active member, an inactive account with a live verification link, an inactive one with no token at all, and an inactive one whose only verification link was revoked. GET /users → pending_verification true for the account with the live link only — with holds_place true —, false for every other account: another account's live link makes nobody else wait, the inactive account without a link, and the one whose own link was revoked beside it, included. Every account of the instance is listed, each exactly its eleven fields.
+        """UADM-VER-02: root (the caller), an active member, an inactive account with a live verification link, an inactive one with no token at all, and an inactive one whose only verification link was revoked. GET /users → pending_verification true for the account with the live link only — with holds_place true —, false for every other account: another account's live link makes nobody else wait, the inactive account without a link, and the one whose own link was revoked beside it, included. Every account of the instance is listed, each exactly its twelve fields.
 
         Premise first: the service reads each account as the case built it — the waiting one waits and holds its place,
         no other does.
@@ -5212,7 +5212,7 @@ class TestAnAccountWaitingForItsVerificationInTheUsersTab:
     # red until E-7
     @pytest.mark.asyncio
     async def test_the_patch_answer_carries_pending_verification_and_ending_the_wait_clears_it(self, private: _Private) -> None:
-        """UADM-VER-03: an inactive account with a live verification link, beside root. PATCH {is_superuser: true} → 200, the account exactly its eleven fields, still inactive, now an administrator, pending_verification true and holds_place true — promoting it ends no wait: its link is still unspent —, and the answer is the item GET /users lists right after. Then PATCH {is_active: false}, the administrator ending the wait → 200, still inactive and an administrator, pending_verification false and holds_place false — its verification links are revoked: an ordinary deactivated account —, the answer again the item GET /users lists right after, and no verification token left unspent.
+        """UADM-VER-03: an inactive account with a live verification link, beside root. PATCH {is_superuser: true} → 200, the account exactly its twelve fields, still inactive, now an administrator, pending_verification true and holds_place true — promoting it ends no wait: its link is still unspent —, and the answer is the item GET /users lists right after. Then PATCH {is_active: false}, the administrator ending the wait → 200, still inactive and an administrator, pending_verification false and holds_place false — its verification links are revoked: an ordinary deactivated account —, the answer again the item GET /users lists right after, and no verification token left unspent.
 
         Premise first: the service reads the account as waiting, holding its place, and it holds exactly one unspent verification link.
         """
@@ -5241,7 +5241,7 @@ class TestAnAccountWaitingForItsVerificationInTheUsersTab:
     # red until E-7
     @pytest.mark.asyncio
     async def test_an_account_whose_link_expired_is_pending_and_its_reactivation_clears_it(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """UADM-VER-04: root, an active member, and an inactive account whose only verification link expired, with LIBREFOLIO_MAX_USERS=3: two places taken — the active accounts; the expired link holds none —, one free. GET /users → the account pending_verification true and holds_place false: the badge stays after the link expired, the place does not; usage used 2 of 3. PATCH {is_active: true} → 200, the account exactly its eleven fields, active, pending_verification false and holds_place false, the answer the item GET /users lists right after, its verification link revoked (none unspent), usage used 3.
+        """UADM-VER-04: root, an active member, and an inactive account whose only verification link expired, with LIBREFOLIO_MAX_USERS=3: two places taken — the active accounts; the expired link holds none —, one free. GET /users → the account pending_verification true and holds_place false: the badge stays after the link expired, the place does not; usage used 2 of 3. PATCH {is_active: true} → 200, the account exactly its twelve fields, active, pending_verification false and holds_place false, the answer the item GET /users lists right after, its verification link revoked (none unspent), usage used 3.
 
         Premise first: the service reads the account as waiting without holding a place, and it holds exactly one unspent
         verification link, expired.
@@ -5270,7 +5270,7 @@ class TestAnAccountWaitingForItsVerificationInTheUsersTab:
 
     # red until E-7
     def test_admin_user_read_declares_pending_verification_false_by_default(self) -> None:
-        """UADM-VER-05: AdminUserRead declares ``pending_verification: bool``, false by default — an AdminUserRead built without it, as UADM-064 and UADM-AV-04 build one, does not wait for a verification link —, and nothing else changes: its fields are exactly the eleven an account is listed with."""
+        """UADM-VER-05: AdminUserRead declares ``pending_verification: bool``, false by default — an AdminUserRead built without it, as UADM-064 and UADM-AV-04 build one, does not wait for a verification link —, and nothing else changes: its fields are exactly the twelve an account is listed with."""
         print_section("UADM-VER-05: AdminUserRead.pending_verification")
         declared = AdminUserRead.model_fields.get("pending_verification")
         assert declared is not None, f"AdminUserRead must declare pending_verification (lot E-7, point 21); it declares {sorted(AdminUserRead.model_fields)}"
@@ -5282,4 +5282,49 @@ class TestAnAccountWaitingForItsVerificationInTheUsersTab:
         _expect(violations, getattr(built, "pending_verification", "<missing>") is False, f"an account built without it must not wait for a verification link: {getattr(built, 'pending_verification', '<missing>')!r}")
         _expect(violations, set(AdminUserRead.model_fields) == USER_ITEM_KEYS, f"AdminUserRead must be exactly {sorted(USER_ITEM_KEYS)}: {sorted(AdminUserRead.model_fields)}")
         assert not violations, f"AdminUserRead.pending_verification broke its contract:{_verdict(violations)}"
-        print_success("a bool, false by default, eleven fields")
+        print_success("a bool, false by default, twelve fields")
+
+
+# =============================================================================
+# 22. A change of address waiting for its link (release 1.4, project 71, step 2.6)
+# =============================================================================
+
+
+class TestAPendingEmailChangeInTheUsersTab:
+    """Point 22: ``pending_email_change`` on every account ``GET /users`` lists, true only for an account holding an open
+    change of address it asked from Profile (an ``email_change`` link with ``created_by_user_id == user_id``); the link is
+    ``revocable`` in ``GET /users/account-links`` and ``DELETE /users/account-links/{id}`` revokes it (204), after which the
+    account no longer waits. The owner's link (no creator) is neither a badge nor revocable (409 ``LINK_NOT_REVOCABLE``)."""
+
+    @pytest.mark.asyncio
+    async def test_pending_email_change_is_the_badge_of_an_open_profile_change_and_the_admin_revokes_it(self, private: _Private) -> None:
+        """UADM-PEC-01: root (the caller); ``waiting`` with an open Profile change; ``hosted`` with the host's change only; ``expired`` with a Profile change past its 24 hours; ``cancelled`` with a revoked one. GET /users → ``pending_email_change`` true for ``waiting`` only. Its link is revocable, the host's is not; DELETE of the Profile link → 204 and the badge is gone; DELETE of the host's link → 409 ``LINK_NOT_REVOCABLE``, the link still open."""
+        print_section("UADM-PEC-01: the pending email change badge, and its revocation")
+        root, cookie = await _admin(private)
+        waiting, hosted, expired, cancelled = [await _add_user(private, name) for name in ("waiting", "hosted", "expired", "cancelled")]
+        now = utcnow()
+        profile = await _private_issue(private, EMAIL_CHANGE, user_id=waiting.user_id, email="waiting-new@example.com", created_by_user_id=waiting.user_id, ttl=timedelta(hours=24))
+        host = await _private_issue(private, EMAIL_CHANGE, user_id=hosted.user_id, email="hosted-new@example.com")
+        await _private_issue(private, EMAIL_CHANGE, user_id=expired.user_id, email="expired-new@example.com", created_by_user_id=expired.user_id, ttl=timedelta(hours=24), now=now - timedelta(hours=25))
+        revoked = await _private_issue(private, EMAIL_CHANGE, user_id=cancelled.user_id, email="cancelled-new@example.com", created_by_user_id=cancelled.user_id, ttl=timedelta(hours=24))
+        async with AsyncSession(private.engine) as session:
+            await revoke_tokens(session, token_id=revoked.record.id)
+            await session.commit()
+
+        listed = await _private_listed(private, cookie)
+        badges = {item["username"]: item.get("pending_email_change", "<missing>") for item in listed.values()}
+        assert badges == {"root": False, "waiting": True, "hosted": False, "expired": False, "cancelled": False}, badges
+        links = {item["id"]: item for item in (await _call(private, "GET", LINKS, cookie=cookie)).json()["items"]}
+        assert (links[profile.record.id]["revocable"], links[host.record.id]["revocable"]) == (True, False)
+
+        refused = await _call(private, "DELETE", f"{LINKS}/{host.record.id}", cookie=cookie)
+        assert refused.status_code == 409 and refused.json()["detail"]["error_code"] == "LINK_NOT_REVOCABLE", refused.text
+        revoked_now = await _call(private, "DELETE", f"{LINKS}/{profile.record.id}", cookie=cookie)
+        assert revoked_now.status_code == 204, revoked_now.text
+
+        after = await _private_listed(private, cookie)
+        assert after[waiting.user_id]["pending_email_change"] is False
+        async with AsyncSession(private.engine) as session:
+            assert (await inspect_token(session, profile.token, EMAIL_CHANGE)).status == TokenStatus.REVOKED
+            assert (await inspect_token(session, host.token, EMAIL_CHANGE)).status == TokenStatus.VALID
+        print_success("badge for the open Profile change only; revocable and revoked; the host's link stays")

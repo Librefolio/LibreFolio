@@ -347,7 +347,7 @@ function expectChipPerPair(category: HTMLElement, issue: DataQualityIssue): Draw
         expect(chip.tagName, `${nameOf(issue)}: the chip of ${pair} is a button`).toBe('BUTTON');
         expect(precedes(message, chip), `${nameOf(issue)}: the chip of ${pair} comes after the message`).toBe(true);
         expect(shown(chip), `${nameOf(issue)}: the chip of ${pair} shows its pair`).toMatch(drawnPair(pair));
-        expect(chip, `${nameOf(issue)}: the chip of ${pair} says what it does, and to which pair`).toHaveAccessibleName(`${label}: ${base}/${quote}`);
+        expect(chip, `${nameOf(issue)}: the chip of ${pair} says what it does, and to which pair`).toHaveAccessibleName(`${label}: ${base} / ${quote}`);
         expect(shown(messageRow), `${nameOf(issue)}: ${pair} listed once, on its chip`).not.toMatch(drawnPair(pair));
         return chip;
     });

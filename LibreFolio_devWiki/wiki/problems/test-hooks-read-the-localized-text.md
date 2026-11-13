@@ -56,8 +56,8 @@ whole `component-unit` selector.
 
 | Role | Path |
 |------|------|
-| `data-dist-pct` and its hook | `frontend/src/lib/components/assets/ProviderComparisonModal.svelte` |
+| `data-dist-pct` and its hook | `frontend/src/lib/features/assets/ProviderComparisonModal.svelte` |
 | The gallery's check | `frontend/e2e/fixtures/galleryProviderCompare.ts` |
-| `data-operation` | `frontend/src/lib/components/assets/ProviderAssignmentSection.svelte` |
-| The repaired test | `frontend/src/lib/components/assets/AssetModal.providerLifecycle.test.ts` |
+| `data-operation` | `frontend/src/lib/features/assets/ProviderAssignmentSection.svelte` |
+| The repaired test | `frontend/src/lib/features/assets/AssetModal.providerLifecycle.test.ts` |
 | T's lots (T-CL, T-ISO, the repair) | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |

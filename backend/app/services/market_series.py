@@ -13,24 +13,14 @@ from decimal import Decimal
 from typing import Protocol
 
 from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
-from backend.app.schemas.portfolio import (
-    DataQualityExcludedAsset,
-    DataQualityExclusionReason,
-    DataQualityReport,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.risk import (
-    AssetReturnPoint,
-    AssetReturnSeries,
-    AssetValuationPoint,
-    AssetValuationSeries,
-    PreparedAssetSeries,
-    PreparedAssetSeriesSet,
-)
+from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet
 from backend.app.services.assets.market_calendar import is_market_closed_repeat
 from backend.app.services.financial_math.returns import float_price_return, observed_annualization
-from backend.app.services.financial_math.series_steps import merged_spans
-from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.fx.conversion_issues import split_fx_issues
+from backend.app.services.platform.data_quality_thresholds import is_stale
+from backend.app.utils.day_spans import merged_spans
 
 
 def date_is_within_range(
@@ -335,7 +325,8 @@ def prepare_asset_series_set_from_readings(  # noqa: C901 — one pass per stage
         wanted = set(observed) | {day - timedelta(days=1) for day in observed if day > load_start}
         stored = {day: point for day in sorted(wanted) if (point := reading.point_on(day)) is not None}
         marked = mark_market_closed_carries(stored, market_holidays)
-        warnings.update(reading.errors)
+        reading_errors, _fx_issues = split_fx_issues(reading.errors)  # a missing rate is data quality (`missing_fx`), not a warning text (CP-11d)
+        warnings.update(reading_errors)
         # A day of the range on which the asset has a point that is not in the target currency: its rate is missing until
         # it starts, so the days run from the first row to the day before its first converted point.
         probes = [requested_range.start, *observed[:1]] if requested_range.start <= requested_end else []
@@ -383,7 +374,7 @@ def prepare_asset_series_set_from_readings(  # noqa: C901 — one pass per stage
                 asset_id=reading.asset_id,
                 all_points=all_points,
                 target_points=target_points,
-                warnings=tuple(reading.errors),
+                warnings=tuple(reading_errors),
                 quote_dates=tuple(day for day, point in target_points.items() if requested_range.start <= day <= requested_end and _price_is_fresh(point)),
             )
         )
@@ -518,10 +509,10 @@ def _prepare_from_inputs(  # noqa: C901 — sequential pipeline stages with earl
         for index, point in enumerate(valuation_points):
             if index == 0:
                 continue
-            if point.is_price_carried_forward and (point.valuation_date - point.effective_price_date).days > STALE_PRICE_THRESHOLD_DAYS:
+            if point.is_price_carried_forward and is_stale(point.effective_price_date, point.valuation_date):
                 carried_price_points += 1
                 carried_price_asset_ids.add(item.asset_id)
-            if point.is_fx_carried_forward and point.fx_rate_date is not None and (point.valuation_date - point.fx_rate_date).days > STALE_PRICE_THRESHOLD_DAYS:
+            if point.is_fx_carried_forward and point.fx_rate_date is not None and is_stale(point.fx_rate_date, point.valuation_date):
                 carried_fx_points += 1
                 carried_fx_pairs.add(f"{point.native_currency}/{point.target_currency}")
             if not point.is_price_carried_forward:

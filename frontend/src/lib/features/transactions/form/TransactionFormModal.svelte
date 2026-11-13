@@ -51,13 +51,13 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import CompactCashCell from '$lib/features/transactions/form/CompactCashCell.svelte';
-    import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
+    import FxSyncModal from '$lib/features/fx/FxSyncModal.svelte';
     import TransactionTypeSearchSelect from '../TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from '../wac/WacPreviewSection.svelte';
     import AssetEventPicker from '../events/AssetEventPicker.svelte';
     import EventCreateMiniModal from '../events/EventCreateMiniModal.svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
-    import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import AssetModal from '$lib/features/assets/AssetModal.svelte';
 
     import {zodiosApi} from '$lib/api';
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
@@ -77,8 +77,8 @@
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/features/transactions/form/txFormFields';
     import {isBulkBalanceIssue} from '$lib/features/transactions/bulk/bulkDisplay';
     import {applySign, buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, exactDecimalSign, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/features/transactions/txPayloadHelpers';
-    import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
-    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
+    import {lookupFxRate, type FxDataPoint} from '$lib/features/fx/fxStoreRegistry';
+    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/features/fx/fxConversionHelper';
     import type {TXReadItem} from '../types';
     import {type FormModalItems, isInaccessible} from '../resolveFormItems';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';

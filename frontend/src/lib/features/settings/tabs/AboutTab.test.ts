@@ -83,12 +83,12 @@ vi.mock('$lib/stores/app/themeStore', () => ({
 }));
 
 const registeredSignals = vi.fn<() => unknown[]>(() => []);
-vi.mock('$lib/charts/signals/registry', () => ({getRegisteredSignalTypes: () => registeredSignals()}));
+vi.mock('$lib/features/signals/registry', () => ({getRegisteredSignalTypes: () => registeredSignals()}));
 
 // The catalogue mapper is a strict translator with its own rules and its own
 // tests; what AboutTab owns is what it does with the *result*. Mocking it to a
 // pass-through keeps this file honest about which contract it is checking.
-vi.mock('$lib/charts/signals/catalogMapper', () => ({mapBackendSignalDefinition: (raw: unknown) => raw}));
+vi.mock('$lib/features/signals/catalogMapper', () => ({mapBackendSignalDefinition: (raw: unknown) => raw}));
 
 import AboutTab from './AboutTab.svelte';
 import {zodiosApi} from '$lib/api';
@@ -676,10 +676,10 @@ describe('AboutTab — the installed signals', () => {
 
 // =========================================================================
 describe('AboutTab — the plugin discovery report', () => {
-    it('reports all four systems as healthy when nothing failed to load', async () => {
+    it('reports all six systems as healthy when nothing failed to load', async () => {
         await mount();
 
-        for (const system of ['asset', 'fx', 'brim', 'signals']) {
+        for (const system of ['asset', 'fx', 'brim', 'signals', 'risk', 'tools']) {
             expect(diagnosticsFor(system)).toHaveAttribute('data-status', 'ok');
             expect(diagnosticsFor(system)).toHaveAttribute('data-failures', '0');
             expect(diagnosticsFor(system)).toHaveTextContent('settings.pluginDiagnosticsAllLoaded');
@@ -698,6 +698,24 @@ describe('AboutTab — the plugin discovery report', () => {
         expect(diagnosticsFor('asset')).toHaveAttribute('data-status', 'ok');
         expect(diagnosticsFor('fx')).toHaveAttribute('data-status', 'ok');
         expect(diagnosticsFor('signals')).toHaveAttribute('data-status', 'ok');
+    });
+
+    it('lists the Risk and Tools plugin systems too, each with its own failures (C-20)', async () => {
+        api.diag().mockResolvedValue([
+            {system: 'risk', filename: 'risk_one.py', error: 'risk boom'},
+            {system: 'tools', filename: 'tool_one.py', error: 'tool bang'},
+        ] as never);
+        await mount();
+
+        expect(diagnosticsFor('risk')).toHaveAttribute('data-status', 'failed');
+        expect(diagnosticsFor('risk')).toHaveTextContent('risk_one.py');
+        expect(diagnosticsFor('risk')).not.toHaveTextContent('tool_one.py');
+        expect(diagnosticsFor('tools')).toHaveAttribute('data-status', 'failed');
+        expect(diagnosticsFor('tools')).toHaveTextContent('tool_one.py');
+        expect(diagnosticsFor('tools')).not.toHaveTextContent('risk_one.py');
+        expect(diagnosticsFor('risk')).toHaveTextContent('settings.pluginSystemRisk');
+        expect(diagnosticsFor('tools')).toHaveTextContent('settings.pluginSystemTools');
+        expect(diagnosticsFor('asset')).toHaveAttribute('data-status', 'ok');
     });
 
     it('names the file and the reason, so the report is actionable', async () => {

@@ -50,7 +50,7 @@ None.
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/phases/17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md` |
 | Sector taxonomy (bonds) | `backend/app/utils/asset/sector.py` |
-| Distributions CSV import | `frontend/src/lib/components/assets/DistributionDataImportModal.svelte` |
+| Distributions CSV import | `frontend/src/lib/features/assets/DistributionDataImportModal.svelte` |
 | Distribution editor | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |
 | Delete with counts | `backend/app/services/assets/crud.py` |
 | User doc (distributions) | `mkdocs_src/docs/user/assets/create-edit.en.md` |

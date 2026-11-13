@@ -40,7 +40,8 @@ import pytest
 
 from backend.app.config import get_version
 from backend.app.schemas.brim import BRIMCombinedTable, BRIMDerivedRef, BRIMFileInfo, BRIMFileStatus, BRIMParseOutput
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import combined_files, parsing, registry, storage
+from backend.test_scripts.brim_samples import SampleDir
 
 
 class _MovingPlugin:
@@ -55,7 +56,7 @@ class _MovingPlugin:
 
     def can_parse(self, file_path: Path) -> bool:
         if self.move:
-            brim_provider.move_to_parsed(self.file_id)
+            storage.move_to_parsed(self.file_id)
             self.move = False  # only the first caller wins the transition
         return True
 
@@ -67,20 +68,20 @@ class _MovingPlugin:
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: tmp_path)
+    monkeypatch.setattr(storage, "get_broker_reports_dir", lambda: tmp_path)
     return tmp_path
 
 
 def _upload(content: bytes = b"date,amount\n2026-01-01,10\n"):
-    return brim_provider.save_uploaded_file(content, "generic_simple.csv", user_id=1, broker_id=1)
+    return storage.save_uploaded_file(content, "generic_simple.csv", user_id=1, broker_id=1)
 
 
 def test_parse_survives_the_file_moving_between_resolution_and_read(store, monkeypatch):
     info = _upload()
     plugin = _MovingPlugin(info.file_id)
-    monkeypatch.setattr(brim_provider.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
+    monkeypatch.setattr(registry.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
 
-    output = brim_provider.parse_file(info.file_id, "broker_generic_csv", broker_id=1)
+    output = parsing.parse_file(info.file_id, "broker_generic_csv", broker_id=1)
 
     assert output.transactions == []
     assert len(plugin.paths_read) == 2, "expected one failed read at the old path and one retry"
@@ -99,10 +100,10 @@ def test_a_read_error_on_a_file_that_did_not_move_is_not_retried(store, monkeypa
         raise ValueError("genuinely malformed")
 
     plugin.parse = exploding_parse
-    monkeypatch.setattr(brim_provider.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
+    monkeypatch.setattr(registry.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
 
     with pytest.raises(ValueError, match="genuinely malformed"):
-        brim_provider.parse_file(info.file_id, "broker_generic_csv", broker_id=1)
+        parsing.parse_file(info.file_id, "broker_generic_csv", broker_id=1)
     assert len(plugin.paths_read) == 1
 
 
@@ -121,7 +122,7 @@ def test_get_file_path_finds_a_file_whose_metadata_still_says_uploaded(store):
     (uploaded / f"{info.file_id}{ext}").rename(parsed / f"{info.file_id}{ext}")
     # sidecar deliberately left behind, still saying "uploaded"
 
-    found = brim_provider.get_file_path(info.file_id)
+    found = storage.get_file_path(info.file_id)
 
     assert found is not None
     assert found == parsed / f"{info.file_id}{ext}"
@@ -145,7 +146,7 @@ class _HonestPlugin:
     def can_parse(self, file_path: Path) -> bool:
         self.checked.append(file_path)
         if self.mover:
-            brim_provider.move_to_parsed(self.mover)
+            storage.move_to_parsed(self.mover)
             self.mover = None  # only the first caller wins the transition
         return file_path.exists()
 
@@ -165,9 +166,9 @@ def test_can_parse_guard_survives_the_file_moving_before_the_check(store, monkey
     """
     info = _upload()
     plugin = _HonestPlugin(mover=info.file_id)
-    monkeypatch.setattr(brim_provider.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
+    monkeypatch.setattr(registry.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
 
-    output = brim_provider.parse_file(info.file_id, "broker_generic_csv", broker_id=1)
+    output = parsing.parse_file(info.file_id, "broker_generic_csv", broker_id=1)
 
     assert output.transactions == []
     assert len(plugin.checked) == 2, "expected one check at the stale path and one at the new one"
@@ -182,27 +183,27 @@ def test_a_plugin_that_genuinely_cannot_read_the_format_still_fails(store, monke
     info = _upload()
     plugin = _HonestPlugin()
     plugin.can_parse = lambda file_path: False  # the file is there; the plugin just says no
-    monkeypatch.setattr(brim_provider.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
+    monkeypatch.setattr(registry.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
 
     with pytest.raises(ValueError, match="cannot parse file"):
-        brim_provider.parse_file(info.file_id, "broker_generic_csv", broker_id=1)
+        parsing.parse_file(info.file_id, "broker_generic_csv", broker_id=1)
     assert plugin.paths_read == []
 
 
 def test_relocated_path_reports_none_when_the_file_never_moved(store):
     """``None`` is the signal that the caller's failure was genuine."""
     info = _upload()
-    path = brim_provider.get_file_path(info.file_id)
+    path = storage.get_file_path(info.file_id)
     assert path is not None
 
-    assert brim_provider._relocated_path(info.file_id, path) is None
+    assert parsing._relocated_path(info.file_id, path) is None
 
-    brim_provider.move_to_parsed(info.file_id)
-    moved = brim_provider._relocated_path(info.file_id, path)
+    storage.move_to_parsed(info.file_id)
+    moved = parsing._relocated_path(info.file_id, path)
     assert moved is not None
     assert moved.parent.parent.name == BRIMFileStatus.PARSED.value
 
-    assert brim_provider._relocated_path("does-not-exist", path) is None
+    assert parsing._relocated_path("does-not-exist", path) is None
 
 
 # =============================================================================
@@ -252,7 +253,7 @@ class _RefusingPlugin:
     def can_parse(self, file_path: Path) -> bool:
         self.checked.append(file_path)
         if self.mover:
-            brim_provider.move_to_parsed(self.mover)
+            storage.move_to_parsed(self.mover)
             self.mover = None  # only the first caller wins the transition
         return False
 
@@ -269,15 +270,15 @@ class _RefusingPlugin:
 
 def _refusal(file_id: str, plugin, monkeypatch) -> ValueError:
     """Parse ``file_id`` with ``plugin`` standing in for the generic CSV; the ``ValueError`` the guard must raise."""
-    monkeypatch.setattr(brim_provider.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
+    monkeypatch.setattr(registry.BRIMProviderRegistry, "get_provider_instance", lambda code: plugin)
     with pytest.raises(ValueError) as refusal:
-        brim_provider.parse_file(file_id, GENERIC_CSV_CODE, broker_id=1)
+        parsing.parse_file(file_id, GENERIC_CSV_CODE, broker_id=1)
     return refusal.value
 
 
 def test_the_refusal_says_why_when_the_plugin_knows(store, monkeypatch):
     info = _upload()
-    stored = brim_provider.get_file_path(info.file_id)
+    stored = storage.get_file_path(info.file_id)
     plugin = _RefusingPlugin(reason="some reason")
 
     refusal = _refusal(info.file_id, plugin, monkeypatch)
@@ -291,7 +292,7 @@ def test_the_refusal_says_why_when_the_plugin_knows(store, monkeypatch):
 def test_the_refusal_stays_plain_when_the_plugin_has_nothing_to_add(store, monkeypatch, reason):
     """No colon, nothing appended, so a stray ``": "`` fails — and the guard did ask."""
     info = _upload()
-    stored = brim_provider.get_file_path(info.file_id)
+    stored = storage.get_file_path(info.file_id)
     plugin = _RefusingPlugin(reason=reason)
 
     refusal = _refusal(info.file_id, plugin, monkeypatch)
@@ -329,7 +330,7 @@ def test_a_plugin_without_the_method_keeps_the_plain_refusal(store, monkeypatch)
 def test_a_reason_that_raises_leaves_the_plain_refusal(store, monkeypatch, failure):
     """The guard logs the failure and ignores it: the plain ``ValueError``, never the method's exception — not even its own ``ValueError``."""
     info = _upload()
-    stored = brim_provider.get_file_path(info.file_id)
+    stored = storage.get_file_path(info.file_id)
     plugin = _RefusingPlugin(reason=failure)
 
     refusal = _refusal(info.file_id, plugin, monkeypatch)
@@ -362,11 +363,11 @@ def test_the_generic_csv_names_the_required_columns_a_file_misses(store):
     """
     info = _upload(b"amount,description\n10,first\n20,second\n")
     assert GENERIC_CSV_CODE not in info.compatible_plugins, f"premise: the generic CSV does not offer itself for this file: {info.compatible_plugins}"
-    plugin = brim_provider.BRIMProviderRegistry.get_provider_instance(GENERIC_CSV_CODE)
+    plugin = registry.BRIMProviderRegistry.get_provider_instance(GENERIC_CSV_CODE)
     assert plugin is not None and plugin.provider_name not in ("", GENERIC_CSV_CODE), f"premise: the generic CSV is registered, with a name that is not its code: {plugin and plugin.provider_name!r}"
 
     with pytest.raises(ValueError) as refusal:
-        brim_provider.parse_file(info.file_id, GENERIC_CSV_CODE, broker_id=1)
+        parsing.parse_file(info.file_id, GENERIC_CSV_CODE, broker_id=1)
 
     message = str(refusal.value)
     assert message.endswith("': required columns 'date' and 'type' not found in the CSV header"), f"the refusal does not say which columns are missing: {message!r}"
@@ -410,7 +411,7 @@ def test_the_generic_csv_names_the_required_columns_a_file_misses(store):
 # missing name, which ``test_the_detection_signature_is_the_app_version`` pins alone. Every wait is bounded: a
 # regression fails here, it never hangs the suite.
 
-SAMPLE_DIR = Path(__file__).resolve().parents[2] / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 DANSKE_CODE = "broker_danske_bank"
 DANSKE_CASH = "danske_bank-cash.csv"
 CURRENT_SIGNATURE = "plugins-signature-current"
@@ -449,12 +450,12 @@ _PROBE_ANSWERS = {0: "free", 3: "held", 4: "no lock file"}
 
 def _pin_signature(monkeypatch, signature: str = CURRENT_SIGNATURE) -> None:
     """The signature of today's catalogue, for this test (``raising=False``: see the section header)."""
-    monkeypatch.setattr(brim_provider, "detection_signature", lambda: signature, raising=False)
+    monkeypatch.setattr(storage, "detection_signature", lambda: signature, raising=False)
 
 
 def _upload_danske_cash() -> BRIMFileInfo:
     """The synthetic Danske cash statement, uploaded on broker 1 through the real ``save_uploaded_file``."""
-    return brim_provider.save_uploaded_file((SAMPLE_DIR / DANSKE_CASH).read_bytes(), DANSKE_CASH, user_id=1, broker_id=1)
+    return storage.save_uploaded_file((SAMPLE_DIR / DANSKE_CASH).read_bytes(), DANSKE_CASH, user_id=1, broker_id=1)
 
 
 def _sidecar_path(store: Path, file_id: str, status: BRIMFileStatus = BRIMFileStatus.UPLOADED) -> Path:
@@ -500,10 +501,10 @@ def _resolved(paths: List[Path]) -> List[Path]:
 def _read(how: str, file_id: str) -> BRIMFileInfo:
     """Broker 1's file as ``get_file_info`` or ``list_files`` reads it."""
     if how == "get_file_info":
-        info = brim_provider.get_file_info(file_id)
+        info = storage.get_file_info(file_id)
         assert info is not None, f"get_file_info({file_id!r}) is None"
         return info
-    listed = [info for info in brim_provider.list_files(broker_ids=[1]) if info.file_id == file_id]
+    listed = [info for info in storage.list_files(broker_ids=[1]) if info.file_id == file_id]
     assert len(listed) == 1, f"{file_id} listed {len(listed)} times"
     return listed[0]
 
@@ -511,7 +512,7 @@ def _read(how: str, file_id: str) -> BRIMFileInfo:
 def _save_combined(member: BRIMFileInfo) -> BRIMFileInfo:
     """A combined file built from ``member`` by the Danske plugin, stored by the real ``save_combined_file``."""
     ref = BRIMDerivedRef(file_id=member.file_id, role="cash", filename=member.filename)
-    return brim_provider.save_combined_file(broker_id=1, plugin_code=DANSKE_CODE, plugin_version="1.0.0", members=[ref], table=COMBINED_TABLE, filename="Danske Bank — combined")
+    return combined_files.save_combined_file(broker_id=1, plugin_code=DANSKE_CODE, plugin_version="1.0.0", members=[ref], table=COMBINED_TABLE, filename="Danske Bank — combined")
 
 
 class _DetectionGate:
@@ -547,8 +548,8 @@ class _DetectionSpy:
 
 def _spy_on_detection(monkeypatch, gate: Optional[_DetectionGate] = None) -> _DetectionSpy:
     """Install the spy after the test's own uploads (which detect too); ``monkeypatch`` puts the classmethod back."""
-    spy = _DetectionSpy(brim_provider.BRIMProviderRegistry.get_compatible_plugins, gate)
-    monkeypatch.setattr(brim_provider.BRIMProviderRegistry, "get_compatible_plugins", staticmethod(spy))
+    spy = _DetectionSpy(registry.BRIMProviderRegistry.get_compatible_plugins, gate)
+    monkeypatch.setattr(registry.BRIMProviderRegistry, "get_compatible_plugins", staticmethod(spy))
     return spy
 
 
@@ -598,7 +599,7 @@ def _probe(lock_file: Path) -> str:
 
 
 def _take_and_release(broker_id: Optional[int]) -> bool:
-    with brim_provider._broker_metadata_lock(broker_id):
+    with storage._broker_metadata_lock(broker_id):
         return True
 
 
@@ -607,7 +608,7 @@ def _take_and_release(broker_id: Optional[int]) -> bool:
 
 def test_the_detection_signature_is_the_app_version():
     """D2: the signature of the plugin catalogue is the app version, so every release (and every nightly commit) detects again."""
-    signature = brim_provider.detection_signature()
+    signature = storage.detection_signature()
 
     assert isinstance(signature, str) and signature, f"the signature is not a non-empty string: {signature!r}"
     assert signature == get_version()
@@ -623,7 +624,7 @@ def test_the_upload_records_the_signature_it_detected_with(store, monkeypatch):
     assert stored["compatible_plugins"] == [DANSKE_CODE], f"premise: today's catalogue reads the sample as Danske only: {stored['compatible_plugins']}"
     assert stored.get("plugins_signature") == CURRENT_SIGNATURE, f"the upload does not record the signature of the catalogue it detected with: {sorted(stored)}"
     spy = _spy_on_detection(monkeypatch)
-    assert brim_provider.get_file_info(info.file_id).compatible_plugins == [DANSKE_CODE]
+    assert storage.get_file_info(info.file_id).compatible_plugins == [DANSKE_CODE]
     assert spy.paths == [], "a read right after the upload detected the plugins again"
 
 
@@ -646,13 +647,13 @@ def test_a_parsed_or_failed_file_is_detected_again_where_it_lies(store, monkeypa
     """Every original is detected again, a failed one too (plan §2.3: so it can be retried), on the data file beside its sidecar."""
     _pin_signature(monkeypatch)
     info = _upload_danske_cash()
-    moved = brim_provider.move_to_parsed(info.file_id) if status == BRIMFileStatus.PARSED else brim_provider.move_to_failed(info.file_id, "synthetic failure")
+    moved = storage.move_to_parsed(info.file_id) if status == BRIMFileStatus.PARSED else storage.move_to_failed(info.file_id, "synthetic failure")
     assert moved, f"premise: the file moved to {status.value}"
     sidecar = _sidecar_path(store, info.file_id, status)
     _as_detected_before_item_8(sidecar)
     spy = _spy_on_detection(monkeypatch)
 
-    read = brim_provider.get_file_info(info.file_id)
+    read = storage.get_file_info(info.file_id)
 
     assert read is not None and read.status == status, f"premise: the file reads as {status.value}: {read}"
     assert read.compatible_plugins == [DANSKE_CODE], f"a {status.value} file still gives the plugins stored before item 8: {read.compatible_plugins}"
@@ -665,9 +666,9 @@ def test_a_parsed_or_failed_file_is_detected_again_where_it_lies(store, monkeypa
 def test_an_old_signature_drops_the_plugins_that_no_longer_read_the_file(store, monkeypatch, how):
     """What an older catalogue offered and today's does not (since step G the generic CSV wants a date and a type): the list empties."""
     _pin_signature(monkeypatch)
-    info = brim_provider.save_uploaded_file(UNREADABLE_CSV, "amounts.csv", user_id=1, broker_id=1)
+    info = storage.save_uploaded_file(UNREADABLE_CSV, "amounts.csv", user_id=1, broker_id=1)
     sidecar = _sidecar_path(store, info.file_id)
-    assert brim_provider.BRIMProviderRegistry.get_compatible_plugins(sidecar.with_suffix(".csv")) == [], "premise: no plugin of today's catalogue reads this CSV"
+    assert registry.BRIMProviderRegistry.get_compatible_plugins(sidecar.with_suffix(".csv")) == [], "premise: no plugin of today's catalogue reads this CSV"
     _rewrite_sidecar(sidecar, plugins_signature=OLD_SIGNATURE, compatible_plugins=["broker_directa", "broker_generic_csv"])
 
     read = _read(how, info.file_id)
@@ -740,7 +741,7 @@ def test_a_saved_detection_is_trusted_by_the_next_reads(store, monkeypatch):
     data = sidecar.with_suffix(".csv")
     spy = _spy_on_detection(monkeypatch)
 
-    first = brim_provider.get_file_info(info.file_id)
+    first = storage.get_file_info(info.file_id)
     detected = list(spy.paths)
     again = {how: _read(how, info.file_id).compatible_plugins for how in READS}
 
@@ -753,16 +754,16 @@ def test_a_saved_detection_is_trusted_by_the_next_reads(store, monkeypatch):
 
 
 def _move_to_parsed(file_id: str) -> bool:
-    return brim_provider._move_file(file_id, BRIMFileStatus.PARSED)
+    return storage._move_file(file_id, BRIMFileStatus.PARSED)
 
 
 def _update_another_field(file_id: str) -> bool:
-    return brim_provider._update_metadata(file_id, lambda metadata: metadata.update(lock_probe="kept"))
+    return storage._update_metadata(file_id, lambda metadata: metadata.update(lock_probe="kept"))
 
 
 def _detect_meanwhile(file_id: str) -> bool:
     """Another worker saved its own detection first: the current signature, with a list told apart from the parked one."""
-    return brim_provider._update_metadata(file_id, lambda metadata: metadata.update(plugins_signature=CURRENT_SIGNATURE, compatible_plugins=["broker_directa"]))
+    return storage._update_metadata(file_id, lambda metadata: metadata.update(plugins_signature=CURRENT_SIGNATURE, compatible_plugins=["broker_directa"]))
 
 
 def _settled_after_the_move(store: Path, file_id: str) -> None:
@@ -805,7 +806,7 @@ def test_a_write_while_the_detection_computes_is_never_undone(store, monkeypatch
     _as_detected_before_item_8(_sidecar_path(store, info.file_id))
     gate = _DetectionGate()
     _spy_on_detection(monkeypatch, gate)
-    reader = _Threaded("detection-reader", lambda: brim_provider.get_file_info(info.file_id), on_exit=gate.progress)
+    reader = _Threaded("detection-reader", lambda: storage.get_file_info(info.file_id), on_exit=gate.progress)
     writer = _Threaded(f"concurrent-{write}", lambda: concurrent(info.file_id))
     gate.parked = reader.thread
     reader.thread.start()
@@ -830,7 +831,7 @@ def test_a_write_while_the_detection_computes_is_never_undone(store, monkeypatch
 
 def test_the_broker_lock_excludes_another_process_until_it_is_released(store):
     """The coordinator's requirement: with several workers, a parse moving a file in one process while another rewrites its old sidecar would resurrect it."""
-    broker_lock = brim_provider._broker_metadata_lock
+    broker_lock = storage._broker_metadata_lock
     lock_file = _lock_file(store, 1)
 
     with broker_lock(1):
@@ -845,7 +846,7 @@ def test_the_broker_lock_excludes_another_process_until_it_is_released(store):
 
 def test_the_broker_lock_is_per_broker(store):
     """Holding broker 1's lock, another thread takes broker 2's at once, and so does another process."""
-    broker_lock = brim_provider._broker_metadata_lock
+    broker_lock = storage._broker_metadata_lock
     with broker_lock(2):
         assert _lock_file(store, 2).is_file(), "premise: broker 2's lock file exists once its lock was taken"
     other = _Threaded("broker-2-while-broker-1-is-held", lambda: _take_and_release(2))
@@ -864,7 +865,7 @@ def test_the_broker_lock_is_per_broker(store):
 
 def test_an_exception_inside_the_broker_lock_releases_it(store):
     """The lock is released when the block raises: for another process and for another thread of this one."""
-    broker_lock = brim_provider._broker_metadata_lock
+    broker_lock = storage._broker_metadata_lock
     with pytest.raises(RuntimeError, match="raised inside the broker lock"):
         with broker_lock(1):
             while_held = _probe(_lock_file(store, 1))
@@ -885,7 +886,7 @@ def test_the_broker_lock_is_reentrant_and_held_until_the_outer_block_ends(store)
     Plan §7: ``flock`` is taken once per nesting level, with a per-thread counter. Releasing it when the inner block
     ends would leave the rest of the outer one unprotected against another process.
     """
-    broker_lock = brim_provider._broker_metadata_lock
+    broker_lock = storage._broker_metadata_lock
     lock_file = _lock_file(store, 1)
 
     def nested() -> tuple:
@@ -904,7 +905,7 @@ def test_the_broker_lock_is_reentrant_and_held_until_the_outer_block_ends(store)
 
 def test_files_without_a_broker_share_the_broker_none_lock(store):
     """``_broker_metadata_lock(None)`` locks ``broker_none.lock``, the files uploaded without a broker."""
-    broker_lock = brim_provider._broker_metadata_lock
+    broker_lock = storage._broker_metadata_lock
     lock_file = _lock_file(store, None)
 
     with broker_lock(None):
@@ -923,7 +924,7 @@ def _writes_upload(store: Path):
     def landed(result: BRIMFileInfo) -> None:
         assert _sidecar_path(store, result.file_id).is_file()
 
-    return (lambda: brim_provider.save_uploaded_file(UNREADABLE_CSV, "probe.csv", user_id=1, broker_id=1)), landed
+    return (lambda: storage.save_uploaded_file(UNREADABLE_CSV, "probe.csv", user_id=1, broker_id=1)), landed
 
 
 def _writes_update(store: Path):
@@ -933,7 +934,7 @@ def _writes_update(store: Path):
         assert result is True
         assert _stored(store, info.file_id).get("lock_probe") == "written"
 
-    return (lambda: brim_provider._update_metadata(info.file_id, lambda metadata: metadata.update(lock_probe="written"))), landed
+    return (lambda: storage._update_metadata(info.file_id, lambda metadata: metadata.update(lock_probe="written"))), landed
 
 
 def _writes_combined(store: Path):
@@ -954,7 +955,7 @@ def _writes_parse_result(store: Path):
         assert result is True
         assert _stored(store, info.file_id)["last_parse_result"] == cached
 
-    return (lambda: brim_provider.save_parse_result(info.file_id, cached)), landed
+    return (lambda: storage.save_parse_result(info.file_id, cached)), landed
 
 
 def _writes_move(store: Path):
@@ -964,7 +965,7 @@ def _writes_move(store: Path):
         assert result is True
         assert _sidecars(store, info.file_id) == [_sidecar_path(store, info.file_id, BRIMFileStatus.PARSED)]
 
-    return (lambda: brim_provider._move_file(info.file_id, BRIMFileStatus.PARSED)), landed
+    return (lambda: storage._move_file(info.file_id, BRIMFileStatus.PARSED)), landed
 
 
 def _writes_delete(store: Path):
@@ -974,7 +975,7 @@ def _writes_delete(store: Path):
         assert result is True
         assert _sidecars(store, info.file_id) == []
 
-    return (lambda: brim_provider.delete_file(info.file_id)), landed
+    return (lambda: storage.delete_file(info.file_id)), landed
 
 
 def _writes_detection(store: Path):
@@ -986,7 +987,7 @@ def _writes_detection(store: Path):
         stored = _stored(store, info.file_id)
         assert (stored["compatible_plugins"], stored.get("plugins_signature")) == ([DANSKE_CODE], CURRENT_SIGNATURE), "the detection is not saved once the lock was released"
 
-    return (lambda: brim_provider.get_file_info(info.file_id)), landed
+    return (lambda: storage.get_file_info(info.file_id)), landed
 
 
 # The writers of plan §2.7, each with a check that its write landed once the lock was released.
@@ -1017,7 +1018,7 @@ def test_a_metadata_write_waits_for_the_broker_lock(store, monkeypatch, write):
     """While another thread holds broker 1's lock, the write neither returns nor changes a sidecar of broker 1; released, it lands."""
     _pin_signature(monkeypatch)
     act, landed = LOCKED_WRITES[write](store)
-    broker_lock = brim_provider._broker_metadata_lock
+    broker_lock = storage._broker_metadata_lock
     call = _Threaded(f"{write}-while-the-lock-is-held", act)
     before = _broker_sidecars(store, 1)
 
@@ -1084,7 +1085,7 @@ def _enter_the_lock(broker_id: Optional[int]) -> tuple:
     """Enter ``broker_metadata_lock(broker_id)`` once, on this thread: ``(the OSError it raised or None, whether the block ran)``."""
     ran: List[bool] = []
     try:
-        with brim_provider.broker_metadata_lock(broker_id):
+        with storage.broker_metadata_lock(broker_id):
             ran.append(True)
     except OSError as error:
         return error, bool(ran)
@@ -1114,7 +1115,7 @@ def test_a_symbolic_link_at_the_lock_file_is_refused_and_leaves_nothing_behind(s
     assert _what_is_at(lock_file) == link, f"the link is left as it was: {link}, now {_what_is_at(lock_file)}"
 
     lock_file.unlink()
-    with brim_provider.broker_metadata_lock(1):
+    with storage.broker_metadata_lock(1):
         inside = (_what_is_at(lock_file)[0], _probe(lock_file))
     after = _probe(lock_file)
     other = _Threaded("broker-1-after-a-refused-link", lambda: _take_and_release(1))

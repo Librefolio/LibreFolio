@@ -127,7 +127,7 @@ Uses the `borsa-italiana-scraping` library (optional dependency). Follows the st
 | Provider implementation | `backend/app/services/asset_source_providers/borsa_italiana/plugin.py` |
 | Provider schema (enum) | `backend/app/schemas/provider.py` |
 | Service registry (was `services/asset_source.py`; `AssetProviderRegistry` since `7e094f276`) | `backend/app/services/assets/registry.py` |
-| Frontend search integration | `frontend/src/lib/components/assets/AssetSearchAutocomplete.svelte` |
+| Frontend search integration | `frontend/src/lib/features/assets/AssetSearchAutocomplete.svelte` |
 | Dev docs | `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md` |
 | Plugin guide | `mkdocs_src/docs/developer/architecture/patterns/asset_plugin_guide.md` |
 
@@ -155,7 +155,7 @@ Fixed FX provider removal flow + added UX improvements to the FX detail page edi
 | Role | Path |
 |------|------|
 | Backend FX endpoint (`api/v1/fx.py` split by theme in `4180a59b6`; routes in `providers.py`) | `backend/app/api/v1/fx/providers.py` |
-| FX pair modal | `frontend/src/lib/components/fx/FxPairAddModal.svelte` |
+| FX pair modal | `frontend/src/lib/features/fx/FxPairAddModal.svelte` |
 | FX detail page | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` |
 | Asset detail page (tip) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
 

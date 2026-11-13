@@ -4,7 +4,7 @@ parse, and answer exactly what the one-statement read answered.
 The defect, on HEAD 10602d52a. SQLite parses ``a OR b OR c …`` as a chain one level deeper per term and refuses a chain
 of a thousand («Expression tree is too large (maximum depth 1000)»). Two more reads had one OR term per item:
 
-- ``brim_provider.search_asset_candidates_bulk`` read the universe of every extracted asset in ONE statement: per
+- ``candidates.search_asset_candidates_bulk`` read the universe of every extracted asset in ONE statement: per
   distinct ``(symbol, isin, name)`` triple the ISIN's equality and ``identifier_other LIKE``, the ticker's equality, the
   name's ILIKE on each of the seven identifier columns and on ``display_name``: 11 OR terms per security with all three
   fields, so from 91 such securities (1 001 terms) the import's candidate step raised ``OperationalError``;
@@ -149,7 +149,7 @@ import asyncio
 import random
 import threading
 from collections.abc import AsyncIterator
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional, get_args
 
@@ -164,8 +164,8 @@ from backend.app.db.models import Asset, AssetType, FxRate
 from backend.app.schemas.brim import BRIMMatchConfidence
 from backend.app.schemas.common import Currency
 from backend.app.schemas.pac_allocator.base import PlannerIssueCode
-from backend.app.schemas.portfolio import PortfolioPlannerSourceIssueCode
-from backend.app.services.brim import brim_provider
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceIssueCode
+from backend.app.services.brim import candidates
 from backend.app.services.fx import period_changes as fx_period_changes
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.pac_allocator.source import fx_quotes as source_fx_quotes
@@ -177,7 +177,7 @@ CHUNK = 500  # OR_TERMS_PER_QUERY: the contract's number, written here and not r
 IMPORT_SIZED = 1_500  # OR terms of one import-sized read: past SQLite's limit, past two chunk boundaries
 SQLITE_MAX_DEPTH = 1_000  # SQLite's SQLITE_MAX_EXPR_DEPTH: an OR chain of this many terms is refused
 DAY0 = date(2004, 1, 5)  # the first day of every FX series; any day would do
-FETCHED_AT = datetime(2025, 1, 1)
+FETCHED_AT = datetime(2025, 1, 1, tzinfo=UTC)
 
 Triple = tuple[Optional[str], Optional[str], Optional[str]]
 
@@ -396,7 +396,7 @@ async def _assert_bulk_matches_per_asset(session: AsyncSession, triples: list[Tr
     """
     extractions = triples + triples[::7]  # every seventh triple asked twice, at the end
     try:
-        bulk = await brim_provider.search_asset_candidates_bulk(session, extractions)
+        bulk = await candidates.search_asset_candidates_bulk(session, extractions)
     except OperationalError as error:
         pytest.fail(f"search_asset_candidates_bulk raised for {len(triples)} triples ({_or_terms(triples)} OR terms), SQLite refusing the statement: {error.orig!r} (MF-SEC9a)")
 
@@ -405,7 +405,7 @@ async def _assert_bulk_matches_per_asset(session: AsyncSession, triples: list[Tr
     expected: dict[Triple, tuple] = {}
     divergences = []
     for symbol, isin, name in triples:
-        reference = _shape(await brim_provider.search_asset_candidates(session, symbol, isin, name))
+        reference = _shape(await candidates.search_asset_candidates(session, symbol, isin, name))
         expected[(symbol, isin, name)] = reference
         got = _shape(bulk[(symbol, isin, name)])
         if got != reference:
@@ -613,7 +613,7 @@ async def test_bulk_candidates_classify_off_the_event_loop(session, monkeypatch)
     loop_thread = threading.get_ident()
     compile_threads: list[int] = []
     loop_answers: list[Optional[int]] = []
-    like_to_regex = brim_provider._like_to_regex
+    like_to_regex = candidates._like_to_regex
 
     async def _answer_from_the_loop() -> int:
         return threading.get_ident()
@@ -630,8 +630,8 @@ async def test_bulk_candidates_classify_off_the_event_loop(session, monkeypatch)
                 loop_answers.append(None)
         return like_to_regex(pattern)
 
-    monkeypatch.setattr(brim_provider, "_like_to_regex", _recording_like_to_regex)
-    bulk = await brim_provider.search_asset_candidates_bulk(session, triples)
+    monkeypatch.setattr(candidates, "_like_to_regex", _recording_like_to_regex)
+    bulk = await candidates.search_asset_candidates_bulk(session, triples)
 
     assert set(bulk) == set(triples), f"one answer per distinct triple: {len(bulk)} for {len(triples)}"
     assert all(candidates for candidates, _ in bulk.values()), "every generic name matches funds: the classification did its work"
@@ -657,7 +657,7 @@ async def test_bulk_candidates_compile_each_needle_once_and_dump_each_asset_once
     triples = _generic_triples()
     compiles: list[str] = []
     dumps: list[Optional[list[str]]] = []
-    like_to_regex, other_as_text = brim_provider._like_to_regex, brim_provider._other_as_text
+    like_to_regex, other_as_text = candidates._like_to_regex, candidates._other_as_text
 
     def _counting_like_to_regex(pattern: str):
         compiles.append(pattern)
@@ -667,9 +667,9 @@ async def test_bulk_candidates_compile_each_needle_once_and_dump_each_asset_once
         dumps.append(value)
         return other_as_text(value)
 
-    monkeypatch.setattr(brim_provider, "_like_to_regex", _counting_like_to_regex)
-    monkeypatch.setattr(brim_provider, "_other_as_text", _counting_other_as_text)
-    bulk = await brim_provider.search_asset_candidates_bulk(session, triples + triples[::5])
+    monkeypatch.setattr(candidates, "_like_to_regex", _counting_like_to_regex)
+    monkeypatch.setattr(candidates, "_other_as_text", _counting_other_as_text)
+    bulk = await candidates.search_asset_candidates_bulk(session, triples + triples[::5])
 
     assert set(bulk) == set(triples), f"one answer per distinct triple: {len(bulk)} for {len(triples)}"
     needles = sum(bool(isin) + bool(name) for _, isin, name in triples)
@@ -739,7 +739,7 @@ async def _seed_sized_assets(session: AsyncSession) -> None:
     random.Random(23).shuffle(rows)
     specials = sorted(SIZED_SPECIAL_ASSETS, key=lambda special: special[0], reverse=True)
     rows += [{"display_name": name, "identifier_isin": isin, "identifier_ticker": ticker, "identifier_other": other} for name, isin, ticker, other in specials]
-    now = datetime(2026, 1, 1)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
     await session.execute(insert(Asset), [{**row, "currency": "EUR", "asset_type": AssetType.FUND, "created_at": now, "updated_at": now} for row in rows])
     await session.commit()
 
@@ -822,7 +822,7 @@ async def test_guard_bulk_exact_hits_keep_the_universe_order(session):
     Green before and after: the index's lists keep the universe's order.
     """
     print_section("MF-SEC9g guard: exact ISIN and ticker hits in display-name order")
-    now = datetime(2026, 1, 1)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
     rows = [
         ("Zulu twin isin", "TW0000000009", None, None),
         ("Kilo twin isin", "TW0000000009", None, None),
@@ -840,7 +840,7 @@ async def test_guard_bulk_exact_hits_keep_the_universe_order(session):
     assert ids_by_name["Zulu twin isin"] < ids_by_name["Alpha twin isin"], "ids against the display names' order"
 
     by_isin, by_ticker = ("NOSYM-TW9", "TW0000000009", None), ("twtk9", None, None)
-    bulk = await brim_provider.search_asset_candidates_bulk(session, [by_isin, by_ticker])
+    bulk = await candidates.search_asset_candidates_bulk(session, [by_isin, by_ticker])
 
     exact, high, medium = BRIMMatchConfidence.EXACT, BRIMMatchConfidence.HIGH, BRIMMatchConfidence.MEDIUM
     expected = {
@@ -849,7 +849,7 @@ async def test_guard_bulk_exact_hits_keep_the_universe_order(session):
     }
     for triple, answer in expected.items():
         assert _shape(bulk[triple]) == answer, f"{triple}: bulk {_shape(bulk[triple])}, expected {answer}"
-        assert _shape(await brim_provider.search_asset_candidates(session, *triple)) == answer, f"{triple}: the per-asset search agrees"
+        assert _shape(await candidates.search_asset_candidates(session, *triple)) == answer, f"{triple}: the per-asset search agrees"
     print_success("three primaries, one alternate, two tickers: display-name order in both paths")
 
 

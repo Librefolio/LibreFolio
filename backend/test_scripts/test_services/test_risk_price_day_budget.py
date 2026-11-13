@@ -46,7 +46,9 @@ from backend.app.db.base import SQLModel  # imports every model, and backend.app
 from backend.app.db.models import Asset, AssetType, FxRate, PriceHistory
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import FAPriceQueryItem
-from backend.app.schemas.risk import RiskErrorCode, RiskQueryRequest, RiskQueryResponse, RiskResultStatus
+from backend.app.schemas.risk.results import RiskQueryResponse
+from backend.app.schemas.risk.scope import RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskResultStatus
 from backend.app.services.assets import price_query
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.market_series import prepare_asset_series_set

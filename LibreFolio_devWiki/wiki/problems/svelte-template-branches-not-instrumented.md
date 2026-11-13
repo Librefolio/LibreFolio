@@ -82,7 +82,7 @@ Until 2026-10-13 this section read «Accepted, not fixed»; the backlog's C-72 f
 
 | Role | Path |
 |------|------|
-| Real case | `frontend/src/lib/components/assets/ProviderAssignmentSection.svelte` (~402) |
+| Real case | `frontend/src/lib/features/assets/ProviderAssignmentSection.svelte` (~402) |
 | Coverage merge (istanbul) | `frontend/scripts/js-coverage-report.js` |
 | Build instrumentation | `frontend/vite.config.ts` — `vite-plugin-istanbul`, gated on `COVERAGE_INSTRUMENT=1` |
 | Vitest coverage provider | `frontend/vitest.config.ts` — `provider: 'istanbul'` (V8 reports an **empty branch map** for a Svelte template; that is the whole reason for this page) |

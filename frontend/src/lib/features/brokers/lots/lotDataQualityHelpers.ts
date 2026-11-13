@@ -24,6 +24,7 @@
 
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 import {resolveBrokerName} from './lotChartShared';
+import {STALE_FX_ACTION} from '$lib/features/dashboard/staleFxIssue';
 
 /** The three severities a data-quality issue can carry. */
 export type IssueSeverity = 'error' | 'warning' | 'info';
@@ -35,31 +36,41 @@ export interface LotChip {
 }
 
 /** One message line of a group: its catalogue key and the params it is formatted with. */
-export interface IssueMessage {
+export interface IssueMessage<I extends DataQualityIssueLike = DataQualityIssueLike> {
     /** Unique within its group and stable for the same issues: the banner's `{#each}` key. */
     key: string;
     messageKey: string;
     params: Record<string, string | number | boolean | null | undefined>;
+    /** The issue whose action this line offers (project 69, L4): a line of its own, never the lots' line. */
+    action?: I;
 }
+
+/**
+ * The actions the lots banner offers (project 69, L4): the Dashboard's pair actions, «add the pair» and «sync the pair»,
+ * named by the developer, and since L4b the sync of the old-rate row (`STALE_FX_ACTION`, a pair sync too). Another
+ * action an issue carries draws no control here: `navigate_asset` would open the asset the panel is already on.
+ */
+export const LOT_BANNER_ACTIONS: ReadonlySet<string> = new Set(['add_fx_pair', 'sync_fx_pair', STALE_FX_ACTION]);
 
 /**
  * One issue category after grouping: its message lines and the lots it touches. The lines are, in first-occurrence
  * order, one for the code's issues on a lot (the first one's params; the lots are the chips) and one per distinct issue
  * without a lot (J-53). Never empty.
  */
-export interface IssueGroup {
+export interface IssueGroup<I extends DataQualityIssueLike = DataQualityIssueLike> {
     code: string;
     severity: IssueSeverity;
-    messages: IssueMessage[];
+    messages: IssueMessage<I>[];
     lots: LotChip[];
 }
 
 /** The structural subset of a data-quality issue this module reads. */
-interface DataQualityIssueLike {
+export interface DataQualityIssueLike {
     code: string;
     severity: IssueSeverity;
     message_i18n_key: string;
     message_params?: Record<string, string | number | boolean | null | undefined>;
+    cta_action?: string | null;
 }
 
 /** Sort rank per severity; errors first, info last. Exhaustive over IssueSeverity. */
@@ -98,8 +109,8 @@ export function groupedSeverity(errorCount: number, warningCount: number): Issue
  *
  * `labelForDate(iso)` supplies the localized base label for a lot's opening date.
  */
-export function buildIssueGroups(issues: readonly DataQualityIssueLike[], lotDates: ReadonlyMap<number, string>, labelForDate: (iso: string) => string): IssueGroup[] {
-    const byCode = new Map<string, {code: string; severity: IssueSeverity; messages: IssueMessage[]; lotIds: number[]; hasLotLine: boolean; lotlessSeen: Set<string>}>();
+export function buildIssueGroups<I extends DataQualityIssueLike>(issues: readonly I[], lotDates: ReadonlyMap<number, string>, labelForDate: (iso: string) => string): IssueGroup<I>[] {
+    const byCode = new Map<string, {code: string; severity: IssueSeverity; messages: IssueMessage<I>[]; lotIds: number[]; hasLotLine: boolean; lotlessSeen: Set<string>}>();
     for (const issue of issues) {
         let group = byCode.get(issue.code);
         if (!group) {
@@ -119,10 +130,12 @@ export function buildIssueGroups(issues: readonly DataQualityIssueLike[], lotDat
         const identity = messageIdentity(issue.message_i18n_key, params);
         if (group.lotlessSeen.has(identity)) continue;
         group.lotlessSeen.add(identity);
-        group.messages.push({key: `${group.code}:${group.messages.length}`, messageKey: issue.message_i18n_key, params});
+        // An issue without a lot has its own line: the action it offers hangs there, on the issue it fixes (L4).
+        const action = issue.cta_action && LOT_BANNER_ACTIONS.has(issue.cta_action) ? issue : undefined;
+        group.messages.push({key: `${group.code}:${group.messages.length}`, messageKey: issue.message_i18n_key, params, ...(action ? {action} : {})});
     }
 
-    const result: IssueGroup[] = [];
+    const result: IssueGroup<I>[] = [];
     for (const group of byCode.values()) {
         // Every id here passed `lotDates.has(lotId)` above, so the `?? ''` fallback is a
         // provably-unreachable guard (its right arm cannot execute) — kept for type-safety.

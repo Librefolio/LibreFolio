@@ -294,7 +294,7 @@ def services_ai_export_performance_steps(verbose: bool = False, test_names: list
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """Test registry dei provider (asset & fx)."""
     print_section("Services: Provider Registry")
-    print_info("Testing: backend/app/services/provider_registry.py")
+    print_info("Testing: backend/app/services/platform/provider_registry.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry.py", test_names)
     return run_command(cmd, "Provider registry tests", verbose=verbose)
 
@@ -757,6 +757,16 @@ def services_owner_email_change(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Instance owner email change tests", verbose=verbose)
 
 
+def services_email_change(verbose: bool = False, test_names: list = None) -> bool:
+    """Test project 71, block 2: the change of address a user asks for from Profile."""
+    print_section("Services: Profile Email Change (project 71)")
+    print_info("Testing: services/accounts/email_change.py, user_service.py (revoke_pending_email_change, email_refusal, move_email), api/v1/auth.py change_password")
+    print_info("Tests: the revocations and the helpers; the request, resend, cancel, limits, the click with the account's session (D10), two clicks, refusals at the click, link_flow, pending_ids, the logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_change.py", test_names)
+    return run_command(cmd, "Profile email change tests", verbose=verbose)
+
+
 def services_owner_assignment(verbose: bool = False, test_names: list = None) -> bool:
     """Test A5-2: a restore on a managed instance gives the instance to the owner the administrator chose."""
     print_section("Services: Owner Assignment after a Restore (A5-2)")
@@ -1119,7 +1129,7 @@ def services_brim_parse_error(verbose: bool = False, test_names: list = None) ->
 def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> bool:
     """Test parse resilience when the file is renamed underfoot."""
     print_section("Services: BRIM Parse Race")
-    print_info("Testing: backend/app/services/brim/brim_provider.py (uploaded → parsed rename race)")
+    print_info("Testing: backend/app/services/brim/storage.py (uploaded → parsed rename race)")
     print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata, re-detection, the per-broker metadata lock (no link followed, created 0o600)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
@@ -1129,7 +1139,7 @@ def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> 
 def services_brim_parse_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the BRIM parse hook of the plugin settings: the parent resolves, the child binds, a secret never leaves."""
     print_section("Services: BRIM Parse Settings")
-    print_info("Testing: backend/app/services/brim/brim_parse_pool.py (parse_file_offloaded, user_id), brim_provider.parse_file (settings), plugin_settings/runtime.py (bound_settings_for)")
+    print_info("Testing: backend/app/services/brim/brim_parse_pool.py (parse_file_offloaded, user_id), parsing.parse_file (settings), plugin_settings/runtime.py (bound_settings_for)")
     print_info("Tests: no field = parsed exactly as before, fields = BoundSettings handed to the child, errors and logs masked, the endpoint passes the user, pickle round-trip")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_settings.py", test_names)
@@ -1139,7 +1149,7 @@ def services_brim_parse_settings(verbose: bool = False, test_names: list = None)
 def services_brim_parse_failure_detail(verbose: bool = False, test_names: list = None) -> bool:
     """Test the 400 of a failed BRIM parse: an object the wizard translates, not an English sentence (W5-5, C-70b)."""
     print_section("Services: BRIM Parse Failure Detail")
-    print_info("Testing: backend/app/api/v1/brokers.py (parse_file), brim_parse_pool.parse_file_offloaded, brim_provider guard")
+    print_info("Testing: backend/app/api/v1/brokers/parse.py (parse_file), brim_parse_pool.parse_file_offloaded, brim_provider guard")
     print_info("Tests: BRIMParseError with/without a code, the guard's coded and silent refusals, unknown plugin stays a string, 404 unchanged")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_failure_detail.py", test_names)
@@ -1149,7 +1159,7 @@ def services_brim_parse_failure_detail(verbose: bool = False, test_names: list =
 def services_brim_parse_error_codes(verbose: bool = False, test_names: list = None) -> bool:
     """Test that every BRIMParseError of a BRIM plugin carries a code the wizard translates (W5-6, E-21)."""
     print_section("Services: BRIM Parse Error Codes")
-    print_info("Testing: backend/app/services/brim_providers/** (static ast scan), frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json")
+    print_info("Testing: backend/app/services/brim_providers/** (static ast scan), frontend/src/lib/features/transactions/import/i18n/{en,it,fr,es}.json")
     print_info("Tests: every raise coded, not swallowed by a broad except, text in the four catalogues, placeholders agree, generic CSV and DEGIRO codes")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_error_codes.py", test_names)
@@ -1169,7 +1179,7 @@ def services_brim_field_contract(verbose: bool = False, test_names: list = None)
 def services_brim_file_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test the wiring of a BRIM plugin's settings: the value reaches the pool worker, the fingerprint is stored, a changed setting makes a parse stale."""
     print_section("Services: BRIM File Settings")
-    print_info("Testing: brim_parse_pool.parse_file_offloaded (bound), brim_provider.save_parse_result (settings_fingerprint), services/brim/brim_file_settings.py (apply_settings_staleness)")
+    print_info("Testing: brim_parse_pool.parse_file_offloaded (bound), storage.save_parse_result (settings_fingerprint), services/brim/brim_file_settings.py (apply_settings_staleness)")
     print_info("Tests: the value reaches the subprocess, the fingerprint is stored and never served, stale by the user's own value")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_file_settings.py", test_names)
@@ -1215,7 +1225,7 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
 def services_brim_report_sets(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM report-set schemas, plugin-contract defaults and combined-file storage."""
     print_section("Services: BRIM Report Sets")
-    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim/brim_provider.py (report roles, truth points, combined files)")
+    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim/brim_provider.py, combined_files.py (report roles, truth points, combined files)")
     print_info("Tests: schemas, BRIMProvider set defaults, two-role fake plugin, batch_id, combined-file write/save/reuse/stale/delete/list")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_sets.py", test_names)
@@ -1266,7 +1276,7 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
     """Test ROI, FIFO, and PortfolioService pure-math utilities."""
     print_section("Services: ROI / FIFO / Portfolio Utils")
     print_info("Testing: backend/app/services/financial_math/returns.py")
-    print_info("Testing: backend/app/services/portfolio_service.py (compute_wac_iterative, get_report)")
+    print_info("Testing: backend/app/services/portfolio/portfolio_service.py (compute_wac_iterative, get_report)")
     print_info("Tests: TWRR/MWRR/SimpleROI + series, FIFO lots (FifoLotEngine), price marks, WAC")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/", test_names)
@@ -1291,6 +1301,16 @@ def services_split_adjustment_ledger(verbose: bool = False, test_names: list = N
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_split_adjustment_ledger.py", test_names)
     return run_command(cmd, "Split adjustment ledger tests", verbose=verbose)
+
+
+def services_lifo_lot_engine(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the lot engine replayed in FIFO or in LIFO (project 69, lot L1)."""
+    print_section("Services: Lot Engine in LIFO (project 69, L1)")
+    print_info("Testing: backend/app/services/financial_math/fifo/engine.py (matching_method, _broker_fragments, _event_sort_key)")
+    print_info("Tests: the most recent lot first for sales, outgoing adjustments, short covers and transfers; inflows before outflows within a day; D10; the same lots and the same closed total in both methods")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_lifo_lot_engine.py", test_names)
+    return run_command(cmd, "Lot engine LIFO tests", verbose=verbose)
 
 
 def services_dust_threshold(verbose: bool = False, test_names: list = None) -> bool:
@@ -1333,7 +1353,7 @@ def services_transfer_cost_estimate(verbose: bool = False, test_names: list = No
 def services_engine_shared_run(verbose: bool = False, test_names: list = None) -> bool:
     """Test that the Portfolio page's report, Performance table, positions chart and BUY funding share one engine run (FB-14)."""
     print_section("Services: Engine Shared Run (FB-14)")
-    print_info("Testing: backend/app/services/portfolio_service.py (_engine_run: get_report, get_positions_contribution, get_positions_series, get_acquisition_funding_history)")
+    print_info("Testing: backend/app/services/portfolio/portfolio_service.py (_engine_run: get_report, get_positions_contribution, get_positions_series, get_acquisition_funding_history)")
     print_info("Tests: one build for the report then the series, for both concurrent (single-flight), none for the standalone contribution and funding after the report; every output equal to the old per-caller flags' (PortfolioService on a private SQLite file)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_engine_shared_run.py", test_names)
@@ -1343,7 +1363,7 @@ def services_engine_shared_run(verbose: bool = False, test_names: list = None) -
 def services_ownership_share_option(verbose: bool = False, test_names: list = None) -> bool:
     """Test the report and the positions series with the owner's share ignored, apply_ownership_share (MF6-3, D4)."""
     print_section("Services: Ownership Share Option (MF6-3)")
-    print_info("Testing: backend/app/services/portfolio_service.py (get_report, get_positions_series, _engine_run, the L2 key) and financial_math/portfolio/engine.py (calculate: broker_shares, the blob key)")
+    print_info("Testing: backend/app/services/portfolio/portfolio_service.py (get_report, get_positions_series, _engine_run, the L2 key) and financial_math/portfolio/engine.py (calculate: broker_shares, the blob key)")
     print_info(
         "Tests: apply_ownership_share=False equals the default for an owner at 100 %, an editor, a viewer; equals the editor's view for an owner at 30 %, 0 %, and 30 %/60 % with transfers (no share mismatch); caches never swap the two answers; the risk scope of one broker is share-invariant by default, whole with the option, stress amounts included (PortfolioService on a private SQLite file)"
     )
@@ -1355,7 +1375,7 @@ def services_ownership_share_option(verbose: bool = False, test_names: list = No
 def services_closed_by(verbose: bool = False, test_names: list = None) -> bool:
     """Test how a closed position closed: AssetPeriodContribution.closed_by and closed_to_broker_id (MF-CB)."""
     print_section("Services: Closed By (MF-CB)")
-    print_info("Testing: backend/app/services/portfolio_service.py (get_positions_contribution, get_report) and backend/app/schemas/portfolio.py (AssetPeriodContribution)")
+    print_info("Testing: backend/app/services/portfolio/portfolio_service.py (get_positions_contribution, get_report) and backend/app/schemas/portfolio.py (AssetPeriodContribution)")
     print_info(
         "Tests: a fully sold row says SELL, TRANSFER (with the receiving broker when the user has access to it) or ADJUSTMENT, from the move of its last close; two exits, the later; same-day exits, the later id; another user's broker or an orphan names no broker; open and income-only rows say nothing; a row closed before the period says how; no figure changes (PortfolioService on a private SQLite file)"
     )
@@ -1400,7 +1420,7 @@ def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) 
     """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
     print_section("Services: Bulk Reads Chunked (MF-SEC9a, X-R45 reverted, X-R45b)")
     print_info(
-        "Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows), services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes), services/fx/conversion.py (convert_bulk), services/fx/period_changes.py (_first_rate_days_inside), schemas/portfolio.py (PortfolioPlannerSourceIssueCode), schemas/pac_allocator/base.py (PlannerIssueCode)"
+        "Testing: services/brim/candidates.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows), services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes), services/fx/conversion.py (convert_bulk), services/fx/period_changes.py (_first_rate_days_inside), schemas/portfolio.py (PortfolioPlannerSourceIssueCode), schemas/pac_allocator/base.py (PlannerIssueCode)"
     )
     print_info(
         "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard; X-R45 reverted: the planner's latest saved FX row and the WAC row of its exact date are read as stored (a legacy 0, inf or 1E+14); X-R45b: a latest saved rate of 0 or inf falls back to the previous valid one with one allocation.saved_fx_skipped warning (pair, skipped_date, used_date), over a run of two too; no valid rate before → the latest row's quote with no rate and allocation.saved_fx_invalid; 1E+14 quoted as read back; the code a source issue code, not a tool one; guards: the latest usable rate wins, convert_bulk and _first_rate_days_inside still skip unusable rates"
@@ -1501,6 +1521,15 @@ def services_asset_event_store(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Asset Event Store tests", verbose=verbose)
 
 
+def services_asset_type_rules(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the asset type rules: the family of a type and the INDEX rule (lane 65, lot B1)."""
+    print_section("Services: Asset Type Rules")
+    print_info("Testing: backend/app/services/assets/type_rules.py")
+    print_info("Tests: every AssetType has a family, ETF_*/CROWDFUND_* roll up, family change, INDEX with and without transactions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_type_rules.py", test_names)
+    return run_command(cmd, "Asset type rules tests", verbose=verbose)
+
+
 def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
     """Run the C-97a digit limits: manual prices and events refused beyond them, provider prices truncated."""
     print_section("Services: Asset Digit Limits")
@@ -1522,7 +1551,7 @@ def services_current_price_storable(verbose: bool = False, test_names: list = No
 def services_test_only_providers(verbose: bool = False, test_names: list = None) -> bool:
     """Run X-R44: outside test mode a test-only provider (mockprov, MOCKFX) is not served by its registry."""
     print_section("Services: Test-Only Providers")
-    print_info("Testing: backend/app/services/provider_registry.py (get_plugin, list_plugin_codes, list_providers), assets/core.configured_provider, fx/runtime, schemas/provider.py")
+    print_info("Testing: backend/app/services/platform/provider_registry.py (get_plugin, list_plugin_codes, list_providers), assets/core.configured_provider, fx/runtime, schemas/provider.py")
     print_info("Tests: outside test mode mockprov/MOCKFX found by no lookup or list and refused as an unknown provider; in test mode, and for real providers or families without the flag, nothing changes")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_test_only_providers.py", test_names)
     return run_command(cmd, "Test-only provider tests", verbose=verbose)
@@ -2292,7 +2321,7 @@ def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
 def services_provider_registry_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider registry helper branches not covered by contract tests."""
     print_section("Services: Provider Registry Helpers")
-    print_info("Testing: backend/app/services/provider_registry.py")
+    print_info("Testing: backend/app/services/platform/provider_registry.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry_misc.py", test_names)
     return run_command(cmd, "Provider registry helper tests", verbose=verbose)
 
@@ -2906,6 +2935,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "email-change",
+        services_email_change,
+        name="Profile Email Change (project 71)",
+        desc="A change of address asked from Profile waits for a link the account issued for itself (created_by_user_id): a password change (route), a password reset (link or command line) and a deactivation (administrator, user limit, command line) revoke it, an activation does not, and the host's link of the same account stays valid; email_refusal and move_email extracted from update_profile; email_change.py: a request issues one 24-hour link and changes nothing, confirmation to the new address and notice to the old, a refused send leaves nothing waiting, limits (5 an hour per account, resend after 60 s, 3 an hour per new mailbox, the instance budget) refuse before any write, a taken address refused, resend revokes the old link only after its email, cancel; the click: a dead link says why to anyone, a live one needs the account's session (D10) and without it nothing is written, the address moves verified and the sessions end, of two clicks one wins, a condition failed at the click revokes the link; link_flow, pending_ids, verification_mode; the owner flow untouched; no address or token in the log",
+        # PURE: every database is a private file under tmp_path built with create_all; the change-password route is called
+        # in this process on that file; profile and variables set with monkeypatch. No lane DB, no server, no email.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "owner-assignment",
         services_owner_assignment,
         name="Owner Assignment after a Restore (A5-2)",
@@ -3298,6 +3337,18 @@ Note: No backend server required.
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price marks")
     add_test(
         cat,
+        "lifo-lot-engine",
+        services_lifo_lot_engine,
+        name="Lot Engine LIFO",
+        desc="Project 69 L1: the lot engine's matching_method (default FIFO); LIFO takes the most recent lot first (opening date, then id) for sales, outgoing adjustments, short covers and transfer departures; within a day inflows before outflows in both methods (D4, D4b); D10 with every broker and with one; the same lots and the same total realized at a closed position in both methods",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: run_fifo_lot_engine and read_transfers_at_scope_boundary on hand-written rows; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "orphan-transfer-numbers",
         services_orphan_transfer_numbers,
         name="Orphan Transfer Numbers",
@@ -3528,6 +3579,15 @@ Note: No backend server required.
         # every event and transaction written against them are visible to all concurrent tests.
         # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
         isolation="write-global",
+    )
+    add_test(
+        cat,
+        "asset-type-rules",
+        services_asset_type_rules,
+        name="Asset Type Rules",
+        desc="Lane 65 B1: asset_type_family (every AssetType member has a family; ETF_* -> ETF, CROWDFUND_* -> CROWDFUND, any other its own), family_changed, classify_type_change (ETF -> ETF_STOCK ok; CROWDFUND_REAL_ESTATE -> ETF_STOCK and STOCK -> BOND warn; ETF -> INDEX warns without transactions and is blocked with them, with no warning on top; an INDEX already holding transactions is left alone), only INDEX forbids transactions",
+        # PURE: functions over the enum, no session, no server.
+        isolation="pure",
     )
     add_test(
         cat,
@@ -4310,7 +4370,7 @@ Note: No backend server required.
         services_tools_lifecycle,
         name="Tool Lifecycle",
         desc="Owned spawn workers, quotas, ready/ACK, cancellation, PID identity and full-tree cleanup",
-        exclusive_because=("owns native POSIX process groups and exercises forceful teardown and executor quarantine; " "requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"),
+        exclusive_because=("owns native POSIX process groups and exercises forceful teardown and executor quarantine; requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"),
     )
     add_test(
         cat,
@@ -4334,7 +4394,7 @@ Note: No backend server required.
         services_tool_settings_lifecycle,
         name="Tool Settings Lifecycle",
         desc="CP12 X5-4b with real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs",
-        exclusive_because=("starts real multiprocessing spawn workers that own native POSIX process sessions and the executor's process-wide pool, " "like tools-lifecycle; run it in the same leased resource slot, never beside other process-owning units"),
+        exclusive_because=("starts real multiprocessing spawn workers that own native POSIX process sessions and the executor's process-wide pool, like tools-lifecycle; run it in the same leased resource slot, never beside other process-owning units"),
     )
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

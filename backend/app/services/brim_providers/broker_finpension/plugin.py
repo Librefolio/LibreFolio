@@ -44,7 +44,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -118,7 +118,7 @@ class FinpensionBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import transactions from Finpension CSV export. " "Supports Swiss pension fund investments."
+        return "Import transactions from Finpension CSV export. Supports Swiss pension fund investments."
 
     @property
     def supported_extensions(self) -> List[str]:

@@ -266,6 +266,12 @@ tenuti dal frontend, che si perderebbero a una ricarica o con un sync notturno.
 Prima di farlo va verificato che serva davvero (developer, 19/10: «prima facciamolo funzionare, magari scopriamo che
 non serve e i primi 3 sono sufficienti»). Si lega al task notturno: potrebbero diventare la stessa cosa.
 
+## 📸 Guide d'import — schermate dei portali dei broker (C-43, parcheggiata l'11/11/2026)
+
+Le pagine d'import di DEGIRO, Schwab, Revolut, Trading 212, eToro, Finpension, Freetrade e Coinbase hanno un segnaposto
+invisibile al posto della schermata del portale. Si fanno quando un utente manda il materiale, come per Crédit Agricole,
+Fineco e Trade Republic. Danske Bank ha le schermate di LibreFolio ma non quelle del portale: in attesa dell'utente.
+
 ## 📥 BRIM — riconoscere all'import una posizione chiusa (Directa, CSV generico)
 
 **Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA — da approfondire se ne vale la pena · **Priorità**: Bassa
@@ -364,28 +370,40 @@ Aggiunto: 26/10/26
 ## 🏦 Regime Fiscale — Metodo di Vendita (FIFO, LIFO, PMC, Select ID)
 
 **Data aggiunta**: 20 Febbraio 2026  
-**Status**: 📋 PIANIFICATO  
+**Status**: 🟡 IN PARTE FATTO — FIFO e LIFO nell'analisi dei lotti (1.4, progetto 69); il resto è backlog  
 **Priorità**: Alta (architettura core)
 
 > Tocca il motore dei lotti (`backend/app/services/financial_math/fifo/`): da coordinare con ogni lavoro sul cost basis.
 
-### Contesto
+### Cosa c'è (1.4, progetto 69)
 
-Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere in caso di vendita parziale:
+- L'analisi dei lotti calcola **FIFO e LIFO in una richiesta** (`matching_methods`); il pannello sceglie con un selettore,
+  vista iniziale FIFO, non salvata. La selezione dei lotti resta al cambio di metodo (i lotti sono gli stessi).
+- Coda **per broker**; nel giorno **prima le entrate, poi le uscite**, nei due metodi; con tutti i broker nello scope il
+  lotto trasferito tiene la data d'acquisto, visto da un broker solo nasce all'arrivo.
+- Nessun dato salvato sui lotti, nessuna migrazione. L'AI Export resta FIFO (D7), la finestra di detenzione della
+  Dashboard resta FIFO (D6), la Dashboard realizza sul costo medio.
 
-- **Italia**: Prezzo Medio di Carico (PMC)
-- **USA**: FIFO, LIFO, Select ID (scelta specifica dell'utente)
-- **Altre**: HIFO (Highest In First Out), etc.
+### Contesto (la norma)
 
-### Requisiti
+- **Italia, regime dichiarativo**: **LIFO** — art. 67, comma 1-bis, TUIR; dal 2027 art. 76, comma 2, del nuovo TUIR
+  (d.lgs. 117/2026). Il FIFO non è il metodo di nessun regime italiano.
+- **Italia, regime amministrato**: **costo medio ponderato** — art. 6, comma 4, d.lgs. 461/1997; dal 2027 art. 306,
+  comma 5. Non è un metodo di abbinamento: le linee del costo medio esistono già.
+- **USA**: FIFO, LIFO, Select ID (scelta specifica dell'utente). **Altre**: HIFO (Highest In First Out), etc.
+- Punti incerti (più conti: per conto o sul contribuente; ETF e fondi; cripto) e fonti: pagina di teoria
+  `mkdocs_src/docs/financial-theory/fundamentals/taxation.en.md`, sezione «Italy».
 
-1. **Impostazioni Broker**: Nella zona short/long del broker, selettore per il metodo di vendita supportato (FIFO, LIFO, PMC, Select ID)
-2. **Preferenze Utente**: Impostazioni di default per metodo di vendita
-3. **Impostazioni Admin**: Default globale per nuovi utenti
-4. **Collegamento Transazioni**: Il sell deve essere collegato ai buy tramite `link_transactions_id`:
-   - FIFO/LIFO: collegamento algoritmico
-   - Select ID: scelto dall'utente
-   - PMC: nessun collegamento (calcolo on-the-fly)
+### Ancora da fare
+
+1. **Preferenza dell'utente, impostazione per broker, default dell'admin** (D1: «poi vedremo»): legata a quale metodo
+   è il default.
+2. **Il LIFO nell'AI Export** (D7): legato alla stessa decisione sul default.
+3. **Select ID**: il sell collegato ai buy tramite `link_transactions_id`, scelto dall'utente (vedi le note qui sotto).
+4. **Rinomino** di `fifo/` e delle classi `Fifo*` (D5), in una finestra quieta, senza toccare il codice di errore.
+5. **Una gamba d'arrivo che porti le date d'acquisto** (D10): oggi, visto da un broker solo, il lotto trasferito nasce
+   all'arrivo.
+6. **Una coda LIFO unica su tutti i broker** (D3): solo se la norma la chiede.
 
 ### Note Tecniche
 
@@ -713,6 +731,14 @@ raggiungibile», mai «irraggiungibile». I 110 siti ora loggano: conviene parti
 
 # PAC e strumenti
 
+## 💾 Scenari salvati degli Strumenti (idea del developer, 11/11/2026)
+
+Salvare la configurazione di un piano (PAC, Ribilanciatore) e riprenderla: un bottone alla fine, la scelta all'inizio,
+anche più di uno scenario. Il calcolo resta senza stato: lo scenario è un documento dell'utente che la pagina rimanda per
+intero. Tre strade (file esportato, memoria del browser, tabella sul server) e i punti aperti (dati copiati che
+invecchiano, versione del contratto) in `LibreFolio_developer_journal/Release_2/Phase_2/67_rebalancer/idea-scenari-salvati-REB.md`.
+Non è nel giro della 1.4.
+
 ## 💸 PAC/Rebalancer — Profili Commissionali Avanzati per Broker e Mercato
 
 **Data aggiunta**: 15 Settembre 2026 · **Status**: 📋 FUTURO · **Priorità**: Media
@@ -989,6 +1015,8 @@ Dettagli nel journal, `Release_2/Phase_2/DA-DECIDERE-residui-1.3.md`.
 - **Selettore dell'icona del broker** (C-40).
 - **`SearchSelect` che sceglie la voce sbagliata dopo una ricerca**: sospeso finché non ricapita.
 - **Traduzioni dei plugin montati a runtime** (U-B1): facoltativo, oggi c'è il ripiego in inglese.
+- **Crédit Agricole, ruolo `portfolio`** (W5-7 gradino 7): le verifiche di posizione e liquidità dal file «Andamento
+  Portafoglio». Si fa quando arriva un file d'esempio; il resto del plugin 2.0.0 è nella 1.3.
 - **Immagine d'avvio su iPhone** (K-6): `app.html` non ha `apple-touch-startup-image`; serve un'immagine per formato.
 - **Quadrato nero sull'icona Android** (K-7): prima una prova sul telefono.
 - **I filtri della lista asset persi al ritorno** (K-19): decisione del 06/10, dopo la lista del Rischio.

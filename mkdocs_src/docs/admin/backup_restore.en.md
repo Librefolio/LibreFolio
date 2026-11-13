@@ -2,8 +2,11 @@
 
 A backup is one archive with your whole LibreFolio in it: the database and the files of every user. It is a plain zip or, for a [secure backup](#secure), an `.lfbk` encrypted with a password you choose.
 
+**You make it from the app, in a few clicks, and you restore it from the app too**: no terminal is needed. The command line is there for the cases the app does not cover, such as backups that run on a schedule.
+
 Here you find:
 
+- the [quick start from the app](#quick-start), with the buttons to press;
 - [what the archive holds](#contents) and [what follows](#what-follows);
 - how to [make one](#create), from the app or from the command line, and how to [keep copies off the server](#keep-copies);
 - how to [check it](#check) and how to [restore it](#restore), from the app or from the command line.
@@ -17,6 +20,32 @@ Every option and message of the commands: «Back Up the Instance», in [CLI Admi
 !!! info "📚 This guide is in several pages"
 
     Besides this page: [Backups: Sealed Backups](backup_sealed.md), [Backups: Moving and Troubleshooting](backup_moving.md).
+
+---
+
+## 🖱️ Quick Start: Back Up from the App {: #quick-start }
+
+Backup is an **administrator's** tool: it holds the data of every user, so only administrators see the **Backup** tab. In three steps:
+
+1. Open **Settings**, and in the **Administration** group of the tab bar choose **Backup**.
+2. In **Back up the instance** choose **Clear** (a plain `.zip`) or **Secure** (an `.lfbk` closed with a password of your choice, typed twice), then click **Create backup**.
+3. At **Backup ready**, click **Download**: the file goes to your computer. LibreFolio also keeps a copy on the server, in **Backups on this server**.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="settings" data-name="backup-create" alt="Settings, Administration, Backup tab: the Back up the instance card with the Clear and Secure kinds and the Create backup button" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+The same list of copies kept on the server is in **Files › Backups**, where you **Download** or **Delete** each one:
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="files" data-name="backups" alt="Files, Backups tab: the backups kept on the server with their date, origin, type and size, and the Download and Delete buttons" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+Every detail follows: [which kind to choose](#secure), [where the copies stay](#kept-backups) and [how to restore](#restore), all from the same tab. What to remember now:
+
+- 💽 a copy that stays on the server's disk is not a real backup: download it and keep it elsewhere ([Keep Copies Off the Server](#keep-copies));
+- 🔑 the password of a secure backup cannot be recovered: keep it apart from the file;
+- 🗓️ make one before every update.
 
 ---
 
@@ -86,6 +115,10 @@ LibreFolio keeps working during the backup. One backup runs at a time, whoever s
 3. For a secure backup, type the password in **Password of the backup** and again in **The same password again**. The rules of an account password apply, given by the server: the meter under the first field lists them as you type (*At least 12 characters*, *One uppercase letter*, *One lowercase letter*, *One number*, *One special character*) and shows how strong it is. While the two fields differ, *The two passwords differ.* shows and **Create backup** stays disabled.
 4. Click **Create backup**. The password fields empty at once; the card follows the backup phase by phase (a secure backup ends with *Encrypting with your password*).
 5. At **Backup ready**, click **Download**. The browser saves `librefolio-backup-20261015-121500.zip` (date and time of start, in UTC), or `.lfbk` for a secure backup, which the card marks *Encrypted with your password: keep it safe, LibreFolio cannot recover it.*
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="settings" data-name="backup-ready" alt="The Backup tab at Backup ready: the archive name, size and date, with the Download and Delete from the server buttons" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 Good to know:
 

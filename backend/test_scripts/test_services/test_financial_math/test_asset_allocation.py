@@ -53,7 +53,8 @@ from functools import cache
 from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.portfolio import AllocationHistoryDimensions, AllocationHistoryPoint, AllocationItem, PortfolioSummary
+from backend.app.schemas.portfolio.report import AllocationHistoryDimensions
+from backend.app.schemas.portfolio.summary import AllocationHistoryPoint, AllocationItem, PortfolioSummary
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder

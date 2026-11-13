@@ -155,7 +155,9 @@
     "lineShapeDesc": "Come i grafici uniscono i punti. Vale solo per questo grafico.",
     "lineShapeSegments": "Segmenti",
     "lineShapeSteps": "Gradini",
-    "lineShapeSpline": "Curva morbida"
+    "lineShapeSpline": "Curva morbida",
+    "fxRateNotFound": "Nessun cambio {pair} fino al {date}: sincronizza i cambi per confrontare questi asset",
+    "fxRateNotFoundRange": "Nessun cambio {pair} per {count} giorni, dal {first} al {last}: sincronizza i cambi per confrontare questi asset"
   },
   "measure": {
     "pending": "Inizio: {startDate} ({startValue}) — clicca sul grafico per il punto finale",

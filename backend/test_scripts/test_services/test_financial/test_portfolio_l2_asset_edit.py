@@ -1,7 +1,7 @@
 """
 The portfolio report's Layer-2 cache forgets its answer when an asset's own data is edited.
 
-What it guards. ``PortfolioService.get_report`` (``backend/app/services/portfolio_service.py``) keeps its answer in
+What it guards. ``PortfolioService.get_report`` (``backend/app/services/portfolio/portfolio_service.py``) keeps its answer in
 ``_portfolio_l2_cache`` (30 min TTL) under a key of transaction, price, FX and yield-on-cost fingerprints. The report also
 shows each asset's own data — the allocation slice by asset carries its name, ``icon_url`` and ``asset_type``, a holding
 its ``asset_name`` — and an edit of those changes none of the four: the developer changed an asset's icon, refreshed, and
@@ -40,9 +40,11 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import AssetAllocationItem, PortfolioReportQuery, PortfolioReportResponse
-from backend.app.services import portfolio_service as portfolio_service_module
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AssetAllocationItem
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 D0, D1 = date(2025, 9, 1), date(2025, 9, 3)
@@ -53,7 +55,7 @@ ICON_B = "/static/icons/l2-asset-edit-b.png"
 
 
 def _clear_portfolio_caches() -> None:
-    for cache in (portfolio_service_module._portfolio_l2_cache, portfolio_service_module._wac_cache, portfolio_engine_module._portfolio_blob_cache):
+    for cache in (report_module._portfolio_l2_cache, wac_module._wac_cache, portfolio_engine_module._portfolio_blob_cache):
         cache.clear()
 
 

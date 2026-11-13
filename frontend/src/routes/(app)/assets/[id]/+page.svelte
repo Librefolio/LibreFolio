@@ -21,27 +21,27 @@
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {ChartLine, Pencil, RefreshCw, Ruler, Settings, Shield, X} from 'lucide-svelte';
-    import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
+    import AssetDataEditorSection from '$lib/features/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
-    import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
-    import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
-    import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
-    import AssetModal from '$lib/components/assets/AssetModal.svelte';
-    import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
-    import {fetchSeriesRangeDelta, summaryRangeDelta} from '$lib/components/assets/detail/assetDetailRangeChange';
+    import ChartSignalsSection from '$lib/features/signals/components/ChartSignalsSection.svelte';
+    import type {SignalDataSummary} from '$lib/features/signals/components/ChartSignalsSection.svelte';
+    import MeasurePanel from '$lib/features/signals/components/MeasurePanel.svelte';
+    import AssetModal from '$lib/features/assets/AssetModal.svelte';
+    import AssetPriceSummary from '$lib/features/assets/AssetPriceSummary.svelte';
+    import {fetchSeriesRangeDelta, summaryRangeDelta} from '$lib/features/assets/detail/assetDetailRangeChange';
     import type {RangeDelta} from '$lib/utils/rangeChange';
-    import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';
-    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
-    import AssetDetailSignalsPanel from '$lib/components/assets/detail/AssetDetailSignalsPanel.svelte';
-    import AssetDetailMeasuresSection from '$lib/components/assets/detail/AssetDetailMeasuresSection.svelte';
-    import AssetDetailHeader from '$lib/components/assets/detail/AssetDetailHeader.svelte';
-    import AssetDetailMetadataPanel from '$lib/components/assets/detail/AssetDetailMetadataPanel.svelte';
-    import AssetDetailToolbarActions from '$lib/components/assets/detail/AssetDetailToolbarActions.svelte';
+    import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/features/assets/detail/AssetChartModeToggle.svelte';
+    import AssetCalendarWindowControls from '$lib/features/assets/detail/AssetCalendarWindowControls.svelte';
+    import AssetDetailSignalsPanel from '$lib/features/assets/detail/AssetDetailSignalsPanel.svelte';
+    import AssetDetailMeasuresSection from '$lib/features/assets/detail/AssetDetailMeasuresSection.svelte';
+    import AssetDetailHeader from '$lib/features/assets/detail/AssetDetailHeader.svelte';
+    import AssetDetailMetadataPanel from '$lib/features/assets/detail/AssetDetailMetadataPanel.svelte';
+    import AssetDetailToolbarActions from '$lib/features/assets/detail/AssetDetailToolbarActions.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
@@ -62,7 +62,7 @@
         type SignalDefinition,
         type SignalInstanceResult,
         type SignalProblem,
-    } from '$lib/charts/signals';
+    } from '$lib/features/signals';
     import {DEFAULT_AXIS_SCALE, detailModesForPrimaryView, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, primaryViewForDetailModes, resolveLineShape, setPairSettings, getGlobalLineShape, lineShapeFollowsGlobal, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {LineShape} from '$lib/components/charts/lineShape';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -71,42 +71,43 @@
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
-    import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {ensureFxRangeLoaded, getFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
-    import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
+    import {buildTabUrlFromLocation, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {todayIso} from '$lib/utils/dateOnly';
     import type {AssetDetail, ProviderAssignmentFlat} from '$lib/types';
-    import type {SignalLabelInfo} from '$lib/charts/signalLabel';
-    import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
-    import {buildFxPairComparisonQuery, fxPairComparisonViews} from '$lib/charts/crossTypeCalendar';
-    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, collectConfiguredComparisonFxSlugs, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
-    import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
-    import {renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import type {SignalLabelInfo} from '$lib/components/charts/signalLabel';
+    import {buildOverlaySignalInfoMap} from '$lib/components/charts/signalLabel';
+    import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/features/signals/comparisonSeries';
+    import {buildFxPairComparisonQuery, fxPairComparisonViews} from '$lib/features/signals/crossTypeCalendar';
+    import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, collectConfiguredComparisonFxSlugs, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/features/signals/loadComparisonData';
+    import {buildChartRequestBody, calendarComparisonFingerprint as chartCalendarComparisonFingerprint, calendarDataFingerprint as chartCalendarDataFingerprint, calendarPeerAssetIds, calendarReturnRequests, chartCurrencies, fxPairTargetsOf, heldPointsToChartPoints, priceComparisonLoadFingerprint as chartPriceComparisonLoadFingerprint, priceComparisonRuntimeIsAuthoritative as chartPriceComparisonRuntimeIsAuthoritative} from '$lib/features/assets/detail/assetDetailChartRequest';
+    import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/features/signals/chartPageSignals';
+    import {renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
     import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
     import {percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
-    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
-    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
-    import {assetChartAnswerForCache, assetChartAnswerKey, calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/components/assets/detail/assetDetailPriceQuery';
+    import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/features/signals/calendarReturn';
+    import {assetChartAnswerForCache, assetChartAnswerKey, calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/features/assets/detail/assetDetailPriceQuery';
     import {assetChartAnswers, clearAssetPageAnswers, comparisonSeriesAnswers} from '$lib/stores/signalResultCache';
-    import {mergeChartPointsIncremental} from '$lib/components/assets/detail/assetDetailChartPoints';
-    import {AssetDetailLive} from '$lib/components/assets/detail/assetDetailLive.svelte';
-    import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from '$lib/components/assets/detail/assetDetailFxRequirements';
-    import {displayCurrencyAfterFxPairCreated, fxPairCreateDefaults} from '$lib/components/assets/detail/assetDetailFxPair';
+    import {mergeChartPointsIncremental} from '$lib/features/assets/detail/assetDetailChartPoints';
+    import {AssetDetailLive} from '$lib/features/assets/detail/assetDetailLive.svelte';
+    import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from '$lib/features/assets/detail/assetDetailFxRequirements';
+    import {displayCurrencyAfterFxPairCreated, fxPairCreateDefaults} from '$lib/features/assets/detail/assetDetailFxPair';
     import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
-    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {signalCatalogStore} from '$lib/features/signals/signalCatalogStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {FxPairCreatedDetail, FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
     import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';
@@ -1027,41 +1028,19 @@
     }
 
     function calendarComparisonFingerprint(configs: SignalConfig[]): string {
-        return JSON.stringify(comparisonAssetIds(configs));
+        return chartCalendarComparisonFingerprint(configs, data.assetId);
     }
 
     function calendarDataFingerprint(configs: SignalConfig[], windowDays = calendarWindowDays): string {
-        return JSON.stringify({
-            assetId: data.assetId,
-            start: urlDateStart,
-            end: urlDateEnd,
-            targetCurrency: displayCurrency || assetInfo?.currency || '',
-            windowDays,
-            peers: comparisonAssetIds(configs),
-        });
+        return chartCalendarDataFingerprint(configs, {assetId: data.assetId, urlDateStart, urlDateEnd, displayCurrency, nativeCurrency: assetInfo?.currency ?? '', windowDays});
     }
 
     function priceComparisonLoadFingerprint(configs: SignalConfig[]): string {
-        return JSON.stringify({
-            peers: configs
-                .filter((config) => config.signalType === 'asset-comparison')
-                .map((config) => ({configId: config.id, assetId: Number(config.params.assetId)}))
-                .filter((peer) => Number.isSafeInteger(peer.assetId) && peer.assetId > 0 && peer.assetId !== data.assetId)
-                .sort((left, right) => left.configId.localeCompare(right.configId)),
-            start: comparisonStart,
-            end: dateEnd,
-            targetCurrency: displayCurrency || '',
-        });
+        return chartPriceComparisonLoadFingerprint(configs, {assetId: data.assetId, comparisonStart, dateEnd, displayCurrency});
     }
 
     function priceComparisonRuntimeIsAuthoritative(configs: SignalConfig[]): boolean {
-        return configs
-            .filter((config) => config.signalType === 'asset-comparison')
-            .filter((config) => {
-                const assetId = Number(config.params.assetId);
-                return Number.isSafeInteger(assetId) && assetId > 0 && assetId !== data.assetId;
-            })
-            .every((config) => Object.hasOwn(config.params, '_conversionFailed') && comparisonEvents.has(Number(config.params.assetId)));
+        return chartPriceComparisonRuntimeIsAuthoritative(configs, data.assetId, (peerId) => comparisonEvents.has(peerId));
     }
 
     async function retryBackendSignals() {
@@ -1310,11 +1289,6 @@
      * `silent`: the reload after a price catch-up (Y5-1) — the chart and the signals on screen stay as they are, and nothing
      * says the page is busy (no `loading`, no calendar `loading`, no `signalsLoading`): it is not a load the user asked for.
      */
-    /** The `fx-pair` signals of `configs` as the FX page reads them: the pair, and whether the signal shows it inverted. */
-    function fxPairTargetsOf(configs: readonly SignalConfig[]): Array<{configId: string; pairSlug: string; inverted: boolean}> {
-        return configs.filter((config) => config.signalType === 'fx-pair' && config.params.pairSlug).map((config) => ({configId: config.id, pairSlug: String(config.params.pairSlug), inverted: Boolean(config.params._inverted)}));
-    }
-
     /**
      * FB-11: the rolling return of the FX pairs the `fx-pair` signals compare, asked of `POST /fx/currencies/convert` over the
      * period on screen and the window (`buildFxPairComparisonQuery`). Independent of the asset's own request: it never throws
@@ -1360,8 +1334,7 @@
         const requestedEnd = dateEnd;
         const requestedDisplayCurrency = displayCurrency;
         const requestedNativeCurrency = assetInfo?.currency ?? '';
-        const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
-        const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
+        const {effectiveCurrency, targetCurrency} = chartCurrencies(displayCurrency, assetInfo?.currency ?? '');
         const wantsCalendarReturn = primaryMode === 'calendar-return';
         if (wantsCalendarReturn) void loadCalendarPairComparisons(requestedSignalConfigs);
         const backendSignalConfigs = wantsCalendarReturn ? [] : requestedSignalConfigs;
@@ -1376,42 +1349,12 @@
         const requestedCalendarFingerprint = wantsCalendarReturn ? calendarDataFingerprint(requestedSignalConfigs, requestedCalendarWindow) : null;
         const retainCurrentCalendarDiagnostics = requestedCalendarFingerprint !== null && calendarSnapshotFingerprint === requestedCalendarFingerprint;
         const calendarRequestIsCurrent = () => requestedCalendarFingerprint !== null && dataRequestIsCurrent() && primaryMode === 'calendar-return' && calendarDataFingerprint(signals, calendarWindowDays) === requestedCalendarFingerprint;
-        const calendarRequests = wantsCalendarReturn
-            ? [
-                  {
-                      instance_id: CALENDAR_RETURN_INSTANCE_ID,
-                      signal_code: CALENDAR_RETURN_SIGNAL_CODE,
-                      params: {window_days: requestedCalendarWindow},
-                  },
-              ]
-            : [];
-        const calendarComparisonAssetIds = wantsCalendarReturn
-            ? [
-                  ...new Set(
-                      requestedSignalConfigs
-                          .filter((config) => config.signalType === 'asset-comparison')
-                          .map((config) => Number(config.params.assetId))
-                          .filter((assetId) => assetId > 0 && assetId !== requestedAssetId),
-                  ),
-              ]
-            : [];
+        const calendarRequests = wantsCalendarReturn ? calendarReturnRequests(requestedCalendarWindow) : [];
+        const calendarComparisonAssetIds = wantsCalendarReturn ? calendarPeerAssetIds(requestedSignalConfigs, requestedAssetId) : [];
         let pricesFromCache = false;
         // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the
         // prices are asked in background, with no loading state.
         let staleShown = false;
-        const chartPointsOf = (held: ReturnType<ReturnType<typeof getAssetPriceStore>['getRange']>['data']) =>
-            held.map((p) => ({
-                date: p.date,
-                close: p.close,
-                open: p.open,
-                high: p.high,
-                low: p.low,
-                volume: p.volume,
-                currency: p.currency,
-                original_close: p.originalClose,
-                backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
-            }));
-
         // FB-7b: «All» still pending, its first day unknown: the series is asked from the sentinel `min` (the server answers the asset's
         // first stored day, whatever its year) and never from a made-up start; the store cannot answer a start it does not know
         const askedFromMin = isMaxPending;
@@ -1426,7 +1369,7 @@
                     staleShown = true;
                     // A silent reload of the range already on screen leaves the chart alone; a return to the page, or another range, shows them.
                     if (!silent || chartData.length === 0) {
-                        chartData = chartPointsOf(held);
+                        chartData = heldPointsToChartPoints(held);
                         error = null;
                     }
                 }
@@ -1434,7 +1377,7 @@
             if (gaps.length === 0) {
                 // Cache hit — update chart data without loading spinner
                 const cached = store.getRange(dateStart, dateEnd).data;
-                chartData = chartPointsOf(cached);
+                chartData = heldPointsToChartPoints(cached);
                 if (chartData.length === 0 && !error) {
                     error = catalogueError('assetDetail.noData');
                 } else {
@@ -1451,25 +1394,18 @@
             }
         }
 
-        const requestBody: AssetPriceBulkQueryBody = [
-            {
-                asset_id: data.assetId,
-                date_range: {start: askedFromMin ? ('min' as const) : dateStart, end: dateEnd},
-                include_price: !pricesFromCache,
-                include_events: true,
-                target_currency: targetCurrency,
-                signals: [...requestPlan.requests, ...calendarRequests],
-            },
-            ...calendarComparisonAssetIds.map((assetId) => ({
-                asset_id: assetId,
-                // every item of the bulk shares the main one's range: the peer's own first day, when the main one asks from `min`
-                date_range: {start: askedFromMin ? ('min' as const) : dateStart, end: dateEnd},
-                include_price: false,
-                include_events: true,
-                target_currency: effectiveCurrency || undefined,
-                signals: calendarRequests,
-            })),
-        ];
+        const requestBody: AssetPriceBulkQueryBody = buildChartRequestBody({
+            assetId: data.assetId,
+            askedFromMin,
+            dateStart,
+            dateEnd,
+            includePrice: !pricesFromCache,
+            targetCurrency,
+            effectiveCurrency,
+            signals: [...requestPlan.requests, ...calendarRequests],
+            calendarRequests,
+            peerAssetIds: calendarComparisonAssetIds,
+        }) as AssetPriceBulkQueryBody;
         // N64: the same request, answered over the same price data (the generations of this asset's store and of each
         // peer's, read now), comes back from the signal cache with its events: no request, no spinner, no token (Q1).
         // Any invalidation of those stores — Refresh, a sync, a save, a catch-up marking them stale (Q2) — misses.
@@ -2418,7 +2354,7 @@
     function handleAssetDetailTabChange(tabId: string): void {
         if (!ASSET_DETAIL_TAB_IDS.includes(tabId as AssetDetailTabId)) return;
         activeTab = tabId as AssetDetailTabId;
-        void goto(buildTabUrl($page.url, tabId === 'overview' ? null : tabId), {replaceState: true, noScroll: true});
+        void goto(buildTabUrlFromLocation(window.location.href, tabId === 'overview' ? null : tabId), {replaceState: true, noScroll: true});
     }
 
     async function openSignalConfiguration(): Promise<void> {

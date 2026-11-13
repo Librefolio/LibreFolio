@@ -10,28 +10,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset
-from backend.app.schemas.portfolio import (
-    DataQualityExclusionReason,
-    DataQualityIssue,
-    DataQualityReport,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
-)
-from backend.app.schemas.risk import (
-    RiskAnalyticResult,
-    RiskReturnBasis,
-    RiskScopeKind,
-    RiskWarning,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason, DataQualityIssue, DataQualityReport, IssueCode, IssueDomain, IssueSeverity
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskWarning
+from backend.app.schemas.risk.vocabulary import RiskReturnBasis, RiskScopeKind
 from backend.app.services.financial_math.portfolio.data_quality import load_configured_fx_pair_sets, normalize_fx_pair_slug
-from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk.base import (
     RiskExecutionContext,
     RiskSeriesInputs,
 )
 from backend.app.services.risk.plan import AnalyticPlan, is_historical_replay_plan, is_hypothetical_plan
+from backend.app.utils.day_spans import merged_spans
 
 _PRICE_EXCLUSION_REASONS = frozenset({DataQualityExclusionReason.MISSING_PRICE.value, "no_price_source"})
 

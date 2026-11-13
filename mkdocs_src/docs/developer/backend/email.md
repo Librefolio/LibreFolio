@@ -1,8 +1,9 @@
 # 📧 Email Service (SMTP)
 
 The email service sends LibreFolio's transactional emails through an SMTP server that the administrator names in
-environment variables. It can write six kinds — a password-reset link, an invitation, an address to confirm, the
-activation link of the first administrator, a test message, and the notice that an account's email address changed.
+environment variables. It can write eight kinds — a password-reset link, an invitation, an address to confirm, the
+activation link of the first administrator, a test message, the notice that an account's email address changed, the
+confirmation of the owner's new address, and the two emails of a change asked from the Profile.
 The service lives in `backend/app/services/email/`, its configuration in `backend/app/config/email.py`, and its
 hourly budget counts with the sliding-window limiter of `backend/app/utils/runtime/rate_window.py`. Its routes
 (`backend/app/api/v1/email.py`) give administrators the state of email, a test email and the emailing of the links
@@ -52,14 +53,14 @@ Email is optional (feature F04 of the release 1.3 plan). Four rules shape the wh
 | `backend/app/config/email.py` | The `LIBREFOLIO_SMTP_*` accessors and `EmailConfigError` |
 | `services/email/smtp.py` | The transport: `deliver()`, `SmtpServer`, `SmtpErrorCode`, `SmtpDeliveryError` |
 | `services/email/delivery.py` | `email_config_state()`, the hourly budget (`INSTANCE_BUDGET`, `budget_status()`), `send_email()`, the `EmailError` family, and `mailbox_budget_key()`, the key of the per-mailbox limits ([The Key of a Mailbox](#mailbox-key)) |
-| `services/email/messages.py` and `templates/` | `EmailKind`, `email_language()`, the six builders and `compose_message()`; the texts in four languages and the HTML layout. Nothing here sends, reads the configuration or logs |
+| `services/email/messages.py` and `templates/` | `EmailKind`, `email_language()`, the builders and `compose_message()`; the texts in four languages and the HTML layout. Nothing here sends, reads the configuration or logs |
 | `services/email/checks.py` | `check_smtp_configuration()`, `check_smtp_encryption()`, `check_email_links()`, `EMAIL_CONFIG_CHECKS`, which closes the platform's `CONFIG_CHECKS` |
 | `services/email/links.py` | `links_state()`, `require_links()`, `email_link()`, `email_instance_config()` and `EmailLinksUnavailableError`: every emailed link from `LIBREFOLIO_PUBLIC_URL` ([Links](#links)) |
 | `services/email/flows.py` | What an action of the application sends, to whom and in which language: the test email, a link an administrator emails, a forgotten password and its limits, the notice of an email change ([Flows](#flows)); `require_email()` and `link_ttl()`, which `verification.py` reuses |
 | `services/email/verification.py` | Email verification at sign-up (developer decision 44): the wait, the emailed link, its confirmation, «send the link again», and the place a waiting account holds ([Email Verification](#verification)) |
 | `backend/app/api/v1/email.py` and `backend/app/schemas/email.py` | `GET /email/status`, `POST /email/test` and `POST /email/links` for administrators, `POST /email/password-reset`, `POST /email/verification/confirm` and `POST /email/verification/resend` for anyone, and their models ([The API](#api)); `EmailInstanceConfig`, the `email` field of `GET /system/instance` |
 | `backend/app/utils/runtime/rate_window.py` | `SlidingWindowLimiter` and `RateDecision`, the [sliding-window limiter](#rate-window) |
-| `frontend/src/lib/features/email/` and `frontend/src/lib/i18n/email/` | The Email tab of the settings, its seam over the API client, the check of the links' base from the browser, and its texts ([The Email Tab](#email-tab)); the frontend of email verification ([In the Frontend](#verification-frontend)); «Send by email» and the «forgot password» form ([Links by Email in the Interface](#link-actions)) |
+| `frontend/src/lib/features/email/` and `frontend/src/lib/features/email/i18n/` | The Email tab of the settings, its seam over the API client, the check of the links' base from the browser, and its texts ([The Email Tab](#email-tab)); the frontend of email verification ([In the Frontend](#verification-frontend)); «Send by email» and the «forgot password» form ([Links by Email in the Interface](#link-actions)) |
 | `frontend/src/routes/verify-email/+page.svelte` | The page of a verification link ([In the Frontend](#verification-frontend)) |
 
 `services/email/__init__.py` holds only the package docstring.
@@ -326,7 +327,7 @@ error.
 
 ## ✉️ Messages (`messages.py` and `templates/`) {: #messages }
 
-### 🗂️ The Six Kinds {: #kinds }
+### 🗂️ The Kinds {: #kinds }
 
 Each kind of email has a keyword-only builder that returns an `EmailContent`, a frozen dataclass with `kind`,
 `language`, `subject`, `text` (the plain-text part) and `html`:
@@ -341,6 +342,8 @@ Each kind of email has a keyword-only builder that returns an `EmailContent`, a 
 | `email_change_confirmation` | `build_email_change_confirmation()` | `language`, `username`, `link`, `ttl`, `instance` | By username | Yes |
 | `test` | `build_test_message()` | `language`, `username`, `instance` | By username | No |
 | `email_changed` | `build_email_changed()` | `language`, `instance` | Anonymous | No |
+| `email_change_request` | `build_email_change_request_confirmation()` | `language`, `link`, `ttl`, `instance` | Anonymous | Yes |
+| `email_change_request` | `build_email_change_requested()` | `language`, `instance` | Anonymous | No |
 
 - `build_password_reset_after_restore()` is the same kind with other words (the `restore_*` keys of the `password_reset` section): it tells the owner of an instance restored from a backup that the password was revoked after the restore and points to «Forgot Password?» for when the link expires. Only `instance_owner.assign_owner_and_send_reset()` uses it; it does not say who restored the backup, and shows no address and no name.
 - The greeting is the catalogue's `common.greeting_anonymous`, «Hello,», or `common.greeting`, «Hello $username,»,
@@ -736,6 +739,38 @@ And one from the security review of lot E4b (16/10), to be reviewed:
   account over still needs its password.
 
 ---
+
+### 📬 A Change Asked from Profile {: #flow-profile-email-change }
+
+With email and links usable (`email_change.verification_mode()` is `verified`: `email_instance_config().links`, the very
+condition `GET /api/v1/system/instance` publishes), `PUT /api/v1/auth/profile` no longer changes the address:
+`backend/app/services/accounts/email_change.py` holds the change until its link is clicked. It sends through
+`delivery.send_email()` like every flow here, and its tests are `./dev.py test services email-change`.
+
+- **`admit_request()`** reads without writing: the address refused (`user_service.email_refusal()`: another account's
+  address or username, the owner's reserved address), email and links usable, the instance's budget, the new mailbox's
+  limit, the account's. The route calls it **before** saving a username, so a refusal leaves the profile as it was.
+- **`request_change()`** revokes the account's earlier Profile links and issues a new `email_change` token (24 hours,
+  `created_by_user_id` = the account: that marks a Profile link; the host's link of the owner has no creator) in one
+  commit, then sends `build_email_change_request_confirmation()` to the **new** address. A send that fails revokes the
+  new link and removes its address, so it counts for no limit, and re-raises: nothing waits, and the answer is `429` or
+  `502`, never the immediate change. `email_change_requested_work()` writes the notice to the old address as a
+  background task, never raising.
+- **`resend()`** issues a new token for the same address and revokes the earlier ones **only after** the email went; it
+  checks under the write lock that the request was not cancelled meanwhile. **`cancel()`**, **`pending()`** and
+  **`pending_ids()`** (the accounts with a live Profile link, for the administrator's badge) complete it.
+- **`confirm_profile_change(token, acting_user_id)`** reads the link without writing: a dead link raises its status to
+  anyone; a live link whose account is not `acting_user_id` raises `ProfileEmailChangeSignInRequiredError` and writes
+  nothing (the 403 `EMAIL_CHANGE_SIGN_IN_REQUIRED` of [`POST /email/email-change/confirm`](#api-email-change-confirm)).
+  Only then is the link spent (the first write: of two clicks one wins), the conditions read again and
+  `user_service.move_email()` run in a savepoint; a condition that fails revokes the link in the same transaction.
+- **Limits**: 5 confirmation emails an hour per account, counted on the rows that still carry an address, and a resend
+  not within 60 seconds of the last; `EMAIL_CHANGE_LINKS_BY_MAILBOX` and `EMAIL_CHANGE_REQUESTED_BY_MAILBOX`, 3 an hour
+  each by [`mailbox_budget_key()`](#mailbox-key), the second apart from `EMAIL_CHANGE_NOTICES_BY_MAILBOX`.
+- Revocations live in `user_service.revoke_pending_email_change()`: a password change or reset and a deactivation call
+  it, and it never touches a link without `created_by_user_id`.
+
+No log line holds an address or a token: `user_id`, `token_id` and a reason.
 
 ## ✅ Email Verification (`verification.py`) {: #verification }
 
@@ -1152,6 +1187,22 @@ active account matches, its owner gets an email with a link to choose a new pass
 None of them depends on the accounts. `EMAIL_UNAVAILABLE` and `EMAIL_LINKS_UNAVAILABLE` say nothing that
 `GET /system/instance` does not publish already (`email.available` and `email.links`).
 
+### 🔀 `POST /api/v1/email/email-change/confirm` {: #api-email-change-confirm }
+
+Two flows share the route and the page `/confirm-email-change`; `email_change.link_flow()` decides on the link: a token
+issued by the account itself is the [Profile flow](#flow-profile-email-change), any other (the host's link, an unknown
+token) the owner's of a managed instance (`instance_owner.confirm_email_change()`, which needs no session). The body is
+an `EmailChangeConfirmRequest` (`token`); a 200 is an `EmailChangeConfirmResponse` (the `username`).
+
+| Status | `detail` | When |
+|--------|----------|------|
+| 200 | — | The address moved, verified; the account's sessions ended; the emails of a completed change queued (`by_host` false for a Profile link) |
+| 400 | `error_code` `TOKEN_INVALID`, `status` | A dead link: `expired`, `consumed`, `revoked` or `unknown`, to anyone. `revoked` also when a condition failed at the click (the address taken meanwhile, the account inactive or protected) |
+| 403 | `error_code` `EMAIL_CHANGE_SIGN_IN_REQUIRED` | A live Profile link clicked without the session of its account: none, one no longer valid, or another account's. One answer for the three; nothing is written and the link stays valid |
+
+The session is read without demanding it: `get_current_user()` inside a `try/except HTTPException`, so its rules are
+the ones every route applies. The 403 is not a 401 on purpose: on a link page a 401 means a blocked instance.
+
 ### 🔓 `POST /api/v1/email/verification/confirm` {: #api-verification-confirm }
 
 An `async def`, without a session: the link proves that its reader received the email. The page of the link calls it
@@ -1231,7 +1282,7 @@ verification turn on ([In the Frontend](#verification-frontend)).
 
 ## 🖥️ The Email Tab {: #email-tab }
 
-The tab is in `frontend/src/lib/features/email/`, its texts in `frontend/src/lib/i18n/email/`. The same folder holds
+The tab is in `frontend/src/lib/features/email/`, its texts in `frontend/src/lib/features/email/i18n/`. The same folder holds
 the frontend of email verification ([In the Frontend](#verification-frontend)), «Send by email» and the «forgot
 password» form ([Links by Email in the Interface](#link-actions)).
 

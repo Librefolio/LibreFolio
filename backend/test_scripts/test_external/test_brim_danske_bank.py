@@ -76,13 +76,14 @@ from sqlmodel import SQLModel
 from structlog.testing import capture_logs
 
 import backend.app.db.models  # noqa: F401 — registers the app tables on SQLModel.metadata (the B-52 end-to-end proofs)
-from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import COMBINED_REQUIRED_HEADERS, BRIMCombinedTable, BRIMCoverage, BRIMGapFixRequest, BRIMParseOutput, BRIMReportRole, BRIMSetShape, is_fake_asset_id
 from backend.app.schemas.common import DateRangeModel
 from backend.app.services.brim import brim_report_sets
 from backend.app.services.brim.brim_gap_fix import compute_gap_fix
-from backend.app.services.brim.brim_provider import BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.services.brim.brim_provider import BRIMProvider, BRIMSetRequiredError
+from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_samples import SampleDir
 
 # =============================================================================
 # CONSTANTS
@@ -90,7 +91,7 @@ from backend.app.services.brim.registry import BRIMProviderRegistry
 
 PLUGIN_CODE = "broker_danske_bank"
 PLUGIN_MODULE = "backend.app.services.brim_providers.broker_danske_bank.plugin"
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 BROKER_ID = 1
 # The deposit account of the custody samples. It is an account number: it never leaves the members.
 ACCOUNT = "SYNTH-0001"

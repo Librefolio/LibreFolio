@@ -8,11 +8,8 @@ from datetime import date
 import pytest
 
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.signals import (
-    SignalDomain,
-    SignalExecutionContext,
-    SignalSeriesKind,
-)
+from backend.app.schemas.signals.inputs import SignalExecutionContext
+from backend.app.schemas.signals.vocabulary import SignalDomain, SignalSeriesKind
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.test_scripts.fixtures.signal_plugins.registry import (
     FixtureSignalPluginRegistry,

@@ -158,8 +158,8 @@ be longer than the field.
 
 | Component | Syncs | Used by |
 |---|---|---|
-| `AssetSyncModal` (`components/assets/`) | Asset prices | Assets list |
-| `FxSyncModal` (`components/fx/`) | FX rates | FX list, transaction form, PAC planner |
+| `AssetSyncModal` (`features/assets/`) | Asset prices | Assets list |
+| `FxSyncModal` (`features/fx/`) | FX rates | FX list, transaction form, PAC planner |
 | `PageSyncModal` (`ui/modals/`) | Asset prices **and** the FX pairs they need, in parallel | Asset detail, FX detail, risk panels |
 
 `PageSyncModal` reports `onsynced({accepted})`: `accepted` is true when at least one item of the
@@ -173,7 +173,7 @@ warning per active section whose targets meet it (`data-testid="{testId}-overwri
 `data-section`, `data-existing` and `data-total`; the section title leads it only when several
 sections are active), and hides it once the run starts. The pages compute the ids from what they
 already show, with `hasStoredPointInRange()` (`utils/sync/syncHelpers.ts`): a point counts unless it
-was filled backward from an earlier date (`extractDaysBack()`, `utils/assetPriceDerived.ts`, the one
+was filled backward from an earlier date (`extractDaysBack()`, `features/assets/assetPriceDerived.ts`, the one
 home of that rule). `AssetSyncModal` and `FxSyncModal` take them as `withDataInRange`, `PageSyncModal`
 as `assetsWithDataInRange` and `fxPairsWithDataInRange`. The Assets and FX pages pass them, and so
 do the detail pages for their own asset or pair and their pairs. A compared asset is not counted,

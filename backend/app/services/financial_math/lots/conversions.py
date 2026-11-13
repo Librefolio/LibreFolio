@@ -1,4 +1,5 @@
-"""Conversions of the lots analysis: the FX resolver loaded once per request, and the conversions each view needs."""
+"""Conversions of the lots analysis: the FX resolver loaded once per request, its read-only copy per matching method, and
+the conversions each view needs."""
 
 from __future__ import annotations
 
@@ -11,19 +12,18 @@ from typing import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import PriceHistory, Transaction
-from backend.app.schemas.common import Currency, DateSpan
-from backend.app.schemas.portfolio import (
-    LotAnalysisType,
-)
+from backend.app.schemas.common import Currency
+from backend.app.schemas.portfolio.data_quality import StaleFxPair
+from backend.app.schemas.portfolio.lots import LotAnalysisType
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.change_days import reading_change_days
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
-from backend.app.services.financial_math.fx_rates import AskedDayRates
+from backend.app.services.financial_math.fx_rates import AskedDayRates, missing_pair_infos
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import realized_gain
-from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.fx.conversion import unit_rate_steps
+from backend.app.services.platform.data_quality_thresholds import is_stale
 
 #: One unit of a currency: the amount every rate of the resolver converts.
 _ONE = Decimal("1")
@@ -54,6 +54,10 @@ class FxRateResolver:
 
     ``convert`` turns an amount at the rate of its day, or gives None and records the day as a gap of its pair
     (``missing_pairs``).
+
+    One analysis may replay its lots in several matching methods (project 69, D1b): each method asks its rates on the one
+    resolver, which loads them all at once, then reads them through its own ``read_only_copy`` so that a gap one method
+    meets is not reported by the other.
     """
 
     def __init__(self, target_currency: str) -> None:
@@ -72,9 +76,31 @@ class FxRateResolver:
         self._missing: dict[str, set[date_type]] = defaultdict(set)
         #: The stretches of valuation days with no rate (``convert_through``), by pair.
         self._missing_spans: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
+        #: A copy (``read_only_copy``) reads the rates loaded and records its own gaps: it asks and loads nothing.
+        self._read_only = False
+
+    def read_only_copy(self) -> FxRateResolver:
+        """A resolver that reads the rates this one has loaded and the windows it was asked, read-only, and starts with a
+        copy of the gaps recorded so far: what it fails to convert from now on is its own gap, not this resolver's nor
+        another copy's. ``need``, ``need_days`` and ``load`` raise on it. Refused while a rate asked is not loaded yet:
+        every copy would miss it."""
+        if self._needs_loaded != len(self._needs) or any(self._pending_windows.values()):
+            raise RuntimeError("FxRateResolver.read_only_copy: rates are asked and not loaded yet")
+        copy = FxRateResolver(self.target_currency)
+        copy._needs, copy._seen, copy._windows, copy._needs_loaded = self._needs, self._seen, self._windows, self._needs_loaded
+        copy._rates = self._rates
+        copy._missing = defaultdict(set, {pair: set(days) for pair, days in self._missing.items()})
+        copy._missing_spans = defaultdict(list, {pair: list(spans) for pair, spans in self._missing_spans.items()})
+        copy._read_only = True
+        return copy
+
+    def _refuse_on_a_copy(self, action: str) -> None:
+        if self._read_only:
+            raise RuntimeError(f"FxRateResolver.{action}: a read-only copy asks and loads nothing")
 
     def need(self, currency: str | None, as_of_date: date_type) -> None:
         """Ask the rate of ``currency`` on one day."""
+        self._refuse_on_a_copy("need")
         if not currency or currency == self.target_currency:
             return
         key = (currency, as_of_date)
@@ -84,14 +110,17 @@ class FxRateResolver:
         self._needs.append(key)
 
     def need_days(self, currency: str | None, first: date_type, last: date_type) -> None:
-        """Ask the rate of ``currency`` on every day of ``[first, last]``; nothing when the window ends before it starts."""
-        if not currency or currency == self.target_currency or last < first:
+        """Ask the rate of ``currency`` on every day of ``[first, last]``; nothing when the window ends before it starts, or
+        when that very window was asked already (the market series asks the same window in every matching method)."""
+        self._refuse_on_a_copy("need_days")
+        if not currency or currency == self.target_currency or last < first or (first, last) in self._windows.get(currency, ()):
             return
         self._windows[currency].append((first, last))
         self._pending_windows[currency].append((first, last))
 
     async def load(self, session: AsyncSession) -> None:
         """Read the rates asked since the previous load: one ``unit_rate_steps`` call, none when nothing is asked."""
+        self._refuse_on_a_copy("load")
         windows: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
         for currency, asked in self._pending_windows.items():
             windows[currency].extend(asked)
@@ -154,10 +183,24 @@ class FxRateResolver:
                 days.update(reading_change_days(rates, currency, self.target_currency))
         return tuple(sorted(days))
 
+    def stale_pairs(self, day: date_type) -> list[StaleFxPair]:
+        """The pairs the analysis values on ``day`` from a stored rate older than the stale threshold, oldest row first.
+
+        The same notice the portfolio report gives (``stale_fx_pairs``, D-P4): the value is the one ``convert`` gives, the warning says the rate
+        behind it is old. A currency whose rate was not asked on ``day`` is not read here, so it is not listed.
+        """
+        stale: list[StaleFxPair] = []
+        for currency in sorted({*self._windows, *(currency for currency, _day in self._needs)}):
+            if currency == self.target_currency:
+                continue
+            rate_day = next((found for rates in self._rates.maps if isinstance(rates, AskedDayRates) and (found := rates.rate_day_at(currency, self.target_currency, day)) is not None), None)
+            if rate_day is not None and is_stale(rate_day, day):
+                stale.append(StaleFxPair(pair=f"{currency}/{self.target_currency}", last_rate_date=rate_day, stale_days=(day - rate_day).days))
+        return sorted(stale, key=lambda item: (item.last_rate_date, item.pair))
+
     def missing_pairs(self) -> list[WACMissingPairInfo]:
         """Every conversion asked for and not made, one entry per pair, as the data-quality report lists them."""
-        pairs = sorted({*self._missing, *self._missing_spans})
-        return [WACMissingPairInfo(pair=pair, dates=sorted(self._missing.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(self._missing_spans.get(pair, ()))]) for pair in pairs]
+        return missing_pair_infos(self._missing, self._missing_spans)
 
 
 @dataclass(frozen=True, slots=True)

@@ -10,23 +10,10 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from backend.app.schemas.signals import (
-    SignalAnnotationRequest,
-    SignalBandValueSource,
-    SignalError,
-    SignalErrorCode,
-    SignalExecutionContext,
-    SignalLineCrossoverRequest,
-    SignalOutputValueSource,
-    SignalPriceField,
-    SignalPriceValueSource,
-    SignalRequest,
-    SignalResult,
-    SignalSeriesKind,
-    SignalStatus,
-    SignalThresholdCrossingRequest,
-    SignalWarmupRequirement,
-)
+from backend.app.schemas.signals.annotations import SignalAnnotationRequest, SignalLineCrossoverRequest, SignalThresholdCrossingRequest
+from backend.app.schemas.signals.inputs import SignalBandValueSource, SignalExecutionContext, SignalOutputValueSource, SignalPriceValueSource, SignalWarmupRequirement
+from backend.app.schemas.signals.result import SignalError, SignalRequest, SignalResult
+from backend.app.schemas.signals.vocabulary import SignalErrorCode, SignalPriceField, SignalSeriesKind, SignalStatus
 from backend.app.services.signals.annotations import annotation_sources
 from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry

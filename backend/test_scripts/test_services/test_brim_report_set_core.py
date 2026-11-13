@@ -17,7 +17,7 @@ Covered:
   rows are superseded, on which days two files contradict; the ``owner`` and ``contradiction`` policies);
 - D pairing: ``assign``, ``best_assignment``, ``pair_by_key`` (a pair only when it is certain, else the rows are
   listed as ambiguous), and ``pair_outcome_of`` (the right row decides what a pair imports);
-- E timeline: ``merge_spans``, ``build_timeline``, ``zone``, ``Segment.zone``.
+- E timeline: ``build_timeline``, ``zone``, ``Segment.zone``.
 
 Pure: no database, no server, no network, no clock. A row of rule M is a tiny frozen dataclass with a ``day`` and a
 ``signature``; the files of B live in ``tmp_path``. No assertion counts anything the test did not build itself.
@@ -954,33 +954,6 @@ class TestPairByKey:
 # =============================================================================
 # E. SEGMENTS AND ZONES
 # =============================================================================
-
-
-class TestMergeSpans:
-    def test_touching_next_day_merges(self):
-        assert core.merge_spans([(day(1), day(3)), (day(4), day(6))]) == [(day(1), day(6))]
-
-    def test_a_one_day_gap_does_not_merge(self):
-        assert core.merge_spans([(day(1), day(3)), (day(5), day(6))]) == [(day(1), day(3)), (day(5), day(6))]
-
-    def test_overlap_merges(self):
-        assert core.merge_spans([(day(1), day(5)), (day(3), day(8))]) == [(day(1), day(8))]
-
-    def test_a_span_inside_another_keeps_the_outer_end(self):
-        assert core.merge_spans([(day(1), day(10)), (day(2), day(3))]) == [(day(1), day(10))]
-
-    def test_unsorted_input(self):
-        spans = [(day(10), day(12)), (day(1), day(3)), (day(4), day(5)), (day(20), day(21))]
-        assert core.merge_spans(spans) == [(day(1), day(5)), (day(10), day(12)), (day(20), day(21))]
-
-    def test_one_day_spans(self):
-        assert core.merge_spans([(day(2), day(2)), (day(3), day(3))]) == [(day(2), day(3))]
-
-    def test_empty(self):
-        assert core.merge_spans([]) == []
-
-    def test_accepts_a_generator(self):
-        assert core.merge_spans(span for span in [(day(1), day(2))]) == [(day(1), day(2))]
 
 
 class TestBuildTimeline:

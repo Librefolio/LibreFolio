@@ -163,6 +163,10 @@ of your instance need your attention: the errors and warnings that **Settings** 
   with an error, or when the connection is [not secure](#connection-not-secure), amber with warnings
   only. Open the menu to see the line.
 
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="security" data-name="connection-indicator-attention" alt="The connection line of an administrator with security findings: a red dot on the shield, and in the open details the link giving the count of errors and warnings" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
 The dot follows the **Security** tab: information is never counted, so with only information, or
 nothing at all, there is no dot. LibreFolio reads the checks once, when it opens in your browser:
 after you fix something on the server and restart it, reload the page, or click **Check again** on

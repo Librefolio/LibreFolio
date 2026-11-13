@@ -144,7 +144,7 @@ removal of every EUR/USD rate and route in TestMissingFx is rolled back too (the
 limit, so only an absence owned by the test is an absence). The report, WAC and engine blob caches are emptied around
 each test. Rows are found by the test's own broker and asset ids; the user owns only the test's brokers.
 
-Reference: backend/app/services/portfolio_service.py (get_positions_contribution, get_report),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_positions_contribution, get_report),
 backend/app/services/financial_math/portfolio/daily_state.py (_build_position_state, _value_held_position,
 _market_value_for, _internal_pair_value), backend/app/services/financial_math/portfolio/period.py (period_pnl),
 backend/app/services/financial_math/portfolio/contributions.py (closed_position_base, transfer_costs_moved_out,
@@ -173,7 +173,6 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import (
     Asset,
     AssetEvent,
@@ -191,10 +190,13 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import AssetPeriodContribution, PortfolioReportQuery, PortfolioSummary, PositionsContribution
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PortfolioSummary, PositionsContribution
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.returns import cumulative_to_annualized
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_services._range_bounds import lift_range_bound
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -321,8 +323,8 @@ def _broker_ids(scenario: _Scenario) -> list[int] | None:
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

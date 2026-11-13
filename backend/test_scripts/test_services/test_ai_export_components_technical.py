@@ -36,30 +36,13 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PositionsContribution,
-)
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PositionsContribution
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.signals import (
-    SignalBandComponent,
-    SignalBandPoint,
-    SignalBandSeries,
-    SignalBandValueSource,
-    SignalCadence,
-    SignalDomain,
-    SignalExecutionContext,
-    SignalLineCrossoverRequest,
-    SignalOutputValueSource,
-    SignalPricePoint,
-    SignalPriceValueSource,
-    SignalReferenceLevel,
-    SignalStatus,
-    SignalTemporalClass,
-    SignalThresholdCrossingRequest,
-)
+from backend.app.schemas.signals.annotations import SignalLineCrossoverRequest, SignalThresholdCrossingRequest
+from backend.app.schemas.signals.inputs import SignalBandValueSource, SignalExecutionContext, SignalOutputValueSource, SignalPricePoint, SignalPriceValueSource
+from backend.app.schemas.signals.outputs import SignalBandPoint, SignalBandSeries, SignalReferenceLevel
+from backend.app.schemas.signals.vocabulary import SignalBandComponent, SignalCadence, SignalDomain, SignalStatus, SignalTemporalClass
 from backend.app.services.ai_export.components import asset_fx_technical, portfolio_broker_technical, technical_context, technical_shared
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
@@ -95,7 +78,7 @@ from backend.app.services.ai_export.temporal.policy import (
     indicator_history_row_limit,
 )
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.signal_plugins.drawdown.plugin import DrawdownParams, DrawdownPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
@@ -1075,9 +1058,7 @@ class TestMultiOutputOhlc:
         table = technical_shared.build_indicator_table_payloads(
             (result,),
             context,
-        )[
-            0
-        ].model_dump(mode="json")
+        )[0].model_dump(mode="json")
         row = next(row for row in table["rows"] if row["start_date"] == bucket.start_date.isoformat() and row["end_date"] == bucket.end_date.isoformat())
 
         assert row["cells"]["bands.lower"]["min"]["date"] == middle.isoformat()

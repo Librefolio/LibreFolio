@@ -3,6 +3,7 @@ Test datetime utilities.
 All test is independent of the others, so help use pytest features.
 """
 
+import random
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta, timezone
 
@@ -10,6 +11,7 @@ import pytest
 
 from backend.app.utils import datetime_utils
 from backend.app.utils.datetime_utils import ensure_utc, parse_ISO_date, serialize_datetime_utc, utcnow
+from backend.app.utils.day_spans import merged_spans
 
 # ============================================================================
 # TESTS: utcnow
@@ -231,3 +233,171 @@ def test_day_before_date_min_is_none():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+def _day(n: int) -> date:
+    """Day ``n`` of the fixture calendar (``_day(0)`` = 2026-10-01)."""
+    return date(2026, 10, 1) + timedelta(days=n)
+
+
+# =============================================================================
+# merged_spans (utils/day_spans.py) — the one place that joins day spans (data quality, asked FX windows, BRIM coverage)
+# =============================================================================
+
+
+def _days_of(spans) -> set[date]:
+    return {first + timedelta(days=offset) for first, last in spans for offset in range((last - first).days + 1)}
+
+
+def _runs_of(days: set[date]) -> list[tuple[date, date]]:
+    """The maximal runs of consecutive days, by walking the sorted days: an oracle that shares nothing with the merge."""
+    runs: list[tuple[date, date]] = []
+    for day in sorted(days):
+        if runs and day - runs[-1][1] == timedelta(days=1):
+            runs[-1] = (runs[-1][0], day)
+        else:
+            runs.append((day, day))
+    return runs
+
+
+class TestMergedSpans:
+    def _merge(self, spans, **kwargs):
+        return merged_spans(spans, **kwargs)
+
+    def test_touching_next_day_merges(self):
+        assert self._merge([(_day(1), _day(3)), (_day(4), _day(6))]) == [(_day(1), _day(6))]
+
+    def test_a_one_day_gap_does_not_merge(self):
+        assert self._merge([(_day(1), _day(3)), (_day(5), _day(6))]) == [(_day(1), _day(3)), (_day(5), _day(6))]
+
+    def test_overlap_merges(self):
+        assert self._merge([(_day(1), _day(5)), (_day(3), _day(8))]) == [(_day(1), _day(8))]
+
+    def test_a_span_inside_another_keeps_the_outer_end(self):
+        assert self._merge([(_day(1), _day(10)), (_day(2), _day(3))]) == [(_day(1), _day(10))]
+
+    def test_unsorted_input_and_one_day_spans(self):
+        spans = [(_day(10), _day(12)), (_day(1), _day(3)), (_day(4), _day(5)), (_day(20), _day(21)), (_day(30), _day(30)), (_day(31), _day(31))]
+        assert self._merge(spans) == [(_day(1), _day(5)), (_day(10), _day(12)), (_day(20), _day(21)), (_day(30), _day(31))]
+
+    def test_empty_and_generator(self):
+        assert self._merge([]) == []
+        assert self._merge(span for span in [(_day(1), _day(2))]) == [(_day(1), _day(2))]
+
+    def test_a_reversed_span_raises_by_default(self):
+        with pytest.raises(ValueError):
+            self._merge([(_day(1), _day(3)), (_day(5), _day(4))])
+
+    def test_a_reversed_span_is_left_out_with_skip_reversed(self):
+        assert self._merge([(_day(5), _day(4))], skip_reversed=True) == []
+        assert self._merge([(_day(0), _day(2)), (_day(9), _day(3)), (_day(4), _day(6))], skip_reversed=True) == [(_day(0), _day(2)), (_day(4), _day(6))]
+
+    def test_a_valid_input_gives_the_same_with_and_without_skip_reversed(self):
+        spans = [(_day(7), _day(9)), (_day(1), _day(2)), (_day(3), _day(3))]
+        assert self._merge(spans) == self._merge(spans, skip_reversed=True) == [(_day(1), _day(3)), (_day(7), _day(9))]
+
+    def test_it_is_the_maximal_runs_of_the_days_covered(self):
+        """Proof by oracle: the merge of any spans is exactly the maximal runs of consecutive days the spans cover —
+        sorted, disjoint, never two touching, the same days — checked on 400 seeded random inputs."""
+        rng = random.Random(14)
+        for _ in range(400):
+            spans = []
+            for _ in range(rng.randint(0, 8)):
+                first = rng.randint(0, 40)
+                spans.append((_day(first), _day(first + rng.randint(0, 6))))
+            merged = self._merge(spans)
+            assert merged == _runs_of(_days_of(spans)), spans
+            assert merged == self._merge(list(reversed(spans))), "the order of the input does not matter"
+            assert merged == self._merge(merged), "merging again changes nothing"
+
+
+# =============================================================================
+# UtcDateTime — the timestamp column (db/utc_datetime.py, D-UTC)
+# =============================================================================
+
+
+class TestUtcDateTimeColumn:
+    """Aware UTC in Python, the plain column's text in SQLite, a naive value refused: on a private in-memory SQLite."""
+
+    @staticmethod
+    def _table():
+        from sqlalchemy import Column, Integer, MetaData, Table  # noqa: PLC0415
+
+        from backend.app.db.utc_datetime import UtcDateTime  # noqa: PLC0415
+
+        return Table("stamps", MetaData(), Column("id", Integer, primary_key=True), Column("at", UtcDateTime, nullable=True))
+
+    def _engine(self):
+        self.stamps = self._table()
+        from sqlalchemy import create_engine  # noqa: PLC0415
+
+        engine = create_engine("sqlite://")
+        self.stamps.metadata.create_all(engine)
+        return engine
+
+    def test_the_stored_text_is_the_plain_columns_utc_clock_without_an_offset(self):
+        """No migration: a row written by the plain ``DateTime`` column and one written here are the same text."""
+        from sqlalchemy import Column, DateTime, Integer, MetaData, Table, insert, text  # noqa: PLC0415
+
+        engine = self._engine()
+        moment = datetime(2026, 11, 10, 8, 30, 15, 123456, tzinfo=UTC)
+        plain = Table("plain", MetaData(), Column("id", Integer, primary_key=True), Column("at", DateTime))
+        plain.metadata.create_all(engine)
+        with engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at=moment))
+            connection.execute(insert(plain).values(id=1, at=moment.replace(tzinfo=None)))
+            ours = connection.execute(text("SELECT at FROM stamps")).scalar_one()
+            theirs = connection.execute(text("SELECT at FROM plain")).scalar_one()
+        assert ours == theirs == "2026-11-10 08:30:15.123456"
+
+    def test_it_reads_back_aware_utc_and_an_old_row_too(self):
+        from sqlalchemy import insert, select, text  # noqa: PLC0415
+
+        engine = self._engine()
+        with engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)))
+            connection.execute(text("INSERT INTO stamps (id, at) VALUES (2, '2025-06-07 08:09:10.000000')"))
+            connection.execute(insert(self.stamps).values(id=3, at=None))
+            rows = dict(connection.execute(select(self.stamps.c.id, self.stamps.c.at)).all())
+        assert rows[1] == datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC) and rows[1].tzinfo is not None
+        assert rows[2] == datetime(2025, 6, 7, 8, 9, 10, tzinfo=UTC), "a row written before D-UTC reads back as the same UTC moment, aware"
+        assert rows[3] is None
+
+    def test_another_zone_is_stored_as_the_utc_clock(self):
+        from sqlalchemy import insert, select, text  # noqa: PLC0415
+
+        engine = self._engine()
+        rome = timezone(timedelta(hours=1))
+        with engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at=datetime(2026, 11, 10, 9, 0, tzinfo=rome)))
+            stored = connection.execute(text("SELECT at FROM stamps")).scalar_one()
+            read = connection.execute(select(self.stamps.c.at)).scalar_one()
+        assert stored.startswith("2026-11-10 08:00:00")
+        assert read == datetime(2026, 11, 10, 8, 0, tzinfo=UTC)
+
+    def test_a_naive_datetime_is_refused_on_write(self):
+        from sqlalchemy import insert  # noqa: PLC0415
+        from sqlalchemy.exc import StatementError  # noqa: PLC0415
+
+        engine = self._engine()
+        with pytest.raises(StatementError, match="refuses a naive datetime"), engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at=datetime(2026, 1, 1)))
+
+    def test_a_value_that_is_not_a_datetime_is_refused(self):
+        from sqlalchemy import insert  # noqa: PLC0415
+        from sqlalchemy.exc import StatementError  # noqa: PLC0415
+
+        engine = self._engine()
+        with pytest.raises(StatementError, match="stores a datetime"), engine.begin() as connection:
+            connection.execute(insert(self.stamps).values(id=1, at="2026-01-01 00:00:00"))
+
+    def test_every_timestamp_field_of_the_models_is_a_utc_datetime(self):
+        """The guard: a new ``datetime`` field cannot go back to the plain column, which reads naive."""
+        from sqlalchemy import DateTime  # noqa: PLC0415
+        from sqlmodel import SQLModel  # noqa: PLC0415
+
+        from backend.app.db import models  # noqa: F401, PLC0415
+        from backend.app.db.utc_datetime import UtcDateTime  # noqa: PLC0415
+
+        plain = [f"{table.name}.{column.name}" for table in SQLModel.metadata.tables.values() for column in table.columns if isinstance(column.type, DateTime) and not isinstance(column.type, UtcDateTime)]
+        assert plain == [], f"these columns read naive datetimes: declare sa_type=UtcDateTime: {plain}"

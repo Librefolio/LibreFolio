@@ -23,13 +23,8 @@ from backend.app.api.v1.risk import (
 from backend.app.config import set_test_mode
 from backend.app.db.models import Asset, AssetType, PriceHistory, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.risk import (
-    RiskAnalyticResult,
-    RiskError,
-    RiskErrorCode,
-    RiskQueryResponse,
-    RiskResultStatus,
-)
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskQueryResponse
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskResultStatus
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
@@ -64,7 +59,7 @@ async def fixture_user_id() -> int:
 
     if user_id is None:
         pytest.fail(
-            f"Test database is not populated: user '{FIXTURE_USERNAME}' is missing.\n" "These tests run real analytics against the mock portfolio, so they need the fixtures.\n" "Seed them with: ./dev.py test db populate --force",
+            f"Test database is not populated: user '{FIXTURE_USERNAME}' is missing.\nThese tests run real analytics against the mock portfolio, so they need the fixtures.\nSeed them with: ./dev.py test db populate --force",
         )
     return user_id
 
@@ -869,6 +864,9 @@ async def test_asset_eligibility_judges_each_asset_on_its_own_quotes_in_request_
     # The facts behind each verdict travel with it.
     assert (by_key["eligible"]["quotes_in_period"], by_key["eligible"]["first_quote"], by_key["eligible"]["last_quote"]) == (20, start.isoformat(), (start + timedelta(days=76)).isoformat())
     assert (by_key["no_prices"]["quotes_in_period"], by_key["no_prices"]["first_quote"], by_key["no_prices"]["last_quote"]) == (0, (start - timedelta(days=30)).isoformat(), (start - timedelta(days=10)).isoformat())
+    # CP-11: the asset with no exchange rate says which conversion is missing, in its direction, and that no rate is stored at all; the others say nothing.
+    assert by_key["no_fx"]["missing_fx"] == {"from_currency": "KES", "to_currency": "EUR", "first_rate_date": None}
+    assert [key for key, item in by_key.items() if item["missing_fx"] is not None] == ["no_fx"]
     assert by_key["late"]["first_quote"] == (start + timedelta(days=10)).isoformat()
     assert by_key["stale"]["last_quote"] == (end - timedelta(days=10)).isoformat()
     # The quoted histories do not overlap (one ends before another begins): both fields present, null.

@@ -51,20 +51,16 @@ from backend.app.schemas.common import (
     BaseListResponse,
     Currency,
     DateRangeModel,
+    FxConversionIssue,
     MinStartDateRangeModel,
     SafeDecimal,
     StrictModel,
     iso_currency_code,
 )
 from backend.app.schemas.prices import SAMPLE_KEY_PATTERN
-from backend.app.schemas.signals import (
-    SignalAnnotationRequest,
-    SignalBandValueSource,
-    SignalLineCrossoverRequest,
-    SignalOutputValueSource,
-    SignalRequest,
-    SignalResult,
-)
+from backend.app.schemas.signals.annotations import SignalAnnotationRequest, SignalLineCrossoverRequest
+from backend.app.schemas.signals.inputs import SignalBandValueSource, SignalOutputValueSource
+from backend.app.schemas.signals.result import SignalRequest, SignalResult
 from backend.app.services.assets.price_sampling import SampleResolution  # Z-29: a pure module of dates, no service
 from backend.app.utils.datetime_utils import parse_ISO_date
 
@@ -194,7 +190,7 @@ class FXConversionResult(BaseModel):
     rate: Optional[SafeDecimal] = Field(None, description="Exchange rate used (if not identity)")
     backward_fill_info: Optional[BackwardFillInfo] = Field(
         None,
-        description="Backward-fill info (only present if rate from a different date was used). " "If null, rate_date = conversion_date",
+        description="Backward-fill info (only present if rate from a different date was used). If null, rate_date = conversion_date",
     )
     request_index: Optional[int] = Field(None, ge=0, description="The position in the request of the conversion this result belongs to (Z-29fx)")
 
@@ -241,6 +237,7 @@ class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
 
     # Inherits: results, success_count, errors
     # Note: success_count should be populated by service layer
+    fx_issues: List[FxConversionIssue] = Field(default_factory=list, description="The conversions that failed for want of an exchange rate, one per pair, in the direction of the conversion (CP-11d); `errors` keeps the other operation errors")
     signal_results: List[FXSignalQueryResult] = Field(
         default_factory=list,
         description="Signal results grouped by original conversion request",

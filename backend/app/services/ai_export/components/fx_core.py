@@ -57,12 +57,8 @@ from sqlalchemy import select
 
 from backend.app.db.models import Asset, FxRate
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import (
-    PortfolioHolding,
-    PortfolioReportQuery,
-    PortfolioReportResponse,
-    PortfolioSummary,
-)
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.fx_payloads import (
     FxConversionProvenancePayload,
@@ -298,7 +294,7 @@ async def _load_exposure_report(context: BuildContext) -> PortfolioReportRespons
     async def _loader(session) -> PortfolioReportResponse:
         # Local import: avoids importing the (heavier) portfolio service at
         # module load time for FX-only requests that never build exposure.
-        from backend.app.services.portfolio_service import PortfolioService  # noqa: PLC0415
+        from backend.app.services.portfolio.portfolio_service import PortfolioService  # noqa: PLC0415
 
         query = PortfolioReportQuery(
             broker_ids=list(scope.broker_scope) or None,

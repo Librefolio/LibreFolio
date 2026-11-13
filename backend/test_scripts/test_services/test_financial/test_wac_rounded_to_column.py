@@ -82,13 +82,13 @@ from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.base import NO_VALUE
 
-import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, Transaction, TransactionType
 from backend.app.db.precision import decimal_limit_issue, round_computed_value
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationIssue
 from backend.app.schemas.wac import WACPreviewResultItem
-from backend.app.services.portfolio_service import compute_wac_iterative
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.wac import compute_wac_iterative
 from backend.app.services.transactions.auto_cost import TransactionAutoCostMixin
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
@@ -169,7 +169,7 @@ async def session(engine):
 @pytest.fixture(autouse=True)
 def _fresh_wac_cache():
     """No average served from the facade's cache: the batch path calls it with ``use_cache=True``."""
-    portfolio_service_module._wac_cache.clear()
+    wac_module._wac_cache.clear()
     yield
 
 
@@ -206,14 +206,14 @@ def averages_handed_to_the_facade(monkeypatch) -> list[Decimal]:
     """The averages ``financial_math.average_cost`` hands the facade, before the facade does anything with them: the
     real ``compute_average_costs`` runs, and each position's ``unit_cost_report`` is recorded on its way through."""
     seen: list[Decimal] = []
-    real = portfolio_service_module.compute_average_costs
+    real = wac_module.compute_average_costs
 
     async def recording(*args: Any, **kwargs: Any):
         averages = await real(*args, **kwargs)
         seen.extend(average.unit_cost_report for average in averages.values())
         return averages
 
-    monkeypatch.setattr(portfolio_service_module, "compute_average_costs", recording)
+    monkeypatch.setattr(wac_module, "compute_average_costs", recording)
     return seen
 
 

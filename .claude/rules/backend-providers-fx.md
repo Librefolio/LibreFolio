@@ -8,7 +8,7 @@ paths:
 
 ## Architecture
 
-All FX providers extend `FXRateProvider` (abstract base in `services/fx/base.py`) and are auto-discovered via `@register_provider(FXProviderRegistry)`; the registry lives in `services/fx/registry.py`, the decorator in `services/provider_registry.py`.
+All FX providers extend `FXRateProvider` (abstract base in `services/fx/base.py`) and are auto-discovered via `@register_provider(FXProviderRegistry)`; the registry lives in `services/fx/registry.py`, the decorator in `services/platform/provider_registry.py`.
 
 Each provider represents a central bank or financial data source that provides exchange rates.
 

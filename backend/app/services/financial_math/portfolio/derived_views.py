@@ -12,9 +12,7 @@ from decimal import Decimal
 from typing import Any
 
 from backend.app.schemas.common import Currency as CurrencySchema
-from backend.app.schemas.portfolio import (
-    DataQualityReport,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
 from backend.app.services.financial_math.average_cost import (
     CostMovement,
     CostPosition,

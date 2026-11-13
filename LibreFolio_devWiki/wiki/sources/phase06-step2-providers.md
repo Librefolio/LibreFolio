@@ -156,7 +156,7 @@ Comprehensive checklist for CSS Scraper and Scheduled Investment asset providers
 | CSS Scraper provider | `backend/app/services/asset_source_providers/css_scraper/plugin.py` |
 | Scheduled Investment provider | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |
 | Provider base class | `backend/app/services/assets/base.py` |
-| ScheduledInvestmentEditor | `frontend/src/lib/components/assets/ScheduledInvestmentEditor.svelte` |
-| ProviderAssignmentSection | `frontend/src/lib/components/assets/ProviderAssignmentSection.svelte` |
+| ScheduledInvestmentEditor | `frontend/src/lib/features/assets/ScheduledInvestmentEditor.svelte` |
+| ProviderAssignmentSection | `frontend/src/lib/features/assets/ProviderAssignmentSection.svelte` |
 | CSS Scraper icon | `backend/app/services/asset_source_providers/static/cssscraper.png` |
 | Scheduled Investment icon | `backend/app/services/asset_source_providers/static/scheduled_investment.png` |

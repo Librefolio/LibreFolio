@@ -70,6 +70,7 @@ const LOTS_REFRESH_TIMEOUT_MS = 45_000;
 const RESERVED_CURRENCIES = {
     missingRate: {desktop: 'MKD', mobile: 'RSD'},
     breakdown: {desktop: 'KZT', mobile: 'UAH'},
+    lotsBannerSync: {desktop: 'FKP', mobile: 'GIP'},
 } as const;
 
 type Money = {code: string; amount: string};
@@ -95,7 +96,9 @@ type ReportBody = {
 };
 type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: string; end?: string} | null};
 type LotsRequestBody = {asset_id?: number; requested_analyses?: string[]};
-type LotsBody = {lots?: Array<{lot_id: number}> | null; data_quality?: {issues?: ReportIssue[]} | null};
+type LotsBody = {lots?: Array<{lot_id: number}> | null; data_quality?: {issues?: ReportIssue[]; stale_fx_pairs?: unknown[] | null} | null};
+/** The lots analysis answer: the panel shows the FIFO block (project 69, D11). */
+type LotsAnswer = {methods: {FIFO: LotsBody}};
 type CommitBody = {committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index: number; ids: number[]}>};
 type TransactionRead = {id: number; asset_event_id?: number | null; cost_basis_override?: Money | null};
 /** A refused events save: the code and where it is, never only a sentence (decision 22). */
@@ -397,7 +400,7 @@ async function openDashboard(page: Page, url: string, lotsAssetId: number | null
     const reportAnswer = await reportResponse;
     const range = (reportAnswer.request().postDataJSON() as ReportRequestBody).date_range;
     const report = await jsonFrom<ReportBody>(reportAnswer, 'dashboard report');
-    const lots = lotsResponse ? await jsonFrom<LotsBody>(await lotsResponse, 'first answer of the lots panel') : null;
+    const lots = lotsResponse ? (await jsonFrom<LotsAnswer>(await lotsResponse, 'first answer of the lots panel')).methods.FIFO : null;
     return {range, report, lots};
 }
 
@@ -701,14 +704,16 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
             expect(refreshed, 'the open lots panel did not ask again after «Sync rates»: no POST /portfolio/lots/analysis for this asset once the sync had answered').not.toBeNull();
             const refreshedAnswer = await refreshed!.response();
             if (!refreshedAnswer) throw new Error('The lots analysis asked again after the sync got no answer');
-            const lotsAfter = await jsonFrom<LotsBody>(refreshedAnswer, 'lots analysis asked again after the sync');
+            const lotsAfter = (await jsonFrom<LotsAnswer>(refreshedAnswer, 'lots analysis asked again after the sync')).methods.FIFO;
             const lotIssuesAfter = lotIssues(lotsAfter);
             expect(
                 lotIssuesAfter.filter((issue) => issue.code === 'MISSING_FX_RATES'),
                 `the lots answer has no missing rate any more; it carries ${JSON.stringify(lotIssuesAfter)}`,
             ).toEqual([]);
-            // Decided by that answer, not by a probe of the page.
-            if (lotIssuesAfter.length === 0) {
+            // Decided by that answer, not by a probe of the page. The rates the sync stored end a week after the last movement,
+            // so today's valuation reads an old row: the panel adds a notice for it (CP-11a), which is not a missing rate.
+            const staleNotice = (lotsAfter.data_quality?.stale_fx_pairs?.length ?? 0) > 0;
+            if (lotIssuesAfter.length === 0 && !staleNotice) {
                 await expect(lotsPanel.getByTestId('lot-data-quality-banner'), 'nothing is left to report in the lots panel: its banner goes').toHaveCount(0, {timeout: 15_000});
             } else {
                 await expandStrict(lotsPanel.getByTestId('lot-data-quality-toggle'));
@@ -901,6 +906,94 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
                 if (item.negative) await expect(value, `${item.id} is a loss and says so`).toHaveText(/[-−]/);
                 else await expect(value, `${item.id} is a gain and carries no minus`).not.toHaveText(/[-−]/);
             }
+        });
+    });
+
+    test('E4 — project 69, L4: the lots panel’s own banner offers «Sync rates» on its missing rate, and the sync heals the lots and the dashboard', async ({page, request, owned}) => {
+        test.setTimeout(180_000);
+        const quote = reservedCurrency('lotsBannerSync');
+        const pair = `EUR-${quote}`;
+        const d1 = daysAgoIso(40);
+        const d2 = daysAgoIso(20);
+
+        const {assetId} = await test.step(`seed: an EUR asset bought and partly sold with ${quote} cash, on a MOCKFX route without rates`, async () => {
+            await openAccount(page, request, owned, 'dqlots');
+            owned.fxQuotes.push(quote);
+            await resetReservedPair(page, quote);
+            await createMockFxRoute(page, quote);
+            const suffix = uniqueSuffix();
+            const brokerId = await createBroker(page, owned, `dq-lots-broker-${suffix}`, {allow_cash_overdraft: true});
+            const assetId = await createManualAsset(page, owned, `DQ lots sync ${suffix}`, 'EUR');
+            await seedPrices(
+                page,
+                assetId,
+                [
+                    {date: d1, close: 100},
+                    {date: d2, close: 110},
+                ].map((price) => ({...price, currency: 'EUR'})),
+            );
+            await commitTransactions(
+                page,
+                {
+                    creates: [
+                        {broker_id: brokerId, type: 'DEPOSIT', date: d1, cash: {code: quote, amount: '1234.5'}, description: `dq-lots funding ${suffix}`},
+                        {broker_id: brokerId, asset_id: assetId, type: 'BUY', date: d1, quantity: '10', cash: {code: quote, amount: '-1234.5'}, description: `dq-lots purchase ${suffix}`},
+                        {broker_id: brokerId, asset_id: assetId, type: 'SELL', date: d2, quantity: '-4', cash: {code: quote, amount: '617.25'}, description: `dq-lots sale ${suffix}`},
+                        {broker_id: brokerId, type: 'WITHDRAWAL', date: d2, cash: {code: quote, amount: '-617.25'}, description: `dq-lots withdrawal ${suffix}`},
+                    ],
+                },
+                `commit the ${quote}-funded purchase and partial sale`,
+            );
+            return {brokerId, assetId};
+        });
+
+        const sync = watchFxSync(page);
+        const load = await openDashboard(page, dashboardUrl({tab: 'posizioni', assetId}), assetId);
+        const lotsPanel = page.getByTestId('lots-analysis-panel');
+        const lotsRow = lotsPanel.getByTestId('lot-data-quality-issue-MISSING_FX_RATES');
+
+        await test.step('before the sync: the lots answer offers «Sync rates» on the pair, and its banner draws the button', async () => {
+            expectDashboardPreconditions(load);
+            const fxIssues = lotIssues(load.lots).filter((issue) => issue.code === 'MISSING_FX_RATES');
+            expect(fxIssues.length, `premise: the lots answer reports the missing rate; it carries ${JSON.stringify(lotIssues(load.lots))}`).toBeGreaterThan(0);
+            expect(fxIssues[0], 'premise: the issue names the pair and offers the sync').toMatchObject({affected_fx_pairs: [pair], cta_action: 'sync_fx_pair'});
+            await expectLotIssue(page, 'MISSING_FX_RATES');
+            await expect(lotsRow.getByTestId('data-quality-cta-MISSING_FX_RATES'), 'the lots banner draws the Dashboard’s sync button').toBeVisible();
+        });
+
+        expect(sync.sentBeforeClick, 'nothing may sync before the user asks').toBe(0);
+        const since = await eventSeq(page);
+        sync.clicked = true;
+        const syncResponse = armed(page.waitForResponse((res) => isFxSync(res.request()), {timeout: 60_000}));
+        const lotsRefresh = armed(page.waitForResponse((res) => sync.answered && isMainLotsRequest(res.request(), assetId), {timeout: LOTS_REFRESH_TIMEOUT_MS}));
+        const reportReload = armed(page.waitForRequest((req) => sync.answered && isSummaryReport(req), {timeout: 60_000}));
+
+        await test.step('the lots banner’s button syncs the pair and says so as the lots banner', async () => {
+            await lotsRow.getByTestId('data-quality-cta-MISSING_FX_RATES').click();
+            const answer = schemas.FXSyncBulkResponse.parse(await jsonFrom(await syncResponse, 'the sync answer'));
+            expect(
+                answer.results.find((item) => item.pair === pair),
+                `the sync answer for ${pair}: ${JSON.stringify(answer.results)}`,
+            ).toMatchObject({status: 'ok', provider_used: 'MOCKFX'});
+            const synced = await waitForEvent(page, 'fx.rates.synced', {since, timeout: 60_000});
+            expect(synced.detail).toMatchObject({origin: 'lots-banner', pairs: [pair], outcome: 'ok', stillMissing: false});
+        });
+
+        await test.step('after the sync: the lots answer has no missing rate and its row goes; the dashboard asks its report again', async () => {
+            const lotsAfter = (await jsonFrom<LotsAnswer>(await lotsRefresh, 'lots analysis asked again after the sync')).methods.FIFO;
+            const left = lotIssues(lotsAfter);
+            expect(
+                left.filter((issue) => issue.code === 'MISSING_FX_RATES'),
+                `the lots answer has no missing rate any more; it carries ${JSON.stringify(left)}`,
+            ).toEqual([]);
+            const staleNotice = (lotsAfter.data_quality?.stale_fx_pairs?.length ?? 0) > 0;
+            if (left.length === 0 && !staleNotice) {
+                await expect(lotsPanel.getByTestId('lot-data-quality-banner'), 'nothing is left to report in the lots panel: its banner goes').toHaveCount(0, {timeout: 15_000});
+            } else {
+                await expandStrict(lotsPanel.getByTestId('lot-data-quality-toggle'));
+                await expect(lotsRow, 'the missing-rate row of the lots panel goes').toHaveCount(0, {timeout: 15_000});
+            }
+            expect(await reportReload, 'the dashboard asked its report again after the lots banner’s sync').toBeTruthy();
         });
     });
 });

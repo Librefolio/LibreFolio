@@ -15,7 +15,7 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {optionsClosed} from '../fixtures/probe';
+import {appears, optionsClosed} from '../fixtures/probe';
 import {waitForSettled} from '../fixtures/app-events';
 
 // 45 s: login and the 20 s transactions-page gate share this budget; at 20 s they left the form-modal steps no time under load.
@@ -162,12 +162,15 @@ test.describe('WAC Preview', () => {
         const wacSection = page.getByTestId('tx-form-cost-basis');
         await expect(wacSection).toBeVisible({timeout: 3_000});
 
-        // If suggestion is visible, try expanding qualifying TXs
+        // Optional by design: the suggestion (and its qualifying panel) exists only once a WAC preview has been
+        // computed, and this form has no asset yet. Absent → the panel's table must not be there either.
         const showBtn = page.getByTestId('tx-form-cost-basis-show-qualifying');
-        if (await showBtn.isVisible({timeout: 2_000}).catch(() => false)) {
+        const table = page.getByTestId('tx-form-cost-basis-qualifying-table');
+        if (await appears(showBtn, 2_000)) {
             await showBtn.click();
-            const table = page.getByTestId('tx-form-cost-basis-qualifying-table');
             await expect(table).toBeVisible({timeout: 2_000});
+        } else {
+            await expect(table).toBeHidden();
         }
     });
 });

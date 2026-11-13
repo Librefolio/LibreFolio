@@ -3,7 +3,7 @@
  *
  * Used by:
  * - routes/(app)/assets/+page.svelte (assets list, cards + table): `fetchCurrentPrices` and the poll's outcome;
- * - the asset detail page's live poll (`components/assets/detail/assetDetailLive.svelte.ts`): the helpers only, since
+ * - the asset detail page's live poll (`features/assets/detail/assetDetailLive.svelte.ts`): the helpers only, since
  *   it posts its one id itself.
  *
  * Always non-blocking: callers fire-and-forget via promises. `livePollOutcome` and `livePollFailure` turn an answer, or

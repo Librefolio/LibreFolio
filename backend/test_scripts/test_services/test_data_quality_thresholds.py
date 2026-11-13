@@ -14,7 +14,6 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.services import portfolio_service
 from backend.app.services.platform.data_quality_thresholds import (
     QUANTITY_DUST_THRESHOLD,
     REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE,
@@ -22,6 +21,7 @@ from backend.app.services.platform.data_quality_thresholds import (
     STALE_PRICE_THRESHOLD_DAYS,
     TRANSACTION_IMPLIED_GRACE_DAYS,
 )
+from backend.app.services.portfolio import engine_facts
 from backend.app.services.risk_plugins.asset_risk_return.plugin import AssetRiskReturnAnalytic
 from backend.app.services.risk_plugins.asset_set_comparison.plugin import AssetSetComparisonAnalytic
 from backend.app.services.risk_plugins.asset_set_kpi.plugin import AssetSetKpiAnalytic
@@ -57,10 +57,11 @@ CONSUMERS = {
     # The daily state holds a position only above the dust threshold (MF6-2), as the holdings do.
     "backend/app/services/financial_math/portfolio/daily_state.py": {"STALE_PRICE_THRESHOLD_DAYS", "QUANTITY_DUST_THRESHOLD"},
     # The holdings read positions through the dust threshold...
-    "backend/app/services/portfolio_service.py": {"TRANSACTION_IMPLIED_GRACE_DAYS", "QUANTITY_DUST_THRESHOLD"},
+    "backend/app/services/portfolio/engine_facts.py": {"QUANTITY_DUST_THRESHOLD"},
+    "backend/app/services/portfolio/summary.py": {"TRANSACTION_IMPLIED_GRACE_DAYS"},
     # ...and so do the asset list's held-now flags.
     "backend/app/services/assets/crud.py": {"QUANTITY_DUST_THRESHOLD"},
-    "backend/app/services/market_series.py": {"STALE_PRICE_THRESHOLD_DAYS"},
+    "backend/app/services/market_series.py": {"is_stale"},
     "backend/app/services/risk/eligibility.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/service.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
     # A risk result's data quality states the threshold in its stale warnings and the banner's FX issue.
@@ -148,7 +149,7 @@ def test_the_thresholds_hold_the_values_the_developer_decided():
 
 def test_the_portfolio_reads_the_shared_dust_threshold_under_its_old_name():
     # Kept as an alias so the portfolio's many readers need not change; an alias, not a copy.
-    assert portfolio_service._QUANTITY_DUST_THRESHOLD is QUANTITY_DUST_THRESHOLD
+    assert engine_facts._QUANTITY_DUST_THRESHOLD is QUANTITY_DUST_THRESHOLD
 
 
 @pytest.mark.parametrize("analytic", FLOOR_ANALYTICS, ids=lambda analytic: analytic.analytic_code)

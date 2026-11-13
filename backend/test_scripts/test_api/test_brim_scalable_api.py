@@ -29,7 +29,8 @@ from typing import Dict, List, NamedTuple, Set, Tuple
 import httpx
 import pytest
 
-from backend.app.config import PROJECT_ROOT, get_settings
+from backend.app.config import get_settings
+from backend.test_scripts.brim_samples import SampleDir
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -37,8 +38,7 @@ settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
-
+SAMPLE_DIR = SampleDir()
 # The rows the tests save: cash movements without an instrument.
 CASH_TYPES = {"DEPOSIT", "WITHDRAWAL", "INTEREST", "TAX", "FEE"}
 SCALABLE_TAGS = ["import", "scalable"]

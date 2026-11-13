@@ -18,25 +18,26 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "run",
         "src/lib/stores/__tests__/assetPriceStoreRegistry.test.ts",
         "src/lib/stores/__tests__/signalResultCache.test.ts",
-        "src/lib/utils/__tests__/assetPriceDerived.test.ts",
+        "src/lib/features/assets/assetPriceDerived.test.ts",
         "src/lib/utils/__tests__/periodChanges.test.ts",
         "src/lib/utils/__tests__/periodChanges.rangeChange.test.ts",
         "src/lib/utils/__tests__/rangeChange.test.ts",
-        "src/lib/components/assets/detail/assetDetailRangeChange.test.ts",
+        "src/lib/features/assets/detail/assetDetailRangeChange.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregationGolden.test.ts",
         "src/lib/components/charts/__tests__/lineChartHelpers.test.ts",
         "src/lib/components/charts/chartCoreHelpers.test.ts",
-        "src/lib/charts/signals/__tests__/backendRenderer.test.ts",
-        "src/lib/charts/signals/__tests__/catalogMapper.test.ts",
-        "src/lib/charts/signals/__tests__/localSignalRegression.test.ts",
+        "src/lib/features/signals/__tests__/backendRenderer.test.ts",
+        "src/lib/features/signals/__tests__/catalogMapper.test.ts",
+        "src/lib/features/signals/__tests__/localSignalRegression.test.ts",
         "src/lib/workers/__tests__/workerPool.test.ts",
         "src/lib/workers/__tests__/priceProcessingPool.test.ts",
         "src/lib/workers/__tests__/priceProcessing.worker.test.ts",
-        "src/lib/stores/signalCatalogStore.test.ts",
-        "src/lib/utils/__tests__/assetSimilarity.test.ts",
-        "src/lib/utils/__tests__/assetGrouping.test.ts",
-        "src/lib/utils/__tests__/assetIdentifiers.test.ts",
+        "src/lib/features/signals/signalCatalogStore.test.ts",
+        "src/lib/features/assets/assetSimilarity.test.ts",
+        "src/lib/features/assets/assetGrouping.test.ts",
+        "src/lib/features/assets/identifierQuestions.test.ts",
+        "src/lib/features/assets/detail/assetDetailChartRequest.test.ts",
         "src/lib/utils/__tests__/assetTypeTables.test.ts",
         "src/lib/features/dashboard/allocationTypeEmoji.test.ts",
         "src/lib/features/dashboard/growthLadderAxis.test.ts",
@@ -99,6 +100,18 @@ def front_asset_list(verbose: bool = False, ui: bool = False, headed: bool = Fal
     if not _ensure_test_users():
         return False
     return _run_playwright("assets/asset-list.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_asset_bulk_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the asset bulk edit E2E tests (lane 65, E1)."""
+    print_section("Frontend Asset Bulk Edit Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-bulk-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_asset_card_sync_confirm(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -330,6 +343,14 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "asset-bulk-edit",
+        front_asset_bulk_edit,
+        name="Asset Bulk Edit",
+        desc="Lane 65: the pencil of the selection toolbar opens the bulk edit; a type and a benchmark flag chosen once are saved for three assets (one all-or-nothing PATCH, toast event, selection cleared, list reloaded); Index on an asset with transactions is a block that saves nothing, not even the free asset, until the blocked one is taken out and the rest is re-checked; at 375 px the fields and the summary (the card list) do not scroll sideways; closing keeps the selection and changes nothing",
+        tests="assets/asset-bulk-edit.spec.ts",
+    )
+    add_test(
+        cat,
         "asset-card-sync-confirm",
         front_asset_card_sync_confirm,
         name="Asset Card Sync Confirmation",
@@ -381,7 +402,7 @@ def populate_registry(registry: dict) -> None:
         "asset-browse",
         front_asset_browse,
         name="Asset Browse",
-        desc="Asset detail ‹ n/N › prev/next: follows the list left behind (searched grid in DOM order, table sorted by name), the default order on a direct entry, one Back to the list (header and browser), disabled at the edges, the query kept; at 390/360 px the nav fits and the page does not scroll sideways — K step 16, item 2",
+        desc="Asset detail ‹ n/N › prev/next: follows the list left behind (searched grid in DOM order, table sorted by name), the default order on a direct entry, one Back to the list (header and browser), disabled at the edges, the query kept; at 390/360 px the nav fits and the page does not scroll sideways — K step 16, item 2; header rows at 768 (badges under the name) and 1280 (one row) — project 71 block 1",
         tests="assets/asset-browse.spec.ts",
     )
     add_test(

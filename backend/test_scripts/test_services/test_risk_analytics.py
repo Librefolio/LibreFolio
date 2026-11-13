@@ -13,40 +13,25 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.portfolio import (
-    DataQualityExcludedAsset,
-    DataQualityExclusionReason,
-    DataQualityReport,
-)
-from backend.app.schemas.risk import (
-    AssetReturnPoint,
-    AssetReturnSeries,
-    AssetValuationPoint,
-    AssetValuationSeries,
-    PreparedAssetSeries,
-    PreparedAssetSeriesSet,
-    RiskAnalyticOutput,
-    RiskComparisonOutput,
-    RiskComparisonPoint,
+from backend.app.schemas.portfolio.data_quality import DataQualityExcludedAsset, DataQualityExclusionReason, DataQualityReport
+from backend.app.schemas.risk.outputs import RiskAnalyticOutput, RiskComparisonOutput, RiskComparisonPoint, RiskKpiOutput, RiskReturnOutput
+from backend.app.schemas.risk.results import RiskExcludedAsset, RiskHistoricalReplayAudit
+from backend.app.schemas.risk.scenarios import RiskScenarioDimension
+from backend.app.schemas.risk.series import AssetReturnPoint, AssetReturnSeries, AssetValuationPoint, AssetValuationSeries, PreparedAssetSeries, PreparedAssetSeriesSet, RiskFreeReference
+from backend.app.schemas.risk.vocabulary import (
     RiskCompositionPolicy,
     RiskDrawdownRecoveryStatus,
     RiskErrorCode,
-    RiskExcludedAsset,
-    RiskFreeReference,
-    RiskHistoricalReplayAudit,
     RiskHistoricalReplayExclusionReason,
     RiskHistoricalReplayExclusionTreatment,
-    RiskKpiOutput,
     RiskMode,
     RiskReturnBasis,
-    RiskReturnOutput,
     RiskScopeKind,
     RiskSimulationProcess,
     RiskStressApplicationRule,
     RiskStressMethod,
     RiskValueStatus,
 )
-from backend.app.schemas.risk_scenarios import RiskScenarioDimension
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk import acquired
 from backend.app.services.risk import base as risk_base

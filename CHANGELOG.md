@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### ✨ Added
+
+- Trade Republic: imports the new «Transaction export» CSV (profile › Account statements › Transaction export), also when re-saved by Excel: buys and sells of funds, stocks and crypto with their fee and tax, interest with its withholding tax, stamp duty, tax refunds as interest, dividends and transfers. The importer is no longer in beta, and its guide shows how to download the file. Rows of another account, such as a child's account, are left out with a note: export that account from its own login.
+- Edit several assets at once: select them in the Assets table and use «Edit selected» to change the type, benchmark, active state, units per single price, icon or personal URL of all of them. «Validate now» shows what blocks the save (an asset with transactions cannot become an Index) and what deserves a look (a type moving to another family, such as crowdfunding → ETF), and a summary shows every change before the save, which is all or nothing.
+- Lots analysis in FIFO and LIFO: the lots panel computes both methods in one request and switches between them with a selector in its header (FIFO first, not saved). The lots you picked stay picked; which lot a sale closes, and the figures that follow from it, change with the method. The theory pages explain the Italian rule (LIFO in the self-declared regime, average cost in the managed one) and the limits of the calculation.
+- The lots panel's data-quality banner offers «Add FX pair» and «Sync rates» on a missing or old exchange rate, as the Dashboard banner does.
+- Pending email change in Profile: the address waiting for confirmation, written in full, when its link expires, «Send again» and «Cancel the request».
+- Administrators see pending email changes: an «Email change pending» badge on the account, and the link in «Account links» can be revoked.
+
+### 🔄 Changed
+
+- Scalable Capital: a tax given back (a negative tax on a sale, or a positive Taxes row) is now imported as Interest «Tax refund» instead of a Deposit: it is money returned from your investment's gain, so it counts in your returns. Transactions imported before keep their type.
+- The admin guide now opens the backup chapter with a quick start for making a backup from the app, with screenshots: the command line is no longer the first thing you see.
+- An exchange rate more than a week old is now flagged wherever a value depends on it: the lots analysis shows the same «out-of-date rate» notice as the Dashboard, and the Yield on Cost tooltip marks the old rate it used. No figure changes, only the warning.
+- Currency pairs are written the same way everywhere, with symbols and flags: `$ 🇺🇸 USD / EUR 🇪🇺 €` for a pair, `$ 🇺🇸 USD → EUR 🇪🇺 €` for a conversion, in its direction.
+- Risk analysis: when an asset is left out because an exchange rate is missing, the message now names the currency pair and says from which date a rate is stored, or that none is.
+- Assets and FX lists, Rolling Return view: the cards now compare across types, as the detail pages do. An asset card can chart FX pairs and an FX card can chart assets, set from the card's «Chart Settings».
+- Lots analysis: within one day, purchases and incoming adjustments now come before sales and outgoing adjustments. A sale recorded before the purchase of the same day no longer makes the analysis fail; on a broker that allows short selling, a short opened and covered within one day now shows as a long lot, with the same realized gain.
+- Asset detail header: Transactions is now a badge with an icon and the number of transactions, so it reads as a link; the provider badge itself opens the asset's web page (the one you set, or else the provider's) in a new tab, and its tooltip says where it goes. The separate ↗ icon is gone.
+- Asset detail header on tablet and phone: below 1024 px the badges get a row of their own under the name; on a phone ← and ‹ n/N › share the top row, the name has the full width, and the badges follow in two groups (type and currency; Transactions and provider).
+- An asset that has transactions can no longer become an Index from the asset editor: the editor says how many transactions it has, and nothing is saved.
+- Changing your email waits for confirmation when email works: with email set up and `LIBREFOLIO_PUBLIC_URL` set, a new address in Profile is not used until you click the link sent to it (valid for 24 hours) while signed in to your account. Already signed in, one click is enough; otherwise the page asks you to sign in first and brings you back. Your old address is told at once. Without email nothing changes: the new address applies straight away.
+
+### 🐛 Fixed
+
+- Uploading a `.json` file no longer loses its contents, and files with an unusual or very long extension are stored safely.
+- The FX, Files and Assets lists no longer blank out to a spinner after a refresh or an edit: they stay on screen while the new data arrives.
+- Switching tabs on an asset's page keeps the date range you chose.
+- The import wizard's «Corrections» step shows the ticker and quantity of a possible stock split instead of raw placeholders.
+- Pressing Escape inside the AI Export menu closes only the menu, not the panel under it.
+- After Escape or a choice in a two-level list (such as the asset type), the keyboard focus goes back to the field.
+- Confirmation dialogs with many items write their count in your language.
+- Borsa Italiana bonds: the maturity in the description is now right on English pages and for maturities after 2068. An asset already saved with a wrong date is fixed when you ask its provider for the metadata again.
+- Settings › About now also lists the Risk and Tools plugins that fail to load.
+- While the Dashboard waits to reload after a change of the broker filter, it shows that it is busy instead of silently keeping the old totals.
+- In the lot comparison chart, the dashed legend mark of «estimated at cost» has the same colour as its line.
+- The scheduler's buttons that remove a time have a translated name for screen readers.
+- «Analyze Lots» now scrolls all the way to the lots panel on slower machines.
+- The backup command reads `--password-file` and `--instance-key-file` with a single open: a file swapped after the check can no longer be read in its place.
+
+- On an instance blocked by its hosting provider, the administrator also sees the «Backups already kept» and can download them, not only make a new one.
+- Importing a report no longer shows a success message when the change of an asset's identifiers was not saved.
+
+### ⚠️ Breaking changes
+
+- Missing exchange rates are no longer reported as text in `errors` by the price query, event query and conversion endpoints: they come in a new `fx_issues` list of `{code, from_currency, to_currency, first_date, last_date, count}`, in the direction of the conversion.
+- `PATCH /api/v1/assets` is all or nothing: if any item has an issue, nothing is saved. The response gains `committed`, `issues` and `warnings` (codes `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; warning `assetFamilyChange`). A name already used by another asset is reported as `assetNameTaken` instead of a generic failure. The new `POST /api/v1/assets/validate` runs the same checks and never saves.
+- `POST /api/v1/portfolio/lots/analysis` answers in a new shape: the parts no matching method changes (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) stay at the top; everything read from the lot replay (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, the value, return, price and performance histories, `income_events`, `economic_allocation_groups`, the orphans) moves under `methods.FIFO` / `methods.LIFO`. The request takes `matching_methods` (default `["FIFO"]`).
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 «Keyholder»** is the release for whoever runs the instance: it gives the administrator what is needed to open LibreFolio to family and friends, and to keep it safe.

@@ -119,7 +119,7 @@ The logic is centralized in `backend/app/services/brokers/access.py` (`BrokerAcc
 
 ### 🌐 API Endpoints
 
-Access management is exposed via the following endpoints (`backend/app/api/v1/brokers.py`):
+Access management is exposed via the following endpoints (`backend/app/api/v1/brokers/crud.py` and `backend/app/api/v1/brokers/access.py`):
 
 - `GET /api/v1/brokers/{broker_id}/access`: the users with access, with role and share (`list_accesses()`). Any
   authenticated user can read the list of any existing broker, email addresses included; 404 only when the broker
@@ -354,8 +354,8 @@ flowchart TD
 
 - `api/v1/user_limit.py`: the dependency `refuse_when_over_limit`, the **fourth** of the `/api/v1` router, after the
   block, the awaiting-restore mode and the interrupted restore (the first that stands answers). `ALLOWED_WHEN_OVER_LIMIT`
-  is `ALLOWED_WHEN_BLOCKED` less the five routes of the administrator's backup; `ALLOWED_WHEN_OVER_LIMIT_ADMIN` holds
-  those five and the two routes of the choice. The app's own restore is in neither list.
+  is `ALLOWED_WHEN_BLOCKED` less the six routes of the administrator's backup; `ALLOWED_WHEN_OVER_LIMIT_ADMIN` holds
+  those six and the two routes of the choice. The app's own restore is in neither list.
 - `GET /users/over-limit` lists the active accounts (who is `protected`, how many brokers each owns alone);
   `POST /users/over-limit/resolve {keep_user_ids}` deactivates the others in **one transaction** under SQLite's write
   lock, as `update_user_status(is_active=False)` does (sessions end, links retired), never `delete_user`. Refusals:
@@ -539,7 +539,10 @@ The real change starts at the host, and `services/accounts/instance_owner.py` ru
   owner, that the token's address is still the variable's and that no other account holds it; then sets the address
   (verified), ends the owner's sessions, and revokes its other change links and its reset links. A link that no longer
   matches is revoked and answers `TOKEN_INVALID` `revoked`. The notice to the old address is
-  `flows.email_changed_work`, as for the profile.
+  `flows.email_changed_work`, as for the profile. Since release 1.4 the same route also serves the changes a user asks
+  for from the profile (`email_change.link_flow()` tells the flows apart by `created_by_user_id`): those confirm only
+  with the session of the link's account, and a link without it answers 403 `EMAIL_CHANGE_SIGN_IN_REQUIRED`
+  ([A Change Asked from Profile](../backend/email.md#flow-profile-email-change)). The owner's flow above is unchanged.
 
 Tests: `./dev.py test services owner-email-change`, `./dev.py test api owner-email-change`,
 `./dev.py test db migration-005`.

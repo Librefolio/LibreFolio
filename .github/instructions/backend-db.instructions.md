@@ -59,7 +59,7 @@ zero silently** — hence the dedicated coverage test.
 - **Decimal columns** (C-97): amounts and event values `RealDecimal(18, 6)` (W-B60); quantities `RealDecimal(22, 10)`;
   prices and the per-unit cost basis `RealDecimal(24, 12)` (`db/real_decimal.py`: the SQLite REAL read back as
   the decimal written, at most 15 significant digits; reading never raises — a stored ±inf reads `None` — and a
-  value a double cannot hold is refused on write); FX rates `Numeric(24, 10)`. A value typed or read from a
+  value a double cannot hold is refused on write); the volume `RealDecimal(24, 0)` and FX rates `RealDecimal(24, 10)` (W-B63). A value typed or read from a
   file over its column's limit is refused, never rounded (`db/precision.decimal_limit_issue`: decimal places,
   15 significant digits, and the digits before the decimal point, `max_integer_digits` — 15 for a quantity and a
   transaction amount, decision N63, otherwise precision − scale); a value LibreFolio
@@ -67,9 +67,10 @@ zero silently** — hence the dedicated coverage test.
   (`truncate_priceHistory`), and one no column can keep is skipped (`storable_value`, `storable_price`, W-B58).
   Never sum these columns in SQL: `SUM` adds the stored doubles — sum in Python with
   `financial_math` (`position_quantities`, `native_balances`)
-- **Timestamps**: UTC via `utcnow()` helper, stored without an offset: every `datetime` field declares
-  `sa_type=DateTime` (SQLModel >= 0.0.48 would map it to its `UTCDateTime`, which refuses naive values); a value read
-  back is naive UTC (`ensure_utc()`). See the developer docs, Database Schema «Timestamps»
+- **Timestamps**: UTC via `utcnow()` helper, stored without an offset; every `datetime` field declares
+  `sa_type=UtcDateTime` (`db/utc_datetime.py`): the text on disk is the plain column's, a value read back is **aware**
+  UTC, and a naive datetime is refused on write (`ValueError`). Never declare a field as the plain `DateTime` (a test
+  pins it). `ensure_utc()` is for values from outside the database. See the developer docs, Database Schema «Timestamps»
 - **Daily-point policy**: one record per day for prices and FX rates
 - **Foreign keys**: enforced with `PRAGMA foreign_keys=ON`
 - **Currency validation**: via `Currency.validate_code()` from schemas

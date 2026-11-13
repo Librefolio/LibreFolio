@@ -41,29 +41,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess, Transaction
 from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal, StrictModel
-from backend.app.schemas.portfolio import (
-    AllocationItem,
-    AssetPeriodContribution,
-    LotAnalysisType,
-    LotsAnalysisResponse,
-    LotSummarySchema,
-    OtherPeriodEffect,
-    OtherPeriodEffectCode,
-    PortfolioHistoryPoint,
-    PortfolioHolding,
-    PortfolioReportQuery,
-    PortfolioReportResponse,
-    UnallocatedContribution,
-)
+from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse, LotSummarySchema
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AllocationItem, AssetPeriodContribution, OtherPeriodEffect, OtherPeriodEffectCode, PortfolioHolding, UnallocatedContribution
 from backend.app.services.ai_export.components.resources import LotsResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, ResourceKey
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
+from backend.app.services.financial_math.fifo.models import LotMatchingMethod
 from backend.app.services.financial_math.lots.summary import residual_cost
 from backend.app.services.financial_math.returns import price_return
 from backend.app.services.financial_math.series_steps import points_between
-from backend.app.services.lots_analysis_service import LotsAnalysisService, analysis_failure_codes
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService, analysis_failure_codes
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 if TYPE_CHECKING:
     from backend.app.services.ai_export.dependencies import BuildContext
@@ -1002,6 +993,8 @@ async def load_lots_results(
                 target_currency=scope.target_currency,
                 selected_lot_ids=None,
                 requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+                # The AI Export reads the lots in FIFO and says so (project 69, D7).
+                matching_method=LotMatchingMethod.FIFO,
             )
         return LotsResultsResource.from_mapping(results)
 

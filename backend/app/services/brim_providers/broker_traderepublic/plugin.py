@@ -1,7 +1,11 @@
 """
 Trade Republic Broker Report Import Plugin.
 
-Parses semicolon-separated Dutch CSV exports from Trade Republic.
+Two layouts, told apart by the header:
+
+- **The Transaction export** (Profile → Account statements → Transaction export), Trade Republic's own CSV since April 2026,
+  as written or re-saved by Excel: read by ``_transactions_export.py`` (since 1.2.0).
+- **The Dutch 8-column CSV** (``Datum;Transactietype;Waarde (netto);…``): read below, unchanged.
 """
 
 from __future__ import annotations
@@ -23,9 +27,18 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as io
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.brim_providers.broker_traderepublic import _transactions_export as transactions_export
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
+
+# =============================================================================
+# THE DUTCH 8-COLUMN CSV
+# =============================================================================
+# Built on an export found online, not reliable: no real export of this layout has ever been checked (the developer, 11/11/2026).
+# The sample (broker_traderepublic/sample_reports/traderepublic-export.csv) is the one of the Export-To-Ghostfolio project, byte for byte, and that file
+# was written by the community tool pytr (`pytr export_transactions` in Dutch), not by Trade Republic, which had no CSV export then.
+# Today's pytr writes 10 columns (ISIN2, Aantal2), which this exact header does not accept.
 
 COL_DATE = "Datum"
 COL_TYPE = "Transactietype"
@@ -103,7 +116,7 @@ class TradeRepublicBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import transactions from Trade Republic CSV export. Supports trades, dividends, interest, cash movements, fees, and taxes in EUR."
+        return "Import Trade Republic's Transaction export (CSV, also when re-saved by Excel): buys and sells of funds, stocks and crypto with their fee and tax, interest with its withholding tax, stamp duty, dividends and cash transfers."
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -119,26 +132,45 @@ class TradeRepublicBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
+        # 1.2.0 — the Transaction export (23 columns, also re-saved by Excel): each amount, fee and tax column is its own transaction (lane 73 TR).
         # 1.1.0 — the rows left out, and the fee and tax columns not imported, are listed in shared notices with the link to open an issue (W-B87).
-        return "1.1.0"
+        return "1.2.0"
 
     @property
     def docs_url(self) -> Optional[str]:
         return "/mkdocs/user/transactions/import/traderepublic/"
 
     def can_parse(self, file_path: Path) -> bool:
-        """Detect Trade Republic export via exact semicolon header."""
+        """Detect the Transaction export by its required columns, or the Dutch CSV by its exact semicolon header."""
         if file_path.suffix.lower() != ".csv":
             return False
         try:
-            with self._open_text(file_path, newline="") as f:
-                header = next(csv.reader(f, delimiter=";"), [])
-            return header == EXPECTED_HEADER
-        except Exception:
+            return self._is_dutch_csv(file_path) or transactions_export.is_transactions_export(self, file_path)
+        except Exception:  # a probe: a file it cannot read is not a Trade Republic export
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type sign rules, no nested logic
-        """Parse Trade Republic CSV export file."""
+    def _is_dutch_csv(self, file_path: Path) -> bool:
+        with self._open_text(file_path, newline="") as f:
+            header = next(csv.reader(f, delimiter=";"), [])
+        return header == EXPECTED_HEADER
+
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+        """Parse a Trade Republic CSV: the Transaction export, or the Dutch CSV."""
+        try:
+            is_dutch = self._is_dutch_csv(file_path)
+        except FileNotFoundError:
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
+        if is_dutch:
+            return self._parse_dutch_csv(file_path, broker_id)
+        if not transactions_export.is_transactions_export(self, file_path):
+            raise BRIMParseError("Unexpected Trade Republic CSV header", details={"code": "header_mismatch"})
+        try:
+            return transactions_export.parse(self, file_path, broker_id)
+        except Exception as e:
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
+
+    def _parse_dutch_csv(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type sign rules, no nested logic
+        """Parse the Dutch 8-column CSV."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []
@@ -267,3 +299,7 @@ class TradeRepublicBrokerProvider(BRIMProvider):
     @property
     def test_file_pattern(self) -> Optional[str]:
         return "traderepublic"
+
+    @property
+    def test_file_patterns(self) -> List[str]:
+        return ["traderepublic-export", "traderepublic-transactions"]

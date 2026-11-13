@@ -115,6 +115,27 @@ class TestSaveUpload:
         assert file_path.read_bytes() == SAMPLE_CONTENT
         print_success("File and metadata created on disk")
 
+    def test_save_json_upload_keeps_its_data(self):
+        """L4: a ``.json`` upload must not be overwritten by its own metadata sidecar."""
+        content = b'{"hello": "world"}'
+        info = save_upload(content, "notes.json", user_id=2, mime_type="application/json")
+        uploads_dir = get_uploads_dir()
+        meta = json.loads((uploads_dir / f"{info.id}.json").read_text())
+        assert meta["id"] == info.id, "the sidecar stays at {id}.json"
+        path = get_upload_path(info.id)
+        assert path is not None and path != uploads_dir / f"{info.id}.json"
+        assert path.read_bytes() == content
+        assert get_upload_info(info.id).original_name == "notes.json"
+        assert delete_upload(info.id)
+        assert not list(uploads_dir.glob(f"{info.id}*"))
+
+    def test_save_long_extension_falls_back(self):
+        """L4: an absurd suffix is not copied into the path."""
+        info = save_upload(SAMPLE_CONTENT, "a." + "x" * 200, user_id=2)
+        path = get_upload_path(info.id)
+        assert path is not None and path.read_bytes() == SAMPLE_CONTENT
+        assert len(path.name) < 80
+
     def test_save_blocked_extension(self):
         """Blocked extension → UploadSecurityError."""
         print_section("save_upload: blocked extension .exe")

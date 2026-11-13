@@ -117,9 +117,10 @@ from backend.app.schemas import brim as brim_schemas
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMFileInfo, BRIMFileStatus, BRIMNotice, BRIMParseOutput, BRIMParseResponse, BRIMPluginInfo
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.transactions.transactions import TXCreateItem
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import brim_provider, candidates, combined_files, duplicates, parsing, storage
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_samples import SampleDir
 
 BROKER_ID = 42
 OTHER_BROKER_ID = 43
@@ -198,10 +199,10 @@ def _schema(name: str, phase: str = "A1") -> Any:
 
 
 def _service(name: str, phase: str = "A1") -> Any:
-    """A new function or exception from ``backend.app.services.brim.brim_provider``."""
-    found = getattr(brim_provider, name, None)
+    """A new function or exception from the BRIM service modules (the contract, ``storage``, ``combined_files``, ``parsing``…)."""
+    found = next((getattr(module, name) for module in (brim_provider, storage, combined_files, parsing, candidates, duplicates) if hasattr(module, name)), None)
     if found is None:
-        _missing(f"backend.app.services.brim.brim_provider.{name} does not exist", phase)
+        _missing(f"backend.app.services.brim.{{brim_provider,storage,combined_files,parsing,candidates,duplicates}}.{name} does not exist", phase)
     return found
 
 
@@ -235,10 +236,10 @@ def _upload(role: str, *, broker_id: int = BROKER_ID, batch_id: Optional[str] = 
     """Upload one synthetic member through the real ``save_uploaded_file``; ``batch_id`` is sent only when given."""
     extra: Dict[str, Any] = {}
     if batch_id is not None:
-        _require_param(brim_provider.save_uploaded_file, "batch_id")
+        _require_param(storage.save_uploaded_file, "batch_id")
         extra["batch_id"] = batch_id
     content = CUSTODY_CSV if role == "custody" else CASH_CSV
-    return brim_provider.save_uploaded_file(content, f"{role}.csv", user_id=USER_ID, broker_id=broker_id, **extra)
+    return storage.save_uploaded_file(content, f"{role}.csv", user_id=USER_ID, broker_id=broker_id, **extra)
 
 
 def _refs(*members: Tuple[str, BRIMFileInfo]) -> List[Any]:
@@ -252,7 +253,7 @@ def _save_combined(plugin: BRIMProvider, *members: Tuple[str, BRIMFileInfo], plu
     save_combined_file = _service("save_combined_file")
     paths: Dict[str, List[Path]] = {}
     for role, info in members:
-        paths.setdefault(role, []).append(brim_provider.get_file_path(info.file_id))
+        paths.setdefault(role, []).append(storage.get_file_path(info.file_id))
     table = plugin.combine(paths)
     combined = save_combined_file(broker_id=BROKER_ID, plugin_code=FAKE_CODE, plugin_version=plugin_version or plugin.plugin_version, members=_refs(*members), table=table, filename=COMBINED_FILENAME, user_id=USER_ID)
     return combined, table
@@ -260,14 +261,14 @@ def _save_combined(plugin: BRIMProvider, *members: Tuple[str, BRIMFileInfo], plu
 
 def _info(file_id: str) -> BRIMFileInfo:
     """``get_file_info`` for a file that must exist and must still build."""
-    info = brim_provider.get_file_info(file_id)
+    info = storage.get_file_info(file_id)
     assert info is not None, f"get_file_info({file_id!r}) is None: the sidecar is gone or no longer builds a BRIMFileInfo"
     return info
 
 
 def _listed(file_id: str) -> BRIMFileInfo:
     """The one ``list_files()`` entry for ``file_id``."""
-    matches = [info for info in brim_provider.list_files() if info.file_id == file_id]
+    matches = [info for info in storage.list_files() if info.file_id == file_id]
     assert len(matches) == 1, f"{file_id} listed {len(matches)} times"
     return matches[0]
 
@@ -421,7 +422,7 @@ def isolated_brim_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterat
     """Redirect BRIM storage to a temp directory (the pattern of ``test_brim_versioning.py``)."""
     tmp_root = tmp_path / "broker_reports"
     tmp_root.mkdir()
-    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: tmp_root)
+    monkeypatch.setattr(storage, "get_broker_reports_dir", lambda: tmp_root)
     yield tmp_root
     shutil.rmtree(tmp_root, ignore_errors=True)
 
@@ -1056,7 +1057,7 @@ class TestUploadBatchId:
         _require_fields(BRIMFileInfo, *NEW_FILE_INFO_FIELDS)
 
         assert (legacy.batch_id, legacy.kind, legacy.derived_from, legacy.combined_into, legacy.combine_is_stale) == (None, "original", [], [], False)
-        assert (legacy.filename, legacy.target_broker_id, legacy.compatible_plugins) == ("legacy.csv", BROKER_ID, BRIMProviderRegistry.get_compatible_plugins(brim_provider.get_file_path(legacy.file_id)))
+        assert (legacy.filename, legacy.target_broker_id, legacy.compatible_plugins) == ("legacy.csv", BROKER_ID, BRIMProviderRegistry.get_compatible_plugins(storage.get_file_path(legacy.file_id)))
 
 
 class TestWriteCombinedCsv:
@@ -1123,7 +1124,7 @@ class TestSaveCombinedFile:
         data_path = isolated_brim_dir / BRIMFileStatus.UPLOADED.value / f"broker_{BROKER_ID}" / f"{combined.file_id}.csv"
         reference = tmp_path / "reference.csv"
         _service("write_combined_csv")(reference, table)
-        assert brim_provider.get_file_path(combined.file_id) == data_path
+        assert storage.get_file_path(combined.file_id) == data_path
         assert data_path.read_bytes() == reference.read_bytes()
         assert combined.size_bytes == data_path.stat().st_size
         with open(data_path, encoding="utf-8-sig", newline="") as handle:
@@ -1272,16 +1273,16 @@ class TestDeleteFileLinks:
         first, _ = _save_combined(fake_plugin, ("custody", custody), ("cash", cash))
         second, _ = _save_combined(fake_plugin, ("custody", custody), ("cash", cash), plugin_version="1.1.0")
 
-        assert brim_provider.delete_file(custody.file_id) is True
+        assert storage.delete_file(custody.file_id) is True
 
-        assert brim_provider.get_file_info(custody.file_id) is None
+        assert storage.get_file_info(custody.file_id) is None
         for combined in (first, second):
             info = _info(combined.file_id)
             refs = {ref.file_id: ref for ref in info.derived_from}
             assert (info.kind, set(refs)) == ("combined", {custody.file_id, cash.file_id})
             assert (refs[custody.file_id].deleted, refs[custody.file_id].role, refs[custody.file_id].filename) == (True, "custody", "custody.csv")
             assert refs[cash.file_id].deleted is False
-            assert brim_provider.get_file_path(combined.file_id) is not None
+            assert storage.get_file_path(combined.file_id) is not None
         assert _info(cash.file_id).combined_into == [first.file_id, second.file_id]
 
     def test_deleting_a_combined_unlinks_it_from_its_members(self, isolated_brim_dir: Path, fake_plugin: BRIMProvider) -> None:
@@ -1291,9 +1292,9 @@ class TestDeleteFileLinks:
         first, _ = _save_combined(fake_plugin, ("custody", custody), ("cash", cash))
         second, _ = _save_combined(fake_plugin, ("custody", custody), ("cash", cash), plugin_version="1.1.0")
 
-        assert brim_provider.delete_file(first.file_id) is True
+        assert storage.delete_file(first.file_id) is True
 
-        assert (brim_provider.get_file_info(first.file_id), brim_provider.get_file_path(first.file_id)) == (None, None)
+        assert (storage.get_file_info(first.file_id), storage.get_file_path(first.file_id)) == (None, None)
         for member in (custody, cash):
             assert _info(member.file_id).combined_into == [second.file_id]
             assert _sidecar(isolated_brim_dir, member.file_id)["combined_into"] == [second.file_id]
@@ -1310,7 +1311,7 @@ class TestListFilesReportSetFields:
         combined, _ = _save_combined(fake_plugin, ("custody", custody), ("cash", cash))
         legacy_id = _write_legacy_file(isolated_brim_dir)
 
-        listed = {info.file_id: info for info in brim_provider.list_files(broker_ids=[BROKER_ID])}
+        listed = {info.file_id: info for info in storage.list_files(broker_ids=[BROKER_ID])}
 
         assert {custody.file_id, cash.file_id, combined.file_id, legacy_id} <= set(listed)
         for member in (custody, cash):
@@ -1441,7 +1442,7 @@ def _sets(name: str) -> Any:
 
 def _member(content: bytes, filename: str, *, batch_id: Optional[str] = None, broker_id: int = BROKER_ID) -> BRIMFileInfo:
     """Store one synthetic export through the real ``save_uploaded_file``, as ``POST /upload`` does."""
-    return brim_provider.save_uploaded_file(content, filename, user_id=USER_ID, broker_id=broker_id, batch_id=batch_id)
+    return storage.save_uploaded_file(content, filename, user_id=USER_ID, broker_id=broker_id, batch_id=batch_id)
 
 
 def _rewrite_sidecar(root: Path, file_id: str, **changes: Any) -> None:
@@ -1475,7 +1476,7 @@ def _preview(plugin: BRIMProvider, members: Sequence[BRIMFileInfo], *, history_s
 
 def _combined_files() -> List[BRIMFileInfo]:
     """Every combined file of ``BROKER_ID`` in the isolated storage (a collection each test owns entirely)."""
-    return [info for info in brim_provider.list_files(broker_ids=[BROKER_ID]) if info.target_broker_id == BROKER_ID and info.kind == "combined"]
+    return [info for info in storage.list_files(broker_ids=[BROKER_ID]) if info.target_broker_id == BROKER_ID and info.kind == "combined"]
 
 
 # Phase F2 (plan F2.0, U2-B): the preview also says where the history LibreFolio holds ends
@@ -1790,9 +1791,9 @@ class TestCollectMembers:
         _member(CUSTODY_MAR, "custody-no-batch.csv")
         other_plugin = _member(GENERIC_CSV, "generic.csv", batch_id=batch)
         failed = _member(CUSTODY_MAR, "custody-failed.csv", batch_id=batch)
-        assert brim_provider.move_to_failed(failed.file_id, "synthetic failure")
+        assert storage.move_to_failed(failed.file_id, "synthetic failure")
         combined, _ = _save_combined(fake_plugin, ("custody", custody), ("cash", cash))
-        assert brim_provider.move_to_parsed(cash.file_id)
+        assert storage.move_to_parsed(cash.file_id)
         assert FAKE_CODE not in other_plugin.compatible_plugins, "precondition: the fake does not read the generic CSV"
         assert _info(combined.file_id).batch_id == batch, "precondition: the combined file shares the upload's batch"
 
@@ -1826,7 +1827,7 @@ class TestCollectMembers:
             _member(GENERIC_CSV, "generic.csv", batch_id=batch)
             _member(CUSTODY_JAN, "custody-other-broker.csv", batch_id=batch, broker_id=OTHER_BROKER_ID)
             failed = _member(CUSTODY_JAN, "custody-failed.csv", batch_id=batch)
-            assert brim_provider.move_to_failed(failed.file_id, "synthetic failure")
+            assert storage.move_to_failed(failed.file_id, "synthetic failure")
 
         with pytest.raises(members_not_found) as caught:
             collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch)
@@ -2015,7 +2016,7 @@ class TestBuildPreview:
         jan = _member(CUSTODY_JAN, "custody-jan.csv")
         mar = _member(_custody_csv("2025-03-03", "2025-03-20", account=OTHER_ACCOUNT), "custody-mar.csv")
         cash = _member(CASH_JAN_MAR, CASH_NAME)
-        assert fake_plugin.describe_member(brim_provider.get_file_path(mar.file_id)).account_fingerprint == OTHER_ACCOUNT  # precondition
+        assert fake_plugin.describe_member(storage.get_file_path(mar.file_id)).account_fingerprint == OTHER_ACCOUNT  # precondition
 
         preview = _preview(fake_plugin, [jan, mar, cash])
 
@@ -2193,14 +2194,14 @@ class TestCombineSet:
 
         result = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID)
 
-        expected = fake_plugin.combine({"custody": [brim_provider.get_file_path(custody.file_id)], "cash": [brim_provider.get_file_path(cash.file_id)]})
+        expected = fake_plugin.combine({"custody": [storage.get_file_path(custody.file_id)], "cash": [storage.get_file_path(cash.file_id)]})
         assert isinstance(result, _schema("BRIMSetCombineResponse", A2))
         assert (result.reused, result.summary) == (False, expected.summary)
         combined = result.combined
         assert (combined.kind, combined.status, combined.target_broker_id, combined.compatible_plugins) == ("combined", BRIMFileStatus.UPLOADED, BROKER_ID, [FAKE_CODE])
         assert (combined.batch_id, combined.uploaded_by_user_id) == (batch, USER_ID)
         assert {ref.file_id: (ref.role, ref.filename, ref.deleted) for ref in combined.derived_from} == {custody.file_id: ("custody", CUSTODY_NAME, False), cash.file_id: ("cash", CASH_NAME, False)}
-        with open(brim_provider.get_file_path(combined.file_id), encoding="utf-8-sig", newline="") as handle:
+        with open(storage.get_file_path(combined.file_id), encoding="utf-8-sig", newline="") as handle:
             assert list(csv.reader(handle, delimiter=";")) == [expected.headers, *expected.rows]
         for member in (custody, cash):
             assert combined.file_id in _info(member.file_id).combined_into
@@ -2464,7 +2465,7 @@ class TestA2FixtureGuards:
 
     def test_fixture_guard_fake_describes_its_set(self, isolated_brim_dir: Path, fake_plugin: BRIMProvider) -> None:
         """Fixture guard: the fake's ``describe_set`` merges custody spans that overlap or touch, and proves a gap between the others."""
-        jan, mar, touching = (brim_provider.get_file_path(_member(content, name).file_id) for content, name in ((CUSTODY_JAN, "jan.csv"), (CUSTODY_MAR, "mar.csv"), (_custody_csv("2025-01-16", "2025-01-20"), "touching.csv")))
+        jan, mar, touching = (storage.get_file_path(_member(content, name).file_id) for content, name in ((CUSTODY_JAN, "jan.csv"), (CUSTODY_MAR, "mar.csv"), (_custody_csv("2025-01-16", "2025-01-20"), "touching.csv")))
 
         shape = fake_plugin.describe_set({"custody": [mar, jan]})
         merged = fake_plugin.describe_set({"custody": [jan, touching]})
@@ -2476,7 +2477,7 @@ class TestA2FixtureGuards:
     def test_fixture_guard_account_fingerprint(self, isolated_brim_dir: Path, fake_plugin: BRIMProvider) -> None:
         """Fixture guard: a custody header's ``account=<id>`` cell is the fingerprint; without it, ``FAKE_ACCOUNT``; cash has none; a stranger file has no role."""
         contents = ((CUSTODY_JAN, "jan.csv"), (_custody_csv("2025-03-03", account=OTHER_ACCOUNT), "mar.csv"), (CASH_JAN, "cash.csv"), (GENERIC_CSV, "generic.csv"))
-        paths = [brim_provider.get_file_path(_member(content, name).file_id) for content, name in contents]
+        paths = [storage.get_file_path(_member(content, name).file_id) for content, name in contents]
 
         assert [fake_plugin.describe_member(path).account_fingerprint for path in paths] == [FAKE_ACCOUNT, OTHER_ACCOUNT, None, None]
         assert [fake_plugin.detect_role(path) for path in paths] == ["custody", "custody", "cash", None]
@@ -2931,7 +2932,7 @@ class TestCollectMembersExclusions:
             assert FAKE_CODE not in other.compatible_plugins, "precondition: the fake does not read the generic CSV"
         else:
             other = _member(CASH_FEB, "cash-failed.csv", batch_id=batch)
-            assert brim_provider.move_to_failed(other.file_id, "synthetic failure")
+            assert storage.move_to_failed(other.file_id, "synthetic failure")
 
         members = collect_members(broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, exclude_file_ids=[other.file_id])
 
@@ -3005,7 +3006,7 @@ class TestCombineSetExclusions:
 
         result = await combine_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch, user_id=USER_ID, exclude_file_ids=[cash_feb.file_id])
 
-        expected = fake_plugin.combine({"custody": [brim_provider.get_file_path(custody.file_id)], "cash": [brim_provider.get_file_path(cash.file_id)]})
+        expected = fake_plugin.combine({"custody": [storage.get_file_path(custody.file_id)], "cash": [storage.get_file_path(cash.file_id)]})
         assert result.reused is False
         assert _ids(result.combined.derived_from) == {custody.file_id, cash.file_id}
         assert result.summary == expected.summary
@@ -3072,7 +3073,7 @@ class TestCombineSetExclusions:
 # defect: it found nothing to reuse) or a grace runs out (the cure: it is waiting for the lock).
 
 DANSKE_CODE = "broker_danske_bank"
-DANSKE_SAMPLE_DIR = Path(__file__).resolve().parents[2] / "app" / "services" / "brim_providers" / "sample_reports"
+DANSKE_SAMPLE_DIR = SampleDir()
 DANSKE_PAIR = (("danske_bank-custody.xlsx", "custody"), ("danske_bank-cash.csv", "cash"))
 # Every wait for something that must happen is bounded by this: a regression fails the test, it never hangs the suite.
 _WAIT_SECONDS = 30.0
@@ -3108,7 +3109,7 @@ def _danske_pair_detected_before_item_8(root: Path) -> Tuple[str, Dict[str, BRIM
 
 def _plugins_on_record() -> Dict[str, List[str]]:
     """The plugins each file of ``BROKER_ID`` is read with now, for a failure message."""
-    return {info.filename: info.compatible_plugins for info in brim_provider.list_files(broker_ids=[BROKER_ID]) if info.target_broker_id == BROKER_ID}
+    return {info.filename: info.compatible_plugins for info in storage.list_files(broker_ids=[BROKER_ID]) if info.target_broker_id == BROKER_ID}
 
 
 class TestDanskePairDetectedBeforeItem8:
@@ -3194,7 +3195,7 @@ class TestDanskePairUploadedWith1_1_0:
         assert all(DANSKE_CODE in info.compatible_plugins for info in uploaded_again.values()), f"premise: today's catalogue reads the pair as Danske: {[info.compatible_plugins for info in uploaded_again.values()]}"
 
         read = {role: _info(file_id) for role, file_id in from_1_1_0.items()}
-        batches = sorted({info.batch_id for info in brim_provider.list_files(broker_ids=[BROKER_ID]) if info.batch_id is not None})
+        batches = sorted({info.batch_id for info in storage.list_files(broker_ids=[BROKER_ID]) if info.batch_id is not None})
         sets = {batch: _ids(collect_members(broker_id=BROKER_ID, plugin_code=DANSKE_CODE, batch_id=batch)) for batch in batches}
 
         assert {role: info.compatible_plugins for role, info in read.items()} == {"custody": [DANSKE_CODE], "cash": [DANSKE_CODE]}, "the files uploaded with 1.1.0 are not offered Danske after the update"

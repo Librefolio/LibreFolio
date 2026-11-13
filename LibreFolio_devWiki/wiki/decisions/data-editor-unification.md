@@ -53,6 +53,6 @@ Phase 6 Part B identified that FX rate editing and Asset price editing had grown
 | CsvEditor component | `frontend/src/lib/components/ui/data-editor/CsvEditor.svelte` |
 | DataImportModal | `frontend/src/lib/components/ui/data-editor/DataImportModal.svelte` |
 | ErasableNumberCell | `frontend/src/lib/components/ui/data-editor/ErasableNumberCell.svelte` |
-| Asset data editor | `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` |
-| FX data editor | `frontend/src/lib/components/fx/FxDataEditorSection.svelte` |
+| Asset data editor | `frontend/src/lib/features/assets/AssetDataEditorSection.svelte` |
+| FX data editor | `frontend/src/lib/features/fx/FxDataEditorSection.svelte` |
 | Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step4/PlanB/plan-partBDataEditorUnificato.prompt.md` |

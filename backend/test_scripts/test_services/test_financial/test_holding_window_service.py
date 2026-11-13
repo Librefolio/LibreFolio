@@ -74,7 +74,7 @@ rolled back: nothing is committed. Every amount is in EUR and read in EUR (``tar
 rate reaches the figures. The report, WAC and engine blob caches are emptied around each test. Rows are found by the
 test's own (broker id, asset id).
 
-Reference: backend/app/services/portfolio_service.py (get_summary, get_positions_contribution),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_summary, get_positions_contribution),
 backend/app/services/financial_math/holding_window.py.
 """
 
@@ -98,12 +98,13 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import AssetPeriodContribution, PortfolioHolding
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PortfolioHolding
 from backend.app.services.financial_math.returns import cumulative_to_annualized
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
 EUR = "EUR"
@@ -142,8 +143,8 @@ class _Scope:
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

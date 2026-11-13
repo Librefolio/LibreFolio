@@ -6,6 +6,7 @@
  * on the first page?", not "does it exist?" — and the answer changes whenever a
  * neighbouring test adds a row. These helpers ask the question the test means.
  */
+import {appears} from './probe';
 import {expect, type Locator, type Page} from '@playwright/test';
 
 /**
@@ -42,7 +43,8 @@ export async function maximisePageSize(page: Page, container: Locator): Promise<
     const pagination = container.getByTestId('data-table-pagination');
     if ((await pagination.count()) === 0) return;
     const btn = pagination.locator('.page-size-btn').first();
-    if (!(await btn.isVisible().catch(() => false))) return;
+    // Optional by design: a table that fits one page renders no page-size button, and there is nothing to maximise.
+    if (!(await appears(btn, 500))) return;
     await btn.click();
     const options = pagination.locator('.page-size-dropdown button, .dropdown-option');
     await expect.poll(async () => options.count(), {timeout: 5_000}).toBeGreaterThan(0);

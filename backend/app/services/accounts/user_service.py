@@ -11,17 +11,17 @@ from datetime import datetime
 from typing import Optional
 
 import structlog
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from backend.app.config import get_settings
 from backend.app.config.accounts import USERNAME_LENGTH_MESSAGE, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE, owner_admin_email
-from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
+from backend.app.db.models import AccountToken, AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
 from backend.app.db.session import begin_writes
 from backend.app.services.accounts import token_service, whats_new_service
 from backend.app.services.accounts.auth_service import hash_password
-from backend.app.services.brim import brim_provider
+from backend.app.services.brim import storage
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
 
@@ -358,7 +358,8 @@ async def reset_password(
     new_password: str,
 ) -> tuple[bool, Optional[str]]:
     """
-    Reset a user's password, and end every open session of the account.
+    Reset a user's password, and end every open session of the account. Its live password-reset links are revoked, its
+    setup links retired, and a change of address it asked for from Profile revoked (``revoke_pending_email_change``).
 
     Args:
         session: Database session
@@ -382,6 +383,8 @@ async def reset_password(
     # of the initial administrator is retired: given a password another way, the account is set up (A-32).
     await token_service.revoke_tokens(session, user_id=user_id, purpose=AccountTokenPurpose.PASSWORD_RESET)
     await token_service.retire_tokens(session, user_id=user_id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+    # A change of address the account asked for from Profile dies with the old password: whoever asked may not be the owner
+    await revoke_pending_email_change(session, user_id)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
@@ -410,7 +413,8 @@ async def create_password_reset(
 
 
 async def complete_password_reset(session: AsyncSession, token: str, new_password: str, *, now: Optional[datetime] = None) -> Optional[User]:
-    """Spend a password-reset link: set the new password, end every session, revoke the other live links; commits.
+    """Spend a password-reset link: set the new password, end every session, revoke the other live links and a change of
+    address asked from Profile; commits.
 
     None, and nothing changed, when the link is not valid.
     """
@@ -427,6 +431,8 @@ async def complete_password_reset(session: AsyncSession, token: str, new_passwor
     await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET, now=now)
     # Given a password through another link, the initial administrator is set up: its setup link is retired (A-32)
     await token_service.retire_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP, now=now)
+    # A change of address the account asked for from Profile dies with the old password
+    await revoke_pending_email_change(session, user.id, now=now)
     await session.commit()
     await session.refresh(user)
     logger.info("Password reset through a link, sessions ended", user_id=user.id, username=user.username)
@@ -469,7 +475,8 @@ async def update_user_status(
     Activating retires the setup links of the initial administrator: set up another way, it waits no more (A-32).
     Deactivating the initial administrator waiting for its setup, already inactive, revokes its setup links — the
     cancellation: it keeps waiting, and ``./dev.py user setup-link`` gives it a new one —; deactivating any other
-    account retires the setup links it never used (A-43). Demoting the waiting administrator is refused by the caller.
+    account retires the setup links it never used (A-43). Deactivating, either way, revokes a change of address the
+    account asked for from Profile (``revoke_pending_email_change``). Demoting the waiting administrator is refused by the caller.
     """
     if not await refreshed_under_lock(session, user):
         return "NOT_FOUND"
@@ -504,8 +511,8 @@ async def deactivate_for_limit(session: AsyncSession, user: User) -> None:
     """Deactivate an active ``user`` chosen to lose the access because the instance is over its limit of users (A5-7). Not committed.
 
     The caller holds SQLite's write lock and has decided: the last-administrator rule is its own check (it keeps an
-    administrator). As ``update_user_status(is_active=False)`` does: the verification and setup links are retired and the
-    sessions end; nothing is deleted.
+    administrator). As ``update_user_status(is_active=False)`` does: the verification and setup links are retired, a change
+    of address asked from Profile is revoked, and the sessions end; nothing is deleted.
     """
     await _apply_active_flag(session, user, False, False)
     await end_sessions(session, user)
@@ -518,7 +525,8 @@ async def _apply_active_flag(session: AsyncSession, user: User, is_active: Optio
 
     A new value of the flag revokes the account's email-verification links and retires its setup links. Deactivating an
     account already inactive ends what it waited for: its verification links, and its setup links (``_end_setup_links``:
-    revoked for the waiting initial administrator, ``waiting``; retired for any other).
+    revoked for the waiting initial administrator, ``waiting``; retired for any other). Deactivating, either way, revokes
+    the change of address the account asked for from Profile (``revoke_pending_email_change``); activating does not.
     """
     if is_active is not None and is_active != user.is_active:
         user.is_active = is_active
@@ -526,13 +534,16 @@ async def _apply_active_flag(session: AsyncSession, user: User, is_active: Optio
         # Activated another way, the initial administrator is set up (A-32); deactivated, a link left behind must not
         # set up the account again (A-43): either way its setup links are retired
         await token_service.retire_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+        if not is_active:
+            await revoke_pending_email_change(session, user.id)
         return True
     if is_active is not False:
         return False
     # An account already inactive that waited for its email verification: its links stop working, its place is free.
     revoked = await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION)
     ended = await _end_setup_links(session, user, waiting)
-    return bool(revoked) or bool(ended)
+    pending = await revoke_pending_email_change(session, user.id)
+    return bool(revoked) or bool(ended) or bool(pending)
 
 
 async def _is_pending_admin(session: AsyncSession, user: User) -> bool:
@@ -571,7 +582,8 @@ async def set_user_active(
     revoked: the operator has decided, so the account no longer waits for one (workstream E). Activating retires the
     setup links of the initial administrator: set up another way, it waits no more (A-32). Deactivating the initial
     administrator waiting for its setup revokes its setup links — the cancellation: it keeps waiting —; deactivating
-    any other account retires the setup links it never used (A-43). Protection is not checked: the operator's power.
+    any other account retires the setup links it never used (A-43). Deactivating also revokes a change of address the
+    account asked for from Profile (``revoke_pending_email_change``). Protection is not checked: the operator's power.
 
     Args:
         session: Database session
@@ -608,6 +620,8 @@ async def set_user_active(
     else:
         # The waiting administrator's link revoked (the cancellation), any other account's retired (A-43)
         await _end_setup_links(session, user, waiting)
+        # A change of address the account asked for from Profile ends with the account's access
+        await revoke_pending_email_change(session, user_id)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
@@ -672,6 +686,65 @@ async def set_user_admin(
     return True, None
 
 
+async def email_refusal(session: AsyncSession, user: User, address: str, *, reserve_owner_address: bool = True) -> Optional[AccountError]:
+    """Why ``user`` cannot take ``address`` as its email, or None: ``EMAIL_TAKEN`` for another account's address, for another
+    account's username (A-21a, rule 2: the sign-in would read it as this address), and for the address the host named for
+    the owner of a managed instance (A-64 (a)) unless ``user`` is that owner. The account's own address and username are
+    never a refusal.
+
+    ``reserve_owner_address``: the profile reserves the owner's address; the command line passes False.
+    """
+    existing = await get_user_by_email(session, address)
+    if existing is not None and existing.id != user.id:
+        return AccountError("EMAIL_TAKEN", "Email already registered")
+    if await address_is_a_username(session, address, other_than=user.id):
+        return AccountError("EMAIL_TAKEN", "Email already registered")
+    if reserve_owner_address and not user.is_instance_owner and await asyncio.to_thread(owner_address_reserved, address):
+        return AccountError("EMAIL_TAKEN", "Email already registered")
+    return None
+
+
+async def move_email(session: AsyncSession, user: User, address: str, *, verified_at: Optional[datetime]) -> None:
+    """Give ``user`` the address ``address``, verified at ``verified_at`` (None: not verified, E5). Not committed.
+
+    Every session opened with the old address ends (A6e), and so does every live password-reset link (A-27: whoever holds
+    the old mailbox cannot use one asked for before), the setup link of the waiting initial administrator, which went to
+    the old address too (A-33), and every pending change of address, the host's included (A5-4): its link must not move
+    the address again. The caller has checked ``email_refusal`` and commits.
+    """
+    user.email = address
+    user.email_verified_at = verified_at
+    await end_sessions(session, user)
+    await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
+    await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+    await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_CHANGE)
+
+
+async def revoke_pending_email_change(session: AsyncSession, user_id: int, *, now: Optional[datetime] = None) -> int:
+    """Revoke the live change-of-address links ``user_id`` issued for itself from Profile; how many. Not committed.
+
+    Only the links with ``created_by_user_id == user_id``: the link the host issued for the owner of a managed instance
+    (A5-1b) carries no creator and stays valid. Called by what ends the owner's trust in a request: a password changed
+    or reset, a deactivation.
+    """
+    statement = (
+        update(AccountToken)
+        .where(
+            AccountToken.purpose == AccountTokenPurpose.EMAIL_CHANGE,
+            AccountToken.user_id == user_id,
+            AccountToken.created_by_user_id == user_id,
+            AccountToken.consumed_at.is_(None),  # type: ignore[union-attr]
+            AccountToken.revoked_at.is_(None),  # type: ignore[union-attr]
+        )
+        .values(revoked_at=now or utcnow())
+        .execution_options(synchronize_session=False)
+    )
+    revoked = (await session.execute(statement)).rowcount
+    if revoked:
+        logger.info("Pending email change revoked", count=revoked, user_id=user_id)
+    return revoked
+
+
 async def update_profile(
     session: AsyncSession,
     user_id: int,
@@ -713,24 +786,13 @@ async def update_profile(
             return None, AccountError("USERNAME_TAKEN", "Username already taken")
         user.username = username
 
-    # Check email uniqueness (if changing): the same address in another case is no change (decision P18). The username
-    # of another account is taken too (A-21a, rule 2): the sign-in would read it as this address; the account's own is not.
+    # Check email uniqueness (if changing): the same address in another case is no change (decision P18).
     email_changed = email is not None and not same_email(email, user.email)
     if email_changed:
-        existing = await get_user_by_email(session, email)
-        if existing or await address_is_a_username(session, email, other_than=user.id) or (reserve_owner_address and not user.is_instance_owner and await asyncio.to_thread(owner_address_reserved, email)):
-            return None, AccountError("EMAIL_TAKEN", "Email already registered")
-        user.email = email
-        # A new address is not verified (E5), every session opened with the old one ends (A6e), and so does every live
-        # password-reset link (A-27: whoever holds the old mailbox cannot use one asked for before): committed below,
-        # together with the address.
-        user.email_verified_at = None
-        await end_sessions(session, user)
-        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
-        # The setup link of the waiting initial administrator went to the old address too: revoked, it waits for a new one (A-33)
-        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
-        # A pending change of address was asked for before this one: its link must not move the address again (A5-4)
-        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_CHANGE)
+        if (refusal := await email_refusal(session, user, email, reserve_owner_address=reserve_owner_address)) is not None:
+            return None, refusal
+        # A new address is not verified (E5): committed below, together with the address
+        await move_email(session, user, email, verified_at=None)
     elif email is not None:
         # The same address written in another case: the stored form follows, nothing else changes.
         user.email = email
@@ -874,7 +936,7 @@ async def delete_account(session: AsyncSession, user: User) -> AccountDeletionRe
     files_removed = 0
     if deleted_ids:
         try:
-            files_removed = await asyncio.to_thread(brim_provider.delete_files_for_brokers, deleted_ids)
+            files_removed = await asyncio.to_thread(storage.delete_files_for_brokers, deleted_ids)
         except Exception:
             logger.exception("The report files of the deleted brokers could not be removed", broker_ids=deleted_ids)
     return AccountDeletionResult(deleted_broker_ids=deleted_ids, files_removed=files_removed)

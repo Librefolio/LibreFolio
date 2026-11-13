@@ -135,15 +135,17 @@ from backend.app.db.base import SQLModel  # every model, for create_all; and the
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.precision import usable_fx_rate_bounds
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioReportQuery
-from backend.app.services import portfolio_service as portfolio_service_module
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.services.financial_math.native_cash import CashMovement, NativeCash
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import history as history_module
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
 Pair = tuple[str, str]
@@ -451,8 +453,8 @@ async def _rated_session(directory: Path, rows, legacy, name: str) -> AsyncItera
 
 
 def _clear_portfolio_caches() -> None:
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 
@@ -770,7 +772,7 @@ class _Recorded:
     def install(self, monkeypatch: pytest.MonkeyPatch) -> _Recorded:
         preload_signature, native_signature = inspect.signature(REAL_PRELOAD), inspect.signature(REAL_COMPUTE_NATIVE_CASH)
         current_preload = PortfolioCalculationEngine._preload_fx_rates
-        current_engine_native, current_service_native = portfolio_engine_module.compute_native_cash, portfolio_service_module.compute_native_cash
+        current_engine_native, current_service_native = portfolio_engine_module.compute_native_cash, history_module.compute_native_cash
 
         async def preload(engine_self, *args, **kwargs):
             fx_map = await current_preload(engine_self, *args, **kwargs)
@@ -789,7 +791,7 @@ class _Recorded:
 
         monkeypatch.setattr(PortfolioCalculationEngine, "_preload_fx_rates", preload)
         monkeypatch.setattr(portfolio_engine_module, "compute_native_cash", native_recorder(current_engine_native))
-        monkeypatch.setattr(portfolio_service_module, "compute_native_cash", native_recorder(current_service_native))
+        monkeypatch.setattr(history_module, "compute_native_cash", native_recorder(current_service_native))
         return self
 
 
@@ -949,7 +951,7 @@ class TestTheReportIsBitIdentical:
             with monkeypatch.context() as patch:
                 patch.setattr(PortfolioCalculationEngine, "_preload_fx_rates", _preload_fx_rates_today)
                 patch.setattr(portfolio_engine_module, "compute_native_cash", _compute_native_cash_today)
-                patch.setattr(portfolio_service_module, "compute_native_cash", _compute_native_cash_today)
+                patch.setattr(history_module, "compute_native_cash", _compute_native_cash_today)
                 today = _deep_bits(await _report(book))
         assert product["history"] and product["summary"], "precondition: the report has a history and a summary"
         # The new stale-rate list is the product's alone (see the module docstring): present and well formed here, left out below.
@@ -1052,9 +1054,9 @@ class TestTheCost:
             calls = _record_fx(monkeypatch, native_cash_module)
             await native_cash_module.compute_native_cash(session, movements, report_currency=EUR, rates_until=NATIVE_RATES_UNTIL)
         units = [item for item in calls.bulk_items if item not in {(movement.currency, movement.amount, EUR, movement.date) for movement in foreign}]
-        assert calls.bulk_items == [
-            (movement.currency, movement.amount, EUR, movement.date) for movement in foreign
-        ], f"compute_native_cash handed convert_bulk {len(calls.bulk_items)} items for {len(foreign)} foreign movements: {len(units)} are no movement (one unit per asked day, e.g. {units[:3]})"
+        assert calls.bulk_items == [(movement.currency, movement.amount, EUR, movement.date) for movement in foreign], (
+            f"compute_native_cash handed convert_bulk {len(calls.bulk_items)} items for {len(foreign)} foreign movements: {len(units)} are no movement (one unit per asked day, e.g. {units[:3]})"
+        )
         assert len(calls.steps_requests) == 1, f"compute_native_cash called unit_rate_steps {len(calls.steps_requests)} time(s): expected 1"
         problems = _days_problems(calls.asked_days(), _needs_by_pair(_unit_requests_today(foreign, NATIVE_RATES_UNTIL), EUR))
         assert not problems, f"the native cash's windows do not ask the days of today:{_show(problems)}"

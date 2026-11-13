@@ -48,8 +48,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
-from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
+from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
 from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_services._scope_boundary_books import (
     L1_ARRIVAL_DAY,
@@ -609,7 +609,7 @@ async def test_r12_a_legacy_arrival_without_cost_is_degraded_not_failed(session)
 # The economics stay on ``kind``; the partner broker is never named (R13-SEC7). The label is read through
 # ``model_dump()``: until the cure the field does not exist, and a red must fail on its value, never on an AttributeError.
 
-from backend.app.schemas.portfolio import LotTimelineEventSchema
+from backend.app.schemas.portfolio.lots import LotTimelineEventSchema
 
 CUSTODY = LotAnalysisType.CUSTODY_HISTORY
 _BROKER_FIELDS = ("broker_id", "source_broker_id", "destination_broker_id")

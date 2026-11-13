@@ -24,11 +24,14 @@ from backend.app.schemas.assets.events import FAAssetEventPoint, FAAssetEventPoi
 from backend.app.schemas.common import (
     Currency,
     FxBackwardFillInfo,
+    FxConversionIssue,
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.price_store import PRICE_UPSERT_CHUNK_SIZE
+from backend.app.services.financial_math.fx_rates import fx_days_back
 from backend.app.services.financial_math.splits import costless_incoming_split_adjustments, is_split_event_type, is_valid_split_ratio
 from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.fx.conversion_issues import day_issue, group_fx_issues, split_fx_issues
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -658,6 +661,7 @@ class EventStoreOperations:
             db_events = res.scalars().all()
 
             errors: list[str] = []
+            event_issues: list[FxConversionIssue] = []
 
             # Build native-currency event points first
             event_points: list = []
@@ -682,12 +686,13 @@ class EventStoreOperations:
             if target_currency and event_points:
                 conversions = [(ep.value, target_currency, ep.date) for ep in event_points]
                 conv_results, conv_errors = await convert_bulk(session, conversions, raise_on_error=False)
+                event_issues: list[FxConversionIssue] = []
 
                 for idx, (ep, conv) in enumerate(zip(event_points, conv_results, strict=True)):
                     if conv is None:
                         # FX miss — keep native currency value, surface as non-fatal warning.
                         # original_* stays None → frontend will hide the event marker (E.8.2).
-                        errors.append(f"Missing FX rate {ep.value.code}->{target_currency} for event on {ep.date.isoformat()}")
+                        event_issues.append(day_issue("event_rate_missing", ep.value.code, target_currency, ep.date))
                         continue
                     new_cur, rate_date, _bfill = conv
                     # Identity conversion (from == to) → no-op, don't populate original_*/fx_*
@@ -695,7 +700,7 @@ class EventStoreOperations:
                     if ep.value.code == target_currency:
                         continue
                     # Compute days_back magnitude (0 for same-day, >0 for backward-fill).
-                    days_back = (ep.date - rate_date).days if rate_date else 0
+                    days_back = fx_days_back(ep.date, rate_date)
                     event_points[idx] = FAAssetEventPointOut(
                         date=ep.date,
                         type=ep.type,
@@ -710,15 +715,16 @@ class EventStoreOperations:
                 # Also include per-pair errors surfaced by convert_bulk (e.g. pair not registered)
                 # (deduplicated against our per-event messages — convert_bulk errors are already
                 # one per failed conversion, same index, so we skip duplicates by content).
-                for err in conv_errors:
-                    if err not in errors:
-                        errors.append(err)
+                # A missing rate of an event is already its ``event_rate_missing`` issue: only the other errors are kept as text
+                extra_errors, _event_rate_failures = split_fx_issues(conv_errors)
+                errors.extend(err for err in extra_errors if err not in errors)
 
             results.append(
                 FAEventQueryResult(
                     asset_id=asset_id,
                     events=event_points,
                     errors=errors,
+                    fx_issues=group_fx_issues(event_issues),
                 )
             )
 

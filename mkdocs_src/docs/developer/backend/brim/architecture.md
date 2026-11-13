@@ -106,7 +106,7 @@ backend/data/{prod|test}/broker_reports/
 Each file is stored with a companion `.json` metadata sidecar recording status, original filename, and any errors encountered. A file keeps its `broker_<id>/` folder for its whole life: a move changes only the status folder.
 
 Deleting a broker clears its storage. Its files live on disk, outside the ORM cascade, so
-`delete_files_for_brokers` (`backend/app/services/brim/brim_provider.py`) runs after the commit that
+`delete_files_for_brokers` (`backend/app/services/brim/storage.py`) runs after the commit that
 deleted the broker — `DELETE /brokers`, the last owner leaving it, an account deletion — and removes
 its files, then (`_remove_broker_storage`, under the broker's metadata lock) its empty
 `uploaded|parsed|failed/broker_<id>/` folders and its `.locks/broker_<id>.lock`, unlinked while held.
@@ -136,7 +136,7 @@ was built from; deleting a combined file removes it from its originals' `combine
 ### 🔐 Who reaches a report file {: #file-access }
 
 Every per-file route, `/api/v1/brokers/import/files/{file_id}…`, starts with
-`_get_brim_file_with_access` (`backend/app/api/v1/brokers.py`), which reads the file's sidecar and
+`get_brim_file_with_access` (`backend/app/api/v1/brokers/guards.py`), which reads the file's sidecar and
 lets through only the users of the table below (decision 36 of release 1.3; the roles are those of
 [Broker Access Control](../../architecture/access_control.md)). The administrator (`is_superuser`)
 reaches every file; anyone else gets 403.
@@ -170,7 +170,7 @@ reaches every file; anyone else gets 403.
 hold a role on, plus the files with no broker they uploaded; the administrator gets every file, as
 before. With `broker_ids`, intersected with a regular user's brokers, the list holds only those
 brokers' files, for the administrator too: the route drops the files with no broker, which
-`brim_provider.list_files` keeps, so they come only without the filter, on the Files page. Before
+`storage.list_files` keeps, so they come only without the filter, on the Files page. Before
 1.3 they came with any filter, and a broker's *Uploaded Reports* (`broker_ids=<its id>`) listed them
 under every broker, where its bulk delete could remove them (W-B32). Each item is a
 `BRIMFileListItem`, a `BRIMFileInfo` plus `can_delete`, which says what
@@ -191,12 +191,12 @@ serialised by the server no matter how parallel the client was.
 | Layer | What runs where |
 |---|---|
 | **Upload** | `save_uploaded_file` runs in `asyncio.to_thread`. A thread is enough: the transfer itself is the OS's work; we only write the file and re-read it to sniff compatible plugins |
-| **Plugin discovery** | `auto_discover()` (`backend/app/services/provider_registry.py`) imports the plugin modules once, under the registry's own `RLock`, and marks discovery done only after every module has run. The first uploads after a start run on worker threads: one that arrives mid-discovery waits for the full catalogue instead of detecting against a half-filled one |
+| **Plugin discovery** | `auto_discover()` (`backend/app/services/platform/provider_registry.py`) imports the plugin modules once, under the registry's own `RLock`, and marks discovery done only after every module has run. The first uploads after a start run on worker threads: one that arrives mid-discovery waits for the full catalogue instead of detecting against a half-filled one |
 | **Parse** | `backend/app/services/brim/brim_parse_pool.py` — a **lazy** `ProcessPoolExecutor`, `min(cpu_count, 4)` workers. Parsing is CPU work: a thread would leave it serialised by the GIL. With the opt-in [warm-up](#parse-pool-warm-up), its forkserver starts at application startup preloaded with the BRIM module and every plugin, so each worker is born with them; with it off nothing is preloaded, and each worker imports them at its first parse |
 | **Sidecar writes** | Every write of a broker's sidecars holds that broker's lock (`broker_metadata_lock`: a re-entrant thread lock plus an advisory `flock` on `broker_reports/.locks/broker_<id>.lock`, created `0600` and opened with `O_NOFOLLOW` — a symbolic link in its place makes the lock raise `OSError` as it is entered, and the write it guards does not run). `combine_set` holds it, in a worker thread, from the reuse check to the save of the combined file: analysing the same set twice — a double click, two tabs — reuses the first combined file instead of building a second one. See [The broker metadata lock](../../architecture/patterns/brim_plugin_guide.md#broker-metadata-lock) |
-| **File reads** | The preview and download routes (`get_brim_file_preview`, `download_file` in `backend/app/api/v1/brokers.py`) resolve the file's path in a worker thread, `await asyncio.to_thread(brim_provider.get_file_path, file_id)`: `get_file_path` finds and reads the sidecar. `./dev.py test utils gate-event-loop-io` fails on any direct call of a synchronous `brim_provider.py` function inside an `async def` of `backend/app/api/v1/`. See the [Event Loop Blocking Rule](../../architecture/patterns/async.md) |
+| **File reads** | The preview and download routes (`get_brim_file_preview`, `download_file` in `backend/app/api/v1/brokers/files.py`) resolve the file's path in a worker thread, `await asyncio.to_thread(brim_provider.get_file_path, file_id)`: `get_file_path` finds and reads the sidecar. `./dev.py test utils gate-event-loop-io` fails on any direct call of a synchronous `brim_provider.py` function inside an `async def` of `backend/app/api/v1/`. See the [Event Loop Blocking Rule](../../architecture/patterns/async.md) |
 | **Candidate search** | `search_asset_candidates_bulk` issues **one** query per file instead of up to five per extracted asset — one per chunk of 500 conditions, each name's seven identifier `ILIKE`s counted one by one (MF-SEC9a) — then applies the same five priorities in memory, in a worker thread (`_classify_candidates` over plain `_CandidateView`s, `asyncio.to_thread`; MF-SEC9g): exact ISIN and ticker through an index that keeps the universe's order, each needle's `LIKE` pattern compiled once. On the event loop, a large universe with generic names held it for seconds to minutes |
-| **Frontend** | `lib/utils/core/requestConcurrency.ts` — `mapWithConcurrency` bounds the upload and parse loops instead of awaiting one file at a time |
+| **Frontend** | `lib/features/transactions/import/requestConcurrency.ts` — `mapWithConcurrency` bounds the upload and parse loops instead of awaiting one file at a time |
 
 ### 🧵 Why `forkserver`/`spawn`, never `fork`
 
@@ -234,7 +234,7 @@ With `forkserver`, every worker of the pool is forked from one forkserver proces
 warm-up on (below), that forkserver preloads `brim_parse_preload` (`set_forkserver_preload`):
 `prewarm()` sets the preload at startup, and `_get_pool()` sets it too, which counts only
 while the forkserver has not started. That module, imported only by the forkserver, imports
-`brim_provider` and runs `BRIMProviderRegistry.auto_discover()`: every worker is born with
+`parsing` and runs `BRIMProviderRegistry.auto_discover()`: every worker is born with
 the BRIM module and every plugin imported and discovered, sharing those pages with the
 forkserver, instead of importing them itself at its first parse.
 
@@ -344,7 +344,7 @@ Confidence levels:
 
 An incoming `DEPOSIT` or `WITHDRAWAL` is also compared with the saved legs of `CASH_TRANSFER` and
 `FX_CONVERSION` pairs (`_MERGED_LEG_TYPES`, read by `detect_tx_duplicates` in
-`backend/app/services/brim/brim_provider.py`): same broker, date and quantity, same amount — sign
+`backend/app/services/brim/duplicates.py`): same broker, date and quantity, same amount — sign
 included — and currency. A deposit thus meets the leg that received the money, a withdrawal the
 leg that sent it.
 
@@ -433,7 +433,7 @@ What each plugin sends there (`plugin_version` is the one that introduced it; ch
 | Revolut (Invest layout) | 1.3.0 | a `Stock split` with no readable positive `Quantity` (a reverse split), or with no ticker | — | `Transfer` |
 | Trading 212 | 1.2.0 | `stock distribution`, `currency conversion`; a `stock split close`/`open` that is a reverse split (fewer shares after), has equal shares, or has no partner | — | `transfer` |
 | eToro | 1.4.0 | — (no type goes to the shared notice) | — | — |
-| Trade Republic | 1.1.0 | an unknown type; a row whose `Kosten` or `Belasting` is not zero (the row is imported, the fee and tax are not) | an unreadable date or amount, a missing ISIN | — |
+| Trade Republic | 1.2.0 | Transaction export: a (`category`, `type`) it does not map, a negative dividend, a positive fee, a sign a type does not allow. Dutch CSV: an unknown type; a row whose `Kosten` or `Belasting` is not zero (the row is imported, the fee and tax are not) | Transaction export: an unreadable date, number or currency, a trade or dividend without a symbol, a trade without shares. Dutch CSV: an unreadable date or amount, a missing ISIN | a repeated `transaction_id`; a row whose amount, fee and tax are all zero. A row of another account (`account_type` ≠ `DEFAULT`, a child's `JUNIOR`) is ignored with its own info note, `traderepublic_other_account`, without `report_issue` |
 | Swissquote | 1.2.0 | a forex leg without its partner, with costs, or in an order of more than two legs; an unknown transaction | an unreadable date, a missing or zero net amount, a missing currency, a missing ISIN and symbol, a quantity not positive on a trade | — |
 | Interactive Brokers | 1.1.0 | an unknown direction, a trade without an ISIN (a currency trade) | an unreadable date | — |
 
@@ -449,11 +449,12 @@ Each plugin is a folder of `backend/app/services/brim_providers/`, named after i
 backend/app/services/brim_providers/
 ├── __init__.py                                   ← the family's docstring
 ├── _brim_io.py, _brim_output.py, _scalable.py    ← helpers shared by the plugins (discovery skips them)
-├── static/                                       ← icons, served under /api/v1/uploads/plugin/brim/…
-├── sample_reports/                               ← every plugin's sample exports, read by the tests
+├── sample_reports/                               ← what belongs to no plugin: README and malformed/ fixtures
 └── broker_directa/
     ├── __init__.py   ← its docstring and nothing else
     ├── plugin.py     ← the code, loaded as backend.app.services.brim_providers.broker_directa.plugin
+    ├── sample_reports/ ← its sample exports, read by the tests
+    ├── static/       ← optional: its icons, served as /api/v1/uploads/plugin/brim/broker_directa/<file>
     └── i18n/         ← en.json, it.json, fr.json, es.json: brimPlugins.broker_directa.name and .description
 ```
 
@@ -503,7 +504,7 @@ parent does it:
 2. A plugin that declares **no** field gets `None` and no database read: it is called exactly as
    before, with three arguments.
 3. Otherwise the picklable `BoundSettings` travels as a fourth argument of
-   `brim_provider.parse_file(file_id, plugin_code, broker_id, settings)`. The worker binds it on the
+   `parsing.parse_file(file_id, plugin_code, broker_id, settings)`. The worker binds it on the
    plugin instance before the parse, and holds the secrets *in flight* for its length: masked in
    every log line and in the exception it raises. The parent masks the exception too, and hides its
    texts whole when a personal secret is bound ([Secrets](../../architecture/patterns/plugin_settings.md#secrets)).
@@ -599,15 +600,15 @@ value, and a token set after the parse makes the file stale too.
   text dates never move. There is no «auto» value.
 - `backend/app/services/brim/brim_parse_pool.py`: `parse_file_offloaded(..., bound=...)`. A caller that resolved the
   values itself passes them and the database is not read again; `None` means «no settings».
-- `backend/app/api/v1/brokers.py`, the parse route: resolves `bound = bound_settings_for(...)` once, hands it to
+- `backend/app/api/v1/brokers/parse.py`, the parse route: resolves `bound = bound_settings_for(...)` once, hands it to
   `parse_file_offloaded` and saves `bound.fingerprint` with the result.
-- `backend/app/services/brim/brim_provider.py`, `save_parse_result(..., settings_fingerprint=...)`: stores it in
+- `backend/app/services/brim/storage.py`, `save_parse_result(..., settings_fingerprint=...)`: stores it in
   the file's metadata as `parsed_settings_fingerprint`; `None` (a plugin without fields) removes the one a previous
   parse left.
 - `backend/app/schemas/brim.py`, `BRIMFileInfo.parsed_settings_fingerprint`: filled from the metadata, with
   `exclude=True`, so it is compared in memory and never serialised in the API.
 - `backend/app/services/brim/brim_file_settings.py`, `apply_settings_staleness(files, user_id)`: called by
-  `GET /brokers/import/files` in `brokers.py`, in the async route, for the
+  `GET /brokers/import/files` in `brokers/files.py`, in the async route, for the
   signed-in user. It resolves `current` once per plugin and sets `parse_is_stale = True` through
   `settings_changed_since(...)`; a file that is not `PARSED`, a plugin without fields and a file already stale are
   left alone. The existing stale banner already tells the user to parse again.

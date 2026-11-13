@@ -2,7 +2,7 @@
     import {_} from '$lib/i18n';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {schemas} from '$lib/api';
-    import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
+    import AssetIcon from '$lib/features/assets/AssetIcon.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
@@ -43,9 +43,11 @@
         currency: string;
         onClose: () => void;
         onGotoTransaction?: (transactionId: number) => void;
+        /** The matching method on screen (project 69): it names the realized P&L. */
+        matchingMethod?: string;
     }
 
-    let {open, lot, history = [], brokers = [], currency, onClose, onGotoTransaction}: Props = $props();
+    let {open, lot, history = [], brokers = [], currency, onClose, onGotoTransaction, matchingMethod = 'FIFO'}: Props = $props();
 
     let selectedHistoryKey = $state<string | null>(null);
 
@@ -353,7 +355,7 @@
                         </div>
                     {/if}
                     <div class="rounded-xl bg-lf-panel px-4 py-3">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.fifoPnl')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('brokers.lots.fifoPnl', {values: {method: matchingMethod}})}</dt>
                         <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotPnl)}`}>{formatSignedCurrency(lotPnl)}</dd>
                     </div>
                     {#if lotTotalPnl != null}

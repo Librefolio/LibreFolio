@@ -159,10 +159,7 @@ test.describe('AI Export contextual memory', () => {
         await expect(trigger).toBeVisible();
         await expect(trigger, `AI Export is enabled for ${TEST_USER_2.username}, who owns no broker: its export would leave without broker_ids, and the backend would widen it to every broker the user can see (F2)`).toBeDisabled();
 
-        // The second session needs a user who can export: TEST_ADMIN owns every seeded broker. After login an admin's
-        // browser asks GitHub for a newer release (updateCheck.ts) and, when there is one, opens a modal over the
-        // page: the third party stays out of the test, and the probe fails closed, in silence.
-        await page.route('https://api.github.com/**', (route) => route.abort());
+        // The second session needs a user who can export: TEST_ADMIN owns every seeded broker.
         await switchUser(page, TEST_ADMIN);
         if ((await ownedBrokerIds()).length === 0) throw new Error(`${TEST_ADMIN.username} owns no broker with a share above zero, so its Dashboard cannot export. Check populate_mock_data.py seeding.`);
         await gotoDashboard(page);

@@ -25,6 +25,7 @@ Usage:
 """
 
 # Setup test database BEFORE importing app modules
+from backend.test_scripts.brim_samples import SampleDir
 from backend.test_scripts.test_db_config import initialize_test_database, setup_test_database
 
 setup_test_database()
@@ -75,10 +76,10 @@ from backend.app.db.models import GlobalSetting, UserOnboardingStepProgress
 from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
 from backend.app.services.accounts.auth_service import hash_password
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
-from backend.app.services.brim.brim_provider import save_uploaded_file
+from backend.app.services.brim.storage import save_uploaded_file
 from backend.app.services.files.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
@@ -494,7 +495,7 @@ def _grandfather_onboarding_for_test_users(session: Session, users: list[User]) 
 
     if inserted or repaired or steps_inserted or steps_repaired:
         session.commit()
-    print(f"  ✅ Onboarding grandfathered for {len(user_ids)} canonical test user(s): " f"{inserted} row(s) inserted, {repaired} row(s) repaired; " f"{steps_inserted} step row(s) inserted, {steps_repaired} step row(s) repaired")
+    print(f"  ✅ Onboarding grandfathered for {len(user_ids)} canonical test user(s): {inserted} row(s) inserted, {repaired} row(s) repaired; {steps_inserted} step row(s) inserted, {steps_repaired} step row(s) repaired")
 
 
 def populate_broker_user_access(session: Session):  # noqa: C901 — sequential fixture seeding steps
@@ -2659,7 +2660,7 @@ def link_transactions_to_events(session: Session):  # noqa: C901 — sequential 
     session.add(apple_div_tx)
     session.commit()
 
-    print(f"  ✅ Linked Transaction #{apple_div_tx.id} (DIVIDEND, {apple_div_tx.date}) " f"→ AssetEvent #{apple_div_event.id} (Apple DIVIDEND, {apple_div_event.date})")
+    print(f"  ✅ Linked Transaction #{apple_div_tx.id} (DIVIDEND, {apple_div_tx.date}) → AssetEvent #{apple_div_event.id} (Apple DIVIDEND, {apple_div_event.date})")
     print("\n  🧪 Testing tip — RESTRICT-aware delete:")
     print(f"     • Open Asset detail for 'Apple Inc.' (asset_id={apple.id})")
     print(f"     • In the Events tab, try to delete event #{apple_div_event.id}")
@@ -2692,7 +2693,7 @@ def link_transactions_to_events(session: Session):  # noqa: C901 — sequential 
             loan_int_tx.asset_event_id = loan_int_event.id
             session.add(loan_int_tx)
             session.commit()
-            print(f"  ✅ Linked Transaction #{loan_int_tx.id} (INTEREST, {loan_int_tx.date}) " f"→ AssetEvent #{loan_int_event.id} ({loan1.display_name} INTEREST, {loan_int_event.date})")
+            print(f"  ✅ Linked Transaction #{loan_int_tx.id} (INTEREST, {loan_int_tx.date}) → AssetEvent #{loan_int_event.id} ({loan1.display_name} INTEREST, {loan_int_event.date})")
         else:
             print("  ⚠️  Skipped bond INTEREST link — tx or event missing")
 
@@ -2955,7 +2956,7 @@ def create_split_transaction(session: Session):
     session.add(split_tx)
     session.commit()
 
-    print(f"  ✅ SPLIT AssetEvent #{split_event.id} (value=2) + ADJUSTMENT #{split_tx.id} " f"(+{open_qty} AAPL on broker #{etoro_buy.broker_id}, {split_date})")
+    print(f"  ✅ SPLIT AssetEvent #{split_event.id} (value=2) + ADJUSTMENT #{split_tx.id} (+{open_qty} AAPL on broker #{etoro_buy.broker_id}, {split_date})")
     print("\n  🧪 Testing tip — split marker (◆):")
     print(f"     • Open Asset detail for 'Apple Inc.' (asset_id={apple.id}) → tab Posizioni → Analizza Lotti")
     print(f"     • In 'PMC / Prezzo di mercato' the eToro lot shows a ◆ split marker on {split_date}")
@@ -3243,7 +3244,7 @@ def populate_fx_currency_pair_sources(session: Session):
 
     session.commit()
     total = len(eur_direct_routes) + len(chain_routes) + 1  # direct + chains + manual
-    print(f"\n  📊 Configured {total} conversion routes " f"({len(eur_direct_routes)} direct + {len(chain_routes)} chains + 1 manual)")
+    print(f"\n  📊 Configured {total} conversion routes ({len(eur_direct_routes)} direct + {len(chain_routes)} chains + 1 manual)")
 
 
 def configure_user_avatars(session: Session):
@@ -3556,7 +3557,7 @@ def upload_broker_reports(session: Session):
     print("\n📄 Uploading broker report samples...")
     print("-" * 60)
 
-    samples_dir = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+    samples_dir = SampleDir()
     if not samples_dir.exists():
         print("  ⚠️  Sample reports directory not found")
         return

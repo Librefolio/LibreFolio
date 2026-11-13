@@ -21,9 +21,11 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, ArrowLeftRight, Coins, ArrowUpRight, RefreshCw, Loader2} from 'lucide-svelte';
-    import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, Loader2} from 'lucide-svelte';
+    import {formatPairSlugHtml} from '$lib/utils/currency/currencyFormat';
     import {DATA_QUALITY_TONE, STATUS_TONES} from '$lib/theme/toneClasses';
+    import {ctaIcon, ctaLabel, fixShape} from './dataQualityCta';
+    import DataQualityIssueActions from './DataQualityIssueActions.svelte';
 
     /** Matches backend DataQualityIssue DTO. Only fields that are actively populated. */
     export interface DataQualityIssue {
@@ -76,30 +78,6 @@
     let actionableIssues = $derived(sortedIssues.filter((i) => i.severity !== 'info'));
     let infoIssues = $derived(sortedIssues.filter((i) => i.severity === 'info'));
 
-    /** Per-asset navigation targets (id + display name), zipping the two aligned backend arrays. */
-    function assetTargets(issue: DataQualityIssue): {id: number; name: string}[] {
-        const ids = issue.affected_asset_ids ?? [];
-        const names = issue.affected_asset_names ?? [];
-        return ids.map((id, i) => ({id, name: names[i] ?? `#${id}`}));
-    }
-
-    /** The actions that work on one pair at a time: the add dialog opens on one pair, the link goes to one pair. */
-    const PER_PAIR_ACTIONS: ReadonlySet<string> = new Set(['add_fx_pair', 'navigate_fx']);
-
-    /**
-     * How a category's action meets what it fixes (grouped mode). `all`: one button fixes the whole category, so it
-     * comes first and the message and items hang under it. `each-asset` and `each-pair`: the action works on one item at
-     * a time, so each item is its own chip, under the message. `none`: no action, the message alone.
-     */
-    type FixShape = 'all' | 'each-asset' | 'each-pair' | 'none';
-
-    function fixShape(issue: DataQualityIssue): FixShape {
-        if (!issue.cta_action) return 'none';
-        if (issue.cta_action === 'navigate_asset' && (issue.affected_asset_ids?.length ?? 0) > 0) return 'each-asset';
-        if (PER_PAIR_ACTIONS.has(issue.cta_action) && (issue.affected_fx_pairs?.length ?? 0) > 0) return 'each-pair';
-        return 'all';
-    }
-
     /** The assets a one-button fix works on, as plain text: at most three names, then «+N». */
     function assetNamesLine(names: string[]): string {
         const shown = names.slice(0, 3).join(', ');
@@ -125,31 +103,7 @@
         }
     }
 
-    function getCtaLabel(action: string | null | undefined): string {
-        if (!action) return '';
-        const key = `dataQuality.cta.${action}`;
-        const translated = $_(key);
-        return translated !== key ? translated : action.replace(/_/g, ' ');
-    }
-
-    /** Select CTA icon based on action type */
-    function getCtaIcon(action: string | null | undefined) {
-        if (action === 'add_fx_pair') return Coins;
-        if (action === 'sync_fx_pair' || action === 'sync_stale_fx' || action === 'sync_asset_prices') return RefreshCw;
-        return ArrowUpRight;
-    }
-
-    function formatFxPair(slug: string): {baseFlag: string; baseCode: string; quoteFlag: string; quoteCode: string} {
-        const parts = slug.includes('/') ? slug.split('/') : slug.split('-');
-        const base = parts[0]?.toUpperCase() ?? '';
-        const quote = parts[1]?.toUpperCase() ?? '';
-        return {
-            baseFlag: getCurrencyInfo(base).flag_emoji ?? '',
-            baseCode: base,
-            quoteFlag: getCurrencyInfo(quote).flag_emoji ?? '',
-            quoteCode: quote,
-        };
-    }
+    const translate = (key: string) => $_(key);
 
     function getGroupedSeverity(): IssueSeverity {
         if (errorCount > 0) return 'error';
@@ -169,15 +123,14 @@
     }
 </script>
 
-{#snippet fxPairLabel(pair: string, arrowSize: number)}
-    {@const fx = formatFxPair(pair)}
-    <span class="inline-flex items-center gap-0.5"><span class="emoji-flag">{fx.baseFlag}</span>{fx.baseCode}<ArrowLeftRight size={arrowSize} /><span class="emoji-flag">{fx.quoteFlag}</span>{fx.quoteCode}</span>
+{#snippet fxPairLabel(pair: string)}
+    <span class="inline-flex items-center gap-0.5">{@html formatPairSlugHtml(pair)}</span>
 {/snippet}
 
 {#snippet fxPairList(pairs: string[])}
     <span class="inline-flex items-center gap-1 flex-wrap text-[11px]">
         {#each pairs.slice(0, 3) as pair}
-            {@render fxPairLabel(pair, 9)}
+            {@render fxPairLabel(pair)}
         {/each}
         {#if pairs.length > 3}
             <span>+{pairs.length - 3}</span>
@@ -200,8 +153,6 @@
 {#snippet issueRow(issue: DataQualityIssue, divided: boolean, dividerClass: string)}
     {@const rowStyles = getSeverityStyles(issue.severity)}
     {@const shape = fixShape(issue)}
-    {@const action = issue.cta_action ?? ''}
-    {@const CtaIcon = getCtaIcon(issue.cta_action)}
     {@const pairs = issue.affected_fx_pairs ?? []}
     {@const names = issue.affected_asset_names ?? []}
     <!-- A divider above every category but a section's first: a button heading its category never reads as the tail
@@ -209,22 +160,7 @@
     <div class="flex flex-col gap-1 text-xs {divided ? `pt-2.5 border-t ${dividerClass}` : ''}" data-testid="data-quality-issue-{issue.code}" data-severity={issue.severity} data-tone={rowStyles.tone}>
         {#if shape === 'all'}
             <!-- One button fixes the whole category: it comes first, and what it fixes hangs under it. -->
-            <div>
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                    onclick={() => handleCta(issue)}
-                    disabled={busyCode === issue.code}
-                    data-testid="data-quality-cta-{issue.code}"
-                >
-                    {#if busyCode === issue.code}
-                        <Loader2 size={11} class="animate-spin" />
-                    {:else}
-                        <CtaIcon size={11} />
-                    {/if}
-                    {getCtaLabel(issue.cta_action)}
-                </button>
-            </div>
+            <DataQualityIssueActions {issue} placement="head" chipClass={rowStyles.chip} {onaction} {busyCode} />
             <div class="flex flex-col gap-1 ml-1 pl-2.5 border-l-2 {rowStyles.divider}" data-testid="data-quality-fixes-{issue.code}">
                 {@render issueMessage(issue, false)}
                 {#if pairs.length > 0}
@@ -237,34 +173,8 @@
             </div>
         {:else}
             {@render issueMessage(issue, shape === 'none')}
-            {#if shape === 'each-asset'}
-                <!-- One «go to asset» chip per affected asset: the chip is the item and its fix. -->
-                <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-nav-assets-{issue.code}">
-                    {#each assetTargets(issue) as tgt}
-                        <button
-                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] min-w-0 max-w-[16rem]"
-                            onclick={() => onaction?.('navigate_asset', String(tgt.id), issue)}
-                            title={tgt.name}
-                            data-testid="data-quality-nav-asset-{tgt.id}"
-                        >
-                            <ArrowUpRight size={11} class="shrink-0" />
-                            <span class="truncate">{tgt.name}</span>
-                        </button>
-                    {/each}
-                </div>
-            {:else if shape === 'each-pair'}
-                <!-- One chip per pair, the action on that pair: adding or opening works on one pair at a time. -->
-                <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-fx-pairs-{issue.code}">
-                    {#each pairs as pair (pair)}
-                        {@const fx = formatFxPair(pair)}
-                        {@const label = `${getCtaLabel(issue.cta_action)}: ${fx.baseCode}/${fx.quoteCode}`}
-                        <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded {rowStyles.chip} transition-colors font-medium text-[11px] min-w-0" onclick={() => onaction?.(action, pair, issue)} title={label} aria-label={label} data-testid="data-quality-fx-pair-{pair}">
-                            <CtaIcon size={11} class="shrink-0" />
-                            {@render fxPairLabel(pair, 9)}
-                        </button>
-                    {/each}
-                </div>
-            {/if}
+            <!-- One chip per asset or per pair, under the message: each chip is an item and its fix. -->
+            <DataQualityIssueActions {issue} placement="items" chipClass={rowStyles.chip} {onaction} {busyCode} />
         {/if}
     </div>
 {/snippet}
@@ -318,7 +228,7 @@
     {#each sortedIssues as issue (issue.code + (issue.group_key ?? ''))}
         {@const styles = getSeverityStyles(issue.severity)}
         {@const Icon = getIcon(issue.severity)}
-        {@const CtaIcon = getCtaIcon(issue.cta_action)}
+        {@const CtaIcon = ctaIcon(issue.cta_action)}
         <div class="border rounded-xl px-4 py-2.5 text-xs flex flex-col sm:flex-row items-start sm:items-center gap-2 {styles.container}" data-testid="data-quality-issue-{issue.code}" data-severity={issue.severity} data-tone={styles.tone} role="status">
             <!-- Left: icon + message + FX pairs + asset context -->
             <div class="flex items-center gap-2 flex-wrap min-w-0 flex-1">
@@ -327,14 +237,7 @@
                 <!-- FX pairs with flags -->
                 {#if (issue.affected_fx_pairs?.length ?? 0) > 0}
                     {#each issue.affected_fx_pairs ?? [] as pair}
-                        {@const fx = formatFxPair(pair)}
-                        <span class="font-medium inline-flex items-center gap-1">
-                            <span class="emoji-flag">{fx.baseFlag}</span>
-                            {fx.baseCode}
-                            <ArrowLeftRight size={10} class="shrink-0" />
-                            <span class="emoji-flag">{fx.quoteFlag}</span>
-                            {fx.quoteCode}
-                        </span>
+                        <span class="font-medium inline-flex items-center gap-1">{@html formatPairSlugHtml(pair)}</span>
                     {/each}
                 {/if}
                 <!-- Asset context, in parens: smaller, never dimmed by an opacity (designer, round 3) -->
@@ -353,7 +256,7 @@
                         {:else}
                             <CtaIcon size={13} />
                         {/if}
-                        {getCtaLabel(issue.cta_action)}
+                        {ctaLabel(translate, issue.cta_action)}
                     </button>
                 </div>
             {/if}

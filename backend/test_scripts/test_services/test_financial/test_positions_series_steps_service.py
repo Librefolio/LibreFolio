@@ -50,8 +50,8 @@ setup_test_database()
 import backend.app.services.financial_math.portfolio.position_series as position_series_module
 from backend.app.db.models import PriceHistory, TransactionType
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import PositionKey, PositionsSeriesQuery
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.schemas.portfolio.positions_series import PositionKey, PositionsSeriesQuery
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_services.test_financial import test_positions_series_service as base
 from backend.test_scripts.test_services.test_financial.test_positions_series_service import (  # noqa: F401 — fixtures the tests of this module use
     clean_portfolio_caches,

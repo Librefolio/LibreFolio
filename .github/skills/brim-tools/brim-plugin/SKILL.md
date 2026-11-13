@@ -41,6 +41,10 @@ converter.
 6. **Correct sign conventions.** Set signs per transaction type (BUY: qty > 0 / cash < 0;
    SELL: qty < 0 / cash > 0; DIVIDEND & INTEREST: qty = 0 / cash > 0; FEE & TAX: qty = 0 /
    cash < 0; ADJUSTMENT: qty ≠ 0 / no cash), but take magnitudes verbatim from the report.
+   **A tax given back is INTEREST**, never a DEPOSIT (the developer, 11/11/2026): money returned from the
+   investment's gain counts in the P&L, a deposit would be new capital. Describe it `Tax refund`, put it on the
+   trade's asset when it refunds a trade's tax, and list the rows in one `info` notice. Only for what is imported
+   from now on: never migrate rows already saved.
 7. **`cost_basis_override` is PER-UNIT.** If you freeze an inherited cost basis (WAC) on a
    `TRANSFER`/`ADJUSTMENT` seed (opening snapshot, TRANSFER_IN), store the cost **per single
    unit**, never the total — the engine multiplies it by `quantity`. If the source reports a
@@ -108,6 +112,10 @@ converter.
       tax, a currency conversion) unless the plugin knows that is safe: a row it cannot import
       is unknown.
     - Rule 9's rows not settled yet are neither: they keep their info note.
+    - **An info note the user must read is in the four languages** (the developer, 11/11/2026): a note on what the
+      import did on purpose (a tax refund as interest, rows not settled yet, rows of another account) gets
+      `importWizard.brimNotice.<code>` and `importWizard.brimEvidence.<code>` in EN/IT/FR/ES, whatever the file's
+      language; the plugin's own text stays as the English fallback.
     - **Beta plugins.** While a plugin is in beta it may still write one plain string per skipped
       row (a `legacy` warning, no link): with no reliable reports there is no way yet to tell the
       safe rows from the unknown ones (decision of 19/10/2026, confirmed 22/10). That is a
@@ -136,12 +144,12 @@ without values (defaults, no secret), so nothing they use may depend on a settin
 2. Implement `can_parse` (quick header/extension sniff) and `parse` (full parsing →
    `BRIMParseOutput`). Use the base-class helpers instead of re-implementing them.
 3. Map the broker's operation labels to `TransactionType`, applying the sign rules above.
-4. Add a sample export under `sample_reports/`, set `test_file_pattern`, and add a
+4. Add a sample export under the plugin's own `sample_reports/`, set `test_file_pattern`, and add a
    user-facing docs page under `mkdocs_src/docs/user/transactions/import/`.
 5. Give the plugin its name and description in EN/IT/FR/ES, in its own `i18n/`:
    `./dev.py i18n add brimPlugins.broker_<name>.name --en … --it … --fr … --es …
    --into brim_providers/broker_<name>` (and `.description`). The gate
-   `utils gate-plugin-i18n-ownership` checks they live there.
+   `./dev.py test utils gate-plugin-i18n-ownership` checks they live there.
 
 ## 📚 Where to find the technical details
 

@@ -7,6 +7,57 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### ✨ Ajouté
+
+- Trade Republic : importe le nouveau CSV « Export des transactions » (profil › Relevés de compte › Export des transactions), même lorsqu'il a été réenregistré par Excel : achats et ventes de fonds, d'actions et de crypto avec leurs frais et impôts, intérêts avec leur retenue, droit de timbre, remboursements d'impôt comptés comme intérêts, dividendes et virements. L'importateur n'est plus en bêta, et son guide montre comment télécharger le fichier. Les lignes d'un autre compte, comme celui d'un enfant, sont écartées avec une note : ce compte s'exporte depuis son propre accès.
+- Modifier plusieurs actifs à la fois : sélectionnez-les dans le tableau des actifs et utilisez « Modifier la sélection » pour changer pour tous le type, l'indice de référence, l'état actif, les unités par prix unitaire, l'icône ou l'URL personnelle. « Valider maintenant » montre ce qui bloque l'enregistrement (un actif avec des transactions ne peut pas devenir un Indice) et ce qui mérite un coup d'œil (un type qui passe à une autre famille, comme crowdfunding → ETF), et un récapitulatif montre chaque changement avant l'enregistrement, qui est tout ou rien.
+- Analyse des lots en FIFO et en LIFO : le panneau des lots calcule les deux méthodes en une seule requête et passe de l'une à l'autre avec un sélecteur dans son en-tête (FIFO à l'ouverture, non enregistré). Les lots sélectionnés le restent ; le lot clôturé par une vente, et les chiffres qui en découlent, changent avec la méthode. Les pages de théorie expliquent la règle italienne (LIFO dans le régime déclaratif, coût moyen dans le régime administré) et les limites du calcul.
+- Le bandeau de qualité des données du panneau des lots propose « Ajouter paire FX » et « Synchroniser les taux » sur un taux de change manquant ou ancien, comme le bandeau du tableau de bord.
+- Changement d'e-mail en attente dans le Profil : l'adresse qui attend la confirmation, écrite en entier, l'expiration du lien, « Renvoyer » et « Annuler la demande ».
+- Les administrateurs voient les changements d'e-mail en attente : un badge « Changement d'e-mail en attente » sur le compte, et le lien dans « Liens de compte » peut être révoqué.
+
+### 🔄 Modifié
+
+- Scalable Capital : un impôt restitué (un impôt négatif sur une vente, ou une ligne Taxes positive) est désormais importé comme Intérêt « Tax refund » au lieu d'un Dépôt : c'est de l'argent rendu sur le gain de l'investissement, il compte donc dans vos rendements. Les transactions importées avant gardent leur type.
+- Le guide admin ouvre désormais le chapitre sur la sauvegarde par un démarrage rapide pour la faire depuis l'application, avec des captures : la ligne de commande n'est plus la première chose que l'on voit.
+- Un taux de change de plus d'une semaine est désormais signalé partout où une valeur en dépend : l'analyse des lots affiche le même avertissement « taux de change non à jour » que le Tableau de bord, et l'info-bulle du Yield on Cost indique l'ancien taux utilisé. Aucun chiffre ne change, seulement l'avertissement.
+- Les paires de devises s'écrivent partout de la même façon, avec symboles et drapeaux : `$ 🇺🇸 USD / EUR 🇪🇺 €` pour une paire, `$ 🇺🇸 USD → EUR 🇪🇺 €` pour une conversion, dans son sens.
+- Analyse du risque : quand un actif est écarté faute de taux de change, le message nomme désormais la paire de devises et indique depuis quelle date un taux est enregistré, ou qu'il n'y en a aucun.
+- Listes Actifs et Change, vue Rolling Return : les cartes comparent désormais aussi l'autre type, comme les pages de détail. La carte d'un actif peut afficher des paires de devises et celle d'une paire peut afficher des actifs, choisis dans « Paramètres du Graphique » de la carte.
+- Analyse des lots : dans une même journée, les achats et les ajustements entrants passent désormais avant les ventes et les ajustements sortants. Une vente enregistrée avant l'achat du même jour ne fait plus échouer l'analyse ; chez un courtier qui autorise la vente à découvert, un découvert ouvert et couvert dans la journée apparaît désormais comme un lot long, avec le même gain réalisé.
+- En-tête du détail d'un actif : Transactions est désormais un badge avec une icône et le nombre de transactions, pour qu'on le reconnaisse comme un lien ; le badge du fournisseur ouvre lui-même la page web de l'actif (celle que vous avez définie, sinon celle du fournisseur) dans un nouvel onglet, et son info-bulle indique où il mène. L'icône ↗ séparée disparaît.
+- En-tête du détail d'un actif sur tablette et téléphone : sous 1024 px, les badges ont leur propre ligne sous le nom ; sur téléphone, ← et ‹ n/N › partagent la première ligne, le nom prend toute la largeur et les badges suivent en deux groupes (type et devise ; Transactions et fournisseur).
+- Un actif qui a des transactions ne peut plus devenir un Indice depuis l'éditeur de l'actif : l'éditeur indique combien de transactions il a, et rien n'est enregistré.
+- Le changement d'e-mail attend une confirmation quand l'e-mail fonctionne : avec l'e-mail configuré et `LIBREFOLIO_PUBLIC_URL` défini, une nouvelle adresse dans le Profil n'est utilisée qu'après un clic sur le lien envoyé à cette adresse (valable 24 heures) en étant connecté à votre compte. Déjà connecté, un clic suffit ; sinon la page vous demande d'abord de vous connecter puis vous y ramène. Votre ancienne adresse est prévenue aussitôt. Sans e-mail rien ne change : la nouvelle adresse s'applique tout de suite.
+
+### 🐛 Corrections
+
+- Téléverser un fichier `.json` ne perd plus son contenu, et les fichiers avec une extension inhabituelle ou très longue sont enregistrés en toute sécurité.
+- Les listes Devises, Fichiers et Actifs ne se vident plus pour afficher un indicateur de chargement après une actualisation ou une modification : elles restent à l'écran pendant l'arrivée des nouvelles données.
+- Changer d'onglet sur la page d'un actif conserve la période que vous avez choisie.
+- À l'étape « Corrections » de l'import, un possible fractionnement affiche le ticker et la quantité au lieu des espaces réservés bruts.
+- Échap dans le menu de l'AI Export ferme seulement le menu, pas le panneau en dessous.
+- Après Échap ou un choix dans une liste à deux niveaux (comme le type d'actif), le focus du clavier revient sur le champ.
+- Les confirmations avec de nombreux éléments indiquent leur nombre dans votre langue.
+- Obligations de Borsa Italiana : l'échéance dans la description est désormais correcte sur les pages en anglais et pour les échéances après 2068. Un actif déjà enregistré avec une date erronée se corrige en redemandant ses métadonnées à son fournisseur.
+- Paramètres › À propos liste désormais aussi les plugins Risque et Outils qui ne se chargent pas.
+- Pendant que le Tableau de bord attend de se recharger après un changement du filtre de courtier, il indique qu'il travaille au lieu de garder en silence les anciens totaux.
+- Dans le graphique de comparaison des lots, le tiret de légende « estimé au coût » a la même couleur que sa ligne.
+- Les boutons du planificateur qui retirent un horaire ont un nom traduit pour les lecteurs d'écran.
+- « Analyser les Lots » fait désormais défiler jusqu'au bout vers le panneau des lots, même sur les machines lentes.
+- La commande de sauvegarde lit `--password-file` et `--instance-key-file` en une seule ouverture : un fichier échangé après la vérification ne peut plus être lu à sa place.
+
+- Sur une instance bloquée par son hébergeur, l'administrateur voit aussi les «Sauvegardes déjà conservées» et peut les télécharger, pas seulement en faire une nouvelle.
+- L'import d'un relevé n'affiche plus de message de succès quand la modification des identifiants d'un actif n'a pas été enregistrée.
+
+### ⚠️ Changements incompatibles
+
+- Les endpoints de requête des prix, de requête des événements et de conversion ne signalent plus les taux de change manquants comme texte dans `errors` : ils arrivent dans une nouvelle liste `fx_issues` de `{code, from_currency, to_currency, first_date, last_date, count}`, dans le sens de la conversion.
+- `PATCH /api/v1/assets` enregistre tout ou rien : si un élément pose problème, rien n'est enregistré. La réponse ajoute `committed`, `issues` et `warnings` (codes `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed` ; avertissement `assetFamilyChange`). Un nom déjà utilisé par un autre actif est signalé par `assetNameTaken` au lieu d'une erreur générique. Le nouveau `POST /api/v1/assets/validate` fait les mêmes contrôles et n'enregistre jamais.
+- `POST /api/v1/portfolio/lots/analysis` répond sous une nouvelle forme : les parties qui ne dépendent pas de la méthode d'appariement (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) restent en tête ; tout ce qui vient du rejeu des lots (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, les historiques de valeur, de rendement, de prix et de performance, `income_events`, `economic_allocation_groups`, les orphelins) passe sous `methods.FIFO` / `methods.LIFO`. La requête accepte `matching_methods` (par défaut `["FIFO"]`).
+
 ## [1.3.0] - 2026-11-10
 
 **LibreFolio 1.3 « Keyholder »** est la version pour qui gère l'instance : elle donne à l'administrateur ce qu'il faut pour ouvrir LibreFolio à sa famille et à ses amis, et pour le garder en sécurité.

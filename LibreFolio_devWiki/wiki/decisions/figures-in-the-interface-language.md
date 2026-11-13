@@ -85,6 +85,6 @@ rischio sulla 1.2».
 | Amounts | `frontend/src/lib/utils/currency/currencyFormat.ts` |
 | Dates | `frontend/src/lib/utils/core/formatDateTime.ts` |
 | The en-GB rule, tested | `frontend/src/lib/stores/app/uiLocale.test.ts` |
-| The what-if signals' tracked catalogue (T-EN2) | `frontend/src/lib/charts/signals/ChartSignal.ts` |
+| The what-if signals' tracked catalogue (T-EN2) | `frontend/src/lib/features/signals/ChartSignal.ts` |
 | Developer guide | `mkdocs_src/docs/developer/frontend/i18n.md` |
 | Journal (M-18) | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |

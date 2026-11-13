@@ -4,18 +4,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from backend.app.schemas.risk import (
-    RiskDrawdownOutput,
-    RiskDrawdownPoint,
-    RiskDrawdownRecoveryStatus,
-    RiskErrorCode,
-    RiskMode,
-    RiskOutputKind,
-    RiskReturnBasis,
-    RiskScopeKind,
-    RiskWarning,
-)
-from backend.app.services.provider_registry import register_plugin
+from backend.app.schemas.risk.outputs import RiskDrawdownOutput, RiskDrawdownPoint
+from backend.app.schemas.risk.results import RiskWarning
+from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskErrorCode, RiskMode, RiskOutputKind, RiskReturnBasis, RiskScopeKind
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs, RiskUnavailableError
 from backend.app.services.risk.metrics import drawdown_episodes

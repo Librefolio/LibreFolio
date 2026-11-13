@@ -19,40 +19,42 @@
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
-    import {BarChart3, CalendarSync, ChartLine, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, CalendarSync, ChartLine, Check, Network, Pencil, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import PageBackButton from '$lib/components/layout/PageBackButton.svelte';
-    import AssetCard from '$lib/components/assets/AssetCard.svelte';
-    import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
-    import AssetTable from '$lib/components/assets/AssetTable.svelte';
-    import AssetBrowseOrder from '$lib/components/assets/AssetBrowseOrder.svelte';
+    import AssetCard from '$lib/features/assets/AssetCard.svelte';
+    import type {AssetRow} from '$lib/features/assets/AssetTable.svelte';
+    import AssetTable from '$lib/features/assets/AssetTable.svelte';
+    import AssetBrowseOrder from '$lib/features/assets/AssetBrowseOrder.svelte';
     import {fetchCurrentPrices, computeDirection, livePollFailure, livePollOutcome, type LivePriceResult} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {startActivePolling, type ActivePolling, type ActivePollingState} from '$lib/features/live-updates/activePolling';
     import {ASSET_LIST_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
     import LiveUpdatesStatus from '$lib/features/live-updates/LiveUpdatesStatus.svelte';
-    import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
-    import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import AssetSyncModal from '$lib/features/assets/AssetSyncModal.svelte';
+    import AssetModal from '$lib/features/assets/AssetModal.svelte';
     import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {loadAssetEditData, type AssetEditData} from '$lib/components/assets/assetEditData';
+    import {loadAssetEditData, type AssetEditData} from '$lib/features/assets/assetEditData';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {extractErrorMessage} from '$lib/utils/trySave';
-    import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
+    import AssetMergeModal from '$lib/features/assets/AssetMergeModal.svelte';
     import {invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import AssetBulkEditModal from '$lib/features/assets/bulk/AssetBulkEditModal.svelte';
+    import type {BulkAsset} from '$lib/features/assets/bulk/assetBulkEdit';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
-    import ChartSettingsModal from '$lib/components/charts/ChartSettingsModal.svelte';
+    import ChartSettingsModal from '$lib/features/signals/components/ChartSettingsModal.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import type {ChartPrimaryView, ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
-    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
     import {calendarReturnRangeDays, calendarReturnWindowDays} from '$lib/components/charts/calendarReturnWindow';
-    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
+    import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
@@ -63,27 +65,29 @@
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
-    import {reducedPrices, type ReducedEntry} from '$lib/stores/reducedPriceCache';
-    import type {DerivedBase} from '$lib/utils/assetPriceDerived';
+    import {reducedPrices, type ReducedEntry} from '$lib/features/assets/reducedPriceCache';
+    import type {DerivedBase} from '$lib/features/assets/assetPriceDerived';
     import {buildReducedQuery, cardsOfAnotherStep, comparisonTargetFrom, comparisonTargetIds, estimateEntryDays, signalBaseData, type CardQueryInput} from '$lib/utils/reducedPriceQuery';
     import {DEFAULT_COMPACT_PLOT_WIDTH_PX, compactMaxPoints, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {assetRangeDelta, rangeStartFor, type RangeDelta} from '$lib/utils/rangeChange';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
-    import {TargetSampleLoader, type TargetSampleRequest} from '$lib/utils/targetSampleLoader';
+    import {TargetSampleLoader, type TargetSampleRequest} from '$lib/features/assets/targetSampleLoader';
     import {MIN_START, sendBulkBatches} from '$lib/api/bulkBatches';
+    import {buildFxPairComparisonQuery, buildListFxPairComparisonQuery, estimateListFxPairDays, fxPairComparisonViews, listFxPairComparisonViews} from '$lib/features/signals/crossTypeCalendar';
+    import {fxPairTargetsOf} from '$lib/features/assets/detail/assetDetailChartRequest';
     import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
-    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {signalCatalogStore} from '$lib/features/signals/signalCatalogStore.svelte';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
-    import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/components/assets/assetLifecycle';
+    import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/features/assets/assetLifecycle';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -103,6 +107,8 @@
         /** Eligible as a comparison benchmark: the comparison picker lists these first (Y5-F4). */
         is_benchmark?: boolean;
         quote_base_quantity?: number | null;
+        /** The user's own link for the asset (notes, a dashboard): read by the bulk edit. */
+        user_url?: string | null;
         tx_count?: number;
         /** A positive quantity is held **now** in a broker the user owns (Risk, `FAinfoResponse`). */
         held_by_me?: boolean;
@@ -166,6 +172,9 @@
 
     // Bulk delete confirmation dialog
     let bulkDeleteDialogOpen = $state(false);
+    // Bulk edit of the selected assets (lane 65): a snapshot of the selection taken when the pencil is pressed.
+    let bulkEditOpen = $state(false);
+    let bulkEditAssets = $state<BulkAsset[]>([]);
     let deletingAssets = $state<AssetRow[]>([]);
     let bulkDeleteResults = $state<{label: string; success: boolean; detail?: string; action?: {href: string; label: string; testId?: string}}[]>([]);
 
@@ -271,6 +280,10 @@
         void getSettingsVersion();
         return getGlobalSettings('assets').primaryView;
     });
+    /** The rolling return of the FX pairs each card in the rolling-return view compares (FB-11), by card and `fx-pair` signal id. */
+    let calendarPairsByCard: Map<number, Map<string, CalendarReturnView>> = $state(new Map());
+    const calendarPairRequestOfCard = new Map<number, number>();
+    let calendarPairSeq = 0;
     /** The rolling return of each card in the rolling-return view, and its comparisons' (Y-40), by card. */
     let calendarByCard = $state(new Map<number, {own: CalendarReturnView; targets: Map<number, CalendarReturnView>}>());
 
@@ -591,8 +604,13 @@
     // Data Loading
     // =========================================================================
 
-    async function loadAssets() {
-        loading = true;
+    /**
+     * `soft`: a reload after the user's own write (create, edit, merge). The list stays on screen and the rows
+     * keep their last price until the second wave replaces it, so the page does not blank to a spinner (N-1).
+     */
+    async function loadAssets(opts?: {soft?: boolean}) {
+        const previousRows = opts?.soft ? new Map(assets.map((a) => [a.id, a])) : null;
+        if (!opts?.soft) loading = true;
         error = null;
         try {
             const response = await zodiosApi.list_assets_api_v1_assets_query_get({
@@ -600,7 +618,9 @@
             });
             const items = response as any[];
 
-            assets = items.map((item: any) => ({
+            assets = items.map((item: any) => {
+                const kept = previousRows?.get(item.id);
+                return {
                 id: item.id,
                 display_name: item.display_name,
                 currency: item.currency,
@@ -608,17 +628,20 @@
                 asset_type: item.asset_type ?? null,
                 is_benchmark: item.is_benchmark === true,
                 quote_base_quantity: item.quote_base_quantity ?? 1,
+                user_url: item.user_url ?? null,
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
                 tx_count: item.tx_count ?? 0,
                 held_by_me: item.held_by_me ?? false,
                 held_by_others: item.held_by_others ?? false,
-                lastPrice: null,
-                chartData: [],
+                lastPrice: kept?.lastPrice ?? null,
+                chartData: kept?.chartData ?? [],
                 // Born already waiting for wave 2, so the row draws its own
                 // skeleton the instant it appears instead of a bare empty cell.
-                loadingPrices: true,
-            }));
+                // A soft reload keeps the row's last price on screen instead.
+                loadingPrices: kept ? false : true,
+                };
+            });
         } catch (e: any) {
             console.error('Failed to load assets:', e);
             error = e?.message || 'Failed to load assets';
@@ -817,25 +840,86 @@
         return {state: view.state, points: view.points, problemCode: view.problem?.code ?? null, problemMessage};
     }
 
-    /** A card's comparisons in the rolling-return view: their targets' returns (V-5 a), drawn as the detail draws them. */
+    /** A card's comparisons in the rolling-return view: their targets' returns (V-5 a), drawn as the detail draws them, the compared FX pairs' too (FB-11). */
     function cardCalendarOverlays(assetId: number): RenderedSignal[] {
+        const settings = getSettingsForPair(`asset-${assetId}`, 'assets');
         const views = calendarByCard.get(assetId)?.targets;
-        if (!views) return [];
         const target = (id: number) => {
             const asset = assets.find((item) => item.id === id);
             return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url, assetType: asset.asset_type} : null;
         };
-        return renderCalendarComparisons(getSettingsForPair(`asset-${assetId}`, 'assets').signals, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), assetId);
+        const assetLines = views ? renderCalendarComparisons(settings.signals, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), assetId) : [];
+        const pairViews = calendarPairsByCard.get(assetId);
+        return pairViews ? [...assetLines, ...renderCalendarPairComparisons(settings.signals, pairViews)] : assetLines;
+    }
+
+    /**
+     * FB-11 follow-up: the rolling return of the FX pairs the cards in that view compare, asked of `POST /fx/currencies/convert` in one
+     * request for the whole list (the batches the caps need), apart from the cards' own request. Never throws: a failure marks each
+     * compared pair of the cards `error`; an answer the page has moved past, or a session that ended, is dropped.
+     */
+    async function fetchCalendarPairs(only?: ReadonlySet<number>) {
+        void getSettingsVersion();
+        const sessionGeneration = getClientSessionGeneration();
+        const requestId = ++calendarPairSeq;
+        const rangeStart = isMaxPending ? MIN_START : dateStart;
+        const cards: Array<{cardKey: string; start: string; end: string; windowDays: number; pairTargets: ReturnType<typeof fxPairTargetsOf>}> = [];
+        const next = new Map(calendarPairsByCard);
+        for (const asset of assets) {
+            if (only && !only.has(asset.id)) continue;
+            const settings = getSettingsForPair(`asset-${asset.id}`, 'assets');
+            if (settings.primaryView !== 'calendar-return') {
+                next.delete(asset.id);
+                continue;
+            }
+            const pairTargets = fxPairTargetsOf(settings.signals);
+            if (pairTargets.length === 0) {
+                next.delete(asset.id);
+                continue;
+            }
+            calendarPairRequestOfCard.set(asset.id, requestId);
+            cards.push({cardKey: String(asset.id), start: rangeStart, end: dateEnd, windowDays: calendarReturnRequest(settings, dateStart, dateEnd).params.window_days, pairTargets});
+        }
+        calendarPairsByCard = next;
+        if (cards.length === 0) return;
+
+        const entries = buildListFxPairComparisonQuery(cards);
+        const settle = (byCard: Map<string, Map<string, CalendarReturnView>> | null) => {
+            if (sessionGeneration !== getClientSessionGeneration() || !isClientSessionCurrent(sessionGeneration)) return;
+            const settled = new Map(calendarPairsByCard);
+            for (const card of cards) {
+                const id = Number(card.cardKey);
+                if (calendarPairRequestOfCard.get(id) !== requestId) continue;
+                settled.set(id, byCard ? (byCard.get(card.cardKey) ?? new Map()) : new Map(card.pairTargets.map((pair) => [pair.configId, emptyCalendarReturnView('error')])));
+            }
+            calendarPairsByCard = settled;
+        };
+        try {
+            const outcome = await sendBulkBatches(
+                entries,
+                (entry) => estimateListFxPairDays(entry, todayIso()),
+                (batch) => zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(batch.map((entry) => entry.request)),
+            );
+            if (outcome.failed) console.error('Failed to fetch the compared FX pairs of the cards:', outcome.error);
+            settle(listFxPairComparisonViews(outcome.answers.map(({batch, answer}) => ({entries: batch.items, answer}))));
+        } catch (requestError) {
+            console.error('Failed to fetch the compared FX pairs of the cards:', requestError);
+            settle(null);
+        }
     }
 
     /**
      * The prices and backend signals of the cards (Z-29b). Each card asks for the series its plot takes, one point a day, a
      * week or a month (`max_points` from its measured width; `utils/reducedPriceQuery.ts`), and each comparison target for
-     * the same buckets (`sample_like`). Only what the reduced cache (`stores/reducedPriceCache.ts`) does not hold, or holds
+     * the same buckets (`sample_like`). Only what the reduced cache (`features/assets/reducedPriceCache.ts`) does not hold, or holds
      * for another step or stale, is asked; the answers go to the cache and the cards draw them as they are. `only` limits it
      * to some cards: a settings change reloads its own card, a width that changes the step its own.
      */
     async function fetchPriceSeries(only?: ReadonlySet<number>, silent = false) {
+        await Promise.all([fetchOwnPriceSeries(only, silent), fetchCalendarPairs(only)]);
+    }
+
+    async function fetchOwnPriceSeries(only?: ReadonlySet<number>, silent = false) {
         if (assets.length === 0) return;
         void getSettingsVersion();
 
@@ -1256,7 +1340,7 @@
         if (detail?.syncing) syncingAssetIds = new Set([...syncingAssetIds, assetId]);
         // A reload after the user's own write: it holds the page's Refresh button (Y11). The sync that follows has
         // the card's indicator, and the reload after it (`handleCreatedAssetSynced`) does not hold the button (P3).
-        await pageBusy.track('assets-reload', () => loadAssets());
+        await pageBusy.track('assets-reload', () => loadAssets({soft: true}));
     }
 
     /** The one sync of a new asset ended (AssetModal, O-20): its toast, then the price data again. */
@@ -1415,6 +1499,24 @@
         clearAllTableSelections();
     }
 
+    /** The pencil: the selected assets, in the order of the selection, as the list holds them now. */
+    function handleBulkEditAssets() {
+        const byId = new Map(assets.map((a) => [a.id, a]));
+        bulkEditAssets = selectedAssetRows
+            .map((row) => byId.get(row.id))
+            .filter((a): a is AssetState => a !== undefined)
+            .map((a) => ({id: a.id, display_name: a.display_name, asset_type: a.asset_type, active: a.active, is_benchmark: a.is_benchmark, quote_base_quantity: a.quote_base_quantity, icon_url: a.icon_url, user_url: a.user_url}));
+        bulkEditOpen = true;
+    }
+
+    /** The bulk edit saved (all or nothing): drop the cached rows, clear the selection, reload the list. */
+    async function handleBulkEditSaved(saved: {ids: number[]}) {
+        bulkEditOpen = false;
+        invalidateAfterMutation(saved.ids);
+        clearAllTableSelections();
+        await pageBusy.track('assets-reload', () => loadAssets({soft: true}));
+    }
+
     function handleBulkDeleteAssets() {
         deletingAssets = [...selectedAssetRows];
         bulkDeleteDialogOpen = true;
@@ -1555,7 +1657,18 @@
             const asset = assets.find((item) => item.id === id);
             return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url, assetType: asset.asset_type} : null;
         };
-        return {points: own.points, overlays: renderCalendarComparisons(configs, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), cardId)};
+        // FB-11: the compared FX pairs, asked as the cards ask them (one conversion each); a failure leaves them out of the preview.
+        const pairEntries = buildFxPairComparisonQuery({start: dateStart, end: dateEnd, windowDays, pairTargets: fxPairTargetsOf(configs)});
+        let pairLines: RenderedSignal[] = [];
+        if (pairEntries.length > 0) {
+            try {
+                const pairAnswer = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(pairEntries.map((entry) => entry.request));
+                pairLines = renderCalendarPairComparisons(configs, fxPairComparisonViews(pairAnswer, pairEntries));
+            } catch (pairError) {
+                console.error('Failed to fetch the compared FX pairs of the preview:', pairError);
+            }
+        }
+        return {points: own.points, overlays: [...renderCalendarComparisons(configs, views, target, (id) => $t('chartSettings.signals.assetFallback', {values: {id: String(id)}}), cardId), ...pairLines]};
     }
 
     function handleCardSettings(asset: {id: number}) {
@@ -1734,6 +1847,7 @@
                 <DataTableToolbar
                     selectedCount={selectedAssetRows.length}
                     bulkActions={[
+                        {id: 'edit', icon: Pencil, label: () => $t('assets.bulkEdit.action', {values: {count: selectedAssetRows.length}}), onClick: () => handleBulkEditAssets()},
                         {id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets()},
                         {id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets()},
                         {id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets()},
@@ -2185,7 +2299,7 @@
     {:else if error}
         <div class="bg-lf-danger-soft border border-lf-danger-line rounded-xl p-6 text-center">
             <p class="text-lf-danger-on-soft">{error}</p>
-            <button class="mt-3 px-4 py-2 text-sm bg-lf-danger-solid text-lf-on-danger-solid rounded-lg hover:bg-lf-danger-hover transition-colors" onclick={loadAssets}>
+            <button class="mt-3 px-4 py-2 text-sm bg-lf-danger-solid text-lf-on-danger-solid rounded-lg hover:bg-lf-danger-hover transition-colors" onclick={() => loadAssets()}>
                 {$t('common.retry')}
             </button>
         </div>
@@ -2304,6 +2418,7 @@
 </div>
 
 <AssetBrowseOrder view={viewMode} panels={assetPanels} />
+<AssetBulkEditModal open={bulkEditOpen} assets={bulkEditAssets} onclose={() => (bulkEditOpen = false)} onsaved={handleBulkEditSaved} />
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
     axisContext={settingsTargetId ? (assets.find((asset) => asset.id === Number(settingsTargetId))?.currency ?? '—') : $t('common.preview')}
@@ -2403,7 +2518,7 @@
     linkCreatedAsset
     oncreated={handleAssetCreated}
     onsynced={handleCreatedAssetSynced}
-    onupdated={() => void pageBusy.track('assets-reload', () => loadAssets())}
+    onupdated={() => void pageBusy.track('assets-reload', () => loadAssets({soft: true}))}
     onclose={() => {
         assetModalOpen = false;
         assetTourPreview = false;
@@ -2419,7 +2534,7 @@
     sourceAsset={mergingAsset ? {id: mergingAsset.id, display_name: mergingAsset.display_name} : null}
     onmerged={async () => {
         if (mergingAsset) invalidateAfterMutation(mergingAsset.id);
-        await pageBusy.track('assets-reload', () => loadAssets());
+        await pageBusy.track('assets-reload', () => loadAssets({soft: true}));
     }}
     onclose={() => {
         mergeModalOpen = false;

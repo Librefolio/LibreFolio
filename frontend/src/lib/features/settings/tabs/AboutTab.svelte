@@ -11,9 +11,9 @@
     import SocialShareModal from '$lib/features/support/SocialShareModal.svelte';
     import type {SocialPlatform} from '$lib/features/support/supportLinks';
     import ToolAboutPanel from '$lib/features/tools/ToolAboutPanel.svelte';
-    import {mapBackendSignalDefinition} from '$lib/charts/signals/catalogMapper';
-    import {getRegisteredSignalTypes} from '$lib/charts/signals/registry';
-    import type {BackendSignalCatalogResponse, SignalDefinition} from '$lib/charts/signals';
+    import {mapBackendSignalDefinition} from '$lib/features/signals/catalogMapper';
+    import {getRegisteredSignalTypes} from '$lib/features/signals/registry';
+    import type {BackendSignalCatalogResponse, SignalDefinition} from '$lib/features/signals';
     import {getCurrentResolvedTheme, getStoredThemePreference, type ThemePreference} from '$lib/stores/app/themeStore';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -65,13 +65,15 @@
         error: string;
     }
 
-    type PluginSystem = 'asset' | 'fx' | 'brim' | 'signals';
+    type PluginSystem = 'asset' | 'fx' | 'brim' | 'signals' | 'risk' | 'tools';
 
     const PLUGIN_SYSTEMS: Array<{system: PluginSystem; labelKey: string}> = [
         {system: 'asset', labelKey: 'settings.pluginSystemAsset'},
         {system: 'fx', labelKey: 'settings.pluginSystemFx'},
         {system: 'brim', labelKey: 'settings.pluginSystemBrim'},
         {system: 'signals', labelKey: 'settings.pluginSystemSignals'},
+        {system: 'risk', labelKey: 'settings.pluginSystemRisk'},
+        {system: 'tools', labelKey: 'settings.pluginSystemTools'},
     ];
 
     let systemInfo: SystemInfo | null = null;

@@ -33,14 +33,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment
 from backend.app.schemas.assets.metadata import FAClassificationParams
-from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse, OpenDateRangeModel, PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.common import Currency, DateRangeModel, OpenDateRangeModel
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
 from backend.app.services.ai_export.components.resources import PriceResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.financial_math.fifo.models import LotMatchingMethod
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 
 class AssetNotFoundError(ValueError):
@@ -305,6 +307,8 @@ def load_asset_lots(scope: BuildScope):
             target_currency=scope.target_currency,
             selected_lot_ids=None,
             requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            # The AI Export reads the lots in FIFO and says so (project 69, D7).
+            matching_method=LotMatchingMethod.FIFO,
         )
 
     return _load

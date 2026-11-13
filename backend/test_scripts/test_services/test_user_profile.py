@@ -816,7 +816,7 @@ class TestSetUserAdmin:
 # Every test runs on the private database of isolated_engine: whether an admin is the last one
 # depends on every other user, and on the shared lane DB other active admins always exist.
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 @dataclass(frozen=True)
@@ -1068,7 +1068,7 @@ class TestLastActiveAdministrator:
 # a correct cure. The outcome is read in a fresh session.
 
 #: When the address was verified: any value that is not NULL; what a kept verification keeps is the value read back.
-_VERIFIED_AT = datetime(2026, 10, 2, 8, 0, 0)
+_VERIFIED_AT = datetime(2026, 10, 2, 8, 0, 0, tzinfo=UTC)
 
 
 @dataclass(frozen=True)

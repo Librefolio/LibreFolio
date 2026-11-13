@@ -8,7 +8,7 @@
  */
 
 import * as echarts from 'echarts';
-import type {RenderedSignal} from '$lib/charts/signals';
+import type {RenderedSignal} from '$lib/components/charts/chartSignalContract';
 import {toRgba} from '$lib/theme/colorAlpha';
 import {CHART_GAIN_LOSS, chartNeutrals, PRICE_SERIES} from '$lib/theme/chartTheme';
 

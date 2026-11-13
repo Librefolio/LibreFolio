@@ -16,27 +16,17 @@ from backend.app.db.models import Asset, AssetProviderAssignment, BrokerUserAcce
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel
-from backend.app.schemas.portfolio import (
-    DataQualityExclusionReason,
-    DataQualityReport,
-    PortfolioReportQuery,
-    PortfolioReportResponse,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityExclusionReason, DataQualityReport
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.prices import FAPriceQueryItem
-from backend.app.schemas.risk import (
-    AssetRiskScope,
-    AssetSetRiskScope,
-    PortfolioRiskScope,
-    PreparedAssetSeriesSet,
-    RiskExcludedAsset,
-    RiskQueryRequest,
-    RiskWarning,
-)
+from backend.app.schemas.risk.results import RiskExcludedAsset, RiskWarning
+from backend.app.schemas.risk.scope import AssetRiskScope, AssetSetRiskScope, PortfolioRiskScope, RiskQueryRequest
+from backend.app.schemas.risk.series import PreparedAssetSeriesSet
 from backend.app.services.assets import price_query
 from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.financial_math.weights import share_of
 from backend.app.services.market_series import prepare_asset_series_set, prepare_asset_series_set_from_readings
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.risk.base import RiskAssetClassification, resource_limit_error
 from backend.app.services.risk.scenario_catalog import get_loaded_risk_scenario_catalog
 from backend.app.utils.date_range_limits import range_span_floor

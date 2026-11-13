@@ -23,7 +23,7 @@
     import {attachChartReady} from '$lib/utils/chartReady';
     import {dayOfAxisValue} from '$lib/utils/stepSeries';
     import {t} from '$lib/i18n';
-    import type {RenderedSignal} from '$lib/charts/signals';
+    import type {RenderedSignal} from '$lib/components/charts/chartSignalContract';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
     import {toRgba} from '$lib/theme/colorAlpha';

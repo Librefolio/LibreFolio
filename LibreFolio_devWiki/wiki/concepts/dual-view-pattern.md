@@ -40,8 +40,8 @@ Table view: DataTable component with sortable columns, filters
 
 | Role | Path |
 |------|------|
-| Asset card | `frontend/src/lib/components/assets/AssetCard.svelte` |
-| Asset table | `frontend/src/lib/components/assets/AssetTable.svelte` |
-| FX card | `frontend/src/lib/components/fx/FxCard.svelte` |
-| FX table | `frontend/src/lib/components/fx/FxTable.svelte` |
+| Asset card | `frontend/src/lib/features/assets/AssetCard.svelte` |
+| Asset table | `frontend/src/lib/features/assets/AssetTable.svelte` |
+| FX card | `frontend/src/lib/features/fx/FxCard.svelte` |
+| FX table | `frontend/src/lib/features/fx/FxTable.svelte` |
 | View mode toggle | `frontend/src/lib/components/ui/ViewModeToggle.svelte` |

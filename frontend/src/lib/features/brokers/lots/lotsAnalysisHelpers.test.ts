@@ -7,6 +7,7 @@
  * double-click lot gathering. No fetch, no DOM, no ECharts.
  */
 import {describe, it, expect} from 'vitest';
+import * as helpers from './lotsAnalysisHelpers';
 import {asArray, asObject, lotIsOpenish, filterVisibleLots, normalizeQuoteBaseQuantity, collectInvolvedLotIds, type LotOpenish, type InvolvedEventRow} from './lotsAnalysisHelpers';
 
 describe('asArray', () => {
@@ -180,5 +181,40 @@ describe('collectInvolvedLotIds', () => {
     it('treats an empty / all-null related array as no pairing (value[0] ?? null right arm)', () => {
         const events = [row(5, 100), row(6, 101, [null])];
         expect(collectInvolvedLotIds(events, row(5, 100, []))).toEqual([100]);
+    });
+});
+
+/**
+ * Project 69, D12: the lots are the same in FIFO and in LIFO (a lot is born of a purchase), so one selection serves both
+ * methods and stays when the method on screen changes. `keepSelection(selected, lots)` is what the panel applies to the
+ * selection whenever the lots on screen change — a new answer or another method: the ids still among the lots, in the
+ * order the user chose them, and the very same array when none drops, so a switch hands nothing new downstream.
+ */
+describe('keepSelection (project 69, D12)', () => {
+    const keepSelection = (helpers as Record<string, unknown>).keepSelection as ((selected: number[], lots: {lot_id: number}[]) => number[]) | undefined;
+    const fifoLots = [
+        {lot_id: 11, realized_quantity: '5'},
+        {lot_id: 12, realized_quantity: '0'},
+        {lot_id: 13, realized_quantity: '0'},
+    ];
+    const lifoLots = [
+        {lot_id: 11, realized_quantity: '0'},
+        {lot_id: 12, realized_quantity: '0'},
+        {lot_id: 13, realized_quantity: '5'},
+    ];
+
+    it('keeps the selection, in its order and as the same array, when the method changes', () => {
+        expect(typeof keepSelection, 'lotsAnalysisHelpers exports no keepSelection()').toBe('function');
+        const selected = [13, 11];
+        const afterFifo = keepSelection!(selected, fifoLots);
+        expect(afterFifo).toBe(selected);
+        expect(keepSelection!(afterFifo, lifoLots)).toBe(selected);
+        expect(selected).toEqual([13, 11]);
+    });
+
+    it('drops only an id that is no lot of the answer, keeping the order of the rest', () => {
+        expect(typeof keepSelection, 'lotsAnalysisHelpers exports no keepSelection()').toBe('function');
+        expect(keepSelection!([13, 99, 11], lifoLots)).toEqual([13, 11]);
+        expect(keepSelection!([11, 12], [])).toEqual([]);
     });
 });

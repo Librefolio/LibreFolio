@@ -45,6 +45,8 @@ variable the code reads is listed in .env.example.
 
 import os
 import re
+import stat
+from contextlib import suppress
 from pathlib import Path
 from typing import Literal, cast
 from urllib.parse import urlsplit
@@ -214,15 +216,89 @@ def _secret_file_path(file_name: str) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
-def read_secret_file(path: Path, label: str) -> str:
+_LINK_REFUSED = "{label}: {path} goes through a link inside the data directory: give the file itself, from outside it"
+
+
+def _descend_without_links(base: Path, below: tuple[str, ...], flags: int, label: str, path: Path) -> int:
+    """The descriptor of ``base/<below>``, each component opened ``O_NOFOLLOW`` from the one before; a link is refused."""
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    current = os.open(base, directory_flags)
+    try:
+        for index, part in enumerate(below):
+            wanted = flags if index == len(below) - 1 else directory_flags
+            try:
+                following = os.open(part, wanted | os.O_NOFOLLOW, dir_fd=current)
+            except OSError:
+                if _is_link(part, current):
+                    raise SecretFileError(_LINK_REFUSED.format(label=label, path=path)) from None
+                raise
+            os.close(current)
+            current = following
+    except BaseException:
+        os.close(current)
+        raise
+    return current
+
+
+def _open_secret(path: Path, label: str, *, regular_only: bool, no_links_under: Path | None) -> int:
+    """An open descriptor on the secret file ``path``, checked on that descriptor (H-47); ``SecretFileError`` otherwise.
+
+    Opened ``O_NONBLOCK``, so a FIFO never waits for a writer. Below ``no_links_under`` the path is walked one component
+    at a time, each opened with ``O_NOFOLLOW`` from the descriptor of the one before (``dir_fd``): a link anywhere below
+    the root is refused, and no check or swap between two opens can be slipped in. The root itself, and a path that is
+    not below it, are opened as they are, links followed (a Kubernetes secret volume is made of links).
+    """
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0)
+    base, below = None, ()
+    if no_links_under is not None:
+        base = Path(os.path.abspath(no_links_under))
+        with suppress(ValueError):  # not below the root: opened as it is
+            below = Path(os.path.abspath(path)).relative_to(base).parts
+    try:
+        if below and os.open in os.supports_dir_fd:
+            descriptor = _descend_without_links(base, below, flags, label, path)
+        elif below and any(os.path.islink(base.joinpath(*below[: i + 1])) for i in range(len(below))):
+            raise SecretFileError(_LINK_REFUSED.format(label=label, path=path))
+        else:
+            descriptor = os.open(path, flags)
+        if regular_only and not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            os.close(descriptor)
+            raise SecretFileError(f"{label}: {path} is not a regular file")
+        return descriptor
+    except FileNotFoundError:
+        raise SecretFileError(f"{label}: {path} does not exist") from None
+    except OSError as exc:
+        raise SecretFileError(f"{label}: {path} cannot be read ({exc.strerror or type(exc).__name__})") from None
+
+
+def _is_link(name: str, directory_fd: int) -> bool:
+    """Whether ``name`` in the directory is a link, even one whose target is missing."""
+    try:
+        return stat.S_ISLNK(os.lstat(name, dir_fd=directory_fd).st_mode)
+    except OSError:
+        return False
+
+
+def read_secret_file(path: Path, label: str, *, regular_only: bool = False, no_links_under: Path | None = None) -> str:
     """The secret held by ``path``, without a leading UTF-8 byte order mark and its trailing line breaks.
 
     ``label`` names the source in the errors. A file that holds nothing but spaces and line breaks is an error, like an
     empty one.
+
+    Both options are off by default, as the startup readers and the Docker secrets need (H-47). With either, the file is
+    opened once and checked and read through that descriptor (``_open_secret``):
+
+    - ``regular_only``: a FIFO, a folder or a device is refused (``is not a regular file``) and a FIFO is never waited on.
+    - ``no_links_under``: a link in any component of ``path`` below that folder is refused, its target never opened.
+      Links outside the folder are followed.
     """
     try:
-        with path.open("rb") as handle:
-            raw = handle.read(SECRET_FILE_MAX_BYTES + 1)
+        if regular_only or no_links_under is not None:
+            with os.fdopen(_open_secret(path, label, regular_only=regular_only, no_links_under=no_links_under), "rb") as handle:
+                raw = handle.read(SECRET_FILE_MAX_BYTES + 1)
+        else:
+            with path.open("rb") as handle:
+                raw = handle.read(SECRET_FILE_MAX_BYTES + 1)
     except FileNotFoundError:
         raise SecretFileError(f"{label}: {path} does not exist") from None
     except OSError as exc:

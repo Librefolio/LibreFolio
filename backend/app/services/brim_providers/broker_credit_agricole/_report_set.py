@@ -66,6 +66,7 @@ from backend.app.services.brim_providers.broker_credit_agricole._rows import (
     read_account,
     read_securities,
 )
+from backend.app.utils.day_spans import merged_spans
 
 __all__ = ["Analysis", "describe_member", "describe_set", "detect_role"]
 
@@ -342,7 +343,7 @@ class Analysis:
                 spans.append(declared)
             elif file.row_span is not None:
                 spans.append(file.row_span)
-        return core.merge_spans(spans)
+        return merged_spans(spans)
 
     def _covered(self, day: Optional[date]) -> bool:
         return day is not None and any(start <= day <= end for start, end in self.cash_spans)
@@ -550,7 +551,7 @@ class Analysis:
     # ----------------------------------------------------------------- the shape of the set
 
     def segments(self) -> List[DateRangeModel]:
-        spans = core.merge_spans(span for span in (core.coverage(file.rows, lambda row: row.op) for file in self.securities_files) if span)
+        spans = merged_spans(span for span in (core.coverage(file.rows, lambda row: row.op) for file in self.securities_files) if span)
         return [DateRangeModel(start=start, end=end) for start, end in spans]
 
     def gaps(self) -> List[DateRangeModel]:

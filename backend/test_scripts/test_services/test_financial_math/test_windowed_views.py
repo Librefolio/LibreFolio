@@ -16,7 +16,7 @@ Modules under test:
     after it, the opening's capital baseline being where the first delta starts. So, for every ``d``,
     ``rebase_to_period(*windowed(d), d) == rebase_to_period(*whole(), d)``.
 
-* ``backend/app/services/portfolio_service.py`` — the six call sites hand the builder their window: ``get_summary``
+* ``backend/app/services/portfolio/portfolio_service.py`` — the six call sites hand the builder their window: ``get_summary``
   (performance inputs), ``get_history`` (history, performance inputs), ``get_broker_pnl_history``, ``get_pnl_candles``,
   ``get_acquisition_funding_history``. Their own cuts stay and now take nothing away, so the output is unchanged: a call
   site that drops its window loses only speed, which is why only the wiring tests below can see it.
@@ -93,7 +93,7 @@ import pytest
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
-from backend.app.schemas.portfolio import BrokerPnlHistory, PnlCandleSeries
+from backend.app.schemas.portfolio.history import BrokerPnlHistory, PnlCandleSeries
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
@@ -113,7 +113,7 @@ from backend.app.services.financial_math.returns import (
     rebase_to_period,
 )
 from backend.app.services.financial_math.series_steps import points_between
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 

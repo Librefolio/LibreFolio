@@ -16,7 +16,6 @@ import {expect, test, type Page, type Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
-import {appears} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
 import {randomUUID} from 'crypto';
 
@@ -98,11 +97,10 @@ async function pickAssetByName(page: Page, name: string) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
     const searchInput = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
-    if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
-        await searchInput.fill(name);
-        // The list is debounced; the named entry arriving *is* the settle.
-        await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first()).toBeVisible({timeout: 5_000});
-    }
+    await expect(searchInput, 'the asset picker opens with its search input').toBeVisible({timeout: 3_000});
+    await searchInput.fill(name);
+    // The list is debounced; the named entry arriving *is* the settle.
+    await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first()).toBeVisible({timeout: 5_000});
     const option = page.locator('[data-testid^="search-select-option-"]').first();
     await expect(option).toBeVisible({timeout: 3_000});
     await option.click();
@@ -285,10 +283,10 @@ test.describe('BulkModal WAC Cell Rendering', () => {
 
         // Toggle to manual
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
-        if (await manualToggle.isVisible({timeout: 2_000}).catch(() => false)) {
-            await manualToggle.click();
-            await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
-        }
+        // The Auto/Manual toggle is always rendered on an editable row.
+        await expect(manualToggle).toBeVisible({timeout: 3_000});
+        await manualToggle.click();
+        await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
 
         // Type 150 in cost basis input
         const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');
@@ -334,10 +332,10 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await dblClickBulkRow(page, transferMarker);
 
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
-        if (await manualToggle.isVisible({timeout: 2_000}).catch(() => false)) {
-            await manualToggle.click();
-            await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
-        }
+        // The Auto/Manual toggle is always rendered on an editable row.
+        await expect(manualToggle).toBeVisible({timeout: 3_000});
+        await manualToggle.click();
+        await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
         const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await expect(amountInput).toBeVisible({timeout: 2_000});
         await amountInput.fill('150');
@@ -347,10 +345,9 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await dblClickBulkRow(page, transferMarker);
 
         const autoToggle = page.getByTestId('tx-form-cost-basis-toggle-auto');
-        if (await autoToggle.isVisible({timeout: 2_000}).catch(() => false)) {
-            await autoToggle.click();
-            await expect(autoToggle).toHaveAttribute('aria-pressed', 'true');
-        }
+        await expect(autoToggle).toBeVisible({timeout: 3_000});
+        await autoToggle.click();
+        await expect(autoToggle).toHaveAttribute('aria-pressed', 'true');
         await applyFormModal(page);
 
         // Wait for auto to resolve

@@ -17,7 +17,7 @@ in anyway**.
 
 ## 🧮 The similarity engine
 
-`lib/utils/assetSimilarity.ts` — pure, no Svelte, unit-tested.
+`lib/features/assets/assetSimilarity.ts` — pure, no Svelte, unit-tested.
 
 **Normalize** (upper-case, strip accents and punctuation, collapse spaces) → **tokenize**,
 splitting tokens into **numeric** (`25-2-33`, `1,65%`, `3,35`) and **alphabetic**. The split is
@@ -57,7 +57,7 @@ the UI asks instead of assuming.
 
 ## 🧩 Grouping and overrides
 
-`lib/utils/assetGrouping.ts` turns pairwise links into a partition via union-find, and holds the
+`lib/features/assets/assetGrouping.ts` turns pairwise links into a partition via union-find, and holds the
 user's edits.
 
 ```ts
@@ -90,7 +90,7 @@ and is pinned by tests rather than by inspecting the UI.
 
 ## ⭐ Electing the primary identifier
 
-`components/assets/IdentifierPrimaryChooser.svelte` — one component, five triggers.
+`features/assets/IdentifierPrimaryChooser.svelte` — one component, five triggers.
 
 The rule never changes: **one value leads, the others move to `identifier_other`, nothing is
 discarded.** What changes is who is arguing.
@@ -144,7 +144,7 @@ again as an `identifier_<type>` row. Opened as they arrived, the second modal la
 first and repeated its question (R18).
 
 The decision is a pure function, `decideComparison()` in
-`components/assets/providerComparisonQueue.ts`; the modal only reports what is open and whether its
+`features/assets/providerComparisonQueue.ts`; the modal only reports what is open and whether its
 provider context is still current:
 
 | When the comparison is ready… | Decision |
@@ -181,7 +181,7 @@ A manual **Ask provider** is unchanged: `handleAskProvider()` reads with the def
 `providerComparisonQueue.test.ts`, the modal flow in `AssetModal.providerLifecycle.test.ts`.
 
 Which fields become rows at all is decided upstream, by the pure `compareMetadata()` in
-`components/assets/assetMetadataComparison.ts`, which `fetchAndCompareMetadata()` calls before
+`features/assets/assetMetadataComparison.ts`, which `fetchAndCompareMetadata()` calls before
 applying its writes in order, from the `patch_data` of the probe's `metadata` operation:
 
 - a field empty in the form, and not edited while the read ran, is filled silently (never the
@@ -204,7 +204,7 @@ edit.
 
 **Units per single price** (`quote_base_quantity`) is never empty, so a comparison never fills it:
 it agrees or it is a row. Every proposal comes from one ladder,
-`proposeQuoteBase(suggestion, assetType)` in `components/assets/assetFormState.ts`: the provider's
+`proposeQuoteBase(suggestion, assetType)` in `features/assets/assetFormState.ts`: the provider's
 explicit [suggestion](../../../architecture/patterns/asset_plugin_guide.md#quote-base-suggestion)
 when its `quantity` is a whole number of at least 1, else `defaultQuoteBaseQuantity(assetType)`,
 read from `QUOTE_BASE_TYPE_DEFAULTS` (`BOND`: 100, one entry per exception) and 1 for any other
@@ -288,7 +288,7 @@ deleted.
 ## 🔎 Recognising the asset on the next import
 
 The election is only worth making if the stored value is actually used next time.
-`search_asset_candidates` in `backend/app/services/brim/brim_provider.py` ranks candidates:
+`search_asset_candidates` in `backend/app/services/brim/candidates.py` ranks candidates:
 
 | Priority | Criterion | Confidence |
 |---|---|---|

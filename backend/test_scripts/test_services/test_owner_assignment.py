@@ -777,7 +777,7 @@ async def test_a_new_address_revokes_the_live_email_change_links_of_the_account(
 # A5-5: the email of the owner after a restore says why the password is gone
 # =============================================================================
 
-FRONTEND_AUTH = Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "i18n" / "auth"
+FRONTEND_AUTH = Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "features" / "auth" / "i18n"
 TTL = timedelta(minutes=30)
 LINK = "https://folio.zq-assign.example.com/reset-password#token=abc123"
 INSTANCE = "Zq <Folio> & Co"

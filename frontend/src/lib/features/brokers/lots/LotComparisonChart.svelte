@@ -87,6 +87,8 @@
 
     interface Props {
         selectedLots: ReadonlyArray<LotSummarySchema>;
+        /** The matching method on screen (project 69): it names the realized P&L of the tooltip. */
+        matchingMethod?: string;
         /** The value history as steps: each point holds from its `date` to its `through` (D-P4). */
         valueHistory: ReadonlyArray<LotValueHistoryPoint>;
         returnHistory: ReadonlyArray<LotReturnHistoryPoint>;
@@ -171,7 +173,7 @@
     const LOT_INCOME_MARKER_SERIES_ID = 'lot-income-markers';
     const AGGREGATE_RETURN_SERIES_ID = 'return-aggregate';
 
-    let {selectedLots = [], valueHistory: valueSteps = [], returnHistory: returnSteps = [], range = null, brokers = [], currency, xAxisRange = null, incomeEvents = []}: Props = $props();
+    let {selectedLots = [], valueHistory: valueSteps = [], returnHistory: returnSteps = [], range = null, brokers = [], currency, xAxisRange = null, incomeEvents = [], matchingMethod = 'FIFO'}: Props = $props();
 
     /**
      * The histories are steps; the chart reads points with one date each, summed and grouped by date. So they become the points of their
@@ -456,7 +458,7 @@
         comprehensiveValue: translateOr($_, 'brokers.lots.aggregateComprehensiveValue', 'Comprehensive value'),
         aggregateOpeningValue: translateOr($_, 'brokers.lots.aggregateOpeningValue', 'Opening value'),
         aggregateReturn: translateOr($_, 'brokers.lots.aggregateReturn', 'Aggregate return'),
-        fifoPnl: translateOr($_, 'brokers.lots.fifoPnl', 'FIFO P&L'),
+        fifoPnl: translateOr((key) => $_(key, {values: {method: matchingMethod}}), 'brokers.lots.fifoPnl', `${matchingMethod} P&L`),
         totalPnl: translateOr($_, 'brokers.lots.totalPnl', 'Total P&L'),
         totalReturn: translateOr($_, 'brokers.lots.totalReturn', 'Total return'),
         yAuto: translateOr($_, 'brokers.lots.yAxisAuto', 'Auto'),
@@ -1496,7 +1498,7 @@
         </div>
         {#if mode === 'value' && hasEstimatedAtCostLots}
             <p class="flex items-center gap-2 text-[11px] text-lf-muted" data-testid="lot-comparison-estimated-at-cost-legend">
-                <span class="h-0 w-8 border-t border-dashed border-lf-input"></span>
+                <span class="h-0 w-8 border-t border-dashed" style:border-color={valueEstimatedLineColor()} data-testid="lot-comparison-estimated-at-cost-swatch"></span>
                 <span>{modeLabels.estimatedAtCostLegend}</span>
             </p>
         {/if}

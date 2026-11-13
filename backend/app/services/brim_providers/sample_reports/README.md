@@ -1,6 +1,17 @@
 # BRIM Sample Reports
 
-This directory contains sample broker report files for testing BRIM plugins.
+Sample broker report files for testing BRIM plugins.
+
+**Where they are.** Each plugin keeps its own samples in `brim_providers/<plugin>/sample_reports/` (a sample belongs to the plugin
+whose `test_file_patterns` match its file name; the Generic CSV plugin owns the `generic_*` files). This folder, at the root of the
+family, keeps what belongs to no plugin: this README and `malformed/`, the deliberately broken fixtures. The tests reach them all as one
+folder through `backend/test_scripts/brim_samples.py` (`SampleDir`).
+
+**Where they come from.** Almost all are synthetic (invented values on the real column layout). Two are the public samples of the
+[Export-To-Ghostfolio](https://github.com/dickwolff/Export-To-Ghostfolio) project, which is licensed under Apache-2.0 (compatible with the
+AGPL-3.0 of LibreFolio): `broker_degiro/sample_reports/degiro-export.csv` and `broker_traderepublic/sample_reports/traderepublic-export.csv`.
+Their provenance and licence are in `THIRD_PARTY_LICENSES.md`. Do not add a file taken from a real account or from a source whose licence
+is not written down here.
 
 ## Test Files
 
@@ -77,6 +88,19 @@ have the same dates and amounts on both sides.
 | `scalable-prime-export.csv`   | `broker_scalable`         | PRIME export, 14 columns: buys (gross `amount`), a savings plan, a sell with fee and tax, a dividend with withholding, cash rows | Trades with FEE and TAX legs, gross dividend and interest with a TAX leg, a tax refund as DEPOSIT; pending, cancelled and security-transfer rows only in notices       |
 | `scalable-broker-export.csv`  | `broker_scalable`         | Exporter, broker account, 23 columns: the same families, plus internal transfers, an open partial order, a reversal, a venue fee | Same mapping, ids in the descriptions; notices for the open order, the reversal, the unknown cash type, the net dividend, the trade without details, the transfers |
 | `scalable-deposit-export.csv` | `broker_scalable_deposit` | Exporter, overnight account, 19 columns: interest with and without details, bank transfers, internal transfers                  | Gross interest with a TAX leg, net interest with a notice, deposits and withdrawals; each plugin refuses the other account's file                                     |
+
+### Trade Republic Plugin (`broker_traderepublic`)
+
+The two `traderepublic-transactions*` files are synthetic, with invented values, built on the structure of a real
+«Transaction export» (23 columns, Trade Republic's own CSV since April 2026). No row of the user's file is in them: ids,
+amounts, the counterparty and its IBAN are invented; the ISINs are public securities. `traderepublic-export.csv` is the older
+Dutch 8-column CSV, the sample of the Export-To-Ghostfolio project (Apache-2.0, see above), written by the community tool pytr.
+
+| File                                   | Description                                                                                                            | Expected Result                                                                                                     |
+|----------------------------------------|------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
+| `traderepublic-transactions.csv`       | Transaction export as written (`,`, every cell quoted): interest with withholding, stamp duty, a tax refund, buys and a sell of a fund, a stock and a crypto with fee and tax, an evening trade (`datetime` on the day before `date`), an instant transfer in | 15 transactions: each `amount`, `fee` and `tax` column its own leg, dated by `date`; the refund as INTEREST with an info note |
+| `traderepublic-transactions-excel.csv` | The same rows as Excel saves them back: each line one quoted cell, inner quotes doubled, CRLF                         | The same 15 transactions                                                                                            |
+| `traderepublic-export.csv`             | Dutch 8-column CSV (`;`), with three later English rows                                                                | 9 transactions; the two rows with a fee listed (fee and tax not imported)                                           |
 
 
 ## File Format

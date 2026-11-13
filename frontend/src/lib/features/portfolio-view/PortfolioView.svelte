@@ -25,10 +25,11 @@
     import {brokerStoreVersion, ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+    import {createScopeReloadDebounce} from './scopeReloadDebounce';
     import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
-    import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
+    import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/features/portfolio-view/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {createDateRangeController} from '$lib/features/dashboard/dateRangeController.svelte';
@@ -186,7 +187,6 @@
     }
 
     /** Debounce timer for broker filter changes. */
-    let reloadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 
     /**
      * Date range — backed by global store (shared with assets/fx pages) via the
@@ -304,6 +304,7 @@
     let pageAlive = true;
     onDestroy(() => {
         pageAlive = false;
+        scopeReload.dispose();
         data.dispose();
     });
 
@@ -385,14 +386,9 @@
         scheduleReload();
     }
 
-    /** Fires loadAll after a 2-second quiet period (anti-bounce for rapid clicks). */
-    function scheduleReload() {
-        if (reloadTimer !== null) clearTimeout(reloadTimer);
-        reloadTimer = setTimeout(() => {
-            reloadTimer = null;
-            void pageBusy.track(busy('scope'), () => loadAll());
-        }, 2000);
-    }
+    /** Fires loadAll after a 2-second quiet period (anti-bounce for rapid clicks); the page is busy for the whole wait (K-18). */
+    const scopeReload = createScopeReloadDebounce({delayMs: 2000, waitLabel: busy('scope-pending'), reloadLabel: busy('scope'), reload: () => loadAll()});
+    const scheduleReload = () => scopeReload.schedule();
 
     /** «Aggiorna» (E4): report, contribution, risk and lots are all asked again; what is on screen stays meanwhile. A broker's page asks its own summary and, once its Transactions were opened, their rows too. */
     export async function refresh() {
@@ -568,6 +564,7 @@
                 onAnalyze={openAssetPanel}
                 onCloseAnalysis={closeAssetPanel}
                 {refreshVersion}
+                onLotsRatesChanged={() => void loadAll(true)}
             />
         {:else if activeTab === 'rischio'}
             <PortfolioRiskTab

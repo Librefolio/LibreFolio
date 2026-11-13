@@ -1089,10 +1089,13 @@ their alias, so their chips show.
   not a mix of two colours, nor one whose two percentages do not add up to 100: for such a value it shows
   **Unrecognised colour** and no sliders, and keeps **Apply** disabled until a new value — typed, from the
   sRGB input or snapped to a variable — replaces it.
-- **Class names in comments** count as uses, in the scanner and in the Python inventory alike: the header
-  comments of `app.css` and `tokens.css` name role utilities (`bg-lf-card`, `text-lf-muted`…;
-  `shadow-lf-shadow-card` is written only there). They show among the uses, in the editor's impact, and
-  among the export's occurrences, where an agent finds a comment line.
+- **Comments are not read.** A colour or a class name written in a comment is not one of the app: the scanner
+  and the Python inventory blank the comments of a source before they count (`maskComments` and `mask_comments`,
+  the same rules in both: `/* */` in a stylesheet; `//` and `/* */` in a script, which skips strings and template
+  literals; `<!-- -->` in a Svelte markup; each region of a `.svelte` by its own kind). Lines and columns do not
+  move. A role utility named only in a header comment (`shadow-lf-shadow-card` was) therefore has no use in the
+  catalogue. Counting the comments gave ~135 false entries on 1,750 files (hex 452 → 417, `rgb()`/`hsl()` 141 → 102,
+  custom classes 8,119 → 8,071); the two counts still agree to the unit.
 - **Wide gamut.** Stylesheets keep the value as typed, so an `oklch()` outside sRGB stays wide; charts
   receive it clamped to sRGB. The editor warns when a value leaves sRGB. `<input type="color">` and the
   gallery screenshots are sRGB only, so a wide-gamut display shows such colours more saturated than the
@@ -1200,7 +1203,7 @@ An abridged export (occurrence lists and classes cut):
       "target": "--color-emerald-600",
       "from": "oklch(59.6% 0.145 163.225)",
       "to": "oklch(62% 0.13 160)",
-      "occurrences": [{"file": "src/lib/components/assets/AssetCard.svelte", "line": 133}],
+      "occurrences": [{"file": "src/lib/features/assets/AssetCard.svelte", "line": 133}],
       "impact": {"uses": 52, "files": 27, "classes": {"text-emerald-600": 46, "bg-emerald-600": 3}},
       "note": "gains green too bright",
       "shots": ["assets/list"]

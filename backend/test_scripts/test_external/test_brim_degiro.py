@@ -61,11 +61,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import pytest
 
-from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput, BRIMRefusal, is_fake_asset_id
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
@@ -75,7 +75,7 @@ from scripts.i18n_catalog import load_catalog
 PLUGIN_CODE = "broker_degiro"
 PLUGIN_MODULE = "backend.app.services.brim_providers.broker_degiro.plugin"
 PLUGIN_VERSION = "2.1.0"
-SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+SAMPLE_DIR = SampleDir()
 NL_SAMPLE = SAMPLE_DIR / "degiro-export.csv"
 EN_SAMPLE = SAMPLE_DIR / "degiro-account-en.csv"
 # The languages of the UI translation catalogue, read from its sources (scripts/i18n_catalog.py), never from a build.

@@ -66,7 +66,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.db.models import Transaction, TransactionType
-from backend.app.schemas.portfolio import LotValueHistoryPoint, MarketPriceHistoryPoint
+from backend.app.schemas.portfolio.lots import LotValueHistoryPoint, MarketPriceHistoryPoint
 from backend.app.services.financial_math.lots import prices as prices_module
 from backend.app.services.financial_math.lots.change_days import DayRange, history_steps, price_candidate_days
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series

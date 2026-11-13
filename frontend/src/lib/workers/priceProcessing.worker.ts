@@ -29,7 +29,7 @@ import {z} from 'zod';
 // a Worker's). `generated.ts` itself has zero SvelteKit dependencies (only zod +
 // @zodios/core), so importing it directly is safe here.
 import {schemas} from '$lib/api/generated';
-import {apiPricesToAssetPricePoints, computeDerivedPriceState, type AssetPricePoint, type DerivedPriceState} from '$lib/utils/assetPriceDerived';
+import {apiPricesToAssetPricePoints, computeDerivedPriceState, type AssetPricePoint, type DerivedPriceState} from '$lib/features/assets/assetPriceDerived';
 import type {WorkerRequestMessage, WorkerResponseMessage} from './workerPool';
 
 /** One raw (unvalidated) bulk-query result item, as received over the wire. */

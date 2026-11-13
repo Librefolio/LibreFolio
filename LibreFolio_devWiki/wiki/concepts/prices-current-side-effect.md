@@ -74,7 +74,7 @@ in-memory chart series:
 
 > 2026-11-07 lint: the endpoint has always been a `POST` (the page first said `GET`). Since `305850522`
 > (2026-10-15, live prices paused when idle) the poll lives in the `AssetDetailLive` class,
-> `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts` → `#pollLivePriceOnce` (every 30 s while
+> `frontend/src/lib/features/assets/detail/assetDetailLive.svelte.ts` → `#pollLivePriceOnce` (every 30 s while
 > the chart reaches today, paused while the tab is hidden or idle, no poller for a manual asset). It still calls
 > `/current` only, never `/sync`.
 
@@ -124,7 +124,7 @@ fresh delta after each `/current` call; it always produced an empty
 |------|------|
 | Backend writer (side-effect owner) | `backend/app/services/assets/price_query.py` (`get_current_prices_bulk`; until 2026-09-11 in the monolithic `asset_source.py` — [[entities/asset-sources-package]]) |
 | Backend delta reader | `backend/app/services/assets/refresh.py` (`_count_actual_price_changes`) |
-| Frontend live poll (correct pattern) | `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts` (`#pollLivePriceOnce`; until 2026-10-15 `pollCurrentPriceOnce` in `frontend/src/routes/(app)/assets/[id]/+page.svelte`) |
+| Frontend live poll (correct pattern) | `frontend/src/lib/features/assets/detail/assetDetailLive.svelte.ts` (`#pollLivePriceOnce`; until 2026-10-15 `pollCurrentPriceOnce` in `frontend/src/routes/(app)/assets/[id]/+page.svelte`) |
 | Endpoints `/current` and `/sync` | `backend/app/api/v1/assets/prices.py` |
 | Post-mortem | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure_2.prompt.md` (§ "I-bis #24 — Auto-refresh mirato post-sync", v3→v4 paragraph) |
 

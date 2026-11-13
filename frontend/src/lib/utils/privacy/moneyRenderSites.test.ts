@@ -228,6 +228,18 @@ const REGISTRY: Site[] = [
         why: 'cldrCurrencyDigits: reads resolvedOptions().maximumFractionDigits for the arrow step of PAC planner money inputs and renders nothing — the same form-A false positive as snapshotDataRenderer. Every planner amount leaves through formatCurrencyAmountPlain/Html in the same file.',
     },
     {
+        file: 'lib/features/dashboard/YieldOnCostCell.svelte',
+        snippet: "`${label('dashboard.yieldOnCostFxPair', 'Conversion')}: ${formatCurrencyPairPlain(entry.from_currency, entry.to_currency, 'conversion')} · ${label('dashboard.yieldOnCostFxRateDate', 'rate from')} ${formatDate(entry.rate_date)}${entry.stale ? `",
+        status: 'not-money',
+        why: 'A line of the Yield on Cost tooltip naming the conversion a figure used (the currency pair and the date of its rate) and, when the rate is old, how many days before. It matches form B through the pair helper beside the date and the day count; no amount is written, and an FX rate would be public anyway.',
+    },
+    {
+        file: 'lib/features/transactions/import/pairCellHtml.ts',
+        snippet: '`<span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400" data-testid="import-tx-pair-rate">${formatCurrencyPairHtml(info.base, info.quote, \'conversion\')}<span class="font-mono">@ ${formatFixed(info.impliedRate, 4)}</span></span>`',
+        status: 'not-money',
+        why: "The rate two imported amounts imply (|to| / |from|), written beside its currency pair. It is a rate (a ratio of two amounts), not an amount, and says nothing of the user's holdings; the two amounts it comes from are rendered elsewhere, through the channel.",
+    },
+    {
         file: 'lib/components/charts/PriceChartFull.svelte',
         snippet: '`${currencyHtml}: ${formatPrice(Number(value), {minDecimals: 4})}${valueSuffix}${axisNoteHtml}`',
         status: 'public',

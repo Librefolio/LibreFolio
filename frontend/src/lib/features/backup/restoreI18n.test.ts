@@ -27,7 +27,7 @@
  * (`backup.restore.uploaded`, …) look like keys and are set aside. The scan reads the source as text, so it also counts
  * a key named in a comment — a key a comment names must exist too.
  *
- * The catalogues are the generated ones (`$lib/i18n/<lang>.json`), built from their sources (`lib/i18n/backup/*.json`)
+ * The catalogues are the generated ones (`$lib/i18n/<lang>.json`), built from their sources (`lib/features/backup/i18n/*.json`)
  * before every Vitest run, as in `emailText.test.ts`: a case reads the presence of a key and the placeholders it names,
  * never its wording — except the words of the confirmation, whose form is the contract (§0.4).
  *
@@ -318,7 +318,7 @@ describe('every code §5 lists has its message', () => {
 // =====================================================================================================================
 
 /*
- * Every key B4 adds is a message of the four catalogues (`frontend/src/lib/i18n/backup/{en,it,fr,es}.json`, built into
+ * Every key B4 adds is a message of the four catalogues (`frontend/src/lib/features/backup/i18n/{en,it,fr,es}.json`, built into
  * the catalogues read here), naming the same placeholders in each. The names are this file's choice, made beside the
  * keys of today — `backup.download.phase.<phase>` and `backup.restore.phase.<phase>` as the phase maps of the two cards
  * build them, `backup.download.errors.<code>` and `backup.restore.errors.<code>` as their error maps do — and they are

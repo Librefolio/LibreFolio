@@ -1,0 +1,186 @@
+<!--
+  SignalStyleEditor — Reusable signal line style editor.
+
+  Features:
+  - Color picker
+  - SVG line preview button (opens popover)
+  - Popover with: marker grids (start/end), line type selector, line width selector
+  - Optional `simplified` mode: hides marker grids (for MeasurePanel)
+
+  Used by: ChartSignalsSection, MeasurePanel.
+  Uses Svelte 5 runes.
+-->
+<script lang="ts">
+    import {_ as t} from '$lib/i18n';
+    import type {MarkerType, SignalStyle} from '$lib/features/signals';
+
+    // =========================================================================
+    // Props
+    // =========================================================================
+
+    interface Props {
+        style: SignalStyle;
+        onstylechange: (key: keyof SignalStyle, value: any) => void;
+        /** Hide marker grids (start/end) — used for measure signals */
+        simplified?: boolean;
+        /** Hide the lineType selector — for signals where lineType is zone-driven (e.g. RSI) */
+        hideLineType?: boolean;
+        /** Hide the line width selector — useful for bar-only components. */
+        hideWidth?: boolean;
+    }
+
+    let {style, onstylechange, simplified = false, hideLineType = false, hideWidth = false}: Props = $props();
+
+    // =========================================================================
+    // Constants
+    // =========================================================================
+
+    const LINE_TYPES: ('solid' | 'dashed' | 'dotted')[] = ['solid', 'dashed', 'dotted'];
+    const MARKER_OPTIONS: (MarkerType | null)[] = [null, 'arrow', 'circle', 'diamond', 'rect', 'pin'];
+    const MARKER_SYMBOLS_START: Record<string, string> = {arrow: '◁', circle: '●', diamond: '◆', rect: '■', pin: '📍'};
+    const MARKER_SYMBOLS_END: Record<string, string> = {arrow: '▷', circle: '●', diamond: '◆', rect: '■', pin: '📍'};
+
+    // =========================================================================
+    // State
+    // =========================================================================
+
+    let popoverOpen = $state(false);
+    let colorDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function togglePopover() {
+        popoverOpen = !popoverOpen;
+    }
+
+    function closePopover() {
+        popoverOpen = false;
+    }
+
+    function handleColorInput(e: Event) {
+        const value = (e.currentTarget as HTMLInputElement).value;
+        if (colorDebounceTimer) clearTimeout(colorDebounceTimer);
+        colorDebounceTimer = setTimeout(() => onstylechange('color', value), 100);
+    }
+</script>
+
+<svelte:window
+    onkeydown={(event) => {
+        if (event.key === 'Escape') closePopover();
+    }}
+/>
+
+<div class="flex items-center gap-1.5">
+    <input class="w-6 h-6 p-0 border border-lf-subtle rounded cursor-pointer shrink-0" onchange={(e) => onstylechange('color', (e.currentTarget as HTMLInputElement).value)} oninput={handleColorInput} title={$t('chartSettings.style.color')} type="color" value={style.color} />
+    {#if !simplified || !hideLineType || !hideWidth}
+        <div class="flex-1 relative min-w-[50px]">
+            <button class="w-full h-7 flex items-center cursor-pointer rounded hover:bg-lf-hover transition-colors relative" onclick={togglePopover} title={$t(hideLineType ? 'chartSettings.style.width' : 'chartSettings.style.lineType')} type="button">
+                <svg class="absolute inset-0" height="24" width="100%">
+                    {#if hideLineType}
+                        <line stroke={style.color} stroke-width={style.lineWidth} x1="2%" x2="98%" y1="14" y2="14" />
+                    {:else}
+                        <line stroke={style.color} stroke-dasharray={style.lineType === 'dashed' ? '8,4' : style.lineType === 'dotted' ? '2,4' : 'none'} stroke-width={style.lineWidth} x1="2%" x2="98%" y1="14" y2="14" />
+                    {/if}
+                </svg>
+            </button>
+
+            <!-- Style popover -->
+            {#if popoverOpen}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <div class="fixed inset-0 z-40" data-testid="signal-style-backdrop" onclick={closePopover}></div>
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <div
+                    class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-50
+                    bg-lf-card border border-lf-raised
+                    rounded-lg shadow-lg shadow-lf-shadow p-3 w-max"
+                    data-testid="signal-style-popover"
+                    onclick={(e) => e.stopPropagation()}
+                >
+                    <div class="flex items-center gap-4">
+                        {#if !simplified}
+                            <!-- Start marker grid -->
+                            <div class="flex flex-col items-center">
+                                <span class="text-[9px] text-lf-muted uppercase block mb-1.5">{$t('common.start')}</span>
+                                <div class="grid grid-cols-2 gap-1.5">
+                                    {#each MARKER_OPTIONS as mk}
+                                        <button
+                                            type="button"
+                                            aria-label={mk ?? 'none'}
+                                            class="w-8 h-8 flex items-center justify-center rounded border transition-colors
+                                            {style.markerStart === mk ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle hover:border-lf-input'}"
+                                            onclick={() => onstylechange('markerStart', mk)}
+                                        >
+                                            {#if mk === null}<span class="text-[10px] text-lf-muted">✕</span>
+                                            {:else}<span style="color: {style.color}" class="text-sm leading-none">{MARKER_SYMBOLS_START[mk]}</span>{/if}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+                        {/if}
+                        <!-- Line type + Width -->
+                        {#if !hideLineType || !hideWidth}
+                            <div class="flex flex-col items-center {simplified ? '' : 'border-x border-lf-subtle px-4'}">
+                                {#if !hideLineType}
+                                    <span class="text-[9px] text-lf-muted uppercase block mb-1.5">{$t('chartSettings.style.lineType')}</span>
+                                    <div class="flex gap-1.5 {hideWidth ? '' : 'mb-3'}">
+                                        {#each LINE_TYPES as lt}
+                                            <button
+                                                type="button"
+                                                aria-label={lt}
+                                                class="w-10 h-6 flex items-center justify-center rounded border transition-colors
+                                                    {style.lineType === lt ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle hover:border-lf-input'}"
+                                                onclick={() => onstylechange('lineType', lt)}
+                                            >
+                                                <svg width="32" height="6">
+                                                    <line x1="2" y1="3" x2="30" y2="3" stroke={style.color} stroke-width="2" stroke-dasharray={lt === 'dashed' ? '5,3' : lt === 'dotted' ? '2,3' : 'none'} />
+                                                </svg>
+                                            </button>
+                                        {/each}
+                                    </div>
+                                {/if}
+                                {#if !hideWidth}
+                                    <span class="text-[9px] text-lf-muted uppercase block mb-1.5">{$t('chartSettings.style.width')}</span>
+                                    <div class="flex gap-1.5">
+                                        {#each [1, 2, 3, 4] as w}
+                                            <button
+                                                type="button"
+                                                aria-label="width {w}"
+                                                class="w-7 h-6 flex items-center justify-center rounded border transition-colors
+                                                    {style.lineWidth === w ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle hover:border-lf-input'}"
+                                                onclick={() => onstylechange('lineWidth', w)}
+                                            >
+                                                <svg width="20" height="10">
+                                                    <line x1="2" y1="5" x2="18" y2="5" stroke={style.color} stroke-width={w} />
+                                                </svg>
+                                            </button>
+                                        {/each}
+                                    </div>
+                                {/if}
+                            </div>
+                        {/if}
+                        {#if !simplified}
+                            <!-- End marker grid -->
+                            <div class="flex flex-col items-center">
+                                <span class="text-[9px] text-lf-muted uppercase block mb-1.5">{$t('common.end')}</span>
+                                <div class="grid grid-cols-2 gap-1.5">
+                                    {#each MARKER_OPTIONS as mk}
+                                        <button
+                                            type="button"
+                                            aria-label={mk ?? 'none'}
+                                            class="w-8 h-8 flex items-center justify-center rounded border transition-colors
+                                            {style.markerEnd === mk ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle hover:border-lf-input'}"
+                                            onclick={() => onstylechange('markerEnd', mk)}
+                                        >
+                                            {#if mk === null}<span class="text-[10px] text-lf-muted">✕</span>
+                                            {:else}<span style="color: {style.color}" class="text-sm leading-none">{MARKER_SYMBOLS_END[mk]}</span>{/if}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+                        {/if}
+                    </div>
+                </div>
+            {/if}
+        </div>
+    {/if}
+</div>

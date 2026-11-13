@@ -120,7 +120,7 @@ import random
 import sys
 from collections import Counter
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Iterator
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import ModuleType
 from typing import Any
@@ -153,7 +153,7 @@ IMPORT_SIZED = 1_500  # items of one import-sized request: past SQLite's limit, 
 #: The first day of every series: far enough back that 10 000 daily items end before today, inside the stored bounds
 #: (X-R65: a rate dated after tomorrow is refused before the write).
 DAY0 = date(1990, 1, 1)
-FETCHED_AT = datetime(2025, 1, 1)
+FETCHED_AT = datetime(2025, 1, 1, tzinfo=UTC)
 SOURCE = "SEC9a"
 #: What a failing service raises in the failure cases: an SQL error names the schema.
 LEAK = "SELECT secret_column FROM secret_table"

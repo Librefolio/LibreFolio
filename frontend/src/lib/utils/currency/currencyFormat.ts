@@ -95,3 +95,59 @@ export function formatCurrencyCodeHtml(code: string): string {
     }
     return `${flagHtml} ${codeHtml}`;
 }
+
+/**
+ * The two forms of a currency pair: `conversion` (`→`: something is converted from one currency to the other — an amount, the
+ * rate a conversion used, the Yield on Cost, an import) and `pair` (`/`: the forex pair in itself — the banners of a missing or
+ * old rate, a list of pairs). The default is `pair`.
+ */
+export type CurrencyPairForm = 'pair' | 'conversion';
+
+const pairSeparator = (form: CurrencyPairForm): string => (form === 'conversion' ? '→' : '/');
+
+/**
+ * A currency pair, in the direction of the conversion, as HTML: `$ 🇺🇸 USD / EUR 🇪🇺 €` (form `pair`) or `$ 🇺🇸 USD → EUR 🇪🇺 €`
+ * (form `conversion`) for USD → EUR.
+ *
+ * The currency a conversion starts from is written as `formatCurrencyCodeHtml` writes it (symbol, flag, code); the one it
+ * arrives in is its mirror (code, flag, symbol), so the two read as one line pointing from left to right. A currency with no
+ * symbol of its own (the symbol is its code) leaves the symbol out on its side. The flag stays in `.emoji-flag`.
+ * `EUR → USD` is `€ 🇪🇺 EUR / USD 🇺🇸 $`: the order is the direction, never alphabetical.
+ */
+export function formatCurrencyPairHtml(from: string, to: string, form: CurrencyPairForm = 'pair'): string {
+    const arrival = currencyParts(to);
+    const arrivalHtml = [`<span class="currency-code">${escapeHtml(to)}</span>`, arrival.flag ? `<span class="emoji-flag">${arrival.flag}</span>` : '', arrival.symbol ? `<span class="currency-symbol">${escapeHtml(arrival.symbol)}</span>` : ''].filter(Boolean).join(' ');
+    return `${formatCurrencyCodeHtml(from).trim()} ${pairSeparator(form)} ${arrivalHtml}`;
+}
+
+/** `formatCurrencyPairHtml` as plain text (tooltips, titles): `$ 🇺🇸 USD / EUR 🇪🇺 €`, or with `→` for a `conversion`. */
+export function formatCurrencyPairPlain(from: string, to: string, form: CurrencyPairForm = 'pair'): string {
+    const start = currencyParts(from);
+    const arrival = currencyParts(to);
+    return `${[start.symbol, start.flag, from].filter(Boolean).join(' ')} ${pairSeparator(form)} ${[to, arrival.flag, arrival.symbol].filter(Boolean).join(' ')}`;
+}
+
+/** The pair of a `FROM/TO` slug (`USD/EUR`, also `USD-EUR`), as `formatCurrencyPairHtml`; the text itself, escaped, when it is no pair. */
+export function formatPairSlugHtml(slug: string, form: CurrencyPairForm = 'pair'): string {
+    const codes = slugCodes(slug);
+    return codes ? formatCurrencyPairHtml(codes[0], codes[1], form) : escapeHtml(slug);
+}
+
+/** `formatPairSlugHtml` as plain text. */
+export function formatPairSlugPlain(slug: string, form: CurrencyPairForm = 'pair'): string {
+    const codes = slugCodes(slug);
+    return codes ? formatCurrencyPairPlain(codes[0], codes[1], form) : slug;
+}
+
+function slugCodes(slug: string): [string, string] | null {
+    const parts = slug.includes('/') ? slug.split('/') : slug.split('-');
+    const [from, to] = [parts[0]?.trim().toUpperCase(), parts[1]?.trim().toUpperCase()];
+    return from && to && parts.length === 2 ? [from, to] : null;
+}
+
+/** The symbol (none when it is the code itself) and the flag (none for the white flag) of a currency. */
+function currencyParts(code: string): {symbol: string; flag: string} {
+    const info = getCurrencyInfo(code);
+    const symbol = info.symbol ?? '';
+    return {symbol: symbol !== '' && symbol !== code ? symbol : '', flag: info.flag_emoji && info.flag_emoji !== '🏳️' ? info.flag_emoji : ''};
+}

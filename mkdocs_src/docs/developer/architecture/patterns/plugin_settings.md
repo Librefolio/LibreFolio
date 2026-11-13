@@ -43,7 +43,7 @@ Paths are relative to `backend/`.
 | `app/services/assets/core.py` | `configured_provider()`, `call_provider()` (the boundary of every asset provider call), `public_asset_url()` (an asset URL withheld when it shows a secret), `settings_cache_part()`, `settings_cache_part_for()` |
 | `app/services/assets/search.py` | Search for a user: `providers_not_configured`, and the stream's `provider_error` with its `error_code` ([NOT_CONFIGURED](#not-configured)) |
 | `app/services/fx/runtime.py` | `configured_fx_provider()`, `call_fx_provider()` (the boundary of every FX provider call), `settings_cache_part()` |
-| `app/services/brim/brim_parse_pool.py`, `app/services/brim/brim_provider.py` | The BRIM parse: `parse_file_offloaded()` resolves the values in the parent, `parse_file()` binds them in the worker and holds the secrets in flight ([BRIM](#brim-parse)) |
+| `app/services/brim/brim_parse_pool.py`, `app/services/brim/parsing.py` | The BRIM parse: `parse_file_offloaded()` resolves the values in the parent, `parse_file()` binds them in the worker and holds the secrets in flight ([BRIM](#brim-parse)) |
 | `app/services/tools/settings.py`, `app/services/tools/worker.py` | The Tool compute: `bound_settings_for_batch()` resolves the values in the parent, one set per tool code; `ToolWorkerJob.settings` carries them and the worker binds them ([Tools](#tool-field)) |
 | `app/utils/runtime/secret_masking.py` | The masking of the secrets in flight, in log lines and in exceptions, each text either masked in place or, with `whole`, hidden entirely; and the check that an error still shows one |
 | `app/config/plugins.py` | `plugin_setting_env()` and `plugin_setting_env_origin()`: the environment variables of the fields |
@@ -110,14 +110,14 @@ resolves the values instead, and only for a plugin that declares fields:
    route passes the user who imports. A plugin without fields gets `None`: no database read, and the
    worker is called with the three arguments it always had.
 2. The picklable `BoundSettings` travels as the fourth argument of `parse_file()`
-   (`app/services/brim/brim_provider.py`). The worker binds it on the plugin before the parse and
+   (`app/services/brim/parsing.py`). The worker binds it on the plugin before the parse and
    holds the secrets in flight for its length, masked in every log line and in the exception; the
    parent masks the exception too, hiding its texts whole when a personal secret is bound
    ([Secrets](#secrets)).
 3. The plugin reads `self.settings` inside `parse()`, never in `__init__`.
 
 **Only the parse delivers settings.** No shipped BRIM plugin declares a field yet, and the other places that
-create a plugin (the detection of the plugin, `api/v1/brokers.py` for the preview and the report sets,
+create a plugin (the detection of the plugin, `api/v1/brokers/` for the preview and the report sets,
 `brim_report_sets.get_set_plugin`, `brim_gap_fix`) see the defaults and no secret: a value a plugin needs there
 must not depend on a setting. The details are in
 [BRIM settings](../../backend/brim/architecture.md#brim-settings). How a BRIM plugin declares a field, and when a
@@ -272,7 +272,7 @@ A plugin lists its fields in `settings_fields`, a class attribute holding a tupl
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 
 @register_provider(AssetProviderRegistry)
@@ -806,7 +806,7 @@ hand-entered FX rates, is not: it stays hidden from the FX list by its code.
   fields.
 
 The rule lives in the registry base, `AbstractPluginRegistry._withheld()` in
-`backend/app/services/provider_registry.py`, which reads `is_test_mode()` at each lookup. A class that
+`backend/app/services/platform/provider_registry.py`, which reads `is_test_mode()` at each lookup. A class that
 does not set the flag (every real provider, every plugin of the other families) is never affected.
 `./dev.py test services test-only-providers` covers the registries, the family runtimes and the
 validation of an assignment and of a probe, in both modes.
@@ -926,7 +926,7 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
       (`assets.search.notConfigured`), with **Configure**; a save starts the search again. When a
       result's `display_name` contains 👑, a legend closes the list (`assets.search.crownLegend`).
 - **Texts.** The interface's own are in the `pluginSettings` subsystem of the catalogue
-  (`frontend/src/lib/i18n/pluginSettings/`), the two search texts in `assets.search`, and the probe's
+  (`frontend/src/lib/features/plugin-settings/i18n/`), the two search texts in `assets.search`, and the probe's
   `providerErrors.NOT_CONFIGURED` and `providerErrors.PROVIDER_ERROR` in the `assets` subsystem. A
   field's texts come from its declaration: `fieldLabel()`, `fieldDescription()` and `optionLabel()`
   translate the declared key, and fall back to the English text ([Labels and Translations](#translations)).

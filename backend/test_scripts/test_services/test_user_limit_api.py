@@ -54,10 +54,11 @@ INHERITED_VARIABLES = ("LIBREFOLIO_PUBLIC_URL", "LIBREFOLIO_REGISTRATION", LIMIT
 #: The answer of a refused route to a signed-in ordinary user, whole.
 OVER_LIMIT_CODE = "user_limit_exceeded"
 
-#: The five routes of the administrator's full backup: kept for the administrator alone while the instance is over the limit.
+#: The six routes of the administrator's full backup (with the list of the kept ones, FB-24): kept for the administrator alone while the instance is over the limit.
 ADMIN_BACKUP = {
     "backend.app.api.v1.backup.instance.start_instance_backup",
     "backend.app.api.v1.backup.instance.get_instance_backup_options",
+    "backend.app.api.v1.backup.instance.list_instance_backups",
     "backend.app.api.v1.backup.instance.get_instance_backup_job",
     "backend.app.api.v1.backup.instance.download_instance_backup",
     "backend.app.api.v1.backup.instance.delete_instance_backup_job",
@@ -291,7 +292,7 @@ async def test_the_guard_is_the_fourth_dependency_of_the_router() -> None:
 
 
 def test_the_lists_are_the_block_list_less_the_administrators_backup() -> None:
-    """A5-7-110: ``ALLOWED_WHEN_OVER_LIMIT`` is ``ALLOWED_WHEN_BLOCKED`` less the five routes of the administrator's backup, which ``ALLOWED_WHEN_OVER_LIMIT_ADMIN`` holds with the two routes of the choice. The restore of the app is in neither."""
+    """A5-7-110: ``ALLOWED_WHEN_OVER_LIMIT`` is ``ALLOWED_WHEN_BLOCKED`` less the six routes of the administrator's backup, which ``ALLOWED_WHEN_OVER_LIMIT_ADMIN`` holds with the two routes of the choice. The restore of the app is in neither."""
     from backend.app.api.v1 import user_limit  # noqa: PLC0415
     from backend.app.api.v1.users import list_over_limit, resolve_over_limit  # noqa: PLC0415
 

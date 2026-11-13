@@ -83,9 +83,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse, PortfolioSummary
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
+from backend.app.schemas.portfolio.summary import PortfolioSummary
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_utils import print_section, print_success
 

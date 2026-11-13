@@ -57,13 +57,13 @@ what each status gets), and so is a row without a readable `date`, `amount` or `
 
 | In the file (`type`) | Imported as |
 |:--|:--|
-| `Buy`, `Savings plan` | `BUY` on the gross `amount` — the value of the shares, as Scalable's CSV and exporter 1.0.1 or later write it — with `fee` as a `FEE` and a positive `tax` as a `TAX` of the same asset. A negative `tax`, given back, becomes a `DEPOSIT` without asset |
+| `Buy`, `Savings plan` | `BUY` on the gross `amount` — the value of the shares, as Scalable's CSV and exporter 1.0.1 or later write it — with `fee` as a `FEE` and a positive `tax` as a `TAX` of the same asset. A negative `tax`, given back, becomes an `INTEREST` of the same asset, prefixed `Tax refund` (1.2.0; a `DEPOSIT` without asset up to 1.1.0) |
 | `Sell` | `SELL`, the same way |
 | a type containing `Distribution` | `DIVIDEND`, gross — `amount` plus the tax withheld in `tax` — with that tax as a `TAX` of the same asset; net when `tax` is empty |
 | `Interest` | `INTEREST`, gross, with the tax withheld as a `TAX`, both without asset; net when `tax` is empty |
 | `Deposit`, `Withdrawal` — bank transfers, and transfers between the two accounts | `DEPOSIT`, `WITHDRAWAL` |
 | `Fee` | `FEE`, without asset |
-| `Taxes`, `Tax` | `TAX`, without asset; a positive amount, a refund, becomes a `DEPOSIT` |
+| `Taxes`, `Tax` | `TAX`, without asset; a positive amount, a refund, becomes an `INTEREST` without asset, prefixed `Tax refund` (1.2.0; a `DEPOSIT` up to 1.1.0) |
 | Any other row whose `assetType` is `Cash`, such as a bonus | `DEPOSIT` or `WITHDRAWAL`, by the sign of `amount` |
 | `Security transfer`, `Corporate action` and any other type | Not imported: the `scalable_not_imported` notice lists them |
 
@@ -136,7 +136,7 @@ present in the four catalogues; the English texts are the fallback
 | `scalable_several_overnight_accounts` | warning | The first row of each overnight account (`lf_account_index`), when the file holds more than one: they all go into one broker |
 | `scalable_internal_transfers` | info | Transfers between the two accounts: imported, to be merged |
 | `scalable_dividends_net` | info | Dividends without `tax`: imported net |
-| `scalable_tax_refund` | info | Tax refunds: imported as `DEPOSIT` |
+| `scalable_tax_refund` | info | Tax refunds: imported as `INTEREST` («Tax refund»), the BRIM rule [a tax refund is interest](../../architecture/patterns/brim_plugin_guide.md#tax-refund-interest) |
 | `scalable_cash_by_sign` | info | Cash rows of an unknown type, or with an unexpected sign: booked by the sign of `amount` |
 
 The two warnings marked `report_issue` carry `context.report_issue = True`: the wizard shows the link
@@ -149,7 +149,7 @@ and `rows_unreadable`, appended after the ten; their texts are written once for 
 
 ## 🧪 Samples and tests
 
-- `backend/app/services/brim_providers/sample_reports/` holds `scalable-prime-export.csv`
+- `backend/app/services/brim_providers/broker_scalable/sample_reports/` and `broker_scalable_deposit/sample_reports/` hold `scalable-prime-export.csv`
   (Scalable's own CSV), `scalable-broker-export.csv` and `scalable-deposit-export.csv` (exporter
   1.0.1, one file per account, whose internal transfers mirror each other): invented values on the
   real layout, described in the folder's `README.md`.

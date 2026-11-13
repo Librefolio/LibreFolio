@@ -18,11 +18,11 @@
     import {getTransactionTypeIconUrl, getTypeRule} from '$lib/features/transactions/transactionTypeStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
-    import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
-    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
+    import {formatCurrencyPairHtml} from '$lib/utils/currency/currencyFormat';
+    import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/features/fx/fxConversionHelper';
     import {promotePairOrder} from './promoteHelpers';
     import {formatFixed} from '$lib/utils/core/formatFixed';
-    import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import type {FxDataPoint} from '$lib/features/fx/fxStoreRegistry';
     import type {ValidationIssue} from '../types';
     import type {PendingOp, SuggestEntry} from './txBulkTypes';
     import type DataTable from '$lib/components/table/DataTable.svelte';
@@ -379,9 +379,7 @@
                                     <span class="text-lf-muted mx-0.5">·</span>
                                     <Tooltip html={buildFxTooltipHtml(tooltipData, $t)} position="bottom">
                                         <span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400 cursor-help" data-testid="promote-suggest-fx-info-{idx}">
-                                            {@html formatCurrencyCodeHtml(fxInfo.base)}
-                                            <span>→</span>
-                                            {@html formatCurrencyCodeHtml(fxInfo.quote)}
+                                            {@html formatCurrencyPairHtml(fxInfo.base, fxInfo.quote, 'conversion')}
                                             <span class="font-mono">@ {formatFixed(fxInfo.impliedRate, 4)}</span>
                                             {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
                                                 <span class="text-lf-warning">⚠️</span>

@@ -56,6 +56,14 @@ The connection security indicator at the bottom of the sidebar, open on Connecti
     <img class="gallery-img" data-category="security" data-name="connection-indicator" alt="🚦 Connection Indicator">
 </div>
 
+### 🚦 Connection Indicator with Security Warnings
+
+The same line for an administrator whose instance has security findings: a red dot on the shield and, in the details, the link with the count of errors and warnings.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="security" data-name="connection-indicator-attention" alt="🚦 Connection Indicator with Security Warnings">
+</div>
+
 ---
 
 ## 🧭 Onboarding
@@ -344,6 +352,22 @@ Administrators see what needs attention and how to act on it; the passed checks 
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="settings" data-name="security" alt="Security Checks (Admin)">
+</div>
+
+### 💾 Backup: Make One (Admin)
+
+The Backup tab of an administrator: choose Clear or Secure, then Create backup.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="backup-create" alt="Backup: Make One (Admin)">
+</div>
+
+### ✅ Backup Ready (Admin)
+
+When the backup is made, the card offers its download.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="backup-ready" alt="Backup Ready (Admin)">
 </div>
 
 ### ↩️ Restore Rolled Back (Admin)

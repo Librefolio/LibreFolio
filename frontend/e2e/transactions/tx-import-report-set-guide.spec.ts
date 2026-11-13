@@ -33,13 +33,13 @@ import {optionsClosed} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from '../fixtures/brimSamples';
 
 const API = '/api/v1';
 const UPLOAD_PATH = `${API}/brokers/import/upload`;
 const SPEC_DIR = path.dirname(fileURLToPath(import.meta.url));
-const SAMPLES = path.resolve(SPEC_DIR, '../../../backend/app/services/brim_providers/sample_reports');
-const CUSTODY_XLSX = path.join(SAMPLES, 'danske_bank-custody.xlsx');
-const CASH_CSV = path.join(SAMPLES, 'danske_bank-cash.csv');
+const CUSTODY_XLSX = samplePath('danske_bank-custody.xlsx');
+const CASH_CSV = samplePath('danske_bank-cash.csv');
 const DANSKE = 'broker_danske_bank';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -223,7 +223,7 @@ class TestPortfolioWAC:
 # what the linked ADJUSTMENT means to the cost pool, because a split is recognised
 # by a live join on the linked event's type:
 #
-# * portfolio_service.compute_wac_iterative treats an ADJUSTMENT as split-linked only
+# * wac.compute_wac_iterative treats an ADJUSTMENT as split-linked only
 #   while its AssetEvent.type == SPLIT, and adds that set to the WAC cache fingerprint,
 #   so a retype is picked up although the transaction itself is not touched;
 # * average_cost.cost_movement_from_transaction rescales the pool for a split-linked
@@ -326,8 +326,10 @@ async def _lots_missing_cost_basis(client: httpx.AsyncClient, broker_id: int, as
     line = sorted((point for point in lots["broker_wac_history"] or [] if point["broker_id"] == broker_id), key=lambda point: point["date"])
     assert line, f"the lots analysis draws no average-cost line for broker {broker_id}: {lots['broker_wac_history']}"
     assert (_decimal(line[-1]["pool_qty"]), _decimal(line[-1]["wac"])) == (Decimal(quantity), Decimal(wac)), f"the lots' average-cost line should end on {quantity} units at {wac}: {line[-1]}"
-    assert lots["data_quality"] is not None, "the lots analysis carries no data quality"
-    return _missing_cost_basis_naming(lots["data_quality"], asset_id)
+    # Project 69 (D11): the data quality is per matching method; the request asks the default, FIFO.
+    fifo = lots["methods"]["FIFO"]
+    assert fifo["data_quality"] is not None, "the lots analysis carries no data quality"
+    return _missing_cost_basis_naming(fifo["data_quality"], asset_id)
 
 
 async def _events_on_date(client: httpx.AsyncClient, asset_id: int, event_date: str) -> list[tuple[int, str]]:

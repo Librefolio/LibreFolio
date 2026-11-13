@@ -39,7 +39,7 @@ wall-clock dependency (every range is explicit), no translated text.
 
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory).
 
-Reference: backend/app/services/portfolio_service.py (get_report, get_summary, get_history_steps),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_report, get_summary, get_history_steps),
 backend/app/services/financial_math/returns.py (period_mwrr, period_mwrr_series, _mwrr_solve),
 backend/app/services/ai_export/components/portfolio_financial.py (portfolio.summary, portfolio.performance).
 """
@@ -62,13 +62,17 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import IssueCode, MwrrLinePoint, PortfolioHistoryPoint, PortfolioReportQuery, PortfolioReportResponse, PortfolioSummary
-from backend.app.services import portfolio_service as portfolio_service_module
+from backend.app.schemas.portfolio.data_quality import IssueCode
+from backend.app.schemas.portfolio.history import MwrrLinePoint, PortfolioHistoryPoint
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import PortfolioSummary
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.financial_math.series_steps import value_at
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 
@@ -132,8 +136,8 @@ async def _private_engine(directory: Path, name: str) -> AsyncIterator[AsyncEngi
 
 
 def _clear_portfolio_caches() -> None:
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

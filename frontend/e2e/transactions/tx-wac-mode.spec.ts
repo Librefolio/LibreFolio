@@ -53,9 +53,8 @@ async function selectAsset(page: Page, assetName: string) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
     const input = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
-    if (await input.isVisible({timeout: 1_000}).catch(() => false)) {
-        await input.fill(assetName);
-    }
+    await expect(input, 'the asset picker opens with its search input').toBeVisible({timeout: 3_000});
+    await input.fill(assetName);
     // Pick the option that actually matches what we searched for. Taking whichever
     // option happens to be listed first makes the test depend on the ordering of
     // someone else's data.

@@ -82,6 +82,6 @@ and feeds both the price summary and the chart's last point; the comment against
 |------|------|
 | Backend writer (root cause) | `backend/app/services/assets/price_query.py` (`PriceQueryOperations.get_current_prices_bulk`, reached as `AssetSourceManager.get_current_prices_bulk`) |
 | Frontend fix | `frontend/src/routes/(app)/assets/[id]/+page.svelte` (`pollCurrentPriceOnce`, at the time) |
-| The live poll today (`#pollLivePriceOnce`, the comment against `/sync`) | `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts` |
+| The live poll today (`#pollLivePriceOnce`, the comment against `/sync`) | `frontend/src/lib/features/assets/detail/assetDetailLive.svelte.ts` |
 | Post-mortem | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure_2.prompt.md` (§ "I-bis #24 — Auto-refresh mirato post-sync", v3→v4) |
 

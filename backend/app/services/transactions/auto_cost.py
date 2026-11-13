@@ -15,7 +15,7 @@ from backend.app.schemas.transactions.transactions import (
 )
 from backend.app.schemas.wac import WACPreviewResultItem
 from backend.app.services.financial_math.splits import split_linked_ids
-from backend.app.services.portfolio_service import compute_wac_iterative, wac_pool_holding
+from backend.app.services.portfolio.wac import compute_wac_iterative, wac_pool_holding
 from backend.app.services.transactions.unreadable_rows import count_unreadable_rows
 
 

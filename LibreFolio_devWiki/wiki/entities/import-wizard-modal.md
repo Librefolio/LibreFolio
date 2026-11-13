@@ -222,9 +222,9 @@ transaction payload; the wizard never commits directly.
 | Final duplicate request shaping | `frontend/src/lib/features/transactions/import/duplicateRecheckPayload.ts` |
 | Firm collision rule, compare target | `frontend/src/lib/features/transactions/import/importDedup.ts` |
 | Carrying resolver choices | `frontend/src/lib/features/transactions/import/importDuplicateResolver.ts` |
-| Full asset edit loader | `frontend/src/lib/components/assets/assetEditData.ts` |
-| Classification PATCH diff | `frontend/src/lib/components/assets/assetPayload.ts` |
-| Asset create/edit and nested modal orchestration | `frontend/src/lib/components/assets/AssetModal.svelte` |
+| Full asset edit loader | `frontend/src/lib/features/assets/assetEditData.ts` |
+| Classification PATCH diff | `frontend/src/lib/features/assets/assetPayload.ts` |
+| Asset create/edit and nested modal orchestration | `frontend/src/lib/features/assets/AssetModal.svelte` |
 | Backend classification PATCH semantics | `backend/app/services/assets/crud.py` |
 | BRIM routes and final duplicate endpoint | `backend/app/api/v1/brokers.py` |
 | BRIM DTOs and positive fake-ID range | `backend/app/schemas/brim.py` |

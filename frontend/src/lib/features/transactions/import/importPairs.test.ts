@@ -34,7 +34,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import type {TransactionCreateItem} from '$lib/types';
-import {computeFxConversionInfo} from '$lib/utils/currency/fxConversionHelper';
+import {computeFxConversionInfo} from '$lib/features/fx/fxConversionHelper';
 import type {MergedTx} from './importTypes';
 import {completePairsOnly, freshLinkFor, linkedPairs, pairKey, setPairSelected} from './importPairs';
 import {renderFromToHtml, renderImpliedRateHtml} from './pairCellHtml';

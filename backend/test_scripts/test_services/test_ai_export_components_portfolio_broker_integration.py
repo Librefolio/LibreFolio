@@ -52,26 +52,19 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    DataQualityReport,
-    LotAnalysisType,
-    LotsAnalysisMetadata,
-    LotsAnalysisResponse,
-    LotSummarySchema,
-    PortfolioHistoryPoint,
-    PortfolioHolding,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    PositionsContribution,
-    YieldOnCostProvenance,
-    YieldOnCostResult,
-    YieldOnCostStatus,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
+from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisMetadata, LotsAnalysisResponse, LotSummarySchema
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PortfolioHolding, PortfolioSummary, PositionsContribution
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
-from backend.app.schemas.risk import RiskAnalyticResult, RiskDrawdownOutput, RiskDrawdownRecoveryStatus, RiskQueryRequest, RiskQueryResponse, RiskResultStatus, RiskReturnBasis
-from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.risk.outputs import RiskDrawdownOutput
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskQueryResponse
+from backend.app.schemas.risk.scope import RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskResultStatus, RiskReturnBasis
+from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
+from backend.app.schemas.signals.vocabulary import SignalCadence, SignalDomain
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
 from backend.app.services.ai_export.components import broker_cost_efficiency, broker_financial, drawdown_context, portfolio_financial, portfolio_income
 from backend.app.services.ai_export.components import portfolio_broker_registry as portfolio_broker_registry_module
@@ -114,8 +107,8 @@ from backend.app.services.ai_export.dependencies import (
     build_bucket_plan_for_scope,
 )
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.signals.service import SignalService
 
 CURRENCY = "USD"

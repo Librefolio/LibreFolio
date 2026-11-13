@@ -57,7 +57,6 @@ from scripts.cli_base import (
     get_data_dir,
     get_database_path,
     get_server_host,
-    get_server_port,
     get_server_port_for_db,
     get_test_database_path,
     get_test_server_port,
@@ -1238,6 +1237,14 @@ def cmd_mkdocs_gallery(args):
     gallery_env["LF_SETUP_DONE"] = "1"
     if test_port:
         gallery_env["TEST_PORT"] = str(test_port)
+    # Scratch files of this lane go to ~/.cache/librefolio-test-tmp/<port>, as in `dev.py test` (WT-T1).
+    if not gallery_env.get("TMPDIR"):
+        lane_tmp = Path.home() / ".cache" / "librefolio-test-tmp" / str(effective_port)
+        try:
+            lane_tmp.mkdir(parents=True, exist_ok=True)
+            gallery_env["TMPDIR"] = str(lane_tmp)
+        except OSError:
+            pass  # unwritable home: keep the system default
 
     # Playwright's webServer starts `dev.py server --test` and waits STARTUP_TIMEOUT_S for it, and that
     # server builds a stale frontend (debug) and MkDocs before it binds. Built here first, in the

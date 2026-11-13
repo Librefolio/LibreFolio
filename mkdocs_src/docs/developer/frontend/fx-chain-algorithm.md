@@ -277,18 +277,26 @@ The graph is small enough that Web Worker parallelization is not needed. Profili
 The graph is built **once** per browser session and cached in `currencyGraphStore.ts`:
 
 ```typescript
-// Module-level singleton
-let cachedGraph: MultiDirectedGraph | null = null;
+// Module-level state
+let cachedGraph: CurrencyGraph | null = null;
+let buildPromise: Promise<CurrencyGraph> | null = null;  // shared by concurrent callers
 
-export async function getOrBuildGraph(): MultiDirectedGraph {
+export async function getCurrencyGraph(): Promise<CurrencyGraph> {
     if (cachedGraph) return cachedGraph;
-
-    const [providers, currencies] = await Promise.all([
-        fetchProviders(),
-        fetchCurrencies(),
-    ]);
-    cachedGraph = buildCurrencyGraph(providers, currencies);
-    return cachedGraph;
+    if (buildPromise) return buildPromise;
+    buildPromise = (async () => {
+        try {
+            // Currencies (any language: only codes are used) and providers, in parallel
+            await Promise.all([ensureCurrenciesLoaded(), listProviders()]);
+            const graph = buildCurrencyGraph(providers, allCurrencyCodes);
+            // Kept only when every provider came with its currencies
+            if (!providers.some((p) => p.currencies_unavailable)) cachedGraph = graph;
+            return graph;
+        } finally {
+            buildPromise = null;
+        }
+    })();
+    return buildPromise;
 }
 ```
 

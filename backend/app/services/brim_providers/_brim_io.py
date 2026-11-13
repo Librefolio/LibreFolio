@@ -2,7 +2,7 @@
 
 This module is intentionally **not** a provider: its filename starts with ``_``,
 so ``BRIMProviderRegistry.auto_discover`` skips it (see
-``backend/app/services/provider_registry.py``). It is imported directly by the
+``backend/app/services/platform/provider_registry.py``). It is imported directly by the
 plugins that need it (Intesa Sanpaolo, Crédit Agricole), both of which
 must read the *same* logical export from either **CSV** or **XLSX**.
 
@@ -45,7 +45,7 @@ from backend.app.services.brim.brim_provider import BRIMProvider
 try:
     import openpyxl
 except ImportError as exc:
-    raise ImportError("openpyxl is required for XLSX broker imports — ensure it is in " "Pipfile [packages] and reinstall dependencies") from exc
+    raise ImportError("openpyxl is required for XLSX broker imports — ensure it is in Pipfile [packages] and reinstall dependencies") from exc
 
 XLSX_EXTENSIONS = {".xlsx", ".xlsm"}
 CSV_EXTENSIONS = {".csv", ".txt"}

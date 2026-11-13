@@ -19,11 +19,7 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.config import get_settings
 from backend.app.db.models import Asset, Transaction, TransactionType, UserSettings
 from backend.app.db.session import get_async_engine, get_session_generator
-from backend.app.schemas.portfolio import (
-    PortfolioPlannerSourceProvenance,
-    PortfolioPlannerSourceResponse,
-    PortfolioPlannerSourceSnapshot,
-)
+from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceProvenance, PortfolioPlannerSourceResponse, PortfolioPlannerSourceSnapshot
 from backend.app.services.accounts import user_service
 from backend.app.services.pac_allocator.source.portfolio_allocation_source import (
     PortfolioPlannerSourceAccessError,
@@ -1081,6 +1077,45 @@ class TestLotsAnalysisEndpoint:
             assert resp.status_code == 422
         print_success("Empty/missing requested_analyses rejected")
 
+    async def test_matching_methods_default_and_validation(self, test_server):
+        """Project 69, L3a (D11): ``matching_methods`` defaults to FIFO; each method asked has its block under
+        ``methods``, in the order asked; an unknown, a repeated or an empty list is a 422."""
+        print_section("Lots Analysis: matching_methods")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_broker(client)
+            asset_id = await create_asset(client)
+            await commit_batch(
+                client,
+                creates=[
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-20", "quantity": "10", "cash": {"code": "EUR", "amount": "-1200"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2026-02-01", "quantity": "-5", "cash": {"code": "EUR", "amount": "650"}},
+                ],
+            )
+            url = f"{API_BASE}/portfolio/lots/analysis"
+            body = {"asset_id": asset_id, "broker_ids": [broker_id], "requested_analyses": ["LOT_SUMMARY"]}
+
+            default = await client.post(url, json=body, timeout=TIMEOUT)
+            assert default.status_code == 200, default.text
+            assert list(default.json()["methods"]) == ["FIFO"]
+            assert default.json()["calculation_metadata"]["matching_methods"] == ["FIFO"]
+
+            both = await client.post(url, json={**body, "matching_methods": ["LIFO", "FIFO"]}, timeout=TIMEOUT)
+            assert both.status_code == 200, both.text
+            data = both.json()
+            assert list(data["methods"]) == ["LIFO", "FIFO"]
+            assert data["calculation_metadata"]["matching_methods"] == ["LIFO", "FIFO"]
+            realized = {method: {lot["opening_date"]: Decimal(lot["realized_quantity"]) for lot in block["lots"]} for method, block in data["methods"].items()}
+            assert realized == {"FIFO": {"2026-01-10": Decimal("5"), "2026-01-20": Decimal("0")}, "LIFO": {"2026-01-10": Decimal("0"), "2026-01-20": Decimal("5")}}
+            assert "lots" not in data and "calculation_status" not in data
+
+            for wrong in (["AVERAGE"], ["FIFO", "FIFO"], []):
+                resp = await client.post(url, json={**body, "matching_methods": wrong}, timeout=TIMEOUT)
+                assert resp.status_code == 422, (wrong, resp.text)
+        print_success("matching_methods defaults to FIFO; unknown, repeated and empty lists rejected")
+
     async def test_lot_summary_and_gantt_for_buy_sell(self, test_server):
         """BUY then partial SELL -> one lot, LOT_SUMMARY + GANTT_TOPOLOGY populated, other sections absent."""
         print_section("Lots Analysis: LOT_SUMMARY + GANTT_TOPOLOGY")
@@ -1105,13 +1140,13 @@ class TestLotsAnalysisEndpoint:
             assert resp.status_code == 200, resp.text
             data = resp.json()
 
-            assert data["calculation_status"] == "COMPLETE"
+            assert data["methods"]["FIFO"]["calculation_status"] == "COMPLETE"
             assert data["target_currency"] == "EUR"
             # quote_base_quantity is echoed so the frontend can rescale per-quote unit prices
             # (opening_unit_price) onto the per-unit price axis. Default asset => 1.
             assert data["quote_base_quantity"] == 1
-            assert len(data["lots"]) == 1
-            lot = data["lots"][0]
+            assert len(data["methods"]["FIFO"]["lots"]) == 1
+            lot = data["methods"]["FIFO"]["lots"][0]
             assert lot["direction"] == "LONG"
             assert Decimal(lot["original_quantity"]) == Decimal("10")
             assert Decimal(lot["open_quantity"]) == Decimal("6")
@@ -1123,7 +1158,7 @@ class TestLotsAnalysisEndpoint:
             # reduced quantity WITHOUT changing the fragment's logical identity (Fase 0.5
             # spec) -- so the same fragment_id legitimately appears twice: one CLOSED
             # historical slice (qty=10, before the sell) and one still-OPEN slice (qty=6).
-            segments = data["gantt_segments"]
+            segments = data["methods"]["FIFO"]["gantt_segments"]
             assert len(segments) == 2
             assert all(segment["custody_type"] == "BROKER" for segment in segments)
             assert all(segment["fragment_id"] == segments[0]["fragment_id"] for segment in segments)
@@ -1135,8 +1170,8 @@ class TestLotsAnalysisEndpoint:
             assert Decimal(closed_segments[0]["quantity"]) == Decimal("10")
 
             # Sections not requested must be absent (None), matching the include_* pattern.
-            assert data["custody_history"] is None
-            assert data["value_history"] is None
+            assert data["methods"]["FIFO"]["custody_history"] is None
+            assert data["methods"]["FIFO"]["value_history"] is None
             assert data["broker_wac_history"] is None
         print_success("LOT_SUMMARY + GANTT_TOPOLOGY correct, other sections omitted")
 
@@ -1182,25 +1217,25 @@ class TestLotsAnalysisEndpoint:
         assert resp_usd.status_code == 200, resp_usd.text
         eur, usd = resp_eur.json(), resp_usd.json()
         # This test's own asset, bought once: exactly one lot in each answer.
-        (eur_lot,) = eur["lots"]
-        (usd_lot,) = usd["lots"]
+        (eur_lot,) = eur["methods"]["FIFO"]["lots"]
+        (usd_lot,) = usd["methods"]["FIFO"]["lots"]
 
         # Accepted and echoed; in EUR the cost is what the BUY paid; in USD the lot itself is unchanged.
         assert (eur["target_currency"], usd["target_currency"]) == ("EUR", "USD")
         assert Decimal(eur_lot["original_cost"]) == Decimal("1000")
         assert (usd_lot["currency"], Decimal(usd_lot["original_quantity"])) == ("EUR", Decimal("10"))
 
-        assert usd["data_quality"] is not None
-        missing_dates = {item["pair"]: item["dates"] for item in usd["data_quality"]["missing_fx_pairs"]}
+        assert usd["methods"]["FIFO"]["data_quality"] is not None
+        missing_dates = {item["pair"]: item["dates"] for item in usd["methods"]["FIFO"]["data_quality"]["missing_fx_pairs"]}
         if buy_date in missing_dates.get("EUR/USD", []):
             # No EUR/USD rate on or before the BUY date: the USD cost and unit price are unknown, and the
             # answer says why -- the pair and that date above -- and that it is DEGRADED.
-            assert (usd_lot["original_cost"], usd_lot["opening_unit_price"], usd["calculation_status"]) == (None, None, "DEGRADED")
+            assert (usd_lot["original_cost"], usd_lot["opening_unit_price"], usd["methods"]["FIFO"]["calculation_status"]) == (None, None, "DEGRADED")
             case = "no EUR/USD rate: USD cost null, pair and BUY date reported, DEGRADED"
         else:
             # A rate exists: nothing is missing, and the cost is a number, converted with the same rate as the
             # unit price (both at the BUY date).
-            assert (usd["data_quality"]["missing_fx_pairs"], usd["calculation_status"]) == ([], "COMPLETE")
+            assert (usd["methods"]["FIFO"]["data_quality"]["missing_fx_pairs"], usd["methods"]["FIFO"]["calculation_status"]) == ([], "COMPLETE")
             assert usd_lot["original_cost"] is not None and usd_lot["opening_unit_price"] is not None
             assert Decimal(usd_lot["original_cost"]) == 10 * Decimal(usd_lot["opening_unit_price"]) > 0
             case = "EUR/USD rate present: USD cost converted, nothing missing"
@@ -1243,13 +1278,13 @@ class TestLotsAnalysisEndpoint:
             assert resp.status_code == 200, resp.text
             data = resp.json()
 
-            assert data["return_history"] is not None
-            assert len(data["return_history"]) == 2
-            assert Decimal(data["return_history"][0]["total_return"]) == Decimal("0")
-            assert Decimal(data["return_history"][1]["total_return"]) == Decimal("0.1")
-            assert Decimal(data["return_history"][1]["relative_return"]) == Decimal("0.1")
-            assert data["return_history"][1]["reference_price_source"] == "exact"
-            assert Decimal(data["lots"][0]["relative_return"]) == Decimal("0.1")
+            assert data["methods"]["FIFO"]["return_history"] is not None
+            assert len(data["methods"]["FIFO"]["return_history"]) == 2
+            assert Decimal(data["methods"]["FIFO"]["return_history"][0]["total_return"]) == Decimal("0")
+            assert Decimal(data["methods"]["FIFO"]["return_history"][1]["total_return"]) == Decimal("0.1")
+            assert Decimal(data["methods"]["FIFO"]["return_history"][1]["relative_return"]) == Decimal("0.1")
+            assert data["methods"]["FIFO"]["return_history"][1]["reference_price_source"] == "exact"
+            assert Decimal(data["methods"]["FIFO"]["lots"][0]["relative_return"]) == Decimal("0.1")
         print_success("Plain BUY return history populated")
 
     async def test_performance_history_contract(self, test_server):
@@ -1292,14 +1327,14 @@ class TestLotsAnalysisEndpoint:
             # J5-5 (steps, contract MF-P4b §1.3): a row holds from `date` to `through`, and the answer carries the `range` the rows lie in.
             # 10 Jan (ROI 0, no TWRR yet) and 11 Jan (ROI and TWRR 0.1) are different figures, so they are two steps of one day each.
             assert data["range"] == {"start": "2026-01-10", "end": "2026-01-11"}
-            assert data["performance_history"] is not None
-            assert len(data["performance_history"]) == 2
-            assert set(data["performance_history"][0]) == {"date", "through", "roi", "twrr"}
-            assert [(row["date"], row["through"]) for row in data["performance_history"]] == [("2026-01-10", "2026-01-10"), ("2026-01-11", "2026-01-11")]
-            assert Decimal(data["performance_history"][0]["roi"]) == Decimal("0")
-            assert data["performance_history"][0]["twrr"] is None
-            assert Decimal(data["performance_history"][1]["roi"]) == Decimal("0.1")
-            assert Decimal(data["performance_history"][1]["twrr"]) == Decimal("0.1")
+            assert data["methods"]["FIFO"]["performance_history"] is not None
+            assert len(data["methods"]["FIFO"]["performance_history"]) == 2
+            assert set(data["methods"]["FIFO"]["performance_history"][0]) == {"date", "through", "roi", "twrr"}
+            assert [(row["date"], row["through"]) for row in data["methods"]["FIFO"]["performance_history"]] == [("2026-01-10", "2026-01-10"), ("2026-01-11", "2026-01-11")]
+            assert Decimal(data["methods"]["FIFO"]["performance_history"][0]["roi"]) == Decimal("0")
+            assert data["methods"]["FIFO"]["performance_history"][0]["twrr"] is None
+            assert Decimal(data["methods"]["FIFO"]["performance_history"][1]["roi"]) == Decimal("0.1")
+            assert Decimal(data["methods"]["FIFO"]["performance_history"][1]["twrr"]) == Decimal("0.1")
         print_success("PERFORMANCE_HISTORY contract OK")
 
     async def test_nonexistent_asset_rejected(self, test_server):
@@ -1362,7 +1397,7 @@ class TestLotsAnalysisEndpoint:
                 line = [(point["date"], Decimal(point["market_price"]), point["currency"], point["estimated"]) for point in expand_steps(data["market_price_history"], None)]
                 expected = [(f"2026-01-{day:02d}", Decimal("100"), "EUR", True) for day in range(10, 15)] + [(f"2026-01-{day:02d}", Decimal("110"), "EUR", True) for day in range(15, 21)]
                 assert line == expected
-                assert (data["price_history"], data["lots"]) == (None, None)
+                assert (data["methods"]["FIFO"]["price_history"], data["methods"]["FIFO"]["lots"]) == (None, None)
             finally:
                 if broker_id is not None:
                     cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)

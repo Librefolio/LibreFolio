@@ -3771,12 +3771,12 @@ async def test_a_newer_token_of_another_purpose_never_counts_in_the_setup_status
 async def test_the_setup_status_is_pending_for_the_administrator_the_bootstrap_created(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, token: Optional[str]) -> None:
     """H61-005 — NEW, red until H-61: ``CREATED`` — one setup link, the variable's token or a generated one, issued at NOW for the life the token service gives a setup link (``DEFAULT_TTL``: the bootstrap passes none) —; asked an hour later: ``pending``, ``setup_expires_at`` that link's ``expires_at``, NOW + 72 h, UTC-aware.
 
-    Barriers first: the link is the account's one setup link, and SQLite gives its expiry back naive — so a UTC-aware answer is the function's doing —, NOW + ``DEFAULT_TTL[admin_setup]``, as ``CREATED`` said.
+    Barriers first: the link is the account's one setup link, and the column reads its expiry back as aware UTC (D-UTC), NOW + ``DEFAULT_TTL[admin_setup]``, as ``CREATED`` said.
     """
     print_section(f"H61-005: pending after CREATED, {'the variable token' if token else 'a generated link'}")
     created = await _created(engine, bootstrap, f02, token=token)
     rows = await _setup_rows(engine, created.user_id)
-    assert len(rows) == 1 and rows[0].expires_at.tzinfo is None, "barrier: one setup link, whose expiry SQLite gives back naive"
+    assert len(rows) == 1 and rows[0].expires_at.utcoffset() == timedelta(0), "barrier: one setup link, whose expiry the column reads back as aware UTC"
     expires_at = ensure_utc(rows[0].expires_at)
     assert expires_at == NOW + DEFAULT_TTL[ADMIN_SETUP] == ensure_utc(created.expires_at), f"barrier: the link lives the token service's {DEFAULT_TTL[ADMIN_SETUP]} from NOW, as CREATED said: {expires_at}"
 

@@ -5,7 +5,7 @@
  * `$effect`, when its view needs them and has none. When `POST /api/v1/portfolio/report` fails, `requestReport` resolves
  * null, the loader's `finally` turns its `loading` flag back to false, and the effect that read the flag runs again:
  * the request leaves again at once, with no pause and no end, each one a full report on the server. The cure
- * (`stores/portfolio/lazyReportRetry.svelte.ts`, pinned on its own by its unit spec) bounds it per scope —
+ * (`features/portfolio-view/lazyReportRetry.svelte.ts`, pinned on its own by its unit spec) bounds it per scope —
  * brokers|start|end|currency —: after failure n the section may be asked again only once a timer of 2, 4 or 8 s has
  * fired, so four requests at most, the first and three retries; a success forgets; a new scope (a period change) and
  * the page's Refresh ask again. Nothing on screen changes.

@@ -101,7 +101,7 @@ No wrong colour shipped: the problem was caught on the first lot that met it, be
 |------|------|
 | The fix: open, disabled and idle borders in one ternary | `frontend/src/lib/components/ui/select/SimpleSelect.svelte` |
 | Border and text as classes, so a caller's `contentClass` can win; the `tone` prop since `1ed424af3` | `frontend/src/lib/components/ui/modals/ModalBase.svelte` |
-| A caller passing a border through `contentClass` (`tone="danger"` since `1ed424af3`) | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
+| A caller passing a border through `contentClass` (`tone="danger"` since `1ed424af3`) | `frontend/src/lib/features/assets/AssetCurrencyChangeModal.svelte` |
 | The `dark` custom variant | `frontend/src/app.css` |
 | The rule for every migration (rule 8) | `.github/skills/design-tools/theme-roles/SKILL.md` |
 | Tailwind version | `frontend/package.json` |

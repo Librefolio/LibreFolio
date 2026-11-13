@@ -140,7 +140,7 @@ def _password(args, *, twice: bool) -> str:
     """The password from ``--password-file``, from ``--password-stdin`` (a pipe), or typed at the terminal without being
     shown, ``--password-stdin`` at a terminal included (``twice`` to choose one). ``_PasswordProblem`` when there is
     none: no source, and no terminal to ask on."""
-    from backend.app.config import SecretFileError, read_secret_file  # noqa: PLC0415 — keep dev.py's start light
+    from backend.app.config import SecretFileError  # noqa: PLC0415 — keep dev.py's start light
 
     # A sealed backup (L3): the password its key opened, handed to the command that opens the envelope inside.
     sealed_password = getattr(args, "sealed_password", None)
@@ -149,7 +149,7 @@ def _password(args, *, twice: bool) -> str:
     password_file = getattr(args, "password_file", None)
     if password_file:
         try:
-            return read_secret_file(_secret_path(args, _requested(password_file), "password file"), "password file")
+            return _read_secret(args, _requested(password_file), "password file")
         except SecretFileError as exc:
             raise _PasswordProblem("password_unreadable", str(exc)) from None
     # At a terminal, a line read would show the password as it is typed: --password-stdin asks it there as without it.
@@ -910,28 +910,16 @@ def _restore_keys(args, path: Path) -> tuple[bool, object, str | None]:
     return True, key, instance_key
 
 
-def _secret_path(args, path: Path, label: str) -> Path:
-    """``path``, once it may be read as a secret (B-38): a regular file, opened without blocking, so that a FIFO never
-    hangs the command nor a folder or a device is read; and, started as root, not reached through a link inside the data
-    directory, whose owner, LibreFolio's user, could point it at a file only root may read. A link elsewhere is followed,
-    as Kubernetes mounts its secrets. ``SecretFileError`` otherwise, the content never read; a file that cannot be opened
-    is left to ``read_secret_file``, which says why. The check and that read are two opens (H-47)."""
-    from backend.app.config import SecretFileError  # noqa: PLC0415 — keep dev.py's start light
+def _read_secret(args, path: Path, label: str) -> str:
+    """The secret in the file ``path`` (B-38, H-47): from a regular file only, so a FIFO never hangs the command nor a
+    folder or a device is read; and, started as root, not reached through a link inside the data directory, whose owner,
+    LibreFolio's user, could point it at a file only root may read. A link elsewhere is followed, as Kubernetes mounts
+    its secrets. The file is opened once, and checked and read through that descriptor (``read_secret_file``).
+    ``SecretFileError`` otherwise, the content never read."""
+    from backend.app.config import read_secret_file  # noqa: PLC0415 — keep dev.py's start light
 
-    if hasattr(os, "geteuid") and os.geteuid() == 0:
-        data_dir = _data_dir_setting(args)
-        if data_dir is not None and _link_inside(data_dir, path):
-            raise SecretFileError(f"{label}: {path} goes through a link inside the data directory: give the file itself, from outside it")
-    try:
-        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
-    except OSError:
-        return path
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise SecretFileError(f"{label}: {path} is not a regular file")
-    finally:
-        os.close(fd)
-    return path
+    data_dir = _data_dir_setting(args) if hasattr(os, "geteuid") and os.geteuid() == 0 else None
+    return read_secret_file(path, label, regular_only=True, no_links_under=data_dir)
 
 
 def _data_dir_setting(args) -> Path | None:
@@ -947,21 +935,6 @@ def _data_dir_setting(args) -> Path | None:
         return None
 
 
-def _link_inside(data_dir: Path, path: Path) -> bool:
-    """Whether ``path`` lies in ``data_dir`` and one of its components, from ``data_dir`` down, is a link."""
-    base = Path(os.path.abspath(data_dir))
-    try:
-        parts = Path(os.path.abspath(path)).relative_to(base).parts
-    except ValueError:
-        return False
-    current = base
-    for part in parts:
-        current = current / part
-        if os.path.islink(current):
-            return True
-    return False
-
-
 def _instance_key_from_file(args) -> tuple[bool, str | None]:
     """``restore --instance-key-file``: the instance key of the installation the archive came from (B-18), read before any
     switch of user, as ``--password-file`` is: a key only root can read (a Docker secret) works. ``(True, None)``
@@ -969,10 +942,10 @@ def _instance_key_from_file(args) -> tuple[bool, str | None]:
     key_file = getattr(args, "instance_key_file", None)
     if not key_file:
         return True, None
-    from backend.app.config import SecretFileError, read_secret_file  # noqa: PLC0415 — keep dev.py's start light
+    from backend.app.config import SecretFileError  # noqa: PLC0415 — keep dev.py's start light
 
     try:
-        return True, read_secret_file(_secret_path(args, _requested(key_file), "instance key file"), "instance key file")
+        return True, _read_secret(args, _requested(key_file), "instance key file")
     except SecretFileError as exc:
         print(f"❌ {exc} (instance_key_unreadable)")
         return False, None

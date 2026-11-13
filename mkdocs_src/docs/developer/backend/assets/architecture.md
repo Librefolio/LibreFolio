@@ -23,7 +23,8 @@ responsibility:
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
 | `period_changes.py` | The fixed-period changes of the Assets table, and on request the whole-range change of the Assets cards: each asset's price on the days the change needs, read in grouped queries and converted at each day's rate ([Fixed-Period Changes](#fixed-period-changes)). |
 | `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
-| `crud.py` | Asset create, list, patch, delete, and merge operations. |
+| `crud.py` | Asset create, list, delete and merge operations, and the all-or-nothing patch `patch_assets_bulk()` ([Asset Patch](#asset-patch)). |
+| `type_rules.py` | Pure rules of the asset type, no database: the family of a type (`asset_type_family()`: `ETF_*` → `ETF`, `CROWDFUND_*` → `CROWDFUND`, any other type is its own), `family_changed()`, `type_allows_transactions()` (only `INDEX` forbids them) and `classify_type_change()`, which judges a change of type for an asset with a given number of transactions. The patch and the transaction batch import what they need from here, so the rule is written once ([Asset Patch](#asset-patch)). |
 | `search.py` | Cross-provider batch search, SSE search, query caching, link-finder fallback, and URL resolution; for each provider that did not answer, the reason the client needs ([Interactive Search Stack](#interactive-search)). |
 | `web_link_finder.py` | The last-resort web lookup of `search.py`: an external metasearch engine that turns a query into candidate provider-domain URLs (see [Asset Search & Link-Finder](search_link_finder.md)). |
 | `manager.py` | The single `AssetSourceManager` class, composed from the provider, metadata, price-store, currency-change, event-store, query, and refresh operation mixins. |
@@ -197,7 +198,7 @@ reads its points as `FAPriceWritePoint` (`FAUpsert.prices`), whose `open`, `high
   (`_price_limit_issue()`);
 - its JSON schema carries `enum: ["clear"]` beside pydantic's `const`, so that the generated
   client reads `z.literal('clear')`: `openapi-zod-client` 1.18.3 ignores `const`, and
-  `schemas/signals.py` pins its literals the same way.
+  `schemas/signals/` pins its literals the same way.
 
 `FAPricePoint`, the model of a provider's history, of the query answers and of a sync's
 `changed_points`, checks no sign since N92: the refresh decides about a provider's day. Before
@@ -727,7 +728,7 @@ names, read from the plugin class in `SignalPluginRegistry` as AI Export reads i
 (`_sample_signal_result()`). A series no output spec describes stays daily and is logged as a
 warning; none does today. The function is pure and reproduces the browser:
 `downsampleRenderedSignal()` (`frontend/src/lib/components/charts/timeSeriesAggregation.ts`), after
-`backendRenderer.ts` (`frontend/src/lib/charts/signals/`) has split a line or an area into runs at
+`backendRenderer.ts` (`frontend/src/lib/features/signals/`) has split a line or an area into runs at
 the points sent without a value.
 
 - **Daily** gives the series itself.
@@ -806,7 +807,7 @@ item `sample_like` that key, on the same range, so the target comes on the card'
 (`utils/reducedPriceQuery.ts`, `buildReducedQuery()`). `bulkBatches.ts` cuts the request by groups,
 a card with its targets, because a `sample_like` whose named item is in another request is refused
 (422 `sample_reference`). The answers go to the reduced price cache
-(`stores/reducedPriceCache.ts`, beside the daily one, which it does not touch): an entry is
+(`features/assets/reducedPriceCache.ts`, beside the daily one, which it does not touch): an entry is
 answered for a width only if the step that width asks, computed from the entry's own counts of days
 and weeks (`stepForMaxPoints()`), is the entry's; otherwise the card is read again from the backend
 (`cardsOfAnotherStep()`), and a weekly sample is never re-aggregated into months nor turned back
@@ -881,7 +882,7 @@ none for a day the backend would refuse (after `as_of`, or not a calendar day), 
 `assetRangeDelta()` for the cards' Δ. The browser no longer computes it: `computeDerivedPriceState()` returns no Δ. The
 page keeps the cards' Δ with a `PeriodChangesLedger` of its own, which marks each request with the whole range rather
 than its last day, so a failed request keeps only the values of the same range. The asset detail page sends it too, for
-its price summary: `fetchSeriesRangeDelta()` (`frontend/src/lib/components/assets/detail/assetDetailRangeChange.ts`)
+its price summary: `fetchSeriesRangeDelta()` (`frontend/src/lib/features/assets/detail/assetDetailRangeChange.ts`)
 asks one item, `as_of` the range's end and `range_start` from `rangeStartFor()`, with `target_currency` only when the
 chart is really converted (the display currency is not the asset's and the FX pair is configured: with the pair missing,
 the summary shows native prices). The page asks it on load, when the asset, the range or the display currency changes,
@@ -1026,7 +1027,7 @@ it. `live_range_changes()` (`services/assets/period_changes.py`) values it after
 A `range_start` after tomorrow (`latest_range_end()`) is refused by the parameter itself (`_range_start_in_bounds()`; there is no first day since D-P4)
 (the standard 422, `loc` `["query", "range_start"]`), before any provider call (R13-SEC9-4); one after the price's day
 gives an empty `range_change`. The asset detail page sends it with its live poll (`AssetDetailLive`,
-`frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts`): while the range ends today, each request asks
+`frontend/src/lib/features/assets/detail/assetDetailLive.svelte.ts`): while the range ends today, each request asks
 `range_start`, the range's first day as it is (`rangeStartFor()`), and `target_currency`, the display
 currency, only when the summary converts the live price (the display currency is not the asset's and the FX pair is
 configured). The answer's `range_change` becomes `rangeDelta`, the Δ the summary shows beside the live price: none
@@ -1042,7 +1043,7 @@ Any user may start one, so each user gets at most 30 probes a minute (a `Sliding
 `api/v1/assets/providers.py`, counted in each process; MF-SI2): past it the route answers 429
 `{"error_code": "PROBE_RATE_LIMITED", "retry_after", "message"}` with `Retry-After`, before the provider is called.
 The web app says it in the user's language, with the local time the wait ends, rounded up to the minute
-(`probeRateLimitMessage()` in `components/assets/resolveProviderError.ts`, X-R66): **Test Configuration** shows it as the
+(`probeRateLimitMessage()` in `features/assets/resolveProviderError.ts`, X-R66): **Test Configuration** shows it as the
 result row's detail and one-line summary, **Ask Provider** as its error toast; any other failure is shown as before.
 `LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read at each probe by
 `probe_limiter()`, as the sign-in limit reads its variable: a change applies at the next probe, without a restart.
@@ -1089,7 +1090,7 @@ exists, and keeps the backend's English message otherwise. Among the codes it kn
 
 Each text, date included, must fit the 60 characters of the result's one-line summary:
 `summarizeProbeError()` (`providerProbe.ts`) cuts a longer one. Both files are in
-`frontend/src/lib/components/assets/`.
+`frontend/src/lib/features/assets/`.
 
 The asset modal's **Ask Provider**, and the comparison that follows a search selection, run
 `metadata` alone and diff its `patch_data` against the form in the browser: nothing is written until
@@ -1232,12 +1233,122 @@ cost unknown it stays `MISSING`.
 
 ---
 
+## ✏️ Asset Patch: All or Nothing {: #asset-patch }
+
+`PATCH /api/v1/assets` takes a list of `FAAssetPatchItem`, each with its own `asset_id` and its own
+fields, so one request can give every asset a different configuration. A single asset's edit is a
+batch of one item. The batch is **all or nothing**: if any item has an issue, nothing is saved.
+`POST /api/v1/assets/validate` runs the very same service and always rolls back, the way
+`POST /transactions/validate` and `/transactions/commit` do for transactions.
+
+```mermaid
+flowchart TD
+    V["POST /assets/validate"] --> S
+    P["PATCH /assets"] --> S
+    S["AssetCRUDService.patch_assets_bulk(patches, session, commit)"] --> K["1 · check every item, nothing written"]
+    K --> D{"any issue?"}
+    D -- yes --> R["rollback · committed=false · every result failed"]
+    D -- no --> X["2 · apply: setattr + flush per item, then the currency wipe (N68)"]
+    X -- "exception" --> R
+    X -- "commit=False" --> R2["rollback · committed=false · results as if saved"]
+    X -- "commit=True" --> C["3 · one commit · drop provider caches · committed=true"]
+```
+
+### 🔎 The check step {: #asset-patch-checks }
+
+`_check_patch_items()` judges **every** item against the stored assets before any `setattr`, loading
+the assets in one query and counting transactions in one more, and only when an item makes an asset
+an `INDEX`. It never stops at the first problem: the answer lists them all.
+
+| Code | Kind | When | `params`, `field` |
+|---|---|---|---|
+| `assetNotFound` | issue | The `asset_id` does not exist | none |
+| `indexWithTransactions` | issue | The type becomes `INDEX` on an asset that has transactions. An asset that already is `INDEX` is never blocked and never cleaned up | `tx_count`; `field="asset_type"` |
+| `assetNameTaken` | issue | The new `display_name` is held by another asset (`uq_assets_display_name`) | `name`; `field="display_name"` |
+| `assetFamilyChange` | warning | The type moves to another family (`asset_type_family(old) != asset_type_family(new)`). It never blocks and corrects nothing; an asset already blocked does not also get it | `from`, `to`; `field="asset_type"` |
+| `patchFailed` | issue | An exception while **applying** (below): the one failure only the database reveals | none |
+
+Two rules shape the checks:
+
+- **Names are judged in the order of the batch**, as the apply step meets them, because each item is
+  flushed before the next: a name an earlier item has just left is free for a later one, a name still
+  held (by an asset in the batch or outside it) is not, an asset that keeps its own name is no clash,
+  and of two items taking the same new name the second is the issue. The check therefore agrees with
+  what the flush would do, without writing.
+- **The type is projected item after item**, so a batch that patches the same asset twice judges the
+  second change against the first.
+
+The family and the `INDEX` rule are not in `crud.py`: they are the pure functions of
+`type_rules.py`, which `services/transactions/batch_creates.py` imports too (the refusal
+*Cannot create transactions for INDEX assets*), so the rule is written once.
+
+### ⚙️ Apply, commit and rollback {: #asset-patch-apply }
+
+- With **any issue**, the session is rolled back and the answer is `committed=false` with **every**
+  `results[i].success` false: the item with an issue carries its message, the others say another
+  asset of the batch has an issue. A caller that still reads only `results[0].success` therefore never
+  announces a save that did not happen.
+- Without issues the items are applied by `_apply_patch_item()`: the rules of an explicit `null`
+  (`CLEARED_BY_NULL` clears the icon, the user URL and an identifier; for any other field a `null`
+  is ignored), the shallow merge of `classification_params` and the replacement of
+  `identifier_other`, then a flush. This is the single place a later feature hooks its own write into
+  the same transaction.
+- The currency change (N68) follows the *result*: the assets whose stored currency now differs lose
+  their prices and non-`SPLIT` events, in the same transaction ([Market-Data
+  Wipe](events.md#market-data-wipe)). The provider cache keys are read **only for a real save**.
+- An exception while applying becomes the issue `patchFailed`, with a rollback, so the items already
+  flushed are undone too.
+- **One commit** ends a real save, and only **after** it the provider caches of the assets whose
+  currency changed are dropped: never on `/validate`, never after a rollback.
+
+### 📤 The answer {: #asset-patch-response }
+
+`FABulkAssetPatchResponse` keeps the shape of the old one (`results`, `success_count`, `errors`;
+`updated_fields` lists every field sent, even one whose value does not change) and gains three
+fields:
+
+| Field | Meaning |
+|---|---|
+| `committed` | `true` only when every item was saved. Always `false` from `/validate` |
+| `issues` | Blocking problems, each an `FAAssetPatchIssue` (`asset_id`, `index` of the item, `code`, an English `message` for logs and API clients, `params`, `field`). The interface translates from `code` |
+| `warnings` | The same shape, never blocking |
+
+Both routes answer **200** also when `committed` is `false`, like `/transactions/commit`; a malformed
+body is a 422 of Pydantic. A request without issues on `/validate` answers `committed=false` with the
+`results` it **would** have saved.
+
+!!! warning "Breaking change since 1.4"
+
+    `PATCH /api/v1/assets` no longer saves part of a batch, and its answer gained `committed`,
+    `issues` and `warnings`. A client that read `results[i].success` of a one-item batch keeps working
+    (a refused batch says `success=false` there); one that relied on a partial save must now read
+    `committed`. In the application the four callers of the old shape (the asset form, the currency
+    change dialog and the two identifier saves of the import wizard) read `committed` through
+    `assetPatchResult.ts`.
+
+### 🧺 The bulk edit of the interface {: #asset-bulk-edit }
+
+The «Edit selected» window of the Assets table (`frontend/src/lib/features/assets/bulk/`) is the
+second client of this service:
+
+| File | Role |
+|---|---|
+| `assetBulkEdit.ts` | Pure: counts of what the selected assets hold, the `PATCH` payload with **only the fields that change for each asset** (no `null` is ever sent), the rows of the summary |
+| `assetBulkVerify.ts` | Pure: the answer of `/validate` organised for the banners, blocks before warnings, grouped by `code` |
+| `AssetBulkEditModal.svelte`, `AssetBulkSummary.svelte` | The two steps; «Continue» runs `/validate`, «Save» runs `PATCH` with the same payload; a `committed=false` answer keeps the modal on the summary with the issues |
+
+The type rules are the backend's alone: the frontend shows the `issues` and `warnings` it receives and
+computes none of them.
+
+---
+
 ## 🌐 API Endpoints Summary
 
 | Endpoint | Method | Description |
 |---|---|---|
 | `POST /api/v1/assets` | POST | Bulk create assets |
-| `PATCH /api/v1/assets` | PATCH | Bulk update assets. An item that changes the currency deletes, in the same call and transaction, the asset's prices and non-`SPLIT` events and unlinks their transactions; never refused (N68) |
+| `PATCH /api/v1/assets` | PATCH | Bulk update assets, **all or nothing**: every item is checked first, any issue saves nothing; the answer is 200 either way, with `committed`, `issues` and `warnings` ([Asset Patch](#asset-patch)). An item that changes the currency deletes, in the same call and transaction, the asset's prices and non-`SPLIT` events and unlinks their transactions; the change itself is never refused (N68) |
+| `POST /api/v1/assets/validate` | POST | Dry run of the row above: same body, same service, always rolled back. Answers the issues and warnings the `PATCH` would answer, with `committed` always `false`; saves nothing and drops no cache |
 | `GET /api/v1/assets` | GET | Bulk read by IDs (with metadata) |
 | `GET /api/v1/assets/query` | GET | Filtered list (search, type, currency, active); `active=true` lists all active assets |
 | `DELETE /api/v1/assets` | DELETE | Bulk delete (cascade provider+prices) |

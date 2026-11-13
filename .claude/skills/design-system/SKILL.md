@@ -238,7 +238,7 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   `text-lf-muted-on-inverse`. **Never `text-lf-danger` inside a tooltip:** on the inverted surface it fails.
 - The gate keeps each `--lf-X-on-inverse` equal to the other theme's `--lf-X`.
 - `src/lib/components/ui/feedback/Tooltip.svelte` draws the surface, the text and the raised shadow. HTML built for a
-  tooltip (`src/lib/utils/currency/fxConversionHelper.ts`, `src/lib/components/assets/providerProbe.ts`) uses the same
+  tooltip (`src/lib/features/fx/fxConversionHelper.ts`, `src/lib/features/assets/providerProbe.ts`) uses the same
   roles in its `style`, as `var(--lf-…-on-inverse)`.
 
 ### 7. Gain and loss are not success and error

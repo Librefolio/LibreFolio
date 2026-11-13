@@ -79,7 +79,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
-from backend.app.api.v1.brokers import _set_error_detail
+from backend.app.api.v1.brokers.sets import _set_error_detail
 from backend.app.db.models import Asset, Broker, Transaction, TransactionType
 from backend.app.schemas import brim as brim_schemas
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAbsorbed, BRIMCheckpoint, BRIMFieldTodo, BRIMNotice, BRIMParseOutput, BRIMTruthCash, BRIMTruthPosition, BRIMVerification
@@ -1860,7 +1860,7 @@ class TestWB74AnUnreadableRowAtTheEndOfADay:
 
 class TestLedgerUnreadableCarriesReasonAndParams:
     """E-21 — ``BRIMLedgerUnreadable`` carries ``reason`` and ``params``; the API detail (``_set_error_detail`` of
-    ``api/v1/brokers.py``) is ``{"code": "ledger_unreadable", "message": <English, unchanged>, "reason": R, "params": P}``.
+    ``api/v1/brokers/``) is ``{"code": "ledger_unreadable", "message": <English, unchanged>, "reason": R, "params": P}``.
     For W-B74's refusal (a value that is not a number) R is ``"values"`` and P is ``{"count": <int>}``. RED until the cure,
     but for the guards; the currency refusal (E-19a) is in ``test_gap_fix_currency_guard.py``."""
 

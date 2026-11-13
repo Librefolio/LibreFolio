@@ -51,7 +51,7 @@ translated text, no fixed position (points are found by date, brokers by id).
 
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory).
 
-Reference: backend/app/services/portfolio_service.py (get_report, get_history), backend/app/schemas/portfolio.py,
+Reference: backend/app/services/portfolio/portfolio_service.py (get_report, get_history), backend/app/schemas/portfolio.py,
 backend/app/schemas/common.py (StepSpan, DateSpan), backend/app/services/financial_math/series_steps.py,
 backend/app/services/financial_math/portfolio/derived_views.py, backend/app/services/financial_math/returns.py.
 """
@@ -72,18 +72,21 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-import backend.app.schemas.portfolio as portfolio_schemas
+import backend.app.schemas.portfolio.history as portfolio_history_schemas
+import backend.app.schemas.portfolio.summary as portfolio_summary_schemas
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import AllocationItem, PortfolioReportQuery, PortfolioReportResponse
-from backend.app.services import portfolio_service as portfolio_service_module
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AllocationItem
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.returns import annualized_to_cumulative, calculate_simple_roi_series, calculate_twrr_series, period_mwrr_series, rebase_to_period
 from backend.app.services.financial_math.weights import slice_percents
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 EUR = "EUR"
 END = date(2025, 1, 31)
@@ -185,8 +188,8 @@ class _Scenario:
 
 
 def _clear_portfolio_caches() -> None:
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 
@@ -461,6 +464,19 @@ def _step_span():
     import backend.app.schemas.common as common  # noqa: PLC0415
 
     return common.StepSpan
+
+
+class _PortfolioSchemas:
+    """The portfolio schemas the tests read by name, whichever module of ``schemas/portfolio/`` defines them."""
+
+    def __getattr__(self, name):
+        for module in (portfolio_history_schemas, portfolio_summary_schemas):
+            if hasattr(module, name):
+                return getattr(module, name)
+        raise AttributeError(name)
+
+
+portfolio_schemas = _PortfolioSchemas()
 
 
 class TestSchemas:

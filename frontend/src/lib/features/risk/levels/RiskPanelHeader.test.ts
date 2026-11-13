@@ -53,7 +53,7 @@ vi.mock('$lib/features/risk/syncTargets', async (importOriginal) => {
     return {...actual, buildSyncTargets: mocks.buildSyncTargets};
 });
 // The dialog is the subject's neighbour, not the subject: a stub that publishes the props it was given.
-vi.mock('$lib/components/fx/FxPairAddModal.svelte', async () => ({default: (await import('$test/harness/FxPairAddModalStub.svelte')).default}));
+vi.mock('$lib/features/fx/FxPairAddModal.svelte', async () => ({default: (await import('$test/harness/FxPairAddModalStub.svelte')).default}));
 // The sync modal fetches providers and rates when it opens, and no case here opens it.
 vi.mock('$lib/components/ui/modals/PageSyncModal.svelte', () => ({default: () => {}}));
 

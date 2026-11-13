@@ -239,9 +239,12 @@ const V9 = `9:${DANSKE}:v:0`;
 const BROKER_NAMES: Record<number, string> = {7: 'Owned broker seven', 8: 'Owned broker eight', 9: 'Owned broker nine'};
 const ASSET_NAMES: Record<number, string> = {41: 'Asset Alpha', 42: 'Asset Beta'};
 
-/** An amount as CurrencyAmount writes its digits (the sign and the currency stay outside the mask). */
+/**
+ * An amount as CurrencyAmount writes its digits (the sign and the currency stay outside the mask), in the interface
+ * locale the app itself uses: never the machine's own locale (`undefined`), which made this test depend on `LANG`.
+ */
 function money(amount: string): string {
-    return Math.abs(Number(amount)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    return Math.abs(Number(amount)).toLocaleString(uiLocale(), {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
 // ---------------------------------------------------------------------------

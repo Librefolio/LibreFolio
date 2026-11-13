@@ -19,7 +19,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {parseFxConvertWithSignalIsolation, type FxConvertAnswer} from '$lib/components/fx/fxDetailConvertQuery';
+    import {parseFxConvertWithSignalIsolation, type FxConvertAnswer} from '$lib/features/fx/fxDetailConvertQuery';
     import {canonicalCacheKey, comparisonSeriesAnswers, fxSignalAnswers} from '$lib/stores/signalResultCache';
     import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
@@ -31,17 +31,16 @@
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
     import type {EventMarker} from '$lib/components/charts/PriceChartFull.svelte';
     import ChartAestheticsSection from '$lib/components/charts/ChartAestheticsSection.svelte';
-    import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
-    import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
-    import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
-    import FxDataEditorSection from '$lib/components/fx/FxDataEditorSection.svelte';
-    import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
-    import FxPriceSummary from '$lib/components/fx/FxPriceSummary.svelte';
+    import ChartSignalsSection from '$lib/features/signals/components/ChartSignalsSection.svelte';
+    import type {SignalDataSummary} from '$lib/features/signals/components/ChartSignalsSection.svelte';
+    import MeasurePanel from '$lib/features/signals/components/MeasurePanel.svelte';
+    import FxDataEditorSection from '$lib/features/fx/FxDataEditorSection.svelte';
+    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
+    import FxPriceSummary from '$lib/features/fx/FxPriceSummary.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
-        backendSignalSchemas,
         buildBackendSignalRequestPlan,
         getSignalProblem,
         getLocalSignalDefinitions,
@@ -53,35 +52,35 @@
         type SignalConfig,
         type SignalDefinition,
         type SignalInstanceResult,
-    } from '$lib/charts/signals';
+    } from '$lib/features/signals';
     import {DEFAULT_AXIS_SCALE, effectiveCalendarReturnWindow, getGlobalLineShape, getSettingsForPair, lineShapeFollowsGlobal, normalizeAxisScaleSettings, resolveLineShape, setPairSettings, type AxisScaleSettings, type ChartPrimaryView} from '$lib/stores/chartSettingsStore.svelte';
     import type {LineShape} from '$lib/components/charts/lineShape';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
-    import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {fetchFxPeriodChanges} from '$lib/utils/periodChanges';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
-    import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
+    import {setCardInverted} from '$lib/features/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
-    import type {SignalLabelInfo} from '$lib/charts/signalLabel';
-    import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
-    import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
-    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, earliestComparisonDate, type ComparisonAssetsLoadResult, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
-    import {detailPageSignalSources} from '$lib/charts/chartPageSignals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
-    import {buildAssetComparisonQuery} from '$lib/charts/crossTypeCalendar';
-    import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/charts/fxDetailCalendar';
+    import type {SignalLabelInfo} from '$lib/components/charts/signalLabel';
+    import {buildOverlaySignalInfoMap} from '$lib/components/charts/signalLabel';
+    import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/features/signals/comparisonSeries';
+    import {applyComparisonAssetsData, clearComparisonAssetsData, earliestComparisonDate, type ComparisonAssetsLoadResult, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/features/signals/loadComparisonData';
+    import {comparisonAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/features/signals/chartPageSignals';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
+    import {buildAssetComparisonQuery} from '$lib/features/signals/crossTypeCalendar';
+    import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/features/signals/fxDetailCalendar';
     import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
-    import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';
-    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
-    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
-    import {emptyCalendarReturnView, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/features/assets/detail/AssetChartModeToggle.svelte';
+    import AssetCalendarWindowControls from '$lib/features/assets/detail/AssetCalendarWindowControls.svelte';
+    import {formatSignalProblem} from '$lib/features/signals/components/chartSignalsHelpers';
+    import {emptyCalendarReturnView, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
     import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
@@ -93,7 +92,7 @@
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
-    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {signalCatalogStore} from '$lib/features/signals/signalCatalogStore.svelte';
     import {clientSessionUserId, getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
@@ -596,11 +595,6 @@
         }
     }
 
-    function parseBackendSignalResults(value: unknown): BackendSignalResult[] {
-        if (!Array.isArray(value)) return [];
-        return value.map((item) => backendSignalSchemas.result.parse(item));
-    }
-
     type FxConvertBulkBody = Parameters<typeof zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post>[0];
 
     /** X-R16: the conversion read with signal isolation, as on the asset page, so an invalid signal result keeps the rates. */
@@ -623,35 +617,6 @@
                 .requests.map((request) => `${request.signal_code}:${JSON.stringify(request.params ?? {})}`)
                 .sort(),
         );
-    }
-
-    const comparisonRuntimeParamKeys = new Set<string>(COMPARISON_ASSET_RUNTIME_PARAM_KEYS);
-
-    function signalDataContextFingerprint(configs: SignalConfig[]): string {
-        return JSON.stringify(
-            configs
-                .map((config) => ({
-                    id: config.id,
-                    signalType: config.signalType,
-                    params: Object.fromEntries(
-                        Object.entries(config.params)
-                            .filter(([key]) => !comparisonRuntimeParamKeys.has(key))
-                            .sort(([left], [right]) => left.localeCompare(right)),
-                    ),
-                }))
-                .sort((left, right) => left.id.localeCompare(right.id)),
-        );
-    }
-
-    function comparisonAssetIds(configs: SignalConfig[]): number[] {
-        return [
-            ...new Set(
-                configs
-                    .filter((config) => config.signalType === 'asset-comparison')
-                    .map((config) => Number(config.params.assetId))
-                    .filter((assetId) => Number.isSafeInteger(assetId) && assetId > 0),
-            ),
-        ].sort((left, right) => left - right);
     }
 
     function comparisonLoadFingerprint(configs: SignalConfig[]): string {

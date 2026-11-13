@@ -20,7 +20,7 @@ import {zodiosApi} from '$lib/api';
 // AssetPricePoint/apiPricesToAssetPricePoints now live in assetPriceDerived.ts (a
 // Zodios/SvelteKit-free module, importable from a Web Worker) — re-exported here so
 // existing call sites of this file don't need to change their import path.
-import {apiPricesToAssetPricePoints, type AssetPricePoint} from '$lib/utils/assetPriceDerived';
+import {apiPricesToAssetPricePoints, type AssetPricePoint} from '$lib/features/assets/assetPriceDerived';
 export {apiPricesToAssetPricePoints, type AssetPricePoint};
 
 // ============================================================================

@@ -9,13 +9,9 @@ import pytest
 import talib
 
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.signals import (
-    SignalDomain,
-    SignalExecutionContext,
-    SignalRequest,
-    SignalSeriesKind,
-    SignalStatus,
-)
+from backend.app.schemas.signals.inputs import SignalExecutionContext
+from backend.app.schemas.signals.result import SignalRequest
+from backend.app.schemas.signals.vocabulary import SignalDomain, SignalSeriesKind, SignalStatus
 from backend.app.services.signal_plugins.kama import plugin as kama_module
 from backend.app.services.signal_plugins.kama.plugin import (
     KamaSignalParams,

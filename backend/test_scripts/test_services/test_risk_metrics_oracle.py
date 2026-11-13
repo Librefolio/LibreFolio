@@ -36,9 +36,10 @@ from scipy.stats import kurtosis as scipy_excess_kurtosis
 
 import backend.app.services.signals.risk_adapters as risk_adapters_module
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.portfolio import DataQualityReport
-from backend.app.schemas.risk import RiskKpiOutput, RiskMode, RiskReturnBasis, RiskScopeKind
-from backend.app.schemas.signals import SignalWarningCode
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
+from backend.app.schemas.risk.outputs import RiskKpiOutput
+from backend.app.schemas.risk.vocabulary import RiskMode, RiskReturnBasis, RiskScopeKind
+from backend.app.schemas.signals.vocabulary import SignalWarningCode
 from backend.app.services.financial_math.returns import calendar_days_to_observations, positive_annualization_factor
 from backend.app.services.risk.base import RiskExecutionContext
 from backend.app.services.risk.metrics import (
@@ -300,7 +301,7 @@ def test_historical_var_cvar_matches_the_coherent_estimator_after_m2():
     the tail that dragged the average down by a measured -0.27 %, on 2000 samples out
     of 2000.
 
-    The zero floor is deliberately KEPT: ``backend/app/schemas/risk.py`` declares both
+    The zero floor is deliberately KEPT: ``backend/app/schemas/risk/`` declares both
     fields ``Field(..., ge=0)``, so these are loss magnitudes, never signed returns.
     At the usual confidence levels it never binds on the tail.
     """
@@ -914,7 +915,7 @@ def test_matrix_diagonals_and_symmetry_follow_the_scalar_definitions():
 #
 # ⚠️ SIGN CONVENTION. ``returns`` here are SIGNED, so a loss is negative and sits on
 # the left, while ``HistoricalTailRisk.value_at_risk`` is a POSITIVE loss magnitude
-# (``backend/app/schemas/risk.py`` declares it ``ge=0``). The producer therefore pins
+# (``backend/app/schemas/risk/`` declares it ``ge=0``). The producer therefore pins
 # at ``-value_at_risk``. Inverting that sign would shade the GAIN tail and still look
 # entirely plausible on screen, which is why the tests below assert the sign of the
 # pin rather than only its magnitude.

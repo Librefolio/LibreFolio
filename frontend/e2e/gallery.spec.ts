@@ -11,6 +11,7 @@
  *   - Run `./dev.py db populate --force` before generating gallery
  *   - This ensures brokers with icons exist for realistic screenshots
  */
+import type {TestInfo} from '@playwright/test';
 import {type APIRequestContext, expect, type Locator, type Page, test} from './fixtures/playwright';
 import {login, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
 import {validateRuns, waitForChart, waitForParseVerdict, waitForSettled} from './fixtures/app-events';
@@ -66,6 +67,7 @@ import {
 import {continueToReview, type ParseResponse, parseSelectedFile, selectBrokerFile} from './fixtures/import-wizard';
 import {canEdit, listBrokers, readTransactions, seededRow, type TxRow} from './fixtures/owned-pair';
 import {appears, optionsClosed} from './fixtures/probe';
+import {samplePath} from './fixtures/brimSamples';
 import {
     chooseLabYear,
     currentUserId,
@@ -136,6 +138,7 @@ import {serveGalleryBackupList, serveGalleryStorage} from './fixtures/galleryFil
 import {GALLERY_PREMIUM_QUERY, serveGalleryPremiumSearch} from './fixtures/galleryAssetSearch';
 import {serveGalleryWhatsNew} from './fixtures/galleryWhatsNew';
 import {backToRestoreCard, rollBackRestoreOverlay, serveGalleryRestore} from './fixtures/galleryRestore';
+import {serveGalleryCacheStatus} from './fixtures/galleryCache';
 import {expectGallerySecurityServed, GALLERY_SECURITY_ATTENTION_COUNT, GALLERY_SECURITY_FINDING_IDS, gallerySecurityReads, serveGallerySecurityChecks, serveGallerySecurityFindings} from './fixtures/gallerySecurity';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
@@ -515,6 +518,10 @@ test.describe('Gallery Screenshots', () => {
     // No locale on the context: @playwright/test would give it 'en-US', and Chromium would then refuse the locale each
     // language sets at runtime (galleryLocale.ts). `locale: undefined` keeps that default; a fixture yielding undefined does not.
     test.use({locale: async ({}, use) => use(undefined)});
+    // A fixed time zone on the context (G-14, the developer's choice of 23/10): every instant is drawn in the browser's zone, so
+    // without this the hours in the shots, and the midnight ticks of the time-axis charts, followed the machine — Europe/Rome
+    // on a local run, UTC on the CI runner that publishes the gallery. The starting data is the same on every machine.
+    test.use({timezoneId: 'Europe/Rome'});
 
     // Tests running in parallel create temporary brokers and files (group 3: disposable accounts, brokers
     // named `‹label› · ‹TOKEN›`). A session that cannot reach them still hears of them: every session caches
@@ -752,7 +759,7 @@ test.describe('Gallery Screenshots', () => {
             // ~4 s, twice that under parallel load: 8 × 8 s + 30 s.
             test.setTimeout(180_000);
             const viewport = getViewport(testInfo);
-            account = await registerGalleryAccount(request);
+            account = await registerGalleryAccount(request, testInfo);
             await login(page, account.user);
             await expect(page, 'a new account signs in to the Welcome page').toHaveURL(/\/welcome(?:[/?#]|$)/, {timeout: 15_000});
 
@@ -793,7 +800,7 @@ test.describe('Gallery Screenshots', () => {
             // resumed on its step, the panel's 3 s fade and one shot, ~8 s, twice that under parallel load: 8 × 16 s + 40 s.
             test.setTimeout(300_000);
             const viewport = getViewport(testInfo);
-            account = await registerGalleryAccount(request);
+            account = await registerGalleryAccount(request, testInfo);
             await login(page, account.user);
             // Welcome confirmed as it comes — the account's own language and currency — hands over to the intro; the tour
             // is walked once, Next by Next, to the Exchange rates destination in the sidebar.
@@ -831,7 +838,7 @@ test.describe('Gallery Screenshots', () => {
             // that under parallel load: 8 × 20 s + 50 s.
             test.setTimeout(300_000);
             const viewport = getViewport(testInfo);
-            account = await registerGalleryAccount(request);
+            account = await registerGalleryAccount(request, testInfo);
             // Welcome confirmed as it comes, the intro closed, every guide skipped but the FX page's: no other guide competes
             // for the overlay. It opens on the page's title; Next takes it to the currency filters, real controls it pulses.
             await prepareOnboardingAccount(page, account.user, ['fx_page_guide']);
@@ -2047,7 +2054,13 @@ test.describe('Gallery Screenshots', () => {
             await expect(page.getByTestId('tooltip-content'), 'a tooltip lies over the shot').toHaveCount(0);
         }
 
-        test('connection indicator on a local network - all languages and themes', async ({page, baseURL}, testInfo) => {
+        /**
+         * The connection line open on «Connection: local network», in every language and theme. `findings` is false for the
+         * all-ok checks of the gallery's fixture (no dot, no link: `connection-indicator`) and true for the five findings of
+         * serveGallerySecurityFindings (the red dot on the shield, the count link in the details: `connection-indicator-attention`).
+         * Both start from the same data, so the shots stay comparable; a few pixels of difference is not a problem.
+         */
+        async function shootConnectionIndicator(page: Page, baseURL: string | undefined, testInfo: TestInfo, findings: boolean): Promise<void> {
             const viewport = getViewport(testInfo);
             const lane = laneOrigin(baseURL);
             const lan = originUnder(lane, GALLERY_LAN_NAME);
@@ -2058,6 +2071,8 @@ test.describe('Gallery Screenshots', () => {
             const link = details.getByTestId('connection-security-docs-link');
 
             await setupDashboardMockReport(page);
+            // Registered after the all-ok route of the outer beforeEach, so tried first.
+            if (findings) await serveGallerySecurityFindings(page);
             await login(page, TEST_ADMIN);
             await keepTempDataHiddenUnder(page, lan, lane);
             await signInThroughFormUnder(page, lan, TEST_ADMIN);
@@ -2082,13 +2097,20 @@ test.describe('Gallery Screenshots', () => {
                 await expect(line).toHaveAttribute('data-reason', 'lan');
 
                 // The administrator's security checks: this load's read answered from the gallery's fixture first — before its
-                // answer the line says 0 too —, then nothing counted, all ok (gallerySecurity.ts). No dot on the shield, nor on
-                // the phone's burger: the level is local, not insecure.
+                // answer the line says 0 too. All ok: nothing counted, no dot on the shield nor on the phone's burger (the level
+                // is local, not insecure). With the findings: the count of errors and warnings, and the dot, red for the error.
                 await expectGallerySecurityServed(page, securityReads);
-                await expect(line, 'nothing counted: the gallery answers every security check ok (gallerySecurity.ts)').toHaveAttribute('data-security-attention', '0');
-                await expect(line, 'no severity: nothing asks for the administrator (gallerySecurity.ts)').toHaveAttribute('data-security-severity', 'none');
-                await expect(line.getByTestId('connection-security-attention-dot'), 'no dot on the shield: the gallery answers every security check ok (gallerySecurity.ts)').toHaveCount(0);
-                await expect(page.getByTestId('mobile-menu-security-dot'), 'no dot on the burger: the level is local, not insecure, and nothing is counted').toHaveCount(0);
+                if (!findings) {
+                    await expect(line, 'nothing counted: the gallery answers every security check ok (gallerySecurity.ts)').toHaveAttribute('data-security-attention', '0');
+                    await expect(line, 'no severity: nothing asks for the administrator (gallerySecurity.ts)').toHaveAttribute('data-security-severity', 'none');
+                    await expect(line.getByTestId('connection-security-attention-dot'), 'no dot on the shield: the gallery answers every security check ok (gallerySecurity.ts)').toHaveCount(0);
+                    await expect(page.getByTestId('mobile-menu-security-dot'), 'no dot on the burger: the level is local, not insecure, and nothing is counted').toHaveCount(0);
+                } else {
+                    await expect(line, 'errors and warnings counted (gallerySecurity.ts)').toHaveAttribute('data-security-attention', String(GALLERY_SECURITY_ATTENTION_COUNT));
+                    await expect(line, 'an error among them: the dot is red').toHaveAttribute('data-security-severity', 'error');
+                    await expect(line.getByTestId('connection-security-attention-dot'), 'the dot on the shield').toBeVisible();
+                    if (viewport === 'mobile') await expect(page.getByTestId('mobile-menu-security-dot'), 'the same dot on the burger').toHaveCount(1);
+                }
 
                 // On a phone the sidebar is the drawer: the burger opens it.
                 if (viewport === 'mobile') {
@@ -2107,7 +2129,8 @@ test.describe('Gallery Screenshots', () => {
                 await expect(details.getByTestId('connection-security-reason')).toBeVisible();
                 await expect(link, 'the link opens the user page in the language of the UI').toHaveAttribute('href', connectionDocsHref(lang));
                 await expect(details.getByTestId('connection-security-admin-warning'), 'no cookie line: the page is plain HTTP').toHaveCount(0);
-                await expect(details.getByTestId('connection-security-attention-link'), 'no link to the security checks: the gallery answers every one ok (gallerySecurity.ts)').toHaveCount(0);
+                if (findings) await expect(details.getByTestId('connection-security-attention-link'), 'the link with the count').toBeVisible();
+                else await expect(details.getByTestId('connection-security-attention-link'), 'no link to the security checks: the gallery answers every one ok (gallerySecurity.ts)').toHaveCount(0);
 
                 // Settled, then in frame: the KPI cards' count-up and the growth chart behind, every image, nothing moving.
                 await textStill(page.getByTestId('kpi-row'), 'the KPI cards');
@@ -2120,8 +2143,9 @@ test.describe('Gallery Screenshots', () => {
                 await expectNoToast(page);
                 await expect(line, 'the whole line is on screen: the level, the reason and the link').toBeInViewport({ratio: 1});
                 await expectUncovered(link, 'the How to connect securely link');
+                if (findings) await expectUncovered(details.getByTestId('connection-security-attention-link'), 'the link to the security checks');
                 // The pointer stays on the details (restPointerOnDetails): parked anywhere else, it would start their countdown.
-                await screenshot(page, viewport, lang, theme, 'security', 'connection-indicator', {keepPointer: true});
+                await screenshot(page, viewport, lang, theme, 'security', findings ? 'connection-indicator-attention' : 'connection-indicator', {keepPointer: true});
                 // Nothing reopens the details without a click: open now, so open in the picture.
                 await expect(toggle, 'the details stayed open through the shot').toHaveAttribute('aria-expanded', 'true');
 
@@ -2132,6 +2156,14 @@ test.describe('Gallery Screenshots', () => {
                     await expect(header, 'the drawer closed').toHaveAttribute('data-sidebar-open', 'false');
                 }
             });
+        }
+
+        test('connection indicator on a local network - all languages and themes', async ({page, baseURL}, testInfo) => {
+            await shootConnectionIndicator(page, baseURL, testInfo, false);
+        });
+
+        test('connection indicator with security findings - all languages and themes', async ({page, baseURL}, testInfo) => {
+            await shootConnectionIndicator(page, baseURL, testInfo, true);
         });
     });
 
@@ -2310,6 +2342,35 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('backup create (admin) - all languages and themes', async ({page}, testInfo) => {
+            // The administrators' Backup tab as a backup is started from it: the card at rest, the two kinds to choose from, the
+            // Create backup button (the shot of the user manual's Backup chapter). Nothing is created: no job is stored or answered,
+            // and the button is never pressed. A fresh page has no followed job (sessionStorage is per page), so the card is idle;
+            // the list of kept backups under it is served from the fixture, so no archive of the lane is ever drawn (G-23's principle:
+            // the starting data is the same every time; a few pixels of difference is no problem).
+            const viewport = getViewport(testInfo);
+            await serveGalleryBackupList(page);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await navigateTo(page, '/settings?tab=backup');
+                await expect(page.getByTestId('settings-tab-backup')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                const card = page.getByTestId('backup-download-card');
+                await waitForSettled(card, 15_000);
+                await expect(card, 'the card is idle: no backup is followed').toHaveAttribute('data-state', 'idle');
+                await expect(card.getByTestId('backup-mode-clear'), 'the kinds to choose from').toBeVisible();
+                await expect(card.getByTestId('backup-mode-secure')).toBeVisible();
+                await expect(card.getByTestId('backup-create')).toBeEnabled();
+                await freezeAnimations(page);
+                // DESKTOP — the tall-screen rule (galleryTallShots.ts): the whole tab, as the backup-ready shot frames it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/backup-create`);
+                // MOBILE — the card itself, at the top of the screen.
+                if (viewport === 'mobile') await frameTarget(page, card, `mobile/${lang}/${theme}/settings/backup-create`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'backup-create');
+                await restoreTallScreen(page);
+            });
+        });
+
         test('restore rolled back (admin) - all languages and themes', async ({page}, testInfo) => {
             // A restore that was rolled back, played in the page (galleryRestore.ts): the overlay that says why, then the card's
             // last result. Nothing is uploaded, restored or restarted; the success is never photographed (P8).
@@ -2393,8 +2454,20 @@ test.describe('Gallery Screenshots', () => {
                 await navigateTo(page, '/settings');
                 await page.getByTestId('settings-page').waitFor({state: 'visible', timeout: 10_000});
                 await freezeAnimations(page);
-                // Click change password button
-                await page.getByTestId('change-password-button').click();
+                // The page under the modal rests at the same scroll every time (G-26). The Profile tab is complete first: its
+                // avatar arrives after the tab is drawn (ProfileTab's onMount) and moves what lies below it, so a click made
+                // before it locked the page at a different scroll. Then the button is brought into view from the top of the
+                // page, the same move every run (bringIntoViewFromTop), and the modal opens over that. A modal a little
+                // taller or shorter with the language is fine; the page behind does not move.
+                const profile = page.getByTestId('profile-tab');
+                await expect(profile).toBeVisible({timeout: 10_000});
+                await expect(profile).toHaveAttribute('data-busy', 'false');
+                const avatar = profile.getByTestId('profile-avatar').locator('img');
+                await expect(avatar, "the admin's avatar is not on the Profile tab").toBeVisible({timeout: 10_000});
+                await expect.poll(() => avatar.evaluate((img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0), {message: "the admin's avatar never loaded", timeout: 10_000}).toBe(true);
+                const changePassword = page.getByTestId('change-password-button');
+                await bringIntoViewFromTop(page, changePassword, 'settings/password-modal');
+                await changePassword.click();
                 await page.waitForTimeout(300);
                 await screenshot(page, viewport, lang, theme, 'settings', 'password-modal');
                 // Close modal
@@ -2661,6 +2734,8 @@ test.describe('Gallery Screenshots', () => {
 
         test('cache panel - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
+            // The caches come from a fixture, not from what the neighbouring tests left in the server's memory (G-23).
+            await serveGalleryCacheStatus(page);
             await login(page, TEST_ADMIN);
 
             for (const lang of SUPPORTED_LANGUAGES) {
@@ -4072,7 +4147,7 @@ test.describe('Gallery Screenshots', () => {
             test.setTimeout(300_000); // 5 minutes
             // generic_simple.csv contains UNETF (unknown asset → unresolved card in step 4)
             const viewport = getViewport(testInfo);
-            const GENERIC_SIMPLE = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+            const GENERIC_SIMPLE = samplePath('generic_simple.csv');
 
             for (const lang of SUPPORTED_LANGUAGES) {
                 await setBrowserLocale(page, lang);
@@ -4488,8 +4563,8 @@ test.describe('Gallery Screenshots', () => {
         });
 
         /** A disposable account through the welcome, with every guide skipped, and its broker, named `‹label› · ‹TOKEN›` (galleryBrokerName). */
-        async function startAccount(page: Page, request: APIRequestContext, label: string, extra: Record<string, unknown> = {}): Promise<number> {
-            account = await registerGalleryAccount(request);
+        async function startAccount(page: Page, request: APIRequestContext, testInfo: TestInfo, label: string, extra: Record<string, unknown> = {}): Promise<number> {
+            account = await registerGalleryAccount(request, testInfo);
             await onboardGalleryAccount(page, account);
             return createGalleryBroker(page.request, account, label, extra);
         }
@@ -4520,7 +4595,7 @@ test.describe('Gallery Screenshots', () => {
             // ~15 s, twice that under parallel load: 8 × 30 s + 60 s.
             test.setTimeout(300_000);
             const viewport = getViewport(testInfo);
-            const brokerId = await startAccount(page, request, 'Danske Bank');
+            const brokerId = await startAccount(page, request, testInfo, 'Danske Bank');
             // The bank's two exports, as it exports them, uploaded together: one set.
             const {
                 batchId,
@@ -4568,7 +4643,7 @@ test.describe('Gallery Screenshots', () => {
             // ~12 s, twice that under parallel load: 8 × 24 s + 50 s.
             test.setTimeout(240_000);
             const viewport = getViewport(testInfo);
-            const brokerId = await startAccount(page, request, 'Danske Bank');
+            const brokerId = await startAccount(page, request, testInfo, 'Danske Bank');
             // The bank's two exports, as it exports them, uploaded together: one set. No single-file plugin reads the bank's
             // own cash statement (decision 1), so its ⋮ menu holds Preview, Remove from the set and Delete, and no «Read alone
             // with…»: the menu of a real export, which the Danske Bank page shows.
@@ -4613,7 +4688,7 @@ test.describe('Gallery Screenshots', () => {
             // ~12 s, twice that under parallel load: 8 × 24 s + 50 s.
             test.setTimeout(240_000);
             const viewport = getViewport(testInfo);
-            const brokerId = await startAccount(page, request, 'Danske Bank');
+            const brokerId = await startAccount(page, request, testInfo, 'Danske Bank');
             // The custody export alone: a set that misses its cash statement.
             const {
                 batchId,
@@ -4651,7 +4726,7 @@ test.describe('Gallery Screenshots', () => {
             // combination combines; the next ones reuse the identical combined file. 8 × 60 s + 100 s.
             test.setTimeout(600_000);
             const viewport = getViewport(testInfo);
-            const brokerId = await startAccount(page, request, 'Danske Bank');
+            const brokerId = await startAccount(page, request, testInfo, 'Danske Bank');
             // The gap set: two custody exports with a gap between them and one cash statement covering both — the
             // set whose analysis has rows left out (the table of reasons) and a truth point after the gap.
             const {batchId} = await uploadSet(page.request, brokerId, [DANSKE_SAMPLES.gapCustody1, DANSKE_SAMPLES.gapCustody2, DANSKE_SAMPLES.gapCash]);
@@ -4726,7 +4801,7 @@ test.describe('Gallery Screenshots', () => {
             // under parallel load: 8 × 20 s + 60 s.
             test.setTimeout(240_000);
             const viewport = getViewport(testInfo);
-            const brokerId = await startAccount(page, request, 'Danske Bank');
+            const brokerId = await startAccount(page, request, testInfo, 'Danske Bank');
             const api = page.request;
             // Over the API only, oldest first; the table lists the newest first.
             // B1: both exports, then combined — the combined file, and two originals "Used in a combined file".
@@ -4802,7 +4877,7 @@ test.describe('Gallery Screenshots', () => {
             test.setTimeout(480_000);
             const viewport = getViewport(testInfo);
             // A broker that imports with the generic CSV, and a statement of cash movements only.
-            const brokerId = await startAccount(page, request, 'Demo Bank', {opened_at: '2020-01-01', default_import_plugin: GENERIC});
+            const brokerId = await startAccount(page, request, testInfo, 'Demo Bank', {opened_at: '2020-01-01', default_import_plugin: GENERIC});
             const statement = await uploadFile(page.request, brokerId, writeSavingsStatement(testInfo));
             // The generic CSV raises no todo on cash rows: the parse of this statement gains two fields to verify.
             const todos = await injectTodosIntoParses(page, SAVINGS_TODOS);
@@ -5733,18 +5808,24 @@ test.describe('Gallery Screenshots', () => {
                     await expect(week).toHaveAttribute('data-active', 'true');
 
                     // The primary mode and the window are toggles: each is switched only when it is not on already.
+                    // A change reloads the series and, meanwhile, unmounts the selectors of the chart: the next toggle
+                    // is read once the page says it is idle again (G-19), never on the heels of the click before it.
                     const detail = page.getByTestId('asset-detail-page');
+                    const idle = () => expect(detail, 'the page is idle before the next toggle is read').toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+                    await idle();
                     const chart = detail.getByTestId('asset-detail-chart');
                     const rollingReturn = chart.getByTestId('asset-chart-primary-calendar-return');
                     await expect(rollingReturn).toBeVisible({timeout: 15_000});
                     if ((await rollingReturn.getAttribute('aria-pressed')) !== 'true') await rollingReturn.click();
                     await expect(rollingReturn).toHaveAttribute('aria-pressed', 'true');
                     await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+                    await idle();
                     const oneYear = chart.getByTestId('asset-calendar-window-controls').getByTestId('asset-calendar-window-1y');
                     await expect(oneYear).toBeVisible();
                     if ((await oneYear.getAttribute('aria-pressed')) !== 'true') await oneYear.click();
                     await expect(oneYear).toHaveAttribute('aria-pressed', 'true');
                     await expect(chart).toHaveAttribute('data-window-days', '365');
+                    await idle();
 
                     // One comparison asset, added the way a user adds it: Signals, Comparison, asset comparison, then
                     // the asset in the new card. In this mode the panel offers comparisons only.

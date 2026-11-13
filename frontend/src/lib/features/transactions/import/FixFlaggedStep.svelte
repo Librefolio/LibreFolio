@@ -31,6 +31,7 @@
     import {splitRowCharges, type ChargeDraft, type ChargeKind} from '$lib/features/transactions/import/splitRowCharges';
     import type {BrimEvidence} from '$lib/types';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
 
     interface FlaggedTodo {
         field: string;
@@ -130,13 +131,11 @@
     /**
      * A blocker todo carries the same `reason_code`/`message` pair as a notice, so the
      * localised wording lives at the same key namespace with the plugin string as the
-     * fallback — the plugin author's language is better than a bare code.
+     * fallback — the plugin author's language is better than a bare code. The todo's
+     * `context` fills the placeholders (`{ticker}`), as on every other surface (O-5).
      */
     function todoMessage(todo: FlaggedTodo | undefined): string {
-        if (!todo) return '';
-        const key = `importWizard.brimNotice.${todo.reasonCode}`;
-        const translated = $t(key);
-        return translated === key ? todo.message : translated;
+        return todo ? resolveBrimTodoMessage(todo, $t) : '';
     }
 
     /** Per-row draft edits, keyed by merged-tx index. */

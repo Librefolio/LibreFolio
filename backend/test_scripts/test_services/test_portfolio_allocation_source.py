@@ -21,15 +21,8 @@ from pydantic import ValidationError
 
 from backend.app.db.models import AssetType, TransactionType, UserRole
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
-from backend.app.schemas.portfolio import (
-    PlannerSourceSection,
-    PortfolioPlannerCurrentDistribution,
-    PortfolioPlannerCurrentWeight,
-    PortfolioPlannerSourceRequest,
-    PortfolioPlannerSourceResponse,
-)
+from backend.app.schemas.portfolio.planner_source import PlannerSourceSection, PortfolioPlannerCurrentDistribution, PortfolioPlannerCurrentWeight, PortfolioPlannerSourceRequest, PortfolioPlannerSourceResponse
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
-from backend.app.services import portfolio_service
 from backend.app.services.financial_math import average_cost
 from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, _fold_average_costs
 from backend.app.services.financial_math.portfolio import engine as portfolio_engine
@@ -41,6 +34,8 @@ from backend.app.services.pac_allocator.source import fx_quotes as source_fx_quo
 from backend.app.services.pac_allocator.source import loaders as source_loaders
 from backend.app.services.pac_allocator.source import portfolio_allocation_source as source
 from backend.app.services.pac_allocator.source import wac as source_wac
+from backend.app.services.portfolio import engine_facts
+from backend.app.services.portfolio import wac as wac_module
 
 AS_OF = date(2026, 9, 15)
 CAPTURED_AT = datetime(2026, 9, 15, 12, 30, tzinfo=UTC)
@@ -1548,7 +1543,7 @@ async def test_wac_context_of_an_asset_with_an_invalid_currency_is_a_typed_copy_
     monkeypatch,
 ):
     compute = AsyncMock(side_effect=AssertionError("An invalid Asset currency must not reach the WAC runtime"))
-    monkeypatch.setattr(portfolio_service, "compute_wac_iterative", compute)
+    monkeypatch.setattr(wac_module, "compute_wac_iterative", compute)
     issues = []
 
     rows = await source_wac.build_planner_wac_contexts(
@@ -1796,17 +1791,17 @@ async def test_legacy_wac_cache_default_reuses_warm_result(
 
     cache = _CacheProbe()
     provider_probe = AsyncMock(side_effect=AssertionError("Same-currency WAC must not request FX"))
-    monkeypatch.setattr(portfolio_service, "_wac_cache", cache)
+    monkeypatch.setattr(wac_module, "_wac_cache", cache)
     monkeypatch.setattr(average_cost, "convert_bulk", provider_probe)  # the module that converts (compute_average_costs)
 
-    cold_result = await portfolio_service.compute_wac_iterative(
+    cold_result = await wac_module.compute_wac_iterative(
         session=session,
         broker_id=7,
         asset_id=11,
         as_of_date=AS_OF,
         asset_currency="EUR",
     )
-    warm_result = await portfolio_service.compute_wac_iterative(
+    warm_result = await wac_module.compute_wac_iterative(
         session=session,
         broker_id=7,
         asset_id=11,
@@ -1901,7 +1896,7 @@ async def test_wac_context_does_not_read_or_mutate_process_cache(
 
     cache = _CacheProbe(cached_wac, cache_hit)
     provider_probe = AsyncMock(side_effect=AssertionError("Same-currency WAC must not request FX"))
-    monkeypatch.setattr(portfolio_service, "_wac_cache", cache)
+    monkeypatch.setattr(wac_module, "_wac_cache", cache)
     monkeypatch.setattr(average_cost, "convert_bulk", provider_probe)  # the module that converts (compute_average_costs)
     monkeypatch.setattr(source, "utcnow", lambda: CAPTURED_AT)
 
@@ -1950,7 +1945,7 @@ async def test_wac_contexts_call_canonical_runtime_sequentially_and_keep_fiscal_
             wac_missing_pairs=[],
         )
 
-    monkeypatch.setattr(portfolio_service, "compute_wac_iterative", compute)
+    monkeypatch.setattr(wac_module, "compute_wac_iterative", compute)
     issues = []
     rows = await source_wac.build_planner_wac_contexts(
         object(),
@@ -2062,7 +2057,7 @@ async def test_wac_fx_evidence_is_exact_deterministic_and_deduplicated(
     """
     result = _converted_wac_result()
     monkeypatch.setattr(
-        portfolio_service,
+        wac_module,
         "compute_wac_iterative",
         AsyncMock(return_value=result),
     )
@@ -2173,7 +2168,7 @@ async def test_warm_wac_result_with_changed_saved_fx_fails_closed(
     stale_cached_result = _converted_wac_result()
     compute = AsyncMock(return_value=stale_cached_result)
     monkeypatch.setattr(
-        portfolio_service,
+        wac_module,
         "compute_wac_iterative",
         compute,
     )
@@ -2236,7 +2231,7 @@ async def test_wac_fx_row_at_the_rate_date_must_carry_the_rate_the_cost_used(
     within-tolerance case as the positive barrier that gives the missing case its teeth.
     """
     monkeypatch.setattr(
-        portfolio_service,
+        wac_module,
         "compute_wac_iterative",
         AsyncMock(return_value=_converted_wac_result(rate=rate_used)),
     )
@@ -2290,7 +2285,7 @@ async def test_wac_fx_without_a_saved_row_at_the_rate_date_fails_closed_even_if_
     (pair, rate date) key — the exact-date read never selects it, and a row handed back anyway is not that key.
     """
     monkeypatch.setattr(
-        portfolio_service,
+        wac_module,
         "compute_wac_iterative",
         AsyncMock(return_value=_converted_wac_result()),
     )
@@ -2372,7 +2367,7 @@ async def test_wac_fx_row_at_the_rate_date_with_an_unusable_rate_fails_closed(
         result = _converted_wac_result()
         source_currency, target_currency = "USD", "EUR"
     monkeypatch.setattr(
-        portfolio_service,
+        wac_module,
         "compute_wac_iterative",
         AsyncMock(return_value=result),
     )
@@ -2458,7 +2453,7 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
         def set(self, _key, _value):
             raise AssertionError("Planner source must not mutate a response cache")
 
-    monkeypatch.setattr(portfolio_service, "_wac_cache", _ForbiddenCache())
+    monkeypatch.setattr(wac_module, "_wac_cache", _ForbiddenCache())
 
     response = await source.build_portfolio_planner_source(
         session,
@@ -2839,7 +2834,7 @@ async def test_current_distribution_excludes_dust_unselected_assets_and_weights_
         positions=(
             _position(11, market_value="50"),
             # At the dust threshold the summary counts the position as closed.
-            _position(12, quantity=str(portfolio_service._QUANTITY_DUST_THRESHOLD), market_value="1000"),
+            _position(12, quantity=str(engine_facts._QUANTITY_DUST_THRESHOLD), market_value="1000"),
             # Held but outside the scenario: never part of the denominator.
             _position(99, market_value="5000"),
         ),

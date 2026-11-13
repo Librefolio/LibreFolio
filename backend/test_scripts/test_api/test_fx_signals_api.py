@@ -19,7 +19,7 @@ from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.fx import FXConversionRequest
-from backend.app.schemas.signals import SignalStatus
+from backend.app.schemas.signals.vocabulary import SignalStatus
 from backend.test_scripts.fx_steps_double import steps_double
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
@@ -31,7 +31,7 @@ TIMEOUT = 30.0
 async def create_user_and_login(
     client: httpx.AsyncClient,
 ) -> None:
-    username = f"fx_signal_{int(time.time() * 1000)}_" f"{uuid.uuid4().hex[:6]}"
+    username = f"fx_signal_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
     password = "TestPass123!"
     register = await client.post(
         f"{API_BASE}/auth/register",
@@ -460,7 +460,9 @@ async def test_missing_rate_returns_grouped_unavailable(test_server):
     assert response.status_code == 200
     payload = response.json()
     assert payload["results"] == []
-    assert payload["errors"]
+    # CP-11d: the missing rate is data, in the direction of the conversion (BMD into CAD), not a text
+    assert [(issue["code"], issue["from_currency"], issue["to_currency"]) for issue in payload["fx_issues"]] == [("rate_not_found", "BMD", "CAD")]
+    assert payload["fx_issues"][0]["count"] >= 1
     assert payload["signal_results"][0]["signals"][0]["status"] == "unavailable"
 
 

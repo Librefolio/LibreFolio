@@ -368,7 +368,7 @@ server può comunque finire, e quella risposta viene scartata.
 
 Se modifichi la bozza dopo un risultato, appare un banner **Risultato non
 aggiornato**: i valori precedenti possono ancora essere consultati, ma non
-descrivono più la bozza corrente. Dal banner, **Torna al Riepilogo** riporta
+descrivono più la bozza corrente. Dal banner, **Torna a Riepilogo** riporta
 all'ultimo passo, e **Elimina il risultato precedente** rimuove il vecchio
 risultato e ti porta lì.
 

@@ -27,15 +27,21 @@ from backend.app.db.models import (  # noqa: E402
 from backend.app.db.session import get_async_engine  # noqa: E402
 from backend.app.schemas.common import DateRangeModel  # noqa: E402
 from backend.app.schemas.prices import FAPriceQueryItem  # noqa: E402
-from backend.app.schemas.signals import (  # noqa: E402
+from backend.app.schemas.signals.annotations import (  # noqa: E402
+    SignalThresholdCrossingRequest,
+)
+from backend.app.schemas.signals.inputs import (  # noqa: E402
+    SignalExecutionContext,
+    SignalPriceValueSource,
+)
+from backend.app.schemas.signals.result import (  # noqa: E402
+    SignalRequest,
+)
+from backend.app.schemas.signals.vocabulary import (  # noqa: E402
     SignalAvailabilityReason,
     SignalCalendarReturnPointStatus,
     SignalDomain,
-    SignalExecutionContext,
-    SignalPriceValueSource,
-    SignalRequest,
     SignalStatus,
-    SignalThresholdCrossingRequest,
     SignalWarningCode,
 )
 from backend.app.services.assets import market_calendar  # noqa: E402

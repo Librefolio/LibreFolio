@@ -89,3 +89,21 @@ describe('FixFlaggedStep — report-issue note (F11)', () => {
         expect(screen.getByTestId('fix-step-report-issue-link')).toBeInTheDocument();
     });
 });
+
+describe('FixFlaggedStep — the todo wording keeps its values (O-5)', () => {
+    it('writes the ticker and the quantity of a possible split, never the raw {placeholders}', async () => {
+        const row = {
+            ...flaggedRow(0),
+            todos: [{field: 'type', severity: 'blocker' as const, reasonCode: 'possible_split', message: 'plugin wording', context: {ticker: 'ZZTOP', added_quantity: '37'}}],
+        };
+        const {container} = mountStep([row]);
+
+        await waitFor(() => expect(screen.getByTestId('fix-step-rows')).toBeInTheDocument());
+
+        const text = container.textContent ?? '';
+        expect(text).toContain('ZZTOP');
+        expect(text).toContain('37');
+        expect(text).not.toContain('{ticker}');
+        expect(text).not.toContain('{added_quantity}');
+    });
+});

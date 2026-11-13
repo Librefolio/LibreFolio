@@ -33,7 +33,7 @@ import psutil
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, ToolUIDescriptor
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import ToolExecutionContext, ToolPlugin, ToolService
 from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.services.tools.wire import decode_json, encode_json

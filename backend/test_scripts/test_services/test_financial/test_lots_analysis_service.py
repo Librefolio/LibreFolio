@@ -17,15 +17,17 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import delete, event, select
+from sqlalchemy import and_, delete, event, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, IssueCode, LotTimelineEventSchema
+from backend.app.schemas.portfolio.data_quality import IssueCode
+from backend.app.schemas.portfolio.lots import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, LotAnalysisType, LotTimelineEventSchema
+from backend.app.services.financial_math.fifo.models import LotMatchingMethod
 from backend.app.services.financial_math.returns import cumulative_to_annualized
-from backend.app.services.lots_analysis_service import get_lots_analysis
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService, get_lots_analysis
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_services._range_bounds import lift_range_bound
@@ -3105,3 +3107,189 @@ async def test_an_opening_event_has_no_opening_value_when_its_conversion_is_miss
     assert [(lot.lot_id, lot.original_cost) for lot in result.lots or []] == [(buy.id, None)], f"precondition: one lot of unknown EUR cost, got {result.lots}"
     openings = [(row.lot_id, row.opening_value) for row in result.lot_events or [] if row.kind == "BUY"]
     assert openings == [(buy.id, None)]
+
+
+# --------------------------------------------------------------------------- #
+# Project 69, L3a — both matching methods in one request (D1b, D11)
+# --------------------------------------------------------------------------- #
+
+_L3_END = date(2025, 4, 30)
+FIFO, LIFO = LotMatchingMethod.FIFO, LotMatchingMethod.LIFO
+_ALL_ANALYSES = list(LotAnalysisType)
+
+
+@dataclass
+class _TwoMethodBook:
+    broker_a: Broker
+    broker_b: Broker
+    split_adjustment_ids: set[int]
+    dividend_id: int
+
+
+async def _two_method_book(session, test_user, asset, broker) -> _TwoMethodBook:
+    """A book on which FIFO and LIFO close different lots: two purchases on broker A, a transfer of 5 from A to B, a
+    purchase on B, a dividend, a 2-for-1 split on both brokers, a sale on each broker. Market prices and EUR/USD rates are
+    this test's own, so every conversion into USD has a rate."""
+    broker_b = Broker(name=f"LotsBrokerB_{utcnow().timestamp()}")
+    session.add(broker_b)
+    await session.flush()
+    session.add(BrokerUserAccess(broker_id=broker_b.id, user_id=test_user.id, role="OWNER", share_percentage=Decimal("1")))
+    split_event = AssetEvent(asset_id=asset.id, date=date(2025, 3, 15), type=AssetEventType.SPLIT, value=Decimal("2"), currency="EUR")
+    session.add(split_event)
+    await session.flush()
+
+    def row(broker_id, tx_type, day, quantity, amount, currency="EUR", **extra):
+        return Transaction(broker_id=broker_id, asset_id=asset.id, type=tx_type, date=day, quantity=Decimal(quantity), amount=Decimal(amount), currency=currency, **extra)
+
+    transfer_out = row(broker.id, TransactionType.TRANSFER, date(2025, 3, 1), "-5", "0")
+    # The arriving leg carries the cost basis the Auto cost writes on it (``transactions/auto_cost.py``: broker A's average
+    # before the units left, 2 200 / 20 = 110): without one the average-cost line of broker B would not know the cost of
+    # what arrived (MISSING_COST_BASIS), which this book does not need.
+    transfer_in = row(broker_b.id, TransactionType.TRANSFER, date(2025, 3, 2), "5", "0", cost_basis_override=Decimal("110"), cost_basis_currency="EUR")
+    dividend = row(broker.id, TransactionType.DIVIDEND, date(2025, 3, 10), "0", "30")
+    split_rows = [
+        row(broker.id, TransactionType.ADJUSTMENT, date(2025, 3, 15), "15", "0", asset_event_id=split_event.id),
+        row(broker_b.id, TransactionType.ADJUSTMENT, date(2025, 3, 15), "9", "0", asset_event_id=split_event.id),
+    ]
+    session.add_all(
+        [
+            row(broker.id, TransactionType.BUY, date(2025, 1, 10), "10", "-1000"),
+            row(broker.id, TransactionType.BUY, date(2025, 2, 10), "10", "-1200"),
+            row(broker_b.id, TransactionType.BUY, date(2025, 2, 20), "4", "-480"),
+            transfer_out,
+            transfer_in,
+            dividend,
+            *split_rows,
+            row(broker.id, TransactionType.SELL, date(2025, 4, 1), "-10", "700"),
+            row(broker_b.id, TransactionType.SELL, date(2025, 4, 5), "-4", "288"),
+            *[
+                PriceHistory(asset_id=asset.id, date=day, close=Decimal(close), currency="EUR", source_plugin_key="TEST")
+                for day, close in ((date(2025, 1, 10), "100"), (date(2025, 2, 10), "120"), (date(2025, 3, 1), "125"), (date(2025, 3, 16), "64"), (date(2025, 4, 1), "70"), (date(2025, 4, 30), "75"))
+            ],
+        ]
+    )
+    await session.flush()
+    transfer_out.related_transaction_id = transfer_in.id
+    transfer_in.related_transaction_id = transfer_out.id
+    await session.flush()
+    for day, rate in ((date(2025, 1, 2), "1.1"), (date(2025, 2, 20), "1.2"), (date(2025, 4, 1), "1.15")):
+        await _own_fx_rate(session, on=day, base="EUR", quote="USD", rate=Decimal(rate))
+    return _TwoMethodBook(broker_a=broker, broker_b=broker_b, split_adjustment_ids={split_row.id for split_row in split_rows}, dividend_id=dividend.id)
+
+
+async def _methods(session, test_user, asset, book: _TwoMethodBook, methods: list[LotMatchingMethod], *, target_currency: str = "EUR", analyses=None):
+    return await LotsAnalysisService(session).get_lots_analysis_methods(
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[book.broker_a.id, book.broker_b.id],
+        date_from=None,
+        date_to=_L3_END,
+        target_currency=target_currency,
+        selected_lot_ids=None,
+        requested_analyses=analyses or _ALL_ANALYSES,
+        matching_methods=methods,
+    )
+
+
+def _common_parts(response) -> dict:
+    """The common parts of a response, without the methods asked (the one field that says which were asked)."""
+    common = response.model_dump(mode="json", exclude={"methods"})
+    common["calculation_metadata"].pop("matching_methods")
+    return common
+
+
+@pytest.mark.asyncio
+async def test_a_method_alone_answers_as_the_same_method_beside_the_other(session, test_user, asset, broker):
+    """Opinion on L3, test 2: the block of a method asked with the other, in either order, is the block of that method asked
+    alone, byte for byte; the common parts too. Read in USD, so every figure goes through a rate. The two methods do differ
+    on this book: the test compares something.
+
+    One known exception, outside this book: ``stale_fx_pairs`` is the union of what both methods asked (Q4). A block can
+    then list a pair read on the last day by the other method only. That takes three things together: lots in two
+    currencies, a movement on the last day, and a request with no market-series analysis (the series asks every currency
+    on every day). Only a hand-made API call with both methods and only Gantt, custody or events meets them."""
+    book = await _two_method_book(session, test_user, asset, broker)
+    fifo_alone = await _methods(session, test_user, asset, book, [FIFO], target_currency="USD")
+    lifo_alone = await _methods(session, test_user, asset, book, [LIFO], target_currency="USD")
+    fifo_first = await _methods(session, test_user, asset, book, [FIFO, LIFO], target_currency="USD")
+    lifo_first = await _methods(session, test_user, asset, book, [LIFO, FIFO], target_currency="USD")
+
+    assert (list(fifo_first.methods), list(lifo_first.methods)) == ([FIFO, LIFO], [LIFO, FIFO])
+    assert (fifo_alone.methods[FIFO].calculation_status, lifo_alone.methods[LIFO].calculation_status) == ("COMPLETE", "COMPLETE"), fifo_alone.methods[FIFO].data_quality
+    fifo_realized = {lot.lot_id: lot.realized_quantity for lot in fifo_alone.methods[FIFO].lots or []}
+    lifo_realized = {lot.lot_id: lot.realized_quantity for lot in lifo_alone.methods[LIFO].lots or []}
+    assert fifo_realized.keys() == lifo_realized.keys() and fifo_realized != lifo_realized, f"precondition: same lots, other closes: {fifo_realized} / {lifo_realized}"
+    for pair in (fifo_first, lifo_first):
+        assert pair.methods[FIFO].model_dump_json() == fifo_alone.methods[FIFO].model_dump_json()
+        assert pair.methods[LIFO].model_dump_json() == lifo_alone.methods[LIFO].model_dump_json()
+    assert _common_parts(fifo_first) == _common_parts(lifo_first) == _common_parts(fifo_alone) == _common_parts(lifo_alone)
+
+
+@pytest.mark.asyncio
+async def test_the_event_dates_are_the_same_in_both_methods(session, test_user, asset, broker):
+    """Opinion on L3, test 4: the common series are drawn once, on the event dates of both replays together. That holds
+    because every date a replay derives is the date of a row the analysis reads anyway: on a book with a transfer, a split
+    and a dividend, the event dates of the two replays are one set, though their closures differ."""
+    book = await _two_method_book(session, test_user, asset, broker)
+    service = LotsAnalysisService(session)
+    inputs = await service._load_inputs(
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[book.broker_a.id, book.broker_b.id],
+        date_from=None,
+        date_to=_L3_END,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        normalized_analyses=_ALL_ANALYSES,
+        matching_methods=[FIFO, LIFO],
+    )
+    assert set(inputs.split_ratios_by_tx_id) == book.split_adjustment_ids, f"precondition: both adjustments are the split: {inputs.split_ratios_by_tx_id}"
+    assert book.dividend_id in {tx.id for tx in inputs.income_transactions}, "precondition: the dividend is read"
+    fifo, lifo = service._replay(inputs, FIFO), service._replay(inputs, LIFO)
+    fifo_closes = {(closure.lot_id, closure.close_date) for closure in fifo.engine_result.closures}
+    lifo_closes = {(closure.lot_id, closure.close_date) for closure in lifo.engine_result.closures}
+    assert fifo_closes != lifo_closes, "precondition: the two replays close different lots"
+    assert service._event_dates(inputs, fifo) == service._event_dates(inputs, lifo)
+
+
+async def _select_count(engine, call) -> int:
+    statements: list[str] = []
+
+    def before_cursor_execute(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        await call()
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", before_cursor_execute)
+    return len(statements)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target_currency", [pytest.param("USD", id="every-rate-there"), pytest.param("ISK", id="with-conversion-gaps")])
+async def test_two_methods_read_what_one_method_reads(session, test_user, asset, broker, engine, target_currency):
+    """Opinion on L3, test 6 (D1b: «the backend does not run the same queries twice»): the second method replays and
+    derives on what was loaded once. With gaps too: the configured FX pairs a gap report reads are read once per request."""
+    book = await _two_method_book(session, test_user, asset, broker)
+    if target_currency == "ISK":
+        # The gaps are this test's own: no EUR/ISK rate, whatever a neighbour stored (rolled back with the session).
+        await session.execute(delete(FxRate).where(or_(and_(FxRate.base == "EUR", FxRate.quote == "ISK"), and_(FxRate.base == "ISK", FxRate.quote == "EUR"))))
+        await session.flush()
+    await _methods(session, test_user, asset, book, [FIFO], target_currency=target_currency)  # caches warm alike for both counts
+    one = await _select_count(engine, lambda: _methods(session, test_user, asset, book, [FIFO], target_currency=target_currency))
+    both: list = []
+    two = await _select_count(engine, lambda: _keep(both, _methods(session, test_user, asset, book, [FIFO, LIFO], target_currency=target_currency)))
+    gaps = [block.data_quality.missing_fx_pairs for block in both[0].methods.values()]
+    assert all(gaps) if target_currency == "ISK" else not any(gaps), f"precondition: gaps {gaps}"
+    assert two == one
+    # Each method's report keeps the Dashboard's FX actions on its FX issues (add or sync the pair; project 69, L4).
+    for block in both[0].methods.values():
+        fx_issues = [issue for issue in block.data_quality.issues if issue.affected_fx_pairs]
+        assert bool(fx_issues) == (target_currency == "ISK")
+        assert all(issue.cta_action in ("add_fx_pair", "sync_fx_pair") for issue in fx_issues), fx_issues
+
+
+async def _keep(sink: list, awaitable):
+    sink.append(await awaitable)

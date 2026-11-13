@@ -1,6 +1,6 @@
 """MF6-1 (workstream MF, wave 6, T-U5) — a Dashboard holding's one-day columns read the engine's marks.
 
-What changed. ``PortfolioService.get_summary`` (``backend/app/services/portfolio_service.py``) no longer has
+What changed. ``PortfolioService.get_summary`` (``backend/app/services/portfolio/portfolio_service.py``) no longer has
 ``_get_price_at_date`` (a query of the last ``PriceHistory`` close on or before a day) nor ``_convert_to_base`` (one
 ``convert_bulk`` per price). A holding's ``current_price`` is ``engine_result.marks.in_target(effective unit price,
 currency, valuation day)``; for a holding valued at its market price (``MARKET_PRICE``) the day before is
@@ -45,7 +45,7 @@ test. No sleep.
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory); alone:
 ``./dev.py test services roi-fifo-utils test_summary_day_change_engine_marks``.
 
-Reference: backend/app/services/portfolio_service.py (get_summary, the MARKET_PRICE branch),
+Reference: backend/app/services/portfolio/portfolio_service.py (get_summary, the MARKET_PRICE branch),
 backend/app/services/financial_math/portfolio/daily_state.py (AssetMarks, marked_price),
 backend/test_scripts/test_services/test_financial/test_summary_day_change_house.py (the house's change_ratio, MF-A12).
 """
@@ -67,11 +67,12 @@ from sqlalchemy.pool import NullPool
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
-from backend.app.schemas.portfolio import PortfolioHolding
-from backend.app.services import portfolio_service as portfolio_service_module
+from backend.app.schemas.portfolio.summary import PortfolioHolding
 from backend.app.services.financial_math.returns import change_ratio
 from backend.app.services.financial_math.valuation import compute_holding_value
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 D = Decimal
 EUR = "EUR"
@@ -174,8 +175,8 @@ async def _holding(book: _Book, valuation: date) -> PortfolioHolding:
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

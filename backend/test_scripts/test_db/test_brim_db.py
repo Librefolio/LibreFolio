@@ -23,7 +23,8 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.brim import BRIMDuplicateLevel, BRIMMatchConfidence
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
-from backend.app.services.brim.brim_provider import detect_tx_duplicates, search_asset_candidates
+from backend.app.services.brim.candidates import search_asset_candidates
+from backend.app.services.brim.duplicates import detect_tx_duplicates
 
 # =============================================================================
 # FIXTURES

@@ -14,6 +14,7 @@ import type {z} from 'zod';
 import type {schemas} from '$lib/api';
 import {safeScalar, safeString} from '$lib/types/common';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {formatCurrencyPairPlain} from '$lib/utils/currency/currencyFormat';
 
 export type EligibilityLevel = z.infer<typeof schemas.RiskEligibilityLevel>;
 export type EligibilityReason = z.infer<typeof schemas.RiskEligibilityReason>;
@@ -154,8 +155,16 @@ export function reasonText(reason: EligibilityReason, item: AssetEligibilityItem
             return worded(t('risk.eligibility.reasons.no_prices'));
         case 'too_few_quotes':
             return worded(t('risk.eligibility.reasons.too_few_quotes', {values: {minQuotes: verdicts.minQuotes, count: item.quotes_in_period}}));
-        case 'missing_fx':
+        case 'missing_fx': {
+            // The engine says which conversion is missing and since when a rate exists (CP-11): the pair in the direction of the conversion.
+            // The generated type of an optional object also admits a list (the client's anyOf): only the object is read.
+            const missing = Array.isArray(item.missing_fx) ? null : item.missing_fx;
+            if (missing) {
+                const pair = formatCurrencyPairPlain(missing.from_currency, missing.to_currency, 'conversion');
+                return typeof missing.first_rate_date === 'string' ? worded(t('risk.eligibility.reasons.missing_fx_since', {values: {pair, date: formatDay(missing.first_rate_date)}})) : worded(t('risk.eligibility.reasons.missing_fx_none', {values: {pair}}));
+            }
             return worded(t('risk.eligibility.reasons.missing_fx', {values: {currency}}));
+        }
         case 'starts_late':
             return worded(t('risk.eligibility.reasons.starts_late', {values: {date: firstQuote}}));
         case 'stale_at_end':

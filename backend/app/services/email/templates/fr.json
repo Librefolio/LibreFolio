@@ -63,5 +63,16 @@
     "action": "Confirmer cette adresse",
     "expiry": "Le lien ne fonctionne qu'une seule fois et expire dans $duration. Une fois confirmé, le compte se connecte avec cette adresse et ses sessions ouvertes prennent fin.",
     "ignore": "Si vous n'attendiez pas cet e-mail, vous pouvez l'ignorer : rien ne change."
+  },
+  "email_change_request": {
+    "subject": "Confirmez la nouvelle adresse e-mail de votre compte LibreFolio",
+    "intro": "Quelqu'un a demandé à utiliser cette adresse e-mail pour un compte sur $instance. Confirmez-la pour terminer le changement : d'ici là, rien ne change et le compte garde son adresse actuelle.",
+    "action": "Confirmer cette adresse",
+    "expiry": "Le lien ne fonctionne qu'une seule fois et expire dans $duration. Une fois confirmé, le compte se connecte avec cette adresse et ses sessions ouvertes prennent fin.",
+    "signin": "Pour confirmer, vous devez être connecté à votre compte : si vous ne l'êtes pas, la page vous demande d'abord de vous connecter.",
+    "ignore": "Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail : rien ne change, et personne ne peut confirmer sans se connecter à ce compte.",
+    "requested_subject": "Un changement d'adresse e-mail a été demandé pour votre compte LibreFolio",
+    "requested_intro": "Quelqu'un a demandé à changer l'adresse e-mail de votre compte sur $instance. Rien n'a encore changé : la nouvelle adresse doit d'abord être confirmée depuis le compte.",
+    "requested_advice": "Si vous l'avez demandé, vous n'avez rien à faire. Sinon, quelqu'un utilise peut-être votre compte : changez tout de suite votre mot de passe, ce qui annule aussi la demande, et prévenez l'administrateur de $instance."
   }
 }

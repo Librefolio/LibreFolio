@@ -9,7 +9,7 @@
   Lives under `src/__tests__/`, which `vitest.config.ts` excludes from coverage.
 -->
 <script lang="ts">
-    import AssetDetailSignalsPanel from '$lib/components/assets/detail/AssetDetailSignalsPanel.svelte';
+    import AssetDetailSignalsPanel from '$lib/features/assets/detail/AssetDetailSignalsPanel.svelte';
 
     let open = $state(false);
 </script>

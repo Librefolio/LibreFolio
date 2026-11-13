@@ -274,10 +274,12 @@ What goes and what stays:
 
 Where it happens:
 
-- **`PATCH /api/v1/assets`** (`AssetCRUDService.patch_assets_bulk()`). It remembers the currency of
-  every patched asset before the loop; after the loop, for the assets whose currency now differs, it
-  reads the cache keys, calls `delete_market_data_of_assets()`, and commits **once**, so the change and
-  the deletion are one transaction. Then it drops the caches. There is no blocker token any more:
+- **`PATCH /api/v1/assets`** (`AssetCRUDService.patch_assets_bulk()`, all or nothing: see
+  [Asset Patch](architecture.md#asset-patch)). It remembers the currency of every patched asset before
+  applying; after applying the items, for the assets whose currency now differs, it reads the cache keys,
+  calls `delete_market_data_of_assets()`, and commits **once**, so the change and the deletion are one
+  transaction. Then it drops the caches. `POST /api/v1/assets/validate` runs the same path and rolls
+  back, so the wipe is undone and no cache is dropped. There is no blocker token any more:
   `CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA` is gone from the per-item `message` and from the route, which
   no longer answers 409 when every item failed. The deletion follows the *result* (the stored currency
   changed), so it runs for any caller of the API, not only the interface.
@@ -305,7 +307,7 @@ The transactions that lost their link can be linked again: `GET /api/v1/transact
 proposes the event of the same day for each, and the user confirms (see
 [Event Reconciliation](../transactions/service.md#event-reconciliation)). Nothing relinks by itself.
 
-In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`) the flow is:
+In the asset form (`AssetModal.svelte`, in `frontend/src/lib/features/assets/`) the flow is:
 
 ```mermaid
 sequenceDiagram
@@ -398,7 +400,7 @@ included. The route answers HTTP 409 with `detail = {error_code, message, params
 
 Any other error of the endpoint keeps its answer, a 500 with a string `detail`.
 
-In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`), `saveEdit()`
+In the asset form (`AssetModal.svelte`, in `frontend/src/lib/features/assets/`), `saveEdit()`
 first PATCHes the asset's fields (step 1), then assigns the provider (step 2). A step-2 refusal with this code is shown inline, in the form's
 error banner (`formError`, `data-form-error`): one sentence in the interface language built by
 `wipeRefusalMessage()` (`currencyChangeErrors.ts`, which maps each code to its key:
@@ -472,7 +474,7 @@ its answer, a 500 with a string `detail`.
     linked to a generated event) is no longer raised and has no sentence in the frontend
     catalogue; a client that still handles it can drop the branch.
 
-In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`), `saveEdit()`
+In the asset form (`AssetModal.svelte`, in `frontend/src/lib/features/assets/`), `saveEdit()`
 removes the provider in step 2, the `providerNoProvider` branch, once step 1 has PATCHed the
 asset's fields. Before step 1 it asks the [dry run](#provider-change-impact) what the removal
 deletes and, when something goes, shows one confirmation (below). Its `catch` mirrors the assign

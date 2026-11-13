@@ -1,7 +1,7 @@
 """Plugin settings, the contract: what a plugin declares, the values it accepts, and what the core binds (plan 03, CP10).
 
 Modules under test: ``services/plugin_settings/fields.py`` and ``contract.py``, and the checks at registration in
-``services/provider_registry.py``. The contract pinned here, hardened after the security review:
+``services/platform/provider_registry.py``. The contract pinned here, hardened after the security review:
 
 1. **Declarations** (``validate_declaration``), per family (``FAMILY_RULES``): an asset plugin may declare ``user`` fields
    and secrets; an FX plugin only ``system`` fields, secrets included; a family without rules declares nothing. A
@@ -66,6 +66,7 @@ from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx_providers.mockfx.plugin import MockFXFailProvider, MockFXProvider
+from backend.app.services.platform.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry, register_provider
 from backend.app.services.plugin_settings import fields as fields_module
 from backend.app.services.plugin_settings import resolver
 from backend.app.services.plugin_settings.contract import BoundSettings, PluginSettingsMixin
@@ -90,7 +91,6 @@ from backend.app.services.plugin_settings.fields import (
     validate_declaration,
     validate_value,
 )
-from backend.app.services.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry, register_provider
 from backend.test_scripts.test_services import _brim_settings_lab as brim_lab
 from backend.test_scripts.test_utils import print_section, print_success
 from scripts.i18n_catalog import load_catalog

@@ -37,7 +37,7 @@ import threading
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from contextlib import closing, contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -545,7 +545,7 @@ async def test_the_status_counts_the_secrets_of_another_key_by_scope(private_eng
         if damaged:
             blob[-1] ^= 1
         extra = {"user_id": user_id} if model is PluginUserSetting else {}
-        return model(family="asset", plugin_code="lab", field_key=key, secret_ciphertext=bytes(blob), key_id=key_id_of(subkey), updated_at=datetime(2026, 10, 15), **extra)
+        return model(family="asset", plugin_code="lab", field_key=key, secret_ciphertext=bytes(blob), key_id=key_id_of(subkey), updated_at=datetime(2026, 10, 15, tzinfo=UTC), **extra)
 
     async with AsyncSession(private_engine) as session:
         session.add_all(

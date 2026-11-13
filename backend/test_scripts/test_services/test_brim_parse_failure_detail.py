@@ -1,6 +1,6 @@
 """The 400 of a failed BRIM parse carries an object the import wizard translates, not an English sentence (lot W5-5, backlog C-70b).
 
-Module under test: the parse endpoint of ``api/v1/brokers.py`` (``parse_file``), with ``services/brim/brim_parse_pool.py``
+Module under test: the parse endpoint of ``api/v1/brokers/`` (``parse_file``), with ``services/brim/brim_parse_pool.py``
 (``parse_file_offloaded``) and the guard of ``services/brim/brim_provider.py`` (``parse_file``) behind it. The contract:
 
 1. **A plugin raised ``BRIMParseError(message, details={"code": …, "context": …})``**: HTTP 400, ``detail`` is
@@ -35,9 +35,9 @@ from typing import Any, ClassVar, Optional
 import pytest
 from fastapi import HTTPException
 
-from backend.app.api.v1 import brokers as brokers_api
+from backend.app.api.v1.brokers import parse as brokers_api
 from backend.app.schemas.brim import BRIMParseOutput, BRIMParseRequest, BRIMRefusal
-from backend.app.services.brim import brim_parse_pool, brim_provider
+from backend.app.services.brim import brim_parse_pool, storage
 from backend.app.services.brim.brim_provider import BRIMParseError
 from backend.test_scripts.test_services import _brim_settings_lab as brim_lab
 from backend.test_scripts.test_utils import print_section, print_success
@@ -128,8 +128,8 @@ def uploaded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     """A file uploaded under ``tmp_path`` (the reports directory is redirected) as ``generic_simple.csv``: its id."""
     reports = tmp_path / "broker_reports"
     reports.mkdir()
-    monkeypatch.setattr(brim_provider, "get_broker_reports_dir", lambda: reports)
-    return brim_provider.save_uploaded_file(b"date,amount\n2026-01-01,10\n", UPLOADED_NAME, user_id=1, broker_id=BROKER_ID).file_id
+    monkeypatch.setattr(storage, "get_broker_reports_dir", lambda: reports)
+    return storage.save_uploaded_file(b"date,amount\n2026-01-01,10\n", UPLOADED_NAME, user_id=1, broker_id=BROKER_ID).file_id
 
 
 @pytest.fixture(autouse=True)
@@ -142,8 +142,8 @@ def access_put_aside(monkeypatch: pytest.MonkeyPatch) -> None:
     async def editor(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    monkeypatch.setattr(brokers_api, "_get_brim_file_with_access", access)
-    monkeypatch.setattr(brokers_api, "_require_broker_editor", editor)
+    monkeypatch.setattr(brokers_api, "get_brim_file_with_access", access)
+    monkeypatch.setattr(brokers_api, "require_broker_editor", editor)
     monkeypatch.setattr(brokers_api, "_refuse_report_set_member", lambda _code, _info: None)
 
 
@@ -156,7 +156,7 @@ async def _parse(file_id: str, plugin_code: str) -> HTTPException:
 
 def _stored(file_id: str) -> tuple:
     """``(status, error_message)`` the file keeps."""
-    info = brim_provider.get_file_info(file_id)
+    info = storage.get_file_info(file_id)
     assert info is not None, "premise: the file is still there"
     return str(getattr(info.status, "value", info.status)), info.error_message
 

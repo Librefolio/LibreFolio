@@ -52,7 +52,7 @@ setup_test_database()
 import backend.app.services.ai_export.components.technical_shared as technical_shared_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import LotAnalysisType
+from backend.app.schemas.portfolio.lots import LotAnalysisType
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
 from backend.app.services.ai_export.components.asset_fx_registry import (
     ASSET_FX_COMPONENTS,
@@ -86,8 +86,10 @@ from backend.app.services.ai_export.dependencies import (
     build_bucket_plan_for_scope,
 )
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService, _portfolio_l2_cache, _wac_cache
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
+from backend.app.services.portfolio.report import _portfolio_l2_cache
+from backend.app.services.portfolio.wac import _wac_cache
 from backend.app.utils.datetime_utils import utcnow
 
 CURRENCY = "EUR"  # Asset/FX scope target_currency throughout - both native currencies

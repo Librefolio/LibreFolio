@@ -4,7 +4,7 @@ Integration tests for PortfolioService.
 Uses a real AsyncSession against the test database.
 Tests WAC orchestration and history aggregation.
 
-Reference: backend/app/services/portfolio_service.py
+Reference: backend/app/services/portfolio/portfolio_service.py
 """
 
 import json
@@ -25,34 +25,32 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 import backend.app.services.financial_math.portfolio.models as portfolio_models_module
-import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRAccessBulkItem
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    DataQualityStatus,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
-    PortfolioReportQuery,
-    StalePriceAsset,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityStatus, IssueCode, IssueDomain, IssueSeverity, StalePriceAsset
+from backend.app.schemas.portfolio.report import PortfolioReportQuery
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.platform.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS
-from backend.app.services.portfolio_service import (
-    PortfolioService,
-    _portfolio_l2_cache,
-)
+from backend.app.services.portfolio import data_access as data_access_module
+from backend.app.services.portfolio import engine_facts
+from backend.app.services.portfolio import history as history_module
+from backend.app.services.portfolio import positions as positions_module
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import summary as summary_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
+from backend.app.services.portfolio.report import _portfolio_l2_cache
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
@@ -211,7 +209,7 @@ class TestPortfolioServiceGetHistory:
         result = await service.get_history(user_id=test_user.id)
 
         for point in result:
-            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: " f"nav={point.nav_value} != cash+market_value"
+            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: nav={point.nav_value} != cash+market_value"
 
     @pytest.mark.asyncio
     async def test_dividend_and_interest_move_nav_exactly_like_a_deposit(self, session, test_user, broker_with_access, test_asset):
@@ -1048,10 +1046,10 @@ class TestPortfolioFxCacheIdentity:
     whole TTL instead (see TestAccessFingerprintCacheBust above for that
     failure mode on the access side).
 
-    All rows here use currency pairs nowhere else in this codebase (EUR/ZAR,
-    EUR/THB, EUR/NOK) so "this identity doesn't already depend on unrelated
-    committed data" is true by construction, not by cleanup — same reasoning
-    as FX_CORE_BASE/FX_CORE_QUOTE in test_fx_core.py. Every row is created on
+    The scope's own pair (EUR/ZAR) and the out-of-scope one (EUR/NOK) appear nowhere else in this codebase, so "this
+    identity doesn't already depend on unrelated committed data" is true by construction, not by cleanup — same
+    reasoning as FX_CORE_BASE/FX_CORE_QUOTE in test_fx_core.py. EUR/THB is not one of them: the mock data seeds its
+    route, so the test that uses it reads what is stored before it writes. Every row is created on
     the test's own rolled-back `session`, so nothing here needs cleanup.
     """
 
@@ -1132,23 +1130,48 @@ class TestPortfolioFxCacheIdentity:
         assert id1 == id2
         assert id1 != "no_fx", "scope has a ZAR transaction against an EUR target — must be a real fingerprint, not the empty-deps sentinel"
 
-    @pytest.mark.asyncio
-    async def test_irrelevant_fx_pair_does_not_change_identity(self, session, test_user):
-        """A rate+route for a pair the scope never touches (EUR/THB) must not move
-        the EUR/ZAR-scoped identity — this is the bounded-query guarantee."""
-        broker = await self._scoped_broker(session, test_user, self.FX_SCOPE_CCY)
-        baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+    async def _store_irrelevant_pair(self, session, *, source: str, rate: Decimal, route_if_missing: bool) -> None:
+        """The EUR/THB rate of the day, and a route for it, written without assuming what the lane already holds.
 
-        session.add(FxRate(date=self.IDENTITY_DATE, base=self.FX_TARGET, quote=self.FX_IRRELEVANT_CCY, rate=Decimal("35.0"), source="TEST"))
+        The rate: the stored row of that day is updated, or one is added. The route: with ``route_if_missing``, one only
+        when the pair has none (the seeding of the mock data, priority 1); otherwise always one more, at the next free
+        priority.
+        """
+        stored_rate = (await session.execute(select(FxRate).where(FxRate.date == self.IDENTITY_DATE, FxRate.base == self.FX_TARGET, FxRate.quote == self.FX_IRRELEVANT_CCY))).scalar_one_or_none()
+        if stored_rate is None:
+            session.add(FxRate(date=self.IDENTITY_DATE, base=self.FX_TARGET, quote=self.FX_IRRELEVANT_CCY, rate=rate, source=source))
+        else:
+            stored_rate.rate = rate
+        top_priority = (await session.execute(select(func.max(FxConversionRoute.priority)).where(FxConversionRoute.base == self.FX_TARGET, FxConversionRoute.quote == self.FX_IRRELEVANT_CCY))).scalar_one_or_none()
+        if route_if_missing and top_priority is not None:
+            await session.flush()
+            return
         session.add(
             FxConversionRoute(
                 base=self.FX_TARGET,
                 quote=self.FX_IRRELEVANT_CCY,
-                priority=1,
-                chain_steps=json.dumps([{"from": self.FX_TARGET, "to": self.FX_IRRELEVANT_CCY, "provider": "ECB"}]),
+                priority=(top_priority or 0) + 1,
+                chain_steps=json.dumps([{"from": self.FX_TARGET, "to": self.FX_IRRELEVANT_CCY, "provider": source}]),
             )
         )
         await session.flush()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("pair_already_seeded", [False, True], ids=["empty-lane", "lane-that-seeds-the-pair"])
+    async def test_irrelevant_fx_pair_does_not_change_identity(self, session, test_user, pair_already_seeded):
+        """A rate+route for a pair the scope never touches (EUR/THB) must not move
+        the EUR/ZAR-scoped identity — this is the bounded-query guarantee.
+
+        The mock data seeds an EUR/THB route (priority 1), so on a populated lane the pair is not new: the test reads
+        what is there and writes the next free priority and the day's rate, never a row that is already stored.
+        """
+        broker = await self._scoped_broker(session, test_user, self.FX_SCOPE_CCY)
+        if pair_already_seeded:
+            # As the mock data does, but only what is missing: on a populated lane the pair is already stored.
+            await self._store_irrelevant_pair(session, source="MOCKFX", rate=Decimal("34.0"), route_if_missing=True)
+        baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+
+        await self._store_irrelevant_pair(session, source="TEST", rate=Decimal("35.0"), route_if_missing=False)
 
         after = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
         assert after == baseline, "an unrelated EUR/THB rate+route perturbed the EUR/ZAR-scoped identity"
@@ -3300,11 +3323,8 @@ class TestPortfolioServiceGetReport:
             def today(cls):
                 return cls.current
 
-        monkeypatch.setattr(
-            portfolio_service_module,
-            "date_type",
-            MutableToday,
-        )
+        for service_module in (data_access_module, engine_facts, history_module, positions_module, report_module, summary_module, wac_module):
+            monkeypatch.setattr(service_module, "date_type", MutableToday)
         monkeypatch.setattr(
             portfolio_engine_module,
             "date_type",

@@ -41,19 +41,14 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    PortfolioHolding,
-    YieldOnCostProvenance,
-    YieldOnCostResult,
-    YieldOnCostStatus,
-    YieldOnCostUnavailableReason,
-)
+from backend.app.schemas.portfolio.summary import PortfolioHolding
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus, YieldOnCostUnavailableReason
 from backend.app.services.financial_math.yield_on_cost import (
     YieldOnCostPositionInput,
     calculate_yield_on_cost_for_positions,
     compute_yield_on_cost_dependency_identity,
 )
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 AS_OF = date(2025, 12, 31)
 WINDOW_START = AS_OF - timedelta(days=364)
@@ -2511,3 +2506,19 @@ async def test_guard_dashboard_never_yields_over_the_cost_a_costless_arrival_lea
         "wac_per_unit": None,
         "yield_on_cost": {"status": YieldOnCostStatus.UNAVAILABLE, "value": None, "reason": YieldOnCostUnavailableReason.MISSING_WAC},
     }
+
+
+def test_fx_provenance_marks_a_rate_row_older_than_the_stale_threshold():
+    """CP-11a: an income converted with a row 8 days before the payment is ``stale`` (threshold 7), one 7 days before is not; the days back are the same."""
+    from collections import defaultdict
+
+    from backend.app.services.financial_math.yield_on_cost import _append_fx_provenance, _ConversionSpec
+
+    key = (1, 1)
+    spec = _ConversionSpec(position_key=key, requested_date=date(2026, 10, 28), from_currency="USD", transaction_id=7)
+    by_key: dict = defaultdict(list)
+    seen: dict = defaultdict(set)
+    for rate_date in (date(2026, 10, 20), date(2026, 10, 21)):
+        _append_fx_provenance(by_key, seen, spec=spec, target_currency="EUR", rate_date=rate_date)
+
+    assert [(entry.days_back, entry.stale) for entry in by_key[key]] == [(8, True), (7, False)]

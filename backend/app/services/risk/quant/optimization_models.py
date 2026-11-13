@@ -8,11 +8,7 @@ from typing import List
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
-from backend.app.schemas.risk import (
-    RiskCovarianceEstimator,
-    RiskOptimizationSolver,
-    RiskOptimizationStrategy,
-)
+from backend.app.schemas.risk.vocabulary import RiskCovarianceEstimator, RiskOptimizationSolver, RiskOptimizationStrategy
 
 #: The most assets one optimization carries. The plugin refuses a bigger selection as a RESOURCE_LIMIT before building the request.
 MAX_OPTIMIZATION_ASSETS = 100

@@ -12,33 +12,15 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveInt, fie
 
 from backend.app.db.models import AssetType
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.risk import (
-    RiskCompositionPolicy,
-    RiskErrorCode,
-    RiskExcludedAsset,
-    RiskHistoricalReplayAudit,
-    RiskHistoricalReplayExcludedAsset,
-    RiskHistoricalReplayExclusionReason,
-    RiskHistoricalReplayExclusionTreatment,
-    RiskHistoricalReplayProxyAsset,
-    RiskMode,
-    RiskOutputKind,
-    RiskReturnBasis,
-    RiskScopeKind,
-    RiskStressApplicationRule,
-    RiskStressBucketAudit,
-    RiskStressConfiguredBucketImpact,
-    RiskStressImpact,
-    RiskStressMethod,
-    RiskStressOutput,
-    RiskWarning,
-)
-from backend.app.schemas.risk_scenarios import (
+from backend.app.schemas.risk.outputs import RiskStressBucketAudit, RiskStressConfiguredBucketImpact, RiskStressImpact, RiskStressOutput
+from backend.app.schemas.risk.results import RiskExcludedAsset, RiskHistoricalReplayAudit, RiskHistoricalReplayExcludedAsset, RiskHistoricalReplayProxyAsset, RiskWarning
+from backend.app.schemas.risk.scenarios import (
     RiskScenarioDimension,
     RiskScenarioMissingHistoryPolicy,
 )
+from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskHistoricalReplayExclusionReason, RiskHistoricalReplayExclusionTreatment, RiskMode, RiskOutputKind, RiskReturnBasis, RiskScopeKind, RiskStressApplicationRule, RiskStressMethod
 from backend.app.services.platform.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE, STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.provider_registry import register_plugin
+from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,
@@ -377,7 +359,7 @@ class StressAnalytic(RiskAnalytic):
                         code="hypothetical_metadata_other_fallback",
                         message_i18n_key="risk.warnings.hypothetical_metadata_other_fallback",
                         message_params={"dimension": params.dimension.value},
-                        message=("Sector or geography metadata was unavailable; " "the asset was treated as Other at 100%."),
+                        message=("Sector or geography metadata was unavailable; the asset was treated as Other at 100%."),
                         details={
                             "asset_id": asset_id,
                             "dimension": params.dimension.value,

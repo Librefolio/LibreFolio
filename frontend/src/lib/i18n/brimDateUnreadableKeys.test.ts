@@ -6,7 +6,7 @@
  * `date_unreadable` (context `{row, value, order}`, `order` one of the six values of the `date_order` setting) and, past the first 20 rows, ONE
  * `date_unreadable_more` (context `{n}`). The wording is looked up by `resolveBrimNoticeMessage` under `importWizard.brimNotice.<code>`; a missing
  * key silently falls back to the plugin's English message, and the catalogue build fills a missing it, fr or es entry from English — so a forgotten
- * key would never show. This file reads the SOURCES, `lib/i18n/importWizard/<lang>.json`, directly, never the generated catalogue.
+ * key would never show. This file reads the SOURCES, `lib/features/transactions/import/i18n/<lang>.json`, directly, never the generated catalogue.
  *
  * Contract (structure and behaviour, never the words, which are the translators').
  *   - both keys exist, non-empty, in the four sources, nested `importWizard` → `brimNotice` → code like the other notices; it, fr and es differ from
@@ -35,9 +35,9 @@ const PREFIX = 'importWizard.brimNotice.';
 const NEW_KEYS = ['date_unreadable', 'date_unreadable_more'] as const;
 const ORDERS = ['day_first', 'month_first', 'day_first_short', 'month_first_short', 'year_first_short', 'year_first'] as const;
 
-/** `lib/i18n/importWizard/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
+/** `lib/features/transactions/import/i18n/<lang>.json`, read from disk, never through the generated catalogue (which fills gaps from English). */
 function importWizardSource(lang: Lang): unknown {
-    return JSON.parse(readFileSync(new URL(`./importWizard/${lang}.json`, import.meta.url), 'utf8'));
+    return JSON.parse(readFileSync(new URL(`../features/transactions/import/i18n/${lang}.json`, import.meta.url), 'utf8'));
 }
 
 /** The value at a dotted key of a nested source; `undefined` when any step is missing or not an object. */

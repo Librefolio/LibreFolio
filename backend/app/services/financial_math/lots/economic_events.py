@@ -9,13 +9,7 @@ from decimal import Decimal
 from typing import Sequence
 
 from backend.app.db.models import Transaction, TransactionType
-from backend.app.schemas.portfolio import (
-    EconomicAllocationGroupSchema,
-    EconomicLotAllocationSchema,
-    LotIncomeEventKind,
-    LotIncomeEventSchema,
-    TargetOperationAllocationSchema,
-)
+from backend.app.schemas.portfolio.lots import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, LotIncomeEventKind, LotIncomeEventSchema, TargetOperationAllocationSchema
 from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoEngineResult, FifoInputTransaction
 from backend.app.services.financial_math.lots.conversions import FxRateResolver
 

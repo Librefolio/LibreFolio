@@ -19,7 +19,7 @@ Each family keeps its registry in its own runtime package:
 - `RiskAnalyticRegistry` in `backend/app/services/risk/registry.py`
 - `ToolPluginRegistry` in `backend/app/services/tools/registry.py`
 
-`backend/app/services/provider_registry.py` keeps what they share: the base classes `AbstractPluginRegistry` and `AbstractProviderRegistry`, the folder-per-plugin discovery (`PLUGIN_MODULE_NAME`), the registry errors, and both decorators.
+`backend/app/services/platform/provider_registry.py` keeps what they share: the base classes `AbstractPluginRegistry` and `AbstractProviderRegistry`, the folder-per-plugin discovery (`PLUGIN_MODULE_NAME`), the registry errors, and both decorators.
 
 ### 🗺️ High-Level Flow
 
@@ -74,7 +74,7 @@ backend/app/services/<family>/
 - **`plugin.py`** holds the plugin class, its registration decorator and whatever else the plugin needs.
 - **`__init__.py`** holds the plugin's docstring and re-exports nothing, e.g. `"""FX provider ``ecb``: the code is in ``plugin.py``, which the registry loads; this package re-exports nothing."""`.
 - **Helpers.** A helper private to one plugin sits beside its `plugin.py` as `_*.py`. A helper shared by several plugins stays at the family root, as `_*.py` too: `brim_providers/_brim_io.py`, `_brim_output.py` and `_scalable.py`. A contract lives in its family's runtime package, not beside the plugins: the signal contract is `services/signals/base.py`, so a family root keeps only `__init__.py` and its `_*.py` helpers.
-- **Data stays with the family**: the icons in the family's `static/`, served under `/api/v1/uploads/plugin/<brim|fx|asset>/…` by `serve_plugin_static` (`backend/app/api/v1/uploads.py`), and the BRIM sample exports in `brim_providers/sample_reports/`.
+- **Data stays with the family for fx and asset** (the icons in the family's `static/`, served under `/api/v1/uploads/plugin/<fx|asset>/…` by `serve_plugin_static`, `backend/app/api/v1/uploads.py`). **A BRIM plugin keeps its own**: icons in `brim_providers/<plugin>/static/` (served as `/api/v1/uploads/plugin/brim/<plugin>/<file>`) and sample exports in `brim_providers/<plugin>/sample_reports/`; the family root keeps only the README and the `malformed/` fixtures.
 - **Translations** live in the plugin's `i18n/` fragment: see [A Plugin's Translations](#plugin-translations).
 
 ### 📥 Importing and Patching a Plugin {: #plugin-imports }

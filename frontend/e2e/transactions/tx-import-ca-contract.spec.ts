@@ -51,18 +51,18 @@ import {expect, test, type Page} from '../fixtures/playwright';
 import {randomUUID} from 'crypto';
 import {readFileSync} from 'fs';
 import {resolve} from 'path';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {navigateTo} from '../fixtures/auth-helpers';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears, optionsClosed} from '../fixtures/probe';
 import {continueToReview, continueToStep, parseSelectedSet, selectReportSet, type ParseResponse} from '../fixtures/import-wizard';
-import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
+import {samplePath} from '../fixtures/brimSamples';
 
 test.setTimeout(120_000);
 
-const SAMPLES = resolve(process.cwd(), '../backend/app/services/brim_providers/sample_reports');
-const ACCOUNT_FIXTURE = resolve(SAMPLES, 'credit_agricole-conti-contract.csv');
-const SECURITIES_FIXTURE = resolve(SAMPLES, 'credit_agricole-securities-contract.csv');
+const ACCOUNT_FIXTURE = samplePath('credit_agricole-conti-contract.csv');
+const SECURITIES_FIXTURE = samplePath('credit_agricole-securities-contract.csv');
 const CA = 'broker_credit_agricole';
 const API = `http://localhost:${process.env.TEST_PORT || '6041'}/api/v1`;
 
@@ -189,20 +189,8 @@ async function goToTransactions(page: Page) {
 }
 
 async function openImportWizard(page: Page) {
-    const firstRow = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first();
-    await firstRow.hover();
-    const kebab = firstRow.getByTestId(/^row-actions-/);
-    await expect(kebab).toBeVisible({timeout: 3_000});
-    await kebab.click();
-    await page.getByTestId('context-menu-action-edit').click();
-    await page.getByTestId('tx-bulk-modal-root').waitFor({state: 'visible', timeout: 6_000});
-
-    const formClose = page.getByTestId('tx-form-close');
-    if (await formClose.isVisible({timeout: 1_500}).catch(() => false)) {
-        await formClose.click();
-    }
-
-    await page.getByTestId('tx-bulk-import').click();
+    // The account is the test's own and holds no transaction to edit: the import button opens the wizard in a fresh bulk editor.
+    await page.getByTestId('tx-import-button').click();
     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 5_000});
 }
 
@@ -231,15 +219,24 @@ test.describe('Import Wizard — plugin contract', () => {
     /** Every broker the running test created — the one below, CAC-012's late one: afterEach deletes them and empties the list. */
     const ownedBrokers: OwnedBroker[] = [];
 
-    test.beforeEach(async ({page}) => {
-        await login(page, TEST_USER);
+    /** The account the running test signs in with: its own, so the brokers and files below are seen by no other spec. */
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
+        account = await registerDisposableUser(request, 'cac');
+        await prepareOnboardingAccount(page, account, []);
         // Broker and file first: the wizard reads the broker list when it opens.
         fixture = await createBrokerWithFixture(page, ownedBrokers, {label: 'CA Contract', filePrefix: 'ca-contract', openedAt: '2020-01-01'});
         await goToTransactions(page);
     });
 
-    test.afterEach(async ({page}) => {
-        await deleteOwnedBrokers(page, ownedBrokers);
+    test.afterEach(async ({page, request}) => {
+        try {
+            await deleteOwnedBrokers(page, ownedBrokers);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
     });
 
     // -----------------------------------------------------------------------
@@ -264,11 +261,10 @@ test.describe('Import Wizard — plugin contract', () => {
         // Evidence is a table plus the sentence explaining what does not add up. The
         // sentence is the part a plugin cannot leave out — see the backend contract test.
         const toggle = page.getByTestId('brim-evidence-toggle').first();
-        if (await toggle.isVisible({timeout: 2_000}).catch(() => false)) {
-            await toggle.click();
-            await expect(page.getByTestId('brim-evidence').first()).toBeVisible({timeout: 4_000});
-            await expect(page.getByTestId('brim-evidence-comment').first()).toBeVisible();
-        }
+        await expect(toggle, 'a warning that states a figure carries its evidence').toBeVisible({timeout: 5_000});
+        await toggle.click();
+        await expect(page.getByTestId('brim-evidence').first()).toBeVisible({timeout: 5_000});
+        await expect(page.getByTestId('brim-evidence-comment').first()).toBeVisible();
     });
 
     // -----------------------------------------------------------------------
@@ -369,12 +365,7 @@ test.describe('Import Wizard — plugin contract', () => {
         for (let i = 0; i < (await rows.count()); i++) {
             const row = rows.nth(i);
             await row.getByTestId('fix-step-row-toggle').click();
-            if (
-                await row
-                    .getByTestId('fix-step-split')
-                    .isVisible({timeout: 800})
-                    .catch(() => false)
-            ) {
+            if (await appears(row.getByTestId('fix-step-split'), 2_000)) {
                 splitRow = row;
                 break;
             }
@@ -415,12 +406,7 @@ test.describe('Import Wizard — plugin contract', () => {
         for (let i = 0; i < (await rows.count()); i++) {
             const row = rows.nth(i);
             await row.getByTestId('fix-step-row-toggle').click();
-            if (
-                await row
-                    .getByTestId('fix-step-split')
-                    .isVisible({timeout: 800})
-                    .catch(() => false)
-            ) {
+            if (await appears(row.getByTestId('fix-step-split'), 2_000)) {
                 splitRow = row;
                 break;
             }
@@ -510,7 +496,7 @@ test.describe('Import Wizard — plugin contract', () => {
         // Open the creation form for an unresolved instrument: the advisory rides on the
         // extracted asset, so it must be on screen exactly where the decision is made.
         const resolveSection = step4.getByTestId('import-wizard-resolve-section');
-        if (!(await resolveSection.isVisible({timeout: 3_000}).catch(() => false))) {
+        if (!(await appears(resolveSection, 3_000))) {
             await step4.getByTestId('import-wizard-resolve-toggle').click();
         }
         await expect(resolveSection, 'the section of the instruments to resolve is open').toBeVisible({timeout: 5_000});
@@ -573,14 +559,15 @@ test.describe('Import Wizard — plugin contract', () => {
         // The fix is offered where the problem is stated, and the verdict is recomputed
         // rather than assumed: the user must see the rows come back.
         const autofix = page.locator('[data-testid^="broker-opening-autofix"]').first();
-        if (await autofix.isVisible({timeout: 3_000}).catch(() => false)) {
+        {
+            await expect(autofix, 'the opening issue offers its fix').toBeVisible({timeout: 5_000});
             await autofix.click();
             // The auto-fix re-checks by itself once the PATCH lands, so its own busy
             // flag is the barrier: reading the toolbar before it clears catches the
             // re-check button mid-life and Playwright loses it to the re-render.
             await waitForSettled(step4);
             const recheck = page.getByTestId('import-wizard-recheck-openings');
-            if (await recheck.isVisible({timeout: 2_000}).catch(() => false)) {
+            if (await appears(recheck, 2_000)) {
                 await recheck.click();
                 await waitForSettled(step4);
             }

@@ -1,5 +1,5 @@
 /**
- * Gate: a chart's saved signals are drawn through one renderer, `lib/charts/chartSignalRendering.ts` (lots Y-39a, Y-42).
+ * Gate: a chart's saved signals are drawn through one renderer, `lib/features/signals/chartSignalRendering.ts` (lots Y-39a, Y-42).
  *
  * ## What this protects
  *
@@ -10,15 +10,15 @@
  * comparison «Asset #id» where the card named it after its target, drew a comparison with the chart's own asset where
  * the card skipped it, and turned an FX pair by its card where the card let the signal's own `_inverted` turn it. Each
  * copy is one more place the next rule has to reach. Y-39a moved the loop of the lists and the preview into
- * `lib/charts/chartSignalRendering.ts`, and Y-42 moved the two detail pages after them, handing the module their data
- * through `detailPageSignalSources(…)` (`lib/charts/chartPageSignals.ts`); this gate keeps the loop there: another copy
+ * `lib/features/signals/chartSignalRendering.ts`, and Y-42 moved the two detail pages after them, handing the module their data
+ * through `detailPageSignalSources(…)` (`lib/features/signals/chartPageSignals.ts`); this gate keeps the loop there: another copy
  * is red the day it is written.
  *
  * ## The rule, as this file checks it
  *
  *   - A call of `signalFromConfig(` — by its name, or through a namespace (`signals.signalFromConfig(`) — appears only in
- *     `lib/charts/chartSignalRendering.ts` and in the files of KNOWN_COPIES. Its declaration in
- *     `lib/charts/signals/registry.ts` is no call. `signalFromConfig` imported or re-exported under another name
+ *     `lib/features/signals/chartSignalRendering.ts` and in the files of KNOWN_COPIES. Its declaration in
+ *     `lib/features/signals/registry.ts` is no call. `signalFromConfig` imported or re-exported under another name
  *     (`signalFromConfig as rebuild`) counts as a call: under another name, its calls are out of the gate's sight.
  *   - KNOWN_COPIES only shrinks, and Y-42 emptied it: it named the two detail pages, which adopted the module in that lot.
  *     The list stays empty — a new copy of the loop does not join it, it renders through the module. The machinery stays:
@@ -60,16 +60,16 @@ import {fileURLToPath} from 'node:url';
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The one renderer of saved signals (Y-39a). */
-const MODULE = 'src/lib/charts/chartSignalRendering.ts';
+const MODULE = 'src/lib/features/signals/chartSignalRendering.ts';
 
 /** Where `signalFromConfig` is declared: its declaration is no call, and the control that the scanner reads its name. */
-const REGISTRY = 'src/lib/charts/signals/registry.ts';
+const REGISTRY = 'src/lib/features/signals/registry.ts';
 
 /** The two detail pages: the last copies of the loop, adopted in Y-42. The walk must reach them, and the checks bite on them. */
 const DETAIL_PAGES = ['src/routes/(app)/assets/[id]/+page.svelte', 'src/routes/(app)/fx/[pair]/+page.svelte'] as const;
 
 /** What every offender is told. */
-const RULE = 'render saved signals through lib/charts/chartSignalRendering.ts';
+const RULE = 'render saved signals through lib/features/signals/chartSignalRendering.ts';
 
 interface KnownCopy {
     file: string;
@@ -79,7 +79,7 @@ interface KnownCopy {
 /**
  * The copies of the loop that may remain for now, each with its reason. The list only shrinks: an entry whose file no
  * longer calls `signalFromConfig(` fails the gate until it is removed. Y-42 moved the two detail pages onto the module
- * and emptied it, so it stays empty: a new copy renders through `lib/charts/chartSignalRendering.ts`.
+ * and emptied it, so it stays empty: a new copy renders through `lib/features/signals/chartSignalRendering.ts`.
  */
 const KNOWN_COPIES: readonly KnownCopy[] = [];
 
@@ -266,7 +266,7 @@ const REGISTRY_TEXT = [
 const MODULE_TEXT = ["import {signalFromConfig} from './signals/registry';", '', 'export function renderLocalSignal(config, baseData, viewMode, sources) {', '    const instance = signalFromConfig(config);', '    return instance ? instance.renderMulti(baseData, viewMode) : [];', '}'].join('\n');
 
 /** A component that draws saved signals itself, as the detail pages do today. */
-const COPY_TEXT = ['<script lang="ts">', "    import {signalFromConfig} from '$lib/charts/signals';", '    let overlaySignals = $derived(configs.flatMap((cfg) => signalFromConfig(cfg)?.renderMulti(data, viewMode) ?? []));', '</script>', '', '<PriceChartFull {data} {overlaySignals} />'].join('\n');
+const COPY_TEXT = ['<script lang="ts">', "    import {signalFromConfig} from '$lib/features/signals';", '    let overlaySignals = $derived(configs.flatMap((cfg) => signalFromConfig(cfg)?.renderMulti(data, viewMode) ?? []));', '</script>', '', '<PriceChartFull {data} {overlaySignals} />'].join('\n');
 
 /** A tree without one of its files. */
 const without = (tree: Tree, path: string): Tree => Object.fromEntries(Object.entries(tree).filter(([file]) => file !== path));
@@ -292,10 +292,10 @@ const CLEAN: Tree = {
     [MODULE]: MODULE_TEXT,
     [SYNTHETIC_COPIES[0].file]: COPY_TEXT,
     [SYNTHETIC_COPIES[1].file]: COPY_TEXT,
-    [PAGE]: ['<script lang="ts">', "    import {renderLocalSignals} from '$lib/charts/chartSignalRendering';", '</script>', '', '<p>{renderLocalSignals.name}</p>'].join('\n'),
+    [PAGE]: ['<script lang="ts">', "    import {renderLocalSignals} from '$lib/features/signals/chartSignalRendering';", '</script>', '', '<p>{renderLocalSignals.name}</p>'].join('\n'),
 };
 
-describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts only (Y-39a gate)', () => {
+describe('Saved signals are drawn through lib/features/signals/chartSignalRendering.ts only (Y-39a gate)', () => {
     describe('the scanner, on synthetic trees', () => {
         it('a tree that keeps the rule passes every check', () => {
             const result = audit(CLEAN);
@@ -306,7 +306,7 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
         it('finds a call wherever the code puts it — in a script, in the markup, through a namespace, across a line break — and names the file and the rule', () => {
             const page = [
                 '<script lang="ts">',
-                "    import * as signals from '$lib/charts/signals';",
+                "    import * as signals from '$lib/features/signals';",
                 '    const one = signalFromConfig(cfg);',
                 '    const two = signals.signalFromConfig(cfg);',
                 '    const three = signalFromConfig',
@@ -323,9 +323,9 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
         });
 
         it('reads no call in a comment, an import, a longer name or the declaration', () => {
-            const helper = 'src/lib/charts/somewhereHelper.ts';
+            const helper = 'src/lib/features/signals/somewhereHelper.ts';
             const text = [
-                "import {signalFromConfig, type SignalConfig} from '$lib/charts/signals';",
+                "import {signalFromConfig, type SignalConfig} from '$lib/features/signals';",
                 '// const old = signalFromConfig(cfg);',
                 '/* signalFromConfig(cfg) */',
                 '/**',
@@ -344,11 +344,11 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
         });
 
         it('counts signalFromConfig under another name as a call', () => {
-            const text = ["import {signalFromConfig as rebuild} from '$lib/charts/signals';", 'const one = rebuild(cfg);'].join('\n');
+            const text = ["import {signalFromConfig as rebuild} from '$lib/features/signals';", 'const one = rebuild(cfg);'].join('\n');
 
-            const found = offenders(audit({...CLEAN, 'src/lib/charts/somewhereHelper.ts': text}), SYNTHETIC_COPIES);
+            const found = offenders(audit({...CLEAN, 'src/lib/features/signals/somewhereHelper.ts': text}), SYNTHETIC_COPIES);
 
-            expect(found.map(placeIn)).toEqual(['src/lib/charts/somewhereHelper.ts:1']);
+            expect(found.map(placeIn)).toEqual(['src/lib/features/signals/somewhereHelper.ts:1']);
             expect(found[0]).toContain('under another name');
         });
 
@@ -360,12 +360,12 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
         });
 
         it('a known copy that no longer calls signalFromConfig( is stale — and so is one whose file is gone', () => {
-            const adopted = audit({...CLEAN, [SYNTHETIC_COPIES[0].file]: ['<script lang="ts">', "    import {renderLocalSignals} from '$lib/charts/chartSignalRendering';", '</script>'].join('\n')});
+            const adopted = audit({...CLEAN, [SYNTHETIC_COPIES[0].file]: ['<script lang="ts">', "    import {renderLocalSignals} from '$lib/features/signals/chartSignalRendering';", '</script>'].join('\n')});
 
             expect(staleCopies(adopted, SYNTHETIC_COPIES).map(placeIn)).toEqual([SYNTHETIC_COPIES[0].file]);
             expect(staleCopies(audit(without(CLEAN, SYNTHETIC_COPIES[1].file)), SYNTHETIC_COPIES).map(placeIn)).toEqual([SYNTHETIC_COPIES[1].file]);
             // An alias alone keeps no copy alive: it is no call.
-            const aliased = audit({...CLEAN, [SYNTHETIC_COPIES[0].file]: "import {signalFromConfig as rebuild} from '$lib/charts/signals';"});
+            const aliased = audit({...CLEAN, [SYNTHETIC_COPIES[0].file]: "import {signalFromConfig as rebuild} from '$lib/features/signals';"});
             expect(staleCopies(aliased, SYNTHETIC_COPIES).map(placeIn)).toEqual([SYNTHETIC_COPIES[0].file]);
         });
 
@@ -386,11 +386,11 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
         it('reads no test, harness or mock', () => {
             expect(isScanned(MODULE)).toBe(true);
             expect(isScanned('src/routes/(app)/assets/+page.svelte')).toBe(true);
-            expect(isScanned('src/lib/charts/__tests__/chartSignalRendering.test.ts')).toBe(false);
+            expect(isScanned('src/lib/features/signals/__tests__/chartSignalRendering.test.ts')).toBe(false);
             expect(isScanned('src/signalRendering.gate.test.ts')).toBe(false);
             expect(isScanned('src/lib/components/charts/__tests__/Recorder.svelte')).toBe(false);
             expect(isScanned('src/__mocks__/$app/stores.ts')).toBe(false);
-            expect(offenders(audit({...CLEAN, 'src/lib/components/charts/ChartSettingsModal.test.ts': 'const instance = signalFromConfig(cfg);'}), SYNTHETIC_COPIES)).toEqual([]);
+            expect(offenders(audit({...CLEAN, 'src/lib/features/signals/components/ChartSettingsModal.test.ts': 'const instance = signalFromConfig(cfg);'}), SYNTHETIC_COPIES)).toEqual([]);
         });
 
         it('the synthetic known copies are explained and name each file once, as a real known copy must', () => {
@@ -413,7 +413,7 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
             expect(emptyScans(srcAudit()), 'the scan reads nothing the rule needs: fix the walk or the patterns — never relax this, the rule passes on an empty scan').toEqual([]);
         });
 
-        it('signalFromConfig( is called only in lib/charts/chartSignalRendering.ts and in the known copies', () => {
+        it('signalFromConfig( is called only in lib/features/signals/chartSignalRendering.ts and in the known copies', () => {
             const found = offenders(srcAudit());
 
             expect(found, ['', `Saved signals are drawn in one place: ${RULE} (Y-39a, Y-42). ${found.length} call(s) outside it:`, '', ...found, ''].join('\n  ')).toEqual([]);
@@ -423,7 +423,7 @@ describe('Saved signals are drawn through lib/charts/chartSignalRendering.ts onl
             expect(staleCopies(srcAudit())).toEqual([]);
         });
 
-        it('lib/charts/chartSignalRendering.ts exists and draws through signalFromConfig(', () => {
+        it('lib/features/signals/chartSignalRendering.ts exists and draws through signalFromConfig(', () => {
             expect(moduleProblems(srcAudit()), 'the one renderer of saved signals is missing, or rebuilds no signal through the registry: «no call outside the module» says nothing until it does').toEqual([]);
         });
 

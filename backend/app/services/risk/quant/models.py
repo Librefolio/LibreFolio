@@ -11,11 +11,7 @@ from typing import List
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveInt, model_validator
 
-from backend.app.schemas.risk import (
-    RiskSamplingStrategy,
-    RiskSimulationProcess,
-    RiskSimulationRegime,
-)
+from backend.app.schemas.risk.vocabulary import RiskSamplingStrategy, RiskSimulationProcess, RiskSimulationRegime
 from backend.app.services.financial_math.returns import calendar_days_to_observations
 
 MAX_SOBOL_DIMENSION = 21_201

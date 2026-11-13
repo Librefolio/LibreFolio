@@ -2,7 +2,7 @@
 CP-4a (workstream J, U4b): the period rebase and two return ratios move into ``returns.py``.
 
 Module under test: ``backend/app/services/financial_math/returns.py``. Three pure functions replace
-math that ``backend/app/services/portfolio_service.py`` writes in place today:
+math that ``backend/app/services/portfolio/portfolio_service.py`` writes in place today:
 
 * ``rebase_to_period(nav_snapshots, cash_flows, date_from) -> PeriodRebase``: the period rebase that
   ``get_summary`` (``:969-994``) and ``get_history`` (``:1244-1270``) each write for themselves;

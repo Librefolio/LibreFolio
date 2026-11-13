@@ -79,6 +79,7 @@ One row per account, oldest first: avatar, username with its badges, email, crea
 | **Deactivated** | The account cannot sign in and takes no place |
 | **Waiting for setup** | The [initial administrator](configuration_accounts.md#initial-admin), not active yet: nobody has used its setup link, nor set it up another way. In the place of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
 | **Waiting for verification** | An account that has not yet opened the verification link sent to its address, even after the link has expired. It cannot sign in and takes a place while the link is live. In the place of **Deactivated**: see [Accounts Waiting for Their Email](#waiting) |
+| **Email change pending** | The account asked for a new address from its [Profile](../user/settings/profile.md#email-change-verified) and waits for the link sent to it: the email shown in the row is still the old one. Added beside the other badges, whatever the account's state. Its link is in [Account Links](#account-links), where you can revoke it; you cannot confirm in the user's place |
 
 **Where the actions are:** click a row to open them, again to close them. Your own row has none: it says *This is your account. Manage it from:* with a link to **Profile**, where you change your details or [delete your account](../user/settings/profile.md).
 
@@ -246,7 +247,7 @@ When someone has forgotten their password, send them a link to choose a new one 
 
 ## 📋 Account Links {: #account-links }
 
-Every single-use link of the instance, and where it stands: invitations, password-reset links, email verifications, the setup link of the first administrator, the email change of a managed instance's owner. The link itself never shows here: it shows only once, when it is created.
+Every single-use link of the instance, and where it stands: invitations, password-reset links, email verifications, the setup link of the first administrator, the email change of a managed instance's owner, and the changes of address that users asked for from their Profile. The link itself never shows here: it shows only once, when it is created.
 
 **Where:** **Users**, the **Account links** section, under the accounts.
 
@@ -260,7 +261,7 @@ Every single-use link of the instance, and where it stands: invitations, passwor
 
 The open links are in the first table. The closed ones — used, expired or revoked — are in **Closed links**, folded: click it to open it. Each table sorts by a column (click its header), filters by a column (the funnel in its header), hides or shows columns (the eye) and pages through long lists.
 
-**Revoke**, in the menu (⋮) of an open link, withdraws it after a confirmation: the link stops working at once, and an invitation frees its place. Invitations, password-reset links and email verifications can be revoked here. The setup link of the waiting administrator is cancelled from its account ([Cancel Its Setup Link](#cancel-setup)); the owner's email change follows the address the host set, and is not revoked here.
+**Revoke**, in the menu (⋮) of an open link, withdraws it after a confirmation: the link stops working at once, and an invitation frees its place. Invitations, password-reset links, email verifications and the changes of address a user asked for from their Profile can be revoked here: revoking the last one cancels the request, and the account keeps its address. The setup link of the waiting administrator is cancelled from its account ([Cancel Its Setup Link](#cancel-setup)); the owner's email change follows the address the host set, and is not revoked here.
 
 ---
 

@@ -2,6 +2,7 @@ import type {Route} from '@playwright/test';
 import {expect, test, type Locator, type Page, type Request} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from './fixtures/onboarding-accounts';
 import {eventSeq, waitForEvent, waitForSettled} from './fixtures/app-events';
 import {findAcrossPages} from './fixtures/paging';
 import {optionsClosed} from './fixtures/probe';
@@ -9,6 +10,7 @@ import {uniqueSuffix} from './fixtures/unique';
 import {readFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from './fixtures/brimSamples';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -110,13 +112,13 @@ async function uploadBrimFile(page: Page, brokerId: number, filename: string, co
 
 const BRIM_UPLOAD_PATH = `${API}/brokers/import/upload`;
 /** The repository's synthetic Generic CSV sample — never a real broker export. */
-const SAMPLE_BRIM_REPORT = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+const SAMPLE_BRIM_REPORT = samplePath('generic_simple.csv');
 const SAMPLE_BRIM_REPORT_NAME = path.basename(SAMPLE_BRIM_REPORT);
 
 type BrimFileInfo = {file_id: string; filename: string; target_broker_id: number | null};
 
 /** A second synthetic Generic CSV sample, for uploads of two files in one action. */
-const SECOND_BRIM_REPORT = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_with_assets.csv');
+const SECOND_BRIM_REPORT = samplePath('generic_with_assets.csv');
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type UploadedInfo = BrimFileInfo & {batch_id?: string | null};
 
@@ -360,6 +362,29 @@ test.describe('Files Page', () => {
             await expect(page.getByTestId('files-table-static')).toBeVisible();
         });
 
+        test('Refresh keeps the table on screen: no spinner between the click and the new rows (N-1)', async ({page}) => {
+            ownedStaticFiles.push(await uploadStaticFile(page, `soft-reload-${uniqueSuffix()}.png`, TEST_PNG, 'image/png'));
+            await openFilesPage(page);
+            await page.getByTestId('files-tab-static').click();
+            await waitForSettled(page.getByTestId('files-page'));
+            await expect(page.getByTestId('files-table-static')).toBeVisible();
+
+            // Count every time the spinner enters the DOM from now on: a mutation record cannot be missed the way a poll can.
+            await page.evaluate(() => {
+                const w = window as unknown as {__spinnerSeen: number};
+                w.__spinnerSeen = 0;
+                new MutationObserver((records) => {
+                    for (const r of records) for (const n of r.addedNodes) if (n instanceof Element && (n.matches('[data-testid="files-loading"]') || n.querySelector('[data-testid="files-loading"]'))) w.__spinnerSeen++;
+                }).observe(document.body, {childList: true, subtree: true});
+            });
+
+            await page.getByTestId('files-refresh-button').click();
+            await waitForSettled(page.getByTestId('files-page'));
+
+            await expect(page.getByTestId('files-table-static')).toBeVisible();
+            expect(await page.evaluate(() => (window as unknown as {__spinnerSeen: number}).__spinnerSeen)).toBe(0);
+        });
+
         test('upload button is visible', async ({page}) => {
             await navigateTo(page, '/files');
             await page.getByTestId('files-tab-static').click();
@@ -449,7 +474,7 @@ test.describe('Files Page', () => {
             await expect(page.getByTestId('file-uploader')).toBeVisible();
 
             // Upload a test file from BRIM samples
-            const testFilePath = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
+            const testFilePath = samplePath('generic_simple.csv');
             await page.getByTestId('file-input').setInputFiles(testFilePath);
 
             // Selected: the drop zone lists the file by name.
@@ -510,7 +535,7 @@ test.describe('Files Page', () => {
             await expect(page.getByTestId('file-uploader')).toBeVisible();
 
             // Select a file
-            const testFilePath = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_dates.csv');
+            const testFilePath = samplePath('generic_dates.csv');
             await page.getByTestId('file-input').setInputFiles(testFilePath);
 
             // Verify file appears in selection: the drop zone lists it by name.
@@ -610,128 +635,7 @@ test.describe('Files Page', () => {
      * through the API, scoped to a broker this test creates — the mock seeds its own
      * `generic_simple.csv` on Interactive Brokers, so a file name alone proves nothing.
      */
-    test.describe('BRIM upload to an owned broker', () => {
-        let ownedBrokerId: number | undefined;
-
-        test.beforeEach(() => {
-            ownedBrokerId = undefined;
-        });
-
-        // afterEach, not `finally`: a cleanup throwing from `finally` would replace the
-        // assertion error it follows, and that assertion is the point of this block.
-        test.afterEach(async ({page}) => {
-            if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
-        });
-
-        test('uploads a BRIM report through the assign-brokers modal to its own broker', async ({page}) => {
-            test.setTimeout(60_000);
-            // Unique (`brokers.name` is uniquely indexed) and typed into the select's search below.
-            const brokerName = `Upload regression BRIM ${uniqueSuffix()}`;
-            const brokerId = await createBroker(page, brokerName);
-            ownedBrokerId = brokerId;
-
-            // Created before the page loads, so the page's broker list includes it.
-            await openBrimTab(page);
-
-            await page.getByTestId('upload-button').click();
-            const uploader = page.getByTestId('file-uploader');
-            await expect(uploader).toBeVisible({timeout: 5_000});
-            // Selecting the file is what opens the assign-brokers modal.
-            await uploader.getByTestId('file-input').setInputFiles(SAMPLE_BRIM_REPORT);
-
-            const modal = page.getByTestId('brim-assign-modal');
-            await expect(modal).toBeVisible({timeout: 5_000});
-            const assignAll = modal.getByTestId('brim-assign-all');
-            await assignAll.getByRole('combobox').click();
-            await assignAll.getByRole('textbox').fill(brokerName);
-            const option = assignAll.getByTestId(`search-select-option-${brokerId}`);
-            await expect(option, `owned broker ${brokerName} must be offered by the assign-all select`).toBeVisible({timeout: 5_000});
-            await option.click();
-            await optionsClosed(page);
-
-            const confirm = modal.getByTestId('brim-upload-confirm');
-            await expect(confirm).toBeEnabled();
-            // Armed before the click: a response is an edge, not a state.
-            const uploadResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === BRIM_UPLOAD_PATH, {timeout: 15_000});
-            await confirm.click();
-            const upload = await uploadResponse;
-            const body = await upload.text();
-            expect(upload.status(), `POST ${BRIM_UPLOAD_PATH} from the Files page: ${body}`).toBe(200);
-
-            const uploaded = JSON.parse(body) as BrimFileInfo;
-            expect(uploaded, 'the file goes to the broker chosen in the modal').toMatchObject({filename: SAMPLE_BRIM_REPORT_NAME, target_broker_id: brokerId});
-            // confirmBrimUpload closes the modal only after every file has been accepted.
-            await expect(modal).toBeHidden({timeout: 8_000});
-            const stored = (await brimFilesOn(page, brokerId)).filter((file) => file.filename === SAMPLE_BRIM_REPORT_NAME);
-            expect(
-                stored.map((file) => file.file_id),
-                `${SAMPLE_BRIM_REPORT_NAME} is stored exactly once on broker ${brokerId}`,
-            ).toEqual([uploaded.file_id]);
-        });
-
-        /**
-         * C1 — one confirmation is one report-set batch (design D-S22): every file of it
-         * carries the same client-generated `batch_id`, a UUID in the multipart form, so
-         * the server can group a report set by upload. Read back from this page's own
-         * upload responses.
-         */
-        test('C1 two files confirmed together from the Files page share one batch id', async ({page}) => {
-            test.setTimeout(60_000);
-            const brokerName = `Upload batch BRIM ${uniqueSuffix()}`;
-            const brokerId = await createBroker(page, brokerName);
-            ownedBrokerId = brokerId;
-
-            // Created before the page loads, so the page's broker list includes it.
-            await openBrimTab(page);
-
-            await page.getByTestId('upload-button').click();
-            const uploader = page.getByTestId('file-uploader');
-            await expect(uploader).toBeVisible({timeout: 5_000});
-            await uploader.getByTestId('file-input').setInputFiles([SAMPLE_BRIM_REPORT, SECOND_BRIM_REPORT]);
-
-            const modal = page.getByTestId('brim-assign-modal');
-            await expect(modal).toBeVisible({timeout: 5_000});
-            const assignAll = modal.getByTestId('brim-assign-all');
-            await assignAll.getByRole('combobox').click();
-            await assignAll.getByRole('textbox').fill(brokerName);
-            const option = assignAll.getByTestId(`search-select-option-${brokerId}`);
-            await expect(option, `owned broker ${brokerName} must be offered by the assign-all select`).toBeVisible({timeout: 5_000});
-            await option.click();
-            await optionsClosed(page);
-            const confirm = modal.getByTestId('brim-upload-confirm');
-            await expect(confirm).toBeEnabled();
-
-            const uploaded = await uploadsDuring(page, 2, async () => {
-                await confirm.click();
-                // confirmBrimUpload closes the modal only after every file has been accepted.
-                await expect(modal).toBeHidden({timeout: 15_000});
-            });
-
-            expect(
-                uploaded.map((file) => file.target_broker_id),
-                'both files go to the broker chosen in the modal',
-            ).toEqual([brokerId, brokerId]);
-            const batchIds = uploaded.map((file) => file.batch_id);
-            const batchId = expectUuid(batchIds[0], 'batch_id of this confirmation');
-            expect(batchIds, 'the files of one confirmation share one batch_id').toEqual([batchId, batchId]);
-        });
-    });
-
     test.describe('File Preview', () => {
-        /**
-         * The broker a test of this block created, deleted with its BRIM files after it. In afterEach for the reasons of
-         * `ownedStaticFiles`, and one more: a cleanup throwing from a `finally` would replace the red it follows.
-         */
-        let ownedBrokerId: number | undefined;
-
-        test.beforeEach(() => {
-            ownedBrokerId = undefined;
-        });
-
-        test.afterEach(async ({page}) => {
-            if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
-        });
-
         test('opens markdown preview from static list view', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-${Date.now()}.md`, '# Hello preview\n\nThis is a markdown preview smoke test.\n', 'text/markdown');
             ownedStaticFiles.push(fileId);
@@ -1057,7 +961,142 @@ test.describe('Files Page', () => {
             // Close empties the viewer — a round trip to its engine's worker — and the preview closes with it.
             await expect(page.getByTestId('file-preview-modal')).toBeHidden({timeout: 10_000});
         });
+    });
+});
 
+// BRIM files of a broker the test creates: an account of its own, so the broker and its files are seen by no
+// other spec. The static-file tests above read what the shared user sees and stay on it.
+test.describe('Files Page', () => {
+    /**
+     * The broker a test of this block created, deleted with its BRIM files after it. In afterEach for the reasons of
+     * `ownedStaticFiles`, and one more: a cleanup throwing from a `finally` would replace the red it follows.
+     */
+    let ownedBrokerId: number | undefined;
+    let account: DisposableUser | null = null;
+
+    test.beforeEach(async ({page, request}) => {
+        ownedBrokerId = undefined;
+        account = await registerDisposableUser(request, 'files');
+        await prepareOnboardingAccount(page, account, []);
+    });
+
+    test.afterEach(async ({page, request}) => {
+        try {
+            if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+        } finally {
+            if (account) await deleteDisposableUser(request, account);
+            account = null;
+        }
+    });
+
+    test.describe('BRIM upload to an owned broker', () => {
+        let ownedBrokerId: number | undefined;
+
+        test.beforeEach(() => {
+            ownedBrokerId = undefined;
+        });
+
+        // afterEach, not `finally`: a cleanup throwing from `finally` would replace the
+        // assertion error it follows, and that assertion is the point of this block.
+        test.afterEach(async ({page}) => {
+            if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+        });
+
+        test('uploads a BRIM report through the assign-brokers modal to its own broker', async ({page}) => {
+            test.setTimeout(60_000);
+            // Unique (`brokers.name` is uniquely indexed) and typed into the select's search below.
+            const brokerName = `Upload regression BRIM ${uniqueSuffix()}`;
+            const brokerId = await createBroker(page, brokerName);
+            ownedBrokerId = brokerId;
+
+            // Created before the page loads, so the page's broker list includes it.
+            await openBrimTab(page);
+
+            await page.getByTestId('upload-button').click();
+            const uploader = page.getByTestId('file-uploader');
+            await expect(uploader).toBeVisible({timeout: 5_000});
+            // Selecting the file is what opens the assign-brokers modal.
+            await uploader.getByTestId('file-input').setInputFiles(SAMPLE_BRIM_REPORT);
+
+            const modal = page.getByTestId('brim-assign-modal');
+            await expect(modal).toBeVisible({timeout: 5_000});
+            const assignAll = modal.getByTestId('brim-assign-all');
+            await assignAll.getByRole('combobox').click();
+            await assignAll.getByRole('textbox').fill(brokerName);
+            const option = assignAll.getByTestId(`search-select-option-${brokerId}`);
+            await expect(option, `owned broker ${brokerName} must be offered by the assign-all select`).toBeVisible({timeout: 5_000});
+            await option.click();
+            await optionsClosed(page);
+
+            const confirm = modal.getByTestId('brim-upload-confirm');
+            await expect(confirm).toBeEnabled();
+            // Armed before the click: a response is an edge, not a state.
+            const uploadResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === BRIM_UPLOAD_PATH, {timeout: 15_000});
+            await confirm.click();
+            const upload = await uploadResponse;
+            const body = await upload.text();
+            expect(upload.status(), `POST ${BRIM_UPLOAD_PATH} from the Files page: ${body}`).toBe(200);
+
+            const uploaded = JSON.parse(body) as BrimFileInfo;
+            expect(uploaded, 'the file goes to the broker chosen in the modal').toMatchObject({filename: SAMPLE_BRIM_REPORT_NAME, target_broker_id: brokerId});
+            // confirmBrimUpload closes the modal only after every file has been accepted.
+            await expect(modal).toBeHidden({timeout: 8_000});
+            const stored = (await brimFilesOn(page, brokerId)).filter((file) => file.filename === SAMPLE_BRIM_REPORT_NAME);
+            expect(
+                stored.map((file) => file.file_id),
+                `${SAMPLE_BRIM_REPORT_NAME} is stored exactly once on broker ${brokerId}`,
+            ).toEqual([uploaded.file_id]);
+        });
+
+        /**
+         * C1 — one confirmation is one report-set batch (design D-S22): every file of it
+         * carries the same client-generated `batch_id`, a UUID in the multipart form, so
+         * the server can group a report set by upload. Read back from this page's own
+         * upload responses.
+         */
+        test('C1 two files confirmed together from the Files page share one batch id', async ({page}) => {
+            test.setTimeout(60_000);
+            const brokerName = `Upload batch BRIM ${uniqueSuffix()}`;
+            const brokerId = await createBroker(page, brokerName);
+            ownedBrokerId = brokerId;
+
+            // Created before the page loads, so the page's broker list includes it.
+            await openBrimTab(page);
+
+            await page.getByTestId('upload-button').click();
+            const uploader = page.getByTestId('file-uploader');
+            await expect(uploader).toBeVisible({timeout: 5_000});
+            await uploader.getByTestId('file-input').setInputFiles([SAMPLE_BRIM_REPORT, SECOND_BRIM_REPORT]);
+
+            const modal = page.getByTestId('brim-assign-modal');
+            await expect(modal).toBeVisible({timeout: 5_000});
+            const assignAll = modal.getByTestId('brim-assign-all');
+            await assignAll.getByRole('combobox').click();
+            await assignAll.getByRole('textbox').fill(brokerName);
+            const option = assignAll.getByTestId(`search-select-option-${brokerId}`);
+            await expect(option, `owned broker ${brokerName} must be offered by the assign-all select`).toBeVisible({timeout: 5_000});
+            await option.click();
+            await optionsClosed(page);
+            const confirm = modal.getByTestId('brim-upload-confirm');
+            await expect(confirm).toBeEnabled();
+
+            const uploaded = await uploadsDuring(page, 2, async () => {
+                await confirm.click();
+                // confirmBrimUpload closes the modal only after every file has been accepted.
+                await expect(modal).toBeHidden({timeout: 15_000});
+            });
+
+            expect(
+                uploaded.map((file) => file.target_broker_id),
+                'both files go to the broker chosen in the modal',
+            ).toEqual([brokerId, brokerId]);
+            const batchIds = uploaded.map((file) => file.batch_id);
+            const batchId = expectUuid(batchIds[0], 'batch_id of this confirmation');
+            expect(batchIds, 'the files of one confirmation share one batch_id').toEqual([batchId, batchId]);
+        });
+    });
+
+    test.describe('File Preview', () => {
         test('opens table preview for BRIM files', async ({page}) => {
             const brokerId = await createBroker(page);
             ownedBrokerId = brokerId;

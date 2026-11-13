@@ -10,7 +10,7 @@ Reference: backend/app/services/brokers/broker_service.py
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -53,7 +53,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.brokers.broker_service import BrokerService
-from backend.app.services.portfolio_service import compute_wac_iterative
+from backend.app.services.portfolio.wac import compute_wac_iterative
 from backend.app.services.transactions import auto_cost, transaction_service
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
@@ -547,12 +547,12 @@ async def _add(session: AsyncSession, *rows) -> None:
 
 
 # ============================================================================
-# 4.4c GET_CASH_BALANCES — AS OF A DAY (W-B5: B15, D-J16)
+# 4.4c CASH AS OF A DAY (get_balances_at_end_of) (W-B5: B15, D-J16)
 # ============================================================================
 #
-# ``TransactionService.get_cash_balances(broker_id, as_of)`` is a picture as of one day: a
+# ``TransactionService.get_balances_at_end_of(broker_id, as_of)`` (cash first) is a picture as of one day: a
 # transaction dated after ``as_of`` counts in none of the balances, one dated on that day counts;
-# without ``as_of`` every row counts. A currency whose only movement comes after that day is not
+# ``date.max`` as ``as_of`` counts every row. A currency whose only movement comes after that day is not
 # listed. The rows straddle the server's today, so every case anchors on ``date.today()``, read
 # once at seeding. Rows are written straight into the session and never committed, as in 4.4b.
 
@@ -567,7 +567,7 @@ AS_OF_DAYS = (
 )
 AS_OF_USD_DAY = 1  # +250 USD: the broker's only USD movement
 
-# The cash get_cash_balances shows when it counts the rows up to the offset given, inclusive.
+# The cash get_balances_at_end_of shows when it counts the rows up to the offset given, inclusive.
 AS_OF_VIEWS = {
     -1: {"EUR": "4000"},  # 5000 − 1000
     0: {"EUR": "3000"},  # + 1000 − 2000
@@ -612,22 +612,22 @@ class TestGetCashBalancesAsOf:
             pytest.param(1, id="day-after-the-anchor"),
         ],
     )
-    async def test_get_cash_balances_as_of_counts_the_rows_up_to_that_day_inclusive(self, session, test_user, offset):
+    async def test_cash_as_of_counts_the_rows_up_to_that_day_inclusive(self, session, test_user, offset):
         """BR-U-091: the day passed as ``as_of`` decides — its rows count, later ones do not."""
         anchor = date.today()
         broker_id, _asset = await _seed_as_of(session, test_user, anchor)
 
-        balances = await TransactionService(session).get_cash_balances(broker_id, as_of=anchor + timedelta(days=offset))
+        balances, _holdings = await TransactionService(session).get_balances_at_end_of(broker_id, anchor + timedelta(days=offset))
 
         assert balances == _expected_as_of(through=offset)
 
     @pytest.mark.asyncio
-    async def test_get_cash_balances_without_as_of_counts_every_row(self, session, test_user):
-        """BR-U-093: no ``as_of`` → every row counts, the future-dated ones included."""
+    async def test_cash_at_the_last_possible_day_counts_every_row(self, session, test_user):
+        """BR-U-093: ``date.max`` as ``as_of`` → every row counts, the future-dated ones included."""
         anchor = date.today()
         broker_id, _asset = await _seed_as_of(session, test_user, anchor)
 
-        balances = await TransactionService(session).get_cash_balances(broker_id)
+        balances, _holdings = await TransactionService(session).get_balances_at_end_of(broker_id, date.max)
 
         assert balances == _expected_as_of(through=2)
 
@@ -1081,7 +1081,7 @@ _CROSS_PAIR_CASES = [
     pytest.param(TransactionType.CASH_TRANSFER, "receiver", TransactionType.WITHDRAWAL, {}, id="cash-transfer-receiver-deleted"),
 ]
 # A stamp of the past for a row's updated_at: a conversion that stamps the row moves it forward, whatever the clock.
-_STAMPED_BEFORE = datetime(2019, 9, 4, 10, 0)
+_STAMPED_BEFORE = datetime(2019, 9, 4, 10, 0, tzinfo=UTC)
 
 # The surviving broker's cash per currency, the same before and after the deletion.
 _SURVIVOR_SUMMARIES = {
@@ -1197,7 +1197,7 @@ _AUTO_COST_HISTORIES = [
 ]
 
 # BR-U-080: a deletion that fails half way. Unlike the rest of 4.9 this case COMMITS, as DELETE /brokers does:
-# it commits whenever response.errors is empty (api/v1/brokers.py), and delete_bulk reports a broker that failed
+# it commits whenever response.errors is empty (api/v1/brokers/crud.py), and delete_bulk reports a broker that failed
 # in its result, never in errors. What the case reads is therefore what the database keeps, through sessions of
 # its own. Its rows are its own — a user, three brokers, an asset, none shared — and it removes them at the end.
 
@@ -1287,11 +1287,11 @@ class TestDeleteBulkCrossBrokerPair:
         pair = await _seed_cross_pair(session, test_user, kind)
         survivor_broker = pair.brokers[CrossPair.survivor_of(deleted)]
         service = TransactionService(session)
-        before = await service.get_cash_balances(survivor_broker)
+        before, _held = await service.get_balances_at_end_of(survivor_broker, date.max)
 
         await _delete_broker(session, test_user, pair.brokers[deleted])
 
-        after = await service.get_cash_balances(survivor_broker)
+        after, _held = await service.get_balances_at_end_of(survivor_broker, date.max)
         expected = _expected_survivor_summary(kind, deleted)
         assert {"before": before, "after": after} == {"before": expected, "after": expected}
 
@@ -1529,7 +1529,7 @@ class TestDeleteBulkCrossBrokerPair:
             monkeypatch.setattr(auto_cost, "compute_wac_iterative", computes_once_then_fails)
 
             response = await BrokerService(session).delete_bulk([BRDeleteItem(id=sender, force=True)], user_id=user_id)
-            if not response.errors:  # what DELETE /brokers does next (api/v1/brokers.py)
+            if not response.errors:  # what DELETE /brokers does next (api/v1/brokers/crud.py)
                 await session.commit()
             else:
                 await session.rollback()
@@ -1550,7 +1550,7 @@ class TestDeleteBulkCrossBrokerPair:
 # ============================================================================
 #
 # DELETE /brokers hands its brokers to delete_bulk in one session and commits when response.errors is empty
-# (api/v1/brokers.py); delete_bulk catches a broker's failure into that broker's result and never fills errors. So
+# (api/v1/brokers/crud.py); delete_bulk catches a broker's failure into that broker's result and never fills errors. So
 # whatever TransactionService.delete_by_broker wrote before it failed is committed with the rest of the request. The
 # cure decided for W-B20: delete_bulk starts the write transaction once (begin_writes, db/session.py), then deletes
 # each broker inside a savepoint of its own — a broker that fails leaves nothing behind, the brokers before and after
@@ -1705,7 +1705,7 @@ def _assert_pair_as_seeded(before: dict, world: _PairWorld) -> None:
 
 async def _delete_as_the_router_does(engine, user_id: int, items: list[BRDeleteItem]) -> BRBulkDeleteResponse:
     """DELETE /brokers from a session of its own that has done nothing yet: delete_bulk, then a commit when errors is
-    empty and a rollback otherwise (api/v1/brokers.py)."""
+    empty and a rollback otherwise (api/v1/brokers/crud.py)."""
     async with AsyncSession(engine, expire_on_commit=False) as request:
         response = await BrokerService(request).delete_bulk(items, user_id=user_id)
         if not response.errors:

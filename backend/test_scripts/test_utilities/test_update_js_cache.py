@@ -74,6 +74,37 @@ def _clean_failures():
     js_cache._HARD_FAILURES.clear()
 
 
+_REAL_VENDOR_DIRS = tuple(Path(path).resolve() for path in js_cache.VENDOR_DIRS.values())
+
+
+@pytest.fixture(autouse=True)
+def _never_touch_the_real_cache(monkeypatch):
+    """K-10: no test of this module writes a manifest into the project's real vendor folders, or reaches the network.
+
+    The real ``frontend/static`` and ``mkdocs_src`` folders are the ones ``VENDOR_DIRS`` holds at import. A test that
+    points ``VENDOR_DIRS`` at its ``tmp_path`` writes there freely. A violation is recorded and checked once the test
+    is over, not raised: ``run_from_args`` catches what its refresh raises, so a raise would not fail the test.
+    A test that fakes the network does so after this fixture and replaces its guards.
+    """
+    violations: list[str] = []
+    real_save_manifest = js_cache.save_manifest
+
+    def guarded_save_manifest(vendor_dir, manifest):
+        if Path(vendor_dir).resolve() in _REAL_VENDOR_DIRS:
+            violations.append(f"wrote the real cache manifest of {vendor_dir}")
+            return None
+        return real_save_manifest(vendor_dir, manifest)
+
+    def no_real_request(url, *_args, **_kwargs):
+        violations.append(f"reached the network: {url}")
+
+    monkeypatch.setattr(js_cache, "save_manifest", guarded_save_manifest)
+    monkeypatch.setattr(js_cache, "download_file", no_real_request)
+    monkeypatch.setattr(js_cache, "get_remote_headers", no_real_request)
+    yield
+    assert not violations, f"a test of the js cache left the sandbox: {violations}"
+
+
 @pytest.fixture
 def no_network(monkeypatch):
     """Every download fails; every HEAD probe finds nothing."""
@@ -217,10 +248,12 @@ class TestConsumerScopedFailure:
             assert js_cache._HARD_FAILURES[0].consumer == expected
 
     @pytest.mark.parametrize("required_for", [["frontend"], ["mkdocs"], None])
-    def test_an_unattributed_resource_stays_fatal_for_every_consumer(self, required_for):
+    def test_an_unattributed_resource_stays_fatal_for_every_consumer(self, required_for, monkeypatch):
         # Narrowing may only excuse a consumer we positively know does not ship
         # the resource. An unregistered name is not such a case, and letting it
         # fall through would turn "I don't know" into "it doesn't matter".
+        # K-10: the refresh is faked, as in the tests above. Left real, it ran the network and rewrote the project's manifests.
+        monkeypatch.setattr(js_cache, "update_all_libraries", lambda force=False: 0)
         js_cache._hard_fail("mystery", "download failed")
         assert js_cache.run_from_args(SimpleNamespace(force=False, required_for=required_for)) == 1
 

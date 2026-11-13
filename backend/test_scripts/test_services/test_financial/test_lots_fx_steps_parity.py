@@ -90,12 +90,8 @@ from backend.app.db.models import FxConversionRoute, FxRate, PriceHistory, Trans
 from backend.app.db.precision import usable_fx_rate_bounds
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    LotAnalysisType,
-    LotsAnalysisResponse,
-)
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services import lots_analysis_service
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots import conversions as conversions_module
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, need_closure_rates, needs_market_series
@@ -103,7 +99,8 @@ from backend.app.services.financial_math.lots.prices import opening_reference_pr
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.conversion import convert_bulk
-from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.app.services.portfolio import lots_analysis_service
+from backend.app.services.portfolio.lots_analysis_service import get_lots_analysis
 from backend.test_scripts.test_services._lots_steps import daily_points, fold_gap_ranges
 
 # Non-test names of the L1a battery: its books, readings and comparison helpers. Never its ``test_*`` functions.
@@ -200,6 +197,11 @@ class LegacyFxRateResolver:
         """Every conversion asked for and not made, one entry per pair, as the data-quality report lists them."""
         return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(self._missing.items())]
 
+    def stale_pairs(self, _day: date_type) -> list:
+        """Since CP-11a the service asks the resolver which rates it read from an old stored row: a notice, never a value. The legacy
+        resolver keeps no row dates, so it says none; the battery compares the values, and ``stale_fx_pairs`` is not one."""
+        return []
+
     # The two methods the service has called since J5-5 (D-P4 cure B: the market price is read on the days a rate can change,
     # not on every day). They are not copies of HEAD: they make this resolver what it was, the reader of EVERY day.
 
@@ -216,6 +218,14 @@ class LegacyFxRateResolver:
         for offset in range(1, (last - first).days + 1):
             self.convert(amount, currency, first + timedelta(days=offset))
         return converted
+
+    def read_only_copy(self) -> "LegacyFxRateResolver":
+        """Since project 69 (L3a) each matching method converts through a copy of the resolver: it reads the rates loaded and
+        keeps its own gaps, from a copy of those recorded so far. Here too the legacy rates are shared, the gaps copied."""
+        copy = LegacyFxRateResolver(self.target_currency)
+        copy._needs, copy._seen, copy._loaded, copy._rates = self._needs, self._seen, self._loaded, self._rates
+        copy._missing = defaultdict(set, {pair: set(days) for pair, days in self._missing.items()})
+        return copy
 
 
 def legacy_collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collection blocks, no decision tree
@@ -480,6 +490,16 @@ async def _as_is_and_legacy(session: AsyncSession, monkeypatch: pytest.MonkeyPat
     return as_is, legacy, sum(handed)
 
 
+def _without_stale_notice(dump: dict) -> dict:
+    """The dump of an answer without ``data_quality.stale_fx_pairs``: since CP-11a the answer says which rates it read from an old stored row
+    (a notice that needs the row dates the legacy resolver never kept), and the battery compares the values, not that notice."""
+    quality = dump.get("data_quality")
+    if isinstance(quality, dict):
+        quality = {key: value for key, value in quality.items() if key != "stale_fx_pairs"}
+        return {**dump, "data_quality": quality}
+    return dump
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("target", "scenario_name", "window", "scope"), PARITY_CASES)
 async def test_parity_the_steps_answer_what_the_days_answered(session, monkeypatch, target, scenario_name, window, scope):
@@ -508,7 +528,7 @@ async def test_parity_the_steps_answer_what_the_days_answered(session, monkeypat
             assert handed > 0, f"precondition: today's resolver handed convert_bulk {handed} conversions on a book with a foreign currency"
     if (target, scenario_name) == (USD, "1900-usd") and not empty_window:
         assert handed >= LEGACY_FLOOR, f"precondition: the legacy copy handed convert_bulk {handed} conversions, the 44 240 days of today's computation are missing"
-    difference = _first_difference(fold_gap_ranges(_dump(as_is)), fold_gap_ranges(_dump(legacy)))
+    difference = _first_difference(_without_stale_notice(fold_gap_ranges(_dump(as_is))), _without_stale_notice(fold_gap_ranges(_dump(legacy))))
     assert difference is None, f"{target} / {scenario_name} / {window} / {scope}: the steps' answer differs from the days' at {difference} — points A/B {_point_counts(as_is, legacy)}"
 
 

@@ -21,20 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.app.services.ai_export.components.drawdown_context as drawdown_module
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, OpenDateRangeModel
-from backend.app.schemas.portfolio import DataQualityReport
-from backend.app.schemas.risk import (
-    RiskAnalyticResult,
-    RiskDrawdownOutput,
-    RiskDrawdownRecoveryStatus,
-    RiskError,
-    RiskErrorCode,
-    RiskMode,
-    RiskQueryResponse,
-    RiskResultStatus,
-    RiskReturnBasis,
-    RiskScopeKind,
-    RiskWarning,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityReport
+from backend.app.schemas.risk.outputs import RiskDrawdownOutput
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskQueryResponse, RiskWarning
+from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskErrorCode, RiskMode, RiskResultStatus, RiskReturnBasis, RiskScopeKind
 from backend.app.services.ai_export.analyses.catalog import build_analysis_registry
 from backend.app.services.ai_export.components.asset_payloads import AssetMarketSnapshotPayload, AssetPriceObservation
 from backend.app.services.ai_export.components.catalog import build_component_registry

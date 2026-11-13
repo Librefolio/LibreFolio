@@ -5,7 +5,7 @@
  * The shared `fxRoutesStore` keeps only the pair slugs, not their providers.
  */
 import {zodiosApi} from '$lib/api';
-import {createPairSlug} from '$lib/stores/fxStoreRegistry';
+import {createPairSlug} from '$lib/features/fx/fxStoreRegistry';
 
 /** `absent`: no route; `provider`: a route downloads rates; `manual`: every route is MANUAL alone. */
 export type PairSetup = 'absent' | 'provider' | 'manual';

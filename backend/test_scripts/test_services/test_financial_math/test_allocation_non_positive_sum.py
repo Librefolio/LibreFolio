@@ -37,7 +37,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.app.schemas.portfolio import AllocationHistoryPoint, AllocationItem
+from backend.app.schemas.portfolio.summary import AllocationHistoryPoint, AllocationItem
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
 from backend.app.utils.asset.sector import sector_emoji

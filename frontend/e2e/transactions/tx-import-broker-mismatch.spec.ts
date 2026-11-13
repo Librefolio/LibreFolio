@@ -38,15 +38,15 @@
  *      the prompt moves (`getAnimations`, `document.fonts`): the lines of a label are the distinct tops
  *      of its text's client rects, the edges are bounding rects. Each language's file is removed again.
  *
- * Why M1 and M4 run on a disposable account. The fallback rule drops the generic-CSV brokers once a
+ * Why every test runs on a disposable account (M1 and M4 need it for the targets). The fallback rule drops the generic-CSV brokers once a
  * broker of a specific plugin is offered, but *every* broker whose specific default plugin reads the file
  * is still a target. On the shared E2E user that includes M2's own overnight account whenever the tests
  * run at once — and the brokers of any spec that imports Scalable files one day — so "one target" (or
  * "two") would depend on the schedule. The account is registered by the test
  * (fixtures/onboarding-accounts.ts, every onboarding flow skipped over the API so no guide covers the
  * wizard), owns exactly the brokers it creates — read back before the walk — and is deleted with them.
- * M2, M3 and M5 assert nothing about the targets, so they run on the shared E2E user. M5's language is
- * its browser context's own (localStorage), never the account's.
+ * M2, M3 and M5 assert nothing about the targets, but they create and delete brokers, so they too run on a
+ * disposable account. M5's language is its browser context's own (localStorage), never the account's.
  *
  * Data. Every test creates its own brokers (unique names: `brokers.name` is uniquely indexed) before
  * the page loads, since the wizard reads the broker list once per session, and uploads a copy of
@@ -64,15 +64,15 @@
  */
 
 import {expect, test, type APIRequestContext, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
-import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
+import {navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {optionsClosed} from '../fixtures/probe';
-import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 import {readFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from '../fixtures/brimSamples';
 
 const API = '/api/v1';
 const BROKERS_PATH = `${API}/brokers`;
@@ -81,7 +81,7 @@ const FILES_PATH = `${API}/brokers/import/files`;
 const PLUGIN_CHECK_PATH = /^\/api\/v1\/brokers\/import\/files\/[^/]+\/plugin-check$/;
 const SPEC_DIR = path.dirname(fileURLToPath(import.meta.url));
 /** The LibreFolio exporter's overnight account file (synthetic): read by `broker_scalable_deposit` and the generic CSV, refused by `broker_scalable`. */
-const DEPOSIT_SAMPLE = path.resolve(SPEC_DIR, '../../../backend/app/services/brim_providers/sample_reports/scalable-deposit-export.csv');
+const DEPOSIT_SAMPLE = samplePath('scalable-deposit-export.csv');
 const SCALABLE_BROKER = 'broker_scalable';
 const SCALABLE_DEPOSIT = 'broker_scalable_deposit';
 /** A fallback plugin (detection priority 0): its brokers are offered only when no broker of a specific plugin is. */
@@ -445,9 +445,10 @@ test.describe('Import Wizard — a file its broker’s default import plugin can
         expect(await filesOn(page, genericAccount.id), 'the generic-CSV broker holds nothing').toEqual([]);
     });
 
-    test('M2: the same file assigned to the overnight account, whose default plugin reads it, raises no question', async ({page}) => {
+    test('M2: the same file assigned to the overnight account, whose default plugin reads it, raises no question', async ({page, request}, testInfo) => {
         test.setTimeout(60_000);
-        await login(page, TEST_USER);
+        owned.user = await registerDisposableUser(request, `bm_${testInfo.project.name}`);
+        await prepareOnboardingAccount(page, owned.user, []);
         const [overnightAccount] = await createOwnedBrokers(page, owned, [{tag: 'overnight account', defaultPlugin: SCALABLE_DEPOSIT}]);
         await goToTransactions(page);
         const step1 = await openImportWizard(page);
@@ -477,9 +478,10 @@ test.describe('Import Wizard — a file its broker’s default import plugin can
         expect(pluginChecks, 'no plugin was asked why it refuses the file').toEqual([]);
     });
 
-    test('M3: Remove deletes the uploaded file, and with no file left the wizard stays on the upload step', async ({page}) => {
+    test('M3: Remove deletes the uploaded file, and with no file left the wizard stays on the upload step', async ({page, request}, testInfo) => {
         test.setTimeout(60_000);
-        await login(page, TEST_USER);
+        owned.user = await registerDisposableUser(request, `bm_${testInfo.project.name}`);
+        await prepareOnboardingAccount(page, owned.user, []);
         const [brokerAccount] = await createOwnedBrokers(page, owned, [{tag: 'broker account', defaultPlugin: SCALABLE_BROKER}]);
         await goToTransactions(page);
         const step1 = await openImportWizard(page);
@@ -596,11 +598,12 @@ test.describe('Import Wizard — a file its broker’s default import plugin can
         expect(await filesOn(page, brokerAccount.id), 'the broker account holds nothing').toEqual([]);
     });
 
-    test('M5: the three answers stay on one line each, inside the prompt, in Italian and French, at desktop width and on a 375 px phone', async ({page}, testInfo) => {
+    test('M5: the three answers stay on one line each, inside the prompt, in Italian and French, at desktop width and on a 375 px phone', async ({page, request}, testInfo) => {
         test.setTimeout(180_000);
-        await login(page, TEST_USER);
-        // The overnight account is there so that the file has a target and Move is offered. How many targets this
-        // shared user has besides, and which one is chosen at first, is not this test's subject: Move names none.
+        owned.user = await registerDisposableUser(request, `bm_${testInfo.project.name}`);
+        await prepareOnboardingAccount(page, owned.user, []);
+        // The overnight account is there so that the file has a target and Move is offered. Which target is chosen at first
+        // is not this test's subject: Move names none.
         const [brokerAccount] = await createOwnedBrokers(page, owned, [
             {tag: 'broker account', defaultPlugin: SCALABLE_BROKER},
             {tag: 'overnight account', defaultPlugin: SCALABLE_DEPOSIT},

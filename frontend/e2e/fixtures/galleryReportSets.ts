@@ -57,6 +57,7 @@ import {randomUUID} from 'crypto';
 import {mkdirSync, readFileSync, writeFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {samplePath} from './brimSamples';
 
 const API = '/api/v1';
 const BROKERS_PATH = `${API}/brokers`;
@@ -66,18 +67,17 @@ const PREVIEW_PATH = `${API}/brokers/import/sets/preview`;
 const COMBINE_PATH = `${API}/brokers/import/sets/combine`;
 /** Every parse the wizard asks for: a single file's, or a set's combined file's. */
 const PARSE_PATH = /^\/api\/v1\/brokers\/import\/files\/[^/]+\/parse$/;
-const SAMPLES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../backend/app/services/brim_providers/sample_reports');
 
 export const DANSKE = 'broker_danske_bank';
 export const GENERIC = 'broker_generic_csv';
 
 /** The repository's synthetic Danske Bank exports: the main set, and the set with a gap. */
 export const DANSKE_SAMPLES = {
-    custody: path.join(SAMPLES, 'danske_bank-custody.xlsx'),
-    cash: path.join(SAMPLES, 'danske_bank-cash.csv'),
-    gapCustody1: path.join(SAMPLES, 'danske_bank-gap-custody-1.xlsx'),
-    gapCustody2: path.join(SAMPLES, 'danske_bank-gap-custody-2.xlsx'),
-    gapCash: path.join(SAMPLES, 'danske_bank-gap-cash.csv'),
+    custody: samplePath('danske_bank-custody.xlsx'),
+    cash: samplePath('danske_bank-cash.csv'),
+    gapCustody1: samplePath('danske_bank-gap-custody-1.xlsx'),
+    gapCustody2: samplePath('danske_bank-gap-custody-2.xlsx'),
+    gapCash: samplePath('danske_bank-gap-cash.csv'),
 } as const;
 
 /**
@@ -126,18 +126,42 @@ type OutputFolder = Pick<TestInfo, 'outputPath'>;
 // ---------------------------------------------------------------------------
 
 /**
- * Sign up a fresh account. Its name is visible in the shots — the sidebar, the "Uploaded by"
- * column — so it is short and neutral: `demo_` and a random token. Randomness, not time, is what
- * keeps two workers apart; six base-36 characters are ~2·10⁹ names.
+ * The token of a test's account (G-17): six of A–Z 0–9 derived from the test's title path and its project, so the same test
+ * gets the same account name on every run and the shots stay comparable. Two tests, or the same test on desktop and on mobile,
+ * never share a name (the project is part of the seed); the name is a 32-bit FNV-1a hash in base 36, padded.
  */
-export async function registerGalleryAccount(request: APIRequestContext): Promise<GalleryAccount> {
-    const token = uniqueToken(6);
-    const username = `demo_${token.toLowerCase()}`;
-    const user = {username, email: `${username}@example.com`, password: `Demo9!_${token}${uniqueToken(4)}`};
-    const response = await request.post(`${API}/auth/register`, {data: user});
-    expect(response.status(), `the gallery signs up a disposable account, so registration must be enabled (HTTP ${response.status()} ${await response.text()})`).toBe(201);
-    const created = (await response.json()) as {user: {id: number}};
-    return {user: {...user, id: created.user.id}, token, brokerIds: []};
+export function galleryAccountToken(testInfo: Pick<TestInfo, 'titlePath' | 'project'>): string {
+    const seed = `${testInfo.project.name}|${testInfo.titlePath.join('|')}`;
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < seed.length; index += 1) {
+        hash ^= seed.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash.toString(36).toUpperCase().padStart(6, '0').slice(-6);
+}
+
+/**
+ * Sign up a fresh account. Its name is visible in the shots — the sidebar, the "Uploaded by"
+ * column, the open "Uploaded by" filter that widens with it — so it is short and neutral: `demo_` and a token.
+ *
+ * With `testInfo` the token is fixed per test and project ({@link galleryAccountToken}, G-17): the shot is the same on
+ * every run. An interrupted run may have left that account behind (its cleanup did not run): the registration then
+ * answers that the name exists, and the account falls back to a random token, as it always was. Without `testInfo`
+ * the token is random: randomness, not time, is what keeps two workers apart; six base-36 characters are ~2·10⁹ names.
+ */
+export async function registerGalleryAccount(request: APIRequestContext, testInfo?: Pick<TestInfo, 'titlePath' | 'project'>): Promise<GalleryAccount> {
+    const fixed = testInfo ? galleryAccountToken(testInfo) : null;
+    for (const token of fixed ? [fixed, uniqueToken(6)] : [uniqueToken(6)]) {
+        const username = `demo_${token.toLowerCase()}`;
+        const user = {username, email: `${username}@example.com`, password: `Demo9!_${token}${uniqueToken(4)}`};
+        const response = await request.post(`${API}/auth/register`, {data: user});
+        // A fixed name left by an interrupted run: the next attempt is the random one.
+        if (token === fixed && response.status() !== 201 && response.status() < 500) continue;
+        expect(response.status(), `the gallery signs up a disposable account, so registration must be enabled (HTTP ${response.status()} ${await response.text()})`).toBe(201);
+        const created = (await response.json()) as {user: {id: number}};
+        return {user: {...user, id: created.user.id}, token, brokerIds: []};
+    }
+    throw new Error('unreachable: the random token is the last attempt and it expects 201');
 }
 
 /**

@@ -967,18 +967,21 @@ ends it and removes them ([What a Run Killed Outright Leaves](#backup-leftovers)
 - **Secret files read as root.** Started as root (`docker compose exec`), the commands that work on a data directory
   switch to its owner (`_drop_root_privileges()`; `decrypt` too since lot B-19, `_decrypt_as_owner()`), but read
   `--password-file` and `--instance-key-file` before the switch (`_password()`, `_instance_key_from_file()`), so that a
-  Docker secret only root can read works. Root then opens a path the server's user may have prepared, so before
-  `read_secret_file()` the command opens the file with `O_RDONLY|O_NONBLOCK`, following links, and `fstat` must find a
-  regular file: a FIFO, a folder or a device is refused at once, `<label>: <path> is not a regular file`, never waited
-  on nor read. As root, a path that goes through a link at any component from the data directory down, where that user
-  owns every folder, is refused too (`os.lstat` of each component; the data directory read as `_decrypt_as_owner()`
-  reads it, `--test-db` included, and a setting it cannot use skips this check), its target never read:
+  Docker secret only root can read works. Root then opens a path the server's user may have prepared, so the commands read the file through
+  `read_secret_file(path, label, regular_only=True, no_links_under=<data directory>)` (`_read_secret()`, lot H-47): one open,
+  `O_RDONLY|O_NONBLOCK`, and the check and the read go through that descriptor, so a file swapped after the check is never
+  read. `fstat` must find a regular file: a FIFO, a folder or a device is refused at once,
+  `<label>: <path> is not a regular file`, never waited on nor read. As root, a path that goes through a link at any
+  component from the data directory down, where that user owns every folder, is refused too: the path is walked one
+  component at a time, each opened with `O_NOFOLLOW` from the descriptor of the one before (`dir_fd`), so a link anywhere
+  below the root, a dangling one included, is caught and its target never opened (the data directory read as
+  `_decrypt_as_owner()` reads it, `--test-db` included, and a setting it cannot use skips this check; the data directory
+  itself may be a link). The refusal reads
   `<label>: <path> goes through a link inside the data directory: give the file itself, from outside it`. A link elsewhere is
   followed, as Kubernetes mounts its secrets (`/etc/secret/pw` → `..data/pw`), and Docker and Compose secrets are plain
   files. Not root, there is no privilege to borrow: no link check. Both refusals keep the codes of an unreadable file,
-  `password_unreadable` and `instance_key_unreadable` (lot B-38). Residual: the check and `read_secret_file()`'s own
-  open are two opens, so a file swapped between them is still read, until `read_secret_file()` takes a descriptor or
-  the flags (H's backlog, H-47).
+  `password_unreadable` and `instance_key_unreadable` (lots B-38 and H-47). Both options are off by default, so the
+  startup readers (`env_secret()`, the generated key) work as before.
 - **In the app.** The Backup tab empties its password fields as soon as a password is submitted
   (`BackupDownloadCard.svelte`, `RestoreCard.svelte`). The two fields of a new secure backup are
   `autocomplete="new-password"`, so that a password manager does not fill in the account's password;
@@ -1661,7 +1664,7 @@ All other endpoints — including Auth (profile, password), Settings (user setti
     fallback of the file preview, an `<iframe>`, shows the file instead of downloading it (H6-2). Any other type (HTML, SVG,
     XML…) and every request with `?download=true` are an `attachment`: a type that can carry active content is never
     shown on the app's own address. Every response carries `X-Content-Type-Options: nosniff`. The broker report route
-    (`GET /brokers/import/files/{id}/download`, `backend/app/api/v1/brokers.py`) imports the same list, so the two routes
+    (`GET /brokers/import/files/{id}/download`, `backend/app/api/v1/brokers/files.py`) imports the same list, so the two routes
     cannot disagree about what is safe to show.
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
@@ -1774,7 +1777,7 @@ both by default; a finite value too large for its column is another matter: see
   or `1E+400` fails it, named by route, model and field. Two barriers keep it from passing empty: a minimum number of
   routes walked, and at least one float found.
 - **Today: six request floats.** Five are signal parameters of the annotation requests that
-  `POST /assets/prices/query` and `POST /fx/currencies/convert` accept (`backend/app/schemas/signals.py`):
+  `POST /assets/prices/query` and `POST /fx/currencies/convert` accept (`backend/app/schemas/signals/`):
   `epsilon` and `relative_epsilon`, declared in `SignalAnnotationRequestBase`, of both `SignalLineCrossoverRequest`
   and `SignalThresholdCrossingRequest`, and `threshold` of the second, all `FiniteFloat` already. The sixth is the
   plain value of a plugin setting (`PluginSettingWriteItem.value`, `PATCH /settings/plugins/bulk`):
@@ -1788,8 +1791,8 @@ both by default; a finite value too large for its column is another matter: see
   message. A new free-form position fails it until it is added there with its probe. Today there are five:
   `FAProviderAssignmentItem.provider_params` and `FAProviderProbeRequest.provider_params` (`POST /assets/provider` and
   `/assets/provider/probe`; their base is `FAProviderConfigBase`, in `backend/app/schemas/provider.py`),
-  `RiskAnalyticRequest.parameters` (`POST /risk/query`, `backend/app/schemas/risk.py`), `SignalRequest.params`
-  (`POST /assets/prices/query`, `/fx/currencies/convert` and `/signals/preview`; `backend/app/schemas/signals.py`) and
+  `RiskAnalyticRequest.parameters` (`POST /risk/query`, `backend/app/schemas/risk/`), `SignalRequest.params`
+  (`POST /assets/prices/query`, `/fx/currencies/convert` and `/signals/preview`; `backend/app/schemas/signals/`) and
   `ToolComputeItem.parameters` (`POST /tools/compute`, `backend/app/schemas/tools.py`). The provider parameters hold
   `Any`, the other three `JsonValue`. The two provider requests and `RiskAnalyticRequest` now run `ensure_json_safe`
   (`backend/app/utils/json_utils.py`) in a `field_validator(mode="before")`, as `SignalRequest.params` already did:
@@ -1992,7 +1995,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
 | `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
-| `POST /backup/instance`, `GET /backup/instance/options`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_options`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away, from the backup card of the block page (`backup_available` of `GET /system/block`, below). `GET /backup/instance/options` gives the rules of a secure backup's password ([Secure Backups](#secure-backups)), so that the card of a blocked instance can offer a secure backup too |
+| `POST /backup/instance`, `GET /backup/instance/options`, `GET /backup/instance/jobs`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_options`, `backup_instance.list_instance_backups`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete, and the list of the backups the instance keeps (FB-24, so one already made can be found and downloaded; `GET /backup/instance/storage` stays refused). On a blocked instance the data can still be taken away, from the backup card of the block page (`backup_available` of `GET /system/block`, below). `GET /backup/instance/options` gives the rules of a secure backup's password ([Secure Backups](#secure-backups)), so that the card of a blocked instance can offer a secure backup too |
 | `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`panel_access(PanelScope.BACKUP)`) instead of a session: the provider hands the data back |
 | `GET /backup/restore/outcome` | `backup_restore.get_restore_outcome` | The outcome of a restore, for the page that asked its restart, with the one-time ticket of that request instead of a session ([The Outcome Ticket](#backup-restore-outcome)): a restart that came back blocked reads `pending`, `waiting: "instance_blocked"`. It starts nothing |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
@@ -2279,7 +2282,7 @@ never an invitation.
 | `password_reset` | 30 minutes | Required | Refused | `/reset-password#token=…` |
 | `email_verification` | 24 hours | Required | Refused | `/verify-email#token=…` |
 | `admin_setup` | 72 hours | Required | Refused | `/setup#token=…` |
-| `email_change` | 7 days | Required (the owner) | Refused | `/confirm-email-change#token=…` |
+| `email_change` | 7 days; 24 hours for a change asked from the profile, passed as `ttl` | Required (the owner, or the account that asks from its profile) | Refused | `/confirm-email-change#token=…` |
 
 `expires_at` is `created_at` plus the lifetime; a `ttl` argument replaces the default. `issue_token()` raises
 `ValueError` on a refused or missing `user_id`, on a refused `grants_admin` and on a lifetime that is not
@@ -3459,7 +3462,7 @@ document too, in every profile, and two switches add more, off on a self-hosted 
 - **A header the route set is kept.** The middleware adds a header only when the response has none of that name, in
   any case: a route's `Referrer-Policy: no-referrer` stays, and the `nosniff` that the file routes of the uploads
   (`backend/app/api/v1/uploads.py`: the text preview and `serve_file()`) and the download of a broker report
-  (`backend/app/api/v1/brokers.py`) set themselves is not repeated. Names are compared whole, never by prefix: `content-security-policy` is a prefix of
+  (`backend/app/api/v1/brokers/files.py`) set themselves is not repeated. Names are compared whole, never by prefix: `content-security-policy` is a prefix of
   `content-security-policy-report-only`, so a prefix check would let a route's report-only policy suppress the enforced
   one, or the reverse. A route that sets its own `X-Frame-Options`, `Content-Security-Policy` or
   `Content-Security-Policy-Report-Only` keeps it alone, and the middleware still adds the others. WebSocket and
@@ -3599,7 +3602,7 @@ the integrity failure).
 
 The PDF preview asks nothing of a third party, and `connect-src` stays `'self'` (H-55 wave 4, decision (c) of the
 developer). The viewer's engine is always the instance's own copy: when it does not answer, `pdfViewerAssets()`
-(`frontend/src/lib/utils/files/pdfViewerAssets.ts`) throws, and the preview shows the browser's own PDF viewer
+(`frontend/src/lib/features/files/pdfViewerAssets.ts`) throws, and the preview shows the browser's own PDF viewer
 (`file-preview-pdf-fallback`) instead of falling back to a CDN. The Chinese, Japanese and Korean fallback fonts
 (`@embedpdf/fonts-jp`, `-kr`, `-sc`, `-tc`) are tens of megabytes each, too heavy for the image, so the viewer asks the
 instance for one only when a PDF needs it, and the **server** gets it.

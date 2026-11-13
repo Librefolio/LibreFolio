@@ -126,13 +126,14 @@ from backend.app.db.base import SQLModel  # every model, for create_all; importi
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.precision import usable_fx_rate_bounds
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioReportQuery, PortfolioReportResponse
-from backend.app.services import portfolio_service as portfolio_service_module
+from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.services.financial_math.native_cash import MissingCashConversion, NativeCash
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, PortfolioCalculationResult
 from backend.app.services.fx.storage import normalize_rate_for_storage
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio import report as report_module
+from backend.app.services.portfolio import wac as wac_module
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
 EUR = "EUR"
@@ -368,8 +369,8 @@ def _value_at(native_cash: NativeCash, day: date, broker_id: int) -> Decimal | s
 
 def _clear_portfolio_caches() -> None:
     """Empty the report (layer 2), WAC and engine blob caches."""
-    portfolio_service_module._portfolio_l2_cache.clear()
-    portfolio_service_module._wac_cache.clear()
+    report_module._portfolio_l2_cache.clear()
+    wac_module._wac_cache.clear()
     portfolio_engine_module._portfolio_blob_cache.clear()
 
 

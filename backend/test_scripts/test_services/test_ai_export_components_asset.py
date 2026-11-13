@@ -41,22 +41,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import (
-    AssetPeriodContribution,
-    LotAnalysisType,
-    LotCustodySummarySchema,
-    LotsAnalysisMetadata,
-    LotsAnalysisResponse,
-    LotSummarySchema,
-    PortfolioHolding,
-    PortfolioReportMetadata,
-    PortfolioReportResponse,
-    PortfolioSummary,
-    PositionsContribution,
-    YieldOnCostProvenance,
-    YieldOnCostResult,
-    YieldOnCostStatus,
-)
+from backend.app.schemas.portfolio.lots import LotAnalysisType, LotCustodySummarySchema, LotsAnalysisMetadata, LotsAnalysisResponse, LotSummarySchema
+from backend.app.schemas.portfolio.report import PortfolioReportMetadata, PortfolioReportResponse
+from backend.app.schemas.portfolio.summary import AssetPeriodContribution, PortfolioHolding, PortfolioSummary, PositionsContribution
+from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.services.ai_export.components import asset_core
 from backend.app.services.ai_export.components.asset_payloads import AssetLotCustodyRow, AssetLotDetailPayload, AssetLotDetailRow
@@ -69,8 +57,8 @@ from backend.app.services.ai_export.dependencies import (
     RequiredComponentBuildError,
     build_bucket_plan_for_scope,
 )
-from backend.app.services.lots_analysis_service import LotsAnalysisService
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
+from backend.app.services.portfolio.portfolio_service import PortfolioService
 
 CURRENCY = "EUR"
 ASSET_ID = 42

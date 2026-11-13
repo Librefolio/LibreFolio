@@ -49,19 +49,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel, StrictModel
-from backend.app.schemas.portfolio import DataQualityStatus
-from backend.app.schemas.risk import (
-    AssetRiskScope,
-    PortfolioRiskScope,
-    RiskAnalyticRequest,
-    RiskAnalyticResult,
-    RiskDrawdownOutput,
-    RiskDrawdownRecoveryStatus,
-    RiskMode,
-    RiskQueryRequest,
-    RiskResultStatus,
-    RiskScopeKind,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityStatus
+from backend.app.schemas.risk.outputs import RiskDrawdownOutput
+from backend.app.schemas.risk.results import RiskAnalyticResult
+from backend.app.schemas.risk.scope import AssetRiskScope, PortfolioRiskScope, RiskAnalyticRequest, RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskMode, RiskResultStatus, RiskScopeKind
 from backend.app.services.ai_export.components.asset_payloads import AssetMarketSnapshotPayload
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import counts_ownership_share

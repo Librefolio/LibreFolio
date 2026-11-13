@@ -46,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 import backend.app.api.v1.auth as auth_module
 import backend.app.api.v1.system as system_module
+import backend.app.api.v1.system.diagnostics as diagnostics
 import backend.app.api.v1.system.health as health_module
 import backend.app.api.v1.system.info as info_module
 import backend.app.api.v1.system.ready as ready_module
@@ -67,7 +68,11 @@ from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import PluginDiagnosticsResponse, ReadinessChecks, ReadinessResponse, SystemInfoPublicResponse, SystemInfoResponse
+from backend.app.schemas.tools import ToolDiscoveryFailure
 from backend.app.services.platform import instance_links, readiness
+from backend.app.services.platform.provider_registry import PluginDiscoveryFailure
+from backend.app.services.risk.registry import RiskAnalyticRegistry
+from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistrySnapshot
 from backend.app.utils.runtime.network import classify_ip, client_address
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id
@@ -130,7 +135,7 @@ class TestParsePipfile:
 
     def test_quoted_name_with_trailing_space(self, tmp_path, monkeypatch):
         pipfile = tmp_path / "Pipfile"
-        pipfile.write_text("[packages]\n" 'fastapi = "*"\n' '"borsa-italiana-scraping " = {git = "https://example.com/repo.git"}\n' "[dev-packages]\n" 'pytest = "*"\n')
+        pipfile.write_text('[packages]\nfastapi = "*"\n"borsa-italiana-scraping " = {git = "https://example.com/repo.git"}\n[dev-packages]\npytest = "*"\n')
         monkeypatch.setattr(info_module, "PROJECT_ROOT", tmp_path)
 
         packages = parse_pipfile()
@@ -352,7 +357,7 @@ PLUGIN_DIAGNOSTICS_URL = f"{API_BASE}/system/plugin-diagnostics"
 TIMEOUT = 30
 PASSWORD = "PluginDiagPass123!"
 #: The ``system`` label get_plugin_diagnostics gives each registry it reads.
-PLUGIN_SYSTEMS = {"asset", "fx", "brim", "signals"}
+PLUGIN_SYSTEMS = {"asset", "fx", "brim", "signals", "risk", "tools"}
 
 
 @pytest.fixture(scope="module")
@@ -472,6 +477,25 @@ class TestPluginDiagnosticsRequiresSession:
             assert set(failure) == {"system", "filename", "error"}, failure
             assert failure["system"] in PLUGIN_SYSTEMS, failure
         assert deleted.status_code == 200, f"could not delete this test's own account: {deleted.status_code} {deleted.text}"
+
+
+class TestPluginDiagnosticsCoverRiskAndTools:
+    """C-20: the Risk and Tool registries report the plugins that fail to load, like the other four."""
+
+    def test_failed_risk_and_tool_plugins_are_listed(self, monkeypatch):
+        for registry in (diagnostics.AssetProviderRegistry, diagnostics.FXProviderRegistry, diagnostics.BRIMProviderRegistry, diagnostics.SignalPluginRegistry):
+            monkeypatch.setattr(registry, "get_discovery_errors", classmethod(lambda cls: ()))
+        failure = PluginDiscoveryFailure(module_name="backend.app.services.risk_plugins.broken", error_type="ImportError", message="boom")
+        monkeypatch.setattr(RiskAnalyticRegistry, "get_discovery_errors", classmethod(lambda cls: (failure,)))
+        snapshot = ToolRegistrySnapshot({}, (ToolDiscoveryFailure(tool_code=None, filename="bad_tool/plugin.py", reason="import_failed"),))
+        monkeypatch.setattr(ToolPluginRegistry, "get_snapshot", classmethod(lambda cls: snapshot))
+
+        listed = diagnostics.get_plugin_diagnostics(None).root
+
+        by_system = {item.system: item for item in listed}
+        assert set(by_system) == {"risk", "tools"}, listed
+        assert by_system["risk"].filename == "broken.py" and "ImportError" in by_system["risk"].error
+        assert by_system["tools"].filename == "bad_tool/plugin.py" and "import_failed" in by_system["tools"].error
 
 
 # ============================================================================
@@ -927,9 +951,9 @@ class TestInstanceConfigLive:
         body = response.json()
         assert set(body) == INSTANCE_KEYS and body["profile"] == "selfhosted", f"the public configuration must be exactly the declared fields, the profile the lane's default: {response.text}"
         accounts = body["accounts"]
-        assert (
-            set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
-        ), f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here) — and the password rules: {response.text}"
+        assert set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool), (
+            f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here) — and the password rules: {response.text}"
+        )
         assert _password_rule_pairs(accounts["password_rules"]) == PASSWORD_RULES, f"accounts.password_rules must be the backend's rules, the same on every instance (decision 37): expected {PASSWORD_RULES} as (code, value), got {accounts['password_rules']}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link (the lane's configuration, not pinned here): {response.text}"
         assert body["support_url"] is None, f"support_url must be null on a lane that sets no {SUPPORT_URL_VARIABLE}, and the asset search then offers a new GitHub issue on a self-hosted instance, no report link on a managed one: {response.text}"
@@ -972,9 +996,9 @@ class TestInstanceConfigInProcess:
         body = response.json()
         assert set(body) == INSTANCE_KEYS and body["profile"] == profile, f"LIBREFOLIO_PROFILE={configured!r} must be answered as profile {profile!r}, beside accounts, email, support_url, legal and client_log_level and nothing else: {response.text}"
         accounts = body["accounts"]
-        assert (
-            set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
-        ), f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (read from the lane's shared database: not pinned here) — and the password rules: {response.text}"
+        assert set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool), (
+            f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (read from the lane's shared database: not pinned here) — and the password rules: {response.text}"
+        )
         assert _password_rule_pairs(accounts["password_rules"]) == PASSWORD_RULES, f"accounts.password_rules must be the backend's rules, the same on every instance (decision 37): expected {PASSWORD_RULES} as (code, value), got {accounts['password_rules']}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link: {response.text}"
 

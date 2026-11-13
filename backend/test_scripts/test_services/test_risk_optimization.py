@@ -10,10 +10,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas.risk import (
-    RiskCovarianceEstimator,
-    RiskOptimizationStrategy,
-)
+from backend.app.schemas.risk.vocabulary import RiskCovarianceEstimator, RiskOptimizationStrategy
 from backend.app.services.risk.quant import (
     optimization_engine as optimization_engine_module,
 )

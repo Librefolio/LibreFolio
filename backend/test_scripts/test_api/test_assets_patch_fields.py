@@ -477,3 +477,258 @@ async def test_patch_multiple_base_fields(test_server):
         assert asset.asset_type == AssetType.ETF
         assert asset.icon_url == "https://multi.test/icon.png"
         print_success("✓ DB verification passed (all fields updated)")
+
+
+# ============================================================
+# Lane 65 B3: the batch is all or nothing (issues, warnings, committed)
+# ============================================================
+async def _create_owned_asset(client: httpx.AsyncClient, tag: str, asset_type: AssetType, currency: str = "USD") -> tuple[int, str]:
+    """Create one asset under a unique name; (id, name)."""
+    name = f"B3 {tag} {unique_id(tag)}"
+    item = FAAssetCreateItem(display_name=name, currency=currency, asset_type=asset_type)
+    resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+    assert resp.status_code == 201, f"Create failed: {resp.status_code}: {resp.text}"
+    return FABulkAssetCreateResponse(**resp.json()).results[0].asset_id, name
+
+
+async def _patch_batch(client: httpx.AsyncClient, items: list[FAAssetPatchItem]) -> FABulkAssetPatchResponse:
+    """PATCH /assets with only the fields each item sets; the answer is always 200."""
+    resp = await client.patch(f"{API_BASE}/assets", json=[it.model_dump(mode="json", exclude_unset=True) for it in items], timeout=TIMEOUT)
+    assert resp.status_code == 200, f"PATCH failed: {resp.status_code}: {resp.text}"
+    return FABulkAssetPatchResponse(**resp.json())
+
+
+@pytest.mark.asyncio
+async def test_patch_batch_with_missing_asset_saves_nothing(test_server):
+    """Lane 65 B3. Red today: the old service saved the real asset and failed only the missing one, and has no
+    ``committed``/``issues``. Contract: one missing id blocks the whole batch, nothing is written."""
+    print_section("B3: PATCH /assets - a missing asset blocks the whole batch")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        real_id, old_name = await _create_owned_asset(client, "MISS", AssetType.STOCK)
+        ghost = 999_999_999
+
+        data = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=real_id, display_name=f"{old_name} renamed"),
+                FAAssetPatchItem(asset_id=ghost, display_name=f"B3 ghost {unique_id('GH')}"),
+            ],
+        )
+
+        assert data.committed is False
+        assert data.success_count == 0
+        assert len(data.results) == 2 and all(r.success is False for r in data.results), data.results
+        assert len(data.issues) == 1, data.issues
+        issue = data.issues[0]
+        assert issue.code == "assetNotFound"
+        assert issue.asset_id == ghost
+        assert issue.index == 1
+        assert issue.field is None
+        assert "not found" in issue.message.lower()
+
+        assert (await _info_of(client, real_id)).display_name == old_name, "the real asset must keep its old name"
+        print_success("✓ missing asset: committed=false, one assetNotFound issue, real asset untouched")
+
+
+@pytest.mark.asyncio
+async def test_patch_batch_family_change_warns_and_saves(test_server):
+    """Lane 65 B3. Red today: no ``warnings`` field. Contract: moving to another family warns (never blocks), moving inside
+    a family (ETF -> ETF_STOCK) does not, and the batch is saved."""
+    print_section("B3: PATCH /assets - family change warns and saves")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        crowd_id, _ = await _create_owned_asset(client, "FAMA", AssetType.CROWDFUND_REAL_ESTATE)
+        etf_id, _ = await _create_owned_asset(client, "FAMB", AssetType.ETF)
+
+        data = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=crowd_id, asset_type=AssetType.ETF_STOCK),
+                FAAssetPatchItem(asset_id=etf_id, asset_type=AssetType.ETF_STOCK),
+            ],
+        )
+
+        assert data.committed is True
+        assert data.issues == []
+        assert len(data.warnings) == 1, data.warnings
+        warning = data.warnings[0]
+        assert warning.code == "assetFamilyChange"
+        assert warning.asset_id == crowd_id
+        assert warning.index == 0
+        assert warning.field == "asset_type"
+        assert warning.params == {"from": "CROWDFUND_REAL_ESTATE", "to": "ETF_STOCK"}
+
+        assert (await _info_of(client, crowd_id)).asset_type == AssetType.ETF_STOCK.value
+        assert (await _info_of(client, etf_id)).asset_type == AssetType.ETF_STOCK.value
+        print_success("✓ cross-family change warned and saved; same-family change silent")
+
+
+@pytest.mark.asyncio
+async def test_patch_batch_three_configurations_are_saved(test_server):
+    """Lane 65 B3. Each asset of one request carries its own configuration; all are saved and each asset shows exactly its own
+    changes. Red today: the response has no ``committed``."""
+    print_section("B3: PATCH /assets - three different configurations in one request")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        id1, name1 = await _create_owned_asset(client, "CFG1", AssetType.ETF)
+        id2, name2 = await _create_owned_asset(client, "CFG2", AssetType.STOCK)
+        id3, name3 = await _create_owned_asset(client, "CFG3", AssetType.STOCK)
+        before = {a: await _info_of(client, a) for a in (id1, id2, id3)}
+
+        data = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=id1, asset_type=AssetType.BOND),
+                FAAssetPatchItem(asset_id=id2, active=False, quote_base_quantity=100),
+                FAAssetPatchItem(asset_id=id3, is_benchmark=True, user_url="https://example.com/x"),
+            ],
+        )
+
+        assert data.committed is True
+        assert data.issues == []
+        assert data.success_count == 3 and all(r.success for r in data.results), data.results
+
+        a1, a2, a3 = [await _info_of(client, a) for a in (id1, id2, id3)]
+        assert a1.asset_type == AssetType.BOND.value
+        assert (a1.active, a1.is_benchmark, a1.quote_base_quantity, a1.user_url) == (before[id1].active, before[id1].is_benchmark, before[id1].quote_base_quantity, before[id1].user_url)
+        assert a2.active is False and a2.quote_base_quantity == 100
+        assert (a2.asset_type, a2.is_benchmark, a2.user_url) == (before[id2].asset_type, before[id2].is_benchmark, before[id2].user_url)
+        assert a3.is_benchmark is True and a3.user_url == "https://example.com/x"
+        assert (a3.asset_type, a3.active, a3.quote_base_quantity) == (before[id3].asset_type, before[id3].active, before[id3].quote_base_quantity)
+        assert (a1.display_name, a2.display_name, a3.display_name) == (name1, name2, name3)
+        print_success("✓ three configurations saved, each asset has only its own changes")
+
+
+@pytest.mark.asyncio
+async def test_patch_batch_failing_item_rolls_back_the_flushed_ones(test_server):
+    """Lane 65 B3. The only path where «nothing saved» undoes rows already flushed: item 0 renames its asset, item 1 sends
+    an empty name, which the apply step stores as NULL and the flush refuses (NOT NULL). Contract: ``patchFailed`` on
+    item 1, ``committed`` false, and item 0's rename is rolled back.
+
+    Lane 65 B4 changed this test: it used to make item 1 take the name of another asset (``uq_assets_display_name``), but
+    that is now caught by the check step as ``assetNameTaken``, before anything is written; an empty name is the one
+    failure left that only the flush reveals through the API."""
+    print_section("B3: PATCH /assets - a failing item rolls back the items already applied")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        first_id, first_name = await _create_owned_asset(client, "RBK1", AssetType.STOCK)
+        second_id, second_name = await _create_owned_asset(client, "RBK2", AssetType.STOCK)
+
+        data = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=first_id, display_name=f"{first_name} renamed"),
+                FAAssetPatchItem(asset_id=second_id, display_name=""),
+            ],
+        )
+
+        assert data.committed is False
+        assert data.success_count == 0 and all(r.success is False for r in data.results), data.results
+        assert [(i.code, i.asset_id, i.index) for i in data.issues] == [("patchFailed", second_id, 1)], data.issues
+        assert (await _info_of(client, first_id)).display_name == first_name, "the flushed rename of item 0 must be rolled back"
+        assert (await _info_of(client, second_id)).display_name == second_name
+        print_success("✓ patchFailed on item 1, item 0 rolled back")
+
+
+# ============================================================
+# Lane 65 B4: a name another asset has is caught by the check, before any write
+# ============================================================
+@pytest.mark.asyncio
+async def test_patch_batch_name_taken_by_another_asset_is_an_issue(test_server):
+    """Lane 65 B4 (coordinator's decision: protect the input where an error can really happen). Red today: the clash only
+    shows as a generic ``patchFailed`` at the flush. Contract: ``assetNameTaken`` on the item, ``field`` display_name,
+    ``params.name``, found by the check, nothing saved (the other item keeps its old name too)."""
+    print_section("B4: PATCH /assets - a name taken by another asset is assetNameTaken")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        first_id, first_name = await _create_owned_asset(client, "NMT1", AssetType.STOCK)
+        second_id, second_name = await _create_owned_asset(client, "NMT2", AssetType.STOCK)
+        _holder_id, taken_name = await _create_owned_asset(client, "NMT3", AssetType.STOCK)
+
+        data = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=first_id, display_name=f"{first_name} renamed"),
+                FAAssetPatchItem(asset_id=second_id, display_name=taken_name),
+            ],
+        )
+
+        assert data.committed is False and data.success_count == 0
+        assert all(r.success is False for r in data.results), data.results
+        assert len(data.issues) == 1, data.issues
+        issue = data.issues[0]
+        assert (issue.code, issue.asset_id, issue.index, issue.field, issue.params) == ("assetNameTaken", second_id, 1, "display_name", {"name": taken_name})
+        assert (await _info_of(client, first_id)).display_name == first_name
+        assert (await _info_of(client, second_id)).display_name == second_name
+        print_success("✓ assetNameTaken with params.name, nothing saved")
+
+
+@pytest.mark.asyncio
+async def test_patch_batch_two_items_taking_the_same_name_is_an_issue(test_server):
+    """Lane 65 B4. Two items of one batch take the same new name: the second one is the clash (the first is the one that
+    holds the name by then), nothing is saved."""
+    print_section("B4: PATCH /assets - two items taking the same new name")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        id_a, name_a = await _create_owned_asset(client, "SAM1", AssetType.STOCK)
+        id_b, name_b = await _create_owned_asset(client, "SAM2", AssetType.STOCK)
+        shared = f"B4 shared {unique_id('SAM')}"
+
+        data = await _patch_batch(client, [FAAssetPatchItem(asset_id=id_a, display_name=shared), FAAssetPatchItem(asset_id=id_b, display_name=shared)])
+
+        assert data.committed is False
+        assert [(i.code, i.asset_id, i.index, i.params) for i in data.issues] == [("assetNameTaken", id_b, 1, {"name": shared})], data.issues
+        assert (await _info_of(client, id_a)).display_name == name_a
+        assert (await _info_of(client, id_b)).display_name == name_b
+        print_success("✓ the second item of the pair is the assetNameTaken")
+
+
+@pytest.mark.asyncio
+async def test_patch_batch_name_checks_follow_the_batch_order(test_server):
+    """Lane 65 B4. The check judges the names as the apply step meets them, item after item: an asset that keeps its own
+    name is not a clash, and a name that an earlier item of the batch has just left is free for a later one. The other
+    way round (taking a name before its holder leaves it) is a clash, because the flush would refuse it."""
+    print_section("B4: PATCH /assets - name checks follow the batch order")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        id_a, name_a = await _create_owned_asset(client, "ORD1", AssetType.STOCK)
+        id_b, name_b = await _create_owned_asset(client, "ORD2", AssetType.STOCK)
+        fresh = f"B4 fresh {unique_id('ORD')}"
+
+        # A moves away, then B takes A's old name.
+        data = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=id_a, display_name=fresh),
+                FAAssetPatchItem(asset_id=id_b, display_name=name_a),
+            ],
+        )
+        assert data.committed is True and data.issues == [], data.issues
+        assert (await _info_of(client, id_a)).display_name == fresh
+        assert (await _info_of(client, id_b)).display_name == name_a
+
+        # Own current name: no clash.
+        same = await _patch_batch(client, [FAAssetPatchItem(asset_id=id_a, display_name=fresh, active=False)])
+        assert same.committed is True and same.issues == [], same.issues
+
+        # The wrong order: B takes A's name while A still holds it.
+        wrong = await _patch_batch(
+            client,
+            [
+                FAAssetPatchItem(asset_id=id_b, display_name=fresh),
+                FAAssetPatchItem(asset_id=id_a, display_name=f"{fresh} moved"),
+            ],
+        )
+        assert wrong.committed is False
+        assert [(i.code, i.asset_id, i.index) for i in wrong.issues] == [("assetNameTaken", id_b, 0)], wrong.issues
+        assert (await _info_of(client, id_a)).display_name == fresh
+        assert (await _info_of(client, id_b)).display_name == name_a
+        print_success("✓ moved-away names are free for later items, held names are not, own name is fine")

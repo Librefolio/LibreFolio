@@ -497,11 +497,21 @@ def api_transactions_wac_inline(verbose: bool = False, test_names: list = None) 
 def api_assets_patch_fields(verbose: bool = False, test_names: list = None) -> bool:
     """Run asset PATCH fields tests."""
     print_section("Assets Patch Fields Tests")
-    print_info("Testing PATCH /assets/{id} field-level updates")
+    print_info("Testing PATCH /assets field-level updates, all or nothing batches, assetNameTaken")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_patch_fields.py", test_names)
     return run_command(cmd, "Assets patch fields tests", verbose=verbose)
+
+
+def api_assets_validate(verbose: bool = False, test_names: list = None) -> bool:
+    """Run POST /assets/validate (dry run of the asset PATCH) tests."""
+    print_section("Assets Validate (lane 65 B4) API Tests")
+    print_info("Testing POST /assets/validate: never writes, a currency change keeps prices and events, same issues and warnings as PATCH")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_assets_validate.py", test_names)
+    return run_command(cmd, "Assets validate tests", verbose=verbose)
 
 
 def api_ohlc_sentinel(verbose: bool = False, test_names: list = None) -> bool:
@@ -534,7 +544,7 @@ def api_prices_currency_coherence(verbose: bool = False, test_names: list = None
 def api_asset_currency_change(verbose: bool = False, test_names: list = None) -> bool:
     """Run asset currency-change flow tests."""
     print_section("Asset Currency Change (N68) API Tests")
-    print_info("Testing PATCH /assets currency change: never blocked, prices + non-split events removed, SPLITs and their transactions kept, mixed batch partial")
+    print_info("Testing PATCH /assets currency change: never blocked, prices + non-split events removed, SPLITs and their transactions kept, mixed batch with a missing asset saves nothing")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_currency_change.py", test_names)
     return run_command(cmd, "Asset currency change tests", verbose=verbose)
@@ -1074,6 +1084,16 @@ def api_email_verification(verbose: bool = False, test_names: list[str] | None =
     return run_command(cmd, "Email verification API tests", verbose=verbose)
 
 
+def api_profile_email_change(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the API tests of the Profile routes of a verified change of address (project 71), in-process."""
+    print_section("Profile Email Change API Tests")
+    print_info("Testing PUT /auth/profile (pending with email on: no cookie, nothing changed; applied without links), DELETE /auth/profile/email-change, POST /auth/profile/email-change/resend, pending_email_change in the answer, /auth/me and the sign-in; 400, 409, 429, 502, 404")
+    print_info("In-process: the real auth router on a private SQLite, the confirmation sent to an outbox, the background emails recorded; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_profile_email_change_api.py", test_names)
+    return run_command(cmd, "Profile email change API tests", verbose=verbose)
+
+
 def api_owner_email_change(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the API tests of the owner's email-change confirmation: POST /email/email-change/confirm, in-process."""
     print_section("Owner Email Change API Tests")
@@ -1275,7 +1295,7 @@ Tests for REST API endpoints (server auto-started):
         name="FX API",
         desc="Conversion, providers, pair sources; X-R65 422 date_out_of_range on manual rates; X-R75: POST /fx/providers/routes?replace=true keeps exactly the posted routes of each pair named (the MANUAL item alone leaves the pair manual), a refused replace (400, 422) changes nothing, without replace the upsert as before",
     )
-    add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="_compress_convert_errors utility")
+    add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="split_fx_issues, group_fx_issues, issue detail text")
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
@@ -1474,7 +1494,8 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "broker-overdraft-off-refused", api_broker_overdraft_off_refused, name="Broker Overdraft Off Refused", desc="PATCH allow_cash_overdraft=false over a negative cash is refused and the stored flag stays on (own user and broker)")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")
-    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets/{id} field-level updates")
+    add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets field-level updates, all or nothing batches, assetNameTaken")
+    add_test(api, "assets-validate", api_assets_validate, name="Assets Validate", desc="POST /assets/validate dry run of the all-or-nothing asset PATCH: never writes, a currency change keeps prices and events, same issues and warnings as PATCH")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
     add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard reject on currency mismatch; X-R71: 422 price_currency_mismatch (items per asset at fault, count), the whole upload refused, no asset written; an unknown asset still reported")
@@ -1483,7 +1504,7 @@ Tests for REST API endpoints (server auto-started):
         "asset-currency-change",
         api_asset_currency_change,
         name="Asset Currency Change",
-        desc="N68 policy A: the currency PATCH is never blocked; prices and non-split events go, their transactions are unlinked, SPLITs and their transactions stay; same currency and nothing-to-lose unchanged; mixed batch 200 partial",
+        desc="N68 policy A: the currency PATCH is never blocked; prices and non-split events go, their transactions are unlinked, SPLITs and their transactions stay; same currency and nothing-to-lose unchanged; mixed batch with a missing asset: 200, committed=false, nothing saved",
     )
     add_test(api, "asset-prices-export", api_asset_prices_export, name="Asset Prices Export", desc="CSV/JSON export + round-trip")
     add_test(api, "prices-sync-delta", api_prices_sync_delta, name="Prices Sync Delta", desc="changed_points payload")
@@ -1758,6 +1779,16 @@ Tests for REST API endpoints (server auto-started):
         # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
         # SMTP and LIBREFOLIO_PUBLIC_URL variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "profile-email-change",
+        api_profile_email_change,
+        name="Profile Email Change API",
+        desc="PUT /auth/profile with email on: 200 email_change pending, the address unchanged, no Set-Cookie, pending_email_change {email, expires_at} in the answer, /auth/me and the sign-in, the confirmation to the new address and the notice to the old one scheduled; without links (email off, SMTP without LIBREFOLIO_PUBLIC_URL) applied as before; a username alone null; a taken address 400 and a spent budget 429 (Retry-After) save no username; 502 EMAIL_DELIVERY_FAILED without smtp_code keeps the username and leaves nothing waiting; the owner 409 before the password; DELETE /auth/profile/email-change 204 twice; resend 429 / 200 / 409 EMAIL_TAKEN / 404 / 409 EMAIL_UNAVAILABLE; route names and models agreed with the web app",
+        # PURE: the real auth router runs in-process on a private SQLite file under tmp_path; the confirmation goes to an
+        # outbox, the background emails to recorders, the service's clock is the test's; the lane's backend is never called.
         isolation="pure",
     )
     add_test(

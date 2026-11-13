@@ -65,7 +65,6 @@ import pytest
 
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
-from backend.app.services import portfolio_service
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx import storage as fx_storage
 from backend.app.services.pac_allocator.evaluation import scenario
@@ -74,6 +73,7 @@ from backend.app.services.pac_allocator.evaluation.keys import fx_pair_key
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.source import wac as source_wac
 from backend.app.services.pac_allocator.source.keys import normalized_fx_pair
+from backend.app.services.portfolio import wac as wac_module
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 APP_ROOT = REPO_ROOT / "backend" / "app"
@@ -477,7 +477,7 @@ async def _wac_evidence(monkeypatch, *, source_currency: str, stored_rate: Decim
     """Drive ``build_planner_wac_contexts`` on one holding: the WAC runtime and the saved-row reader replaced, the session
     a bare object that nothing reads. Returns the one evidence line."""
     base, quote, _inverted = normalized_fx_pair(source_currency, "EUR")
-    monkeypatch.setattr(portfolio_service, "compute_wac_iterative", AsyncMock(return_value=_wac_result(source_currency=source_currency, rate_used=rate_used)))
+    monkeypatch.setattr(wac_module, "compute_wac_iterative", AsyncMock(return_value=_wac_result(source_currency=source_currency, rate_used=rate_used)))
     monkeypatch.setattr(source_wac, "_load_wac_fx_rows", AsyncMock(return_value={(base, quote, ON): SimpleNamespace(rate=stored_rate, source="MANUAL_WAC_FX")}))
     rows = await source_wac.build_planner_wac_contexts(
         object(),
@@ -640,3 +640,138 @@ def test_the_house_of_the_orientation_imports_nothing_from_the_services():
     """The house serves ``fx`` and the PAC; it reads neither: ``ExactRatio`` is reached through ``type(rate)``."""
     imports = _service_imports((APP_ROOT / HOME).read_text(encoding="utf-8"), "backend.app.services.financial_math")
     assert imports == [], f"backend/app/{HOME} imports {imports}"
+
+
+# =============================================================================
+# T-U1: one reading of «a rate / a price is stale» and one list of the conversions that were not made
+# =============================================================================
+
+
+def test_a_rate_is_stale_when_older_than_the_threshold():
+    """``is_stale``: 7 days old is not stale, 8 is; ``first_stale_day`` is the first day it turns true. A row of 20/10 is stale from 28/10."""
+    from datetime import date as _date
+    from datetime import timedelta
+
+    from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS, first_stale_day, is_stale
+
+    observed = _date(2026, 10, 20)
+    assert STALE_PRICE_THRESHOLD_DAYS == 7
+    assert is_stale(observed, _date(2026, 10, 27)) is False
+    assert is_stale(observed, _date(2026, 10, 28)) is True
+    assert first_stale_day(observed) == _date(2026, 10, 28)
+    assert is_stale(observed, first_stale_day(observed) - timedelta(days=1)) is False
+    # a threshold of the caller's own
+    assert is_stale(observed, _date(2026, 10, 22), threshold_days=1) is True
+    assert first_stale_day(observed, threshold_days=1) == _date(2026, 10, 22)
+
+
+def test_missing_pair_infos_lists_each_pair_once_with_its_dates_and_merged_spans():
+    """``missing_pair_infos``: the union of the pairs asked by date and by span, dates sorted and unique, adjacent spans merged."""
+    from datetime import date as _date
+
+    from backend.app.services.financial_math.fx_rates import missing_pair_infos
+
+    d = _date
+    infos = missing_pair_infos(
+        {"USD/EUR": {d(2019, 3, 1), d(2019, 2, 1)}, "GBP/EUR": [d(2020, 1, 5), d(2020, 1, 5)]},
+        {"USD/EUR": [(d(2019, 4, 1), d(2019, 4, 3)), (d(2019, 4, 4), d(2019, 4, 6))], "CHF/EUR": [(d(2021, 1, 1), d(2021, 1, 1))]},
+    )
+
+    assert [i.pair for i in infos] == ["CHF/EUR", "GBP/EUR", "USD/EUR"]
+    by_pair = {i.pair: i for i in infos}
+    assert by_pair["USD/EUR"].dates == [d(2019, 2, 1), d(2019, 3, 1)]
+    assert [(r.start, r.end) for r in by_pair["USD/EUR"].ranges] == [(d(2019, 4, 1), d(2019, 4, 6))]
+    assert by_pair["GBP/EUR"].dates == [d(2020, 1, 5)] and by_pair["GBP/EUR"].ranges == []
+    assert by_pair["CHF/EUR"].dates == [] and [(r.start, r.end) for r in by_pair["CHF/EUR"].ranges] == [(d(2021, 1, 1), d(2021, 1, 1))]
+    assert missing_pair_infos({}, {}) == []
+
+
+# -----------------------------------------------------------------------------
+# T-U1 parity: the expressions the callers wrote before, verbatim, against the shared functions, on every input of a grid
+# -----------------------------------------------------------------------------
+
+
+def test_the_shared_stale_predicate_gives_the_result_of_every_expression_it_replaced():
+    """Same result on every input. The replaced expressions, as they were written:
+
+    * ``daily_state._stale_fx_pair``: ``rate_day is None or (day - rate_day).days <= STALE_PRICE_THRESHOLD_DAYS`` → not stale;
+    * ``market_series`` (a carried price, a carried FX rate): ``(valuation_date - observed).days > STALE_PRICE_THRESHOLD_DAYS``;
+    * ``daily_state._stale_turn_days`` and ``AskedDayRates.stale_turn_days``: ``observed + timedelta(days=threshold + 1)``.
+    Every age from -3 to 40 days (a rate dated after the day included), every threshold from 0 to 14, and the default one.
+    """
+    from datetime import date as _date
+    from datetime import timedelta
+
+    from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS, first_stale_day, is_stale
+
+    base = _date(2026, 3, 1)
+    checked = 0
+    for age in range(-3, 41):
+        observed, day = base, base + timedelta(days=age)
+        # daily_state._stale_fx_pair and market_series, with the default threshold
+        assert is_stale(observed, day) == ((day - observed).days > STALE_PRICE_THRESHOLD_DAYS)
+        assert (not is_stale(observed, day)) == ((day - observed).days <= STALE_PRICE_THRESHOLD_DAYS)
+        for threshold in range(0, 15):
+            assert is_stale(observed, day, threshold) == ((day - observed).days > threshold)
+            checked += 1
+    for threshold in [*range(0, 15), STALE_PRICE_THRESHOLD_DAYS]:
+        assert first_stale_day(base, threshold) == base + timedelta(days=threshold + 1)
+        # the day it turns stale is the first one on which ``is_stale`` is true
+        assert is_stale(base, first_stale_day(base, threshold), threshold) and not is_stale(base, first_stale_day(base, threshold) - timedelta(days=1), threshold)
+    assert first_stale_day(base) == base + timedelta(days=STALE_PRICE_THRESHOLD_DAYS + 1)
+    assert checked == 44 * 15
+
+
+def test_missing_pair_infos_gives_the_result_of_the_four_comprehensions_it_replaced():
+    """Same result on every input the callers pass (a ``defaultdict`` of sets and one of span lists). The replaced expression, verbatim in
+    ``_engine_missing_fx_pairs``, ``LotsAnalysisService`` (gap report), ``FxRateResolver.missing_pairs`` and ``_merge_missing_pairs``:
+    ``WACMissingPairInfo(pair=pair, dates=sorted(dates.get(pair, ())), ranges=[DateSpan(start=a, end=b) for a, b in merged_spans(spans.get(pair, ()))])``
+    for each pair of ``sorted({*dates, *spans})``.
+    """
+    import random
+    from collections import defaultdict
+    from datetime import date as _date
+    from datetime import timedelta
+
+    from backend.app.schemas.common import DateSpan
+    from backend.app.schemas.wac import WACMissingPairInfo
+    from backend.app.services.financial_math.fx_rates import missing_pair_infos
+    from backend.app.utils.day_spans import merged_spans
+
+    def before(dates, spans):
+        pairs = sorted({*dates, *spans})
+        return [WACMissingPairInfo(pair=pair, dates=sorted(dates.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans.get(pair, ()))]) for pair in pairs]
+
+    rng = random.Random(20261111)
+    start = _date(2024, 1, 1)
+    for _ in range(300):
+        dates, spans = defaultdict(set), defaultdict(list)
+        for pair in rng.sample(["USD/EUR", "GBP/EUR", "CHF/EUR", "JPY/EUR", "SEK/EUR"], rng.randint(0, 5)):
+            for _day in range(rng.randint(0, 6)):
+                dates[pair].add(start + timedelta(days=rng.randint(0, 60)))
+            for _span in range(rng.randint(0, 4)):
+                first = start + timedelta(days=rng.randint(0, 60))
+                spans[pair].append((first, first + timedelta(days=rng.randint(0, 5))))
+        assert missing_pair_infos(dates, spans) == before(dates, spans)
+        # the lookups of the old code did not add keys to the inputs, and neither do the new ones
+        keys = (set(dates), set(spans))
+        missing_pair_infos(dates, spans)
+        assert (set(dates), set(spans)) == keys
+
+
+def test_fx_days_back_is_the_old_expressions_of_every_reader_of_the_provenance():
+    """``fx_days_back``: the days between the day asked and the rate row, ``0`` the same day; equal to each expression it replaced (a row is never newer)."""
+    import random
+    from datetime import timedelta
+
+    from backend.app.services.financial_math.fx_rates import fx_days_back
+
+    assert fx_days_back(date(2026, 10, 28), date(2026, 10, 20)) == 8
+    assert fx_days_back(date(2026, 10, 20), date(2026, 10, 20)) == 0
+    rng = random.Random(11)
+    for _ in range(300):
+        requested = date(2020, 1, 1) + timedelta(days=rng.randrange(3000))
+        rate_date = requested - timedelta(days=rng.randrange(0, 400))
+        assert fx_days_back(requested, rate_date) == (requested - rate_date).days  # /fx/convert, YoC, event_store, price_query
+        assert fx_days_back(requested, rate_date) == max((requested - rate_date).days, 0)  # average cost
+        assert fx_days_back(requested, rate_date) == ((requested - rate_date).days if rate_date < requested else 0)  # observed prices

@@ -20,7 +20,7 @@
     import YieldOnCostCell from './YieldOnCostCell.svelte';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-    import {makePositionKey} from '$lib/utils/core/positionKey';
+    import {makePositionKey} from '$lib/features/dashboard/positionKey';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {priceFractionDigits} from '$lib/utils/core/formatFixed';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';

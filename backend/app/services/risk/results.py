@@ -13,28 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.portfolio import (
-    DataQualityReport,
-    DataQualityStatus,
-    PortfolioReportResponse,
-)
-from backend.app.schemas.risk import (
-    AssetRiskScope,
-    PreparedAssetSeriesSet,
-    RiskAnalyticRequest,
-    RiskAnalyticResult,
-    RiskError,
-    RiskErrorCode,
-    RiskExcludedAsset,
-    RiskMode,
-    RiskQueryRequest,
-    RiskResultMetadata,
-    RiskResultStatus,
-    RiskReturnBasis,
-    RiskScopeKind,
-    RiskStressMethod,
-    RiskWarning,
-)
+from backend.app.schemas.portfolio.data_quality import DataQualityReport, DataQualityStatus
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskExcludedAsset, RiskResultMetadata, RiskWarning
+from backend.app.schemas.risk.scope import AssetRiskScope, RiskAnalyticRequest, RiskQueryRequest
+from backend.app.schemas.risk.series import PreparedAssetSeriesSet
+from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskMode, RiskResultStatus, RiskReturnBasis, RiskScopeKind, RiskStressMethod
 from backend.app.services.financial_math.returns import observed_annualization
 from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.risk.base import (

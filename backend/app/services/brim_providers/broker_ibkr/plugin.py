@@ -44,7 +44,7 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as io
-from backend.app.services.provider_registry import register_provider
+from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -105,7 +105,7 @@ class IBKRBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import trades from Interactive Brokers CSV export. " "Supports stocks, ETFs, and FX trades with commissions."
+        return "Import trades from Interactive Brokers CSV export. Supports stocks, ETFs, and FX trades with commissions."
 
     @property
     def supported_extensions(self) -> List[str]:

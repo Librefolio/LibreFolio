@@ -183,7 +183,7 @@ test.describe('Asset Detail Page', () => {
         const link = page.getByTestId('asset-detail-transactions-link');
         await expect(link).toBeVisible();
         await expect(link).toHaveAttribute('href', `/transactions?asset_id=${assetId}`);
-        await expect(link).toContainText(`(${globalCount})`);
+        await expect(link.getByTestId('asset-detail-transactions-count')).toHaveText(String(globalCount));
         // The label itself must come from the real transactions.title catalogue
         // entry, not a hardcoded English guess and not a missing key like the old
         // `nav.transactions` (svelte-i18n renders a missing key as the literal key
@@ -600,8 +600,10 @@ test.describe('Asset Detail Page', () => {
             tx_count_own: 0,
         };
         const readyPeerConversionError = 'synthetic-price-conversion-failure';
+        /** The synthetic text of a failure as the issue the endpoint sends for it: USD into EUR, one day; an event text is an event issue. */
+        const fxIssueOfSyntheticError = (text: string) => ({code: text.startsWith('Missing FX rate') ? 'event_rate_missing' : 'rate_not_found', from_currency: 'USD', to_currency: 'EUR', first_date: '2026-08-01', last_date: '2026-08-01', count: 1});
+        const issueCodesOf = (item: {fx_issues?: Array<{code?: string}>} | undefined) => item?.fx_issues?.map((issue) => issue.code);
         const readyPeerEventOnlyConversionError = 'Missing FX rate USD->EUR for event on 2026-08-02';
-        const readyPeerGenericConversionError = 'Conversion 1: No FX rate available for USD->EUR';
         const partialPeer = {
             id: 920_062,
             display_name: 'Synthetic calendar peer Partial',
@@ -2359,7 +2361,9 @@ test.describe('Asset Detail Page', () => {
                         // while the newer 365-day request was still pending.
                         prices: request.include_price === false || isStaleForcedRefresh || isDeferredEmptyMainRefresh ? [] : racePricePoints,
                         events: responseEvents,
-                        errors: responseErrors,
+                        // The failed conversions are data (`fx_issues`, CP-11d): a text that says an event is an event issue, any other a price one
+                        errors: [],
+                        fx_issues: responseErrors.map(fxIssueOfSyntheticError),
                         signals: signalResults,
                     };
                 })
@@ -2617,6 +2621,13 @@ test.describe('Asset Detail Page', () => {
         expect(fxConvertRequestCount).toBe(firstLoadFxConversionsBeforeSync);
         expect(fxRouteMutationRequestCount).toBe(0);
         await expect(page.getByTestId('toast-error')).toHaveCount(2);
+        // Both are this step's (the failed asset sync and the failed FX sync): closed here, as the user would, so that a
+        // later count of error toasts reads only what follows. Left open they live 15 s, and whether they are gone by the
+        // next count would depend on how fast the steps between run.
+        for (let open = 2; open > 0; open--) {
+            await page.getByTestId('toast-error').first().getByTestId('toast-dismiss').click();
+            await expect(page.getByTestId('toast-error')).toHaveCount(open - 1);
+        }
 
         initialComparisonGate.release();
         const initialComparisonResponse = await initialComparisonResponsePromise;
@@ -2938,8 +2949,8 @@ test.describe('Asset Detail Page', () => {
         expect(await conversionGapResponse.finished()).toBeNull();
         assertCalendarBulkRequest(conversionGapResponse.request().postDataJSON(), 30);
         expect(calendarRequestCount).toBe(conversionGapCalendarRequestCount + 1);
-        const conversionGapPayload = (await conversionGapResponse.json()) as {items?: Array<{asset_id?: number; errors?: unknown[]}>};
-        expect(conversionGapPayload.items?.find((item) => item.asset_id === readyPeer.id)?.errors).toEqual([readyPeerConversionError, readyPeerEventOnlyConversionError]);
+        const conversionGapPayload = (await conversionGapResponse.json()) as {items?: Array<{asset_id?: number; fx_issues?: Array<{code?: string}>}>};
+        expect(issueCodesOf(conversionGapPayload.items?.find((item) => item.asset_id === readyPeer.id))).toEqual(['rate_not_found', 'event_rate_missing']);
 
         const conversionGapIssue = readySignalCard.getByTestId('signal-issue');
         await expect(conversionGapIssue).toBeVisible();
@@ -2951,17 +2962,18 @@ test.describe('Asset Detail Page', () => {
         await expect(priceRouteIssues.filter({hasText: readyPeer.currency})).toHaveCount(1);
         await expect(priceRouteIssues.filter({hasText: readyPeerEventCurrency})).toHaveCount(0);
         await conversionGapIssue.click();
-        await expect(page.getByTestId('tooltip-content')).toHaveText(readyPeerConversionError);
-        await page.getByTestId('asset-detail-header').click();
+        // The sentence is worded from the issue: the pair in the direction of the conversion and the day
+        await expect(page.getByTestId('tooltip-content')).toHaveText(/USD.*→.*EUR.*2026-08-01/);
+        await page.getByTestId('asset-detail-name').click();
         await expect(page.getByTestId('tooltip-content')).toHaveCount(0);
 
         // An event-only FX miss is not evidence that the peer's price series
         // failed conversion. Even with a later generic conversion error, the
-        // first event-scoped error keeps the signal's backend diagnosis.
+        // event-scoped issue keeps the signal's backend diagnosis (an event's missing rate is never a price failure).
         exposeMissingComparisonEventRoutes = true;
         missingFxConversionSlugs.clear();
         missingFxConversionSlugs.add(readyPeerEventFxSlug);
-        calendarConversionGapErrors = [readyPeerEventOnlyConversionError, readyPeerGenericConversionError];
+        calendarConversionGapErrors = [readyPeerEventOnlyConversionError];
         const eventOnlyGapCalendarRequestCount = calendarRequestCount;
         const eventOnlyGapResponsePromise = waitForCalendarResponse(30);
         await refreshButton.click();
@@ -2970,8 +2982,8 @@ test.describe('Asset Detail Page', () => {
         expect(await eventOnlyGapResponse.finished()).toBeNull();
         assertCalendarBulkRequest(eventOnlyGapResponse.request().postDataJSON(), 30);
         expect(calendarRequestCount).toBe(eventOnlyGapCalendarRequestCount + 1);
-        const eventOnlyGapPayload = (await eventOnlyGapResponse.json()) as {items?: Array<{asset_id?: number; errors?: unknown[]}>};
-        expect(eventOnlyGapPayload.items?.find((item) => item.asset_id === readyPeer.id)?.errors).toEqual([readyPeerEventOnlyConversionError, readyPeerGenericConversionError]);
+        const eventOnlyGapPayload = (await eventOnlyGapResponse.json()) as {items?: Array<{asset_id?: number; fx_issues?: Array<{code?: string}>}>};
+        expect(issueCodesOf(eventOnlyGapPayload.items?.find((item) => item.asset_id === readyPeer.id))).toEqual(['event_rate_missing']);
 
         const eventOnlyGapIssue = readySignalCard.getByTestId('signal-issue');
         await expect(eventOnlyGapIssue).toBeVisible();
@@ -5047,9 +5059,9 @@ test.describe('Asset Detail Page', () => {
         assertPriceComparisonRequest(twoSlugInitialComparison.request().postDataJSON(), comparisonPeerIds, ninetyDayRange, asset.currency);
         await expect(pageRoot).toHaveAttribute('data-busy', 'false');
         const twoSlugInitialPayload = (await twoSlugInitialComparison.json()) as {
-            items?: Array<{asset_id?: number; prices?: Array<{currency?: string}>; errors?: unknown[]}>;
+            items?: Array<{asset_id?: number; prices?: Array<{currency?: string}>; fx_issues?: Array<{code?: string}>}>;
         };
-        for (const [peerId, currency, slug] of [
+        for (const [peerId, currency] of [
             [readyPeer.id, readyPeer.currency, readyPeerFxSlug],
             [errorPeer.id, errorPeer.currency, errorPeerFxSlug],
         ] as const) {
@@ -5057,7 +5069,7 @@ test.describe('Asset Detail Page', () => {
             expect(item, `comparison response must contain peer ${peerId}`).toBeDefined();
             expect(item?.prices).toHaveLength(pricePoints.length);
             expect(new Set(item?.prices?.map((point) => point.currency))).toEqual(new Set([currency]));
-            expect(item?.errors).toEqual([`synthetic-price-conversion-failure-${slug}`]);
+            expect(issueCodesOf(item)).toEqual(['rate_not_found']);
         }
         await expect(readyFxSyncAction).toBeVisible();
         await expect(errorFxSyncAction).toBeVisible();
@@ -5442,13 +5454,13 @@ test.describe('Asset Detail Page', () => {
             const payload = (await response.json()) as {
                 items?: Array<{
                     asset_id?: number;
-                    errors?: unknown[];
+                    fx_issues?: Array<{code?: string}>;
                     signals?: Array<{instance_id?: string; signal_code?: string; status?: string; availability?: {reason_code?: string | null}}>;
                 }>;
             };
             const readyPeerItem = payload.items?.find((item) => item.asset_id === readyPeer.id);
             expect(readyPeerItem, `same-fingerprint Calendar response must contain owned peer ${readyPeer.id}`).toBeDefined();
-            expect(readyPeerItem?.errors).toEqual([readyPeerConversionError]);
+            expect(issueCodesOf(readyPeerItem)).toEqual(['rate_not_found']);
             expect(readyPeerItem?.signals?.find((signal) => signal.instance_id === calendarInstanceId && signal.signal_code === calendarSignalCode)).toMatchObject({
                 status: 'unavailable',
                 availability: {reason_code: 'missing_input_fields'},
@@ -5688,11 +5700,11 @@ test.describe('Asset Detail Page', () => {
             assertMainDateRange(presentPeerResponse.request().postDataJSON(), ninetyDayRange);
             expect(calendarRequestCount).toBe(presentPeerCalendarRequestsBefore + 1);
             const presentPeerPayload = (await presentPeerResponse.json()) as {
-                items?: Array<{asset_id?: number; errors?: unknown[]; signals?: Array<{instance_id?: string; signal_code?: string; status?: string}>}>;
+                items?: Array<{asset_id?: number; fx_issues?: Array<{code?: string}>; signals?: Array<{instance_id?: string; signal_code?: string; status?: string}>}>;
             };
             const presentPeerItem = presentPeerPayload.items?.find((item) => item.asset_id === readyPeer.id);
             expect(presentPeerItem, `authoritative Calendar response must contain owned peer ${readyPeer.id}`).toBeDefined();
-            expect(presentPeerItem?.errors).toEqual([]);
+            expect(issueCodesOf(presentPeerItem)).toEqual([]);
             expect(presentPeerItem?.signals?.find((signal) => signal.instance_id === calendarInstanceId && signal.signal_code === calendarSignalCode)).toMatchObject({status: 'ok'});
 
             await expect(chart).toHaveAttribute('data-calendar-comparison-ready', String(readyPeer.id));
@@ -8568,7 +8580,7 @@ test.describe('All-range event markers on a price-cache hit', () => {
     // Path A, from the list: the first answer of a detail that misses the daily
     // cache. With the range on "All", the list bulk-queries ['2000-01-01',
     // today] for its cards. Since Z-29b it keeps that series in its own reduced
-    // cache (`stores/reducedPriceCache.ts`), beside the shared daily price store
+    // cache (`features/assets/reducedPriceCache.ts`), beside the shared daily price store
     // and without touching it. The detail opened from that list therefore finds
     // no daily prices: it asks prices AND events in one request (`include_price:
     // true`) and resolves "All" from that answer. A regression here would be the
@@ -9104,11 +9116,11 @@ test.describe('Provider chip names the provider once its catalogue arrives', () 
             const iconSelector = `img[src=${JSON.stringify(iconUrl)}]`;
             await expect(info.locator(iconSelector), 'the catalogue icon reaches the provider chip').toBeAttached({timeout: 5_000});
 
-            // The chip is the span holding the catalogue's own icon: no test id, class or position.
+            // The chip is found by its test id; it holds the catalogue's own icon.
             // An exact text rather than a header-wide toContainText, so it also says the label is not
             // the raw code (name ≠ code, checked above). Provider names come from the backend
             // registry, not from i18n: this is not an assertion on translated text.
-            const chip = info.locator('span', {has: page.locator(iconSelector)});
+            const chip = info.getByTestId('asset-detail-provider-badge');
             await expect(chip, `the provider chip names «${providerCode}» as the catalogue does, not by its raw code`).toHaveText(provider.name, {timeout: 5_000});
         } finally {
             // The routes stay until the page closes with the test, so the live-price answer outlives the asset page, whose
@@ -9625,7 +9637,7 @@ test.describe('Asset detail — the price summary shows the backend’s Δ over 
 // The page asks for its prices, its events and its backend signal results in one `POST /assets/prices/query`, and
 // reads the answer with signal isolation (`parseAssetPriceQueryWithSignalIsolation`): an item whose signal results hold
 // an invalid one keeps its prices, and its raw `signals`. `loadChartData` then hands those raw results to
-// `parseBackendSignalResults` (`lib/charts/chartPageSignals.ts`), which throws on the first result the signal result
+// `parseBackendSignalResults` (`lib/features/signals/chartPageSignals.ts`), which throws on the first result the signal result
 // schema rejects — whenever the main item's `signals` holds one, with or without a signal configured. The throw lands
 // in the catch and skips the two statements after the parse:
 //   · the price-cache write (`store.merge` / `store.markFetched`): the next read of the same range asks for the prices
@@ -9648,7 +9660,7 @@ test.describe('X-R16 asset detail: an invalid signal result keeps the prices and
     // A ceiling, never a delay: a sign-in, a page load and the round trips each test waits for by name.
     test.describe.configure({timeout: 60_000});
 
-    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `priceChartHelpers.ts`). */
+    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `calendarReturn.ts`). */
     const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
     /** A result the signal result schema rejects: a status outside ok, partial, unavailable and failed (as in `chartPageSignals.test.ts`). */
     const INVALID_SIGNAL_RESULT = {instance_id: 'x-r16-sma', signal_code: 'SMA', status: 'not-a-status'};
@@ -9838,7 +9850,7 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
     test.describe.configure({timeout: 60_000});
 
     const PRICE_QUERY_PATH = '/api/v1/assets/prices/query';
-    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `priceChartHelpers.ts`). */
+    /** The calendar Rolling Return the page asks for in calendar mode (`CALENDAR_RETURN_SIGNAL_CODE`, `calendarReturn.ts`). */
     const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
     /** The backend indicator the period test configures: SMA, in the trend family of the signals picker. */
     const INDICATOR = {group: 'trend', option: 'sma', signalCode: 'SMA'} as const;

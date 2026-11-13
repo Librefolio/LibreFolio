@@ -9,6 +9,7 @@ Calendar days, not trading days: a quote carried over a weekend or a holiday is 
 thresholds are chosen so that it never counts as a problem on its own.
 """
 
+from datetime import date, timedelta
 from decimal import Decimal
 
 STALE_PRICE_THRESHOLD_DAYS = 7
@@ -46,3 +47,13 @@ non-zero quantity after the position is economically closed, because each tranch
 its own. The portfolio's holdings and the asset list's "held now" flags both read positions through
 this threshold, so an asset is "held now" exactly when the portfolio would list it as a holding.
 """
+
+
+def is_stale(observed_on: date, day: date, threshold_days: int = STALE_PRICE_THRESHOLD_DAYS) -> bool:
+    """Whether a price or a rate last observed on ``observed_on`` is stale on ``day``: older than ``threshold_days`` calendar days."""
+    return (day - observed_on).days > threshold_days
+
+
+def first_stale_day(observed_on: date, threshold_days: int = STALE_PRICE_THRESHOLD_DAYS) -> date:
+    """The first day on which a price or a rate observed on ``observed_on`` is stale: ``is_stale`` turns true there and not a day before."""
+    return observed_on + timedelta(days=threshold_days + 1)

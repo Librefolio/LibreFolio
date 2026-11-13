@@ -1251,10 +1251,10 @@ async def test_get_prices_missing_fx_pair():
         assert p.currency == "JPY", f"Expected native JPY (conversion failed), got {p.currency}"
         assert p.close == Decimal("15000.00"), "Price should be unchanged"
 
-        # Errors should report the missing FX pair
-        assert len(result.errors) > 0, "Expected error about missing FX pair"
-        print_info(f"Error message: {result.errors[0]}")
-        print_success("✓ Missing FX pair: native price returned + error reported")
+        # The missing pair is reported as data (CP-11d), in the direction of the conversion (JPY into CHF, not alphabetical)
+        assert [(issue.code, issue.from_currency, issue.to_currency) for issue in result.fx_issues] == [("rate_not_found", "JPY", "CHF")], "Expected an fx issue about the missing FX pair"
+        print_info(f"FX issue: {result.fx_issues[0]}")
+        print_success("✓ Missing FX pair: native price returned + fx issue reported")
 
 
 @pytest.mark.asyncio
@@ -2095,9 +2095,7 @@ async def test_fx_conversion_errors_dedup_once_per_job_capped_and_fast():
     This test drives ~1500 uncovered points through get_prices_bulk and pins:
       - the wall clock stays sane (generous 10s bound; the real contract is
         "not quadratic", a wall-clock assert is only a coarse backstop);
-      - `result.errors` holds at most 10 conversion errors + 1 summary row;
-      - `errors[0]` is the first failure's message, intact;
-      - the summary row counts the suppressed remainder.
+      - the failed days are one `fx_issues` entry for the pair, counting every day (CP-11d), and `errors` stays empty.
 
     Coverage assumption: the series lives in year 2000, and FX rate lookup is
     *backward*-fill (a rate covers only dates at/after its own). Mock seeding
@@ -2146,16 +2144,9 @@ async def test_fx_conversion_errors_dedup_once_per_job_capped_and_fast():
 
         assert elapsed < 10.0, f"get_prices_bulk took {elapsed:.1f}s for {n_days} uncovered points — the quadratic per-point dedup is back"
 
-        conv_errors = [e for e in result.errors if "FX rate" in e or "more FX conversion failures" in e]
-        assert len(conv_errors) == len(result.errors), f"unexpected non-conversion errors: {result.errors[:3]}"
-        assert len(conv_errors) == 11, f"expected 10 kept + 1 summary, got {len(conv_errors)}"
-
-        # errors[0] is the first failure, intact (the FE surfaces exactly this one).
-        assert conv_errors[0] == (f"Conversion 0: No FX rate found for EUR/USD on or before {first_day.isoformat()}. " "Please sync rates using POST /api/v1/fx/currencies/sync"), conv_errors[0]
-        # No duplicates survived the dedup.
-        assert len(set(conv_errors[:10])) == 10
-        # The summary row carries the suppressed remainder.
-        assert conv_errors[-1] == f"… and {n_days - 10} more FX conversion failures", conv_errors[-1]
+        # CP-11d: no text per failed day any more: one issue for the pair, in the direction of the conversion, counting every day.
+        assert result.errors == [], f"unexpected errors: {result.errors[:3]}"
+        assert [(issue.code, issue.from_currency, issue.to_currency, issue.first_date, issue.last_date, issue.count) for issue in result.fx_issues] == [("rate_not_found", "USD", "EUR", first_day, last_day, n_days)]
     finally:
         # Restore what this test wrote (1500 rows + the asset).
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:

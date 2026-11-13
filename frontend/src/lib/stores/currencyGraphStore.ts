@@ -2,12 +2,15 @@
  * Currency Graph Store — Session-level cache for the FX currency graph.
  *
  * Builds the graph from GET /fx/providers + GET /utilities/currencies,
- * then caches it for the entire session. Both API responses are stable
- * (providers are registered at startup, currencies don't change).
+ * then keeps it for the rest of the page session. The backend keeps each
+ * provider's currency list for 24 h (and the last known one when the provider
+ * fails), so the answers are stable for a session in practice, not by contract:
+ * a provider's list that changes later is seen after a reload.
  *
  * There is deliberately no invalidation API: the graph is built only from
  * provider capabilities — the MANUAL sentinel is skipped and user FX
- * routes/rates are not graph inputs — so a complete graph can never go stale.
+ * routes/rates are not graph inputs — so the user's own changes never make a
+ * complete graph stale.
  *
  * One exception: a provider whose currency list the backend could not read
  * (`currencies_unavailable`, e.g. ECB slow right after a restart) has no
