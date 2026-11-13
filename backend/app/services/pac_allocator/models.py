@@ -42,7 +42,10 @@ type ExactUnitKind = Literal["boolean", "count", "ratio", "asset_quantity", "nat
 type ExactObjectiveCode = Literal[
     "fixed_l2",
     "shortfall",
-    "turnover",
+    # The Rebalancer (B1 of project 67, specifica §6): one score J, or the chain distance then money lost.
+    "plan_score",
+    "target_distance",
+    "wealth_loss",
     "explicit_cost",
     "incremental_cost",
     "split_asset_count",
@@ -457,22 +460,49 @@ class ExactLimit:
 
 @dataclass(frozen=True, slots=True)
 class ExactCashEntry:
-    """An entry of the plan for one Broker and currency cell: its minimum and maximum final spendable cash (V5 on cash).
-
-    Named an entry, not a limit, so that block B (B1) can add the cell's weight beside its limits. Until then an entry
-    without a minimum and a maximum says nothing and is refused.
+    """An entry of the plan for one Broker and currency cell: its target weight and its minimum and maximum final spendable
+    cash (V5 on cash). In the PAC the weight is always zero; a Rebalancer cell with a weight is an entry of the distance
+    (specifica §6.1, B1 of project 67). An entry with no weight and no limit says nothing and is refused.
     """
 
     broker_id: str
     currency: str
     minimum: ExactLimit | None
     maximum: ExactLimit | None
+    weight: ExactRatio = ExactRatio(0)
 
     def __post_init__(self) -> None:
         _require_text(self.broker_id, "cash limit broker_id")
         _require_currency(self.currency, "cash limit currency")
-        if self.minimum is None and self.maximum is None:
-            raise ValueError("a cash entry needs a minimum or a maximum: until it carries a weight (block B), no limit says nothing")
+        _require_unit_interval(self.weight, "cash entry weight")
+        if self.minimum is None and self.maximum is None and self.weight == ExactRatio(0):
+            raise ValueError("a cash entry needs a weight, a minimum or a maximum: otherwise it says nothing")
+
+
+@dataclass(frozen=True, slots=True)
+class ExactTargetFidelity:
+    """How faithful to the target a Rebalancer plan is (specifica §6.3, D7 of the step-2 plan): one of two shapes.
+
+    ``weighted``: one objective ``J = λ·D/F + (F − W)`` with ``distance_weight`` = ``λ`` > 0, the levels «cost-conscious»
+    (¼), «balanced» (1), «faithful» (4) or a custom value. ``target_first``: a chain, the distance ``D`` first, then the money
+    lost ``F − W``; no ``λ``. The PAC has no fidelity: its objectives are its own cascade.
+    """
+
+    kind: Literal["weighted", "target_first"]
+    distance_weight: ExactRatio | None
+
+    def __post_init__(self) -> None:
+        if self.kind == "weighted":
+            if self.distance_weight is None or self.distance_weight <= ExactRatio(0):
+                raise ValueError("a weighted fidelity needs a positive distance weight")
+        elif self.kind == "target_first":
+            if self.distance_weight is not None:
+                raise ValueError("a target-first fidelity has no distance weight")
+        else:
+            raise ValueError("fidelity kind must be weighted or target_first")
+
+
+BALANCED_FIDELITY = ExactTargetFidelity(kind="weighted", distance_weight=ExactRatio(1))
 
 
 @dataclass(frozen=True, slots=True)
@@ -556,6 +586,20 @@ class ExactTransferLane:
         _require_currency(self.currency, "transfer currency")
 
 
+def _validate_product_shape(scenario: ExactPlannerScenario) -> None:
+    """What a product and its policy allow: holdings, SELL context, a target fidelity."""
+    if (scenario.product == "pac") != (scenario.policy in {"proportional", "min_fragmentation"}):
+        raise ValueError("PAC product requires a PAC policy and vice versa")
+    if scenario.product == "pac" and (scenario.holdings or scenario.sell_context is not None):
+        raise ValueError("PAC scenarios cannot contain holdings or SELL context")
+    if scenario.policy == "invest_only" and scenario.sell_context is not None:
+        raise ValueError("invest-only scenarios cannot contain SELL context")
+    if scenario.policy == "invest_and_sell" and scenario.sell_context is None:
+        raise ValueError("invest-and-sell scenarios require SELL context")
+    if (scenario.product == "rebalancer") != (scenario.target_fidelity is not None):
+        raise ValueError("a Rebalancer scenario requires a target fidelity and a PAC scenario has none")
+
+
 @dataclass(frozen=True, slots=True)
 class ExactPlannerScenario:
     snapshot: ExactSnapshot
@@ -578,16 +622,11 @@ class ExactPlannerScenario:
     sell_context: ExactSellContext | None
     transfer_lanes: tuple[ExactTransferLane, ...] = ()
     cash_entries: tuple[ExactCashEntry, ...] = ()
+    # B1 (project 67): the Rebalancer's target fidelity, required there; the PAC has none.
+    target_fidelity: ExactTargetFidelity | None = None
 
     def __post_init__(self) -> None:
-        if (self.product == "pac") != (self.policy in {"proportional", "min_fragmentation"}):
-            raise ValueError("PAC product requires a PAC policy and vice versa")
-        if self.product == "pac" and (self.holdings or self.sell_context is not None):
-            raise ValueError("PAC scenarios cannot contain holdings or SELL context")
-        if self.policy == "invest_only" and self.sell_context is not None:
-            raise ValueError("invest-only scenarios cannot contain SELL context")
-        if self.policy == "invest_and_sell" and self.sell_context is None:
-            raise ValueError("invest-and-sell scenarios require SELL context")
+        _validate_product_shape(self)
         _require_currency(self.valuation_currency, "valuation_currency")
         _require_canonical_tuple(self.currency_specs, lambda item: item.currency, "currency_specs")
         _require_canonical_tuple(self.provenance, lambda item: item.provenance_id, "provenance")
@@ -609,8 +648,10 @@ class ExactPlannerScenario:
         _require_canonical_tuple(self.cash_entries, lambda item: (item.broker_id, item.currency), "cash_entries")
         if self.valuation_currency not in {item.currency for item in self.currency_specs}:
             raise ValueError("valuation currency requires a currency spec")
-        if sum((item.weight for item in self.target_weights), ExactRatio(0)) != ExactRatio(1):
-            raise ValueError("target weights must total exactly one")
+        if self.product == "pac" and any(item.weight != ExactRatio(0) for item in self.cash_entries):
+            raise ValueError("a PAC cash entry carries limits only, never a weight")
+        if sum((item.weight for item in (*self.target_weights, *self.cash_entries)), ExactRatio(0)) != ExactRatio(1):
+            raise ValueError("target weights of the Assets and the cash cells must total exactly one")
         if {item.asset_id for item in self.target_weights} != {item.asset_id for item in self.assets}:
             raise ValueError("target weights must cover every normalized Asset exactly once")
 
@@ -1191,6 +1232,27 @@ class ExactAssetEvaluation:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactCashTargetEvaluation:
+    """A cash cell with a target (Rebalancer, specifica §6.1): its spendable cash at the end, in the valuation currency,
+    against ``weight · F``."""
+
+    broker_id: str
+    currency: str
+    target_weight: ExactRatio
+    target_value: ExactRatio
+    final_value: ExactRatio
+    residual: ExactRatio
+
+    def __post_init__(self) -> None:
+        _require_text(self.broker_id, "cash target broker_id")
+        _require_currency(self.currency, "cash target currency")
+        _require_unit_interval(self.target_weight, "cash target weight")
+        _require_nonnegative(self.target_value, "cash target value")
+        if self.residual != self.final_value - self.target_value:
+            raise ValueError("cash target residual does not reconcile")
+
+
+@dataclass(frozen=True, slots=True)
 class ExactAccountingEvaluation:
     current_invested: ExactRatio
     selected_funding: ExactRatio
@@ -1205,6 +1267,12 @@ class ExactAccountingEvaluation:
     rounding_adjustment: ExactRatio
     rounding_bound: ExactRatio
     identity_delta: ExactRatio
+    # B1 (project 67), specifica §5-§6: the wealth the plan starts from and ends with, the money lost on the way, and what is
+    # neither in an Asset nor in a cash cell with a target. ``F`` counts every selected cash, trapped or not.
+    initial_wealth: ExactRatio
+    final_wealth: ExactRatio
+    wealth_loss: ExactRatio
+    uninvested: ExactRatio
 
     def __post_init__(self) -> None:
         for field in (
@@ -1215,6 +1283,7 @@ class ExactAccountingEvaluation:
             "fixed_reference",
             "physical_reserves",
             "rounding_bound",
+            "initial_wealth",
         ):
             _require_nonnegative(getattr(self, field), field)
         if self.trapped_funding != self.selected_funding - self.reachable_funding:
@@ -1226,6 +1295,13 @@ class ExactAccountingEvaluation:
         expected_delta = self.shortfall - (self.free_cash + self.physical_reserves + self.economic_losses + self.rounding_adjustment)
         if self.identity_delta != expected_delta:
             raise ValueError("accounting identity_delta does not reconcile")
+        if self.initial_wealth != self.current_invested + self.selected_funding:
+            raise ValueError("initial wealth must equal current invested plus selected funding")
+        if self.wealth_loss != self.initial_wealth - self.final_wealth:
+            raise ValueError("wealth loss must equal initial less final wealth")
+        # The same identity as ``identity_delta``, read on the whole wealth: trapped cash enters both sides and cancels.
+        if self.wealth_loss != self.physical_reserves + self.economic_losses + self.rounding_adjustment + self.identity_delta:
+            raise ValueError("wealth loss does not reconcile with reserves, losses and rounding")
 
 
 @dataclass(frozen=True, slots=True)
@@ -1293,6 +1369,7 @@ class ExactEvaluation:
     ledgers: tuple[ExactBrokerLedgerEvaluation, ...] = ()
     holdings: tuple[ExactHoldingEvaluation, ...] = ()
     assets: tuple[ExactAssetEvaluation, ...] = ()
+    cash_targets: tuple[ExactCashTargetEvaluation, ...] = ()
     accounting: ExactAccountingEvaluation | None = None
     costs: ExactCostEvaluation | None = None
     canonical_tie_decision_ids: tuple[str, ...] = ()

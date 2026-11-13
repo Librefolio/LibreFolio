@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, order_prices, to_valuation
-from backend.app.services.pac_allocator.models import ExactLimit, ExactOrderRoute, ExactPlannerScenario
+from backend.app.services.pac_allocator.models import ExactAccountingEvaluation, ExactLimit, ExactOrderRoute, ExactPlannerScenario
 from backend.app.services.pac_allocator.numeric import ExactRatio
 
 
@@ -62,13 +62,18 @@ def resolve_limit(limit: ExactLimit | None, reference: ExactRatio) -> ExactRatio
 
 def entries_with_limits(scenario: ExactPlannerScenario) -> list[tuple[LimitEntry, ExactLimit | None, ExactLimit | None]]:
     rows = [(LimitEntry("asset", asset_id=item.asset_id), item.minimum, item.maximum) for item in scenario.target_weights if item.minimum is not None or item.maximum is not None]
-    rows += [(LimitEntry("cash", broker_id=item.broker_id, currency=item.currency), item.minimum, item.maximum) for item in scenario.cash_entries]
+    rows += [(LimitEntry("cash", broker_id=item.broker_id, currency=item.currency), item.minimum, item.maximum) for item in scenario.cash_entries if item.minimum is not None or item.maximum is not None]
     return sorted(rows, key=lambda row: row[0].key)
 
 
 def limited_entries(scenario: ExactPlannerScenario) -> tuple[LimitEntry, ...]:
     """Every entry that carries a minimum or a maximum, in key order: what a «no solution» names (M20)."""
     return tuple(entry for entry, _, _ in entries_with_limits(scenario))
+
+
+def limit_reference(scenario: ExactPlannerScenario, accounting: ExactAccountingEvaluation) -> ExactRatio:
+    """The reference a share limit reads (specifica §15 n. 17): ``fixed_reference`` in the PAC, ``F`` in the Rebalancer."""
+    return accounting.initial_wealth if scenario.product == "rebalancer" else accounting.fixed_reference
 
 
 def resolve_scenario_limits(scenario: ExactPlannerScenario, reference: ExactRatio) -> ResolvedLimits:

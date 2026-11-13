@@ -45,8 +45,9 @@ from backend.app.services.pac_allocator.issues import (
     normalizer_issue_definition,
     section_path,
 )
-from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, fixed_reference_of, trapped_cash_by_cell
+from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, limit_reference_of, trapped_cash_by_cell
 from backend.app.services.pac_allocator.models import (
+    BALANCED_FIDELITY,
     ExactAsset,
     ExactAssetQuote,
     ExactAssetTax,
@@ -1253,6 +1254,8 @@ class _PlannerV2Normalizer:
                 for item in sorted((value for value in self.request.target_weights if value.kind == "cash"), key=lambda value: (value.broker_id, value.currency))
                 if item.minimum is not None or item.maximum is not None
             ),
+            # «Balanced» until B3 (project 67) reads the fidelity from the Rebalancer's request (specifica §14 n. 9).
+            target_fidelity=BALANCED_FIDELITY if isinstance(self.request, (RebalancerInvestOnlyRequest, RebalancerInvestAndSellRequest)) else None,
         )
 
     def run(self) -> PlannerV2NormalizationResult:
@@ -1287,7 +1290,7 @@ class _PlannerV2Normalizer:
         """
         if not entries_with_limits(scenario):
             return []
-        reference = fixed_reference_of(scenario)
+        reference = limit_reference_of(scenario)
         problems = [
             *check_minimum_above_maximum(scenario, reference),
             *check_minimums_exceed_reference(scenario, reference, trapped_cash_by_cell(scenario)),

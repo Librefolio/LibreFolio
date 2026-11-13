@@ -25,6 +25,7 @@ from backend.app.services.pac_allocator.models import (
     ExactAccountingEvaluation,
     ExactAssetEvaluation,
     ExactBrokerLedgerEvaluation,
+    ExactCashTargetEvaluation,
     ExactCostEvaluation,
     ExactFundingSourceEvaluation,
     ExactFundingTransferEvaluation,
@@ -60,6 +61,37 @@ class EconomicState:
     assets: tuple[ExactAssetEvaluation, ...]
     accounting: ExactAccountingEvaluation
     costs: ExactCostEvaluation
+    cash_targets: tuple[ExactCashTargetEvaluation, ...] = ()
+
+
+def final_cash_by_cell(index: ScenarioIndex, ledgers: tuple[ExactBrokerLedgerEvaluation, ...]) -> dict[tuple[str, str], ExactRatio]:
+    """The final spendable cash of every Broker and currency cell, valued in the valuation currency.
+
+    The one reading of a cash cell's value: the limits on cash (V5), the cash rows of the report and the distance ``D`` of the
+    Rebalancer all take it from here.
+    """
+    return {(row.broker_id, row.currency): to_valuation(index, row.final_spendable, row.currency) for row in ledgers}
+
+
+def _evaluate_cash_targets(scenario: ExactPlannerScenario, final_cash: dict[tuple[str, str], ExactRatio], reference: ExactRatio) -> tuple[ExactCashTargetEvaluation, ...]:
+    """One row per cash cell with a target weight (Rebalancer, specifica §6.1), in the order of the scenario's entries."""
+    rows = []
+    for entry in scenario.cash_entries:
+        if entry.weight == _EXACT_ZERO:
+            continue
+        target_value = entry.weight * reference
+        final_value = final_cash.get((entry.broker_id, entry.currency), _EXACT_ZERO)
+        rows.append(
+            ExactCashTargetEvaluation(
+                broker_id=entry.broker_id,
+                currency=entry.currency,
+                target_weight=entry.weight,
+                target_value=target_value,
+                final_value=final_value,
+                residual=final_value - target_value,
+            )
+        )
+    return tuple(rows)
 
 
 def _append_exact_flow(
@@ -754,12 +786,15 @@ def evaluate_economic_state(
         )
     trapped_funding = selected_value - reachable_funding
     fixed_reference = invested_value + reachable_funding
+    initial_wealth = invested_value + selected_value
+    # The PAC aims at what it can reach; the Rebalancer at the whole wealth that enters the plan (specifica §6.1).
+    target_reference = initial_wealth if scenario.product == "rebalancer" else fixed_reference
     assets = _evaluate_assets(
         scenario,
         index,
         holdings,
         orders,
-        fixed_reference,
+        target_reference,
         checkpoint,
     )
     final_invested = sum(
@@ -779,17 +814,9 @@ def evaluate_economic_state(
         ),
         _EXACT_ZERO,
     )
-    broker_spendable_cash = sum(
-        (
-            to_valuation(
-                index,
-                row.final_spendable,
-                row.currency,
-            )
-            for row in ledgers
-        ),
-        _EXACT_ZERO,
-    )
+    final_cash = final_cash_by_cell(index, ledgers)
+    broker_spendable_cash = sum(final_cash.values(), _EXACT_ZERO)
+    cash_targets = _evaluate_cash_targets(scenario, final_cash, target_reference)
     free_cash = broker_spendable_cash + external_contribution_cash - trapped_funding
     physical_reserves = costs.self_reserved_tax
     economic_losses = costs.buy_fees + costs.sell_fees + costs.fx_spread_loss + costs.execution_margin_loss + costs.broker_withheld_tax
@@ -822,6 +849,7 @@ def evaluate_economic_state(
     )
     shortfall = fixed_reference - final_invested
     identity_delta = shortfall - (free_cash + physical_reserves + economic_losses + rounding_adjustment)
+    final_wealth = final_invested + broker_spendable_cash + external_contribution_cash
     accounting = ExactAccountingEvaluation(
         current_invested=invested_value,
         selected_funding=selected_value,
@@ -836,6 +864,10 @@ def evaluate_economic_state(
         rounding_adjustment=rounding_adjustment,
         rounding_bound=rounding_bound,
         identity_delta=identity_delta,
+        initial_wealth=initial_wealth,
+        final_wealth=final_wealth,
+        wealth_loss=initial_wealth - final_wealth,
+        uninvested=initial_wealth - final_invested - sum((row.final_value for row in cash_targets), _EXACT_ZERO),
     )
     check_budget(checkpoint)
     return EconomicState(
@@ -849,4 +881,5 @@ def evaluate_economic_state(
         assets=assets,
         accounting=accounting,
         costs=costs,
+        cash_targets=cash_targets,
     )
