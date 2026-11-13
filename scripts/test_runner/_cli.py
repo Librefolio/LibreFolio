@@ -751,7 +751,7 @@ def _timed_run(args, body):
 
     fresh = bool(getattr(args, "fresh_run", False))
     resumed = bool(getattr(args, "resume", False))
-    _campaign_begin(reset=fresh)
+    token = _campaign_begin(reset=fresh)
     # The run's durations start empty and end in .coverage_data/durations.json, named by the campaign record (step 3.10).
     _run_cache.DURATIONS.reset()
     rc = 1
@@ -764,8 +764,8 @@ def _timed_run(args, body):
         except OSError as exc:
             print_warning(f"Could not write the run's durations: {exc}")
             durations = None
-        _campaign_end(success=rc == 0, label=str(getattr(args, "category", "run")), fresh=fresh, resumed=resumed, durations=str(durations) if durations else None)
-        note = _campaign_summary()
+        this_run = _campaign_end(token, success=rc == 0, label=str(getattr(args, "category", "run")), fresh=fresh, resumed=resumed, durations=str(durations) if durations else None)
+        note = _campaign_summary(this_run)
         if note:
             print()
             print_header("Timing")

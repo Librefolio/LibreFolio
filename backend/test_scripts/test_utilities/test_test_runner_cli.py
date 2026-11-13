@@ -144,6 +144,12 @@ Both entries, with ``--log-file`` or without, call ``_snapshot_log_dir_db`` once
 the body, inside the log's tee when there is one, and let the body's exception through.
 Pure: H-26's ``entry_steps`` (every seam closed, the entry's steps recorded), a
 ``tee_output`` that only records, and a body answering 0 or raising ``H30BodyCrash``.
+
+The campaign-timer regression (project 71, after step 3.10) pins that each invocation times itself. The campaign file had
+ONE slot for the start of the running invocation, shared by every invocation of the checkout: one started while another
+was running took the slot and, ending, cleared it, so the first one ended without a start, recorded nothing, and its
+closing note read the other one's seconds («This invocation: 3s» after an hour). Pure: the campaign file in ``tmp_path``,
+``time.monotonic`` stood in, ``_timed_run`` itself, two invocations interleaved in one process.
 """
 
 from __future__ import annotations
@@ -169,7 +175,7 @@ from scripts.test_runner import _backend_db as backend_db
 from scripts.test_runner import _backend_services as backend_services
 from scripts.test_runner import _backend_utils as backend_utils
 from scripts.test_runner import _cli as runner_cli
-from scripts.test_runner import _common, _consolidate, _executor, _frontend_common, _frontend_utility, _inventory, _scheduler
+from scripts.test_runner import _common, _consolidate, _executor, _frontend_common, _frontend_utility, _inventory, _run_cache, _scheduler
 from scripts.test_runner._consolidate_backend import CONSOLIDATABLE, _junit_results
 from scripts.test_runner._registry import TEST_REGISTRY
 
@@ -2825,6 +2831,36 @@ class TestRunnerBuildsTheFrontendLikeTheTestServer:
         monkeypatch.setattr("scripts.cli_base.check_frontend_needs_build", lambda: False)
 
         assert dev.auto_build_frontend(debug=True) is None
+
+
+class TestEachInvocationTimesItself:
+    """The campaign records every invocation with its own seconds, whatever else ran meanwhile in the same checkout."""
+
+    def test_interleaved_invocations_each_record_their_own_seconds(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, tmp_path: Path) -> None:
+        """An hour-long invocation (``front-fx``) during which a three-second one (``utils``) starts and ends: both are
+        recorded, each with its own seconds, and each closing note names its own duration."""
+        monkeypatch.setattr(_run_cache, "_CAMPAIGN_FILE", tmp_path / ".campaign.json")
+        monkeypatch.setattr(_run_cache, "DURATIONS_FILE", tmp_path / "durations.json")
+        clock = iter([100.0, 200.0, 203.0, 3700.0])
+        monkeypatch.setattr(_run_cache.time, "monotonic", lambda: next(clock))
+        notes: dict[str, str] = {}
+
+        def short() -> int:
+            return 0
+
+        def long() -> int:
+            capsys.readouterr()
+            runner_cli._timed_run(SimpleNamespace(category="utils", fresh_run=False, resume=False, run_status=False), short)
+            notes["utils"] = capsys.readouterr().out
+            return 0
+
+        runner_cli._timed_run(SimpleNamespace(category="front-fx", fresh_run=True, resume=False, run_status=False), long)
+        notes["front-fx"] = capsys.readouterr().out
+
+        runs = {run["label"]: run["seconds"] for run in json.loads((tmp_path / ".campaign.json").read_text(encoding="utf-8"))["runs"]}
+        assert runs == {"utils": 3.0, "front-fx": 3600.0}, runs
+        assert "This invocation: 3s" in notes["utils"]
+        assert "This invocation: 1h 00m 00s" in notes["front-fx"], notes["front-fx"]
 
 
 if __name__ == "__main__":

@@ -149,47 +149,52 @@ def _load_campaign() -> dict:
         return {}
 
 
-def campaign_begin(reset: bool) -> None:
-    """Open a campaign, or join the one already running.
+def campaign_begin(reset: bool) -> dict:
+    """Open a campaign, or join the one already running, and return this invocation's start.
 
     ``reset`` is the --fresh-run flag: it starts the clock over. Without it an
     existing campaign is continued, so a --resume adds to the same total
     instead of pretending the earlier invocations never happened.
+
+    The start stays with the invocation (the returned token, handed back to
+    ``campaign_end``), never in the shared file: the file held one slot for "the
+    running invocation", and a second invocation of the same checkout took it
+    and cleared it, so the first ended with no start and recorded nothing.
     """
     data = _load_campaign()
     if reset or not data.get("started_at"):
         data = {"started_at": datetime.now().isoformat(timespec="seconds"), "runs": []}
-    data["current_started_monotonic"] = time.monotonic()
-    data["current_started_at"] = datetime.now().isoformat(timespec="seconds")
-    try:
-        _CAMPAIGN_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    except OSError:
-        pass
-
-
-def campaign_end(success: bool, label: str, fresh: bool, resumed: bool, durations: str | None = None) -> None:
-    """Close the current invocation and record it in the campaign, with the path of its durations file when it wrote one."""
-    data = _load_campaign()
-    started = data.get("current_started_monotonic")
-    if started is None:
-        return
-    run = {
-        "label": label,
-        "kind": "fresh" if fresh else ("resume" if resumed else "plain"),
-        "started_at": data.get("current_started_at"),
-        "ended_at": datetime.now().isoformat(timespec="seconds"),
-        "seconds": round(max(0.0, time.monotonic() - started), 1),
-        "success": bool(success),
-    }
-    if durations:
-        run["durations"] = durations
-    data.setdefault("runs", []).append(run)
+    # The slot of the old format, if a file still carries it: nobody reads it any more.
     data.pop("current_started_monotonic", None)
     data.pop("current_started_at", None)
     try:
         _CAMPAIGN_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
     except OSError:
         pass
+    return {"monotonic": time.monotonic(), "started_at": datetime.now().isoformat(timespec="seconds")}
+
+
+def campaign_end(token: dict, success: bool, label: str, fresh: bool, resumed: bool, durations: str | None = None) -> dict:
+    """Close the invocation ``token`` started (``campaign_begin``) and record it in the campaign, with the path of its
+    durations file when it wrote one. Returns the record, for the closing note. The file is read again just before the
+    write, so the invocations that ended meanwhile keep their lines."""
+    run = {
+        "label": label,
+        "kind": "fresh" if fresh else ("resume" if resumed else "plain"),
+        "started_at": token.get("started_at"),
+        "ended_at": datetime.now().isoformat(timespec="seconds"),
+        "seconds": round(max(0.0, time.monotonic() - token["monotonic"]), 1),
+        "success": bool(success),
+    }
+    if durations:
+        run["durations"] = durations
+    data = _load_campaign()
+    data.setdefault("runs", []).append(run)
+    try:
+        _CAMPAIGN_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    except OSError:
+        pass
+    return run
 
 
 def format_duration(seconds: float) -> str:
@@ -204,14 +209,15 @@ def format_duration(seconds: float) -> str:
     return f"{secs}s"
 
 
-def campaign_summary() -> str:
-    """Return the closing note: how long this took, and how long it has taken."""
+def campaign_summary(this_run: dict | None = None) -> str:
+    """Return the closing note: how long this invocation took (``this_run``, the record ``campaign_end`` returned; the
+    last one of the file without it), and how long the campaign has taken."""
     data = _load_campaign()
     runs = data.get("runs") or []
     if not runs:
         return ""
 
-    last = runs[-1]
+    last = this_run or runs[-1]
     machine = sum(float(r.get("seconds") or 0) for r in runs)
     started_at = data.get("started_at")
 
