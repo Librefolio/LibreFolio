@@ -465,17 +465,18 @@ async def test_pac_plan_over_http_equals_the_in_process_plan(test_server):
 
 @pytest.mark.asyncio
 async def test_source_reports_the_missing_broker_profile(test_server):
-    """Test 3: until P3 the source has no execution profile of a Broker: it says ``not_available`` and raises
-    ``allocation.broker_execution_profile_unsupported`` on it. When P3 brings the profile, this test turns red on purpose:
-    the order modes and fees written by hand in this file (``# HAND (P3)``) then move to the source."""
+    """Test 3: a Broker created without an operating profile is copied ``not_available`` (source revision 1.1.0, P3 of
+    project 67) and raises ``allocation.broker_execution_profile_unsupported`` on it. A Broker that keeps a profile is copied
+    with it and raises nothing (``test_portfolio_allocation_source``); the order modes and fees written by hand in this
+    file (``# HAND (P3)``) can then move to a profile saved on the Broker: a follow-up of P3."""
     async with _owner() as (client, owned):
         broker_id = await _create_broker(client, owned)
         source = await _source(client, broker_id=broker_id, asset_ids=[], sections=["brokers"])
 
     (broker,) = source["brokers"]
-    assert (broker["source_broker_id"], broker["execution_profile_status"]) == (broker_id, "not_available")
+    assert (broker["source_broker_id"], broker["operating_profile_status"]) == (broker_id, "not_available")
     profile = [issue for issue in source["issues"] if issue["code"] == BROKER_PROFILE_ISSUE]
-    assert [(i["kind"], i["severity"], i["path"]["entity_id"], i["path"]["field"]) for i in profile] == [("unsupported", "error", broker["broker_id"], "execution_profile_status")]
+    assert [(i["kind"], i["severity"], i["path"]["entity_id"], i["path"]["field"]) for i in profile] == [("unsupported", "error", broker["broker_id"], "operating_profile_status")]
 
 
 # ---------------------------------------------------------------------------
