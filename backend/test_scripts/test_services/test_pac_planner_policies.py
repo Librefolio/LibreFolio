@@ -111,8 +111,6 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _fee,
     _funding_route,
     _fx_rate,
-    _invest_and_sell_scenario,
-    _invest_only_baseline,
     _invest_only_scenario,
     _limit_plan_scenario,
     _min_fragmentation_scenario,
@@ -862,19 +860,6 @@ def test_scope_error_for_non_pac_product() -> None:
     scenario = _invest_only_scenario()
     view = build_exact_policy_view(scenario)
     assert scenario.product == "rebalancer"
-    with pytest.raises(PolicyProgramScopeError, match="PAC proportional"):
-        compile_policy_program(scenario, view)
-
-
-def test_scope_error_for_non_pac_product_and_non_primary_purpose() -> None:
-    """`invest_and_sell` + `invest_only_baseline` fails *both* checks at
-    once; the product/policy check runs first, so that message is the one
-    that surfaces.
-    """
-    scenario = _invest_and_sell_scenario()
-    view, _baseline = _invest_only_baseline(scenario)
-    assert scenario.product == "rebalancer"
-    assert view.purpose != "primary"
     with pytest.raises(PolicyProgramScopeError, match="PAC proportional"):
         compile_policy_program(scenario, view)
 

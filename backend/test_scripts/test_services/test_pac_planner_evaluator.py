@@ -1009,42 +1009,23 @@ def _integer_quanta(value: ExactRatio, quantum: ExactRatio = CENT) -> int:
     return scaled.numerator
 
 
-def _invest_only_baseline(
+def _sell_door(
     scenario: ExactPlannerScenario,
-    *,
-    buy_b_quanta: int = 2,
-) -> tuple[ExactPolicyView, CandidateActionVector]:
-    view = build_exact_policy_view(
-        scenario,
-        purpose="invest_only_baseline",
-        view_id="view:invest-only",
-    )
-    contribution = _by_id(
-        scenario.contributions,
-        "contribution_id",
-        "contribution:a",
-    )
-    candidate = _candidate(
-        view,
-        {
-            exact_decision_id("funding_transfer", "route:funding"): (_integer_quanta(contribution.amount.amount)),
-            exact_decision_id("buy_quantum", "route:buy:b"): buy_b_quanta,
-        },
-        candidate_id="candidate:invest-only",
-    )
-    return view, candidate
-
-
-def _sell_extension(
-    scenario: ExactPlannerScenario,
-    baseline: CandidateActionVector,
+    quanta: dict[str, int],
 ) -> ExactPolicyView:
-    return build_exact_policy_view(
-        scenario,
-        purpose="sell_extension",
-        baseline=baseline,
-        view_id="view:sell-extension",
-    )
+    """The way into a replay with an active sell while ``primary`` keeps sells disabled (B1, D6 of project 67).
+
+    A ``deployment`` view over a base that already holds ``quanta`` and the whole contribution: its sells are frozen at the
+    base, its buys start from it, and a candidate equal to the base replays the sell with every rule. C1 changes only this
+    body, to a ``primary`` view with the sells open; the expectations on the sale economy do not move.
+    """
+    primary = build_exact_policy_view(scenario, view_id="view:sell-door:decisions")
+    funding = {}
+    if any(item.contribution_id == "contribution:a" for item in scenario.contributions):
+        contribution = _by_id(scenario.contributions, "contribution_id", "contribution:a")
+        funding[exact_decision_id("funding_transfer", "route:funding")] = _integer_quanta(contribution.amount.amount)
+    base = _candidate(primary, {**funding, **quanta}, candidate_id="candidate:sell-door")
+    return build_exact_policy_view(scenario, purpose="deployment", baseline=base, view_id="view:sell-door")
 
 
 def _assert_invalid_candidate_has_no_replay(
@@ -1272,17 +1253,19 @@ def test_candidate_contract_conflicts_are_deterministic_and_skip_replay(
     expected_codes: tuple[str, ...],
 ) -> None:
     scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    valid = _candidate(view, candidate_id=f"candidate:{case}")
     funding_id = exact_decision_id("funding_transfer", "route:funding")
     buy_b_id = exact_decision_id("buy_quantum", "route:buy:b")
     sell_b_id = exact_decision_id("sell_quantum", "route:sell:b")
+    # A disabled decision lives in ``primary`` (its sells, until C1); frozen and additive ones in ``deployment``.
+    view = build_exact_policy_view(scenario) if case == "disabled" else _sell_door(scenario, {buy_b_id: 2})
+    valid = _candidate(view, candidate_id=f"candidate:{case}")
     duplicate = _by_id(valid.decisions, "decision_id", buy_b_id)
     buy_access = _decision(view, buy_b_id)
     funding_access = _decision(view, funding_id)
-    assert buy_access.baseline_quanta > 0
-    assert funding_access.frozen_quanta is not None
+    if case != "disabled":
+        assert buy_access.baseline_quanta > 0
+        assert funding_access.frozen_quanta is not None
+    # The «disabled» case reads a primary view, where nothing is frozen or additive: its candidate is built apart.
     candidates = {
         "view-mismatch": replace(valid, view_id="view:other"),
         "missing": replace(
@@ -1329,23 +1312,18 @@ def test_candidate_contract_conflicts_are_deterministic_and_skip_replay(
             {buy_b_id: buy_access.upper_quanta + 1},
             candidate_id=valid.candidate_id,
         ),
-        "disabled": _candidate(
-            view,
-            {sell_b_id: 1},
-            candidate_id=valid.candidate_id,
-        ),
         "not-frozen": _candidate(
             view,
-            {funding_id: funding_access.frozen_quanta - 1},
+            {funding_id: (funding_access.frozen_quanta or 1) - 1},
             candidate_id=valid.candidate_id,
         ),
         "not-additive": _candidate(
             view,
-            {buy_b_id: buy_access.baseline_quanta - 1},
+            {buy_b_id: max(buy_access.baseline_quanta - 1, 0)},
             candidate_id=valid.candidate_id,
         ),
     }
-    candidate = candidates[case]
+    candidate = _candidate(view, {sell_b_id: 1}, candidate_id=valid.candidate_id) if case == "disabled" else candidates[case]
 
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
 
@@ -1409,13 +1387,10 @@ def test_candidate_vector_rejects_noncanonical_order_before_replay() -> None:
             id="min-fragmentation-primary",
         ),
         pytest.param("invest-only-primary", id="invest-only-primary"),
-        pytest.param(
-            "invest-and-sell-baseline",
-            id="invest-and-sell-baseline",
-        ),
+        pytest.param("invest-and-sell-primary", id="invest-and-sell-primary"),
     ],
 )
-def test_primary_and_invest_only_policy_views_start_from_zero(
+def test_primary_policy_views_start_from_zero(
     case: str,
 ) -> None:
     if case == "proportional-primary":
@@ -1427,140 +1402,25 @@ def test_primary_and_invest_only_policy_views_start_from_zero(
     elif case == "invest-only-primary":
         scenario = _invest_only_scenario()
         view = build_exact_policy_view(scenario)
-    elif case == "invest-and-sell-baseline":
+    elif case == "invest-and-sell-primary":
         scenario = _invest_and_sell_scenario()
-        view = build_exact_policy_view(
-            scenario,
-            purpose="invest_only_baseline",
-        )
+        view = build_exact_policy_view(scenario)
     else:
         raise AssertionError(f"Unknown policy-view witness {case!r}")
 
     assert all(item.baseline_quanta == 0 for item in view.decisions)
     assert all(item.lower_quanta == 0 for item in view.decisions)
-    if view.purpose == "invest_only_baseline":
+    if view.policy == "invest_and_sell":
         assert all(item.mode == "disabled" for item in view.decisions if item.family == "sell_quantum")
-
-
-def test_invest_and_sell_requires_complete_exact_feasible_baseline() -> None:
-    scenario = _invest_and_sell_scenario()
-
-    with pytest.raises(
-        ExactPolicyContractError,
-        match="requires.*baseline",
-    ):
-        build_exact_policy_view(
-            scenario,
-            purpose="sell_extension",
-        )
-
-    baseline_view, _baseline = _invest_only_baseline(scenario)
-    infeasible = _candidate(
-        baseline_view,
-        {
-            exact_decision_id(
-                "funding_transfer",
-                "route:funding",
-            ): 2_000,
-            exact_decision_id("buy_quantum", "route:buy:b"): 3,
-        },
-        candidate_id="candidate:infeasible-baseline",
-    )
-    baseline_evaluation = evaluate_exact_candidate(
-        scenario,
-        baseline_view,
-        infeasible,
-    )
-    assert baseline_evaluation.candidate_valid is True
-    assert baseline_evaluation.feasible is False
-    assert "SPENDABLE_CASH_NONNEGATIVE" in (baseline_evaluation.conflict_codes)
-
-    with pytest.raises(
-        ExactPolicyContractError,
-        match="baseline is not exact-feasible",
-    ):
-        build_exact_policy_view(
-            scenario,
-            purpose="sell_extension",
-            baseline=infeasible,
-        )
-
-
-def test_sell_extension_freezes_flows_adds_buys_and_opens_only_eligible_sells() -> None:
-    scenario = _invest_and_sell_scenario()
-    baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-
-    funding = _decision(
-        view,
-        exact_decision_id("funding_transfer", "route:funding"),
-    )
-    # NOTE: _invest_and_sell_scenario is 100% EUR-only under the redesign (no
-    # fx_rates declared), so it has no fx_debit decision to freeze/inspect
-    # here anymore -- the old assertion on a fabricated fx route id is gone.
-    buy_a = _decision(
-        view,
-        exact_decision_id("buy_quantum", "route:buy:a"),
-    )
-    buy_b = _decision(
-        view,
-        exact_decision_id("buy_quantum", "route:buy:b"),
-    )
-    sell_a = _decision(
-        view,
-        exact_decision_id("sell_quantum", "route:sell:a"),
-    )
-    sell_b = _decision(
-        view,
-        exact_decision_id("sell_quantum", "route:sell:b"),
-    )
-
-    assert (
-        funding.mode,
-        funding.frozen_quanta,
-        funding.baseline_quanta,
-    ) == ("frozen_exact", 2_000, 2_000)
-    assert (buy_a.mode, buy_a.lower_quanta) == ("additive_only", 0)
-    assert (buy_b.mode, buy_b.lower_quanta) == ("additive_only", 2)
-    assert sell_a.mode == "mutable"
-    assert sell_a.upper_quanta > 0
-    assert (
-        sell_b.mode,
-        sell_b.lower_quanta,
-        sell_b.upper_quanta,
-    ) == ("disabled", 0, 0)
-
-    frozen_buy_baseline = _candidate(
-        baseline_view,
-        {
-            exact_decision_id(
-                "funding_transfer",
-                "route:funding",
-            ): 2_000,
-            exact_decision_id("buy_quantum", "route:buy:a"): 1,
-        },
-        candidate_id="candidate:frozen-buy-overweight",
-    )
-    frozen_buy_view = _sell_extension(
-        scenario,
-        frozen_buy_baseline,
-    )
-    assert (
-        _decision(
-            frozen_buy_view,
-            exact_decision_id("sell_quantum", "route:sell:a"),
-        ).mode
-        == "disabled"
-    )
 
 
 def test_deployment_freezes_funding_fx_and_sell_but_keeps_buy_additive() -> None:
     scenario = _invest_and_sell_scenario()
-    _baseline_view, invest_only = _invest_only_baseline(scenario)
-    extension = _sell_extension(scenario, invest_only)
+    contribution = _by_id(scenario.contributions, "contribution_id", "contribution:a")
     primary = _candidate(
-        extension,
+        build_exact_policy_view(scenario),
         {
+            exact_decision_id("funding_transfer", "route:funding"): _integer_quanta(contribution.amount.amount),
             exact_decision_id("buy_quantum", "route:buy:b"): 4,
             exact_decision_id("sell_quantum", "route:sell:a"): 2,
         },
@@ -1590,54 +1450,22 @@ def test_deployment_freezes_funding_fx_and_sell_but_keeps_buy_additive() -> None
 
 
 @pytest.mark.parametrize(
-    "purpose",
+    "policy",
     [
-        pytest.param("sell_extension", id="sell-extension"),
-        pytest.param("deployment", id="deployment"),
+        pytest.param("proportional", id="pac"),
+        pytest.param("invest_and_sell", id="rebalancer"),
     ],
 )
 def test_baseline_dependent_default_view_ids_use_full_sha256(
-    purpose: str,
+    policy: str,
 ) -> None:
-    if purpose == "sell_extension":
-        scenario = _invest_and_sell_scenario()
-        baseline_view = build_exact_policy_view(
-            scenario,
-            purpose="invest_only_baseline",
-            view_id="view:invest-only",
-        )
-        funding_id = exact_decision_id(
-            "funding_transfer",
-            "route:funding",
-        )
-        buy_id = exact_decision_id("buy_quantum", "route:buy:b")
-        first = _candidate(
-            baseline_view,
-            {funding_id: 2_000, buy_id: 1},
-            candidate_id="candidate:first",
-        )
-        second = _candidate(
-            baseline_view,
-            {funding_id: 2_000, buy_id: 2},
-            candidate_id="candidate:second",
-        )
-    else:
-        scenario = _pac_scenario()
-        baseline_view = build_exact_policy_view(
-            scenario,
-            view_id="view:primary",
-        )
-        buy_id = exact_decision_id("buy_quantum", "route:buy:a")
-        first = _candidate(
-            baseline_view,
-            {buy_id: 0},
-            candidate_id="candidate:first",
-        )
-        second = _candidate(
-            baseline_view,
-            {buy_id: 1},
-            candidate_id="candidate:second",
-        )
+    """``deployment`` is the one purpose with a baseline: its default view ID ends with the full SHA-256 of that baseline."""
+    purpose = "deployment"
+    scenario = _pac_scenario() if policy == "proportional" else _invest_and_sell_scenario()
+    baseline_view = build_exact_policy_view(scenario, view_id="view:primary")
+    buy_id = exact_decision_id("buy_quantum", "route:buy:a")
+    first = _candidate(baseline_view, {buy_id: 0}, candidate_id="candidate:first")
+    second = _candidate(baseline_view, {buy_id: 1}, candidate_id="candidate:second")
 
     first_view = build_exact_policy_view(
         scenario,
@@ -1796,35 +1624,9 @@ def test_tampered_policy_metadata_is_rejected_with_typed_error(
         evaluate_exact_candidate(scenario, tampered, candidate)
 
 
-def test_tampered_sell_gate_metadata_is_rejected_with_typed_error() -> None:
-    scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    gate = _by_id(
-        view.sell_gates,
-        "gate_id",
-        "sell-irreducibility:sell:route:sell:a",
-    )
-    tampered_gate = replace(gate, gate_id="sell-irreducibility:tampered")
-    tampered_view = replace(view, sell_gates=(tampered_gate,))
-
-    with pytest.raises(
-        ExactPolicyContractError,
-        match="SELL proof metadata",
-    ):
-        evaluate_exact_candidate(
-            scenario,
-            tampered_view,
-            _candidate(view),
-        )
-
-
 def test_total_tie_covers_every_decision_once_in_semantic_order() -> None:
     scenario = _invest_and_sell_scenario()
-    view = build_exact_policy_view(
-        scenario,
-        purpose="invest_only_baseline",
-    )
+    view = build_exact_policy_view(scenario)
     expected = (
         exact_decision_id("funding_transfer", "route:funding"),
         # NOTE: no fx_debit entry -- _invest_and_sell_scenario is 100%
@@ -3110,7 +2912,7 @@ def test_sell_never_converts_and_proceeds_stay_in_quote_currency() -> None:
     only a BUY may draw on a currency pool. The proceeds ledger posting
     lands in the Asset's own quote currency, untouched. A same-currency (USD)
     incremental BUY is included so the SELL genuinely funds it (satisfying
-    the invest_and_sell SELL_FUNDS_INCREMENTAL_BUY policy rule) while still
+    a buy of the plan) while still
     involving zero FX -- keeping the "SELL never converts" claim isolated
     from any cross-currency mechanics.
     """
@@ -3133,8 +2935,7 @@ def test_sell_never_converts_and_proceeds_stay_in_quote_currency() -> None:
         # a way that would zero out the sell-source's residual; with
         # fixed_reference == current_invested (no funding_routes here),
         # splitting the target three ways keeps asset:sell-only genuinely
-        # overweight (residual > 0), which is what unlocks it for the
-        # sell_extension phase.
+        # overweight (residual > 0).
         assets=(
             _asset("asset:sell-only", price=R(20), currency="USD"),
             _asset("asset:usd-buy-target", price=R(30), currency="USD"),
@@ -3174,28 +2975,10 @@ def test_sell_never_converts_and_proceeds_stay_in_quote_currency() -> None:
             unit_costs={"asset:sell-only": R(5)},
         ),
     )
-    # invest_and_sell scenarios are strictly two-phase: an all-zero
-    # invest_only_baseline (route:buy-usd stays at 0) followed by a
-    # sell_extension that unlocks the pre-existing "asset:sell-only" holding
-    # and additively increases the USD buy, funded entirely by the sell.
-    baseline_view = build_exact_policy_view(scenario, purpose="invest_only_baseline")
-    baseline_candidate = _candidate(baseline_view, {}, candidate_id="candidate:baseline")
-    view = build_exact_policy_view(
-        scenario,
-        purpose="sell_extension",
-        baseline=baseline_candidate,
-    )
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("sell_quantum", "route:sell-only"): 2,
-                exact_decision_id("buy_quantum", "route:buy-usd"): 1,
-            },
-        ),
-    )
+    # The sell, and the USD buy it funds, reach the replay through the sale door (B1 of project 67).
+    quanta = {exact_decision_id("sell_quantum", "route:sell-only"): 2, exact_decision_id("buy_quantum", "route:buy-usd"): 1}
+    view = _sell_door(scenario, quanta)
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
 
     assert evaluation.feasible is True
     assert evaluation.fx == ()
@@ -3357,15 +3140,9 @@ def test_sell_replay_uses_exact_wac_gain_tax_and_withholding_once(
         withholding_kind=withholding_kind,
         carried_loss=R(999),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    candidate = _candidate(
-        view,
-        {
-            exact_decision_id("buy_quantum", "route:buy:b"): 3,
-            exact_decision_id("sell_quantum", "route:sell:a"): 2,
-        },
-    )
+    quanta = {exact_decision_id("buy_quantum", "route:buy:b"): 3, exact_decision_id("sell_quantum", "route:sell:a"): 2}
+    view = _sell_door(scenario, quanta)
+    candidate = _candidate(view, quanta)
 
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
     order = _by_id(evaluation.orders, "route_id", "route:sell:a")
@@ -3398,7 +3175,7 @@ def test_sell_replay_uses_exact_wac_gain_tax_and_withholding_once(
     assert tax_posting.posted_amount == R(7, 4)
     assert evaluation.costs is not None
     assert evaluation.costs.sell_fees == R(3)
-    assert _objective_map(view, evaluation)["explicit_cost"] == R(19, 4)
+    assert evaluation.costs.explicit_cost == R(19, 4)
     if withholding_kind == "broker_withheld":
         assert evaluation.costs.broker_withheld_tax == R(7, 4)
         assert evaluation.costs.self_reserved_tax == ZERO
@@ -3432,8 +3209,7 @@ def test_carried_loss_is_informational_and_does_not_offset_sell_tax() -> None:
             tax_rate=R(1, 4),
             carried_loss=carried_loss,
         )
-        _baseline_view, baseline = _invest_only_baseline(scenario)
-        view = _sell_extension(scenario, baseline)
+        view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 3, exact_decision_id("sell_quantum", "route:sell:a"): 2})
         evaluations.append(
             evaluate_exact_candidate(
                 scenario,
@@ -3470,9 +3246,8 @@ def test_monetary_sell_uses_integer_quanta_without_hidden_requested_ceiling() ->
         monetary_sell=True,
         sell_step=R(2),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
     sell_id = exact_decision_id("sell_quantum", "route:sell:a")
+    view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 3, sell_id: 8})
     access = _decision(view, sell_id)
 
     evaluation = evaluate_exact_candidate(
@@ -3530,8 +3305,7 @@ def test_monetary_sell_upper_bound_keeps_notional_cap_and_inventory_binding(
             for route in scenario.order_routes
         ),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
+    view = _sell_door(scenario, {})
     sell_id = exact_decision_id("sell_quantum", "route:sell:a")
     access = _decision(view, sell_id)
 
@@ -3545,9 +3319,10 @@ def test_monetary_sell_upper_bound_keeps_notional_cap_and_inventory_binding(
     )
 
     assert access.upper_quanta == expected_upper
+    # The door freezes the sell at the base (zero), so the candidate is also not frozen: both contract codes, no replay.
     _assert_invalid_candidate_has_no_replay(
         evaluation,
-        ("CANDIDATE_DECISION_OUT_OF_BOUNDS",),
+        ("CANDIDATE_DECISION_NOT_FROZEN", "CANDIDATE_DECISION_OUT_OF_BOUNDS"),
     )
 
 
@@ -3580,27 +3355,14 @@ def test_multiple_sell_routes_reconcile_shared_inventory(
             )
         ),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
+    quanta = {
+        exact_decision_id("buy_quantum", "route:buy:b"): 4,
+        exact_decision_id("sell_quantum", "route:sell:a"): first_quanta,
+        exact_decision_id("sell_quantum", "route:sell:a:second"): second_quanta,
+    }
+    view = _sell_door(scenario, quanta)
 
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("buy_quantum", "route:buy:b"): 4,
-                exact_decision_id(
-                    "sell_quantum",
-                    "route:sell:a",
-                ): first_quanta,
-                exact_decision_id(
-                    "sell_quantum",
-                    "route:sell:a:second",
-                ): second_quanta,
-            },
-        ),
-    )
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
     holding_rows = tuple(
         item
         for item in evaluation.holdings
@@ -3622,20 +3384,10 @@ def test_multiple_sell_routes_reconcile_shared_inventory(
 
 def test_buy_and_sell_same_asset_is_forbidden_even_when_cash_reconciles() -> None:
     scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
+    quanta = {exact_decision_id("buy_quantum", "route:buy:a"): 1, exact_decision_id("sell_quantum", "route:sell:a"): 1}
+    view = _sell_door(scenario, quanta)
 
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("buy_quantum", "route:buy:a"): 1,
-                exact_decision_id("sell_quantum", "route:sell:a"): 1,
-            },
-        ),
-    )
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
 
     assert evaluation.candidate_valid is True
     assert "NO_ASSET_BUY_AND_SELL" in evaluation.conflict_codes
@@ -3707,19 +3459,9 @@ def test_monetary_sell_enforces_native_minimums(
         monetary_sell=True,
         sell_minimum=minimum,
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("buy_quantum", "route:buy:b"): 3,
-                exact_decision_id("sell_quantum", "route:sell:a"): 1,
-            },
-        ),
-    )
+    quanta = {exact_decision_id("buy_quantum", "route:buy:b"): 3, exact_decision_id("sell_quantum", "route:sell:a"): 1}
+    view = _sell_door(scenario, quanta)
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
     constraint = _by_id(
         evaluation.constraints,
         "ref_id",
@@ -3736,20 +3478,10 @@ def test_active_sell_requires_strictly_positive_posted_net() -> None:
     scenario = _invest_and_sell_scenario(
         sell_fixed=R(10),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
+    quanta = {exact_decision_id("buy_quantum", "route:buy:b"): 3, exact_decision_id("sell_quantum", "route:sell:a"): 1}
+    view = _sell_door(scenario, quanta)
 
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("buy_quantum", "route:buy:b"): 3,
-                exact_decision_id("sell_quantum", "route:sell:a"): 1,
-            },
-        ),
-    )
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
     order = _by_id(evaluation.orders, "route_id", "route:sell:a")
 
     assert order.posted_cash_amount == R(10)
@@ -4146,26 +3878,14 @@ def test_native_ledgers_and_accounting_identity_reconcile_all_fx_columns() -> No
     assert abs(accounting.rounding_adjustment) <= accounting.rounding_bound
 
 
-def test_sell_extension_keeps_fixed_reference_and_reconciles_u_identity() -> None:
+def test_a_sell_keeps_fixed_reference_and_reconciles_u_identity() -> None:
     scenario = _invest_and_sell_scenario()
-    baseline_view, baseline = _invest_only_baseline(scenario)
-    baseline_result = evaluate_exact_candidate(
-        scenario,
-        baseline_view,
-        baseline,
-    )
-    extension = _sell_extension(scenario, baseline)
-    extension_result = evaluate_exact_candidate(
-        scenario,
-        extension,
-        _candidate(
-            extension,
-            {
-                exact_decision_id("buy_quantum", "route:buy:b"): 4,
-                exact_decision_id("sell_quantum", "route:sell:a"): 2,
-            },
-        ),
-    )
+    buy_only = {exact_decision_id("buy_quantum", "route:buy:b"): 2}
+    baseline = _sell_door(scenario, buy_only)
+    baseline_result = evaluate_exact_candidate(scenario, baseline, _candidate(baseline, buy_only))
+    with_sell = {exact_decision_id("buy_quantum", "route:buy:b"): 4, exact_decision_id("sell_quantum", "route:sell:a"): 2}
+    extension = _sell_door(scenario, with_sell)
+    extension_result = evaluate_exact_candidate(scenario, extension, _candidate(extension, with_sell))
 
     assert baseline_result.accounting is not None
     assert extension_result.accounting is not None
@@ -4175,172 +3895,6 @@ def test_sell_extension_keeps_fixed_reference_and_reconciles_u_identity() -> Non
     assert extension_result.accounting.shortfall == ZERO
     assert extension_result.accounting.identity_delta == ZERO
     assert extension_result.accounting.shortfall == (extension_result.accounting.free_cash + extension_result.accounting.physical_reserves + extension_result.accounting.economic_losses + extension_result.accounting.rounding_adjustment)
-
-
-def test_sell_extension_eligibility_and_gate_metadata_are_exact() -> None:
-    scenario = _invest_and_sell_scenario()
-    baseline_view, baseline = _invest_only_baseline(scenario)
-    baseline_result = evaluate_exact_candidate(
-        scenario,
-        baseline_view,
-        baseline,
-    )
-    view = _sell_extension(scenario, baseline)
-    asset_a = _by_id(
-        baseline_result.assets,
-        "asset_id",
-        "asset:a",
-    )
-    asset_b = _by_id(
-        baseline_result.assets,
-        "asset_id",
-        "asset:b",
-    )
-    gate = _by_id(
-        view.sell_gates,
-        "sell_decision_id",
-        exact_decision_id("sell_quantum", "route:sell:a"),
-    )
-
-    assert asset_a.residual == R(20)
-    assert asset_b.residual == R(-20)
-    assert (
-        _decision(
-            view,
-            exact_decision_id("sell_quantum", "route:sell:a"),
-        ).mode
-        == "mutable"
-    )
-    assert (
-        _decision(
-            view,
-            exact_decision_id("sell_quantum", "route:sell:b"),
-        ).mode
-        == "disabled"
-    )
-    assert gate.fixed_incremental_buy_decision_ids == (
-        exact_decision_id("buy_quantum", "route:buy:a"),
-        exact_decision_id("buy_quantum", "route:buy:b"),
-    )
-    # _invest_and_sell_scenario declares no fx_rates and a single broker, so
-    # no fx_debit decision exists at all here (unlike the old fixture, which
-    # had a broker-scoped fx_route present regardless of use).
-    assert gate.reopened_decision_ids == (exact_decision_id("funding_transfer", "route:funding"),)
-    assert gate.counterfactuals == (
-        "decrement_one_quantum",
-        "zero_row",
-    )
-    requirement = _by_id(
-        view.proof_requirements,
-        "requirement_id",
-        "proof:sell-irreducibility",
-    )
-    assert baseline_view.scenario_fingerprint == exact_scenario_fingerprint(scenario)
-    assert view.scenario_fingerprint == baseline_view.scenario_fingerprint
-    assert baseline_view.sell_gates == ()
-    assert baseline_view.proof_requirements == ()
-    assert view.proof_requirements == (requirement,)
-    assert requirement.allowed_sources == (
-        "deterministic_conflict",
-        "exhaustive_oracle",
-    )
-
-
-def test_sell_gates_exist_only_for_positive_eligible_domains() -> None:
-    scenario = _invest_and_sell_scenario(zero_domain_sell=True)
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    zero_id = exact_decision_id(
-        "sell_quantum",
-        "route:sell:a:zero-domain",
-    )
-
-    zero_access = _decision(view, zero_id)
-    assert zero_access.upper_quanta == 0
-    assert zero_id not in {gate.sell_decision_id for gate in view.sell_gates}
-    assert {gate.sell_decision_id for gate in view.sell_gates} == {
-        exact_decision_id("sell_quantum", "route:sell:a"),
-    }
-
-
-def test_reconstructed_sell_view_revalidates_embedded_baseline_economics() -> None:
-    scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    buy_id = exact_decision_id("buy_quantum", "route:buy:b")
-    access = _decision(view, buy_id)
-    assert access.upper_quanta >= 3
-    changed = replace(
-        access,
-        baseline_quanta=3,
-        lower_quanta=3,
-    )
-    tampered = replace(
-        view,
-        decisions=tuple(changed if item.decision_id == buy_id else item for item in view.decisions),
-    )
-
-    with pytest.raises(
-        ExactPolicyContractError,
-        match="baseline is not exact-feasible",
-    ):
-        evaluate_exact_candidate(
-            scenario,
-            tampered,
-            _candidate(tampered),
-        )
-
-
-@pytest.mark.parametrize(
-    ("case", "expected_satisfied"),
-    [
-        pytest.param(
-            "missing-incremental-buy",
-            False,
-            id="missing-incremental-buy",
-        ),
-        pytest.param(
-            "unnecessary-sell",
-            False,
-            id="sell-zero-still-fundable",
-        ),
-        pytest.param(
-            "necessary-sell",
-            True,
-            id="sell-zero-unfundable",
-        ),
-    ],
-)
-def test_active_sell_requires_incremental_buy_and_unfundable_zero_sell_vector(
-    case: str,
-    expected_satisfied: bool,
-) -> None:
-    contribution = R(40) if case == "unnecessary-sell" else R(20)
-    scenario = _invest_and_sell_scenario(
-        contribution_amount=contribution,
-    )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    values = {
-        exact_decision_id("sell_quantum", "route:sell:a"): 1,
-    }
-    if case != "missing-incremental-buy":
-        values[exact_decision_id("buy_quantum", "route:buy:b")] = 3
-
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(view, values),
-    )
-    constraint = _by_id(
-        evaluation.constraints,
-        "ref_id",
-        "constraint:sell_funds_incremental_buy:global",
-    )
-
-    assert constraint.value == (ONE if expected_satisfied else ZERO)
-    assert constraint.satisfied is expected_satisfied
-    assert ("SELL_FUNDS_INCREMENTAL_BUY" in evaluation.conflict_codes) is (not expected_satisfied)
 
 
 def _objective_map(
@@ -4470,28 +4024,14 @@ def test_exact_objective_sequences_and_values(case: str) -> None:
         }
     else:
         scenario = _invest_and_sell_scenario()
-        _baseline_view, baseline = _invest_only_baseline(scenario)
-        extension = _sell_extension(scenario, baseline)
-        primary = _candidate(
-            extension,
-            {
-                exact_decision_id(
-                    "buy_quantum",
-                    "route:buy:b",
-                ): 4,
-                exact_decision_id(
-                    "sell_quantum",
-                    "route:sell:a",
-                ): 2,
-            },
-            candidate_id="candidate:primary",
-        )
+        contribution_quanta = _integer_quanta(_by_id(scenario.contributions, "contribution_id", "contribution:a").amount.amount)
         if case == "invest-and-sell":
-            view = extension
+            # ``primary`` serves invest_and_sell with its sells disabled (B1-1); the sells reach a replay through the door.
+            view = build_exact_policy_view(scenario)
             evaluation = evaluate_exact_candidate(
                 scenario,
                 view,
-                primary,
+                _candidate(view, {exact_decision_id("funding_transfer", "route:funding"): contribution_quanta, exact_decision_id("buy_quantum", "route:buy:b"): 2}),
             )
             expected_codes = (
                 "fixed_l2",
@@ -4501,18 +4041,14 @@ def test_exact_objective_sequences_and_values(case: str) -> None:
                 "active_order_rows",
             )
             expected_values = {
-                "fixed_l2": ZERO,
+                "fixed_l2": R(800),
                 "shortfall": ZERO,
-                "turnover": R(60),
+                "turnover": R(20),
                 "explicit_cost": ZERO,
-                "active_order_rows": R(2),
+                "active_order_rows": ONE,
             }
         elif case == "deployment":
-            view = build_exact_policy_view(
-                scenario,
-                purpose="deployment",
-                baseline=primary,
-            )
+            view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 4, exact_decision_id("sell_quantum", "route:sell:a"): 2})
             evaluation = evaluate_exact_candidate(
                 scenario,
                 view,
@@ -5791,3 +5327,22 @@ def test_sum_of_minimums_ignores_the_trapped_cash_of_a_cell() -> None:
     above = replace(scenario, cash_entries=(replace(scenario.cash_entries[0], minimum=pac_models.ExactLimit("amount", R(31))),))
     (problem,) = check_minimums_exceed_reference(above, reference, trapped)  # one euro beyond the trapped 30 needs reachable money
     assert [entry.key for entry in problem.entries] == ["asset:asset:a", "cash:broker:idle:EUR"]
+
+
+# ---------------------------------------------------------------------------
+# B1 (project 67): the single objective at the exact level, without the two phases
+# ---------------------------------------------------------------------------
+
+
+def test_primary_view_serves_invest_and_sell_with_sells_disabled() -> None:
+    """B1-1: ``primary`` serves every policy. On ``invest_and_sell`` its sells stay ``disabled`` until C1 opens them, it
+    starts from the zero vector, and doing nothing replays."""
+    scenario = _invest_and_sell_scenario()
+
+    view = build_exact_policy_view(scenario)
+
+    assert (view.purpose, view.policy) == ("primary", "invest_and_sell")
+    assert all(item.baseline_quanta == 0 and item.lower_quanta == 0 for item in view.decisions)
+    sells = [item for item in view.decisions if item.family == "sell_quantum"]
+    assert sells and all((item.mode, item.upper_quanta) == ("disabled", 0) for item in sells)
+    assert evaluate_exact_candidate(scenario, view, _candidate(view)).candidate_valid

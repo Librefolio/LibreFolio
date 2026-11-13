@@ -92,13 +92,12 @@ from backend.test_scripts.test_services.test_pac_planner_evaluator import (
     _funding_route,
     _fx_rate,
     _invest_and_sell_scenario,
-    _invest_only_baseline,
     _min_fragmentation_scenario,
     _objective_map,
     _order_route,
     _pac_scenario,
     _scenario,
-    _sell_extension,
+    _sell_door,
 )
 
 # --------------------------------------------------------------------------
@@ -967,7 +966,7 @@ def test_checkpoint_cancellation_during_candidate_evaluation_propagates() -> Non
 
 
 def test_frozen_exact_decision_contributes_one_value_not_its_theoretical_range() -> None:
-    """`build_exact_policy_view(..., purpose="sell_extension")` freezes the
+    """`build_exact_policy_view(..., purpose="deployment")` freezes the
     funding decision to whatever the baseline consumed (per its docstring).
     The frozen decision's `upper_quanta` is *not* clamped down to the
     frozen point (it keeps the bound the decision would have had if it
@@ -982,8 +981,7 @@ def test_frozen_exact_decision_contributes_one_value_not_its_theoretical_range()
     prove the one-value-not-a-range contract.
     """
     scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline_candidate = _invest_only_baseline(scenario)
-    sell_view = _sell_extension(scenario, baseline_candidate)
+    sell_view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 2})
 
     funding_decision_id = exact_decision_id("funding_transfer", "route:funding")
     frozen_access = _decision(sell_view, funding_decision_id)
