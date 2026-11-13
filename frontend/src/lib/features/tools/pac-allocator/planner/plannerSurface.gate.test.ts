@@ -27,9 +27,19 @@ import {describe, expect, it} from 'vitest';
 const PLANNER_DIR = fileURLToPath(new URL('.', import.meta.url));
 const BASELINE = join(PLANNER_DIR, 'plannerSurface.baseline.json');
 
-const PREFIX = 'pac-planner';
-const EVENTS: Record<string, string> = {completed: 'tool.pac-plan.completed', failed: 'tool.pac-plan.failed'};
-const CORRELATION = 'pac-rev';
+const REBALANCER_BASELINE = join(PLANNER_DIR, 'plannerSurface.rebalancer.baseline.json');
+
+/** The values a profile gives the calls and members it reads: the PAC's, or the Rebalancer's (F3a of project 67). */
+interface SurfaceProfile {
+    prefix: string;
+    events: Record<string, string>;
+    correlation: string;
+}
+
+const PAC: SurfaceProfile = {prefix: 'pac-planner', events: {completed: 'tool.pac-plan.completed', failed: 'tool.pac-plan.failed'}, correlation: 'pac-rev'};
+const REBALANCER: SurfaceProfile = {prefix: 'rebalancer-planner', events: {completed: 'tool.rebalancer-plan.completed', failed: 'tool.rebalancer-plan.failed'}, correlation: 'reb-rev'};
+const EVENTS = PAC.events;
+const CORRELATION = PAC.correlation;
 
 export interface PlannerSurface {
     ids: Record<string, number>;
@@ -66,18 +76,21 @@ function count(bucket: Record<string, number>, value: string): void {
     bucket[value] = (bucket[value] ?? 0) + 1;
 }
 
-/** The surface one source shows, in every form above. */
-export function extractSurface(source: string): PlannerSurface {
+/**
+ * The surface one source shows, in every form above, under `profile` (the PAC by default): a call or a member of the
+ * profile takes that profile's value; a literal is the same under both, since a shared component shows it to both Tools.
+ */
+export function extractSurface(source: string, profile: SurfaceProfile = PAC): PlannerSurface {
     const text = withoutComments(source);
     const surface: PlannerSurface = {ids: {}, derived: {}, events: {}, correlation: {}};
     for (const match of text.matchAll(ID_LITERAL)) count(surface.ids, normalized(match[0]));
     for (const match of text.matchAll(DERIVED)) count(surface.derived, normalized(`\${testid}${match[1]}`));
-    for (const match of text.matchAll(PROFILE_CALL)) count(surface.ids, normalized(`${PREFIX}-${match[2]}`));
-    for (const _match of text.matchAll(PREFIX_MEMBER)) count(surface.ids, PREFIX);
+    for (const match of text.matchAll(PROFILE_CALL)) count(surface.ids, normalized(`${profile.prefix}-${match[2]}`));
+    for (const _match of text.matchAll(PREFIX_MEMBER)) count(surface.ids, profile.prefix);
     for (const match of text.matchAll(EVENT_LITERAL)) count(surface.events, EVENTS[match[1]]);
-    for (const match of text.matchAll(EVENT_MEMBER)) count(surface.events, EVENTS[match[1]]);
+    for (const match of text.matchAll(EVENT_MEMBER)) count(surface.events, profile.events[match[1]]);
     for (const _match of text.matchAll(CORRELATION_LITERAL)) count(surface.correlation, CORRELATION);
-    for (const _match of text.matchAll(CORRELATION_MEMBER)) count(surface.correlation, CORRELATION);
+    for (const _match of text.matchAll(CORRELATION_MEMBER)) count(surface.correlation, profile.correlation);
     return surface;
 }
 
@@ -102,10 +115,10 @@ function merged(surfaces: PlannerSurface[]): PlannerSurface {
     return total;
 }
 
-/** The planner's whole surface, read from its sources. */
-export function plannerSurface(): {surface: PlannerSurface; files: string[]} {
+/** The planner's whole surface, read from its sources, under `profile` (the PAC by default). */
+export function plannerSurface(profile: SurfaceProfile = PAC): {surface: PlannerSurface; files: string[]} {
     const files = productSources(PLANNER_DIR);
-    return {surface: merged(files.map((file) => extractSurface(readFileSync(file, 'utf8')))), files: files.map((file) => relative(PLANNER_DIR, file))};
+    return {surface: merged(files.map((file) => extractSurface(readFileSync(file, 'utf8'), profile))), files: files.map((file) => relative(PLANNER_DIR, file))};
 }
 
 describe('planner surface', () => {
@@ -196,6 +209,26 @@ describe('planner surface', () => {
         expect(surface.events['tool.pac-plan.completed']).toBeGreaterThan(0);
         expect(surface.ids['pac-planner-section-${id}-title']).toBeGreaterThan(0);
         expect(surface.derived['${testid}-row']).toBeGreaterThan(0);
+
+        expect(surface).toEqual(baseline);
+    });
+
+    /*
+     * The Rebalancer's reference (F3a of project 67, step 3): the same sources read under its profile, so `testId(…)` gives
+     * `rebalancer-planner-…`. T1a and T1b select by these ids. The scan cannot tell which component each Tool mounts, so
+     * the reference lists every id the shared planner can show under that profile; a component of one Tool only adds its
+     * own ids here and in the PAC's reference alike.
+     */
+    it('the Rebalancer reads its own ids, events and correlation, equal to its baseline', () => {
+        const {surface} = plannerSurface(REBALANCER);
+        const baseline = JSON.parse(readFileSync(REBALANCER_BASELINE, 'utf8')) as PlannerSurface;
+
+        expect(surface.ids['rebalancer-planner']).toBeGreaterThan(0);
+        expect(surface.ids['rebalancer-planner-continue']).toBeGreaterThan(0);
+        expect(surface.events['tool.rebalancer-plan.completed']).toBeGreaterThan(0);
+        expect(surface.correlation['reb-rev']).toBeGreaterThan(0);
+        // No PAC id leaks into the Rebalancer's DOM: every id goes through the profile.
+        expect(Object.keys(surface.ids).filter((id) => id.startsWith('pac-planner'))).toEqual([]);
 
         expect(surface).toEqual(baseline);
     });
