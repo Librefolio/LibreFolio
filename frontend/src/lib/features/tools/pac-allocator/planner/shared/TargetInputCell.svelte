@@ -16,7 +16,7 @@
     let {draft, assetKey, label}: Props = $props();
 </script>
 
-<div class="relative ml-auto w-28" data-testid={testId('target', profile)} data-asset-key={assetKey}>
+<div class="relative ml-auto w-full max-w-28" data-testid={testId('target', profile)} data-asset-key={assetKey}>
     <ExactDecimalInput value={draft.data.targets[assetKey] ?? ''} step="1" max="100" ariaLabel={label} className="{INPUT} pr-7 text-right" testid={testId('target-input', profile)} onchange={(value) => (draft.data.targets[assetKey] = value)} />
     <span class={INPUT_ADORNMENT} aria-hidden="true">%</span>
 </div>

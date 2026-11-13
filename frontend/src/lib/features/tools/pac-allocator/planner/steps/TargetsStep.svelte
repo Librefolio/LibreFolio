@@ -13,6 +13,8 @@
     import AssetNameCell from '../shared/AssetNameCell.svelte';
     import HelpTip from '../shared/HelpTip.svelte';
     import TargetInputCell from '../shared/TargetInputCell.svelte';
+    import LimitInputCell from '../shared/LimitInputCell.svelte';
+    import {limitProblems} from '../request';
     import TableColumns from '../shared/TableColumns.svelte';
     import {withHelpCues} from '../shared/columnHelp';
     import DistributionDialog from './DistributionDialog.svelte';
@@ -50,6 +52,25 @@
         return 'unknown';
     });
     const excess = $derived(remaining === null ? null : remainingControlPercentage(remaining, '0'));
+    /** The limits' own problems, live under the table (M1): the same check that stops «Continue» and «Calculate». */
+    const limitIssues = $derived(limitProblems(draft));
+    const P_KEY = 'tools.pacAllocator.planner.problems';
+    /** One literal key per limit problem, so the i18n audit can prove each one is used. */
+    function limitProblemText(problem: (typeof limitIssues)[number]): string {
+        const options = {default: problem.fallback, values: problem.values};
+        switch (problem.key) {
+            case 'limitInvalid':
+                return $t('tools.pacAllocator.planner.problems.limitInvalid', options);
+            case 'limitShareAboveHundred':
+                return $t('tools.pacAllocator.planner.problems.limitShareAboveHundred', options);
+            case 'limitMinAboveMax':
+                return $t('tools.pacAllocator.planner.problems.limitMinAboveMax', options);
+            case 'limitShareMinimumsAboveHundred':
+                return $t('tools.pacAllocator.planner.problems.limitShareMinimumsAboveHundred', options);
+            default:
+                return $t(`${P_KEY}.${problem.key}`, options);
+        }
+    }
     const maxWeight = $derived(Math.max(1, ...draft.data.assets.map((asset) => percentNumber(draft.data.targets[asset.key]))));
 
     function assetLabel(asset: DraftAsset): string {
@@ -107,6 +128,8 @@
 
     // On a phone (the table's own 768 px breakpoint) the columns are fluid down to a floor each, and the decorative bar is hidden by
     // default: asset, target, and the pinned columns have to fit a card some 300 px wide (Y-9). The bar stays one click away in «Columns».
+    // With the «Limits» column (F2 of project 67) the phone also drops the selection and Action columns, as the mockup does: «Balance to
+    // 100%» opens from the row's menu on a long press (`enableContextMenu`, as on the Review step, P3), «Balance all» stays in the toolbar.
     const phone = new MediaQuery('max-width: 768px');
 
     const columns = $derived.by((): ColumnDef<DraftAsset>[] =>
@@ -143,6 +166,22 @@
                 width: phone.current ? 96 : 140,
                 minWidth: phone.current ? 84 : 128,
                 cell: (asset) => ({type: 'custom', component: TargetInputCell, props: {draft, assetKey: asset.key, label: assetLabel(asset)}}),
+            },
+            {
+                // F2 of project 67 (M1, M17): minimum and maximum of the final value; the total a percentage refers to is named, not computed.
+                id: 'limits',
+                header: () => $t(`${KEY}.limits`, {default: 'Limits'}),
+                headerTooltip: () =>
+                    $t(`${KEY}.limitsHelp`, {
+                        default: "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the money you invest now. Empty field = no limit.",
+                    }),
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                align: 'right',
+                width: phone.current ? 96 : 184,
+                minWidth: phone.current ? 92 : 176,
+                cell: (asset) => ({type: 'custom', component: LimitInputCell, props: {draft, assetKey: asset.key, label: assetLabel(asset)}}),
             },
         ]),
     );
@@ -216,14 +255,14 @@
                 storageKey={storageKey('targets', profile)}
                 enableSorting={false}
                 enablePagination={false}
-                enableSelection
-                selectionMode="multi"
+                enableSelection={!phone.current}
+                selectionMode={phone.current ? 'none' : 'multi'}
                 onSelectionChange={(ids) => (selectedKeys = ids)}
                 enableColumnVisibility
                 enableColumnFilters={false}
                 enableColumnResize
-                enableContextMenu={false}
-                enableActions
+                enableContextMenu={phone.current}
+                enableActions={!phone.current}
                 {rowActions}
                 actionsColumnWidth={phone.current ? '44px' : '64px'}
                 tableLayout="auto"
@@ -249,6 +288,18 @@
                 testid={testId('targets-total-help', profile)}
             />
         </div>
+
+        {#if limitIssues.length > 0}
+            <div class="{NOTICE.danger} space-y-1" role="alert" data-testid={testId('targets-limits-problems', profile)}>
+                <p class="font-semibold">{$t(`${KEY}.limitsCheck`, {default: 'Check the limits'})}</p>
+                {#each limitIssues as problem (`${problem.key}|${problem.entity ?? ''}`)}
+                    <p data-testid={testId('targets-limits-problem', profile)} data-key={problem.key}>{problem.entity ? `${problem.entity}: ` : ''}{limitProblemText(problem)}</p>
+                {/each}
+            </div>
+        {/if}
+        <p class={NOTICE.info} data-testid={testId('targets-limits-note', profile)}>
+            {$t(`${KEY}.limitsNote`, {default: 'Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.'})}
+        </p>
     {/if}
 </div>
 
