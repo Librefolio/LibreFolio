@@ -58,6 +58,10 @@ const discriminatedSchemas = [
     'PortfolioPlannerSourceMoneyParam',
     'PortfolioPlannerSourceDateParam',
     'PortfolioPlannerSourceEntityRefParam',
+    'BrokerProfileWholeQuantityMode',
+    'BrokerProfileAmountMode',
+    'BrokerProfileNoFeeCap',
+    'BrokerProfileAmountFeeCap',
 ];
 
 let source = await readFile(generatedClient, 'utf8');
