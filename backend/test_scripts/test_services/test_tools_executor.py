@@ -2908,8 +2908,8 @@ async def test_report_progress_sends_declared_phases_between_ready_and_result(ru
 
 @pytest.mark.asyncio
 async def test_undeclared_phase_or_extra_field_is_dropped_not_fatal(runtime):
-    """An undeclared phase, a step over its total, a total without a step, an extra field, a step of the wrong type: each
-    is dropped, the calculation ends well, and only the valid message passes (contract §10: not a worker_crashed)."""
+    """An undeclared phase, a step over its total, a total without a step, an extra field, a step of the wrong type or
+    zero: each is dropped, the calculation ends well, and only the valid message passes (contract §10: not a worker_crashed)."""
     result, events = await _run_with_progress(runtime, "progress_rogue")
 
     assert result.status == "success", result
@@ -2963,8 +2963,8 @@ def test_child_progress_reporter_is_bounded_and_closes(monkeypatch):
     closed.close()
     before = len(sent)
     closed.report("search")
-    closed.send_frame({"kind": "progress", "execution_id": "g" * 32, "phase": "search"})
     assert len(sent) == before
+    assert not hasattr(closed, "send_frame"), "the reporter writes progress frames only, never a raw frame"
 
     context = ToolExecutionContext(execution_id="x", soft_deadline=time.monotonic() + 10, hard_deadline=time.monotonic() + 20, cancelled=lambda: False)
     context.report_progress("search", 1, 2)  # no channel: a no-op

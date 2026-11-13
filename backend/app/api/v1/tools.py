@@ -193,35 +193,43 @@ def _release(*tasks: asyncio.Task) -> None:
 async def _stream_lines(work: asyncio.Task[ToolComputeBatchResponse], events: asyncio.Queue[ToolComputeProgress], first: ToolComputeProgress | None, deadline: float, max_bytes: int) -> AsyncIterator[bytes]:
     """The stream's body: every progress message as it comes, then ``{kind: "result", response}``. A stream that cannot
     end well (past its deadline, an unexpected failure, a result over the response ceiling) ends without a result line,
-    which the client reads as a broken answer. A closed browser cancels it, and with it the calculation."""
+    which the client reads as a broken answer. A closed browser cancels it, and with it the calculation. The deadline is
+    checked between lines, never around a ``yield``: a cancel must not land in the transport's send."""
     getter: asyncio.Task[ToolComputeProgress] | None = None
     try:
-        async with asyncio.timeout(max(0.0, deadline - time.monotonic())):
-            if first is not None:
-                yield _ndjson_line(first.model_dump(mode="json"))
-            while not work.done():
-                getter = asyncio.create_task(events.get())
-                await asyncio.wait((work, getter), return_when=asyncio.FIRST_COMPLETED)
-                if getter.done():
-                    yield _ndjson_line(getter.result().model_dump(mode="json"))
-                else:
-                    getter.cancel()
-                getter = None
-            # The outcome reaches this loop after its item's last messages: hand them over first.
-            while not events.empty():
-                yield _ndjson_line(events.get_nowait().model_dump(mode="json"))
-            response = work.result()
+        if first is not None:
+            yield _ndjson_line(first.model_dump(mode="json"))
+        while not work.done():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.warning("Tool stream deadline exceeded before the result")
+                return
+            getter = asyncio.create_task(events.get())
+            await asyncio.wait((work, getter), timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
+            event = getter.result() if getter.done() else None
+            if event is None:
+                getter.cancel()
+            getter = None
+            if event is not None:
+                yield _ndjson_line(event.model_dump(mode="json"))
+        # The outcome reaches this loop after its item's last messages: hand them over first.
+        while not events.empty():
+            yield _ndjson_line(events.get_nowait().model_dump(mode="json"))
+        response = work.result()
         line = _ndjson_line({"kind": "result", "response": response.model_dump(mode="json")})
         if len(line) > max_bytes:
             logger.warning("Tool stream result exceeds the response limit", request_id=response.request_id, size=len(line))
             return
         yield line
-    except TimeoutError:
-        logger.warning("Tool stream deadline exceeded before the result")
     except Exception as exc:  # isolation boundary: the headers are sent, the stream can only end without a result
         logger.error("Tool stream failed before the result", exc_info=exc)
     finally:
         _release(work, *((getter,) if getter is not None else ()))
+
+
+def _refusal(exc: ToolExecutionError) -> HTTPException:
+    """A refusal before any line: the status ``POST /tools/compute`` answers."""
+    return HTTPException(status_code=429 if exc.code == "queue_full" else 503, detail={"code": exc.code, "retryable": exc.retryable})
 
 
 class _NDJSONResponse(StreamingResponse):
@@ -243,13 +251,17 @@ class _NDJSONResponse(StreamingResponse):
 async def compute_tools_stream(batch: ToolComputeBatchRequest, request: Request, current_user: User = Depends(get_current_user)) -> Response:
     """``POST /tools/compute`` with the progress of its calculations (lot V1 of project 67). The same admission,
     deadlines, cancellation and result; refusals before any job (429, 503) and a disconnect before the first line are
-    the same HTTP answers. Then a stream of lines, never compressed, so each line leaves as soon as it is written."""
+    the same HTTP answers. Then a stream of lines, never compressed (``MIDDLEWARE_STACK`` excludes the media type), so
+    each line leaves as soon as it is written."""
     executor = get_tool_executor()
     request_timeout_ms = await asyncio.to_thread(executor.batch_request_timeout_ms, batch)
     bounded_request = _execution_request(request, timeout_ms=request_timeout_ms)
     if current_user.id is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    settings = await bound_settings_for_batch(batch, user_id=current_user.id)
+    try:
+        settings = await bound_settings_for_batch(batch, user_id=current_user.id)
+    except ToolExecutionError as exc:
+        raise _refusal(exc) from exc
     events: asyncio.Queue[ToolComputeProgress] = asyncio.Queue()
     work = asyncio.create_task(executor.compute(batch, principal_key=str(current_user.id), request_started=bounded_request.started, settings=settings, on_progress=events.put_nowait))
     first = asyncio.create_task(events.get())
@@ -267,11 +279,13 @@ async def compute_tools_stream(batch: ToolComputeBatchRequest, request: Request,
     initial = first.result() if first.done() else None
     if not first.done():
         first.cancel()
-    if work.done() and not work.cancelled() and isinstance(work.exception(), ToolExecutionError):
-        exc = work.exception()
-        status_code = 429 if exc.code == "queue_full" else 503
-        raise HTTPException(status_code=status_code, detail={"code": exc.code, "retryable": exc.retryable}) from exc
-    headers = {"Content-Encoding": "identity", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"}
+    failure = work.exception() if work.done() and not work.cancelled() else None
+    if isinstance(failure, ToolExecutionError):
+        raise _refusal(failure) from failure
+    if failure is not None:
+        raise failure  # what /compute would answer for it, never a 200 with an empty stream
+    # GZip leaves application/x-ndjson alone (platform/middleware.py); a proxy is asked not to transform or buffer it.
+    headers = {"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"}
     return _NDJSONResponse(_stream_lines(work, events, initial, bounded_request.deadline, executor.policy.max_response_bytes), headers=headers)
 
 

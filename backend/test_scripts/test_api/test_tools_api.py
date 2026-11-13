@@ -14,7 +14,6 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi import FastAPI
-from fastapi.middleware.gzip import GZipMiddleware
 
 from backend.app.api.v1 import tools as tools_api
 from backend.app.api.v1.auth import get_current_user
@@ -37,6 +36,7 @@ from backend.app.schemas.tools import (
     ToolPoolSnapshot,
     ToolResourceCapabilities,
 )
+from backend.app.services.platform.middleware import MIDDLEWARE_STACK
 from backend.app.services.tools.base import ToolExecutionError
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_services import _reb_small_requests as reb
@@ -815,7 +815,7 @@ async def _stream(client: httpx.AsyncClient, envelope: dict[str, object]) -> tup
         body = b"".join([chunk async for chunk in response.aiter_bytes()])
     assert response.status_code == 200, body
     assert response.headers["content-type"].startswith(NDJSON)
-    assert response.headers.get("content-encoding", "identity") == "identity", "the stream is never compressed: gzip would hold the lines back"
+    assert "content-encoding" not in response.headers, "the stream is never compressed: gzip would hold the lines back"
     return response, _ndjson(body)
 
 
@@ -870,7 +870,7 @@ async def test_tool_without_phases_streams_only_the_result(test_server):
     assert [result["correlation_id"] for result in line["response"]["results"]] == [item["correlation_id"] for item in items]
 
 
-# In process: the real router behind the real GZip middleware, driven at the ASGI level, so that what is sent and when is
+# In process: the real router behind the app's GZip middleware (its options from ``MIDDLEWARE_STACK``), driven at the ASGI level, so that what is sent and when is
 # observed message by message (httpx's ASGI transport would hand over the whole body at the end).
 
 
@@ -910,15 +910,25 @@ class _StreamExecutor(_TransportExecutor):
         return await self.script(batch, on_progress)
 
 
-async def _drive_stream(monkeypatch, script, envelope: dict[str, object], *, disconnect: asyncio.Event, on_body: Callable[[bytes], None] = lambda body: None) -> list[dict]:
-    """POST the stream route of a fresh app (Tool router + GZip, any size) and return every ASGI message it sends."""
-    policy = ToolPlatformPolicy()
+async def _drive_stream(
+    monkeypatch,
+    script,
+    envelope: dict[str, object],
+    *,
+    disconnect: asyncio.Event,
+    on_body: Callable[[bytes], None] = lambda body: None,
+    policy: ToolPlatformPolicy | None = None,
+) -> list[dict]:
+    """POST the stream route of a fresh app (Tool router + the app's GZip, any size) and return every ASGI message it
+    sends."""
+    policy = policy or ToolPlatformPolicy()
     executor = _StreamExecutor(policy, script)
     monkeypatch.setattr(tools_api, "get_tool_executor", lambda: executor)
     app = FastAPI()
     app.include_router(tools_api.router, prefix="/api/v1")
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
-    app.add_middleware(GZipMiddleware, minimum_size=1)
+    gzip = next(entry for entry in MIDDLEWARE_STACK if entry.name == "gzip")
+    app.add_middleware(gzip.cls, **{**gzip.options, "minimum_size": 1})  # the app's GZip, on any size
     body = json.dumps(envelope).encode()
     received = False
     messages: list[dict] = []
@@ -978,7 +988,7 @@ async def test_stream_route_sends_progress_before_the_result_through_gzip(monkey
     status, headers = _start(messages)
     assert status == 200
     assert headers[b"content-type"].startswith(NDJSON.encode())
-    assert headers.get(b"content-encoding", b"identity") == b"identity"
+    assert b"content-encoding" not in headers
     lines = _ndjson(b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body"))
     assert [(line["kind"], line.get("phase"), line.get("step"), line.get("total")) for line in lines] == [("progress", "validate", None, None), ("progress", "search", 1, 2), ("result", None, None, None)]
     assert lines[0]["correlation_id"] == envelope["items"][0]["correlation_id"]
@@ -1026,3 +1036,53 @@ async def test_stream_route_admission_errors_stay_http_statuses(monkeypatch, cod
     if headers.get(b"content-encoding") == b"gzip":  # an ordinary JSON answer, compressed like any other
         body = gzip.decompress(body)
     assert json.loads(body) == {"detail": {"code": code, "retryable": True}}
+
+
+@pytest.mark.asyncio
+async def test_stream_route_deadline_ends_the_stream_without_a_result_and_cancels(monkeypatch):
+    """A calculation still running at the request's deadline: the stream ends without its result line (the client reads
+    a broken answer) and the calculation is cancelled, as ``/compute`` would end it."""
+    policy = ToolPlatformPolicy(
+        ingress_timeout_ms=10,
+        queue_timeout_ms=10,
+        engine_timeout_ms=10,
+        soft_timeout_ms=20,
+        output_reserve_ms=10,
+        job_timeout_ms=30,
+        cleanup_timeout_ms=10,
+        response_reserve_ms=10,
+        request_timeout_ms=300,
+        client_timeout_ms=400,
+    )
+    envelope, _items = _unknown_envelope()
+    cancelled = asyncio.Event()
+
+    async def script(batch, on_progress):
+        on_progress(_progress(batch, "validate"))
+        try:
+            await asyncio.Event().wait()  # nobody sets it: only the deadline's cancellation ends this calculation
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        raise AssertionError("unreachable")
+
+    messages = await _drive_stream(monkeypatch, script, envelope, disconnect=asyncio.Event(), policy=policy)
+    async with asyncio.timeout(DEADLINE_CEILING_S):
+        await cancelled.wait()
+
+    status, _headers = _start(messages)
+    assert status == 200
+    body = b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body")
+    assert [line["kind"] for line in _ndjson(body)] == ["progress"]
+
+
+@pytest.mark.asyncio
+async def test_stream_route_unexpected_failure_before_any_line_is_not_a_stream(monkeypatch):
+    """A calculation that fails before any line is an HTTP error, as on ``/compute``: never a 200 with an empty stream."""
+    envelope, _items = _unknown_envelope()
+
+    async def script(batch, on_progress):
+        raise RuntimeError("private failure")
+
+    with pytest.raises(RuntimeError, match="private failure"):
+        await _drive_stream(monkeypatch, script, envelope, disconnect=asyncio.Event())

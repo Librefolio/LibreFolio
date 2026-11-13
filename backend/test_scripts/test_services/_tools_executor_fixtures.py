@@ -43,7 +43,7 @@ _SETUP_TIMEOUT = 30.0
 _CLEANUP_TIMEOUT = 5.0
 _CHILD_CONTROL: Connection | None = None
 _CHILD_EXECUTION_ID: str | None = None
-# The real worker's response endpoint, published only to the close_and_linger scenario.
+# The real worker's response endpoint, published only to the close_and_linger and progress_rogue scenarios.
 _CHILD_RESPONSE: Connection | None = None
 FIXTURE_TOOL_CODE = "private_executor_fixture"
 
@@ -309,10 +309,15 @@ def _report_fixture_progress(scenario: str, context: ToolExecutionContext) -> No
         context.report_progress("undeclared")
         context.report_progress("search", 3, 2)
         context.report_progress("search", None, 2)
-        assert context.progress is not None
-        context.progress.send_frame({"kind": "progress", "execution_id": context.execution_id, "phase": "search", "secret": "PRIVATE"})
-        context.progress.send_frame({"kind": "progress", "execution_id": context.execution_id, "phase": "search", "step": "2"})
-        context.progress.send_frame({"kind": "progress", "execution_id": context.execution_id, "phase": "search", "step": True})
+        if _CHILD_RESPONSE is None:
+            raise _PrivateFixtureFailure("progress_rogue requires the private control wrapper")
+        for raw in (
+            {"phase": "search", "secret": "PRIVATE"},
+            {"phase": "search", "step": "2"},
+            {"phase": "search", "step": True},
+            {"phase": "search", "step": 0},
+        ):
+            _CHILD_RESPONSE.send_bytes(encode_json({"kind": "progress", "execution_id": context.execution_id, **raw}))
         context.report_progress("report")
     elif scenario == "progress_flood":
         context.report_progress("search", 1)
@@ -459,11 +464,12 @@ def controlled_worker_entry(target: Callable[..., object], args: tuple[object, .
                 raise AssertionError("Partial-frame fixture received unexpected worker arguments")
             _stall_after_partial_frame(job, response, cancellation)
         else:
-            if isinstance(parameters, dict) and parameters.get("scenario") == "close_and_linger":
-                # The real worker still runs the handshake and compute; compute then closes this same endpoint.
+            if isinstance(parameters, dict) and parameters.get("scenario") in ("close_and_linger", "progress_rogue"):
+                # The real worker still runs the handshake and compute; compute then closes this same endpoint, or
+                # writes on it the raw frames no plugin can send through report_progress.
                 response = args[1] if len(args) > 1 else None
                 if not isinstance(response, Connection):
-                    raise AssertionError("Close-and-linger fixture received unexpected worker arguments")
+                    raise AssertionError("Raw-response fixture received unexpected worker arguments")
                 _CHILD_RESPONSE = response
             target(*args)
     finally:

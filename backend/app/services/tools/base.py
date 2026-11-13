@@ -41,8 +41,6 @@ class ToolProgressChannel(Protocol):
 
     def report(self, phase: str, step: int | None = None, total: int | None = None) -> None: ...
 
-    def send_frame(self, frame: dict[str, object]) -> None: ...
-
 
 @dataclass(frozen=True, slots=True)
 class ToolExecutionContext:

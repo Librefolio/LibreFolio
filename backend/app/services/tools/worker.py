@@ -17,7 +17,7 @@ from backend.app.schemas.tools import ToolError, ToolErrorCode, ToolItemMetrics
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolExecutionContext, ToolExecutionError
 from backend.app.services.tools.registry import ToolDefinition, ToolPluginRegistry
-from backend.app.services.tools.wire import PROGRESS_FRAME_MAX_BYTES, decode_json, encode_json, encode_progress_frame, plain_json_object, validation_error
+from backend.app.services.tools.wire import decode_json, encode_json, encode_progress_frame, plain_json_object, validation_error
 
 
 class CancellationSignal(Protocol):
@@ -59,8 +59,8 @@ CHILD_PROGRESS_FRAME_CAP = 64
 class PipeProgressReporter:
     """The child's progress channel (lot V1 of project 67): small frames on the response pipe, between ``ready`` and the
     result. It never blocks for long, never raises: a malformed call is dropped, past its cap it stops, a broken pipe is
-    swallowed, and once closed (compute returned) it sends nothing, so a stray thread cannot split the result frame. The
-    parent checks every frame again: declared phase, shape, duplicates, its own cap."""
+    swallowed, and once closed (compute returned) it sends nothing, so a stray thread cannot split the result frame. It
+    writes progress frames only: no raw frame reaches the pipe through it. The parent checks every frame again: declared phase, shape, duplicates, its own cap."""
 
     def __init__(self, connection: Connection, execution_id: str) -> None:
         self._connection = connection
@@ -77,14 +77,6 @@ class PipeProgressReporter:
         except ValueError:
             return
         self._send(frame)
-
-    def send_frame(self, frame: dict[str, object]) -> None:
-        """The raw transport, bounded like ``report``: a plugin calls ``context.report_progress``."""
-        try:
-            payload = encode_json(frame, max_depth=1, max_bytes=PROGRESS_FRAME_MAX_BYTES, limit_code="output_limit_exceeded")
-        except (ValueError, ToolExecutionError):
-            return
-        self._send(payload)
 
     def _send(self, payload: bytes) -> None:
         with self._lock:
