@@ -17,6 +17,10 @@
     import {withHelpCues} from '../shared/columnHelp';
     import DistributionDialog from './DistributionDialog.svelte';
     import {STATUS_TONES} from '$lib/theme/toneClasses';
+    import {getPlannerProfile, storageKey, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         draft: PlannerDraft;
@@ -61,7 +65,7 @@
 
     function barHtml(asset: DraftAsset): string {
         const width = Math.min(100, (percentNumber(draft.data.targets[asset.key]) / maxWeight) * 100);
-        return `<div data-testid="pac-planner-target-bar" data-asset-key="${escapeHtml(asset.key)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-lf-neutral"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}%"></div></div>`;
+        return `<div data-testid="${testId('target-bar', profile)}" data-asset-key="${escapeHtml(asset.key)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-lf-neutral"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}%"></div></div>`;
     }
 
     /** Gives this Asset what is missing, or takes away the excess, within 0–100. */
@@ -150,12 +154,12 @@
             label: () => $t(`${KEY}.balance`, {default: 'Balance to 100%'}),
             onClick: (asset) => balance(asset),
             disabled: () => totalState === 'balanced' || totalState === 'unknown',
-            testid: 'pac-planner-target-balance',
+            testid: testId('target-balance', profile),
         },
     ]);
 </script>
 
-<div class="space-y-3" data-testid="pac-planner-targets">
+<div class="space-y-3" data-testid={testId('targets', profile)}>
     <div class="flex flex-wrap items-center gap-2">
         <p class="text-sm text-lf-secondary">{$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}</p>
         <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5">
@@ -175,13 +179,13 @@
                 />
             {/if}
             {#if draft.data.assets.length > 0}
-                <button type="button" class={BUTTON_SECONDARY} disabled={!canBalanceAll} data-testid="pac-planner-targets-balance-all" onclick={() => applyBalance(draft.orderedAssets.map((_, index) => index))}>
+                <button type="button" class={BUTTON_SECONDARY} disabled={!canBalanceAll} data-testid={testId('targets-balance-all', profile)} onclick={() => applyBalance(draft.orderedAssets.map((_, index) => index))}>
                     <Scale class="h-4 w-4" aria-hidden="true" />
                     {$t(`${KEY}.balanceAll`, {default: 'Balance all'})}
                 </button>
             {/if}
             <div class="flex items-center gap-0.5">
-                <button type="button" class={BUTTON_SECONDARY} disabled={copyDisabled} data-testid="pac-planner-distribution-open" onclick={() => (copying = true)}>
+                <button type="button" class={BUTTON_SECONDARY} disabled={copyDisabled} data-testid={testId('distribution-open', profile)} onclick={() => (copying = true)}>
                     <PieChart class="h-4 w-4" aria-hidden="true" />
                     {$t(`${KEY}.copyDistribution`, {default: 'Copy current distribution'})}
                 </button>
@@ -191,25 +195,25 @@
                         default:
                             'Reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not the cash, and brings the ratios to 100%. Assets entered by hand get 0. You see the weights before using them, and a target you changed is replaced only after you confirm.',
                     })}
-                    testid="pac-planner-distribution-help"
+                    testid={testId('distribution-help', profile)}
                 />
             </div>
             {#if draft.data.assets.length > 0}
-                <TableColumns table={tableRef} testid="pac-planner-targets-columns" />
+                <TableColumns table={tableRef} testid={testId('targets-columns', profile)} />
             {/if}
         </div>
     </div>
 
     {#if draft.data.assets.length === 0}
-        <p class={NOTICE.info} data-testid="pac-planner-targets-empty">{$t('tools.pacAllocator.planner.problems.noAssets', {default: 'Add at least one Asset.'})}</p>
+        <p class={NOTICE.info} data-testid={testId('targets-empty', profile)}>{$t('tools.pacAllocator.planner.problems.noAssets', {default: 'Add at least one Asset.'})}</p>
     {:else}
-        <div data-testid="pac-planner-targets-table">
+        <div data-testid={testId('targets-table', profile)}>
             <DataTable
                 bind:this={tableRef}
                 data={draft.orderedAssets}
                 {columns}
                 getRowId={(asset) => asset.key}
-                storageKey="pac-planner-targets"
+                storageKey={storageKey('targets', profile)}
                 enableSorting={false}
                 enablePagination={false}
                 enableSelection
@@ -226,9 +230,9 @@
             />
         </div>
 
-        <div class="flex flex-wrap items-center justify-end gap-1.5 pt-1 text-xs font-medium" data-testid="pac-planner-targets-control" data-balanced={totalState === 'balanced' ? 'true' : 'false'} data-state={totalState}>
+        <div class="flex flex-wrap items-center justify-end gap-1.5 pt-1 text-xs font-medium" data-testid={testId('targets-control', profile)} data-balanced={totalState === 'balanced' ? 'true' : 'false'} data-state={totalState}>
             <span class="text-lf-muted">{$t(`${KEY}.total`, {default: 'Total'})}</span>
-            <span class="font-mono {TOTAL_CLASS[totalState]}" data-testid="pac-planner-targets-total">{total === null ? '—' : formatPlannerPercentUnits(total)}</span>
+            <span class="font-mono {TOTAL_CLASS[totalState]}" data-testid={testId('targets-total', profile)}>{total === null ? '—' : formatPlannerPercentUnits(total)}</span>
             {#if totalState === 'balanced'}
                 <span class="text-lf-success" aria-hidden="true">✅</span>
             {:else if totalState === 'excess' && excess !== null}
@@ -242,7 +246,7 @@
                     default:
                         'The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.',
                 })}
-                testid="pac-planner-targets-total-help"
+                testid={testId('targets-total-help', profile)}
             />
         </div>
     {/if}

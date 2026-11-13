@@ -4,6 +4,10 @@
     import type {PlannerDraft} from '../draft.svelte';
     import {LABEL} from '../ui';
     import HelpTip from '../shared/HelpTip.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         draft: PlannerDraft;
@@ -15,7 +19,7 @@
     const currencyHelp = $derived($t('tools.pacAllocator.planner.scenario.currencyHint', {default: 'The currency the plan compares and summarises amounts in (weights, deviations, uninvested cash). Money stays in its own currency: every exchange needed appears in the plan as an FX operation.'}));
 </script>
 
-<div class="space-y-4" data-testid="pac-planner-scenario">
+<div class="space-y-4" data-testid={testId('scenario', profile)}>
     <p class="max-w-3xl text-sm text-lf-secondary">
         {$t('tools.pacAllocator.planner.scenario.intro', {
             default: 'You plan a new investment (pure PAC): the calculation starts from an empty portfolio, so what you already hold is not counted, and splits the cash you choose among the Assets, as close as possible to the target weights. It is a simulation: no order is sent.',
@@ -25,9 +29,9 @@
         <div class="space-y-1">
             <div class="flex items-center gap-1">
                 <span class={LABEL}>{currencyLabel} *</span>
-                <HelpTip label={currencyLabel} help={currencyHelp} testid="pac-planner-scenario-currency-help" />
+                <HelpTip label={currencyLabel} help={currencyHelp} testid={testId('scenario-currency-help', profile)} />
             </div>
-            <CurrencySearchSelect bind:value={draft.data.valuationCurrency} testId="pac-planner-scenario-currency" compact />
+            <CurrencySearchSelect bind:value={draft.data.valuationCurrency} testId={testId('scenario-currency', profile)} compact />
         </div>
     </div>
 </div>
