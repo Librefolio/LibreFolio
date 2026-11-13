@@ -202,11 +202,13 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
     if env.get("E2E_WORKERS", "1") == "1":
         env["LF_TX_HYGIENE"] = "1"
     if coverage and _common._COVERAGE_PY:
+        _coverage.LEDGER.expect_python("frontend")
         env["COVERAGE_BACKEND"] = "1"
         # Same spawn-worker wiring as _frontend_common._run_playwright_body:
         # Playwright hands this env to the webServer it launches.
         _common.apply_subprocess_coverage_env(env)
     if coverage and _common._COVERAGE_JS:
+        _coverage.LEDGER.expect_e2e_js()
         env["COVERAGE_JS"] = "1"
         # A consolidated worker keeps one istanbul coverage map alive across every
         # spec of the category (the sink of e2e/fixtures/js-coverage-sink.ts) instead
@@ -274,10 +276,7 @@ def run_vitest_group(paths: list[str], coverage: bool, category: str | None = No
     a red run too (``reportOnFailure``), so the directory exists whatever the verdict.
     """
     report = Path(tempfile.mkdtemp(prefix="lf_vitest_")) / "report.json"
-    env = None
-    if coverage and _common._COVERAGE_JS:
-        env = os.environ.copy()
-        env["LF_VITEST_COVERAGE_DIR"] = _coverage.LEDGER.expect_unit(category or "vitest")
+    env = _coverage.vitest_env(category or "vitest") if coverage else None
 
     cmd = ["npx", "vitest", "run", *paths, "--reporter=default", "--reporter=json", f"--outputFile.json={report}"]
 

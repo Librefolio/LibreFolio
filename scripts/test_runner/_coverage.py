@@ -2,6 +2,7 @@
 Coverage finalization, reporting, and management commands.
 """
 
+import json
 import os
 import re
 import shutil
@@ -10,9 +11,11 @@ import subprocess
 import time
 import webbrowser
 from pathlib import Path
+from typing import NamedTuple
 
 from scripts.cli_base import pipenv_prefix
 
+from . import _common
 from ._archive import archive_path
 from ._common import (
     PROJECT_ROOT,
@@ -34,10 +37,21 @@ class CoverageLedger:
     (``coverage-js/unit/<label>-<n>``, relative to ``frontend/``, through ``LF_VITEST_COVERAGE_DIR``), and the directory is noted
     here the moment the group is launched. The runner used to leave the directory to Vitest (a dated name the runner never
     saw), so a group that wrote nothing could not be told from a group that never ran.
+
+    The other launchers note what they leave too (step 3.3): a pytest run under Python coverage the database of its source
+    (``.coverage_data/backend`` or ``frontend``), a Playwright run or the shared server under Python coverage the E2E server's
+    (``.coverage_data/frontend``), a Playwright run under JS coverage its worker files. Only what was launched is expected:
+    a run that skipped everything (``--resume``) expects nothing.
     """
 
     def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        """Forget everything: a run starts from an empty ledger (``_apply_coverage_mode``)."""
         self.units: list[str] = []
+        self.python: set[str] = set()
+        self.e2e_js = 0
         self._counts: dict[str, int] = {}
 
     def expect_unit(self, label: str) -> str:
@@ -47,9 +61,31 @@ class CoverageLedger:
         self.units.append(directory)
         return directory
 
+    def expect_python(self, database: str) -> None:
+        """Note a launch whose Python coverage ends in ``.coverage_data/<database>`` (``backend`` or ``frontend``)."""
+        self.python.add(database)
+
+    def expect_e2e_js(self) -> None:
+        """Note a Playwright run under JS coverage: its workers write ``coverage-js/e2e-raw/worker-*.json``."""
+        self.e2e_js += 1
+
 
 #: The ledger of this process's run: one run per process.
 LEDGER = CoverageLedger()
+
+
+def vitest_env(label: str, env: dict | None = None) -> dict | None:
+    """The environment of a Vitest launch: under JS coverage, ``env`` (or a copy of the runner's own) with
+    ``LF_VITEST_COVERAGE_DIR`` set to the directory the ledger now expects under ``label``; otherwise ``env`` unchanged
+    (``None`` keeps ``subprocess.run`` inheriting the runner's). Every launch of Vitest goes through here, the consolidated
+    groups and the actions that call it themselves alike, so no directory is written that the ledger has not seen."""
+    if not _common._COVERAGE_JS:
+        return env
+    env = dict(os.environ if env is None else env)
+    env["LF_VITEST_COVERAGE_DIR"] = LEDGER.expect_unit(label)
+    return env
+
+
 # coverage.py's final name for a parallel data file: the last step of its write() appends `.H<hash>h`.
 _FINISHED_PART = re.compile(r"\.H\w{10}h$")
 
@@ -77,14 +113,20 @@ def _holds_no_data(part: Path) -> bool:
     """
     if not _FINISHED_PART.search(part.name):
         return False
+    return _measured_files(part) == 0
+
+
+def _measured_files(database: Path) -> int | None:
+    """How many files a coverage database measured (rows of its ``file`` table), or ``None`` when it cannot be read. Opened
+    read-only, so a database that vanishes meanwhile is never re-created."""
     try:
-        con = sqlite3.connect(f"{part.absolute().as_uri()}?mode=ro", uri=True)
+        con = sqlite3.connect(f"{database.absolute().as_uri()}?mode=ro", uri=True)
     except sqlite3.Error:
-        return False
+        return None
     try:
-        return con.execute("select count(*) from file").fetchone()[0] == 0
+        return con.execute("select count(*) from file").fetchone()[0]
     except sqlite3.Error:
-        return False
+        return None
     finally:
         con.close()
 
@@ -292,8 +334,17 @@ def _finalize_js_coverage() -> None:
         print_info("   Find the gaps: ./dev.py test coverage-report --lang js --summary")
 
 
-def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — TODO(P2-refactor): mode matrix × combine/html pipeline, nested error handling
-    """Finalize coverage data after test runs."""
+class PythonFinalized(NamedTuple):
+    """What ``_finalize_coverage`` did with the E2E server's data in this run: how many parts it found in the project root, and
+    whether it saved the combined data into ``.coverage_data/frontend``. ``.coverage_data/frontend`` accumulates across runs,
+    so its rows alone do not say that this run's server wrote anything."""
+
+    server_parts: int
+    frontend_saved: bool
+
+
+def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa: C901 — TODO(P2-refactor): mode matrix × combine/html pipeline, nested error handling
+    """Finalize coverage data after test runs; return what was done with the E2E server's data (``PythonFinalized``)."""
     cwd = Path(os.getcwd())
     main_cov = cwd / ".coverage"
     data_dir = cwd / ".coverage_data"
@@ -305,6 +356,8 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
     def _archive_db(db_path: Path, label: str):
         archive_path(db_path, target_dir=data_dir, label=label)
 
+    server_parts, frontend_saved = 0, False
+
     if is_front or is_all:
         if main_cov.exists():
             if is_all and not backend_db.exists():
@@ -312,6 +365,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
             main_cov.unlink()
 
         pid_files = _coverage_parts(cwd)
+        server_parts = len(pid_files)
 
         print(f"{Colors.YELLOW}📊 Combining coverage data from server subprocess(es)...{Colors.NC}")
         if pid_files:
@@ -326,6 +380,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
             if main_cov.exists():
                 _archive_db(frontend_db, "frontend")
                 shutil.copy2(str(main_cov), str(frontend_db))
+                frontend_saved = True
                 print(f"   {Colors.GREEN}💾 Saved frontend coverage → .coverage_data/frontend{Colors.NC}")
         else:
             print_warning("   No .coverage.* files found! Server may not have written coverage data.")
@@ -389,7 +444,114 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — T
         print("└─▶ $ ./dev.py test coverage show combined   # merge backend + frontend")
     print()
 
-    return html_dir
+    return PythonFinalized(server_parts, frontend_saved)
+
+
+class PieceRow(NamedTuple):
+    """One row of the completeness table: a piece of coverage the run launched, where it must be, and what is there."""
+
+    piece: str
+    where: str
+    expected: str
+    found: str
+    ok: bool
+
+
+def _istanbul_files(path: Path) -> int | None:
+    """How many files an istanbul JSON measured (a ``coverage-final.json``, a Playwright worker file), or ``None`` when it is
+    missing or cannot be read whole — a file cut short is not JSON."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return len(data) if isinstance(data, dict) else None
+
+
+def _named(paths: list, limit: int = 3) -> str:
+    names = [p.name for p in paths[:limit]]
+    return ", ".join(names) + ("…" if len(paths) > limit else "")
+
+
+def check_coverage_pieces(ledger: CoverageLedger, mode: str, finalized: PythonFinalized | None = None) -> list[PieceRow]:  # noqa: C901 — flat list of independent piece checks
+    """Compare what the run launched under coverage (``ledger``) with what the finalizers left on disk: one row per expected piece.
+
+    - every ``.coverage_data/<database>`` a launch noted holds at least one measured file (the ``file`` table, read-only);
+    - where the finalizer combines the server's parts (``mode`` ``frontend`` or ``all``), no ``.coverage.*`` is left in the
+      project root: a part left there is data no report holds;
+    - every Vitest directory of the ledger holds a ``coverage-final.json`` with at least one file;
+    - after a Playwright run under JS coverage, at least one worker file, every one readable whole, and no ``*.tmp`` left;
+    - the JS reports of what ran: ``unit-combined`` for Vitest, ``e2e`` for Playwright, ``combined`` for both.
+
+    Only what was launched is a row: a JS run of Vitest alone expects no worker file, a backend run no E2E data. ``mode`` is the
+    finalizer's: ``backend`` (one backend category), ``frontend`` (a front-* category or all-frontend) or ``all``. ``finalized``
+    is what the Python finalizer did: the E2E database accumulates across runs, so where it combines the server's parts, the
+    check also wants this run's parts saved into it (the JS data needs no such row: a JS run wipes it before it starts).
+    """
+    root = PROJECT_ROOT
+    js = root / "frontend" / JS_COVERAGE_DIR
+    rows: list[PieceRow] = []
+
+    for database in sorted(ledger.python):
+        path = root / ".coverage_data" / database
+        files = _measured_files(path) if path.is_file() else None
+        found = "missing" if not path.is_file() else ("unreadable" if files is None else f"{files} file(s)")
+        rows.append(PieceRow("Python data", f".coverage_data/{database}", "≥1 measured file", found, bool(files)))
+
+    if "frontend" in ledger.python and mode in ("frontend", "all") and finalized is not None:
+        found = f"{finalized.server_parts} part(s), " + ("saved" if finalized.frontend_saved else "nothing saved")
+        rows.append(PieceRow("E2E server data, this run", ".coverage.* → .coverage_data/frontend", "parts found and saved", found, finalized.frontend_saved))
+
+    if ledger.python and mode in ("frontend", "all"):
+        left = _coverage_parts(root)
+        found = f"{len(left)} left" + (f": {_named(left)}" if left else "")
+        rows.append(PieceRow("server parts", ".coverage.* (project root)", "none left after the combine", found, not left))
+
+    for directory in ledger.units:
+        path = root / "frontend" / directory / "coverage-final.json"
+        files = _istanbul_files(path)
+        found = "missing" if not path.exists() else ("unreadable" if files is None else f"{files} file(s)")
+        rows.append(PieceRow("Vitest unit", f"frontend/{directory}", "coverage-final.json, ≥1 file", found, bool(files)))
+
+    if ledger.e2e_js:
+        raw = js / "e2e-raw"
+        workers = sorted(raw.glob("worker-*.json")) if raw.is_dir() else []
+        torn = [w for w in workers if _istanbul_files(w) is None]
+        found = f"{len(workers) - len(torn)} readable" + (f", torn: {_named(torn)}" if torn else "")
+        rows.append(PieceRow("E2E worker files", f"frontend/{JS_COVERAGE_DIR}/e2e-raw/worker-*.json", "≥1, all readable", found, len(workers) > len(torn) and not torn))
+        unfinished = sorted(raw.glob("*.tmp")) if raw.is_dir() else []
+        found = f"{len(unfinished)}" + (f": {_named(unfinished)}" if unfinished else "")
+        rows.append(PieceRow("E2E unfinished writes", f"frontend/{JS_COVERAGE_DIR}/e2e-raw/*.tmp", "none", found, not unfinished))
+
+    reports = (["unit-combined"] if ledger.units else []) + (["e2e"] if ledger.e2e_js else []) + (["combined"] if ledger.units and ledger.e2e_js else [])
+    for name in reports:
+        path = js / name / "coverage-final.json"
+        files = _istanbul_files(path)
+        found = "missing" if not path.exists() else ("unreadable" if files is None else f"{files} file(s)")
+        rows.append(PieceRow("JS report", f"frontend/{JS_COVERAGE_DIR}/{name}", "coverage-final.json, ≥1 file", found, bool(files)))
+
+    return rows
+
+
+def report_coverage_pieces(ledger: CoverageLedger, mode: str, finalized: PythonFinalized | None = None) -> bool:
+    """Print the completeness table «piece · where · expected · found» and say whether the run is whole. A red row makes the run
+    red whatever its tests said: numbers measured with a piece missing are not the run's measure. Nothing launched under coverage,
+    nothing to print: True."""
+    rows = check_coverage_pieces(ledger, mode, finalized)
+    if not rows:
+        return True
+    # The mark is an emoji, two columns wide on a terminal and one character long: it stays out of the width arithmetic.
+    header = ("piece", "where", "expected", "found")
+    cells = [(row.piece, row.where, row.expected, row.found) for row in rows]
+    widths = [max(len(line[i]) for line in (header, *cells)) for i in range(len(header))]
+    print_section("Coverage pieces")
+    for mark, line in (("  ", header), *zip(("✅" if row.ok else "❌" for row in rows), cells, strict=True)):
+        print(f"   {mark}  " + "  ".join(cell.ljust(width) for cell, width in zip(line, widths, strict=True)).rstrip())
+    missing = [row for row in rows if not row.ok]
+    if missing:
+        print_error(f"Coverage incomplete: {len(missing)} of {len(rows)} piece(s) missing or empty — the run is red; its numbers are not the whole measure")
+        return False
+    print_success(f"Coverage complete: {len(rows)} piece(s), all there")
+    return True
 
 
 def _handle_coverage_command(args) -> int:

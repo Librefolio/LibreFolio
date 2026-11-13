@@ -15,6 +15,11 @@ coverage exists, and writes pure numbers. It lands in small steps, each pinned h
    run's ledger (``_coverage.CoverageLedger``); and ``vitest.config.ts`` writes the coverage of a red run too
    (``reportOnFailure``), so a failing test no longer hides a whole group's coverage.
 
+3. ``TestCompleteness`` (step 3.3) — the ledger notes everything the run launches under coverage (the Vitest groups and the
+   actions that launch Vitest themselves, through ``vitest_env``; pytest; Playwright; the E2E server), and at the end
+   ``check_coverage_pieces(ledger, mode)`` compares it with what is on disk. A missing or empty piece is a red row of the table
+   «piece · where · expected · found», and the run exits 1 whatever its tests said: a run that lost data cannot report numbers.
+
 Pure: no database, no server, no network, no subprocess. The runner's heavy parts are stood in for with ``monkeypatch``; the
 source of ``_cli.py`` is read as text (``ast``), never executed beyond its import.
 """
@@ -24,12 +29,14 @@ from __future__ import annotations
 import argparse
 import ast
 import inspect
+import os
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from scripts.test_runner import _cli, _common, _consolidate, _coverage
+from scripts.test_runner import _cli, _common, _consolidate, _coverage, _frontend_common, _frontend_fx, _inventory, _server
 
 CLI_SOURCE = Path(_cli.__file__).read_text(encoding="utf-8")
 VITEST_CONFIG = Path(_common.PROJECT_ROOT, "frontend", "vitest.config.ts")
@@ -75,6 +82,7 @@ def stood_in_runner(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(_common, "_COVERAGE_PY", False)
     monkeypatch.setattr(_common, "_COVERAGE_JS", False)
     monkeypatch.setattr(_common, "_COVERAGE_SOURCE", None)
+    monkeypatch.setattr(_coverage, "LEDGER", _coverage.CoverageLedger())
     return state
 
 
@@ -255,3 +263,224 @@ class TestUnitDirectories:
         assert "reportOnFailure: true" in text
         assert "process.env.LF_VITEST_COVERAGE_DIR" in text
         assert "reportsDirectory: process.env.LF_VITEST_COVERAGE_DIR ?? `coverage-js/unit/${Date.now()" in text, "the variable first, and the dated directory as the default for a direct run, as it was"
+
+
+def _coverage_database(path: Path, measured_files: int) -> Path:
+    """A coverage.py data file as the check reads it: the ``file`` table, with ``measured_files`` rows (0 = the schema of a writer
+    stopped while saving, nothing measured)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(path)
+    try:
+        con.execute("create table file (id integer primary key, path text, unique (path))")
+        con.executemany("insert into file (path) values (?)", [(f"/src/module_{i}.py",) for i in range(measured_files)])
+        con.commit()
+    finally:
+        con.close()
+    return path
+
+
+def _istanbul_json(path: Path, text: str = '{"/src/a.ts": {"path": "/src/a.ts", "s": {"0": 1}}}') -> Path:
+    """An istanbul ``coverage-final.json`` (or a Playwright worker file): one measured file by default, or the text given."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+class TestCompleteness:
+    """Step 3.3: the run checks, at its end, that every piece of coverage it launched is there; a missing piece turns it red."""
+
+    @pytest.fixture
+    def run_root(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        """A project root of the test's own (the check reads ``.coverage_data/`` and ``frontend/coverage-js/`` under it, and the
+        Python data of ``run_command`` lands in the working directory, so the test works there too) and a ledger of its own."""
+        ledger = _coverage.CoverageLedger()
+        monkeypatch.setattr(_coverage, "LEDGER", ledger)
+        monkeypatch.setattr(_coverage, "PROJECT_ROOT", tmp_path)
+        monkeypatch.chdir(tmp_path)
+        return SimpleNamespace(root=tmp_path, js=tmp_path / "frontend" / "coverage-js", ledger=ledger)
+
+    def test_a_missing_unit_directory_turns_the_run_red_with_a_table(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, stood_in_runner: SimpleNamespace, run_root: SimpleNamespace) -> None:
+        """CC-01 — a Vitest group the ledger expects left no ``coverage-final.json``: ``_finish_coverage`` prints the table «piece ·
+        where · expected · found», names the directory as missing, and returns 1 although every test passed. The same run with the
+        directory and its report present returns 0."""
+        monkeypatch.setattr(_common, "_COVERAGE_MODE", "js")
+        monkeypatch.setattr(_common, "_COVERAGE_JS", True)
+        monkeypatch.setattr(_common, "_COVERAGE_SOURCE", "frontend")
+        run_root.ledger.expect_unit("front-fx")
+
+        assert _cli._finish_coverage(True) == 1, "a run with a piece missing is red, whatever the tests said"
+        out = capsys.readouterr().out
+        for column in ("piece", "where", "expected", "found"):
+            assert column in out, f"the table has no «{column}» column"
+        assert "coverage-js/unit/front-fx-1" in out and "missing" in out
+
+        _istanbul_json(run_root.js / "unit" / "front-fx-1" / "coverage-final.json")
+        _istanbul_json(run_root.js / "unit-combined" / "coverage-final.json")
+        assert _cli._finish_coverage(True) == 0, "every expected piece is there: the run keeps the tests' verdict"
+        assert _cli._finish_coverage(False) == 1
+
+    def test_an_empty_server_database_is_a_red_row(self, run_root: SimpleNamespace) -> None:
+        """CC-02 — the E2E server's data (``.coverage_data/frontend``) exists but measured no file — the shape a writer stopped
+        while saving leaves: a red row. With one measured file the row is green. The database is read, never written."""
+        run_root.ledger.expect_python("frontend")
+        database = _coverage_database(run_root.root / ".coverage_data" / "frontend", 0)
+
+        rows = _coverage.check_coverage_pieces(run_root.ledger, "frontend")
+        red = [row for row in rows if not row.ok]
+        assert [row.where for row in red] == [".coverage_data/frontend"]
+        assert "0" in red[0].found
+
+        database.unlink()
+        _coverage_database(database, 1)
+        assert all(row.ok for row in _coverage.check_coverage_pieces(run_root.ledger, "frontend"))
+
+    def test_a_part_left_uncombined_is_a_red_row(self, run_root: SimpleNamespace) -> None:
+        """CC-03 — where the finalizer combines the server's parts (a frontend or a whole run), a ``.coverage.*`` still in the
+        project root is data no report holds: a red row naming how many are left."""
+        run_root.ledger.expect_python("frontend")
+        _coverage_database(run_root.root / ".coverage_data" / "frontend", 3)
+        _coverage_database(run_root.root / ".coverage.host.4242.XabcdeX.Habcdefghijh", 2)
+
+        for mode in ("frontend", "all"):
+            red = [row for row in _coverage.check_coverage_pieces(run_root.ledger, mode) if not row.ok]
+            assert len(red) == 1 and ".coverage.*" in red[0].where and "1" in red[0].found, f"mode {mode}: {red}"
+
+    def test_a_torn_worker_file_is_a_red_row(self, run_root: SimpleNamespace) -> None:
+        """CC-04 — a Playwright run under JS coverage: the worker files must all be readable JSON (one cut short is a red row) and no
+        ``*.tmp`` may be left (a sink that never renamed its file is a red row). One readable file and nothing else is green."""
+        run_root.ledger.expect_e2e_js()
+        _istanbul_json(run_root.js / "e2e-raw" / "worker-0-101.json")
+        _istanbul_json(run_root.js / "e2e" / "coverage-final.json")
+        assert all(row.ok for row in _coverage.check_coverage_pieces(run_root.ledger, "frontend"))
+
+        _istanbul_json(run_root.js / "e2e-raw" / "worker-1-102.json", '{"/src/b.ts": {"pa')
+        _istanbul_json(run_root.js / "e2e-raw" / "worker-2-103.json.tmp", "{}")
+        red = [row for row in _coverage.check_coverage_pieces(run_root.ledger, "frontend") if not row.ok]
+        assert len(red) == 2, red
+        assert any("worker-1-102.json" in row.found for row in red), "the torn file is named"
+        assert any("tmp" in row.where for row in red), "the unfinished file is its own row"
+
+    def test_a_direct_vitest_call_is_in_the_ledger(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
+        """CC-05 — an action that launches Vitest itself (``front-fx fx-unit``, not the consolidated pass) under JS coverage: its
+        child gets ``LF_VITEST_COVERAGE_DIR=coverage-js/unit/front-fx-1`` and the ledger expects that directory. Without JS
+        coverage, nothing is named and nothing expected."""
+        envs: list = []
+        monkeypatch.setattr(_frontend_fx.subprocess, "run", lambda cmd, **kwargs: envs.append(kwargs.get("env")) or SimpleNamespace(returncode=0))
+        monkeypatch.delenv("LF_VITEST_COVERAGE_DIR", raising=False)
+
+        monkeypatch.setattr(_common, "_COVERAGE_JS", True)
+        assert _frontend_fx.front_fx_unit()
+        assert envs[-1]["LF_VITEST_COVERAGE_DIR"] == "coverage-js/unit/front-fx-1"
+        assert run_root.ledger.units == ["coverage-js/unit/front-fx-1"]
+        assert "LF_VITEST_COVERAGE_DIR" not in os.environ, "the variable is the child's alone"
+
+        monkeypatch.setattr(_common, "_COVERAGE_JS", False)
+        assert _frontend_fx.front_fx_unit()
+        assert "LF_VITEST_COVERAGE_DIR" not in (envs[-1] or {})
+        assert run_root.ledger.units == ["coverage-js/unit/front-fx-1"]
+
+    def test_every_vitest_launch_of_the_runner_names_its_directory(self) -> None:
+        """CC-06 — gate on the runner's source: every function that launches Vitest (a command list with ``"vitest"`` and a
+        ``subprocess.run``, ``Popen`` or ``run_command`` call) hands it the environment of ``vitest_env``; a launch that does not
+        writes a directory the ledger never sees, and the check could not tell it missing."""
+        launchers = {"subprocess.run", "subprocess.Popen", "run_command", "_common.run_command"}
+        unnamed = []
+        for module in sorted(Path(_cli.__file__).parent.glob("*.py")):
+            source = module.read_text(encoding="utf-8")
+            for node in ast.walk(ast.parse(source)):
+                if not isinstance(node, ast.FunctionDef):
+                    continue
+                launches = {ast.unparse(call.func) for call in ast.walk(node) if isinstance(call, ast.Call)}
+                lists_vitest = any(isinstance(item, ast.List) and any(isinstance(e, ast.Constant) and e.value == "vitest" for e in item.elts) for item in ast.walk(node))
+                if lists_vitest and launches & launchers and not any(name.endswith("vitest_env") for name in launches):
+                    unnamed.append(f"{module.name}:{node.lineno} {node.name}")
+        assert unnamed == [], f"Vitest launched without vitest_env: {unnamed}"
+
+    def test_a_backend_only_run_expects_only_the_pytest_data(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
+        """CC-07 — ``--coverage py <backend category>``: a pytest command through ``run_command`` notes ``.coverage_data/backend``,
+        nothing else; the check then has one row, green when the database holds data — the server parts a backend run leaves in the
+        project root are not its pieces (its finalizer does not combine them)."""
+        monkeypatch.setattr(_common, "_COVERAGE_PY", True)
+        monkeypatch.setattr(_common, "_COVERAGE_JS", False)
+        monkeypatch.setattr(_common, "_COVERAGE_SOURCE", "backend")
+        monkeypatch.setattr(_common.subprocess, "run", lambda cmd, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""))
+
+        assert _common.run_command(["pipenv", "run", "pytest", "backend/test_scripts/test_utilities/test_coverage_quotable.py"], "stood-in pytest")
+        assert run_root.ledger.python == {"backend"}
+        assert run_root.ledger.units == [] and run_root.ledger.e2e_js == 0
+
+        _coverage_database(run_root.root / ".coverage_data" / "backend", 5)
+        _coverage_database(run_root.root / ".coverage.host.4242.XabcdeX.Habcdefghijh", 2)
+        rows = _coverage.check_coverage_pieces(run_root.ledger, "backend")
+        assert [(row.where, row.ok) for row in rows] == [(".coverage_data/backend", True)]
+
+    def test_playwright_and_the_server_under_coverage_are_in_the_ledger(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
+        """CC-08 — a Playwright run under JS coverage expects worker files (both launchers: the consolidated group and a single
+        action); under Python coverage, Playwright and the shared server expect the E2E server's data, ``.coverage_data/frontend``.
+        A backend category's shared server notes nothing: its parts are not combined by its run (open question of step 3.3)."""
+        monkeypatch.setattr(_common, "_COVERAGE_PY", True)
+        monkeypatch.setattr(_common, "_COVERAGE_JS", True)
+        monkeypatch.setattr(_common, "_COVERAGE_SOURCE", "frontend")
+        monkeypatch.setattr(_consolidate.subprocess, "run", lambda cmd, **kwargs: SimpleNamespace(returncode=0))
+        monkeypatch.setattr(_consolidate, "_playwright_results", lambda report: {})
+
+        _consolidate.run_playwright_group(["e2e/a.spec.ts"], True, category="front-fx")
+        _frontend_common._run_playwright_body("e2e/b.spec.ts", coverage=True)
+        assert run_root.ledger.e2e_js == 2
+        assert run_root.ledger.python == {"frontend"}
+
+        class StoodInServer:
+            def __init__(self, **kwargs: object) -> None:
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+        monkeypatch.setattr(_server, "SharedTestServer", StoodInServer)
+        monkeypatch.setattr(_cli, "_requires_shared_backend", lambda args: True)
+        for source, expected in (("backend", set()), ("frontend", {"frontend"})):
+            monkeypatch.setattr(_common, "_COVERAGE_SOURCE", source)
+            run_root.ledger.reset()
+            with _cli.shared_backend_for("api", SimpleNamespace(workers="1")):
+                pass
+            assert run_root.ledger.python == expected, f"source {source}"
+
+    def test_a_run_starts_from_an_empty_ledger(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
+        """CC-09 — ``_apply_coverage_mode``, the first coverage step of both entries, empties the ledger, with or without
+        ``--coverage``: nothing a previous run of the same process noted is expected again."""
+        for name in ("_COVERAGE_MODE", "_RESUME_MODE", "_COVERAGE_SOURCE", "_COVERAGE_PY", "_COVERAGE_JS", "_FAIL_FAST"):
+            monkeypatch.setattr(_common, name, getattr(_common, name))
+        run_root.ledger.expect_unit("front-fx")
+        run_root.ledger.expect_python("backend")
+        run_root.ledger.expect_e2e_js()
+
+        assert _cli._apply_coverage_mode(SimpleNamespace(category="api", fail_fast=False), None, False, False, False)
+        assert (run_root.ledger.units, run_root.ledger.python, run_root.ledger.e2e_js) == ([], set(), 0)
+        assert run_root.ledger.expect_unit("front-fx") == "coverage-js/unit/front-fx-1", "the count per label starts again"
+
+    def test_collecting_the_launches_expects_nothing(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
+        """CC-10 — the consolidated pass collects what each action would launch by calling it with the launchers stood in
+        (``_inventory.collect_launches``); under JS coverage that dry run must not note a Vitest directory nobody will write."""
+        monkeypatch.setattr(_common, "_COVERAGE_JS", True)
+        launches, _errors = _inventory.collect_launches()
+
+        assert any(engine == "vitest" for units in launches.values() for engine, _path, _project in units), "the dry run reached the Vitest actions"
+        assert run_root.ledger.units == [], "a dry run noted directories in the ledger"
+
+    def test_stale_e2e_data_without_a_part_this_run_is_a_red_row(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
+        """CC-11 — ``.coverage_data/frontend`` accumulates across runs, so rows in it do not prove that this run's server wrote
+        anything. The finalizer says what it did (``PythonFinalized``): with no part in the project root it saves nothing, and the
+        check turns that into a red row although the old database still has rows. A finalizer that found and saved parts is green."""
+        monkeypatch.setattr(_coverage.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""))
+        run_root.ledger.expect_python("frontend")
+        _coverage_database(run_root.root / ".coverage_data" / "frontend", 7)
+
+        finalized = _coverage._finalize_coverage(is_front=True, is_all=False)
+
+        assert finalized == _coverage.PythonFinalized(server_parts=0, frontend_saved=False)
+        red = [row for row in _coverage.check_coverage_pieces(run_root.ledger, "frontend", finalized) if not row.ok]
+        assert len(red) == 1 and "this run" in red[0].piece, red
+        assert all(row.ok for row in _coverage.check_coverage_pieces(run_root.ledger, "frontend", _coverage.PythonFinalized(server_parts=2, frontend_saved=True)))

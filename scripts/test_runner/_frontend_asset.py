@@ -4,6 +4,7 @@ import subprocess
 
 from . import _common
 from ._common import Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
+from ._coverage import vitest_env
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
@@ -49,7 +50,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/components/charts/__tests__/timeSeriesAggregationEarlyYears.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Asset Vitest unit tests{Colors.NC}")
-    result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
+    result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose, env=vitest_env("front-asset"))
     if result.returncode == 0:
         print_success("Asset Vitest unit tests - PASSED")
         return True
@@ -78,7 +79,7 @@ def front_growth_chart_memo(verbose: bool = False, ui: bool = False, headed: boo
     """
     cmd = ["npx", "vitest", "run", "src/lib/features/dashboard/GrowthChart.test.ts"]
     print(f"\n{Colors.BLUE}Running: GrowthChart component tests{Colors.NC}")
-    result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
+    result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose, env=vitest_env("front-asset"))
     if result.returncode == 0:
         print_success("GrowthChart component tests - PASSED")
         return True

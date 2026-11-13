@@ -19,7 +19,7 @@ from scripts.coverage_analysis import register_subparser as register_cov_parser
 from scripts.coverage_analysis import run_analysis as run_coverage_analysis
 
 # Import common module to set its globals
-from . import _common, _frontend_common
+from . import _common, _coverage, _frontend_common
 from ._backend_external import _get_external_extra_args
 from ._common import (
     Colors,
@@ -599,6 +599,10 @@ def shared_backend_for(category: str, args):
     from ._scheduler import resolve_workers
     from ._server import SharedTestServer
 
+    # Under Python coverage the server's parts are combined into the E2E database by a frontend or a whole run's finalizer. A
+    # backend category's finalizer does not combine them, so there the server notes nothing (open question of step 3.3).
+    if _common._COVERAGE_PY and _common._COVERAGE_SOURCE != "backend":
+        _coverage.LEDGER.expect_python("frontend")
     with SharedTestServer(
         coverage=bool(_common._COVERAGE_PY),
         client_workers=resolve_workers(getattr(args, "workers", "1")),
@@ -847,6 +851,8 @@ def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> 
     Returns False when the request cannot be honoured (e.g. ``--coverage js``
     on a backend-only suite), in which case the caller must abort.
     """
+    # A run starts from an empty ledger: nothing an earlier run of this process launched is expected again.
+    _coverage.LEDGER.reset()
     _common._COVERAGE_MODE = coverage
     _common._RESUME_MODE = resume
     _common.set_fail_fast(getattr(args, "fail_fast", False))
@@ -1025,6 +1031,8 @@ def _parallel_for_scope(args, scope: str, workers: int, verbose: bool) -> tuple:
             return True, set()
 
     print_header(f"Parallel pass — {len(p['parallel_paths'])} isolation-safe unit(s) across {len(p['groups'])} worker(s)")
+    if _common._COVERAGE_PY:
+        _coverage.LEDGER.expect_python(_common._COVERAGE_SOURCE or "backend")
     outcome = run_groups(p["groups"], verbose=verbose, coverage=_common._COVERAGE_PY)
 
     # A pass whose coverage was not combined is not green: the 07/10 run lost two passes and reported success.
@@ -1215,8 +1223,9 @@ def _apply_parallel(args, verbose: bool) -> tuple:
 
 def _finish_coverage(success: bool) -> int:
     """The end of every run, through either entry of the runner: with ``--coverage``, print the summary header and finalize the
-    Python and the JS coverage asked, whatever the tests' verdict (a red run's coverage was still tracked). Returns the exit code:
-    0 when ``success``, 1 otherwise."""
+    Python and the JS coverage asked, whatever the tests' verdict (a red run's coverage was still tracked), then check that every
+    piece the run launched under coverage is there (``report_coverage_pieces``, step 3.3). Returns the exit code: 0 when
+    ``success`` and, under coverage, no piece missing; 1 otherwise."""
     if _common._COVERAGE_MODE:
         print()
         print_header("Coverage Report Summary")
@@ -1231,10 +1240,12 @@ def _finish_coverage(success: bool) -> int:
         print()
         print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
         print()
-        if _common._COVERAGE_PY:
-            _finalize_coverage(is_front, is_all)
+        finalized = _finalize_coverage(is_front, is_all) if _common._COVERAGE_PY else None
         if _common._COVERAGE_JS:
             _finalize_js_coverage()
+        # Step 3.3: what the run launched under coverage must be on disk; a missing piece makes the run red.
+        complete = _coverage.report_coverage_pieces(_coverage.LEDGER, "frontend" if is_front else "all" if is_all else "backend", finalized)
+        return 0 if success and complete else 1
 
     return 0 if success else 1
 

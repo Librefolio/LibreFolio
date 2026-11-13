@@ -544,6 +544,9 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
 
     # --- Coverage isolation: swap-in the correct accumulated DB ---
     if use_coverage:
+        from . import _coverage  # noqa: PLC0415 — _coverage imports this module
+
+        _coverage.LEDGER.expect_python(_COVERAGE_SOURCE or "backend")
         cwd_p = Path(os.getcwd())
         data_dir = cwd_p / ".coverage_data"
         data_dir.mkdir(exist_ok=True)

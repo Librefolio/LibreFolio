@@ -4,6 +4,7 @@ import subprocess
 
 from . import _common
 from ._common import PROJECT_ROOT, Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
+from ._coverage import vitest_env
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
@@ -24,7 +25,7 @@ def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
     print(f"\n{Colors.BLUE}Running: FX/store Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True)
+        result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True, env=vitest_env("front-fx"))
         if result.returncode == 0:
             print_success("FX/store Vitest unit tests - PASSED")
             return True
@@ -226,7 +227,15 @@ def populate_registry(registry: dict) -> None:
     from ._common import add_test, make_category
 
     cat = make_category(help_text="Frontend FX E2E & unit tests", description="""Frontend FX Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, currencyGraphStore (an incomplete graph is not cached, B-4), flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)", tests="vitest")
+    add_test(
+        cat,
+        "fx-unit",
+        front_fx_unit,
+        test_names=False,
+        name="FX Unit Tests",
+        desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, currencyGraphStore (an incomplete graph is not cached, B-4), flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)",
+        tests="vitest",
+    )
     add_test(cat, "fx-list", front_fx_list, name="FX List Page", desc="List page navigation, cards, filters", tests="fx/fx-list.spec.ts")
     add_test(cat, "fx-detail", front_fx_detail, name="FX Detail Page", desc="Detail page chart, panels, swap", tests="fx/fx-detail.spec.ts")
     add_test(

@@ -53,7 +53,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from . import _common
+from . import _common, _coverage
 from ._common import Colors, print_error, print_info, print_success, print_warning
 from ._inventory import PROJECT_ROOT
 
@@ -191,6 +191,7 @@ def _run_group(category: str, paths: list, coverage: bool, verbose: bool) -> dic
     accumulated = data_dir / source
     main_cov = PROJECT_ROOT / ".coverage"
     if coverage:
+        _coverage.LEDGER.expect_python(source)
         env["COVERAGE_RUN"] = "1"
         data_dir.mkdir(exist_ok=True)
         if accumulated.exists():
