@@ -77,12 +77,12 @@ const root = () => screen.getByTestId('asset-bulk-edit');
 const cont = () => screen.getByTestId('asset-bulk-continue') as HTMLButtonElement;
 
 describe('AssetBulkEditModal — at rest', () => {
-    it('shows the three zones in order, the selection, and nothing modified', () => {
+    it('shows the two zones in order (details and classification, then price and status), the selection, and nothing modified', () => {
         mount();
         expect(root()).toHaveAttribute('data-step', 'fields');
         expect(root()).toHaveAttribute('data-modified', '0');
         expect(root()).toHaveAttribute('data-selected', '5');
-        const zones = ['asset-bulk-zone-details', 'asset-bulk-zone-classification', 'asset-bulk-zone-price'].map((id) => screen.getByTestId(id));
+        const zones = ['asset-bulk-zone-details', 'asset-bulk-zone-price'].map((id) => screen.getByTestId(id));
         for (let i = 1; i < zones.length; i++) expect(zones[i - 1].compareDocumentPosition(zones[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(screen.getAllByTestId('asset-bulk-selected-chip')).toHaveLength(4);
         expect(screen.queryByTestId('asset-bulk-reset-all')).toBeNull();
