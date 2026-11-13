@@ -477,7 +477,8 @@
       "save": "{count, plural, one {Salva # asset} other {Salva # asset}}",
       "saveFailedTitle": "⛔ Salvataggio non riuscito: nessun asset è stato modificato",
       "saveFailedBody": "Il salvataggio è tutto o niente: un asset non è passato, quindi non è cambiato nulla. Il riepilogo resta qui: togli l'asset o torna indietro.",
-      "savedToast": "{count, plural, one {# asset aggiornato} other {# asset aggiornati}}: {fields}"
+      "savedToast": "{count, plural, one {# asset aggiornato} other {# asset aggiornati}}: {fields}",
+      "saved": "Salvato"
     }
   },
   "events": {

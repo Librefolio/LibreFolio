@@ -477,7 +477,8 @@
       "save": "{count, plural, one {Save # asset} other {Save # assets}}",
       "saveFailedTitle": "⛔ Save failed: no asset was changed",
       "saveFailedBody": "The save is all or nothing: an asset did not pass, so nothing changed. The summary stays here: remove the asset or go back.",
-      "savedToast": "{count, plural, one {# asset updated} other {# assets updated}}: {fields}"
+      "savedToast": "{count, plural, one {# asset updated} other {# assets updated}}: {fields}",
+      "saved": "Saved"
     }
   },
   "events": {
