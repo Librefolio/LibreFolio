@@ -4,22 +4,22 @@
       "name": "Allocateur PAC",
       "description": "Planifie les achats qui rapprochent au mieux un nouvel investissement de son allocation cible, en parts entières ou en montants, sans passer d'ordres.",
       "progress": {
-        "validate": "Contrôle des données",
-        "model": "Construction du modèle",
-        "search": "Recherche du plan",
-        "verify": "Vérification des comptes",
-        "report": "Préparation du résultat"
+        "validate": "Je contrôle les données",
+        "model": "Je construis le modèle",
+        "search": "Je cherche le plan",
+        "verify": "Je vérifie les comptes",
+        "report": "Je prépare le résultat"
       }
     },
     "portfolioRebalancer": {
       "name": "Rééquilibreur de portefeuille",
       "description": "Ramène un portefeuille déjà investi vers ses cibles : il achète et, si vous l'autorisez, vend, en estimant frais et impôts. Il n'envoie aucun ordre.",
       "progress": {
-        "validate": "Contrôle des données",
-        "model": "Construction du modèle",
-        "search": "Recherche du plan",
-        "verify": "Vérification des comptes",
-        "report": "Préparation du résultat"
+        "validate": "Je contrôle les données",
+        "model": "Je construis le modèle",
+        "search": "Je cherche le plan",
+        "verify": "Je vérifie les comptes",
+        "report": "Je prépare le résultat"
       }
     }
   }
