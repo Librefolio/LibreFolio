@@ -32,6 +32,11 @@ coverage exists, and writes pure numbers. It lands in small steps, each pinned h
    listing, a status) with exit 2 before anything starts. The summary it writes says ``quotable`` only for a green run, with
    every piece, from a tree that was clean when it began.
 
+6. ``TestHtmlOnce`` (step 3.9) — under ``--coverage`` no pytest invocation writes an HTML report or a terminal table any more
+   (``--cov-report=``, as the parallel workers already did): every one of them rewrote ``htmlcov-backend`` from the whole
+   accumulated database, once per action. The finalizer writes each HTML once, at the end; a backend-only run, which had
+   none of its own, now writes ``htmlcov-backend``, so ``coverage show backend`` keeps working.
+
 Pure: no database, no server, no network, no subprocess. The runner's heavy parts are stood in for with ``monkeypatch``; the
 source of ``_cli.py`` is read as text (``ast``), never executed beyond its import. The coverage data of step 3.4 is real: a few
 lines of Python under ``tmp_path``, measured in process by coverage.py itself.
@@ -53,7 +58,7 @@ from types import SimpleNamespace
 import coverage
 import pytest
 
-from scripts.test_runner import _cli, _common, _consolidate, _coverage, _frontend_common, _frontend_fx, _inventory, _server
+from scripts.test_runner import _cli, _common, _consolidate, _consolidate_backend, _coverage, _executor, _frontend_common, _frontend_fx, _inventory, _server
 
 CLI_SOURCE = Path(_cli.__file__).read_text(encoding="utf-8")
 VITEST_CONFIG = Path(_common.PROJECT_ROOT, "frontend", "vitest.config.ts")
@@ -843,3 +848,46 @@ class TestQuotable:
         monkeypatch.setattr(_coverage, "_git_state", lambda: ("fedcba9", False))
         moved = _coverage.summarize(run_root.ledger, [], success=True)
         assert moved["quotable"] is False and any("moved" in reason for reason in moved["reasons"])
+
+
+class TestHtmlOnce:
+    """Step 3.9: the backend HTML is written once per run, by the finalizer, never by a pytest invocation."""
+
+    def test_no_pytest_invocation_carries_an_html_or_term_report(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """HO-01 — under Python coverage the pytest of ``run_command``, of the consolidated backend pass and of a parallel worker
+        each carry ``--cov=backend/app`` and the empty ``--cov-report=``, and no ``html:`` or ``term`` report."""
+        commands: list[list[str]] = []
+        monkeypatch.setattr(_common.subprocess, "run", lambda cmd, **kwargs: commands.append([str(part) for part in cmd]) or SimpleNamespace(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(_common, "_COVERAGE_PY", True)
+        monkeypatch.setattr(_coverage, "LEDGER", _coverage.CoverageLedger())
+        for source in ("backend", "frontend"):
+            monkeypatch.setattr(_common, "_COVERAGE_SOURCE", source)
+            monkeypatch.chdir(tmp_path)
+            assert _common.run_command(["pipenv", "run", "pytest", "backend/test_scripts/test_utilities/test_coverage_quotable.py"], "stood-in pytest")
+            commands.append(_consolidate_backend._pytest_cmd(["backend/test_scripts/test_utilities"], True, tmp_path / "junit.xml", False))
+            commands.append(_executor._pytest_cmd(["backend/test_scripts/test_utilities"], True))
+
+        for cmd in commands:
+            reports = [part for part in cmd if part.startswith("--cov-report")]
+            assert "--cov=backend/app" in cmd, cmd
+            assert reports == ["--cov-report="], f"a pytest invocation writes a report of its own: {cmd}"
+
+    def test_a_backend_only_finalize_writes_htmlcov_backend_once(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """HO-02 — the finalizer of one backend category writes ``htmlcov-backend`` once, from the data it saved; without data it
+        writes none (coverage.py would refuse an empty report)."""
+        commands: list[list[str]] = []
+        monkeypatch.setattr(_coverage.subprocess, "run", lambda cmd, **kwargs: commands.append([str(part) for part in cmd]) or SimpleNamespace(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(_coverage, "PROJECT_ROOT", tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _coverage_database(tmp_path / ".coverage", 2)
+
+        _coverage._finalize_coverage(is_front=False, is_all=False)
+
+        html = [cmd for cmd in commands if "html" in cmd]
+        assert len(html) == 1, html
+        assert html[0][html[0].index("-d") + 1] == "htmlcov-backend"
+
+        commands.clear()
+        (tmp_path / ".coverage").unlink()
+        _coverage._finalize_coverage(is_front=False, is_all=False)
+        assert [cmd for cmd in commands if "html" in cmd] == []

@@ -147,13 +147,8 @@ def _pytest_cmd(paths: list, coverage: bool, junit: Path, verbose: bool) -> list
         cmd.append("-s")
     cmd += [*paths, "-v", "--no-header", f"--junit-xml={junit}"]
     if coverage:
-        html_dir = "htmlcov-backend" if _common._COVERAGE_SOURCE != "frontend" else "htmlcov-backend-e2e"
-        cmd += [
-            "--cov=backend/app",
-            "--cov-append",
-            f"--cov-report=html:{html_dir}",
-            "--cov-report=term-missing:skip-covered",
-        ]
+        # No report here: the finalizer writes the HTML once per run (step 3.9), as with the parallel workers.
+        cmd += ["--cov=backend/app", "--cov-append", "--cov-report="]
     return cmd
 
 

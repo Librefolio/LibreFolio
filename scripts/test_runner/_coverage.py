@@ -454,6 +454,12 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa
             _archive_db(backend_db, "backend")
             shutil.copy2(str(main_cov), str(backend_db))
             print(f"   {Colors.GREEN}💾 Saved backend coverage → .coverage_data/backend{Colors.NC}")
+            # The one HTML of a backend run (step 3.9): no pytest invocation writes one any more.
+            r_be = subprocess.run([*pipenv_prefix(), "coverage", "html", "-d", "htmlcov-backend", "--title", "LibreFolio Backend Coverage", "--ignore-errors"], cwd=os.getcwd(), capture_output=True, text=True)
+            if r_be.returncode != 0:
+                print_warning(f"coverage html (backend) failed: {r_be.stderr.strip()}")
+            else:
+                print(f"   {Colors.GREEN}📊 Generated htmlcov-backend/{Colors.NC}")
 
     subprocess.run([*pipenv_prefix(), "coverage", "report", "--skip-covered", "--ignore-errors"], cwd=os.getcwd(), capture_output=False, text=True)
     print_info("   ↑ coverage.py's TOTAL counts lines + branches together: not a number to quote. The pure numbers, lines and branches apart, close the run.")

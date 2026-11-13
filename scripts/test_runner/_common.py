@@ -526,15 +526,9 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
             if verbose:
                 flags_to_add.append("-s")
             if use_coverage:
-                html_dir = "htmlcov-backend" if _COVERAGE_SOURCE != "frontend" else "htmlcov-backend-e2e"
-                flags_to_add.extend(
-                    [
-                        "--cov=backend/app",
-                        "--cov-append",
-                        f"--cov-report=html:{html_dir}",
-                        "--cov-report=term-missing:skip-covered",
-                    ]
-                )
+                # `--cov-report=` (no report): the finalizer writes each HTML once, at the end of the run (step 3.9). A report
+                # here rewrote htmlcov-backend from the whole accumulated database after every action.
+                flags_to_add.extend(["--cov=backend/app", "--cov-append", "--cov-report="])
             if flags_to_add:
                 cmd = cmd[: pytest_idx + 1] + flags_to_add + cmd[pytest_idx + 1 :]
                 if use_coverage:
