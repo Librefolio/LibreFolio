@@ -5,11 +5,13 @@
   opening the page. A link asked from Profile confirms only with the session of its account (D10): `signin` says so, and
   its button is the one way to the sign-in — the «back to the sign-in» link is not shown beside it. Clicked with another
   account's session, `otheraccount` says the link belongs to another account and its button signs out and opens the
-  sign-in the same way; neither ever names the account.
+  sign-in the same way; neither ever names the account. The texts carry their line breaks and their words that matter
+  (`EmphasisText`, lot E4).
 -->
 <script lang="ts">
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
+    import EmphasisText from '$lib/components/ui/display/EmphasisText.svelte';
     import AuthCard from '$lib/features/auth/AuthCard.svelte';
     import type {EmailChangePageStatus} from './emailChangeApi';
 
@@ -42,14 +44,14 @@
 
 <AuthCard data-status={status} testId="email-change-status">
     <div class="space-y-5 text-center">
-        <p aria-live="polite" class="text-sm text-lf-primary" data-testid="email-change-message">{$_(KEYS[status])}</p>
+        <p aria-live="polite" class="text-sm leading-relaxed text-lf-primary" data-testid="email-change-message"><EmphasisText text={$_(KEYS[status])} /></p>
         {#if status === 'ready' && onconfirm}
             <button class="w-full bg-lf-action text-lf-on-action font-bold py-3 rounded-lg shadow-md hover:bg-lf-action-hover transition-all active:scale-[0.98]" data-testid="email-change-confirm" onclick={onconfirm} type="button">
                 {$_('email.emailChange.page.confirm')}
             </button>
         {/if}
         {#if status === 'ready'}
-            <p class="text-xs text-lf-secondary" data-testid="email-change-hint">{$_('email.emailChange.page.notExpected')}</p>
+            <p class="text-xs text-lf-secondary" data-testid="email-change-hint"><EmphasisText text={$_('email.emailChange.page.notExpected')} /></p>
         {/if}
         {#if status === 'error' && onretry}
             <button class="w-full bg-lf-action text-lf-on-action font-bold py-3 rounded-lg shadow-md hover:bg-lf-action-hover transition-all active:scale-[0.98]" data-testid="email-change-retry" onclick={onretry} type="button">

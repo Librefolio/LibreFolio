@@ -155,23 +155,24 @@
     },
     "emailChange": {
       "page": {
-        "ready": "Confirma la nueva dirección de correo de tu cuenta. A partir de ahora iniciarás sesión y recibirás los correos con ella.",
+        "ready": "Confirma la **nueva dirección de correo** de tu cuenta.\nA partir de ahora iniciarás sesión y recibirás los correos con ella.",
         "checking": "Comprobando el enlace…",
-        "expired": "Este enlace ha caducado. Si pediste el cambio desde tu perfil, vuelve a pedirlo desde allí; si la dirección la cambió quien aloja la instancia, pídele un enlace nuevo.",
-        "consumed": "Este enlace ya se ha usado: si tu dirección se cambió, inicia sesión con la nueva.",
-        "revoked": "Este enlace ya no funciona: la solicitud se canceló o se sustituyó, o la dirección ya es de otra cuenta. Vuelve a pedir el cambio, o pregunta a quien aloja la instancia.",
-        "unknown": "Este enlace no es válido: ábrelo de nuevo, entero, desde el correo. Si sigue fallando, vuelve a pedir el cambio o pregunta a quien aloja la instancia.",
-        "blocked": "Esta instancia está bloqueada por quien la aloja, así que el enlace no se puede comprobar ahora. Ábrelo de nuevo cuando se desbloquee.",
-        "missing": "Este enlace está incompleto: ábrelo de nuevo desde el correo.",
-        "error": "No se pudo comprobar el enlace: inténtalo de nuevo.",
+        "expired": "Este enlace ha **caducado**.\nSi pediste el cambio desde tu perfil, **vuelve a pedir el cambio** desde allí.\nSi la dirección la cambió quien aloja la instancia, pídele un enlace nuevo.",
+        "consumed": "Este enlace **ya se ha usado**.\nSi tu dirección se cambió, inicia sesión con la nueva.",
+        "revoked": "Este enlace **ya no funciona**: la solicitud se canceló o se sustituyó, o la dirección ya es de otra cuenta.\n**No ha cambiado nada.**\n**Vuelve a pedir el cambio**, o pregunta a quien aloja la instancia.",
+        "unknown": "Este enlace **no es válido**.\nÁbrelo de nuevo, entero, desde el correo.\nSi sigue fallando, **vuelve a pedir el cambio** o pregunta a quien aloja la instancia.",
+        "blocked": "Esta instancia está **bloqueada** por quien la aloja, así que el enlace no se puede comprobar ahora.\nÁbrelo de nuevo cuando se desbloquee.",
+        "missing": "Este enlace está **incompleto**.\nÁbrelo de nuevo desde el correo.",
+        "error": "No se pudo comprobar el enlace.\nInténtalo de nuevo.",
         "confirm": "Confirmar la nueva dirección",
-        "notExpected": "Si no esperabas este cambio, cierra esta página: no pasa nada.",
-        "signin": "Para confirmar la nueva dirección, inicia sesión con la cuenta que pidió el cambio, no con otra cuenta que uses. Si en este navegador hay otra cuenta abierta, primero se cierra su sesión. Después vuelves aquí, y basta un clic.",
+        "notExpected": "Si no esperabas este cambio, cierra esta página: **no pasa nada**.",
+        "signin": "Para confirmar la nueva dirección, **inicia sesión con la cuenta que pidió el cambio**, no con otra cuenta que uses.\nSi en este navegador hay otra cuenta abierta, primero se cierra su sesión.\nDespués vuelves aquí, y basta **un clic**.",
         "signinAction": "Iniciar sesión con esa cuenta para confirmar",
-        "otherAccount": "Este enlace pertenece a otra cuenta, no a la que tiene la sesión abierta en este navegador: la dirección no ha cambiado. Cierra la sesión y luego inicia sesión con la cuenta que pidió el cambio.",
+        "otherAccount": "Este enlace pertenece a **otra cuenta**, no a la que tiene la sesión abierta en este navegador.\n**No ha cambiado nada.**\nCierra la sesión y luego inicia sesión con la cuenta que pidió el cambio.",
         "otherAccountAction": "Cerrar sesión e iniciarla con la cuenta correcta"
       },
-      "changed": "Tu dirección de correo se cambió: inicia sesión de nuevo."
+      "changed": "Tu dirección de correo se cambió: inicia sesión de nuevo.",
+      "changedSignedIn": "Tu dirección de correo se cambió. Se cerró la sesión en los demás dispositivos."
     }
   }
 }
