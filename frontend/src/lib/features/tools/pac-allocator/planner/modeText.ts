@@ -4,7 +4,7 @@
  *
  * Keys stay literal in this file: `dev.py i18n audit` resolves only same-file string literals.
  */
-import {canonicalInput, decimalScale, decimalSign} from './decimal';
+import {canonicalInput, decimalScale, decimalSign} from '$lib/utils/core/exactDecimal';
 import type {DraftMode, ModeKind} from './draft.svelte';
 import {formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from './format';
 import {MODE_KIND_FALLBACKS} from './labels';

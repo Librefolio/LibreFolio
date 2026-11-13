@@ -17,7 +17,7 @@
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {exposureCategoryLabel} from '../categoryLabels.svelte';
-    import {canonicalInput, decimalSign} from '../decimal';
+    import {canonicalInput, decimalSign} from '$lib/utils/core/exactDecimal';
     import type {DraftAsset, DraftMode, DraftRoute, PlannerDraft} from '../draft.svelte';
     import {cldrCurrencyStep} from '../format';
     import {modeFeeText, modeIncrementText, modeKindText, modeUnitText} from '../modeText';
