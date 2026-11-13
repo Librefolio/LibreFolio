@@ -572,9 +572,11 @@ def _objective_codes(
             "explicit_cost",
         )
     # The Rebalancer (specifica §6.3): a weighted fidelity is one score, «Target first» the distance then the money lost.
+    # Then the tie-breaks of specifica §6.4, which choose only among plans equal on what precedes them.
+    tie_breaks: tuple[ExactObjectiveCode, ...] = ("operation_count", "route_priority")
     if scenario.target_fidelity is not None and scenario.target_fidelity.kind == "target_first":
-        return ("target_distance", "wealth_loss")
-    return ("plan_score",)
+        return ("target_distance", "wealth_loss", *tie_breaks)
+    return ("plan_score", *tie_breaks)
 
 
 def _objective_unit(
@@ -601,6 +603,7 @@ def _objective_unit(
         "split_asset_count",
         "active_order_rows",
         "incremental_order_rows",
+        "operation_count",
     }:
         return ExactUnit(kind="count")
     return ExactUnit(kind="ordinal_penalty")

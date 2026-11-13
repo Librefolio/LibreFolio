@@ -561,6 +561,16 @@ def _rebalancer_score(scenario: ExactPlannerScenario, state: EconomicState) -> d
     return {"target_distance": distance, "wealth_loss": accounting.wealth_loss, "plan_score": score}
 
 
+def _operation_count(view: ExactPolicyView, quanta: Mapping[str, int], state: EconomicState) -> ExactRatio:
+    """The first tie-break of the Rebalancer (specifica §6.4): every operation of the plan, each counted once.
+
+    Orders and deposits by their rows (the replay posts only nonzero ones); conversions and transfers between Brokers by their
+    decisions, since a transfer has no row of its own and a conversion row can exist at zero.
+    """
+    moves = sum(1 for item in view.decisions if item.family in {"fx_debit", "broker_transfer"} and quanta[item.decision_id] > 0)
+    return ExactRatio(len(state.orders) + len(state.funding_transfers) + moves)
+
+
 def objective_value_map(
     *,
     scenario: ExactPlannerScenario,
@@ -610,6 +620,7 @@ def objective_value_map(
     }
     if scenario.product == "rebalancer":
         values |= _rebalancer_score(scenario, state)
+        values["operation_count"] = _operation_count(view, quanta, state)
     expected = {item.code for item in view.objectives}
     if not expected.issubset(values):
         raise ExactPolicyContractError("policy view contains an unsupported exact objective")

@@ -46,6 +46,7 @@ type ExactObjectiveCode = Literal[
     "plan_score",
     "target_distance",
     "wealth_loss",
+    "operation_count",
     "explicit_cost",
     "incremental_cost",
     "split_asset_count",

@@ -1051,5 +1051,5 @@ def test_oracle_confirms_the_hand_computed_small_cases(name: str, domain: int, b
     assert result.best_candidate is not None
     chosen = {item.decision_id: item.quanta for item in result.best_candidate.decisions if item.quanta}
     assert chosen == best
-    (objective,) = result.best_evaluation.objectives
-    assert objective.value == score
+    score_ref = next(ref for ref in view.objectives if ref.ordinal == 1)
+    assert next(item.value for item in result.best_evaluation.objectives if item.ref_id == score_ref.ref_id) == score

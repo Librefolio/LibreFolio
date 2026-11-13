@@ -4014,9 +4014,10 @@ def test_exact_objective_sequences_and_values(case: str) -> None:
             ),
         )
         # One score (B1 of project 67): F = 120, targets 60 and 60, final A 80 and B 40, nothing lost, so
-        # D = 20² + 20² = 800 and J = 800 / 120 at «Balanced».
-        expected_codes = ("plan_score",)
-        expected_values = {"plan_score": R(20, 3)}
+        # D = 20² + 20² = 800 and J = 800 / 120 at «Balanced». Then the tie-breaks: a deposit and an order, every
+        # route at priority zero.
+        expected_codes = ("plan_score", "operation_count", "route_priority")
+        expected_values = {"plan_score": R(20, 3), "operation_count": R(2), "route_priority": ZERO}
     else:
         scenario = _invest_and_sell_scenario()
         contribution_quanta = _integer_quanta(_by_id(scenario.contributions, "contribution_id", "contribution:a").amount.amount)
@@ -4028,9 +4029,10 @@ def test_exact_objective_sequences_and_values(case: str) -> None:
                 view,
                 _candidate(view, {exact_decision_id("funding_transfer", "route:funding"): contribution_quanta, exact_decision_id("buy_quantum", "route:buy:b"): 2}),
             )
-            # The same score with the sells disabled: the same plan as invest-only, J = 800 / 120.
-            expected_codes = ("plan_score",)
-            expected_values = {"plan_score": R(20, 3)}
+            # The same score with the sells disabled: the same plan as invest-only, J = 800 / 120; the deposit has
+            # priority 1 and the route of B priority 3.
+            expected_codes = ("plan_score", "operation_count", "route_priority")
+            expected_values = {"plan_score": R(20, 3), "operation_count": R(2), "route_priority": R(4)}
         elif case == "deployment":
             view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 4, exact_decision_id("sell_quantum", "route:sell:a"): 2})
             evaluation = evaluate_exact_candidate(
@@ -5447,12 +5449,14 @@ def _reb_scores(build: Any, quanta: dict[str, int] | None = None, *, distance_we
 
 
 def test_rebalancer_views_publish_one_score_or_the_target_first_chain() -> None:
-    """B1-9, B1-10: a weighted fidelity is one objective, ``plan_score``; «Target first» is ``target_distance`` then
-    ``wealth_loss``. Their units: money, money squared, money. No ``turnover`` any more."""
+    """B1-9, B1-10, B2-1: a weighted fidelity is one score, ``plan_score``; «Target first» is ``target_distance`` then
+    ``wealth_loss``. Both end with the tie-breaks of specifica §6.4: fewer operations, then the route priorities. No
+    ``turnover`` any more."""
     weighted = build_exact_policy_view(cases.t4())
     target_first = build_exact_policy_view(cases.t4(target_fidelity=_TARGET_FIRST))
-    assert [(ref.code, ref.unit.kind) for ref in weighted.objectives] == [("plan_score", "valuation_money")]
-    assert [(ref.code, ref.unit.kind) for ref in target_first.objectives] == [("target_distance", "valuation_money_squared"), ("wealth_loss", "valuation_money")]
+    tie_breaks = [("operation_count", "count"), ("route_priority", "ordinal_penalty")]
+    assert [(ref.code, ref.unit.kind) for ref in weighted.objectives] == [("plan_score", "valuation_money"), *tie_breaks]
+    assert [(ref.code, ref.unit.kind) for ref in target_first.objectives] == [("target_distance", "valuation_money_squared"), ("wealth_loss", "valuation_money"), *tie_breaks]
 
 
 def test_rebalancer_no_trade_scores_scaled_distance() -> None:
@@ -5549,3 +5553,23 @@ def test_rebalancer_nonempty_needs_only_a_current_portfolio() -> None:
     assert "REBALANCER_NONEMPTY" not in evaluation.conflict_codes
     fact = _by_id(evaluation.constraints, "ref_id", "constraint:rebalancer_nonempty:global")
     assert (fact.value, fact.satisfied) == (evaluation.accounting.current_invested, True)
+
+
+def test_operation_count_counts_orders_conversions_transfers_and_deposits() -> None:
+    """B2-1, specifica §6.4: the first tie-break counts every operation of the plan: orders, conversions, transfers between
+    Brokers, deposits. T6 with its USD conversion and a free transfer lane: one unit bought, 100 EUR converted and 100 EUR
+    moved is three operations; doing nothing is none."""
+
+    def build(**fields: Any) -> ExactPlannerScenario:
+        base = cases.t6(with_usd=True, target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(4)), **fields)
+        broker_y = replace(base.brokers[0], broker_id="broker:y", name="broker:y")
+        lane = pac_models.ExactTransferLane(source_broker_id=cases.BROKER, destination_broker_id="broker:y", currency="EUR")
+        return replace(base, brokers=tuple(sorted((*base.brokers, broker_y), key=lambda item: item.broker_id)), transfer_lanes=(lane,))
+
+    scenario = build()
+    view = build_exact_policy_view(scenario)
+    (transfer_id,) = [item.decision_id for item in view.decisions if item.family == "broker_transfer"]
+    for quanta, expected in (({}, ZERO), ({cases.buy_decision("asset:a"): 1, "fx:8:broker:x:EUR:USD": 10_000, transfer_id: 10_000}, R(3))):
+        evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
+        assert evaluation.feasible, evaluation.conflict_codes
+        assert _objective_map(view, evaluation)["operation_count"] == expected
