@@ -144,3 +144,11 @@ him to answer by number. He reads better from a file than from a long chat messa
 - 30/10/2026 — A relative path in `git worktree add` resolves against the shell's directory: run from the main checkout,
   it creates the worktree inside the repository. Always pass an absolute path.
 - 30/10/2026 (from the cloud coordinator) — Never merge into, or edit, a worktree while a run is going on it (a real-data probe, a whole suite): the result no longer says which commit it tested. Wait for the run to end, or cancel your own queued run first.
+- 13/11/2026 — After about 20 coordinator messages to sessions with no message from the developer, the app pauses
+  cross-session delivery («looks like sessions messaging each other automatically»); a heartbeat turn re-opens it. Keep
+  the heartbeat armed, and note the pause in the recap: the lanes stay frozen until then.
+- 13/11/2026 — Commit only after the child's own final review: a CHECKPOINT note written before it can be superseded (67
+  V1 was committed while the review was still running; it found a real hole, fixed in a follow-up commit). Ask the
+  child for «CHECKPOINT READY after your final review».
+- 13/11/2026 — A child's red reported as «caught by the -k filter» is checked alone on the lane before committing (it was
+  a DB unit, 9/9 alone), never assumed.
