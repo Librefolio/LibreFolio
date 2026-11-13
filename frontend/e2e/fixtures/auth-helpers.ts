@@ -1,4 +1,4 @@
-import {expect, type Page} from './playwright';
+import {expect, test, type Page} from './playwright';
 import {type Language, TEST_USER} from './test-users';
 
 /**
@@ -17,6 +17,22 @@ const ARRIVED = new RegExp(`^(?:${ARRIVALS.join('|')}) at `);
  * A deadline, never a delay.
  */
 const ARRIVAL_MS = 30_000;
+
+/**
+ * How a sign-in got in, published on the running test (project 71, step 3.14, decision D7): `login-path` — `form`, or
+ * `already` when the page was signed in before the call — and `login-ms`, the milliseconds the call took. Playwright's
+ * JSON report carries both per test, so a run can sum what signing in costs. Published state, not a stopwatch to switch
+ * on: always written, at the cost of one clock read. Outside a running test (`test.info()` throws) nothing is written.
+ */
+function annotateLogin(path: 'form' | 'already', startedAt: number): void {
+    try {
+        const {annotations} = test.info();
+        annotations.push({type: 'login-path', description: path});
+        annotations.push({type: 'login-ms', description: String(Math.max(1, Math.round(performance.now() - startedAt)))});
+    } catch {
+        // Called outside a test (a setup script): there is nowhere to publish.
+    }
+}
 
 /** Path and query of the page on view. */
 function pathOnView(page: Page): string {
@@ -43,9 +59,10 @@ async function screenOnView(page: Page): Promise<string> {
  * Arrived is not loaded: the page inside the shell still fetches its own data, so a caller that needs it waits for the
  * page's own state (`data-busy`). Already signed in, it returns as soon as the sidebar's sign-out control shows, which
  * lives in the app shell. A sign-in that does not arrive within {@link ARRIVAL_MS} fails here, naming the screen on view
- * and its path.
+ * and its path. The test is annotated with how the sign-in got in and what it took ({@link annotateLogin}).
  */
 export async function login(page: Page, user = TEST_USER) {
+    const startedAt = performance.now();
     await page.goto('/');
 
     // Wait for auth check to complete — either login form appears or we're already logged in
@@ -57,6 +74,7 @@ export async function login(page: Page, user = TEST_USER) {
 
     if (visible === 'app') {
         // Already logged in — nothing to do
+        annotateLogin('already', startedAt);
         return;
     }
 
@@ -87,6 +105,7 @@ export async function login(page: Page, user = TEST_USER) {
             intervals: [100, 250],
         })
         .toMatch(ARRIVED);
+    annotateLogin('form', startedAt);
 }
 
 /**
