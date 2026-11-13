@@ -17,10 +17,22 @@ import {readLinkRefusal, type VerificationLinkRefusal} from './verificationApi';
  * text for a state it never reaches. */
 export type EmailChangePageStatus = VerifyPageStatus | 'signin' | 'otheraccount';
 
-/** Spend the link: the address of the account is the new one now; its username fills nothing, the sessions have ended. */
-export async function confirmOwnerEmailChange(token: string): Promise<{username: string}> {
+/** What the page shows on opening a live link (lots E2, E3), read without spending it: `ready` for the click, `signin` (no
+ * session of the account that asked), `otheraccount` (another account's session). A dead link is refused as its click
+ * would be (`readEmailChangeRefusal`). The answer never names the account. */
+export type EmailChangeLinkCheck = 'ready' | 'signin' | 'otheraccount';
+
+/** Ask the server what the link's page shows, before any click: `POST /email/email-change/check`, which spends nothing. */
+export async function checkEmailChangeLink(token: string): Promise<EmailChangeLinkCheck> {
+    const answer = await zodiosApi.check_email_change_link_api_v1_email_email_change_check_post({token});
+    return answer.status === 'other_account' ? 'otheraccount' : answer.status;
+}
+
+/** Spend the link: the address of the account is the new one now. `sessionKept`: the browser that confirmed is still
+ * signed in (a link asked from Profile, lot E1); false when every session ended (the owner's link): sign in again. */
+export async function confirmOwnerEmailChange(token: string): Promise<{username: string; sessionKept: boolean}> {
     const answer = await zodiosApi.confirm_owner_email_change_api_v1_email_email_change_confirm_post({token});
-    return {username: answer.username};
+    return {username: answer.username, sessionKept: answer.session_kept};
 }
 
 /** Why the change page cannot use the link, or null for a failure that may be tried again. `signin` only for the 403
