@@ -461,7 +461,9 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         policy: data.policy,
     } as PacPlannerRequest;
 
-    const parsed = toolContractMap.pac_allocator['2.0.0'].input.safeParse(request);
+    // The codec of the draft's Tool (F1 of project 67). Until F3a builds the Rebalancer's own request, the planner builds the
+    // PAC's shape, so the result is read as the PAC's resolved request.
+    const parsed = toolContractMap[draft.profile.toolCode][draft.profile.contractVersion].input.safeParse(request);
     if (!parsed.success) {
         const structural = new ProblemList();
         for (const issue of parsed.error.issues.slice(0, 20)) {
@@ -473,7 +475,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         ok: true,
         built: {
             request,
-            resolved: parsed.data,
+            resolved: parsed.data as PacResolvedRequest,
             ids,
             revision: draft.revision,
             fingerprint: draft.fingerprint,

@@ -10,7 +10,8 @@
 import {compareDecimal, sumControlPercentages, remainingControlPercentage, canonicalInput} from './decimal';
 import {DEFAULT_EXECUTION_MARGIN_PERCENT, DEFAULT_FEE, DEFAULT_FUNDING_PRIORITY, DEFAULT_FX_SPREAD_PERCENT, DEFAULT_QUANTITY_STEP, DEFAULT_ROUTE_PRIORITY, defaultAsOf} from './defaults';
 import {canonicalPair, type ExposureDimension, type SourceProvenance} from './source';
-import {PLANNER_STEPS, type PlannerStep} from './types';
+import {PAC_PLANNER_PROFILE, type PlannerProfile} from './profile';
+import type {PlannerStep} from './types';
 
 export type {ExposureDimension};
 
@@ -344,7 +345,11 @@ export class PlannerDraft {
             .map((entry) => entry.asset);
     });
 
-    constructor(valuationCurrency = '', policy = '') {
+    /** The Tool this draft is for (F1 of project 67): its steps, its test ids. The PAC when none is given. */
+    readonly profile: PlannerProfile;
+
+    constructor(valuationCurrency = '', policy = '', profile: PlannerProfile = PAC_PLANNER_PROFILE) {
+        this.profile = profile;
         this.data = emptyData(valuationCurrency);
         this.data.policy = policy;
     }
@@ -695,7 +700,7 @@ export class PlannerDraft {
     }
 
     /** The wizard steps on screen: FX only when a rate is needed. */
-    readonly visibleSteps: readonly PlannerStep[] = $derived(PLANNER_STEPS.filter((step) => step !== 'fx' || this.fxNeeded));
+    readonly visibleSteps: readonly PlannerStep[] = $derived.by(() => this.profile.steps.filter((step) => step !== 'fx' || this.fxNeeded));
 
     ensureFx(pair: string): DraftFx {
         const existing = this.fx(pair);

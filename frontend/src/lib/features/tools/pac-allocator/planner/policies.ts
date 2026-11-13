@@ -6,18 +6,19 @@
  */
 import type {z} from 'zod';
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
-import {PLANNER_CONTRACT_VERSION, PLANNER_TOOL_CODE} from './defaults';
+import {PAC_PLANNER_PROFILE, type PlannerProfile} from './profile';
 
-export function contractPolicies(): string[] {
-    const field = toolContractMap[PLANNER_TOOL_CODE][PLANNER_CONTRACT_VERSION].input.shape.policy as z.ZodTypeAny;
+/** The strategies the profile's Tool accepts, read from its compiled contract; the PAC's when no profile is given. */
+export function contractPolicies(profile: PlannerProfile = PAC_PLANNER_PROFILE): string[] {
+    const field = toolContractMap[profile.toolCode][profile.contractVersion].input.shape.policy as z.ZodTypeAny;
     const def = field._def as {typeName?: string; value?: unknown; values?: unknown};
     if (def.typeName === 'ZodLiteral' && typeof def.value === 'string') return [def.value];
     if (def.typeName === 'ZodEnum' && Array.isArray(def.values)) return def.values.filter((value): value is string => typeof value === 'string');
     return [];
 }
 
-export function defaultPolicy(): string {
-    const policies = contractPolicies();
+export function defaultPolicy(profile: PlannerProfile = PAC_PLANNER_PROFILE): string {
+    const policies = contractPolicies(profile);
     return policies.length === 1 ? policies[0] : '';
 }
 
