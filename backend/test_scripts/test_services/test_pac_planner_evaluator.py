@@ -29,6 +29,7 @@ from backend.app.services.pac_allocator.evaluation import evaluator as EV
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactPolicyContractError, ExactScenarioContractError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id
+from backend.app.services.pac_allocator.evaluation.limits import limited_entries
 from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
 from backend.app.services.pac_allocator.ledger import (
@@ -78,6 +79,7 @@ from backend.app.services.pac_allocator.models import (
 )
 from backend.app.services.pac_allocator.normalize import normalize_planner_request
 from backend.app.services.pac_allocator.numeric import ExactRatio, post_floor
+from backend.test_scripts.test_services import _reb_small_cases as cases
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id, fx_spec
 
 R = ExactRatio
@@ -328,6 +330,7 @@ def _scenario(
     currency_quantums: Iterable[tuple[str, ExactRatio]] = (("EUR", CENT),),
     target_weights: Iterable[ExactTargetWeight] | None = None,
     sell_context: ExactSellContext | None = None,
+    target_fidelity: pac_models.ExactTargetFidelity | None = None,
 ) -> ExactPlannerScenario:
     asset_rows = tuple(sorted(assets, key=lambda item: item.asset_id))
     targets = (
@@ -375,6 +378,8 @@ def _scenario(
         order_routes=tuple(sorted(order_routes, key=lambda item: item.route_id)),
         target_weights=targets,
         sell_context=sell_context,
+        # A Rebalancer scenario is «Balanced» unless the test names another fidelity (B1 of project 67).
+        target_fidelity=target_fidelity if target_fidelity is not None or product == "pac" else pac_models.BALANCED_FIDELITY,
     )
 
 
@@ -4008,20 +4013,10 @@ def test_exact_objective_sequences_and_values(case: str) -> None:
                 },
             ),
         )
-        expected_codes = (
-            "fixed_l2",
-            "shortfall",
-            "turnover",
-            "explicit_cost",
-            "active_order_rows",
-        )
-        expected_values = {
-            "fixed_l2": R(800),
-            "shortfall": ZERO,
-            "turnover": R(20),
-            "explicit_cost": ZERO,
-            "active_order_rows": ONE,
-        }
+        # One score (B1 of project 67): F = 120, targets 60 and 60, final A 80 and B 40, nothing lost, so
+        # D = 20² + 20² = 800 and J = 800 / 120 at «Balanced».
+        expected_codes = ("plan_score",)
+        expected_values = {"plan_score": R(20, 3)}
     else:
         scenario = _invest_and_sell_scenario()
         contribution_quanta = _integer_quanta(_by_id(scenario.contributions, "contribution_id", "contribution:a").amount.amount)
@@ -4033,20 +4028,9 @@ def test_exact_objective_sequences_and_values(case: str) -> None:
                 view,
                 _candidate(view, {exact_decision_id("funding_transfer", "route:funding"): contribution_quanta, exact_decision_id("buy_quantum", "route:buy:b"): 2}),
             )
-            expected_codes = (
-                "fixed_l2",
-                "shortfall",
-                "turnover",
-                "explicit_cost",
-                "active_order_rows",
-            )
-            expected_values = {
-                "fixed_l2": R(800),
-                "shortfall": ZERO,
-                "turnover": R(20),
-                "explicit_cost": ZERO,
-                "active_order_rows": ONE,
-            }
+            # The same score with the sells disabled: the same plan as invest-only, J = 800 / 120.
+            expected_codes = ("plan_score",)
+            expected_values = {"plan_score": R(20, 3)}
         elif case == "deployment":
             view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 4, exact_decision_id("sell_quantum", "route:sell:a"): 2})
             evaluation = evaluate_exact_candidate(
@@ -5012,7 +4996,7 @@ def test_a_cash_limit_names_a_known_broker_and_a_covered_currency_and_is_unique(
         build_exact_policy_view(replace(scenario, cash_entries=(replace(limit, currency="JPY"),)))
     with pytest.raises(ValueError, match="canonical sorted order|duplicate"):
         replace(scenario, cash_entries=(limit, limit))
-    with pytest.raises(ValueError, match="needs a minimum or a maximum"):
+    with pytest.raises(ValueError, match="needs a weight, a minimum or a maximum"):
         pac_models.ExactCashEntry(broker_id="broker:a", currency="EUR", minimum=None, maximum=None)
 
 
@@ -5346,3 +5330,222 @@ def test_primary_view_serves_invest_and_sell_with_sells_disabled() -> None:
     sells = [item for item in view.decisions if item.family == "sell_quantum"]
     assert sells and all((item.mode, item.upper_quanta) == ("disabled", 0) for item in sells)
     assert evaluate_exact_candidate(scenario, view, _candidate(view)).candidate_valid
+
+
+def _reb_view_and_candidate(scenario: ExactPlannerScenario, quanta: dict[str, int] | None = None) -> tuple[ExactPolicyView, CandidateActionVector]:
+    view = build_exact_policy_view(scenario)
+    return view, _candidate(view, quanta or {})
+
+
+def test_plan_accounts_reconcile_to_initial_minus_final_wealth() -> None:
+    """B1-6, specifica §5: ``F`` is what enters the plan (invested plus selected cash and contributions), ``W`` what it is worth
+    at the end (Assets plus spendable cash plus contributions left undeposited), ``C = F − W`` the money lost, and it is the
+    accounting identity the replay already checks: reserves plus losses plus rounding. ``N`` is ``F`` less the Assets and the
+    cash cells with a target. T4: buying 195 of B for a fee of 5 loses exactly 5."""
+    scenario = cases.t4()
+    for quanta, expected in (
+        ({}, {"F": R(10_000), "W": R(10_000), "C": ZERO, "N": R(200)}),
+        ({cases.buy_decision("asset:b"): 195}, {"F": R(10_000), "W": R(9_995), "C": R(5), "N": R(5)}),
+    ):
+        view, candidate = _reb_view_and_candidate(scenario, quanta)
+        accounting = evaluate_exact_candidate(scenario, view, candidate).accounting
+        assert {"F": accounting.initial_wealth, "W": accounting.final_wealth, "C": accounting.wealth_loss, "N": accounting.uninvested} == expected
+        assert accounting.wealth_loss == accounting.physical_reserves + accounting.economic_losses + accounting.rounding_adjustment + accounting.identity_delta
+
+
+def test_rebalancer_share_limits_resolve_against_initial_wealth() -> None:
+    """Specifica §15 n. 17: a share limit reads the Tool's reference, ``F`` in the Rebalancer. With cash that no route can spend
+    (here 1 000 EUR on a Broker without capabilities) ``F`` = 11 000 while ``fixed_reference`` = 10 000: a maximum of one half
+    on B is 5 500, not 5 000."""
+    base = cases.t4()
+    idle = replace(
+        base,
+        brokers=tuple(sorted((*base.brokers, replace(base.brokers[0], broker_id="broker:y", name="broker:y", capabilities=(), fee_schedules=())), key=lambda item: item.broker_id)),
+        existing_cash=tuple(sorted((*base.existing_cash, replace(base.existing_cash[0], cash_id="cash:y:eur", broker_id="broker:y", available=cases.money(R(1_000)), selected=cases.money(R(1_000)))), key=lambda item: item.cash_id)),
+        target_weights=tuple(replace(item, maximum=pac_models.ExactLimit("share", R(1, 2))) if item.asset_id == "asset:b" else item for item in base.target_weights),
+    )
+    view, candidate = _reb_view_and_candidate(idle)
+    evaluation = evaluate_exact_candidate(idle, view, candidate)
+
+    assert (evaluation.accounting.initial_wealth, evaluation.accounting.fixed_reference) == (R(11_000), R(10_000))
+    limit = _by_id(evaluation.constraints, "ref_id", "constraint:entry_value_within_limits:asset:asset:b")
+    assert limit.upper_bound == R(5_500)
+
+
+def test_pac_view_and_values_ignore_the_target_fidelity() -> None:
+    """B1-7: the PAC keeps its five objectives in today's order and never carries a fidelity; a PAC scenario that names one,
+    or a Rebalancer that names none, is refused at construction. ``λ`` must be positive."""
+    scenario = _pac_scenario()
+    view = build_exact_policy_view(scenario)
+    assert scenario.target_fidelity is None
+    assert tuple(ref.code for ref in view.objectives) == ("fixed_l2", "shortfall", "route_priority", "explicit_cost", "active_order_rows")
+
+    with pytest.raises(ValueError, match="fidelity"):
+        replace(scenario, target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=ONE))
+    with pytest.raises(ValueError, match="fidelity"):
+        replace(_invest_only_scenario(), target_fidelity=None)
+    for kind, distance_weight in (("weighted", ZERO), ("weighted", None), ("target_first", ONE)):
+        with pytest.raises(ValueError):
+            pac_models.ExactTargetFidelity(kind=kind, distance_weight=distance_weight)
+
+
+def _t4_with_cash_target() -> ExactPlannerScenario:
+    """T4 with the weights of the plan's test 6: A 50 %, B 48 %, the Broker's EUR cash 2 %."""
+    return cases.t4(
+        weights_override={"asset:a": R(1, 2), "asset:b": R(12, 25)},
+        cash_entries=(pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=None, maximum=None, weight=R(1, 50)),),
+    )
+
+
+def test_rebalancer_targets_read_initial_wealth_and_cash_cells_with_a_target_are_rows() -> None:
+    """B1-8, specifica §6.1: in the Rebalancer a target is ``w · F`` and a cash cell with a target is an entry of its own, with a
+    row like an Asset's; ``N`` leaves it out. T4 with A 50 %, B 48 %, cash 2 %: doing nothing hits every target (``N = 0``);
+    buying 195 of B leaves the cell empty, 200 under its target, and ``N`` = the 5 of fee."""
+    scenario = _t4_with_cash_target()
+    for quanta, cash_final, b_final, uninvested in (({}, R(200), R(4_800), ZERO), ({cases.buy_decision("asset:b"): 195}, ZERO, R(4_995), R(5))):
+        view, candidate = _reb_view_and_candidate(scenario, quanta)
+        evaluation = evaluate_exact_candidate(scenario, view, candidate)
+        (cash,) = evaluation.cash_targets
+        b = _by_id(evaluation.assets, "asset_id", "asset:b")
+        assert (cash.broker_id, cash.currency, cash.target_weight, cash.target_value) == (cases.BROKER, "EUR", R(1, 50), R(200))
+        assert (cash.final_value, cash.residual) == (cash_final, cash_final - R(200))
+        assert (b.target_value, b.final_value) == (R(4_800), b_final)
+        assert evaluation.accounting.uninvested == uninvested
+
+
+def test_a_cash_entry_with_only_a_weight_is_no_limit() -> None:
+    """A cash entry with a target and no minimum or maximum carries no limit: no ``ENTRY_VALUE_WITHIN_LIMITS`` fact, and a «no
+    solution» does not name it (M20)."""
+    scenario = _t4_with_cash_target()
+    view = build_exact_policy_view(scenario)
+    assert limited_entries(scenario) == ()
+    assert not [ref for ref in view.constraints if ref.code == "ENTRY_VALUE_WITHIN_LIMITS"]
+
+
+def test_pac_cash_entries_never_carry_a_weight() -> None:
+    with pytest.raises(ValueError, match="cash"):
+        replace(_pac_scenario(), cash_entries=(pac_models.ExactCashEntry(broker_id="broker:a", currency="EUR", minimum=None, maximum=None, weight=R(1, 2)),))
+
+
+_TARGET_FIRST = pac_models.ExactTargetFidelity(kind="target_first", distance_weight=None)
+
+
+def _reb_scores(build: Any, quanta: dict[str, int] | None = None, *, distance_weight: ExactRatio = ONE, **fields: Any) -> dict[str, ExactRatio]:
+    """``J`` under a weighted fidelity, and ``D`` and ``C`` under «Target first», for one candidate of one small case.
+
+    The two views of the Rebalancer (B1-9, B1-10): a weighted fidelity publishes ``plan_score`` alone, «Target first» the chain
+    ``target_distance`` then ``wealth_loss``. ``N`` comes from the accounting."""
+    scores: dict[str, ExactRatio] = {}
+    for fidelity in (pac_models.ExactTargetFidelity(kind="weighted", distance_weight=distance_weight), _TARGET_FIRST):
+        scenario = build(target_fidelity=fidelity, **fields)
+        view, candidate = _reb_view_and_candidate(scenario, quanta)
+        evaluation = evaluate_exact_candidate(scenario, view, candidate)
+        assert evaluation.feasible, evaluation.conflict_codes
+        scores |= _objective_map(view, evaluation)
+        scores["N"] = evaluation.accounting.uninvested
+    return {"D": scores["target_distance"], "N": scores["N"], "C": scores["wealth_loss"], "J": scores["plan_score"]}
+
+
+def test_rebalancer_views_publish_one_score_or_the_target_first_chain() -> None:
+    """B1-9, B1-10: a weighted fidelity is one objective, ``plan_score``; «Target first» is ``target_distance`` then
+    ``wealth_loss``. Their units: money, money squared, money. No ``turnover`` any more."""
+    weighted = build_exact_policy_view(cases.t4())
+    target_first = build_exact_policy_view(cases.t4(target_fidelity=_TARGET_FIRST))
+    assert [(ref.code, ref.unit.kind) for ref in weighted.objectives] == [("plan_score", "valuation_money")]
+    assert [(ref.code, ref.unit.kind) for ref in target_first.objectives] == [("target_distance", "valuation_money_squared"), ("wealth_loss", "valuation_money")]
+
+
+def test_rebalancer_no_trade_scores_scaled_distance() -> None:
+    """T1: A 5 040, B 4 960, no cash. No operation: ``D`` = 40² + 40² = 3 200, nothing lost, ``J`` = 3 200 / 10 000."""
+    assert _reb_scores(cases.t1) == {"D": R(3_200), "N": ZERO, "C": ZERO, "J": R(8, 25)}
+
+
+def test_rebalancer_buy_beats_idle_cash_when_penalty_exceeds_fee() -> None:
+    """T4: A 5 000, B 4 800, cash 200. Buying 195 of B: ``N`` = 5 (the fee), ``D`` = 5² + 5² = 50, ``C`` = 5,
+    ``J`` = 50 / 10 000 + 5 = 1 001 / 200. Doing nothing: ``D`` = 200² + 200² = 80 000, ``J`` = 8."""
+    assert _reb_scores(cases.t4, {cases.buy_decision("asset:b"): 195}) == {"D": R(50), "N": R(5), "C": R(5), "J": R(1_001, 200)}
+    assert _reb_scores(cases.t4)["J"] == R(8)
+
+
+def test_rebalancer_idle_cash_wins_when_fee_exceeds_penalty() -> None:
+    """T5: A 5 000, B 4 900, cash 100. Doing nothing: ``D`` = 100² + 100² = 20 000, ``J`` = 2. Buying 95 of B: ``J`` = 1 001 / 200."""
+    assert _reb_scores(cases.t5) == {"D": R(20_000), "N": R(100), "C": ZERO, "J": R(2)}
+    assert _reb_scores(cases.t5, {cases.buy_decision("asset:b"): 95})["J"] == R(1_001, 200)
+
+
+def test_rebalancer_wasted_money_never_lowers_the_score() -> None:
+    """T6 (specifica §6.2), ``λ = 4``: one unit at 4 000, cash 6 000. Buying one unit: ``D`` = 2 000² + 2 000², ``J`` = 3 205.
+    Doing nothing: ``J`` = 28 800. The same plan plus a conversion that buys nothing (100 EUR into USD, which lands as 99 USD
+    and stays idle) keeps the same ``D`` and adds exactly what it loses, ``w = F − W`` of the extra (P1)."""
+    one_unit = {cases.buy_decision("asset:a"): 1}
+    four = R(4)
+    assert _reb_scores(cases.t6, one_unit, distance_weight=four) == {"D": R(8_000_000), "N": R(2_000), "C": R(5), "J": R(3_205)}
+    assert _reb_scores(cases.t6, distance_weight=four)["J"] == R(28_800)
+
+    honest = _reb_scores(cases.t6, one_unit, distance_weight=four, with_usd=True)
+    wasteful = _reb_scores(cases.t6, one_unit | {"fx:8:broker:x:EUR:USD": 10_000}, distance_weight=four, with_usd=True)
+    wasted = wasteful["C"] - honest["C"]
+    assert wasted == ONE  # 100 EUR became 99 USD, worth 99 EUR
+    assert (wasteful["D"], wasteful["J"]) == (honest["D"], honest["J"] + wasted)
+
+
+def test_target_first_puts_distance_before_lost_money() -> None:
+    """«Target first» on T5: buying 95 of B wins on the first objective (``D`` = 50 against 20 000), then pays ``C`` = 5."""
+    buy = _reb_scores(cases.t5, {cases.buy_decision("asset:b"): 95})
+    idle = _reb_scores(cases.t5)
+    assert (buy["D"], buy["C"]) == (R(50), R(5))
+    assert (buy["D"], buy["C"]) < (idle["D"], idle["C"])
+
+
+def test_rebalancer_cash_item_with_target_enters_the_distance() -> None:
+    """T4 with A 50 %, B 48 %, cash 2 %: doing nothing is on target, ``D`` = 0; buying 195 of B gives
+    ``D`` = 195² + 200² + 5² = 78 050 (B over its target, the cell under it, ``N`` = the fee)."""
+
+    def build(**fields: Any) -> ExactPlannerScenario:
+        return cases.t4(
+            weights_override={"asset:a": R(1, 2), "asset:b": R(12, 25)},
+            cash_entries=(pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=None, maximum=None, weight=R(1, 50)),),
+            **fields,
+        )
+
+    assert _reb_scores(build)["D"] == ZERO
+    assert _reb_scores(build, {cases.buy_decision("asset:b"): 195})["D"] == R(78_050)
+
+
+def test_free_cash_moves_do_not_change_the_score() -> None:
+    """P4: moving cash for free between two Brokers changes neither ``D`` nor ``C``, so ``J`` stays. T4 plus a second Broker
+    and a free transfer lane: sending 100 EUR from ``broker:x`` to ``broker:y`` leaves the score as it was."""
+
+    def build(**fields: Any) -> ExactPlannerScenario:
+        base = cases.t4(**fields)
+        broker_y = replace(base.brokers[0], broker_id="broker:y", name="broker:y")
+        lane = pac_models.ExactTransferLane(source_broker_id=cases.BROKER, destination_broker_id="broker:y", currency="EUR")
+        return replace(base, brokers=tuple(sorted((*base.brokers, broker_y), key=lambda item: item.broker_id)), transfer_lanes=(lane,))
+
+    view = build_exact_policy_view(build())
+    (transfer_id,) = [item.decision_id for item in view.decisions if item.family == "broker_transfer"]
+    assert _reb_scores(build, {transfer_id: 10_000}) == _reb_scores(build)
+
+
+def test_rebalancer_with_nothing_to_plan_reports_nonempty_instead_of_dividing_by_zero() -> None:
+    """``J`` divides the distance by ``F``. A Rebalancer scenario worth nothing (no holding, no cash) has ``F`` = 0: the replay
+    still answers, with the ``REBALANCER_NONEMPTY`` conflict, and never raises."""
+    scenario = cases.scenario("empty", holdings={}, cash=ZERO, weights={"asset:a": R(1, 2), "asset:b": R(1, 2)})
+    view, candidate = _reb_view_and_candidate(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, candidate)
+    assert "REBALANCER_NONEMPTY" in evaluation.conflict_codes
+
+
+def test_rebalancer_nonempty_needs_only_a_current_portfolio() -> None:
+    """B1-11, specifica §15 n. 14: the Rebalancer needs something to rebalance, ``V⁰ > 0``, and nothing more. With a target on
+    cash a plan may end with nothing invested: selling every unit is admitted by this rule."""
+    scenario = _invest_and_sell_scenario()
+    everything = {exact_decision_id("sell_quantum", "route:sell:a"): 8, exact_decision_id("sell_quantum", "route:sell:b"): 2}
+    view = _sell_door(scenario, everything)
+
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, everything))
+
+    assert evaluation.accounting.final_invested == ZERO
+    assert "REBALANCER_NONEMPTY" not in evaluation.conflict_codes
+    fact = _by_id(evaluation.constraints, "ref_id", "constraint:rebalancer_nonempty:global")
+    assert (fact.value, fact.satisfied) == (evaluation.accounting.current_invested, True)

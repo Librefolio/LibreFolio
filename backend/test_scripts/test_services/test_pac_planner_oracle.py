@@ -68,8 +68,9 @@ import pytest
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
-from backend.app.services.pac_allocator.models import DecisionAccess, ExactEvaluation, ExactLimit, ExactPlannerScenario, ExactTargetWeight
+from backend.app.services.pac_allocator.models import DecisionAccess, ExactEvaluation, ExactLimit, ExactPlannerScenario, ExactTargetFidelity, ExactTargetWeight
 from backend.app.services.pac_allocator.numeric import ExactRatio
+from backend.test_scripts.test_services import _reb_small_cases as cases
 from backend.test_scripts.test_services._pac_exhaustive_oracle import (
     MAX_EXHAUSTIVE_ORACLE_CANDIDATES,
     OracleDomainTooLargeError,
@@ -1008,3 +1009,47 @@ def test_frozen_exact_with_missing_frozen_quanta_is_unreachable_via_valid_constr
     unsafe = _unsafe_frozen_exact_access_missing_frozen_quanta()
     with pytest.raises(OracleDomainTooLargeError, match="missing frozen_quanta"):
         estimate_oracle_domain_size(_fake_view(unsafe))
+
+
+# --------------------------------------------------------------------------
+# B1-12 (project 67): the exhaustive oracle confirms the small cases computed by hand
+# --------------------------------------------------------------------------
+
+
+def _small_case(name: str) -> ExactPlannerScenario:
+    """The hand-computed cases of specifica §11, cut to the oracle's size (B1 plan, «Peso dell'oracolo»).
+
+    T1 has no cash, so no route: one candidate. T4 and T5 buy in steps of 5 EUR with each route capped at the cash (41 × 41 and
+    21 × 21 candidates; the best plans, 195 and 95, are multiples of 5). T6 has one route by whole units and no currency pair.
+    """
+    if name == "t1":
+        return replace(cases.t1(), order_routes=())
+    if name == "t4":
+        return cases.t4(amount_step=ExactRatio(5), caps={"asset:a": ExactRatio(200), "asset:b": ExactRatio(200)})
+    if name == "t5":
+        return cases.t5(amount_step=ExactRatio(5), caps={"asset:a": ExactRatio(100), "asset:b": ExactRatio(100)})
+    return cases.t6(target_fidelity=ExactTargetFidelity(kind="weighted", distance_weight=ExactRatio(4)))
+
+
+@pytest.mark.parametrize(
+    ("name", "domain", "best", "score"),
+    [
+        pytest.param("t1", 1, {}, ExactRatio(8, 25), id="t1-no-trade"),
+        pytest.param("t4", 41 * 41, {cases.buy_decision("asset:b"): 39}, ExactRatio(1_001, 200), id="t4-buy-195-of-b"),
+        pytest.param("t5", 21 * 21, {}, ExactRatio(2), id="t5-idle-cash-wins"),
+        pytest.param("t6", 3, {cases.buy_decision("asset:a"): 1}, ExactRatio(3_205), id="t6-one-unit"),
+    ],
+)
+def test_oracle_confirms_the_hand_computed_small_cases(name: str, domain: int, best: dict[str, int], score: ExactRatio) -> None:
+    """The oracle enumerates every candidate of the reduced case and picks the plan computed by hand, with its ``J``."""
+    scenario = _small_case(name)
+    view = build_exact_policy_view(scenario)
+    assert estimate_oracle_domain_size(view) == domain
+
+    result = run_exhaustive_oracle(scenario, view)
+
+    assert result.best_candidate is not None
+    chosen = {item.decision_id: item.quanta for item in result.best_candidate.decisions if item.quanta}
+    assert chosen == best
+    (objective,) = result.best_evaluation.objectives
+    assert objective.value == score

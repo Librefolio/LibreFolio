@@ -457,7 +457,7 @@ def test_infeasible_verdict_alongside_a_candidate_is_not_proven(infeasible_run: 
 _MISNAMED_OBJECTIVES = (
     pytest.param("perfect_run", lambda codes: tuple(reversed(codes)), "SCIP closed the stages", id="optimal_codes_reordered"),
     pytest.param("perfect_run", lambda codes: codes[:-1], "SCIP closed the stages", id="optimal_codes_missing_one"),
-    pytest.param("perfect_run", lambda codes: (*codes, "turnover"), "SCIP closed the stages", id="optimal_codes_with_an_extra"),
+    pytest.param("perfect_run", lambda codes: (*codes, "wealth_loss"), "SCIP closed the stages", id="optimal_codes_with_an_extra"),
     pytest.param("infeasible_run", lambda codes: (*codes[1:], codes[0]), "infeasible, but the first objective is", id="infeasible_first_code_differs"),
     pytest.param("infeasible_run", lambda codes: (), "infeasible, but the first objective is None", id="infeasible_no_objective_codes"),
 )

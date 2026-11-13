@@ -2376,3 +2376,13 @@ def test_fiscal_row_without_a_currency_raises_no_fiscal_currency_issue() -> None
     result = _normalize_payload("rebalancer", payload)
 
     assert not [issue for issue in result.issues if getattr(issue.path, "field", None) == "fiscal_currency"], [(issue.code, issue.path) for issue in result.issues]
+
+
+def test_rebalancer_scenario_is_balanced_until_the_request_names_a_fidelity() -> None:
+    """B1-7 (specifica §14 n. 9): the Rebalancer's target fidelity is «Balanced», ``λ = 1``, until B3 reads it from the request.
+    The PAC has none: its objectives do not depend on it."""
+    scenario = _ready_rebalancer_scenario()
+    assert (scenario.target_fidelity.kind, scenario.target_fidelity.distance_weight) == ("weighted", ExactRatio(1))
+
+    pac = _normalize_payload("pac", _fixture(PAC_FIXTURE))
+    assert pac.ready and pac.normalized.target_fidelity is None
