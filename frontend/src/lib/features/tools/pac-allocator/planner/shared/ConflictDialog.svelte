@@ -5,6 +5,10 @@
     import {formatPlannerMoneyPlain, formatPlannerTimestamp} from '../format';
     import {BUTTON_PRIMARY, BUTTON_SECONDARY, HINT} from '../ui';
     import PlannerDialog from './PlannerDialog.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         open: boolean;
@@ -30,17 +34,17 @@
     const incomingAt = $derived(copy ? formatPlannerTimestamp(copy.capturedAt) : '—');
 </script>
 
-<PlannerDialog {open} {title} testid="pac-planner-conflict" onclose={() => onresolve('keep')} zIndex={60}>
+<PlannerDialog {open} {title} testid={testId('conflict', profile)} onclose={() => onresolve('keep')} zIndex={60}>
     <p>{$t('tools.pacAllocator.planner.conflict.intro', {default: 'You asked to copy again. These facts are different now:'})}</p>
     <ul class="space-y-3">
         {#each conflicts as conflict (conflict.id)}
-            <li class="space-y-1 rounded-lg border border-lf-subtle p-3" data-testid="pac-planner-conflict-row" data-kind={conflict.kind}>
+            <li class="space-y-1 rounded-lg border border-lf-subtle p-3" data-testid={testId('conflict-row', profile)} data-kind={conflict.kind}>
                 <p class="font-medium">{conflict.label} · {conflict.currency}</p>
                 <dl class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
                     <dt>{$t('tools.pacAllocator.planner.conflict.cashPrevious', {default: 'Balance copied in the draft · {date}', values: {date: copiedAt(conflict.previousStamp)}})}</dt>
-                    <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-previous">{formatPlannerMoneyPlain(conflict.previous, conflict.currency)}</dd>
+                    <dd class="text-right tabular-nums" data-testid={testId('conflict-previous', profile)}>{formatPlannerMoneyPlain(conflict.previous, conflict.currency)}</dd>
                     <dt>{$t('tools.pacAllocator.planner.conflict.cashIncoming', {default: 'Balance from the system · {date}', values: {date: incomingAt}})}</dt>
-                    <dd class="text-right tabular-nums" data-testid="pac-planner-conflict-incoming">{formatPlannerMoneyPlain(conflict.incoming, conflict.currency)}</dd>
+                    <dd class="text-right tabular-nums" data-testid={testId('conflict-incoming', profile)}>{formatPlannerMoneyPlain(conflict.incoming, conflict.currency)}</dd>
                     <dt>{$t('tools.pacAllocator.planner.conflict.cashSelected', {default: 'Amount to use (yours) · does not change'})}</dt>
                     <dd class="text-right tabular-nums">{formatPlannerMoneyPlain(conflict.selected, conflict.currency)}</dd>
                 </dl>
@@ -50,10 +54,10 @@
     <p class={HINT}>{$t('tools.pacAllocator.planner.conflict.rule', {default: 'Updating changes only the copied fact and its date. Your fields stay as they are.'})}</p>
 
     {#snippet footer()}
-        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-conflict-keep" onclick={() => onresolve('keep')}>
+        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('conflict-keep', profile)} onclick={() => onresolve('keep')}>
             {$t('tools.pacAllocator.planner.conflict.keep', {default: 'Keep previous copy'})}
         </button>
-        <button type="button" class={BUTTON_PRIMARY} data-testid="pac-planner-conflict-update" onclick={() => onresolve('update')}>
+        <button type="button" class={BUTTON_PRIMARY} data-testid={testId('conflict-update', profile)} onclick={() => onresolve('update')}>
             {$t('tools.pacAllocator.planner.conflict.update', {default: 'Update copied fact'})}
         </button>
     {/snippet}
