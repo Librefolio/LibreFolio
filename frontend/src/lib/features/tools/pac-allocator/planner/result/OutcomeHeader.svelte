@@ -9,6 +9,10 @@
     import {BADGE, BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, HINT} from '../ui';
     import {objectiveStage, resultBadges, type BadgeTone} from './model';
     import ResultBadgeTip from './ResultBadgeTip.svelte';
+    import {getPlannerProfile, domId, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
@@ -36,49 +40,49 @@
     const TIP_WIDTH = '320px';
 </script>
 
-<section class="{CARD} space-y-3" aria-labelledby="pac-planner-result-title" data-testid="pac-planner-outcome" data-state={result.result_state}>
+<section class="{CARD} space-y-3" aria-labelledby={domId('result-title', profile)} data-testid={testId('outcome', profile)} data-state={result.result_state}>
     <div class="flex flex-wrap items-start justify-between gap-2">
         <div>
-            <h2 id="pac-planner-result-title" tabindex="-1" class="text-lg font-semibold text-lf-primary focus:outline-none">
+            <h2 id={domId('result-title', profile)} tabindex="-1" class="text-lg font-semibold text-lf-primary focus:outline-none">
                 {$t(`${KEY}.title`, {default: 'Calculated plan'})}
             </h2>
-            <p class={HINT} data-testid="pac-planner-outcome-basis">
+            <p class={HINT} data-testid={testId('outcome-basis', profile)}>
                 {$t(`${KEY}.basis`, {
                     default: 'Scenario {date} · Currency {currency} · draft rev. {revision} · Backend/API {version}',
                     values: {date: formatPlannerDate(basis.as_of), currency: basis.valuation_currency, revision, version: apiVersion},
                 })}
             </p>
         </div>
-        <button type="button" class={BUTTON_LINK} data-testid="pac-planner-goto-proof" onclick={ongotoproof}>
+        <button type="button" class={BUTTON_LINK} data-testid={testId('goto-proof', profile)} onclick={ongotoproof}>
             <span>{$t('tools.pacAllocator.planner.result.gotoProof', {default: 'Proof and timings'})}</span>
             <ArrowDown size={16} aria-hidden="true" />
         </button>
     </div>
     <!-- R11.4: every badge opens its explanation on hover, tap or focus. -->
-    <ul class="flex flex-wrap gap-2" data-testid="pac-planner-outcome-badges">
+    <ul class="flex flex-wrap gap-2" data-testid={testId('outcome-badges', profile)}>
         {#each badges as badge (badge.id)}
-            <li data-testid="pac-planner-outcome-badge" data-badge={badge.id} data-tone={badge.tone}>
+            <li data-testid={testId('outcome-badge', profile)} data-badge={badge.id} data-tone={badge.tone}>
                 <ResultBadgeTip {badge} />
             </li>
         {/each}
     </ul>
     {#if l2 || shortfall}
-        <ul class="flex flex-wrap gap-2 tabular-nums" data-testid="pac-planner-outcome-objectives">
+        <ul class="flex flex-wrap gap-2 tabular-nums" data-testid={testId('outcome-objectives', profile)}>
             {#if l2}
-                <li data-testid="pac-planner-outcome-objective" data-objective="fixed_l2">
+                <li data-testid={testId('outcome-objective', profile)} data-objective="fixed_l2">
                     <Tooltip html={tipHtml($t(`${PLANNER_KEY}.strategy.l2Formula`, {default: L2_FORMULA_FALLBACK}))} math maxWidth={TIP_WIDTH}>
                         <span class={BADGE.neutral}>{$t(`${KEY}.l2`, {default: 'L2 distance {value}', values: {value: formatObjectiveValue(l2.value, l2.unit, digits)}})}</span>
                     </Tooltip>
                 </li>
             {/if}
             {#if shortfall}
-                <li data-testid="pac-planner-outcome-objective" data-objective="shortfall">
+                <li data-testid={testId('outcome-objective', profile)} data-objective="shortfall">
                     <Tooltip text={$t(`${PLANNER_KEY}.result.kpi.help.shortfall`, {default: 'The part of the base that does not end up in the Assets: cash left free, costs and rounding.'})} maxWidth={TIP_WIDTH}>
                         <span class={BADGE.neutral}>{$t(`${KEY}.shortfall`, {default: 'Not invested {value}', values: {value: formatObjectiveValue(shortfall.value, shortfall.unit, digits)}})}</span>
                     </Tooltip>
                 </li>
             {/if}
-            <li data-testid="pac-planner-outcome-notes" data-tone={notesTone}>
+            <li data-testid={testId('outcome-notes', profile)} data-tone={notesTone}>
                 <Tooltip text={$t(`${KEY}.notesHelp`, {default: 'The messages the calculation left about this plan, warnings or information. When there are any, they are listed just below.'})} maxWidth={TIP_WIDTH}>
                     <span class={BADGE[notesTone]}>{$t(`${KEY}.notes`, {default: '{count, plural, =0 {no notes} one {# note} other {# notes}}', values: {count: result.issues.length}})}</span>
                 </Tooltip>
@@ -86,7 +90,7 @@
         </ul>
     {/if}
     <div class="flex flex-wrap items-center justify-between gap-2">
-        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-edit" {disabled} onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
-        <button type="button" class={BUTTON_PRIMARY} data-testid="pac-planner-recalculate" {disabled} onclick={oncalculate}>{$t(`${KEY}.calculateNew`, {default: 'Calculate new plan'})}</button>
+        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('edit', profile)} {disabled} onclick={onedit}>{$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}</button>
+        <button type="button" class={BUTTON_PRIMARY} data-testid={testId('recalculate', profile)} {disabled} onclick={oncalculate}>{$t(`${KEY}.calculateNew`, {default: 'Calculate new plan'})}</button>
     </div>
 </section>

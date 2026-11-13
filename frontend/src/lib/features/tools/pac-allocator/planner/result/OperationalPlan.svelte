@@ -22,6 +22,10 @@
     import {withHelpCues} from '../shared/columnHelp';
     import TableColumns from '../shared/TableColumns.svelte';
     import {AMOUNT_MARKER, splitAtAmount} from '../shared/amountSentence';
+    import {getPlannerProfile, storageKey, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         solution: PacSolution;
@@ -85,7 +89,7 @@
                 filterable: false,
                 pinned: 'left',
                 minWidth: 180,
-                cell: (order) => cell({type: 'asset', assetId: order.asset_id, label: assetLabel(order.asset_id), asset: draft.asset(order.asset_id) ?? null, sequence: order.sequence, orderId: order.order_id, testid: 'pac-planner-plan-order'}),
+                cell: (order) => cell({type: 'asset', assetId: order.asset_id, label: assetLabel(order.asset_id), asset: draft.asset(order.asset_id) ?? null, sequence: order.sequence, orderId: order.order_id, testid: testId('plan-order', profile)}),
             },
             {
                 id: 'instruction',
@@ -133,7 +137,7 @@
         ]),
     );
 
-    const orderActions = $derived.by((): RowAction<PacOrderRow>[] => [{id: 'detail', icon: Eye, label: () => $t(`${KEY}.detail`, {default: 'Detail'}), onClick: (order) => onorder(order), testid: 'pac-planner-plan-order-detail'}]);
+    const orderActions = $derived.by((): RowAction<PacOrderRow>[] => [{id: 'detail', icon: Eye, label: () => $t(`${KEY}.detail`, {default: 'Detail'}), onClick: (order) => onorder(order), testid: testId('plan-order-detail', profile)}]);
 </script>
 
 {#snippet pair(action: PacConversion)}
@@ -160,7 +164,7 @@
 {/snippet}
 
 {#snippet autoBox(action: PacConversion, withBroker: boolean)}
-    <div class="{NOTICE.info} space-y-1" data-testid="pac-planner-plan-auto-conversion" data-conversion={action.conversion_id}>
+    <div class="{NOTICE.info} space-y-1" data-testid={testId('plan-auto-conversion', profile)} data-conversion={action.conversion_id}>
         <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
             <div class="flex min-w-0 flex-wrap items-center gap-2">
                 <span class={BADGE.info}>{$t(`${KEY}.autoConversion`, {default: 'Automatic conversion'})}</span>
@@ -168,7 +172,7 @@
                 {@render pair(action)}
             </div>
             <span class="flex items-center gap-1.5">
-                <span class="font-medium tabular-nums" data-testid="pac-planner-plan-auto-conversion-amounts">
+                <span class="font-medium tabular-nums" data-testid={testId('plan-auto-conversion-amounts', profile)}>
                     {$t(`${KEY}.autoConversionAmounts`, {
                         default: 'about {debit} → {credit}',
                         values: {
@@ -183,7 +187,7 @@
                         default: 'You do nothing: the Broker converts when you place the orders in {destination}. It takes about this much from your {source} cash; the exact amount depends on its rate at that moment, while the plan uses the rate and spread of the FX step.',
                         values: {source: action.source_debit.currency, destination: action.destination_credit.currency},
                     })}
-                    testid="pac-planner-plan-auto-conversion-help"
+                    testid={testId('plan-auto-conversion-help', profile)}
                 />
             </span>
         </div>
@@ -191,13 +195,13 @@
     </div>
 {/snippet}
 
-<div class="space-y-4" data-testid="pac-planner-plan">
+<div class="space-y-4" data-testid={testId('plan', profile)}>
     <p class={HINT}>{$t(`${KEY}.sequenceHint`, {default: 'Follow the numbers: first the cash, then the currency exchanges, then the orders.'})}</p>
 
     {#if steps.length > 0}
         <ol class="divide-y divide-lf-subtle rounded-lg border border-lf-subtle">
             {#each steps as step (step.kind === 'funding' ? step.action.action_id : step.action.conversion_id)}
-                <li class="flex items-start gap-3 p-3 text-sm" data-testid="pac-planner-plan-step" data-kind={step.kind} data-sequence={step.sequence}>
+                <li class="flex items-start gap-3 p-3 text-sm" data-testid={testId('plan-step', profile)} data-kind={step.kind} data-sequence={step.sequence}>
                     <span class={STEP_NUMBER}>{step.sequence}</span>
                     {#if step.kind === 'funding'}
                         {@const action = step.action}
@@ -206,8 +210,8 @@
                         {@const parts = splitAtAmount(fundingSentence(action, source, kind))}
                         <div class="min-w-0 flex-1 space-y-1" data-funding={kind}>
                             <!-- P6: one sentence, the amount a badge in the middle of it. data-broker and data-currency say whom and what the step is for. -->
-                            <p class="text-lf-primary" data-testid="pac-planner-plan-sentence" data-broker={action.destination_broker_id} data-currency={action.amount.currency}>
-                                {parts.before}<span class="{BADGE.neutral} tabular-nums" data-testid="pac-planner-plan-amount">{formatPlannerMoneyPlain(action.amount.amount, action.amount.currency, {digits})}</span>{parts.after}
+                            <p class="text-lf-primary" data-testid={testId('plan-sentence', profile)} data-broker={action.destination_broker_id} data-currency={action.amount.currency}>
+                                {parts.before}<span class="{BADGE.neutral} tabular-nums" data-testid={testId('plan-amount', profile)}>{formatPlannerMoneyPlain(action.amount.amount, action.amount.currency, {digits})}</span>{parts.after}
                             </p>
                             <p class="{HINT} first-letter:uppercase">{fundingDetail(action)}</p>
                         </div>
@@ -221,7 +225,7 @@
                                     {@render pair(action)}
                                 </div>
                                 <span class="flex items-center gap-1.5">
-                                    <span class="font-medium tabular-nums text-lf-primary" data-testid="pac-planner-plan-fx-amounts">
+                                    <span class="font-medium tabular-nums text-lf-primary" data-testid={testId('plan-fx-amounts', profile)}>
                                         {$t(`${KEY}.fxAmounts`, {
                                             default: '{debit} → about {credit}',
                                             values: {
@@ -236,7 +240,7 @@
                                             default: 'Enter the {source} amount in the conversion at the Broker. What you receive in {destination} depends on the rate at that moment: the plan uses the rate and spread of the FX step.',
                                             values: {source: action.source_debit.currency, destination: action.destination_credit.currency},
                                         })}
-                                        testid="pac-planner-plan-fx-estimate-help"
+                                        testid={testId('plan-fx-estimate-help', profile)}
                                     />
                                 </span>
                             </div>
@@ -250,13 +254,13 @@
     {/if}
 
     {#each groups as group (group.brokerId)}
-        <section class="space-y-2" data-testid="pac-planner-plan-orders" data-broker={group.brokerId}>
+        <section class="space-y-2" data-testid={testId('plan-orders', profile)} data-broker={group.brokerId}>
             <div class="flex flex-wrap items-center gap-2">
                 <h4 class="flex items-center gap-2 text-sm font-semibold text-lf-primary">
                     <PlannerBrokerIcon broker={draft.broker(group.brokerId)} size={24} />
                     {$t(`${KEY}.ordersAt`, {default: 'Orders on {broker}', values: {broker: names.broker(group.brokerId)}})}
                 </h4>
-                <TableColumns table={orderTables[group.brokerId]} others={otherTables(group.brokerId)} testid="pac-planner-plan-orders-columns" />
+                <TableColumns table={orderTables[group.brokerId]} others={otherTables(group.brokerId)} testid={testId('plan-orders-columns', profile)} />
             </div>
             {#each automaticConversions(solution.conversions, group.brokerId) as action (action.conversion_id)}
                 {@render autoBox(action, false)}
@@ -266,7 +270,7 @@
                 data={[...group.orders]}
                 columns={orderColumns}
                 getRowId={(order) => order.order_id}
-                storageKey="pac-planner-result-orders"
+                storageKey={storageKey('result-orders', profile)}
                 onRowClick={(order) => onorder(order)}
                 enableSorting={false}
                 enableSelection={false}

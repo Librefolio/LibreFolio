@@ -7,6 +7,10 @@
     import {BUTTON_LINK, BUTTON_SECONDARY} from '../ui';
     import {conversionsFor, type PacProvenanceRow, type PlanLookup, type ResultNames} from './model';
     import {economicQuantityText, instructionStepText, instructionText, priceText, ratePercentText, routeCapText, routeMinimumText} from './text';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
@@ -46,11 +50,11 @@
     });
 </script>
 
-<PlannerDialog open={order !== null} {title} testid="pac-planner-order-detail" {onclose} maxWidth="3xl">
+<PlannerDialog open={order !== null} {title} testid={testId('order-detail', profile)} {onclose} maxWidth="3xl">
     {#if order}
-        <dl class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[auto_1fr_auto_1fr]" data-testid="pac-planner-order-detail-facts">
+        <dl class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[auto_1fr_auto_1fr]" data-testid={testId('order-detail-facts', profile)}>
             <dt class="font-medium text-lf-secondary">{$t(`${KEY}.instruction`, {default: 'Instruction'})}</dt>
-            <dd data-testid="pac-planner-order-detail-instruction">{[instructionText(order, $t, digits), instructionStepText(order, $t, digits)].join(' · ')}</dd>
+            <dd data-testid={testId('order-detail-instruction', profile)}>{[instructionText(order, $t, digits), instructionStepText(order, $t, digits)].join(' · ')}</dd>
             <dt class="font-medium text-lf-secondary">{$t(`${KEY}.economicQuantity`, {default: 'Economic quantity'})}</dt>
             <dd>
                 {economicQuantityText(order.economic_quantity, $t)}
@@ -83,7 +87,7 @@
 
             {#each related as action (action.conversion_id)}
                 <dt class="font-medium text-lf-secondary">{$t(`${KEY}.conversion`, {default: 'Conversion'})}</dt>
-                <dd data-testid="pac-planner-order-detail-conversion" data-mode={action.mode}>
+                <dd data-testid={testId('order-detail-conversion', profile)} data-mode={action.mode}>
                     {#if action.sequence !== null}
                         {$t(`${KEY}.conversionAction`, {
                             default: 'action {sequence} · {source} → {destination} · 1 {source} = {rate} {destination} effective',
@@ -101,7 +105,7 @@
             {/each}
 
             <dt class="font-medium text-lf-secondary">{$t(`${KEY}.route`, {default: 'Route'})}</dt>
-            <dd data-testid="pac-planner-order-detail-route">
+            <dd data-testid={testId('order-detail-route', profile)}>
                 {#if !route}
                     —
                 {:else if route.cap.kind === 'none'}
@@ -111,7 +115,7 @@
                 {/if}
             </dd>
             <dt class="font-medium text-lf-secondary">{$t(`${KEY}.minimums`, {default: 'Minimums'})}</dt>
-            <dd data-testid="pac-planner-order-detail-minimums">
+            <dd data-testid={testId('order-detail-minimums', profile)}>
                 {#if !route}
                     —
                 {:else if route.minimum_if_active.kind === 'none'}
@@ -126,11 +130,11 @@
         </dl>
 
         <div class="space-y-2 border-t border-lf-subtle pt-3">
-            <button type="button" class={BUTTON_LINK} aria-expanded={showProvenance} data-testid="pac-planner-order-detail-provenance-toggle" onclick={() => (showProvenance = !showProvenance)}>
+            <button type="button" class={BUTTON_LINK} aria-expanded={showProvenance} data-testid={testId('order-detail-provenance-toggle', profile)} onclick={() => (showProvenance = !showProvenance)}>
                 {showProvenance ? $t(`${KEY}.hideProvenance`, {default: 'Hide provenance'}) : $t(`${KEY}.showProvenance`, {default: 'Show provenance ({count})', values: {count: provenance.length}})}
             </button>
             {#if showProvenance}
-                <ul class="space-y-1" data-testid="pac-planner-order-detail-provenance">
+                <ul class="space-y-1" data-testid={testId('order-detail-provenance', profile)}>
                     {#each provenance as row (row.provenance_id)}
                         <li class="flex flex-wrap items-center gap-2" data-provenance={row.provenance_id}>
                             <OriginBadge origin={row.kind === 'manual' ? 'manual' : 'copied'} when={provenanceWhen(row)} />
@@ -142,6 +146,6 @@
         </div>
     {/if}
     {#snippet footer()}
-        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-order-detail-done" onclick={onclose}>{$t('common.close', {default: 'Close'})}</button>
+        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('order-detail-done', profile)} onclick={onclose}>{$t('common.close', {default: 'Close'})}</button>
     {/snippet}
 </PlannerDialog>
