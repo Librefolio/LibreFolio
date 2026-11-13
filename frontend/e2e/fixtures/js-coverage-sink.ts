@@ -2,33 +2,44 @@
  * One Playwright worker's JS coverage, summed as its tests finish.
  *
  * The `jsCoverage` fixture (`./playwright.ts`) hands every test's slice of
- * `window.__coverage__` to the worker's sink, which merges it into one istanbul
- * `CoverageMap` and writes that map to one file per worker:
+ * `window.__coverage__` to the worker's sink, which sums it as istanbul's merge
+ * would and writes the sum to one file per worker:
  * `coverage-js/e2e-raw/worker-<parallelIndex>-<pid>.json`. The report
  * (`scripts/js-coverage-report.js`) reads that directory exactly as it read the
  * one-file-per-test directory before: same format, same merge.
  *
- * ### Why the sum equals what the report computed from per-test files
+ * ### How the sum is held: fixed parts once, counters as arrays (step 3.7)
  *
- * The merge is istanbul-lib-coverage's own `CoverageMap.merge` — the call the
- * report makes. For one file and one build, every slice carries the same
- * statement, function and branch maps, so the merge adds the hit counts
- * location by location. Addition is associative, so summing in the worker and
- * then summing the workers gives the counts the report used to get by summing
- * every test. The slices are stored raw (absolute paths, `inputSourceMap`
- * kept): filtering, re-keying and the walk back through the sourcemaps stay in
- * the report, applied once to the sum.
+ * A file coverage is two things of very different sizes: its fixed parts — the statement, function and branch maps,
+ * `inputSourceMap` with the sources inside (most of the ~17 MB a test produces), `hash`, `path` — identical in every slice
+ * of one build, and its hit counters, a few numbers per statement. The sink keeps the fixed parts of each file once, from
+ * the first slice that brought it, and the counters as arrays; a later slice adds its counters index by index. It rebuilds
+ * full objects only when it writes, so the file on disk, and what the report reads, keep their format.
+ *
+ * ### Why the sum equals istanbul's own merge
+ *
+ * The reference is istanbul-lib-coverage's `CoverageMap.merge` — what this sink called until step 3.7, and what the report
+ * still calls. Its `FileCoverage.merge` does not add by key: it keys every item by its position (`keyFromLoc`; a function by
+ * its `loc`, a branch by its first location), so two items at one position are one item to it, the last one's counts
+ * winning, and the keys come out renumbered from 0. It does that from a file's second slice on; a file seen once is kept as
+ * it came. The sink replays exactly that: it computes the fold of a layout once (`foldOf`), applies it to a file at its
+ * second slice, and adds every later slice through it. Addition is associative, so summing in the worker and then summing
+ * the workers gives the counts the report would get from every slice. `js-coverage-sink.spec.ts` holds the sink to istanbul's
+ * merge on the same slices, duplicate positions and two hundred seeded sequences included.
+ *
+ * ### Counters alone from a page, and the cases that go back to istanbul
+ *
+ * Once a page has sent a file in full, the sink knows that build's layout (`knownHashes()`): a later page sends only its
+ * counters as arrays for it (`addLight`, the page side is step 3.8), which the sink places through the same fold. A file
+ * read from a dead predecessor is a sum, not a page's layout: it is merged, but never offered for counters until a page
+ * sends the file in full. A slice whose layout differs from the one held — another build of the file, an `all`
+ * placeholder — goes through istanbul's merge itself, by position, and that file then takes full slices only.
  *
  * ### Why holding the sum in memory no longer kills the worker
  *
- * The 8 GB accumulator of the V8 era kept every payload: memory grew with the
- * number of tests. An istanbul map does not. `FileCoverage.merge` *replaces* the
- * hit counts and maps of a file, it never appends a payload; the bulk of a
- * slice — the `inputSourceMap` with the sources inside, most of the ~17 MB a
- * test produces — is kept once per source file, from the first slice that
- * loaded it, and every later copy is dropped with the slice. The map is bounded
- * by the number of modules in the build, not by the number of tests: about one
- * slice's size for the worker's whole life.
+ * The 8 GB accumulator of the V8 era kept every payload: memory grew with the number of tests. This sum does not: it holds
+ * each module's fixed parts once and one array of numbers per counter, bounded by the number of modules in the build, not
+ * by the number of tests.
  *
  * ### How often the file is written
  *
@@ -154,14 +165,165 @@ function fileCoverageOnly(payload: CoveragePayload): CoveragePayload {
     return kept;
 }
 
+/** The three counters of a file coverage and the map each one is keyed by. */
+type Counter = 's' | 'f' | 'b';
+const COUNTERS: readonly Counter[] = ['s', 'f', 'b'];
+const MAP_OF = {s: 'statementMap', f: 'fnMap', b: 'branchMap'} as const;
+
+type Loc = {start: {line: number; column: number}; end: {line: number; column: number}};
+type Hit = number | number[];
+
+/** istanbul's position keys (`file-coverage.js`, `keyFromLoc` and the two props of `merge`): a statement by its range, a
+ * function by its `loc`, a branch by its first location. Two items with one key are one item to istanbul's merge. */
+const keyFromLoc = ({start, end}: Loc): string => `${start.line}|${start.column}|${end.line}|${end.column}`;
+const ITEM_KEY: Record<Counter, (item: never) => string> = {
+    s: (item: Loc) => keyFromLoc(item),
+    f: (item: {loc: Loc}) => keyFromLoc(item.loc),
+    b: (item: {locations: Loc[]}) => keyFromLoc(item.locations[0]),
+};
+
+/** A page's counters of one file: its `hash` and every counter as an array, in the page's own key order. */
+export type LightEntry = {hash: string; s: number[]; f: number[]; b: number[][]; bT?: number[][]};
+
+/** The values of a counter object, in its key order (integer keys: ascending, on both sides of the page). */
+const valuesOf = <T>(counter: Record<string, T>): T[] => Object.keys(counter).map((key) => counter[key]);
+const copyHit = (hit: Hit): Hit => (Array.isArray(hit) ? [...hit] : hit);
+
+/** The counters of a full file coverage as arrays: what a page sends for a file the sink already holds (step 3.8). */
+export function counterArrays(file: Record<string, unknown>): LightEntry {
+    const light: LightEntry = {
+        hash: String(file.hash),
+        s: valuesOf(file.s as Record<string, number>),
+        f: valuesOf(file.f as Record<string, number>),
+        b: valuesOf(file.b as Record<string, number[]>).map((hits) => [...hits]),
+    };
+    if (file.bT) light.bT = valuesOf(file.bT as Record<string, number[]>).map((hits) => [...hits]);
+    return light;
+}
+
+/** Where each item of a file lands once istanbul has merged it (`mergeProp`): its slot, or −1 when a later item at the same
+ * position replaces it (istanbul keys items by position, so the last one wins the slot the first one opened). */
+type Fold = {plan: Record<Counter, number[]>; maps: Record<Counter, unknown[]>; keys: Record<Counter, string[]>};
+
+function foldOf(file: Record<string, unknown>): Fold {
+    const fold = {plan: {}, maps: {}, keys: {}} as Fold;
+    for (const counter of COUNTERS) {
+        const map = file[MAP_OF[counter]] as Record<string, never>;
+        const hitKeys = Object.keys(file[counter] as object);
+        const slot = new Map<string, number>();
+        const owner = new Map<string, number>();
+        const items: unknown[] = [];
+        const positions = hitKeys.map((hitKey, i) => {
+            const position = ITEM_KEY[counter](map[hitKey]);
+            if (!slot.has(position)) slot.set(position, slot.size);
+            owner.set(position, i);
+            items[slot.get(position)!] = map[hitKey];
+            return position;
+        });
+        fold.plan[counter] = positions.map((position, i) => (owner.get(position) === i ? slot.get(position)! : -1));
+        fold.maps[counter] = items;
+        fold.keys[counter] = [...slot.keys()];
+    }
+    return fold;
+}
+
+/** istanbul's `addHits`: two counts, or two branch arrays element by element, the length of the first. */
+const addHit = (a: Hit, b: Hit): Hit => (Array.isArray(a) ? a.map((value, i) => (value || 0) + ((b as number[])[i] || 0)) : (a as number) + (b as number));
+
+/**
+ * One file the worker holds: its fixed parts once — the three maps, `inputSourceMap` (most of a slice's bytes), `hash`,
+ * `path`, `_coverageSchema` — and its counters as arrays.
+ */
+type Held = {
+    fixed: Record<string, unknown>;
+    keys: Record<Counter | 'bT', string[]>;
+    hits: {s: Hit[]; f: Hit[]; b: Hit[]; bT?: Hit[]};
+    /** Merged at least once: istanbul's fold (one item per position, keys renumbered) has been applied. */
+    folded: boolean;
+    /** The layout of the page's own slices of this file (its build's `hash` and fold), known once a page sent it in full. */
+    page?: {hash: string; plan: Record<Counter, number[]>; lengths: number[]};
+    /** Two builds of the file were merged: only istanbul's merge, by position, can add to it any more. */
+    mixed: boolean;
+    /** The position keys of the folded layout, in slot order: what a full slice must match to be added by index. */
+    positions?: Record<Counter, string[]>;
+};
+
+function held(value: Record<string, unknown>): Held {
+    const {s, f, b, bT, ...fixed} = value as Record<string, Record<string, Hit>>;
+    const hits: Held['hits'] = {s: valuesOf(s).map(copyHit), f: valuesOf(f).map(copyHit), b: valuesOf(b).map(copyHit)};
+    const keys = {s: Object.keys(s), f: Object.keys(f), b: Object.keys(b), bT: bT ? Object.keys(bT) : []};
+    if (bT) hits.bT = valuesOf(bT).map(copyHit);
+    return {fixed, keys, hits, folded: false, mixed: false};
+}
+
+/** The file coverage of a held file, as istanbul holds it: the object the old sink wrote. */
+function rebuilt(file: Held): Record<string, unknown> {
+    const object = (keys: string[], hits: Hit[]) => Object.fromEntries(keys.map((key, i) => [key, copyHit(hits[i])]));
+    const data: Record<string, unknown> = {...file.fixed, s: object(file.keys.s, file.hits.s), f: object(file.keys.f, file.hits.f), b: object(file.keys.b, file.hits.b)};
+    if (file.hits.bT) data.bT = object(file.keys.bT, file.hits.bT);
+    return data;
+}
+
+/** Apply istanbul's fold to a held file, as its first merge does: one item per position, slots renumbered from 0. */
+function fold(file: Held): void {
+    if (file.folded) return;
+    const {plan, maps} = foldOf(rebuilt(file));
+    for (const counter of COUNTERS) {
+        const hits: Hit[] = [];
+        file.hits[counter].forEach((hit, i) => {
+            if (plan[counter][i] >= 0) hits[plan[counter][i]] = hit;
+        });
+        file.hits[counter] = hits;
+        file.fixed[MAP_OF[counter]] = Object.fromEntries(maps[counter].map((item, j) => [String(j), item]));
+        file.keys[counter] = hits.map((_, j) => String(j));
+    }
+    if (file.hits.bT) {
+        const hits: Hit[] = [];
+        file.hits.bT.forEach((hit, i) => {
+            if (plan.b[i] >= 0) hits[plan.b[i]] = hit;
+        });
+        file.hits.bT = hits;
+        file.keys.bT = hits.map((_, j) => String(j));
+    }
+    file.folded = true;
+}
+
+/** The position keys of a held file's folded layout, computed once per layout. */
+function positionsOf(file: Held): Record<Counter, string[]> {
+    fold(file);
+    file.positions ??= foldOf(rebuilt(file)).keys;
+    return file.positions;
+}
+
+/** Add a slice's counters, in its own layout, through its fold plan: what istanbul's merge adds for the same file. */
+function addThrough(file: Held, plan: Record<Counter, number[]>, slice: {s: Hit[]; f: Hit[]; b: Hit[]; bT?: Hit[]}): void {
+    for (const counter of COUNTERS) {
+        slice[counter].forEach((hit, i) => {
+            const j = plan[counter][i];
+            if (j >= 0) file.hits[counter][j] = addHit(file.hits[counter][j], hit);
+        });
+    }
+    // istanbul adds the truthiness counters only when both sides have them.
+    if (file.hits.bT && slice.bT) {
+        slice.bT.forEach((hit, i) => {
+            const j = plan.b[i];
+            if (j >= 0) file.hits.bT![j] = addHit(file.hits.bT![j], hit);
+        });
+    }
+}
+
+const lengthsOf = (slice: {s: unknown[]; f: unknown[]; b: unknown[]}): number[] => [slice.s.length, slice.f.length, slice.b.length];
+const sameLengths = (a: number[], b: number[]): boolean => a.length === b.length && a.every((n, i) => n === b[i]);
+
 export class WorkerCoverageSink {
     readonly dir: string;
     readonly parallelIndex: number;
     readonly pid: number;
     readonly flushEvery: number;
     readonly file: string;
-    private readonly map = libCoverage.createCoverageMap({});
-    /** Files of dead predecessors merged into `map`, deleted after the next write. */
+    /** Every file the worker has seen, by key: fixed parts once, counters as arrays. */
+    private readonly files = new Map<string, Held>();
+    /** Files of dead predecessors merged into `files`, deleted after the next write. */
     private absorbed: string[] = [];
     private sinceFlush = 0;
     private dirty = false;
@@ -174,6 +336,13 @@ export class WorkerCoverageSink {
         this.pid = pid;
         this.flushEvery = flushEvery;
         this.file = join(dir, `worker-${parallelIndex}-${pid}.json`);
+    }
+
+    /** `{key: hash}` of the files a page may send as counters alone: seen in full from a page, one build only. */
+    knownHashes(): Record<string, string> {
+        const known: Record<string, string> = {};
+        for (const [key, file] of this.files) if (file.page && !file.mixed) known[key] = file.page.hash;
+        return known;
     }
 
     /**
@@ -201,7 +370,8 @@ export class WorkerCoverageSink {
                 continue;
             }
             try {
-                this.mergeEach(fileCoverageOnly(JSON.parse(await readFile(path, 'utf-8')) as CoveragePayload));
+                // A file read from disk is a sum, not a page's layout: it never makes its files known for counters.
+                this.mergeEach(fileCoverageOnly(JSON.parse(await readFile(path, 'utf-8')) as CoveragePayload), false);
             } catch (e) {
                 // Leave it where it is: the report reads (or skips) it as it would any other file.
                 console.warn(`[coverage-js] could not absorb ${name}:`, e);
@@ -214,15 +384,70 @@ export class WorkerCoverageSink {
         return merged;
     }
 
+    /** One full file coverage into the sum: what istanbul's `CoverageMap.merge` would make of it. */
+    private mergeFull(key: string, value: Record<string, unknown>, fromPage: boolean): void {
+        const file = this.files.get(key);
+        if (!file) {
+            // istanbul keeps a file it has not seen as it came, unfolded: so does the sink.
+            const fresh = held(value);
+            if (fromPage && typeof value.hash === 'string') fresh.page = {hash: value.hash, plan: foldOf(value).plan, lengths: lengthsOf(fresh.hits)};
+            this.files.set(key, fresh);
+            return;
+        }
+        const incoming = foldOf(value);
+        const sameLayout =
+            !file.mixed &&
+            value.all !== true &&
+            file.fixed.all !== true &&
+            COUNTERS.every((counter) => {
+                const mine = positionsOf(file)[counter];
+                return mine.length === incoming.keys[counter].length && mine.every((position, i) => position === incoming.keys[counter][i]);
+            });
+        if (!sameLayout) {
+            this.mergeByIstanbul(key, file, value);
+            return;
+        }
+        const slice = held(value).hits;
+        addThrough(file, incoming.plan, slice);
+        if (fromPage && !file.page && value.hash === file.fixed.hash) file.page = {hash: String(value.hash), plan: incoming.plan, lengths: lengthsOf(slice)};
+    }
+
+    /** A file whose layout differs (another build, a placeholder): istanbul's own merge, by position, and the sum read back. */
+    private mergeByIstanbul(key: string, file: Held, value: Record<string, unknown>): void {
+        const map = libCoverage.createCoverageMap({[key]: rebuilt(file)} as CoveragePayload);
+        map.merge({[key]: value});
+        // `toJSON()` hands back `FileCoverage` instances; their plain data is what the sink holds (a rare path: a round trip is fine).
+        const merged = held((JSON.parse(JSON.stringify(map.toJSON())) as Record<string, Record<string, unknown>>)[key]);
+        merged.folded = file.fixed.all !== true;
+        merged.mixed = file.mixed || value.hash !== file.fixed.hash;
+        if (!merged.mixed && file.page) merged.page = file.page;
+        this.files.set(key, merged);
+    }
+
+    /** A page's counters of a file it already sent in full; false when the sink cannot place them (unknown file, another build). */
+    private mergeLight(key: string, light: LightEntry): boolean {
+        const file = this.files.get(key);
+        if (!file?.page || file.mixed || light.hash !== file.page.hash || !sameLengths(lengthsOf(light), file.page.lengths)) return false;
+        fold(file);
+        addThrough(file, file.page.plan, light);
+        return true;
+    }
+
     /**
-     * Merge entry by entry. `CoverageMap.merge` validates every entry before it adds any, so one malformed
-     * module would drop the whole slice; the per-test file kept the rest, and so does this.
+     * Merge entry by entry, so that one malformed module never drops the rest of the slice: an entry with a statement map is a
+     * full file coverage, any other a page's counters (`LightEntry`).
      */
-    private mergeEach(slice: CoveragePayload): number {
+    private mergeEach(slice: CoveragePayload, fromPage: boolean): number {
         let merged = 0;
         for (const [key, value] of Object.entries(slice)) {
             try {
-                this.map.merge({[key]: value});
+                const entry = value as Record<string, unknown>;
+                if (entry && typeof entry === 'object' && entry.statementMap) {
+                    this.mergeFull(key, entry, fromPage);
+                } else if (!this.mergeLight(key, entry as unknown as LightEntry)) {
+                    console.warn(`[coverage-js] counters for ${key} match no file the sink holds: skipped`);
+                    continue;
+                }
                 merged += 1;
             } catch (e) {
                 console.warn(`[coverage-js] skipped malformed coverage for ${key}:`, e);
@@ -232,14 +457,26 @@ export class WorkerCoverageSink {
     }
 
     /**
-     * Add one test's counters, one payload per page of its context: every page is summed into the worker's map,
+     * Add one test's slices in full, one payload per page of its context: every page is summed into the worker's sum,
      * so a module two pages loaded counts the hits of both. Write the worker file every `flushEvery` tests.
      * Returns what the merge and the write cost (two clock reads: the stopwatches' own cost is not worth a flag).
      */
     async add(...payloads: CoveragePayload[]): Promise<AddTiming> {
+        return this.take(payloads.map(fileCoverageOnly));
+    }
+
+    /**
+     * Add one test's slices as a page reads them (step 3.8): counters alone (`LightEntry`) for the files of `knownHashes()`,
+     * the full file coverage for any other. Same sum, same file, as `add` of the full slices.
+     */
+    async addLight(...payloads: CoveragePayload[]): Promise<AddTiming> {
+        return this.take(payloads);
+    }
+
+    private async take(payloads: CoveragePayload[]): Promise<AddTiming> {
         const start = performance.now();
         let merged = 0;
-        for (const payload of payloads) merged += this.mergeEach(fileCoverageOnly(payload));
+        for (const payload of payloads) merged += this.mergeEach(payload, true);
         const mergeMs = performance.now() - start;
         if (merged === 0) return {merge_ms: 0, flush_ms: 0};
         this.dirty = true;
@@ -254,7 +491,9 @@ export class WorkerCoverageSink {
         const start = performance.now();
         await mkdir(this.dir, {recursive: true});
         const tmp = `${this.file}.tmp`;
-        await writeFile(tmp, JSON.stringify(this.map.toJSON()));
+        const sum: Record<string, unknown> = {};
+        for (const [key, file] of this.files) sum[key] = rebuilt(file);
+        await writeFile(tmp, JSON.stringify(sum));
         await rename(tmp, this.file);
         this.dirty = false;
         this.sinceFlush = 0;
