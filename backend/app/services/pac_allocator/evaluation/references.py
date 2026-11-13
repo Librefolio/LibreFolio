@@ -480,7 +480,7 @@ def _global_constraint_refs(
                 scope="scenario",
                 entity_refs=(),
                 unit=valuation_unit,
-                bound_source="current and final invested value",
+                bound_source="current invested value",
                 public_issue_code=("portfolio_rebalancer.nonpositive_current_portfolio"),
             )
         )
@@ -571,27 +571,25 @@ def _objective_codes(
             "route_priority",
             "explicit_cost",
         )
-    return (
-        "fixed_l2",
-        "shortfall",
-        "turnover",
-        "explicit_cost",
-        "active_order_rows",
-    )
+    # The Rebalancer (specifica §6.3): a weighted fidelity is one score, «Target first» the distance then the money lost.
+    if scenario.target_fidelity is not None and scenario.target_fidelity.kind == "target_first":
+        return ("target_distance", "wealth_loss")
+    return ("plan_score",)
 
 
 def _objective_unit(
     scenario: ExactPlannerScenario,
     code: ExactObjectiveCode,
 ) -> ExactUnit:
-    if code == "fixed_l2":
+    if code in {"fixed_l2", "target_distance"}:
         return ExactUnit(
             kind="valuation_money_squared",
             currency_code=scenario.valuation_currency,
         )
     if code in {
         "shortfall",
-        "turnover",
+        "plan_score",
+        "wealth_loss",
         "explicit_cost",
         "incremental_cost",
     }:

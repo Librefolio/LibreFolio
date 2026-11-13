@@ -317,6 +317,7 @@ def evaluate_exact_candidate(
         ledgers=state.ledgers,
         holdings=state.holdings,
         assets=state.assets,
+        cash_targets=state.cash_targets,
         accounting=state.accounting,
         costs=state.costs,
         canonical_tie_decision_ids=canonical_tie_decision_ids,

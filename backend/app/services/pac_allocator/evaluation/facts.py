@@ -6,13 +6,13 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from backend.app.services.pac_allocator.evaluation.economics import EconomicState
+from backend.app.services.pac_allocator.evaluation.economics import EconomicState, final_cash_by_cell
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, is_quantum_multiple
-from backend.app.services.pac_allocator.evaluation.limits import resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
-from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, to_valuation, valuation_rate_of
+from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, valuation_rate_of
 from backend.app.services.pac_allocator.ledger import (
     rounded_money_posting,
 )
@@ -232,9 +232,9 @@ def _limit_constraint_facts(
     cell already says how much may be left in it.
     """
     facts: dict[str, _ConstraintFact] = {}
-    resolved = resolve_scenario_limits(scenario, state.accounting.fixed_reference)
+    resolved = resolve_scenario_limits(scenario, limit_reference(scenario, state.accounting))
     final_value = {item.asset_id: item.final_value for item in state.assets}
-    final_cash = {(row.broker_id, row.currency): to_valuation(index, row.final_spendable, row.currency) for row in state.ledgers}
+    final_cash = final_cash_by_cell(index, state.ledgers)
     for entry, bounds in resolved.by_entry.items():
         check_budget(checkpoint)
         value = final_value[entry.asset_id] if entry.kind == "asset" else final_cash[(entry.broker_id, entry.currency)]
@@ -486,12 +486,12 @@ def _global_constraint_facts(  # noqa: C901 — flat sequential global facts, ea
             no_short_or_leverage = False
     facts[_constraint_id("NO_SHORT_OR_LEVERAGE", "global")] = _bool_fact(no_short_or_leverage)
     if scenario.product == "rebalancer":
-        rebalancer_nonempty = state.accounting.current_invested > _EXACT_ZERO and state.accounting.final_invested > _EXACT_ZERO
+        # Only a portfolio to rebalance is required (specifica §15 n. 14): with a target on cash a plan may end all in cash.
         facts[_constraint_id("REBALANCER_NONEMPTY", "global")] = _ConstraintFact(
-            value=state.accounting.final_invested,
+            value=state.accounting.current_invested,
             lower_bound=_EXACT_ZERO,
             upper_bound=None,
-            satisfied=rebalancer_nonempty,
+            satisfied=state.accounting.current_invested > _EXACT_ZERO,
         )
     return facts
 
@@ -544,6 +544,23 @@ def constraint_facts(
     return facts
 
 
+def _rebalancer_score(scenario: ExactPlannerScenario, state: EconomicState) -> dict[ExactObjectiveCode, ExactRatio]:
+    """The Rebalancer's objectives (specifica §6), in exact arithmetic.
+
+    ``D``: the squared distance of the final portfolio from the targets ``w · F``, over every Asset, every cash cell with a
+    target, and the uninvested ``N`` (target zero): the money lost stays inside ``N``, so wasting it never shortens ``D``.
+    ``C = F − W``, the money lost. ``J = λ·D/F + C`` for a weighted fidelity. A scenario worth nothing (``F = 0``) has no
+    distance to scale: ``J = C``, and ``REBALANCER_NONEMPTY`` refuses the plan anyway.
+    """
+    accounting = state.accounting
+    distance = sum((item.residual.square() for item in (*state.assets, *state.cash_targets)), _EXACT_ZERO) + accounting.uninvested.square()
+    score = accounting.wealth_loss
+    fidelity = scenario.target_fidelity
+    if fidelity is not None and fidelity.kind == "weighted" and accounting.initial_wealth > _EXACT_ZERO:
+        score += fidelity.distance_weight * distance / accounting.initial_wealth
+    return {"target_distance": distance, "wealth_loss": accounting.wealth_loss, "plan_score": score}
+
+
 def objective_value_map(
     *,
     scenario: ExactPlannerScenario,
@@ -556,10 +573,6 @@ def objective_value_map(
 ) -> dict[ExactObjectiveCode, ExactRatio]:
     fixed_l2 = sum(
         (asset.residual.square() for asset in state.assets),
-        _EXACT_ZERO,
-    )
-    turnover = sum(
-        (order.mid_value for order in state.orders),
         _EXACT_ZERO,
     )
     active_order_rows = len(state.orders)
@@ -588,7 +601,6 @@ def objective_value_map(
     values: dict[ExactObjectiveCode, ExactRatio] = {
         "fixed_l2": fixed_l2,
         "shortfall": state.accounting.shortfall,
-        "turnover": turnover,
         "explicit_cost": state.costs.explicit_cost,
         "incremental_cost": incremental_cost,
         "split_asset_count": ExactRatio(split_asset_count),
@@ -596,6 +608,8 @@ def objective_value_map(
         "incremental_order_rows": ExactRatio(incremental_order_rows),
         "route_priority": ExactRatio(route_priority),
     }
+    if scenario.product == "rebalancer":
+        values |= _rebalancer_score(scenario, state)
     expected = {item.code for item in view.objectives}
     if not expected.issubset(values):
         raise ExactPolicyContractError("policy view contains an unsupported exact objective")
