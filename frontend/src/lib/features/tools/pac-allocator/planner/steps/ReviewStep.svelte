@@ -13,6 +13,10 @@
     import IssueList from '../shared/IssueList.svelte';
     import ReviewCell from '../shared/ReviewCell.svelte';
     import TableColumns from '../shared/TableColumns.svelte';
+    import {getPlannerProfile, domId, storageKey, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         draft: PlannerDraft;
@@ -120,7 +124,7 @@
         },
     ]);
 
-    const sectionActions = $derived.by((): RowAction<SectionRow>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (row) => ongoto(row.step), testid: 'pac-planner-review-goto'}]);
+    const sectionActions = $derived.by((): RowAction<SectionRow>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (row) => ongoto(row.step), testid: testId('review-goto', profile)}]);
 
     function kindLabel(kind: FactKind): string {
         return $t(`${KEY}.kind.${kind}`, {default: KIND_FALLBACKS[kind]});
@@ -204,10 +208,10 @@
         },
     ]);
 
-    const factActions = $derived.by((): RowAction<SnapshotFact>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (fact) => ongoto(fact.step), testid: 'pac-planner-review-fact-goto'}]);
+    const factActions = $derived.by((): RowAction<SnapshotFact>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (fact) => ongoto(fact.step), testid: testId('review-fact-goto', profile)}]);
 </script>
 
-<div class="space-y-4" data-testid="pac-planner-review">
+<div class="space-y-4" data-testid={testId('review', profile)}>
     <div class="flex flex-wrap items-center gap-1">
         <p class="text-sm text-lf-secondary">{$t(`${KEY}.lead`, {default: 'Last check before the calculation.'})}</p>
         <HelpTip
@@ -215,18 +219,18 @@
             help={$t(`${KEY}.help`, {
                 default: 'The calculation uses only the data listed here. Just before it, LibreFolio reads again the prices, rates and balances you took from LibreFolio without changing them; the ones you typed or changed stay as they are.',
             })}
-            testid="pac-planner-review-help"
+            testid={testId('review-help', profile)}
         />
-        <TableColumns table={sectionsTable} testid="pac-planner-review-sections-columns" />
+        <TableColumns table={sectionsTable} testid={testId('review-sections-columns', profile)} />
     </div>
 
-    <div data-testid="pac-planner-review-sections">
+    <div data-testid={testId('review-sections', profile)}>
         <DataTable
             bind:this={sectionsTable}
             data={sectionRows}
             columns={sectionColumns}
             getRowId={(row) => row.step}
-            storageKey="pac-planner-review-sections"
+            storageKey={storageKey('review-sections', profile)}
             onRowClick={(row) => ongoto(row.step)}
             enableSorting={false}
             enablePagination={false}
@@ -244,9 +248,9 @@
     </div>
 
     {#if problems.length > 0}
-        <div class={NOTICE.warning} role="alert" data-testid="pac-planner-review-problems">
+        <div class={NOTICE.warning} role="alert" data-testid={testId('review-problems', profile)}>
             <p class="mb-2 font-medium">{$t(`${KEY}.problems`, {default: 'Complete these fields before calculating:'})}</p>
-            <IssueList items={problems} {ongoto} testid="pac-planner-review-problem" />
+            <IssueList items={problems} {ongoto} testid={testId('review-problem', profile)} />
         </div>
     {/if}
 
@@ -256,23 +260,23 @@
                 type="button"
                 class="flex items-center gap-1 rounded text-left {SECTION_TITLE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                 aria-expanded={factsOpen}
-                aria-controls="pac-planner-review-facts-body"
-                data-testid="pac-planner-review-facts-toggle"
+                aria-controls={domId('review-facts-body', profile)}
+                data-testid={testId('review-facts-toggle', profile)}
                 onclick={() => (factsOpen = !factsOpen)}
             >
                 {#if factsOpen}<ChevronDown size={16} aria-hidden="true" />{:else}<ChevronRight size={16} aria-hidden="true" />{/if}
                 {$t(`${KEY}.factsToggle`, {default: 'Calculation data ({count})', values: {count: facts.length}})}
             </button>
-            <div id="pac-planner-review-facts-body" hidden={!factsOpen}>
+            <div id={domId('review-facts-body', profile)} hidden={!factsOpen}>
                 {#if factsOpen}
-                    <div class="space-y-2" data-testid="pac-planner-review-facts">
-                        <TableColumns table={factsTable} testid="pac-planner-review-facts-columns" />
+                    <div class="space-y-2" data-testid={testId('review-facts', profile)}>
+                        <TableColumns table={factsTable} testid={testId('review-facts-columns', profile)} />
                         <DataTable
                             bind:this={factsTable}
                             data={facts}
                             columns={factColumns}
                             getRowId={(fact) => fact.id}
-                            storageKey="pac-planner-review-facts"
+                            storageKey={storageKey('review-facts', profile)}
                             enableSorting
                             enablePagination={false}
                             enableSelection={false}
@@ -297,9 +301,9 @@
     <div class="space-y-2">
         <div class="flex flex-wrap justify-center gap-3">
             {#if hasResult}
-                <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-show-result" onclick={onshowresult}>{$t(`${KEY}.showResult`, {default: 'See the last result'})}</button>
+                <button type="button" class={BUTTON_SECONDARY} data-testid={testId('show-result', profile)} onclick={onshowresult}>{$t(`${KEY}.showResult`, {default: 'See the last result'})}</button>
             {/if}
-            <button type="button" class={BUTTON_PRIMARY} disabled={busy || problems.length > 0} data-testid="pac-planner-calculate" onclick={oncalculate}>
+            <button type="button" class={BUTTON_PRIMARY} disabled={busy || problems.length > 0} data-testid={testId('calculate', profile)} onclick={oncalculate}>
                 {$t(`${KEY}.calculate`, {default: 'Calculate plan'})}
             </button>
         </div>

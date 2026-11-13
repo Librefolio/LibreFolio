@@ -20,6 +20,10 @@
     import {BADGE, BUTTON_PILL, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, LABEL_ROW, NOTICE} from '../ui';
     import HelpTip from '../shared/HelpTip.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         draft: PlannerDraft;
@@ -31,7 +35,7 @@
 
     let {draft, accountGeneration, onadded, onclose}: Props = $props();
 
-    const testid = 'pac-planner-owned-assets';
+    const testid = testId('owned-assets', profile);
     const load = new SourceLoad();
     let scope = $state<ScopeBroker[] | null>(null);
     let scopeFailed = $state(false);

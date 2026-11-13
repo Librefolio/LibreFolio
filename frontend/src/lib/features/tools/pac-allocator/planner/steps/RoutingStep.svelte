@@ -26,6 +26,10 @@
     import HelpTip from '../shared/HelpTip.svelte';
     import PlannerBrokerIcon from '../shared/PlannerBrokerIcon.svelte';
     import BrokerEditor from './BrokerEditor.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         draft: PlannerDraft;
@@ -92,29 +96,29 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="pac-planner-routing">
+<div class="space-y-4" data-testid={testId('routing', profile)}>
     {#if draft.orderedAssets.length === 0}
-        <p class={NOTICE.info} data-testid="pac-planner-routing-empty">{$t('tools.pacAllocator.planner.problems.noAssets', {default: 'Add at least one Asset.'})}</p>
+        <p class={NOTICE.info} data-testid={testId('routing-empty', profile)}>{$t('tools.pacAllocator.planner.problems.noAssets', {default: 'Add at least one Asset.'})}</p>
     {:else if draft.operativeBrokers.length === 0}
-        <p class={NOTICE.info} data-testid="pac-planner-routing-no-broker">{$t('tools.pacAllocator.planner.problems.noOperativeBroker', {default: 'Add at least one Broker on which orders can be proposed.'})}</p>
+        <p class={NOTICE.info} data-testid={testId('routing-no-broker', profile)}>{$t('tools.pacAllocator.planner.problems.noOperativeBroker', {default: 'Add at least one Broker on which orders can be proposed.'})}</p>
     {:else}
         {#each draft.operativeBrokers as broker (broker.key)}
             {@const routes = draft.routesOfBroker(broker.key)}
             {@const allowed = routes.filter((route) => route.enabled).length}
-            <section class="{CARD} space-y-3" data-testid="pac-planner-routing-broker" data-broker-key={broker.key}>
+            <section class="{CARD} space-y-3" data-testid={testId('routing-broker', profile)} data-broker-key={broker.key}>
                 <div class="flex min-w-0 items-start gap-2.5">
                     <PlannerBrokerIcon {broker} size={28} />
                     <div class="min-w-0 flex-1 space-y-0.5">
-                        <h4 class="min-w-0 font-semibold text-lf-primary" data-testid="pac-planner-routing-title">
+                        <h4 class="min-w-0 font-semibold text-lf-primary" data-testid={testId('routing-title', profile)}>
                             <span use:scrollOnOverflow class={overflowScrollTextClass} title={broker.name}>{broker.name || '—'}</span>
                         </h4>
                         {#if broker.modes.length === 0}
-                            <p class="text-xs text-lf-danger" data-testid="pac-planner-routing-broker-no-mode">
+                            <p class="text-xs text-lf-danger" data-testid={testId('routing-broker-no-mode', profile)}>
                                 {$t('tools.pacAllocator.planner.problems.brokerNoMode', {default: 'The Broker has no order mode.'})}
                             </p>
                         {:else}
                             {#each broker.modes as mode (mode.key)}
-                                <p class="flex flex-wrap items-center gap-x-1.5 {HINT}" data-testid="pac-planner-routing-broker-mode" data-currency={mode.currency}>
+                                <p class="flex flex-wrap items-center gap-x-1.5 {HINT}" data-testid={testId('routing-broker-mode', profile)} data-currency={mode.currency}>
                                     <CurrencyCode code={mode.currency} />
                                     <span>{modeLine(mode)}</span>
                                 </p>
@@ -123,14 +127,14 @@
                     </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-2" data-testid="pac-planner-routing-bulk">
-                    <button type="button" class={BUTTON_PILL} disabled={allowed === routes.length} data-testid="pac-planner-routing-all" onclick={() => setAll(routes, true)}>
+                <div class="flex flex-wrap items-center gap-2" data-testid={testId('routing-bulk', profile)}>
+                    <button type="button" class={BUTTON_PILL} disabled={allowed === routes.length} data-testid={testId('routing-all', profile)} onclick={() => setAll(routes, true)}>
                         <CheckCheck size={13} aria-hidden="true" />{$t('tools.pacAllocator.planner.routing.allowAll', {default: 'Allow all'})}
                     </button>
-                    <button type="button" class={BUTTON_PILL} disabled={allowed === 0} data-testid="pac-planner-routing-none" onclick={() => setAll(routes, false)}>
+                    <button type="button" class={BUTTON_PILL} disabled={allowed === 0} data-testid={testId('routing-none', profile)} onclick={() => setAll(routes, false)}>
                         <Square size={13} aria-hidden="true" />{$t('tools.pacAllocator.planner.routing.excludeAll', {default: 'Exclude all'})}
                     </button>
-                    <span class="ml-auto {HINT}" data-testid="pac-planner-routing-count" data-allowed={allowed} data-total={routes.length}>
+                    <span class="ml-auto {HINT}" data-testid={testId('routing-count', profile)} data-allowed={allowed} data-total={routes.length}>
                         {$t('tools.pacAllocator.planner.routing.allowedCount', {default: '{allowed} of {total} allowed', values: {allowed, total: routes.length}})}
                     </span>
                 </div>
@@ -140,21 +144,21 @@
                         {@const asset = draft.asset(route.assetKey)}
                         {@const mode = draft.modeFor(route.assetKey, route.brokerKey)}
                         {@const missing = missingCurrency(asset, mode)}
-                        <li class="{TOGGLE_CARD} {route.enabled ? TOGGLE_ON : TOGGLE_OFF}" data-testid="pac-planner-route" data-asset-key={route.assetKey} data-broker-key={route.brokerKey} data-enabled={route.enabled ? 'true' : 'false'} data-ready={mode ? 'true' : 'false'}>
-                            <button type="button" class="flex w-full cursor-pointer items-center gap-2 p-2 text-left" aria-pressed={route.enabled} data-testid="pac-planner-route-enabled" onclick={() => (route.enabled = !route.enabled)}>
+                        <li class="{TOGGLE_CARD} {route.enabled ? TOGGLE_ON : TOGGLE_OFF}" data-testid={testId('route', profile)} data-asset-key={route.assetKey} data-broker-key={route.brokerKey} data-enabled={route.enabled ? 'true' : 'false'} data-ready={mode ? 'true' : 'false'}>
+                            <button type="button" class="flex w-full cursor-pointer items-center gap-2 p-2 text-left" aria-pressed={route.enabled} data-testid={testId('route-enabled', profile)} onclick={() => (route.enabled = !route.enabled)}>
                                 <AssetIcon iconUrl={asset?.iconUrl} assetType={asset?.assetClass.toUpperCase()} altText="" size="sm" />
                                 <span class="min-w-0 flex-1">
-                                    <span class="block min-w-0 font-medium text-lf-primary" data-testid="pac-planner-route-title">
+                                    <span class="block min-w-0 font-medium text-lf-primary" data-testid={testId('route-title', profile)}>
                                         <span use:scrollOnOverflow class={overflowScrollTextClass} title={title(asset)}>{title(asset) || '—'}</span>
                                     </span>
                                     {#if typeText(asset) !== ''}<span class="block {HINT}">{typeText(asset)}</span>{/if}
                                 </span>
-                                {#if mode}<span class="shrink-0 text-xs text-lf-secondary" data-testid="pac-planner-route-currency"><CurrencyCode code={mode.currency} /></span>{/if}
+                                {#if mode}<span class="shrink-0 text-xs text-lf-secondary" data-testid={testId('route-currency', profile)}><CurrencyCode code={mode.currency} /></span>{/if}
                             </button>
 
                             {#if route.enabled && !mode}
                                 {#if missing !== ''}
-                                    <div class="mx-2 mb-2 space-y-2 rounded-md border border-lf-warning-line bg-lf-warning-soft p-2.5 text-sm text-lf-warning-on-soft sm:ml-10" data-testid="pac-planner-route-mode-missing" data-currency={missing}>
+                                    <div class="mx-2 mb-2 space-y-2 rounded-md border border-lf-warning-line bg-lf-warning-soft p-2.5 text-sm text-lf-warning-on-soft sm:ml-10" data-testid={testId('route-mode-missing', profile)} data-currency={missing}>
                                         <div class="flex flex-wrap items-center gap-x-1">
                                             <span>{$t('tools.pacAllocator.planner.route.modeMissing', {default: '{broker} has no order mode in {currency} yet', values: {broker: broker.name || '—', currency: missing}})}</span>
                                             <HelpTip
@@ -164,14 +168,14 @@
                                                         'The order mode says how {broker} takes an order in {currency}: by units or by amount, with which increment and which fees. The plan needs it to size the purchase of this Asset, which is priced in {currency}. It is not the conversion: if you pay with another currency, the plan adds the conversion as you set it on the Broker. Add the mode, or exclude the Asset on this Broker.',
                                                     values: {broker: broker.name || '—', currency: missing},
                                                 })}
-                                                testid="pac-planner-route-mode-missing-help"
+                                                testid={testId('route-mode-missing-help', profile)}
                                             />
                                         </div>
                                         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-                                            <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-route-add-mode" onclick={() => (editing = {brokerKey: broker.key, currency: missing, asset: title(asset)})}>
+                                            <button type="button" class={BUTTON_SECONDARY} data-testid={testId('route-add-mode', profile)} onclick={() => (editing = {brokerKey: broker.key, currency: missing, asset: title(asset)})}>
                                                 <Plus class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.route.addMode', {default: 'Add {currency} mode', values: {currency: missing}})}
                                             </button>
-                                            <button type="button" class={BUTTON_LINK} data-testid="pac-planner-route-exclude" onclick={() => (route.enabled = false)}>
+                                            <button type="button" class={BUTTON_LINK} data-testid={testId('route-exclude', profile)} onclick={() => (route.enabled = false)}>
                                                 {$t('tools.pacAllocator.planner.route.excludeHere', {default: 'Exclude on {broker}', values: {broker: broker.name || '—'}})}
                                             </button>
                                         </div>
@@ -179,7 +183,7 @@
                                 {/if}
                             {:else if route.enabled}
                                 {@const unit = limitUnit(mode)}
-                                <div class="grid gap-3 px-2 pb-2 sm:grid-cols-2 sm:pl-10 lg:grid-cols-3" data-testid="pac-planner-route-fields">
+                                <div class="grid gap-3 px-2 pb-2 sm:grid-cols-2 sm:pl-10 lg:grid-cols-3" data-testid={testId('route-fields', profile)}>
                                     <div>
                                         <div class={LABEL_ROW}>
                                             <label for="{ids}-{route.wireId}-min-active">{$t('tools.pacAllocator.planner.route.minimumIfActive', {default: 'Minimum purchase'})}</label>
@@ -198,7 +202,7 @@
                                                 step={unitStep(mode)}
                                                 placeholder={$t('tools.pacAllocator.planner.route.minimumNone', {default: 'no minimum'})}
                                                 className="{INPUT} {unit === '' ? '' : 'pr-20'}"
-                                                testid="pac-planner-route-minimum-if-active"
+                                                testid={testId('route-minimum-if-active', profile)}
                                             />
                                             {#if unit !== ''}<span class={INPUT_ADORNMENT} aria-hidden="true">{unit}</span>{/if}
                                         </div>
@@ -221,7 +225,7 @@
                                                 maxIntegerDigits={15}
                                                 placeholder={$t('tools.pacAllocator.planner.route.capNone', {default: 'no limit'})}
                                                 className="{INPUT} {unit === '' ? '' : 'pr-20'}"
-                                                testid="pac-planner-route-cap"
+                                                testid={testId('route-cap', profile)}
                                             />
                                             {#if unit !== ''}<span class={INPUT_ADORNMENT} aria-hidden="true">{unit}</span>{/if}
                                         </div>
@@ -237,12 +241,12 @@
                                             />
                                         </div>
                                         <div class="relative">
-                                            <ExactDecimalInput id="{ids}-{route.wireId}-margin" bind:value={route.marginPercent} step="0.01" max="100" className="{INPUT} pr-8" testid="pac-planner-route-margin" />
+                                            <ExactDecimalInput id="{ids}-{route.wireId}-margin" bind:value={route.marginPercent} step="0.01" max="100" className="{INPUT} pr-8" testid={testId('route-margin', profile)} />
                                             <span class={INPUT_ADORNMENT} aria-hidden="true">%</span>
                                         </div>
                                     </div>
                                     {#if priorityShown(route)}
-                                        <div data-testid="pac-planner-route-priority-field">
+                                        <div data-testid={testId('route-priority-field', profile)}>
                                             <div class={LABEL_ROW}>
                                                 <label for="{ids}-{route.wireId}-priority">{$t('tools.pacAllocator.planner.route.priority', {default: 'Priority'})}</label>
                                                 <HelpTip
@@ -253,7 +257,7 @@
                                                     })}
                                                 />
                                             </div>
-                                            <ExactDecimalInput id="{ids}-{route.wireId}-priority" bind:value={route.priority} step="1" maxFractionDigits={0} className={INPUT} testid="pac-planner-route-priority" />
+                                            <ExactDecimalInput id="{ids}-{route.wireId}-priority" bind:value={route.priority} step="1" maxFractionDigits={0} className={INPUT} testid={testId('route-priority', profile)} />
                                         </div>
                                     {/if}
                                 </div>
@@ -266,7 +270,7 @@
     {/if}
 
     {#each draft.fundingOnlyBrokers as broker (broker.key)}
-        <p class="flex items-center gap-2 text-sm text-lf-muted" data-testid="pac-planner-routing-funding-only">
+        <p class="flex items-center gap-2 text-sm text-lf-muted" data-testid={testId('routing-funding-only', profile)}>
             <PlannerBrokerIcon {broker} size={20} />
             {$t('tools.pacAllocator.planner.routing.fundingOnly', {default: '{name}: nothing is bought from this account', values: {name: broker.name || '—'}})}
         </p>
