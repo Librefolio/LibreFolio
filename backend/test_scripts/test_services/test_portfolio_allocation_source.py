@@ -20,8 +20,10 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.db.models import AssetType, TransactionType, UserRole
+from backend.app.schemas.broker_profile import BrokerOperatingProfile, operating_profile_text
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
-from backend.app.schemas.portfolio.planner_source import PlannerSourceSection, PortfolioPlannerCurrentDistribution, PortfolioPlannerCurrentWeight, PortfolioPlannerSourceRequest, PortfolioPlannerSourceResponse
+from backend.app.schemas.pac_allocator.request import PlannerBrokerInput
+from backend.app.schemas.portfolio.planner_source import PlannerSourceSection, PortfolioPlannerCurrentDistribution, PortfolioPlannerCurrentWeight, PortfolioPlannerSourceBroker, PortfolioPlannerSourceRequest, PortfolioPlannerSourceResponse
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.financial_math import average_cost
 from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, _fold_average_costs
@@ -127,6 +129,7 @@ def _broker(
     *,
     name: str | None = None,
     active: bool = True,
+    operating_profile: str | None = None,
 ):
     return SimpleNamespace(
         id=broker_id,
@@ -137,6 +140,7 @@ def _broker(
         is_active=active,
         allow_cash_overdraft=True,
         allow_asset_shorting=False,
+        operating_profile=operating_profile,
     )
 
 
@@ -988,7 +992,8 @@ async def test_w2_inactive_broker_keeps_holdings_cash_and_typed_warning(
             "active": False,
             "allow_cash_overdraft": True,
             "allow_asset_shorting": False,
-            "execution_profile_status": "not_available",
+            "operating_profile_status": "not_available",
+            "operating_profile": None,
             "provenance_id": "source:broker-domain",
         }
     }
@@ -999,11 +1004,11 @@ async def test_w2_inactive_broker_keeps_holdings_cash_and_typed_warning(
     assert {
         "allow_cash_overdraft": copied_broker["allow_cash_overdraft"],
         "allow_asset_shorting": copied_broker["allow_asset_shorting"],
-        "execution_profile_status": copied_broker["execution_profile_status"],
+        "operating_profile_status": copied_broker["operating_profile_status"],
     } == {
         "allow_cash_overdraft": True,
         "allow_asset_shorting": False,
-        "execution_profile_status": "not_available",
+        "operating_profile_status": "not_available",
     }
     assert {row["holding_id"]: row for row in dumped["holdings"]} == {
         "holding:asset:11:broker:7": {
@@ -1062,7 +1067,7 @@ async def test_w2_inactive_broker_keeps_holdings_cash_and_typed_warning(
                 "section": "brokers",
                 "entity_kind": "broker",
                 "entity_id": scenario_broker_id,
-                "field": "execution_profile_status",
+                "field": "operating_profile_status",
             },
             "message_key": "allocation.broker_execution_profile_unsupported",
             "params": [],
@@ -2511,7 +2516,7 @@ async def test_complete_saved_domain_copy_is_select_only_private_and_stable(
             "classifications",
             "fx_quotes",
         ],
-        "source_revision": "1.0.0",
+        "source_revision": "1.1.0",
     }
     assert [row["provenance_id"] for row in dumped["provenance"]] == [
         "source:portfolio-ledger",
@@ -3090,3 +3095,116 @@ async def test_current_distribution_publishes_weights_never_amounts(
     published = json.dumps({"current_distribution": section, "issues": dumped["issues"]})
     for amount in (*crafted.values(), "4786.666556", "3.141593", "785.643210", "2468.135790"):
         assert amount not in published
+
+
+# ============================================================================
+# THE BROKER'S OPERATING PROFILE IN THE SOURCE (P3 of project 67, revision 1.1.0)
+#
+# A Broker with a readable profile is copied with it (`operating_profile_status = "available"`) and raises no
+# `allocation.broker_execution_profile_unsupported`; one without, or with a text that cannot be read, is copied as before:
+# `not_available`, `operating_profile: null`, and the issue (same code, kind and severity: D10), whose field now names
+# `operating_profile_status`. Only an OWNER receives brokers at all (unchanged).
+# ============================================================================
+
+_PROFILE_DOCUMENT = {
+    "profile_version": 1,
+    "order_modes": [
+        {
+            "currency": "EUR",
+            "capability": {"kind": "whole_quantity", "capability_id": "mode:EUR", "quantity_unit": "asset_unit", "quantity_step": "1"},
+            "fees": [
+                {"fee_schedule_id": "fee:EUR:buy", "capability_id": "mode:EUR", "side": "buy", "rate": "0.0019", "variable_floor": {"amount": "1.5", "currency": "EUR"}},
+                {"fee_schedule_id": "fee:EUR:sell", "capability_id": "mode:EUR", "side": "sell", "fixed_fee": {"amount": "5", "currency": "EUR"}},
+            ],
+        },
+        {
+            "currency": "USD",
+            "capability": {"kind": "monetary_amount", "capability_id": "mode:USD", "order_amount_step": {"amount": "0.01", "currency": "USD"}},
+            "fees": [],
+        },
+    ],
+    "conversion_mode": "automatic",
+    "tax_regime": "administered",
+}
+
+
+def _profile_text() -> str:
+    return operating_profile_text(BrokerOperatingProfile.model_validate(_PROFILE_DOCUMENT))
+
+
+def _built_brokers(*brokers):
+    issues: list = []
+    rows = source_entities.build_planner_brokers([(_access(broker.id), broker) for broker in brokers], observed_currencies={}, issues=issues)
+    return {row.broker_id: row for row in rows}, issues
+
+
+def _profile_issues(issues) -> list:
+    return [issue for issue in issues if issue.code == "allocation.broker_execution_profile_unsupported"]
+
+
+def test_a_broker_with_a_profile_is_copied_with_it_and_raises_no_profile_issue():
+    rows, issues = _built_brokers(_broker(7, operating_profile=_profile_text()))
+
+    row = rows["broker:7"]
+    assert row.operating_profile_status == "available"
+    assert row.operating_profile == BrokerOperatingProfile.model_validate(_PROFILE_DOCUMENT)
+    assert _profile_issues(issues) == []
+
+
+def test_only_the_broker_without_a_profile_raises_the_profile_issue():
+    rows, issues = _built_brokers(_broker(7, operating_profile=_profile_text()), _broker(8))
+
+    assert (rows["broker:7"].operating_profile_status, rows["broker:8"].operating_profile_status) == ("available", "not_available")
+    assert rows["broker:8"].operating_profile is None
+    profile_issues = _profile_issues(issues)
+    assert [(issue.path.entity_id, issue.path.field, issue.kind, issue.severity) for issue in profile_issues] == [("broker:8", "operating_profile_status", "unsupported", "error")]
+
+
+@pytest.mark.parametrize("stored", ["{not json", '{"profile_version": 9}', "[]", ""])
+def test_an_unreadable_stored_profile_counts_as_not_available(stored):
+    rows, issues = _built_brokers(_broker(7, operating_profile=stored))
+
+    assert (rows["broker:7"].operating_profile_status, rows["broker:7"].operating_profile) == ("not_available", None)
+    assert len(_profile_issues(issues)) == 1
+
+
+def test_the_profile_row_validates_as_planner_broker_input_parts():
+    """The copy translates nothing: the row's modes and fees, dumped, are a request broker's `capabilities` and `fee_schedules`."""
+    rows, _issues = _built_brokers(_broker(7, operating_profile=_profile_text()))
+    profile = rows["broker:7"].model_dump(mode="json")["operating_profile"]
+
+    PlannerBrokerInput.model_validate(
+        {
+            "broker_id": "broker:7",
+            "identity": {"kind": "manual_broker", "name": "Probe"},
+            "provenance_id": "manual:broker:7",
+            "capabilities": [row["capability"] for row in profile["order_modes"]],
+            "fee_schedules": [fee for row in profile["order_modes"] for fee in row["fees"]],
+            "conversion_mode": profile["conversion_mode"],
+        }
+    )
+
+
+def test_available_status_needs_a_profile_and_the_reverse():
+    base = {
+        "broker_id": "broker:7",
+        "source_broker_id": 7,
+        "name": "Probe",
+        "icon_url": None,
+        "portal_url": None,
+        "default_import_plugin": None,
+        "access_role": "OWNER",
+        "ownership_share": "1",
+        "observed_currencies": [],
+        "active": True,
+        "allow_cash_overdraft": False,
+        "allow_asset_shorting": False,
+        "provenance_id": "source:broker-domain",
+    }
+    profile = BrokerOperatingProfile.model_validate(_PROFILE_DOCUMENT)
+    PortfolioPlannerSourceBroker.model_validate({**base, "operating_profile_status": "available", "operating_profile": profile})
+    PortfolioPlannerSourceBroker.model_validate({**base, "operating_profile_status": "not_available", "operating_profile": None})
+    with pytest.raises(ValidationError):
+        PortfolioPlannerSourceBroker.model_validate({**base, "operating_profile_status": "available", "operating_profile": None})
+    with pytest.raises(ValidationError):
+        PortfolioPlannerSourceBroker.model_validate({**base, "operating_profile_status": "not_available", "operating_profile": profile})

@@ -6,6 +6,7 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess, PriceHistory
+from backend.app.schemas.broker_profile import stored_operating_profile
 from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceAsset, PortfolioPlannerSourceBroker, PortfolioPlannerSourceCashBalance, PortfolioPlannerSourceHolding, PortfolioPlannerSourceIssue, PortfolioPlannerSourcePrice
 from backend.app.services.pac_allocator.source.keys import BROKER_PROVENANCE_ID, MARKET_PROVENANCE_ID, PORTFOLIO_PROVENANCE_ID, asset_key, broker_key, cash_key, field_issue, holding_key, price_key, validated_currency
 
@@ -102,6 +103,8 @@ def build_planner_brokers(
         if broker.id is None:
             continue
         broker_ref = broker_key(broker.id)
+        # P3 of project 67: the account's operating profile, read tolerantly (an unreadable text is «no profile»).
+        profile = stored_operating_profile(broker.operating_profile)
         rows.append(
             PortfolioPlannerSourceBroker(
                 broker_id=broker_ref,
@@ -116,7 +119,8 @@ def build_planner_brokers(
                 active=broker.is_active,
                 allow_cash_overdraft=broker.allow_cash_overdraft,
                 allow_asset_shorting=broker.allow_asset_shorting,
-                execution_profile_status="not_available",
+                operating_profile_status="available" if profile is not None else "not_available",
+                operating_profile=profile,
                 provenance_id=BROKER_PROVENANCE_ID,
             )
         )
@@ -132,17 +136,19 @@ def build_planner_brokers(
                     field="active",
                 )
             )
-        issues.append(
-            field_issue(
-                code="allocation.broker_execution_profile_unsupported",
-                kind="unsupported",
-                severity="error",
-                section="brokers",
-                entity_kind="broker",
-                entity_id=broker_ref,
-                field="execution_profile_status",
+        if profile is None:
+            # Only a Broker without a usable profile: same code, kind and severity as before (D10).
+            issues.append(
+                field_issue(
+                    code="allocation.broker_execution_profile_unsupported",
+                    kind="unsupported",
+                    severity="error",
+                    section="brokers",
+                    entity_kind="broker",
+                    entity_id=broker_ref,
+                    field="operating_profile_status",
+                )
             )
-        )
     return rows
 
 
