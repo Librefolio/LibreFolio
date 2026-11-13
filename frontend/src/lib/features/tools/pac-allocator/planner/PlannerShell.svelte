@@ -438,7 +438,7 @@
 
 <ConfirmModal
     open={leaveTarget !== null}
-    title={$t(`${PLANNER_KEY}.leave.title`, {default: 'Leave the PAC allocator?'})}
+    title={profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.leave.title', {default: 'Leave the portfolio rebalancer?'}) : $t(`${PLANNER_KEY}.leave.title`, {default: 'Leave the PAC allocator?'})}
     message={$t(`${PLANNER_KEY}.leave.message`, {
         default: 'The current configuration is not saved. Leaving, you will lose {assets, plural, one {# Asset} other {# Assets}} and {sources, plural, one {# liquidity source} other {# liquidity sources}}.',
         values: leaveCounts,

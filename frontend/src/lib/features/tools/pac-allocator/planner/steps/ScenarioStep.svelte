@@ -21,9 +21,13 @@
 
 <div class="space-y-4" data-testid={testId('scenario', profile)}>
     <p class="max-w-3xl text-sm text-lf-secondary">
-        {$t('tools.pacAllocator.planner.scenario.intro', {
-            default: 'You plan a new investment (pure PAC): the calculation starts from an empty portfolio, so what you already hold is not counted, and splits the cash you choose among the Assets, as close as possible to the target weights. It is a simulation: no order is sent.',
-        })}
+        {profile.text === 'rebalancer'
+            ? $t('tools.portfolioRebalancer.planner.scenario.intro', {
+                  default: 'You rebalance a portfolio you already hold: the calculation starts from the positions and the cash you bring into the plan, counts them, and moves the whole as close as possible to the target weights. It is a simulation: no order is sent.',
+              })
+            : $t('tools.pacAllocator.planner.scenario.intro', {
+                  default: 'You plan a new investment (pure PAC): the calculation starts from an empty portfolio, so what you already hold is not counted, and splits the cash you choose among the Assets, as close as possible to the target weights. It is a simulation: no order is sent.',
+              })}
     </p>
     <div class="grid max-w-3xl gap-4 sm:grid-cols-2">
         <div class="space-y-1">
