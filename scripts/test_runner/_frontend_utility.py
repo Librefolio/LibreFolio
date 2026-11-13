@@ -263,6 +263,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/tools/computeStream.test.ts",
             "src/lib/features/tools/registry.test.ts",
             "src/lib/features/tools/pac-allocator/planner/decimal.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/profile.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/plannerSurface.gate.test.ts",
             "src/lib/features/tools/pac-allocator/planner/format.test.ts",
             "src/lib/features/tools/pac-allocator/planner/modeText.test.ts",
             "src/lib/features/tools/pac-allocator/planner/categoryLabels.test.ts",
