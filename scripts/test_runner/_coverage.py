@@ -2,12 +2,16 @@
 Coverage finalization, reporting, and management commands.
 """
 
+import contextlib
+import io
 import json
 import os
 import re
 import shutil
 import sqlite3
 import subprocess
+import sys
+import tempfile
 import time
 import webbrowser
 from pathlib import Path
@@ -47,8 +51,9 @@ class CoverageLedger:
     def __init__(self) -> None:
         self.reset()
 
-    def reset(self) -> None:
-        """Forget everything: a run starts from an empty ledger (``_apply_coverage_mode``)."""
+    def reset(self, categories: list[str] | None = None) -> None:
+        """Forget everything: a run starts from an empty ledger (``_apply_coverage_mode``), naming the categories it runs."""
+        self.categories: list[str] = list(categories or [])
         self.units: list[str] = []
         self.python: set[str] = set()
         self.e2e_js = 0
@@ -426,6 +431,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa
             print(f"   {Colors.GREEN}💾 Saved backend coverage → .coverage_data/backend{Colors.NC}")
 
     subprocess.run([*pipenv_prefix(), "coverage", "report", "--skip-covered", "--ignore-errors"], cwd=os.getcwd(), capture_output=False, text=True)
+    print_info("   ↑ coverage.py's TOTAL counts lines + branches together: not a number to quote. The pure numbers, lines and branches apart, close the run.")
 
     print()
     print(f"{Colors.GREEN}📊 Detailed reports:{Colors.NC}")
@@ -532,13 +538,13 @@ def check_coverage_pieces(ledger: CoverageLedger, mode: str, finalized: PythonFi
     return rows
 
 
-def report_coverage_pieces(ledger: CoverageLedger, mode: str, finalized: PythonFinalized | None = None) -> bool:
-    """Print the completeness table «piece · where · expected · found» and say whether the run is whole. A red row makes the run
-    red whatever its tests said: numbers measured with a piece missing are not the run's measure. Nothing launched under coverage,
-    nothing to print: True."""
+def report_coverage_pieces(ledger: CoverageLedger, mode: str, finalized: PythonFinalized | None = None) -> list[PieceRow]:
+    """Print the completeness table «piece · where · expected · found» and return its rows: the run is whole when every row is
+    ok. A red row makes the run red whatever its tests said: numbers measured with a piece missing are not the run's measure.
+    Nothing launched under coverage, nothing to print."""
     rows = check_coverage_pieces(ledger, mode, finalized)
     if not rows:
-        return True
+        return rows
     # The mark is an emoji, two columns wide on a terminal and one character long: it stays out of the width arithmetic.
     header = ("piece", "where", "expected", "found")
     cells = [(row.piece, row.where, row.expected, row.found) for row in rows]
@@ -549,9 +555,178 @@ def report_coverage_pieces(ledger: CoverageLedger, mode: str, finalized: PythonF
     missing = [row for row in rows if not row.ok]
     if missing:
         print_error(f"Coverage incomplete: {len(missing)} of {len(rows)} piece(s) missing or empty — the run is red; its numbers are not the whole measure")
-        return False
+        return rows
     print_success(f"Coverage complete: {len(rows)} piece(s), all there")
-    return True
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# Pure numbers (step 3.4): lines and branches apart, never coverage.py's mixed TOTAL
+# ---------------------------------------------------------------------------
+
+#: ``financial_math`` reported on its own (one home of every financial calculation): the folder and its subfolders. coverage.py's
+#: ``*`` crosses ``/`` in an include pattern, so ``fifo/``, ``lots/`` and ``portfolio/`` are in.
+FINANCIAL_MATH_INCLUDE = "*/backend/app/services/financial_math/*"
+SUMMARY_SCHEMA = "lf-coverage-summary/1"
+#: The frontend levels of the summary and the report directory each one is read from.
+_JS_LEVELS = {"unit": "unit-combined", "e2e": "e2e", "combined": "combined"}
+
+
+def _measure(covered: int, total: int) -> dict:
+    """Covered / total with the percentage computed here, to two decimals; ``None`` when there is nothing to count (no branch is
+    neither 0 % nor 100 %)."""
+    return {"covered": covered, "total": total, "pct": round(100 * covered / total, 2) if total else None}
+
+
+def backend_totals(database: Path, include: str | None = None) -> dict | None:
+    """Lines and branches of one coverage database, apart: ``totals`` of a JSON report (``covered_lines`` / ``num_statements``,
+    ``covered_branches`` / ``num_branches``), never its ``percent_covered``, which mixes the two as coverage.py's TOTAL does.
+    ``include`` restricts it to a folder (``FINANCIAL_MATH_INCLUDE``). The report reads the repository's ``.coveragerc`` (its
+    exclusions), as ``coverage json`` run from the project root would. ``None`` for a missing database, one without a measured
+    file, or an ``include`` that matches nothing: never a zero that would read as «measured, nothing covered»."""
+    if not database.is_file() or not _measured_files(database):
+        return None
+    import coverage  # noqa: PLC0415 — the runner's own interpreter has it; only coverage runs need it
+
+    rc_file = PROJECT_ROOT / ".coveragerc"
+    reader = coverage.Coverage(data_file=str(database), config_file=str(rc_file) if rc_file.is_file() else False)
+    with tempfile.TemporaryDirectory(prefix="lf_cov_json_") as scratch:
+        out = Path(scratch) / "report.json"
+        try:
+            reader.load()
+            with contextlib.redirect_stdout(io.StringIO()):
+                reader.json_report(outfile=str(out), include=include, ignore_errors=True)
+        except coverage.exceptions.NoDataError:
+            return None
+        except coverage.exceptions.CoverageException as exc:
+            print_warning(f"   coverage json on {database.name} failed: {exc}")
+            return None
+        report = json.loads(out.read_text(encoding="utf-8"))
+    totals = report["totals"]
+    return {"files": len(report["files"]), "lines": _measure(totals["covered_lines"], totals["num_statements"]), "branches": _measure(totals.get("covered_branches", 0), totals.get("num_branches", 0))}
+
+
+def _union_totals(databases: list[Path]) -> tuple[dict | None, dict | None]:
+    """The totals of the union of ``databases`` (pytest and E2E server): the whole, and ``financial_math`` alone. Built in a
+    scratch database, so neither source is touched."""
+    present = [db for db in databases if db.is_file() and _measured_files(db)]
+    if not present:
+        return None, None
+    from coverage import CoverageData  # noqa: PLC0415 — see backend_totals
+    from coverage.exceptions import DataError  # noqa: PLC0415
+
+    with tempfile.TemporaryDirectory(prefix="lf_cov_union_") as scratch:
+        union_path = Path(scratch) / "union"
+        union = CoverageData(basename=str(union_path))
+        try:
+            for database in present:
+                part = CoverageData(basename=str(database))
+                part.read()
+                union.update(part)
+            union.write()
+        except DataError as exc:
+            print_warning(f"   the backend databases cannot be combined: {exc}")
+            return None, None
+        return backend_totals(union_path), backend_totals(union_path, include=FINANCIAL_MATH_INCLUDE)
+
+
+def frontend_totals() -> dict:
+    """The three frontend levels (``unit``, ``e2e``, ``combined``) from the ``summary.json`` ``js-coverage-report.js`` writes
+    beside each report: lines and branches covered / total (the percentage computed here), the files read and skipped. A level
+    without its summary is ``None``."""
+    levels: dict = {}
+    for level, directory in _JS_LEVELS.items():
+        path = PROJECT_ROOT / "frontend" / JS_COVERAGE_DIR / directory / "summary.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            levels[level] = {"files": data["files"], "lines": _measure(data["lines"]["covered"], data["lines"]["total"]), "branches": _measure(data["branches"]["covered"], data["branches"]["total"])}
+        except (OSError, ValueError, KeyError, TypeError):
+            levels[level] = None
+    return levels
+
+
+def _git_state() -> tuple[str | None, bool | None]:
+    """The commit the run measured and whether the tree had changes (``git status --porcelain``); ``None`` when git cannot say."""
+    try:
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=30)
+        status = subprocess.run(["git", "status", "--porcelain"], cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None, None
+    sha = head.stdout.strip() if head.returncode == 0 else None
+    dirty = bool(status.stdout.strip()) if status.returncode == 0 else None
+    return sha or None, dirty
+
+
+def _cell(measure: dict | None) -> str:
+    if not measure:
+        return "—"
+    pct = "  n/a  " if measure["pct"] is None else f"{measure['pct']:6.2f} %"
+    return f"{pct}  ({measure['covered']}/{measure['total']})"
+
+
+def _files_cell(value: dict | None) -> str:
+    """A backend base counts its measured files; a frontend level the JSON files its report read and skipped."""
+    if not value:
+        return "—"
+    files = value["files"]
+    return str(files) if isinstance(files, int) else f"{files['read']} read, {files['skipped']} skipped"
+
+
+def summarize(ledger: CoverageLedger, rows: list[PieceRow], *, success: bool, quotable_run: bool = False) -> dict:
+    """Write ``.coverage_data/coverage-summary.json`` (schema ``lf-coverage-summary/1``) and print its numbers.
+
+    The backend bases are what this run measured (the ledger): ``pytest`` (``.coverage_data/backend``), ``server`` (the E2E
+    server, ``.coverage_data/frontend``), their union ``combined``, and ``financial_math``, the union restricted to its folder.
+    The frontend levels come from the JS reports. Every number is lines and branches apart (``backend_totals``). ``quotable`` is
+    true only for a ``--quotable all`` run (step 3.5) whose tests passed, whose pieces are all there and whose tree was clean;
+    ``reasons`` says what kept it from it. The numbers are a note, not a gate (D6): nothing here turns a run red.
+    """
+    sha, dirty = _git_state()
+    missing = [row for row in rows if not row.ok]
+    reasons = []
+    if not quotable_run:
+        reasons.append("not a --quotable all run")
+    if not success:
+        reasons.append("tests red")
+    if missing:
+        reasons.append(f"{len(missing)} coverage piece(s) missing")
+    if dirty is not False:
+        reasons.append("working tree dirty" if dirty else "git state unknown")
+
+    data_dir = PROJECT_ROOT / ".coverage_data"
+    measured = [data_dir / name for name in ("backend", "frontend") if name in ledger.python]
+    combined, financial_math = _union_totals(measured)
+    summary = {
+        "schema": SUMMARY_SCHEMA,
+        "quotable": not reasons,
+        "reasons": reasons,
+        "sha": sha,
+        "dirty": dirty,
+        "workers": getattr(_common, "_E2E_WORKERS", 1),
+        "argv": sys.argv[1:],
+        "categories": ledger.categories,
+        "backend": {
+            "pytest": backend_totals(data_dir / "backend") if "backend" in ledger.python else None,
+            "server": backend_totals(data_dir / "frontend") if "frontend" in ledger.python else None,
+            "combined": combined,
+            "financial_math": financial_math,
+        },
+        "frontend": frontend_totals(),
+        "pieces": [row._asdict() for row in rows],
+    }
+    data_dir.mkdir(exist_ok=True)
+    (data_dir / "coverage-summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+
+    table = [(f"backend {name}", value) for name, value in summary["backend"].items()] + [(f"frontend {name}", value) for name, value in summary["frontend"].items()]
+    cells = [(label, _cell(value and value["lines"]), _cell(value and value["branches"]), _files_cell(value)) for label, value in table]
+    header = ("base", "lines", "branches", "files")
+    widths = [max(len(line[i]) for line in (header, *cells)) for i in range(len(header))]
+    print_section("Coverage numbers — lines and branches apart (a note, not a gate)")
+    for line in (header, *cells):
+        print("   " + "  ".join(cell.ljust(width) for cell, width in zip(line, widths, strict=True)).rstrip())
+    verdict = "quotable" if summary["quotable"] else f"not quotable: {'; '.join(reasons)}"
+    print_info(f"   Summary → .coverage_data/coverage-summary.json ({verdict})")
+    return summary
 
 
 def _handle_coverage_command(args) -> int:

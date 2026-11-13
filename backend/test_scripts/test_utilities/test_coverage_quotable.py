@@ -20,26 +20,37 @@ coverage exists, and writes pure numbers. It lands in small steps, each pinned h
    ``check_coverage_pieces(ledger, mode)`` compares it with what is on disk. A missing or empty piece is a red row of the table
    «piece · where · expected · found», and the run exits 1 whatever its tests said: a run that lost data cannot report numbers.
 
+4. ``TestPureNumbers`` (step 3.4) — the numbers a run reports are lines and branches apart, each covered / total with the
+   percentage the runner computes, never coverage.py's TOTAL (which mixes the two) nor its ``percent_covered``: for the backend
+   from ``totals`` of a JSON report of each database (pytest, E2E server, their union, and ``financial_math`` alone), for the
+   frontend from the ``summary.json`` that ``js-coverage-report.js`` writes beside each report. ``summarize()`` writes them all to
+   ``.coverage_data/coverage-summary.json`` (schema ``lf-coverage-summary/1``) and prints them.
+
 Pure: no database, no server, no network, no subprocess. The runner's heavy parts are stood in for with ``monkeypatch``; the
-source of ``_cli.py`` is read as text (``ast``), never executed beyond its import.
+source of ``_cli.py`` is read as text (``ast``), never executed beyond its import. The coverage data of step 3.4 is real: a few
+lines of Python under ``tmp_path``, measured in process by coverage.py itself.
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import importlib.util
 import inspect
+import json
 import os
 import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
+import coverage
 import pytest
 
 from scripts.test_runner import _cli, _common, _consolidate, _coverage, _frontend_common, _frontend_fx, _inventory, _server
 
 CLI_SOURCE = Path(_cli.__file__).read_text(encoding="utf-8")
 VITEST_CONFIG = Path(_common.PROJECT_ROOT, "frontend", "vitest.config.ts")
+JS_REPORT_SCRIPT = Path(_common.PROJECT_ROOT, "frontend", "scripts", "js-coverage-report.js")
 
 #: The run flags both parsers carry: what ``_add_run_flags`` registers, by their destination.
 RUN_FLAG_DESTS = (
@@ -484,3 +495,169 @@ class TestCompleteness:
         red = [row for row in _coverage.check_coverage_pieces(run_root.ledger, "frontend", finalized) if not row.ok]
         assert len(red) == 1 and "this run" in red[0].piece, red
         assert all(row.ok for row in _coverage.check_coverage_pieces(run_root.ledger, "frontend", _coverage.PythonFinalized(server_parts=2, frontend_saved=True)))
+
+
+#: One ``if`` never taken the other way: every line runs, one branch of two. Lines 100 %, branches 50 %, coverage.py's TOTAL
+#: (lines + branches together) 6 / 7 = 85.71 %, a number that is neither.
+_ONE_IF = "def decide(flag):\n    result = 0\n    if flag:\n        result = 1\n    return result\n"
+
+
+def _measured_database(root: Path, database: Path, sources: dict[str, str]) -> Path:
+    """Real coverage data: write each ``{relative path: source}`` under ``root``, import it and call its function with ``True``
+    while coverage.py measures lines and branches into ``database``. In process, nested inside any coverage that is already
+    running (coverage.py pauses the outer collector and resumes it on stop)."""
+    for relative, source in sources.items():
+        (root / relative).parent.mkdir(parents=True, exist_ok=True)
+        (root / relative).write_text(source, encoding="utf-8")
+    database.parent.mkdir(parents=True, exist_ok=True)
+    measuring = coverage.Coverage(data_file=str(database), branch=True, config_file=False, include=[f"{root}/*"])
+    measuring.start()
+    try:
+        for relative in sources:
+            spec = importlib.util.spec_from_file_location(Path(relative).stem, root / relative)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            module.decide(True)
+    finally:
+        measuring.stop()
+        measuring.save()
+    return database
+
+
+def _js_summary(path: Path, lines: tuple[int, int], branches: tuple[int, int], read: int = 3, skipped: int = 0) -> Path:
+    """The ``summary.json`` ``js-coverage-report.js`` writes beside a report: covered / total per measure, files read and skipped."""
+    measure = lambda covered, total: {"covered": covered, "total": total}  # noqa: E731
+    body = {"lines": measure(*lines), "branches": measure(*branches), "statements": measure(*lines), "functions": measure(1, 1), "files": {"read": read, "skipped": skipped}}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(body), encoding="utf-8")
+    return path
+
+
+class TestPureNumbers:
+    """Step 3.4: lines and branches apart, covered / total, the percentage computed by the runner; one summary file."""
+
+    @pytest.fixture
+    def run_root(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        """A project root of the test's own, a ledger of its own, and the git state stood in (a clean tree at a known commit)."""
+        ledger = _coverage.CoverageLedger()
+        monkeypatch.setattr(_coverage, "LEDGER", ledger)
+        monkeypatch.setattr(_coverage, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(_coverage, "_git_state", lambda: ("0123abc", False))
+        monkeypatch.chdir(tmp_path)
+        return SimpleNamespace(root=tmp_path, data=tmp_path / ".coverage_data", js=tmp_path / "frontend" / "coverage-js", ledger=ledger)
+
+    def test_backend_lines_and_branches_come_from_totals_never_percent_covered(self, run_root: SimpleNamespace) -> None:
+        """PN-01 — real data, one ``if`` taken one way: lines 5 / 5 = 100 %, branches 1 / 2 = 50 %. coverage.py's mixed TOTAL
+        (85.71 %) appears nowhere: each percentage is the runner's own, covered / total."""
+        database = _measured_database(run_root.root, run_root.data / "backend", {"pkg/one_if.py": _ONE_IF})
+
+        totals = _coverage.backend_totals(database)
+
+        assert totals["files"] == 1
+        assert totals["lines"] == {"covered": 5, "total": 5, "pct": 100.0}
+        assert totals["branches"] == {"covered": 1, "total": 2, "pct": 50.0}
+        assert 85.71 not in {round(measure["pct"], 2) for measure in (totals["lines"], totals["branches"])}
+
+    def test_financial_math_include_takes_nested_files(self, run_root: SimpleNamespace) -> None:
+        """PN-02 — ``financial_math`` is the combined data restricted to ``backend/app/services/financial_math/``, subfolders
+        (``fifo/``, ``lots/``, ``portfolio/``) included; a file outside the folder is not counted."""
+        sources = {"backend/app/services/financial_math/fifo/lots.py": _ONE_IF, "backend/app/services/other/elsewhere.py": _ONE_IF}
+        database = _measured_database(run_root.root, run_root.data / "backend", sources)
+
+        whole = _coverage.backend_totals(database)
+        folder = _coverage.backend_totals(database, include=_coverage.FINANCIAL_MATH_INCLUDE)
+
+        assert whole["files"] == 2
+        assert folder["files"] == 1, "the nested file of financial_math, and only it"
+        assert folder["lines"] == {"covered": 5, "total": 5, "pct": 100.0}
+
+    def test_an_empty_or_missing_database_has_no_totals(self, run_root: SimpleNamespace) -> None:
+        """PN-03 — no database, or one with no measured file: ``None``, never a zero that would read as «measured, nothing covered»."""
+        assert _coverage.backend_totals(run_root.data / "backend") is None
+        assert _coverage.backend_totals(_coverage_database(run_root.data / "frontend", 0)) is None
+
+    def test_the_js_summary_json_is_read_for_three_levels(self, run_root: SimpleNamespace) -> None:
+        """PN-04 — ``unit`` (``unit-combined/``), ``e2e`` and ``combined``: lines and branches covered / total, the percentage
+        computed here, the files read and skipped carried over; a level without its ``summary.json`` is ``None``."""
+        _js_summary(run_root.js / "unit-combined" / "summary.json", (30, 40), (3, 8), read=4)
+        _js_summary(run_root.js / "e2e" / "summary.json", (10, 40), (0, 0), read=2, skipped=1)
+
+        levels = _coverage.frontend_totals()
+
+        assert levels["unit"] == {"files": {"read": 4, "skipped": 0}, "lines": {"covered": 30, "total": 40, "pct": 75.0}, "branches": {"covered": 3, "total": 8, "pct": 37.5}}
+        assert levels["e2e"]["branches"] == {"covered": 0, "total": 0, "pct": None}, "no branch measured: no percentage, not 0 % nor 100 %"
+        assert levels["e2e"]["files"] == {"read": 2, "skipped": 1}
+        assert levels["combined"] is None
+
+    def test_the_js_report_script_writes_its_summary_and_counts_the_files_it_skips(self) -> None:
+        """PN-05 — contract on the text of ``frontend/scripts/js-coverage-report.js``: it writes ``summary.json`` beside
+        ``coverage-final.json`` and counts the files it could not read, which it used to skip in silence."""
+        text = JS_REPORT_SCRIPT.read_text(encoding="utf-8")
+
+        assert "'summary.json'" in text
+        assert "skipped += 1" in text
+        assert "covered" in text and "total" in text
+
+    def test_summarize_writes_the_summary_file_and_prints_the_numbers(self, capsys: pytest.CaptureFixture, run_root: SimpleNamespace) -> None:
+        """PN-06 — ``summarize()`` writes ``.coverage_data/coverage-summary.json``, schema ``lf-coverage-summary/1``: the run
+        (``sha``, ``dirty``, ``workers``, ``argv``, ``categories``), the verdict (``quotable`` with its ``reasons``), the backend
+        bases (pytest, E2E server, their union, ``financial_math``) and the three frontend levels, and the piece table. A base the
+        run did not measure is ``None``. The same numbers are printed."""
+        _measured_database(run_root.root, run_root.data / "backend", {"backend/app/services/financial_math/top.py": _ONE_IF})
+        _measured_database(run_root.root, run_root.data / "frontend", {"backend/app/api/route.py": _ONE_IF})
+        _js_summary(run_root.js / "unit-combined" / "summary.json", (30, 40), (3, 8))
+        run_root.ledger.reset(categories=["all"])
+        run_root.ledger.expect_python("backend")
+        run_root.ledger.expect_python("frontend")
+        rows = [_coverage.PieceRow("Python data", ".coverage_data/backend", "≥1 measured file", "1 file(s)", True)]
+
+        summary = _coverage.summarize(run_root.ledger, rows, success=True)
+
+        written = json.loads((run_root.data / "coverage-summary.json").read_text(encoding="utf-8"))
+        assert written == summary
+        assert written["schema"] == "lf-coverage-summary/1"
+        assert (written["sha"], written["dirty"], written["categories"]) == ("0123abc", False, ["all"])
+        assert {"workers", "argv", "quotable", "reasons", "pieces"} <= written.keys()
+        assert written["quotable"] is False and written["reasons"], "only a --quotable all run can be quoted (step 3.5)"
+        backend = written["backend"]
+        assert backend["pytest"]["lines"]["total"] == 5 and backend["server"]["lines"]["total"] == 5
+        assert backend["combined"]["files"] == 2 and backend["combined"]["lines"] == {"covered": 10, "total": 10, "pct": 100.0}
+        assert backend["financial_math"]["files"] == 1
+        assert written["frontend"]["unit"]["lines"]["pct"] == 75.0 and written["frontend"]["e2e"] is None
+        assert written["pieces"] == [{"piece": "Python data", "where": ".coverage_data/backend", "expected": "≥1 measured file", "found": "1 file(s)", "ok": True}]
+        out = capsys.readouterr().out
+        assert "75.00" in out and "37.50" in out, "the frontend unit numbers are printed"
+
+    def test_the_reasons_name_what_keeps_a_run_from_being_quoted(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
+        """PN-07 — red tests, a missing piece, a dirty tree each add their reason; a backend-only run has no frontend and its
+        server base is ``None``."""
+        run_root.ledger.expect_python("backend")
+        _measured_database(run_root.root, run_root.data / "backend", {"pkg/one_if.py": _ONE_IF})
+        missing = _coverage.PieceRow("Vitest unit", "frontend/coverage-js/unit/front-fx-1", "coverage-final.json, ≥1 file", "missing", False)
+
+        clean = _coverage.summarize(run_root.ledger, [], success=True)
+        monkeypatch.setattr(_coverage, "_git_state", lambda: ("0123abc", True))
+        dirty = _coverage.summarize(run_root.ledger, [missing], success=False)
+
+        assert len(dirty["reasons"]) == len(clean["reasons"]) + 3, dirty["reasons"]
+        assert dirty["backend"]["server"] is None and dirty["frontend"] == {"unit": None, "e2e": None, "combined": None}
+
+    def test_every_coverage_run_ends_with_its_summary(self, monkeypatch: pytest.MonkeyPatch, stood_in_runner: SimpleNamespace, run_root: SimpleNamespace) -> None:
+        """PN-08 — ``_finish_coverage`` writes the summary after the piece table, in every coverage run; without ``--coverage``,
+        nothing."""
+        _cli._finish_coverage(True)
+        assert not (run_root.data / "coverage-summary.json").exists()
+
+        monkeypatch.setattr(_common, "_COVERAGE_MODE", "js")
+        monkeypatch.setattr(_common, "_COVERAGE_JS", True)
+        _cli._finish_coverage(True)
+        assert json.loads((run_root.data / "coverage-summary.json").read_text(encoding="utf-8"))["schema"] == "lf-coverage-summary/1"
+
+    def test_the_mixed_total_of_coverage_report_is_labelled(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, run_root: SimpleNamespace) -> None:
+        """PN-09 — outside a quotable run ``coverage report`` still prints its TOTAL, followed by a line saying it mixes lines and
+        branches, so nobody quotes it."""
+        monkeypatch.setattr(_coverage.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""))
+
+        _coverage._finalize_coverage(is_front=False, is_all=False)
+
+        assert "lines + branches" in capsys.readouterr().out

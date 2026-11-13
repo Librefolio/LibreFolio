@@ -19,6 +19,11 @@
  * was systematically coarser.
  *
  * Filtering lives here rather than in a config: it is three rules.
+ *
+ * Beside `coverage-final.json` it writes `summary.json`: lines, branches,
+ * statements and functions as covered / total, and the input files it read and
+ * the ones it skipped (unreadable JSON). The runner reads the numbers from there,
+ * never from this script's console table (test runner, step 3.4).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -84,6 +89,7 @@ if (!outDir || inputs.length === 0) {
 
 const map = libCoverage.createCoverageMap({});
 let merged = 0;
+let skipped = 0;
 
 // One map per input, remapped before the levels meet.
 //
@@ -105,7 +111,10 @@ for (const input of inputs) {
         try {
             data = JSON.parse(fs.readFileSync(file, 'utf-8'));
         } catch {
-            continue; // A half-written file from a killed worker is not fatal.
+            // A half-written file from a killed worker is not fatal, but it is no
+            // longer silent: summary.json counts it.
+            skipped += 1;
+            continue;
         }
         const filtered = {};
         for (const [key, value] of Object.entries(data)) {
@@ -154,6 +163,18 @@ fs.rmSync(outFull, {recursive: true, force: true});
 fs.mkdirSync(outFull, {recursive: true});
 fs.writeFileSync(path.join(outFull, 'coverage-final.json'), JSON.stringify(map.toJSON()));
 
+const s = map.getCoverageSummary();
+// Counts only: the percentage is the reader's to compute, from the same two numbers.
+const measure = (m) => ({covered: m.covered, total: m.total});
+const summary = {
+    lines: measure(s.lines),
+    branches: measure(s.branches),
+    statements: measure(s.statements),
+    functions: measure(s.functions),
+    files: {read: merged, skipped},
+};
+fs.writeFileSync(path.join(outFull, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
+
 const context = libReport.createContext({
     dir: outFull,
     coverageMap: map,
@@ -163,10 +184,9 @@ const context = libReport.createContext({
 });
 reports.create('html', {verbose: false}).execute(context);
 
-const s = map.getCoverageSummary();
 const pct = (m) => `${m.pct.toFixed(2).padStart(6)} %`;
 const row = (label, m) => `│ ${label.padEnd(10)} │ ${pct(m)} │ ${String(m.covered).padStart(7)} │ ${String(m.total).padStart(7)} │`;
-console.log(`[${reportName || 'coverage'}] merged ${merged} file(s)`);
+console.log(`[${reportName || 'coverage'}] merged ${merged} file(s)${skipped ? `, skipped ${skipped} unreadable` : ''}`);
 console.log('┌────────────┬──────────┬─────────┬─────────┐');
 console.log('│ Name       │ Coverage │ Covered │   Total │');
 console.log('├────────────┼──────────┼─────────┼─────────┤');

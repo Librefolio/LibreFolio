@@ -852,7 +852,7 @@ def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> 
     on a backend-only suite), in which case the caller must abort.
     """
     # A run starts from an empty ledger: nothing an earlier run of this process launched is expected again.
-    _coverage.LEDGER.reset()
+    _coverage.LEDGER.reset(categories=[args.category] if getattr(args, "category", None) else [])
     _common._COVERAGE_MODE = coverage
     _common._RESUME_MODE = resume
     _common.set_fail_fast(getattr(args, "fail_fast", False))
@@ -1244,8 +1244,10 @@ def _finish_coverage(success: bool) -> int:
         if _common._COVERAGE_JS:
             _finalize_js_coverage()
         # Step 3.3: what the run launched under coverage must be on disk; a missing piece makes the run red.
-        complete = _coverage.report_coverage_pieces(_coverage.LEDGER, "frontend" if is_front else "all" if is_all else "backend", finalized)
-        return 0 if success and complete else 1
+        rows = _coverage.report_coverage_pieces(_coverage.LEDGER, "frontend" if is_front else "all" if is_all else "backend", finalized)
+        # Step 3.4: the pure numbers, lines and branches apart, on screen and in .coverage_data/coverage-summary.json.
+        _coverage.summarize(_coverage.LEDGER, rows, success=success)
+        return 0 if success and all(row.ok for row in rows) else 1
 
     return 0 if success else 1
 
