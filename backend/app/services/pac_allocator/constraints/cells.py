@@ -93,23 +93,22 @@ def _require_modelled_rounded_families(scenario: ExactPlannerScenario, facts: Sc
         raise LedgerPostingScopeError(f"this {scenario.product}/{scenario.policy} scenario posts rounded ledger families this build does not model: {sorted(unmodelled)}")
 
 
-# A gap under this share of the quantum is finer than float rows tell apart reliably: the pair stays non-strict there.
-_MIN_GAP_SHARE = Fraction(1, 10_000)
-
-
-def _exact_gap(generators: tuple[ExactRatio, ...], quantum: ExactRatio) -> float | None:
+def _exact_gap(generators: tuple[ExactRatio, ...], quantum: ExactRatio) -> float:
     """The smallest positive distance between an exact amount and a multiple of ``quantum``, from the data (P5).
 
     The exact amount of a posting is an integer combination of ``generators`` (a route's step, a fee's parts, a conversion's
     rate times the source quantum), so ``exact − quantum·units`` lives on the lattice of their rational gcd with the quantum:
-    when it is not zero it is at least that gcd. ``None`` when the gcd is too fine to be a float row (``_MIN_GAP_SHARE``).
+    when it is not zero it is at least that gcd.
+
+    No threshold, however fine the gcd (the B2 review, 1(c)): EUR → USD at 1.085 with a 1 % spread steps by 1/2 000 000 of a
+    dollar, the common case for an FX credit. A tightened row cannot prune a true point: its slack is ``>= 0`` exactly, and the
+    float error of the row is far below SCIP's feasibility tolerance.
     """
     values = [Fraction(abs(item.numerator), item.denominator) for item in (*generators, quantum) if item.numerator != 0]
     gap = values[0]
     for value in values[1:]:
         gap = Fraction(math.gcd(gap.numerator * value.denominator, value.numerator * gap.denominator), gap.denominator * value.denominator)
-    quantum_fraction = Fraction(quantum.numerator, quantum.denominator)
-    return float(gap) if gap >= quantum_fraction * _MIN_GAP_SHARE else None
+    return float(gap)
 
 
 def _posted_units_term(
@@ -291,7 +290,7 @@ def add_ledger_balance_constraints(model: Model, scenario: ExactPlannerScenario,
     return cells
 
 
-def _rebalancer_posting_gaps(scenario: ExactPlannerScenario) -> dict[tuple[str, str], float | None]:
+def _rebalancer_posting_gaps(scenario: ExactPlannerScenario) -> dict[tuple[str, str], float]:
     """The exact gap of every rounded posting of a Rebalancer scenario (``_exact_gap``), keyed by family and route or decision.
 
     * a buy debit is ``step`` times the quanta (an amount route) or ``step`` units at the execution price;
@@ -299,7 +298,7 @@ def _rebalancer_posting_gaps(scenario: ExactPlannerScenario) -> dict[tuple[str, 
     * an FX credit is the source quantum times the quanta times the planning rate.
     """
     index = build_scenario_index(scenario)
-    gaps: dict[tuple[str, str], float | None] = {}
+    gaps: dict[tuple[str, str], float] = {}
     for route in scenario.order_routes:
         if route.side != "buy":
             continue

@@ -89,6 +89,7 @@ from backend.app.services.pac_allocator.constraints import (
     valuation_rate,
 )
 from backend.app.services.pac_allocator.constraints import facts as constraints_facts
+from backend.app.services.pac_allocator.constraints.cells import _exact_gap
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.ledger import _ROUNDED_FAMILIES
@@ -1487,6 +1488,14 @@ def test_small_capped_order_cannot_pay_the_cap_fee_to_lower_a_cash_cell() -> Non
     values = {var.name: program.model.getVal(var) for var in program.model.getVars()}
     assert round(values["fee_capped:route:buy:asset:b"]) == 0
     assert values["fee:route:buy:asset:b"] == pytest.approx(5.4, abs=1e-6)
+
+
+def test_exact_gap_tightens_a_fine_fx_credit_step() -> None:
+    """The B2 review, 1(c): EUR → USD at 1.085 with a 1 % spread credits 0.01 × 1.085 × 0.99 = 0.0107415 USD per source cent, a
+    step of 1/2 000 000 of a dollar; its posting rows are tightened by that gap like every other, with no threshold."""
+    gap = _exact_gap((R(1, 100) * R(1085, 1000) * R(99, 100),), R(1, 100))
+    assert gap == pytest.approx(5e-7, rel=1e-12)
+    assert _exact_gap((R(1, 3),), R(1, 100)) == pytest.approx(1 / 300, rel=1e-12)
 
 
 def test_rounding_at_an_exact_multiple_posts_the_true_unit_under_the_score() -> None:
