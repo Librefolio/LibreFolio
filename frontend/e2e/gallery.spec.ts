@@ -13,7 +13,7 @@
  */
 import type {TestInfo} from '@playwright/test';
 import {type APIRequestContext, expect, type Locator, type Page, test} from './fixtures/playwright';
-import {login, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
+import {login, loginWithForm, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
 import {validateRuns, waitForChart, waitForParseVerdict, waitForSettled} from './fixtures/app-events';
 import {
     attachPageSnapshotOnFailure,
@@ -3063,7 +3063,8 @@ test.describe('Gallery Screenshots', () => {
                         [lang, theme] as [string, string],
                     );
                     const signalledBefore = signalledLogins;
-                    await login(page, TEST_ADMIN);
+                    // Through the form, always: the popup is a signal of the sign-in's own answer, which a reused session never asks for.
+                    await loginWithForm(page, TEST_ADMIN);
                     expect(signalledLogins, 'the sign-in did not go through the intercepted login response').toBeGreaterThan(signalledBefore);
 
                     // The attributes, not visibility: with the popup open the body is scroll-locked and <html>
