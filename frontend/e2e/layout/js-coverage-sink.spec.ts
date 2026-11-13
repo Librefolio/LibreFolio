@@ -22,7 +22,13 @@
  *     reference every case is held to, duplicate positions (which istanbul folds from its second merge on) included. A
  *     page that already sent a file sends only its counters (`addLight`, step 3.8 reads them in the page); a file of a
  *     different build goes through istanbul's merge, by position.
+ *   - JCS-08…09 (step 3.8) the page side, on `about:blank` with a fake `__coverage__`: `readCoverageInPage` returns the
+ *     counters alone of the files the sink knows in that build and that the test touched, the full object of every other
+ *     (zeros included: an untouched file is still in the denominator), and in compare mode a full copy taken in the same
+ *     synchronous run, so a timer that keeps counting cannot set the two forms apart.
  *   - JCP-01 `scripts/js-coverage-probe.mjs timing` reads the stopwatch lines: per field n, mean, p50, p95, total, max.
+ *   - JCP-02 `scripts/js-coverage-probe.mjs compare` says whether two directories of worker files hold the same coverage:
+ *     files on one side only, files whose maps or counters differ, and those that differ only by istanbul's fold.
  */
 import {spawnSync} from 'node:child_process';
 import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
@@ -31,7 +37,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {expect, test} from '../fixtures/playwright';
-import {WorkerCoverageSink, counterArrays, payloadBytes, timingEnabled, timingRecord, TimingLog, type CoveragePayload} from '../fixtures/js-coverage-sink';
+import {WorkerCoverageSink, counterArrays, payloadBytes, readCoverageInPage, timingEnabled, timingRecord, TimingLog, type CoveragePayload} from '../fixtures/js-coverage-sink';
 
 /** istanbul-lib-coverage, from the same `node_modules` the sink and the report load it from: the reference of every case. */
 const libCoverage = createRequire(import.meta.url)('istanbul-lib-coverage') as {
@@ -331,5 +337,117 @@ test.describe('JCS, the counter-based sink (step 3.7): the same file as istanbul
         expect(out.fields.evaluate_ms).toEqual({n: 4, mean: 4, p50: 2, p95: 10, total: 16, max: 10});
         expect(out.fields.flush_ms.total).toBe(40);
         expect(Object.keys(out.fields).sort()).toEqual(SIX_FIELDS);
+    });
+});
+
+test.describe('JCS, the page side (step 3.8): counters alone for what the worker already holds', () => {
+    let dir: string;
+
+    test.beforeEach(async () => {
+        dir = await mkdtemp(join(tmpdir(), 'lf-js-coverage-page-'));
+    });
+
+    test.afterEach(async () => {
+        await rm(dir, {recursive: true, force: true});
+    });
+
+    /** `about:blank` carrying `coverage` as its `window.__coverage__`: no app, no server. */
+    async function blankWith(page: import('@playwright/test').Page, coverage: CoveragePayload): Promise<void> {
+        await page.goto('about:blank');
+        await page.evaluate((value) => {
+            (window as unknown as {__coverage__: unknown}).__coverage__ = value;
+        }, coverage);
+    }
+
+    test('JCS-08 counters for the known and touched files, the full object for unknown, other builds and untouched-unknown', async ({page}) => {
+        const touched = module('/fake/a.ts', 'ha', {s: [1, 0, 2], f: [1], b: [[0, 1]]});
+        const untouched = module('/fake/b.ts', 'hb', {s: [0, 0, 0], f: [0], b: [[0, 0]]});
+        const unknown = module('/fake/c.ts', 'hc', {s: [0, 0, 0], f: [0], b: [[0, 0]]});
+        const rebuilt = module('/fake/d.ts', 'hd-new', {s: [1, 1, 1], f: [1], b: [[1, 1]]});
+        await blankWith(page, {...touched, ...untouched, ...unknown, ...rebuilt});
+
+        const read = await page.evaluate(readCoverageInPage, {known: {'/fake/a.ts': 'ha', '/fake/b.ts': 'hb', '/fake/d.ts': 'hd-old'}, compare: false});
+
+        expect(read).not.toBeNull();
+        expect(Object.keys(read!.light).sort(), 'an untouched known file adds nothing: it is not sent').toEqual(['/fake/a.ts', '/fake/c.ts', '/fake/d.ts']);
+        expect(read!.light['/fake/a.ts'], 'known and touched: its counters alone').toEqual(counterArrays(touched['/fake/a.ts'] as Record<string, unknown>));
+        expect(read!.light['/fake/c.ts'], 'unknown, even all zeros: in full, for the denominator').toEqual(unknown['/fake/c.ts']);
+        expect(read!.light['/fake/d.ts'], 'another build of a known file: in full').toEqual(rebuilt['/fake/d.ts']);
+        expect(read!.full, 'no full copy outside compare mode').toBeUndefined();
+        expect(await page.evaluate(readCoverageInPage, {known: {}, compare: false}), 'every file in full when the worker knows none').toEqual({light: {...touched, ...untouched, ...unknown, ...rebuilt}});
+    });
+
+    test('JCS-08b a sink fed by the page, test after test, writes what the full slices would', async ({page}) => {
+        const tests = [
+            {...module('/fake/a.ts', 'ha', {s: [1, 0, 0], f: [1], b: [[1, 0]]}), ...module('/fake/b.ts', 'hb', {s: [0, 0, 0], f: [0], b: [[0, 0]]})},
+            {...module('/fake/a.ts', 'ha', {s: [0, 2, 0], f: [0], b: [[0, 2]]}), ...module('/fake/b.ts', 'hb', {s: [3, 0, 0], f: [1], b: [[1, 0]]})},
+            {...module('/fake/a.ts', 'ha', {s: [0, 0, 0], f: [0], b: [[0, 0]]}), ...module('/fake/b.ts', 'hb', {s: [0, 0, 4], f: [0], b: [[0, 1]]})},
+        ];
+        const sink = new WorkerCoverageSink(join(dir, 'e2e-raw'), 0, process.pid, 100);
+
+        for (const coverage of tests) {
+            await blankWith(page, coverage);
+            const read = await page.evaluate(readCoverageInPage, {known: sink.knownHashes(), compare: false});
+            await sink.addLight(read!.light);
+        }
+
+        expect(await written(sink)).toEqual(oldPath(...tests));
+    });
+
+    test('JCS-09 in compare mode both forms come from one snapshot: a timer that keeps counting does not set them apart', async ({page}) => {
+        await blankWith(page, module('/fake/a.ts', 'ha', {s: [0, 0, 0], f: [0], b: [[0, 0]]}));
+        await page.evaluate(() => {
+            const file = (window as unknown as {__coverage__: Record<string, {s: Record<string, number>}>}).__coverage__['/fake/a.ts'];
+            setInterval(() => (file.s['0'] += 1), 0);
+        });
+        await expect.poll(() => page.evaluate(() => (window as unknown as {__coverage__: Record<string, {s: Record<string, number>}>}).__coverage__['/fake/a.ts'].s['0'])).toBeGreaterThan(5);
+
+        for (let i = 0; i < 20; i++) {
+            const read = await page.evaluate(readCoverageInPage, {known: {'/fake/a.ts': 'ha'}, compare: true});
+            const light = read!.light['/fake/a.ts'] as {s: number[]};
+            const full = (read!.full as Record<string, {s: Record<string, number>}>)['/fake/a.ts'];
+            expect(light.s[0], `read ${i}`).toBe(full.s['0']);
+        }
+    });
+});
+
+test.describe('JCP-02, the compare probe: two directories of worker files, the same coverage or not', () => {
+    let dir: string;
+
+    test.beforeEach(async () => {
+        dir = await mkdtemp(join(tmpdir(), 'lf-js-coverage-compare-'));
+    });
+
+    test.afterEach(async () => {
+        await rm(dir, {recursive: true, force: true});
+    });
+
+    async function workerDir(name: string, ...files: CoveragePayload[]): Promise<string> {
+        const target = join(dir, name);
+        await mkdir(target, {recursive: true});
+        await Promise.all(files.map((content, i) => writeFile(join(target, `worker-${i}-${1000 + i}.json`), JSON.stringify(content))));
+        return target;
+    }
+
+    function compare(a: string, b: string): {status: number | null; out: {onlyA: string[]; onlyB: string[]; differ: string[]; foldOnly: string[]}} {
+        const run = spawnSync(process.execPath, [PROBE, 'compare', a, b, '--json'], {encoding: 'utf-8'});
+        return {status: run.status, out: JSON.parse(run.stdout || '{}')};
+    }
+
+    test('JCP-02 equal directories are 0 differences; a counter, a missing file and a fold are each reported', async () => {
+        const a1 = module('/fake/a.ts', 'ha', {s: [1, 0, 2], f: [1], b: [[0, 1]]});
+        const b1 = module('/fake/b.ts', 'hb', {s: [0, 3, 0], f: [0], b: [[1, 0]]});
+        const same = compare(await workerDir('left', {...a1, ...b1}), await workerDir('right', a1, b1));
+        expect(same).toEqual({status: 0, out: {onlyA: [], onlyB: [], differ: [], foldOnly: []}});
+
+        const changed = module('/fake/a.ts', 'ha', {s: [1, 0, 3], f: [1], b: [[0, 1]]});
+        const diff = compare(await workerDir('left2', {...a1, ...b1}), await workerDir('right2', changed));
+        expect(diff.status).toBe(1);
+        expect(diff.out).toMatchObject({onlyA: ['/fake/b.ts'], onlyB: [], differ: ['/fake/a.ts']});
+
+        const raw = module('/fake/dupe.ts', 'hd', {s: [1, 2, 3], f: [1], b: [[1, 0]]}, true);
+        const folded = oldPath(raw, module('/fake/dupe.ts', 'hd', {s: [0, 0, 0], f: [0], b: [[0, 0]]}, true));
+        const fold = compare(await workerDir('left3', raw), await workerDir('right3', folded));
+        expect(fold).toEqual({status: 0, out: {onlyA: [], onlyB: [], differ: [], foldOnly: ['/fake/dupe.ts']}});
     });
 });

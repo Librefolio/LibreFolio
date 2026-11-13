@@ -61,6 +61,12 @@
  * file is either the old sum or the new one. The `.tmp` suffix also keeps a
  * half-written file out of both readers (`*.json`).
  *
+ * ### The page side (step 3.8)
+ *
+ * After each test the fixture reads every page with `readCoverageInPage`, handing it `knownHashes()`: the files this sink
+ * already holds come back as counters alone, the others in full. `LF_COV_COMPARE=1` runs a second, full sink beside it
+ * (`coverage-js/e2e-raw-full/`, outside every report) fed from the same reads, for `js-coverage-probe compare`.
+ *
  * ### The stopwatches
  *
  * Under `LF_COV_TIMING=1` the fixture writes, per test, one line into `coverage-js/timing/worker-<i>-<pid>.jsonl` (`TimingLog`):
@@ -188,6 +194,49 @@ export type LightEntry = {hash: string; s: number[]; f: number[]; b: number[][];
 /** The values of a counter object, in its key order (integer keys: ascending, on both sides of the page). */
 const valuesOf = <T>(counter: Record<string, T>): T[] => Object.keys(counter).map((key) => counter[key]);
 const copyHit = (hit: Hit): Hit => (Array.isArray(hit) ? [...hit] : hit);
+
+/** What one page hands back after a test (`readCoverageInPage`): its slice in the light form, and in compare mode a full copy. */
+export type PageRead = {light: CoveragePayload; full?: CoveragePayload};
+
+/**
+ * Read one page's coverage after a test, inside the page (`page.evaluate(readCoverageInPage, {known, compare})`): for every
+ * file whose `hash` is the one the worker's sink already holds (`known`, from `knownHashes()`), its counters alone as
+ * arrays (`counterArrays`), and only when one of them is not zero — an untouched file adds nothing; for every other file —
+ * unknown, another build — the full istanbul object, zeros included, since a file never run still belongs in the
+ * denominator. `null` without `window.__coverage__`.
+ *
+ * The bulk of a slice is in the parts that never change (`inputSourceMap` with the sources, the maps): sending them once per
+ * worker instead of after every test is the whole saving (step 3.7 measured ~18 s and ~25 MB per test for the full read).
+ *
+ * With `compare`, a full copy is returned too, taken in the same synchronous run: no timer of the page can count between the
+ * two forms, so the light sum and the full sum can be compared hit for hit (`LF_COV_COMPARE=1`, `js-coverage-probe compare`).
+ *
+ * Self-contained on purpose: Playwright sends its source to the page, where nothing of this module exists.
+ */
+export function readCoverageInPage(arg: {known: Record<string, string>; compare: boolean}): PageRead | null {
+    const live = (window as unknown as {__coverage__?: Record<string, Record<string, unknown>>}).__coverage__;
+    if (!live) return null;
+    // In compare mode both forms are built from one copy, taken at once: the light one too, so that not even the full
+    // objects it hands back by reference can tick between the two.
+    const coverage = arg.compare ? (JSON.parse(JSON.stringify(live)) as Record<string, Record<string, unknown>>) : live;
+    const values = <T>(counter: Record<string, T>): T[] => Object.keys(counter).map((key) => counter[key]);
+    const light: Record<string, unknown> = {};
+    for (const key of Object.keys(coverage)) {
+        const file = coverage[key];
+        if (arg.known[key] === undefined || file.hash !== arg.known[key]) {
+            light[key] = file;
+            continue;
+        }
+        const s = values(file.s as Record<string, number>);
+        const f = values(file.f as Record<string, number>);
+        const b = values(file.b as Record<string, number[]>).map((hits) => hits.slice());
+        if (!s.some(Boolean) && !f.some(Boolean) && !b.some((hits) => hits.some(Boolean))) continue;
+        const entry: Record<string, unknown> = {hash: file.hash, s, f, b};
+        if (file.bT) entry.bT = values(file.bT as Record<string, number[]>).map((hits) => hits.slice());
+        light[key] = entry;
+    }
+    return arg.compare ? {light, full: coverage} : {light};
+}
 
 /** The counters of a full file coverage as arrays: what a page sends for a file the sink already holds (step 3.8). */
 export function counterArrays(file: Record<string, unknown>): LightEntry {

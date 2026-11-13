@@ -22,7 +22,7 @@ import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {TEST_USER} from './test-users';
 import {cspCollectorEnabled, isKnown, loadBaseline, type CspViolation} from './csp';
-import {WorkerCoverageSink, TimingLog, payloadBytes, timingEnabled, timingRecord, type CoveragePayload} from './js-coverage-sink';
+import {WorkerCoverageSink, TimingLog, payloadBytes, readCoverageInPage, timingEnabled, timingRecord, type CoveragePayload, type PageRead} from './js-coverage-sink';
 
 const COVERAGE_ON = process.env.COVERAGE_JS === '1';
 
@@ -53,6 +53,13 @@ const E2E_COVERAGE_DIR = fileURLToPath(new URL('../../coverage-js/e2e-raw', impo
 /** `LF_COV_TIMING=1`: one line per test of what its collection cost, in `coverage-js/timing/` (measure only, project 71 step 3.6). */
 const TIMING_ON = COVERAGE_ON && timingEnabled();
 const E2E_TIMING_DIR = fileURLToPath(new URL('../../coverage-js/timing', import.meta.url));
+
+/**
+ * `LF_COV_COMPARE=1` (project 71 step 3.8, acceptance only): a second sink, fed the full objects of the same reads, writes
+ * `coverage-js/e2e-raw-full/`, which no report reads; `scripts/js-coverage-probe.mjs compare` then holds the light sum to it.
+ */
+const COMPARE_ON = COVERAGE_ON && process.env.LF_COV_COMPARE === '1';
+const E2E_FULL_DIR = fileURLToPath(new URL('../../coverage-js/e2e-raw-full', import.meta.url));
 
 /**
  * The JS coverage collection's own time budget. Collecting is not the test's work: once the test is over, the
@@ -269,7 +276,7 @@ function describeCspViolation(v: CspViolation): string {
     return `${v.directive} blocked ${v.blockedURI || '(nothing)'} at ${v.sourceFile || v.documentURI}:${v.lineNumber} (page ${v.page ?? v.documentURI}, ${v.disposition})`;
 }
 
-const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknown: boolean; cspViolations: CspRecorder; updateCheckBlocked: boolean; updateCheckGuard: void}, {hygieneApi: HygieneState; jsCoverageSink: WorkerCoverageSink | null}>({
+const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknown: boolean; cspViolations: CspRecorder; updateCheckBlocked: boolean; updateCheckGuard: void}, {hygieneApi: HygieneState; jsCoverageSink: WorkerCoverageSink | null; jsCoverageFullSink: WorkerCoverageSink | null}>({
     hygieneApi: [
         async ({}, use) => {
             if (HYGIENE_REQUESTED && !HYGIENE_ON) {
@@ -354,8 +361,31 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknow
         {scope: 'worker', timeout: JS_COVERAGE_TIMEOUT_MS},
     ],
 
+    /** Compare mode only (`LF_COV_COMPARE=1`): the full sum of the same reads, in `coverage-js/e2e-raw-full/`. */
+    jsCoverageFullSink: [
+        async ({}, use, workerInfo) => {
+            if (!COMPARE_ON) {
+                await use(null);
+                return;
+            }
+            const sink = new WorkerCoverageSink(E2E_FULL_DIR, workerInfo.parallelIndex);
+            try {
+                await sink.absorbDeadPredecessors();
+            } catch (e) {
+                console.warn('[coverage-js] compare: could not absorb the files of earlier workers:', e);
+            }
+            await use(sink);
+            try {
+                await sink.flush();
+            } catch (e) {
+                console.warn('[coverage-js] compare: could not write the worker file:', e);
+            }
+        },
+        {scope: 'worker', timeout: JS_COVERAGE_TIMEOUT_MS},
+    ],
+
     jsCoverage: [
-        async ({context, jsCoverageSink}, use, testInfo) => {
+        async ({context, jsCoverageSink, jsCoverageFullSink}, use, testInfo) => {
             if (!COVERAGE_ON || !jsCoverageSink) {
                 await use();
                 return;
@@ -373,20 +403,28 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknow
             // That is also why there is no monocart here any more: resolving
             // V8 ranges to sources was its entire job, and instrumenting the
             // build removed the job.
+            //
+            // The page sends in full only what the worker does not hold yet
+            // (step 3.8, `readCoverageInPage`): for the files of `known`, its
+            // counters alone. One snapshot of `known` for every page of the
+            // test: a file two pages bring for the first time comes in full
+            // twice, and is merged twice, as before.
+            const known = jsCoverageSink.knownHashes();
             const evaluateStart = TIMING_ON ? performance.now() : 0;
-            const entries = (
+            const reads = (
                 await Promise.all(
                     context.pages().map(async (page) => {
                         try {
-                            return await page.evaluate(() => (window as unknown as {__coverage__?: unknown}).__coverage__ ?? null);
+                            return await page.evaluate(readCoverageInPage, {known, compare: COMPARE_ON});
                         } catch {
                             // Page already closed: not an error of the test.
                             return null;
                         }
                     }),
                 )
-            ).filter(Boolean);
+            ).filter((read): read is PageRead => read !== null);
             const evaluateMs = TIMING_ON ? performance.now() - evaluateStart : 0;
+            const entries = reads.map((read) => read.light);
 
             if (entries.length === 0) {
                 if (!INSTRUMENTED_BUILD) warnUninstrumentedOnce();
@@ -398,9 +436,10 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknow
             // per worker every few tests. Every page is summed: a module two
             // pages loaded counts the hits of both.
             try {
-                const added = await jsCoverageSink.add(...(entries as CoveragePayload[]));
-                // The size is measured, and the line written, only with the stopwatches on: the payload is ~17 MB, and
-                // stringifying it again is a cost the collection must not pay for a number nobody asked for.
+                const added = await jsCoverageSink.addLight(...(entries as CoveragePayload[]));
+                if (jsCoverageFullSink) await jsCoverageFullSink.add(...reads.map((read) => read.full as CoveragePayload));
+                // The size is measured, and the line written, only with the stopwatches on: a first read is ~25 MB,
+                // and stringifying it again is a cost the collection must not pay for a number nobody asked for.
                 if (TIMING_ON) await new TimingLog(E2E_TIMING_DIR, testInfo.parallelIndex).append(timingRecord(evaluateMs, payloadBytes(entries), added));
             } catch (e) {
                 console.warn('[coverage-js] collection failed:', e);

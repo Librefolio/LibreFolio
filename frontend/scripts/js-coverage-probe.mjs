@@ -2,6 +2,7 @@
  * Test-infrastructure probe of the E2E JS coverage collection (project 71, block 3, C2). Not part of any report.
  *
  *   node scripts/js-coverage-probe.mjs timing <dir> [--json]
+ *   node scripts/js-coverage-probe.mjs compare <dirA> <dirB> [--json]
  *
  * `timing` reads the stopwatch lines the `jsCoverage` fixture writes under `LF_COV_TIMING=1`
  * (`coverage-js/timing/worker-<parallelIndex>-<pid>.jsonl`, one JSON object per test: `evaluate_ms`, `payload_bytes`,
@@ -10,11 +11,24 @@
  * the tests; the maximum of the memory is what a worker reached. Percentiles are nearest-rank: a value that was measured,
  * never an interpolation between two. A line that is not JSON is counted as skipped, and said.
  *
+ * `compare` holds two directories of worker files to each other (step 3.8: `coverage-js/e2e-raw-full/`, the full sum of
+ * `LF_COV_COMPARE=1`, against `coverage-js/e2e-raw/`, the light one). Each directory is summed with istanbul's own
+ * `CoverageMap.merge`, as the report sums it, and the two sums are compared file by file: the files on one side only, and
+ * the files whose maps or counters differ. A file whose two sides differ only by istanbul's fold — the same file, folded on
+ * one side because that side merged it more often, which renumbers and merges items at one position — is listed apart
+ * (`foldOnly`) and is not a difference: both sides are folded and compared again before a file is called different. Exit 0
+ * when nothing differs, 1 otherwise.
+ *
  * `--json` prints the same as one JSON object, for a test or a script to read.
  */
 import fs from 'node:fs';
+import {createRequire} from 'node:module';
 import path from 'node:path';
+import {isDeepStrictEqual} from 'node:util';
 import {pathToFileURL} from 'node:url';
+
+// The same library, from the same `node_modules`, as the sink and the report.
+const libCoverage = createRequire(import.meta.url)('istanbul-lib-coverage');
 
 export const TIMING_FIELDS = ['evaluate_ms', 'payload_bytes', 'merge_ms', 'flush_ms', 'rss_mb', 'heap_mb'];
 
@@ -71,13 +85,69 @@ function printTiming(dir, asJson) {
     }
 }
 
+/** A directory of worker files summed as the report sums them: one istanbul map, plain data. */
+export function sumDirectory(dir) {
+    const map = libCoverage.createCoverageMap({});
+    for (const name of fs.readdirSync(dir).sort()) {
+        if (!/^worker-\d+-\d+\.json$/.test(name)) continue;
+        map.merge(JSON.parse(fs.readFileSync(path.join(dir, name), 'utf-8')));
+    }
+    return JSON.parse(JSON.stringify(map.toJSON()));
+}
+
+/** istanbul's fold of one file coverage: merged with a copy of itself at zero, which keys its items by position. */
+function folded(file) {
+    const zero = JSON.parse(JSON.stringify(file));
+    for (const counter of ['s', 'f']) for (const key of Object.keys(zero[counter])) zero[counter][key] = 0;
+    for (const counter of ['b', 'bT']) if (zero[counter]) for (const key of Object.keys(zero[counter])) zero[counter][key] = zero[counter][key].map(() => 0);
+    const map = libCoverage.createCoverageMap({[file.path]: JSON.parse(JSON.stringify(file))});
+    map.merge({[file.path]: zero});
+    return JSON.parse(JSON.stringify(map.toJSON()))[file.path];
+}
+
+/** Compare two sums: files on one side only, files that differ, files that differ only by istanbul's fold. */
+export function compareSums(a, b) {
+    const onlyA = Object.keys(a)
+        .filter((key) => !(key in b))
+        .sort();
+    const onlyB = Object.keys(b)
+        .filter((key) => !(key in a))
+        .sort();
+    const differ = [];
+    const foldOnly = [];
+    for (const key of Object.keys(a)
+        .filter((k) => k in b)
+        .sort()) {
+        if (isDeepStrictEqual(a[key], b[key])) continue;
+        if (isDeepStrictEqual(folded(a[key]), folded(b[key]))) foldOnly.push(key);
+        else differ.push(key);
+    }
+    return {onlyA, onlyB, differ, foldOnly};
+}
+
+function printCompare(dirA, dirB, asJson) {
+    const result = compareSums(sumDirectory(dirA), sumDirectory(dirB));
+    if (asJson) {
+        console.log(JSON.stringify(result));
+    } else {
+        const list = (names) => (names.length ? `: ${names.slice(0, 10).join(', ')}${names.length > 10 ? ', …' : ''}` : '');
+        console.log(`[compare] ${dirA} ↔ ${dirB}`);
+        console.log(`  only in the first:  ${result.onlyA.length}${list(result.onlyA)}`);
+        console.log(`  only in the second: ${result.onlyB.length}${list(result.onlyB)}`);
+        console.log(`  different:          ${result.differ.length}${list(result.differ)}`);
+        console.log(`  differ only by istanbul's fold (not a difference): ${result.foldOnly.length}${list(result.foldOnly)}`);
+    }
+    return result.onlyA.length + result.onlyB.length + result.differ.length === 0 ? 0 : 1;
+}
+
 function main(argv) {
-    const [command, dir, ...rest] = argv;
-    if (command === 'timing' && dir) {
-        printTiming(dir, rest.includes('--json'));
+    const [command, first, second, ...rest] = argv;
+    if (command === 'timing' && first) {
+        printTiming(first, [second, ...rest].includes('--json'));
         return 0;
     }
-    console.error('usage: node scripts/js-coverage-probe.mjs timing <dir> [--json]');
+    if (command === 'compare' && first && second) return printCompare(first, second, rest.includes('--json'));
+    console.error('usage: node scripts/js-coverage-probe.mjs timing <dir> [--json] | compare <dirA> <dirB> [--json]');
     return 2;
 }
 
