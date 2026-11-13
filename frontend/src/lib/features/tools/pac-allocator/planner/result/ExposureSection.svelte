@@ -18,6 +18,10 @@
     import ExposureMaps from './ExposureMaps.svelte';
     import {exposureTooltipText} from './exposureTooltip';
     import {exposureGroups, UNCATEGORISED_CATEGORY_ID, type MapWeightRow} from './model';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
@@ -59,17 +63,17 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="pac-planner-exposures">
+<div class="space-y-4" data-testid={testId('exposures', profile)}>
     <div class="grid grid-cols-1 gap-x-6 gap-y-5 lg:grid-cols-2">
         {#each views as view (view.dimension)}
-            <div class="min-w-0 {view.dimension === 'geography' ? 'lg:col-span-2' : ''}" data-testid="pac-planner-exposures-dimension" data-dimension={view.dimension} data-folded={view.folded ? 'true' : 'false'}>
+            <div class="min-w-0 {view.dimension === 'geography' ? 'lg:col-span-2' : ''}" data-testid={testId('exposures-dimension', profile)} data-dimension={view.dimension} data-folded={view.folded ? 'true' : 'false'}>
                 <h4 class="text-sm font-semibold text-lf-primary">{$t(`${PLANNER_KEY}.dimensions.${view.dimension}`, {default: DIMENSION_FALLBACKS[view.dimension]})}</h4>
                 {#if view.weights.length === 0}
                     <p class="mt-1 {HINT}">—</p>
                 {:else if view.folded}
                     <p class="mt-1 flex flex-wrap items-center gap-2 text-sm text-lf-secondary">
                         {$t(`${PLANNER_KEY}.result.exposures.nothingDeclared`, {default: 'No classification declared · 100% uncategorised'})}
-                        <button type="button" class={BUTTON_LINK} data-testid="pac-planner-exposures-show" onclick={() => expanded.add(view.dimension)}>
+                        <button type="button" class={BUTTON_LINK} data-testid={testId('exposures-show', profile)} onclick={() => expanded.add(view.dimension)}>
                             {$t(`${PLANNER_KEY}.actions.show`, {default: 'Show'})}
                         </button>
                     </p>
@@ -81,9 +85,9 @@
                             <ExposureBars rows={view.weights} dimension={view.dimension} />
                         {/if}
                     </div>
-                    <ul class="sr-only" data-testid="pac-planner-exposures-values">
+                    <ul class="sr-only" data-testid={testId('exposures-values', profile)}>
                         {#each view.weights as row (row.id)}
-                            <li data-testid="pac-planner-exposures-row" data-id={row.id}>{row.label}: {words.target} {formatExactPercent(row.target)}, {words.final} {finalText(row)}</li>
+                            <li data-testid={testId('exposures-row', profile)} data-id={row.id}>{row.label}: {words.target} {formatExactPercent(row.target)}, {words.final} {finalText(row)}</li>
                         {/each}
                     </ul>
                 {/if}
