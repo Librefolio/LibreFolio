@@ -340,7 +340,7 @@ Two caveats when reading it:
 - **Explicit timeouts**: use `{timeout: N}` on expect/waitFor — keep them tight (localhost is fast)
 - **Never skip for missing data**: if mock data is needed, ensure it exists in `populate_mock_data.py`
 - **Mobile awareness**: handle hamburger menu with `openMobileMenu()`
-- **No hardcoded login**: always use `login()` from `auth-helpers.ts`
+- **No hardcoded login**: always use `login()` from `auth-helpers.ts`. It reuses the session this worker already holds for that user (no form, no `POST /auth/login`); a spec about what the sign-in's own answer carries — the saved language and theme, the donation popup, an intercepted `POST /auth/login` — uses `loginWithForm()`
 - **Request interception**: use `page.waitForRequest()` to verify commit payloads
 - **Whoever commits, cleans up**: see below — a spec that writes must restore what it wrote
 - **Never `waitForTimeout()`**: see below — it is a bet on machine speed that concurrency loses

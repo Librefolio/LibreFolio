@@ -111,7 +111,7 @@ Tests are organized **per concern**, not monolithically per page. Each spec file
 - **Never skip for missing mock data**: if data is needed, it must exist in `populate_mock_data.py`. Use `throw new Error(...)` pointing to the seeding script instead.
 - **Reserve `test.skip()` only for infrastructure conditions** (e.g. mobile-only test on desktop project)
 - **Mobile awareness**: handle hamburger menu with `openMobileMenu()`
-- **Login via helper**: always use `login()` from `auth-helpers.ts`
+- **Login via helper**: always use `login()` from `auth-helpers.ts`. It reuses the session this worker already holds for that user (no form, no `POST /auth/login`); a spec about what the sign-in's own answer carries — the saved language and theme, the donation popup, an intercepted `POST /auth/login` — uses `loginWithForm()`
 - **Mock data**: tests rely on `populate_mock_data.py` — all asymmetric access pairs use tag `access-test`
 - **Request interception**: use `page.waitForRequest()` to verify commit payloads (Bug 14 pattern)
 
