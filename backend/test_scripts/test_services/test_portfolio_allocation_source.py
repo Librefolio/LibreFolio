@@ -3103,7 +3103,9 @@ async def test_current_distribution_publishes_weights_never_amounts(
 # A Broker with a readable profile is copied with it (`operating_profile_status = "available"`) and raises no
 # `allocation.broker_execution_profile_unsupported`; one without, or with a text that cannot be read, is copied as before:
 # `not_available`, `operating_profile: null`, and the issue (same code, kind and severity: D10), whose field now names
-# `operating_profile_status`. Only an OWNER receives brokers at all (unchanged).
+# `operating_profile_status`. A readable profile with no order mode is copied (`available`) and still raises the issue
+# (Q-P3b, from D11: the planner then falls back on its default zero-fee modes). Only an OWNER receives brokers at all
+# (unchanged).
 # ============================================================================
 
 _PROFILE_DOCUMENT = {
@@ -3158,6 +3160,18 @@ def test_only_the_broker_without_a_profile_raises_the_profile_issue():
     assert rows["broker:8"].operating_profile is None
     profile_issues = _profile_issues(issues)
     assert [(issue.path.entity_id, issue.path.field, issue.kind, issue.severity) for issue in profile_issues] == [("broker:8", "operating_profile_status", "unsupported", "error")]
+
+
+def test_a_profile_without_order_modes_is_copied_and_still_raises_the_profile_issue():
+    """Q-P3b (a), from D11: a profile with no order mode leaves the planner on its default zero-fee modes, so it says so."""
+    document = {"profile_version": 1, "order_modes": [], "conversion_mode": "automatic", "tax_regime": "administered"}
+    stored = operating_profile_text(BrokerOperatingProfile.model_validate(document))
+    rows, issues = _built_brokers(_broker(7, operating_profile=stored), _broker(8, operating_profile=_profile_text()))
+
+    row = rows["broker:7"]
+    assert row.operating_profile_status == "available"
+    assert row.operating_profile == BrokerOperatingProfile.model_validate(document)
+    assert [(issue.path.entity_id, issue.path.field, issue.kind, issue.severity) for issue in _profile_issues(issues)] == [("broker:7", "operating_profile_status", "unsupported", "error")]
 
 
 @pytest.mark.parametrize("stored", ["{not json", '{"profile_version": 9}', "[]", ""])

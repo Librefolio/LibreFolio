@@ -136,8 +136,9 @@ def build_planner_brokers(
                     field="active",
                 )
             )
-        if profile is None:
-            # Only a Broker without a usable profile: same code, kind and severity as before (D10).
+        if profile is None or not profile.order_modes:
+            # A Broker without a usable profile: same code, kind and severity as before (D10). A profile with no order mode
+            # counts too (Q-P3b, from D11): the planner then gives its default zero-fee modes, which the issue says.
             issues.append(
                 field_issue(
                     code="allocation.broker_execution_profile_unsupported",
