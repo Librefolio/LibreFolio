@@ -208,8 +208,9 @@ async def confirm_owner_email_change(body: EmailChangeConfirmRequest, request: R
     A change asked from Profile (release 1.4): the link proves that its reader received the email at the new address, and
     the session of the request that it is the account's owner (decision D10). With the session of the link's account the
     address becomes the link's, verified; every session of the account ends; after the answer the old address gets a
-    notice and the new one a confirmation. Without that session — none, one no longer valid, another account's — 403
-    ``EMAIL_CHANGE_SIGN_IN_REQUIRED``, nothing changed: the link still works once its account signs in.
+    notice and the new one a confirmation. Without that session — none, one no longer valid — 403
+    ``EMAIL_CHANGE_SIGN_IN_REQUIRED``; with another account's, 403 ``EMAIL_CHANGE_OTHER_ACCOUNT``, which says only that the link
+    is not for the account signed in, never whose it is. Nothing changed: the link still works once its account signs in.
 
     The owner of a managed instance (A5-1b): no session needed. The host put the new address in ``LIBREFOLIO_ADMIN_EMAIL``,
     and the owner may have no way to sign in any more. The owner's address becomes the link's, verified; every session of
@@ -225,6 +226,8 @@ async def confirm_owner_email_change(body: EmailChangeConfirmRequest, request: R
         acting_user_id = await _session_account_id(request, session)
         try:
             confirmed = await email_change.confirm_profile_change(session, body.token, acting_user_id=acting_user_id)
+        except email_change.ProfileEmailChangeOtherAccountError:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error_code": "EMAIL_CHANGE_OTHER_ACCOUNT", "message": "This link belongs to another account: sign out, then sign in with the account that asked for this change"}) from None
         except email_change.ProfileEmailChangeSignInRequiredError:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error_code": "EMAIL_CHANGE_SIGN_IN_REQUIRED", "message": "Sign in to the account that asked for this change to confirm it"}) from None
         except email_change.ProfileEmailChangeLinkInvalidError as exc:

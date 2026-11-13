@@ -685,17 +685,18 @@ async def test_cancel_revokes_the_request_and_is_idempotent(engine: AsyncEngine,
 
 @pytest.mark.asyncio
 async def test_a_click_without_the_accounts_session_writes_nothing(engine: AsyncEngine, outbox: Outbox) -> None:
-    """EMC-028 — D10: a live link clicked with no session (``acting_user_id=None``) or with another account's: ``ProfileEmailChangeSignInRequiredError``, and nothing written — the row neither spent nor revoked, the address and the sessions unchanged. The same link, clicked next by its account, completes the change."""
+    """EMC-028 — D10: a live link clicked with no session (``acting_user_id=None``) or with another account's: refused, and nothing written — the row neither spent nor revoked, the address and the sessions unchanged. With no session ``ProfileEmailChangeSignInRequiredError`` (``EMAIL_CHANGE_SIGN_IN_REQUIRED``); with another account's its subclass ``ProfileEmailChangeOtherAccountError`` (``EMAIL_CHANGE_OTHER_ACCOUNT``), so the page can say that the link is not for the account signed in, never whose it is. The same link, clicked next by its account, completes the change."""
     print_section("EMC-028: the click needs the account's session")
     user, stranger = await _add_user(engine), await _add_user(engine)
     await _ask(engine, user.id)
     token = _token_of(outbox.attempts[-1])
     before = await _account(engine, user.id)
 
-    for acting in (None, stranger.id):
-        with pytest.raises(email_change.ProfileEmailChangeSignInRequiredError) as refused:
+    for acting, error, code in ((None, email_change.ProfileEmailChangeSignInRequiredError, "EMAIL_CHANGE_SIGN_IN_REQUIRED"), (stranger.id, email_change.ProfileEmailChangeOtherAccountError, "EMAIL_CHANGE_OTHER_ACCOUNT")):
+        with pytest.raises(error) as refused:
             await _confirm(engine, token, acting)
-        assert refused.value.code == "EMAIL_CHANGE_SIGN_IN_REQUIRED"
+        assert refused.value.code == code
+        assert isinstance(refused.value, email_change.ProfileEmailChangeSignInRequiredError), "the other account's refusal is still a refusal to sign in"
     (row,) = await _rows(engine, user.id)
     assert (row.consumed_at, row.revoked_at, await _status(engine, token)) == (None, None, TokenStatus.VALID), "the link is read, never spent or revoked"
     after = await _account(engine, user.id)

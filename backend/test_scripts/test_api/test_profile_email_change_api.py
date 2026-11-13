@@ -573,7 +573,7 @@ async def test_a_profile_link_clicked_with_the_accounts_session_completes_the_ch
 
 @pytest.mark.asyncio
 async def test_a_profile_link_without_the_accounts_session_is_403_and_stays_live(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """PEC-021 — D10: the Profile link clicked without a cookie, with a cookie no longer valid (the account's session version raised since) and with another account's cookie: 403 ``EMAIL_CHANGE_SIGN_IN_REQUIRED``, the same body in the three cases, nothing changed, no email scheduled; the link then works with the account's own session."""
+    """PEC-021 — D10: the Profile link clicked without a cookie, with a cookie no longer valid (the account's session version raised since) and with another account's cookie: 403, nothing changed, no email scheduled; the link then works with the account's own session. Without a valid session ``EMAIL_CHANGE_SIGN_IN_REQUIRED``, one body for both; with another account's ``EMAIL_CHANGE_OTHER_ACCOUNT``, whose body names no account: neither the link's username nor an address."""
     print_section("PEC-021: 403 without the account's session")
     _email_on(monkeypatch)
     user, other = await _add_user(private.engine), await _add_user(private.engine)
@@ -590,14 +590,16 @@ async def test_a_profile_link_without_the_accounts_session_is_403_and_stays_live
 
     bodies = [response.json() for response in (without, another, stale)]
     assert [response.status_code for response in (without, another, stale)] == [403, 403, 403], [response.text for response in (without, another, stale)]
-    assert bodies[0]["detail"]["error_code"] == "EMAIL_CHANGE_SIGN_IN_REQUIRED" and bodies.count(bodies[0]) == 3, bodies
+    assert bodies[0]["detail"]["error_code"] == "EMAIL_CHANGE_SIGN_IN_REQUIRED" and bodies[2] == bodies[0], bodies
+    assert bodies[1]["detail"]["error_code"] == "EMAIL_CHANGE_OTHER_ACCOUNT", bodies
+    assert not [secret for secret in (user.username, user.email, NEW_EMAIL) if secret.casefold() in another.text.casefold()], f"the refusal names the account: {another.text}"
     assert ((await _row(private.engine, user.id)).email, world.changed) == (user.email, [])
     assert len(_live(await _links(private.engine, user.id))) == 1, "the link is neither spent nor revoked"
 
     async with _signed_in(private, user) as browser:
         response = await browser.post(CONFIRM, json={"token": token})
     assert response.status_code == 200, response.text
-    print_success("403 three times, one body; then 200 with the account's session")
+    print_success("403 three times (sign in, another account, sign in); then 200 with the account's session")
 
 
 @pytest.mark.asyncio
