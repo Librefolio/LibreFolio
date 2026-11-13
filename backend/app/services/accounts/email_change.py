@@ -349,6 +349,28 @@ async def _refusal(session: AsyncSession, record: AccountToken, user: Optional[U
     return None
 
 
+LinkCheck = Literal["ready", "signin", "other_account"]
+
+
+async def check_link(session: AsyncSession, token: str, *, acting_user_id: Optional[int], now: Optional[datetime] = None) -> LinkCheck:
+    """What the link page shows on opening (lots E2, E3): read only, the link neither spent nor revoked, and nothing that names
+    the account. A dead link: ``ProfileEmailChangeLinkInvalidError`` with its status, as its click would get. A live one:
+    its status — see ``EmailChangeCheckResponse``. The conditions read at the click (another account took the
+    address meanwhile) are not read here: the click still answers them."""
+    inspection = await token_service.inspect_token(session, token, CHANGE, now=now or utcnow())
+    record = inspection.record
+    if inspection.status is not token_service.TokenStatus.VALID or record is None:
+        raise ProfileEmailChangeLinkInvalidError(inspection.status.value)
+    if not (record.created_by_user_id is not None and record.created_by_user_id == record.user_id):
+        # The host's link of the instance owner: no session needed.
+        return "ready"
+    if acting_user_id is None:
+        return "signin"
+    if acting_user_id != record.user_id:
+        return "other_account"
+    return "ready"
+
+
 async def confirm_profile_change(session: AsyncSession, token: str, *, acting_user_id: Optional[int], now: Optional[datetime] = None) -> ConfirmedProfileChange:
     """The click on a Profile link, by ``acting_user_id`` (the account of the request's session; None without one); commits.
 
