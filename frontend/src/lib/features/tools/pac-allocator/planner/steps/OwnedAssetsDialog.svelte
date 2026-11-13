@@ -11,7 +11,7 @@
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
-    import {applyOwnedAssets, domainAssetKey, domainBrokerKey, ownedAssets} from '../copies';
+    import {applyOwnedAssets, applyOwnedPositions, domainAssetKey, domainBrokerKey, newCopyRecord, ownedAssets} from '../copies';
     import type {PlannerDraft} from '../draft.svelte';
     import {loadCopyScope, selectableIds, type ScopeBroker} from '../scope';
     import {compareDecimal} from '$lib/utils/core/exactDecimal';
@@ -36,7 +36,8 @@
     let {draft, accountGeneration, onadded, onclose}: Props = $props();
 
     const testid = testId('owned-assets', profile);
-    const load = new SourceLoad();
+    // The Rebalancer reads the quantities held too, and copies the positions with the Assets (F3a of project 67).
+    const load = new SourceLoad({positions: profile.positions});
     let scope = $state<ScopeBroker[] | null>(null);
     let scopeFailed = $state(false);
     /** One owned Broker id, or `''` for all of them. */
@@ -103,7 +104,8 @@
 
     function add(): void {
         const assets = picked.map((row) => row.asset);
-        applyOwnedAssets(draft, assets);
+        if (profile.positions && load.data) applyOwnedPositions(draft, load.data, newCopyRecord(draft, 'positions', load.data), picked);
+        else applyOwnedAssets(draft, assets);
         onadded(assets.map((asset) => asset.source_asset_id));
         onclose();
     }

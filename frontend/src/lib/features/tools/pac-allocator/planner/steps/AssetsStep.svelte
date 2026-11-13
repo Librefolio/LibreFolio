@@ -27,6 +27,7 @@
     import RemovalConfirm from '../shared/RemovalConfirm.svelte';
     import AssetEditor from './AssetEditor.svelte';
     import OwnedAssetsDialog from './OwnedAssetsDialog.svelte';
+    import PositionsTable from './PositionsTable.svelte';
     import {getPlannerProfile, testId} from '../profile';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
@@ -162,24 +163,29 @@
 </script>
 
 <div class="space-y-4" data-testid={testId('assets', profile)} aria-busy={reader.busy} data-busy={reader.busy ? 'true' : 'false'}>
+    <!-- N6 (F3a of project 67, both Tools): on a phone the search takes the whole row, the two buttons go under it, half and half. -->
     <div class="flex flex-wrap items-center gap-2">
-        <div class="w-full max-w-sm">
-            <AssetPickerPanel mode="single" assets={catalogue} blockedLabel={$t('risk.benchmark.blocked')} bind:value={searchValue} placeholder={$t(`${KEY}.search`, {default: 'Search Asset'})} loading={catalogueLoading} testId={testId('asset-search', profile)} onchange={addFromSearch} />
+        <div class="flex w-full items-center gap-1 sm:w-auto">
+            <div class="min-w-0 flex-1 sm:w-96 sm:max-w-sm sm:flex-none">
+                <AssetPickerPanel mode="single" assets={catalogue} blockedLabel={$t('risk.benchmark.blocked')} bind:value={searchValue} placeholder={$t(`${KEY}.search`, {default: 'Search Asset'})} loading={catalogueLoading} testId={testId('asset-search', profile)} onchange={addFromSearch} />
+            </div>
+            <HelpTip
+                label={$t(`${KEY}.autoLabel`, {default: 'Data from LibreFolio'})}
+                help={$t(`${KEY}.priceAuto`, {
+                    default:
+                        'An Asset added from LibreFolio arrives with its latest stored price and its composition. The composition is the one of LibreFolio and is not changed here. The price is «Auto»: read again just before the calculation; switch it to «Manual» to use a price of your own. No provider is called: the prices are the ones LibreFolio already has.',
+                })}
+                testid={testId('assets-auto-help', profile)}
+            />
         </div>
-        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('owned-assets-open', profile)} onclick={() => (owning = true)}>
-            <Briefcase class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.ownedAssets.open', {default: 'Your Assets'})}
-        </button>
-        <HelpTip
-            label={$t(`${KEY}.autoLabel`, {default: 'Data from LibreFolio'})}
-            help={$t(`${KEY}.priceAuto`, {
-                default:
-                    'An Asset added from LibreFolio arrives with its latest stored price and its composition. The composition is the one of LibreFolio and is not changed here. The price is «Auto»: read again just before the calculation; switch it to «Manual» to use a price of your own. No provider is called: the prices are the ones LibreFolio already has.',
-            })}
-            testid={testId('assets-auto-help', profile)}
-        />
-        <button type="button" class="{BUTTON_SECONDARY} ml-auto" data-testid={testId('asset-add', profile)} onclick={() => (editing = {key: null})}>
-            <Plus class="h-4 w-4" aria-hidden="true" />{$t(`${KEY}.addManual`, {default: 'Manual Asset'})}
-        </button>
+        <div class="grid w-full grid-cols-2 gap-2 sm:contents">
+            <button type="button" class={BUTTON_SECONDARY} data-testid={testId('owned-assets-open', profile)} onclick={() => (owning = true)}>
+                <Briefcase class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.ownedAssets.open', {default: 'Your Assets'})}
+            </button>
+            <button type="button" class="{BUTTON_SECONDARY} sm:ml-auto" data-testid={testId('asset-add', profile)} onclick={() => (editing = {key: null})}>
+                <Plus class="h-4 w-4" aria-hidden="true" />{$t(`${KEY}.addManual`, {default: 'Manual Asset'})}
+            </button>
+        </div>
     </div>
 
     {#if reader.error}
@@ -329,6 +335,9 @@
                             {/if}
                         </dd>
                     </dl>
+                    {#if profile.positions}
+                        <PositionsTable {draft} assetKey={asset.key} assetLabel={title(asset)} />
+                    {/if}
                 </section>
             {/snippet}
         </OrderableList>
