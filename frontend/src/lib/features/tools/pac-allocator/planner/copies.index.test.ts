@@ -18,7 +18,7 @@ function source(assets: SourceAsset[]): PlannerSource {
         generatedAt: '2026-11-07T10:00:00Z',
         provenance: [],
         assets,
-        brokers: [{broker_id: 'broker-1', source_broker_id: 1, name: 'B', icon_url: null, access_role: 'OWNER', ownership_share: '1', observed_currencies: [], active: true, execution_profile_status: 'ok', provenance_id: 'p'}],
+        brokers: [{broker_id: 'broker-1', source_broker_id: 1, name: 'B', icon_url: null, access_role: 'OWNER', ownership_share: '1', observed_currencies: [], active: true, operating_profile_status: 'not_available', operating_profile: null, provenance_id: 'p'}],
         holdings: assets.map((row) => ({holding_id: `h-${row.source_asset_id}`, asset_id: row.asset_id, broker_id: 'broker-1', provenance_id: 'p'})),
         cash: [],
         prices: [],

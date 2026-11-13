@@ -93,7 +93,7 @@ const PROFILE: SourceIssue = {
     code: PROFILE_CODE,
     kind: 'unsupported',
     severity: 'error',
-    path: {kind: 'field', section: 'brokers', entity_kind: 'broker', entity_id: BROKER_ID, field: 'execution_profile_status'},
+    path: {kind: 'field', section: 'brokers', entity_kind: 'broker', entity_id: BROKER_ID, field: 'operating_profile_status'},
     params: [],
 };
 
@@ -117,7 +117,8 @@ function brokerRow(id: number, name: string, active = true) {
         active,
         allow_cash_overdraft: false,
         allow_asset_shorting: false,
-        execution_profile_status: 'not_available',
+        operating_profile_status: 'not_available',
+        operating_profile: null,
         provenance_id: 'source:broker-domain',
     };
 }
@@ -271,7 +272,7 @@ const PROFILE_OUTSIDE: SourceIssue = {
     code: PROFILE_CODE,
     kind: 'unsupported',
     severity: 'error',
-    path: {kind: 'field', section: 'brokers', entity_kind: 'broker', entity_id: OUTSIDE_ID, field: 'execution_profile_status'},
+    path: {kind: 'field', section: 'brokers', entity_kind: 'broker', entity_id: OUTSIDE_ID, field: 'operating_profile_status'},
     params: [],
 };
 

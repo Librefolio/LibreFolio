@@ -11,6 +11,7 @@ import {isAxiosError} from 'axios';
 import {zodiosApi} from '$lib/api';
 import {safeToolTransportError} from '$lib/features/tools/client';
 import {ToolClientError, assertToolAccount, runToolSessionTask} from '$lib/features/tools/contracts';
+import type {OperatingProfileDocument} from '$lib/features/brokers/profile/brokerOperatingProfile';
 
 export type SourceSection = 'assets' | 'brokers' | 'holdings' | 'cash_balances' | 'prices' | 'classifications' | 'wac_contexts' | 'fx_quotes' | 'current_distribution';
 export type SourceDomain = 'portfolio' | 'market_data' | 'broker' | 'fx' | 'wac';
@@ -54,7 +55,10 @@ export interface SourceBroker {
     ownership_share: string;
     observed_currencies: string[];
     active: boolean;
-    execution_profile_status: string;
+    /** Source 1.1.0 (P3 of project 67): `available` when the account keeps a readable operating profile. */
+    operating_profile_status: 'available' | 'not_available';
+    /** The account's whole operating profile, sale side and tax regime included (D13); `null` without one. */
+    operating_profile: OperatingProfileDocument | null;
     provenance_id: string;
 }
 
@@ -228,7 +232,8 @@ function mapResponse(raw: RawResponse): PlannerSource {
             ownership_share: row.ownership_share,
             observed_currencies: [...row.observed_currencies],
             active: row.active,
-            execution_profile_status: row.execution_profile_status,
+            operating_profile_status: row.operating_profile_status,
+            operating_profile: (row.operating_profile ?? null) as OperatingProfileDocument | null,
             provenance_id: row.provenance_id,
         })),
         holdings: raw.holdings.map((row) => ({

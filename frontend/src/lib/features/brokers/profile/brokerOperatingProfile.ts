@@ -52,6 +52,11 @@ export interface OperatingProfileDocument {
     tax_regime?: TaxRegime | null;
 }
 
+/** The regime a profile means: an absent one is `declarative` (M6, M18), the backend's `effective_tax_regime`, written once here. */
+export function effectiveTaxRegime(profile: OperatingProfileDocument | null | undefined): TaxRegime {
+    return profile?.tax_regime ?? 'declarative';
+}
+
 // -- the panel's draft -------------------------------------------------------------------------------
 
 /** One fee as the panel shows it: every field a text; an empty field is zero, an empty maximum is «none». */
