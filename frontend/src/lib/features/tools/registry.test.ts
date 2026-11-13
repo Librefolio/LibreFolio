@@ -19,10 +19,11 @@ function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
     return {promise, resolve};
 }
 
-function makeCatalog(): VerifiedToolCatalog {
-    const contracts = [getCompiledToolContract('pac_allocator', '2.0.0')];
+/** A verified catalog that serves `tools` (the PAC alone by default), each from its compiled 2.0.0 contract. */
+function makeCatalog(tools: readonly ('pac_allocator' | 'portfolio_rebalancer')[] = ['pac_allocator']): VerifiedToolCatalog {
+    const contracts = tools.map((tool) => getCompiledToolContract(tool, '2.0.0'));
     if (contracts.some((contract) => !contract)) {
-        throw new Error('the compiled pac_allocator 2.0.0 contract must be generated');
+        throw new Error(`the compiled 2.0.0 contracts of ${tools.join(', ')} must be generated`);
     }
     return validateToolCatalog(
         {
@@ -224,5 +225,27 @@ describe('compiled tool renderer registry', () => {
 
         expect(() => binding.peek()).toThrowError(expect.objectContaining({kind: 'session', code: 'session_changed'}));
         await expect(binding.load()).rejects.toMatchObject({kind: 'session', code: 'session_changed'});
+    });
+
+    it('two tools bind two renderers with distinct component keys (F3a of project 67)', () => {
+        const both = makeCatalog(['pac_allocator', 'portfolio_rebalancer']);
+        const rebalancer = getCompiledToolContract('portfolio_rebalancer', '2.0.0');
+
+        // The shipped registry: each Tool resolves to its own renderer, key and UI version taken from the compiled contract.
+        expect(resolveToolRenderer(both, 'pac_allocator')).toMatchObject({status: 'ready', binding: {descriptor: {ui: {component_key: 'pac-allocator', version: '2.0.0'}}}});
+        expect(resolveToolRenderer(both, 'portfolio_rebalancer')).toMatchObject({
+            status: 'ready',
+            binding: {descriptor: {tool_code: 'portfolio_rebalancer', contract_version: '2.0.0', ui: {kind: 'custom', component_key: rebalancer?.componentKey, version: rebalancer?.uiVersion}}},
+        });
+        expect(rebalancer).toMatchObject({componentKey: 'portfolio-rebalancer', uiVersion: '1.0.0'});
+    });
+
+    it('one component key claimed by two tools blocks both', () => {
+        const both = makeCatalog(['pac_allocator', 'portfolio_rebalancer']);
+        const thief = defineToolRenderer('portfolio_rebalancer', '2.0.0', {componentKey: 'pac-allocator', uiVersion: '1.0.0', load: vi.fn(async () => ({default: fakeComponent}))});
+        const registry = createToolRendererRegistry([registration(), thief]);
+
+        expect(registry.resolve(both, 'pac_allocator')).toMatchObject({status: 'unavailable', reason: 'renderer_collision'});
+        expect(registry.resolve(both, 'portfolio_rebalancer')).toMatchObject({status: 'unavailable', reason: 'renderer_collision'});
     });
 });
