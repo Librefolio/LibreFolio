@@ -1,24 +1,31 @@
 <!--
   The scenario data of one Broker: how you buy there in each currency, what a purchase costs, and
   which liquidity may pay for it. It edits a copy, and «Apply» writes that copy back to the draft.
+
+  P3 of project 67: the order modes, the purchase fee and the currency conversion are edited with the broker's own
+  operating profile panel (`BrokerOperatingProfileBox`, groups `orderMode`, `buyFee`, `conversion`), through
+  `brokerProfileAdapter.ts`; the liquidity sources stay the planner's. «Restore» goes back to the modes copied from the
+  account's profile (D12), or to the default modes when it has none.
 -->
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {PiggyBank, Plus, Trash2} from 'lucide-svelte';
+    import {PiggyBank} from 'lucide-svelte';
     import {t} from '$lib/i18n';
-    import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
-    import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import BrokerOperatingProfileBox from '$lib/features/brokers/profile/BrokerOperatingProfileBox.svelte';
+    import {fromDraft, profileProblems, type OrderKind, type ProfileDraft, type ProfileGroup} from '$lib/features/brokers/profile/brokerOperatingProfile';
+    import {modeKeys, modesFromProfile, modesOf, profileDraftOf} from '../brokerProfileAdapter';
+    import {planProfileSave, readStoredProfile, writeStoredProfile, type ProfileSavePhase, type ProfileSavePlan, type ProfileWriteOutcome} from '../brokerProfileSave';
     import {DEFAULT_QUANTITY_STEP} from '../defaults';
-    import {defaultMode, type DraftBroker, type DraftFunding, type DraftMode, type FundingSourceRef, type ModeKind, type PlannerDraft} from '../draft.svelte';
+    import {brokerModesModified, defaultMode, type DraftBroker, type DraftFunding, type FundingSourceRef, type PlannerDraft} from '../draft.svelte';
     import {cldrCurrencyStep, formatPlannerMoneyPlain} from '../format';
-    import {fundingSourceHelp, modeKindText, modeUnitText} from '../modeText';
-    import {BADGE, BUTTON_DANGER_SMALL, BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, ICON_BUBBLE, INPUT, INPUT_SUFFIX, LABEL_ROW, SECTION_TITLE, TITLE_INPUT, TOGGLE_CARD, TOGGLE_OFF, TOGGLE_ON} from '../ui';
+    import {fundingSourceHelp} from '../modeText';
+    import {BADGE, BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, ICON_BUBBLE, INPUT, INPUT_SUFFIX, LABEL_ROW, SECTION_TITLE, TITLE_INPUT, TOGGLE_CARD, TOGGLE_OFF, TOGGLE_ON} from '../ui';
     import CurrencyCode from '../shared/CurrencyCode.svelte';
     import HelpTip from '../shared/HelpTip.svelte';
     import PlannerBrokerIcon from '../shared/PlannerBrokerIcon.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
+    import ProfileSaveConfirm from '../shared/ProfileSaveConfirm.svelte';
     import {getPlannerProfile, testId} from '../profile';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
@@ -35,6 +42,9 @@
     }
 
     let {draft, brokerKey, addCurrency = '', addFor = '', onclose}: Props = $props();
+
+    /** The planner shows the purchase side only: the sale fee and the tax regime are not part of a plan yet. */
+    const BOX_GROUPS: readonly ProfileGroup[] = ['orderMode', 'buyFee', 'conversion'];
 
     const ids = $props.id();
     // Mount = open: the editor works on a copy taken once, and writes it back only on apply.
@@ -55,55 +65,110 @@
         working.modes = [mode, ...working.modes];
         return mode.key;
     });
+    /** The box marks the block the Route step asked for, only when the Broker did not have it. */
+    const requiredCurrencies = untrack(() => (addedKey ? [addCurrency] : []));
 
-    let adding = $state(false);
-    let pendingCurrency = $state('');
+    /** The panel's starting draft: a new object only on «Restore», so the panel never restarts while the user types. */
+    let boxDraft = $state.raw<ProfileDraft>(untrack(() => profileDraftOf(working?.modes ?? [], working?.conversionMode ?? 'manual')));
+    /** The panel's latest draft, for its local problems. */
+    let latest = $state.raw<ProfileDraft>(untrack(() => boxDraft));
+    const problems = $derived(profileProblems(latest));
+    let keyFor = untrack(() => modeKeys(working?.modes.map((mode) => mode.key) ?? [], () => draft.nextId('mode')));
 
-    const kindOptions = $derived((['whole_quantity', 'monetary_amount'] as const).map((kind) => ({value: kind, label: modeKindText($t, kind)})));
-    /** R4.9: who makes a currency conversion; it changes how the plan presents it, not the calculation. */
-    const conversionOptions = $derived([
-        {mode: 'manual' as const, label: $t('tools.pacAllocator.planner.brokerEditor.conversionManual', {default: 'You convert before buying'})},
-        {mode: 'automatic' as const, label: $t('tools.pacAllocator.planner.brokerEditor.conversionAutomatic', {default: 'The Broker converts when you buy'})},
-    ]);
-    const usedCurrencies = $derived(new Set(working?.modes.map((mode) => mode.currency) ?? []));
-
-    function setKind(mode: DraftMode, kind: string): void {
-        if (kind !== 'whole_quantity' && kind !== 'monetary_amount') return;
-        if (mode.kind === kind) return;
-        mode.kind = kind as ModeKind;
-        mode.step = kind === 'whole_quantity' ? DEFAULT_QUANTITY_STEP : cldrCurrencyStep(mode.currency);
+    /** The increment that follows a new order type, or a new currency by amount (as before the shared panel). */
+    function stepFor(kind: OrderKind, currency: string): string {
+        return kind === 'whole_quantity' ? DEFAULT_QUANTITY_STEP : cldrCurrencyStep(currency);
     }
 
-    /** The currencies another block already uses: a block cannot take one of them. */
-    function otherCurrencies(mode: DraftMode): Set<string> {
-        return new Set([...usedCurrencies].filter((currency) => currency !== mode.currency));
+    function profileChanged(next: ProfileDraft): void {
+        latest = next;
+        // A confirm list speaks of the values it was computed on: an edit closes it.
+        closeProfileSave();
+        if (!working) return;
+        const back = modesOf(next, keyFor);
+        working.modes = back.modes;
+        working.conversionMode = back.conversionMode;
     }
 
-    /** A block changes currency in place; an amount increment follows the new currency's minor unit. */
-    function setCurrency(mode: DraftMode, currency: string): void {
-        if (!/^[A-Z]{3}$/.test(currency) || currency === mode.currency || otherCurrencies(mode).has(currency)) return;
-        mode.currency = currency;
-        if (mode.kind === 'monetary_amount') mode.step = cldrCurrencyStep(currency);
-    }
-
-    /** The new currency goes first, where the user is looking; the list can be reordered after. */
-    function addMode(currency: string): void {
-        if (!working || !/^[A-Z]{3}$/.test(currency) || usedCurrencies.has(currency)) return;
-        working.modes = [defaultMode(draft.nextId('mode'), currency), ...working.modes];
-        closeAdd();
-    }
-
-    function closeAdd(): void {
-        pendingCurrency = '';
-        adding = false;
-    }
-
-    function removeMode(key: string): void {
-        if (working) working.modes = working.modes.filter((mode) => mode.key !== key);
-    }
+    /** `profile`: as the account's profile gave them; `modified`: changed since; `none`: no profile was copied. */
+    const modesOrigin = $derived(!working || (working.copiedModes === null && working.copiedConversionMode === null) ? 'none' : brokerModesModified(working) ? 'modified' : 'profile');
 
     function restoreProposed(): void {
-        if (working) working.modes = draft.defaultModes(working.observedCurrencies);
+        if (!working) return;
+        working.modes = working.copiedModes ? structuredClone($state.snapshot(working.copiedModes)) : draft.defaultModes(working.observedCurrencies);
+        working.conversionMode = working.copiedConversionMode ?? 'manual';
+        keyFor = modeKeys(
+            working.modes.map((mode) => mode.key),
+            () => draft.nextId('mode'),
+        );
+        boxDraft = profileDraftOf(working.modes, working.conversionMode);
+        latest = boxDraft;
+        closeProfileSave();
+    }
+
+    // -- «Save to the broker profile» (M10, D18, N4) ---------------------------------------------------------------
+
+    /** Only a Broker copied from LibreFolio has a profile to write; a manual one never (W2). */
+    const savable = $derived(working !== null && working.origin === 'copied' && working.sourceBrokerId !== null);
+    /** The profile as the last copy (or save) knew it; `null` when it had none. */
+    const knownProfile = $derived(working && (working.copiedModes !== null || working.copiedConversionMode !== null) ? fromDraft(profileDraftOf(working.copiedModes ?? [], working.copiedConversionMode ?? 'manual')) : null);
+    /** Off when the scenario says nothing the profile does not say already. */
+    const saveHasChanges = $derived(working ? planProfileSave(knownProfile, working.modes, working.conversionMode).changes.length > 0 : false);
+    let savePhase = $state<ProfileSavePhase | null>(null);
+    let savePlan = $state.raw<ProfileSavePlan | null>(null);
+    let saveRefusal = $state<string | null>(null);
+
+    /** N4: re-read the broker, then show what the save would change; nothing is written yet. */
+    async function startProfileSave(): Promise<void> {
+        if (!working || working.sourceBrokerId === null) return;
+        savePhase = 'reading';
+        savePlan = null;
+        saveRefusal = null;
+        try {
+            const stored = await readStoredProfile(working.sourceBrokerId);
+            if (!working || savePhase !== 'reading') return;
+            savePlan = planProfileSave(stored, working.modes, working.conversionMode);
+            savePhase = 'confirm';
+        } catch {
+            if (savePhase === 'reading') savePhase = 'readFailed';
+        }
+    }
+
+    /** D18: one write of the merged document; the copy then follows what the account now says. */
+    async function confirmProfileSave(): Promise<void> {
+        if (!working || working.sourceBrokerId === null || !savePlan || savePhase !== 'confirm') return;
+        const plan = savePlan;
+        savePhase = 'writing';
+        let outcome: ProfileWriteOutcome;
+        try {
+            outcome = await writeStoredProfile(working.sourceBrokerId, plan.document);
+        } catch {
+            savePhase = 'writeFailed';
+            return;
+        }
+        if (!outcome.ok) {
+            saveRefusal = outcome.error;
+            savePhase = 'refused';
+            return;
+        }
+        const copiedModes = modesFromProfile(plan.document, () => draft.nextId('mode'));
+        const copiedConversionMode = plan.document ? (plan.document.conversion_mode ?? 'manual') : null;
+        working.copiedModes = copiedModes;
+        working.copiedConversionMode = copiedConversionMode;
+        // The draft's Broker learns the new copy too: the account changed even if this window is cancelled.
+        const target = draft.broker(working.key);
+        if (target) {
+            target.copiedModes = copiedModes ? structuredClone(copiedModes) : null;
+            target.copiedConversionMode = copiedConversionMode;
+        }
+        savePhase = 'saved';
+    }
+
+    function closeProfileSave(): void {
+        if (savePhase === 'writing') return;
+        savePhase = null;
+        savePlan = null;
+        saveRefusal = null;
     }
 
     /** Who a funding source belongs to: a Broker account (with its icon) or a contribution. */
@@ -160,187 +225,28 @@
             {/if}
         </div>
 
-        <section class="space-y-3" aria-labelledby="{ids}-modes">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-                <div class="flex items-center gap-0.5">
-                    <h3 id="{ids}-modes" class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.brokerEditor.modes', {default: 'How you buy, currency by currency'})}</h3>
-                    <HelpTip
-                        label={$t('tools.pacAllocator.planner.brokerEditor.modes', {default: 'How you buy, currency by currency'})}
-                        help={$t('tools.pacAllocator.planner.brokerEditor.modesHelp', {default: 'One block for each currency you buy in at this Broker: an Asset priced in that currency is bought with its rules. Drag the blocks into the order you prefer.'})}
-                    />
-                </div>
-                <button type="button" class={BUTTON_SECONDARY} disabled={adding} data-testid={testId('mode-add', profile)} onclick={() => (adding = true)}>
-                    <Plus class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.brokerEditor.addCurrency', {default: 'Add currency'})}
-                </button>
-            </div>
-
-            {#if adding}
-                <div class="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-lf-checked bg-lf-selected/50 p-3" data-testid={testId('mode-pending', profile)}>
-                    <div class="w-full sm:w-72">
-                        <p class={LABEL_ROW}>{$t('tools.pacAllocator.planner.brokerEditor.pickCurrency', {default: 'Currency of the new block'})}</p>
-                        <CurrencySearchSelect bind:value={pendingCurrency} excludedCurrencies={usedCurrencies} testId={testId('mode-add-currency', profile)} onchange={(currency) => addMode(currency)} />
-                    </div>
-                    <button type="button" class={BUTTON_SECONDARY} data-testid={testId('mode-add-cancel', profile)} onclick={closeAdd}>{$t('common.cancel', {default: 'Cancel'})}</button>
-                </div>
-            {/if}
-
-            {#if working.modes.length > 0}
-                <OrderableList items={working.modes} keyFn={(mode) => mode.key} onReorder={(next) => working && (working.modes = next)}>
-                    {#snippet children({item: mode})}
-                        <div class="space-y-3 p-1 sm:p-2" data-testid={testId('mode', profile)} data-currency={mode.currency} data-kind={mode.kind} data-added={mode.key === addedKey ? 'true' : undefined}>
-                            {#if mode.key === addedKey && mode.currency === addCurrency}
-                                <p class="rounded-md border border-lf-warning-line bg-lf-warning-soft px-2.5 py-1.5 text-xs text-lf-warning-on-soft" data-testid={testId('mode-added-for', profile)}>
-                                    {$t('tools.pacAllocator.planner.brokerEditor.addedFor', {
-                                        default: '{currency} mode added to buy {asset}, with starting values: check order type, increment and fees, then apply.',
-                                        values: {currency: mode.currency, asset: addFor || '—'},
-                                    })}
-                                </p>
-                            {/if}
-                            <div class="flex items-center justify-between gap-2">
-                                <div class="w-full max-w-64">
-                                    <CurrencySearchSelect value={mode.currency} compact excludedCurrencies={otherCurrencies(mode)} testId={testId('mode-currency', profile)} onchange={(currency) => setCurrency(mode, currency)} />
-                                </div>
-                                <button type="button" class={BUTTON_DANGER_SMALL} data-testid={testId('mode-remove', profile)} onclick={() => removeMode(mode.key)}>
-                                    <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />{$t('common.remove', {default: 'Remove'})}
-                                </button>
-                            </div>
-
-                            <div class="grid gap-3 sm:grid-cols-2">
-                                <div>
-                                    <div class={LABEL_ROW}>
-                                        <span>{$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})}</span>
-                                        <HelpTip
-                                            label={$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})}
-                                            help={$t('tools.pacAllocator.planner.brokers.orderKindHelp', {default: 'How you enter an order at this Broker: by number of units (you buy 3 units) or by amount (you invest 150). It sets the unit of the increment and of the limits on each order.'})}
-                                        />
-                                    </div>
-                                    <SimpleSelect value={mode.kind} options={kindOptions} testId={testId('mode-kind', profile)} ariaLabel={$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})} onchange={(value) => setKind(mode, value)} />
-                                </div>
-                                <div>
-                                    <div class={LABEL_ROW}>
-                                        <label for="{ids}-{mode.key}-step">{$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})} *</label>
-                                        <HelpTip
-                                            label={$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})}
-                                            help={$t('tools.pacAllocator.planner.brokers.incrementHelp', {
-                                                default: 'Every proposed order is a multiple of this value. By number of units: a whole number, for example 1. By amount: the smallest amount you can enter, for example 0.01; this is how you buy fractions of a unit.',
-                                            })}
-                                        />
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <div class="min-w-0 flex-1">
-                                            <ExactDecimalInput id="{ids}-{mode.key}-step" bind:value={mode.step} step={mode.kind === 'whole_quantity' ? '1' : cldrCurrencyStep(mode.currency)} className={INPUT} testid={testId('mode-step', profile)} />
-                                        </div>
-                                        <span class={INPUT_SUFFIX}>
-                                            {#if mode.kind === 'monetary_amount'}<CurrencyCode code={mode.currency} />{:else}{modeUnitText($t, mode)}{/if}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div role="group" aria-labelledby="{ids}-{mode.key}-fee" class="border-t border-lf-subtle pt-3">
-                                <div class={LABEL_ROW}>
-                                    <span id="{ids}-{mode.key}-fee" class="font-semibold text-lf-secondary">{$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}</span>
-                                    <HelpTip
-                                        label={$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}
-                                        help={$t('tools.pacAllocator.planner.brokers.feeHelp', {
-                                            default:
-                                                'What the Broker charges on each purchase: the percentage of the amount, kept between minimum and maximum, plus the fixed part. No purchase, no fee. It is paid from your liquidity and is not invested.\n\nExamples, in the currency of the purchase:\n• 0.19%, minimum 1.50, maximum 18: on 500 you pay 1.50, on 2,000 you pay 3.80, on 20,000 you pay 18.\n• Only a fixed part of 2.95: 2.95 on any purchase.\n• Fixed part 1 plus 0.10%: on 1,000 you pay 2.\n• Everything at 0: no fee.',
-                                        })}
-                                    />
-                                </div>
-                                <div class="mt-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                                    <div>
-                                        <div class={LABEL_ROW}>
-                                            <label for="{ids}-{mode.key}-floor">{$t('tools.pacAllocator.planner.brokerEditor.feeFloor', {default: 'Minimum'})}</label>
-                                            <HelpTip label={$t('tools.pacAllocator.planner.brokerEditor.feeFloor', {default: 'Minimum'})} help={$t('tools.pacAllocator.planner.brokerEditor.feeFloorHelp', {default: 'The percentage part is never below this amount. 0 = no minimum.'})} />
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="min-w-0 flex-1">
-                                                <ExactDecimalInput id="{ids}-{mode.key}-floor" bind:value={mode.floor} step={cldrCurrencyStep(mode.currency)} className={INPUT} testid={testId('mode-fee-floor', profile)} />
-                                            </div>
-                                            <span class={INPUT_SUFFIX}><CurrencyCode code={mode.currency} /></span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div class={LABEL_ROW}>
-                                            <label for="{ids}-{mode.key}-rate">{$t('tools.pacAllocator.planner.brokerEditor.feeRate', {default: 'Percentage'})}</label>
-                                            <HelpTip
-                                                label={$t('tools.pacAllocator.planner.brokerEditor.feeRate', {default: 'Percentage'})}
-                                                help={$t('tools.pacAllocator.planner.brokerEditor.feeRateHelp', {default: 'The share of the amount bought, in percent: 0.19 means 0.19%. Minimum and maximum limit this part only.'})}
-                                            />
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="min-w-0 flex-1">
-                                                <ExactDecimalInput id="{ids}-{mode.key}-rate" bind:value={mode.ratePercent} step="0.01" className={INPUT} testid={testId('mode-fee-rate', profile)} />
-                                            </div>
-                                            <span class={INPUT_SUFFIX}>%</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div class={LABEL_ROW}>
-                                            <label for="{ids}-{mode.key}-cap">{$t('tools.pacAllocator.planner.brokerEditor.feeCap', {default: 'Maximum'})}</label>
-                                            <HelpTip label={$t('tools.pacAllocator.planner.brokerEditor.feeCap', {default: 'Maximum'})} help={$t('tools.pacAllocator.planner.brokerEditor.feeCapHelp', {default: 'The percentage part is never above this amount. Empty = no maximum.'})} />
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="min-w-0 flex-1">
-                                                <ExactDecimalInput
-                                                    id="{ids}-{mode.key}-cap"
-                                                    bind:value={mode.cap}
-                                                    step={cldrCurrencyStep(mode.currency)}
-                                                    placeholder={$t('tools.pacAllocator.planner.brokerEditor.feeCapNone', {default: 'none'})}
-                                                    className={INPUT}
-                                                    testid={testId('mode-fee-cap', profile)}
-                                                />
-                                            </div>
-                                            <span class={INPUT_SUFFIX}><CurrencyCode code={mode.currency} /></span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div class={LABEL_ROW}>
-                                            <label for="{ids}-{mode.key}-fixed">{$t('tools.pacAllocator.planner.brokerEditor.feeFixed', {default: 'Fixed part'})}</label>
-                                            <HelpTip
-                                                label={$t('tools.pacAllocator.planner.brokerEditor.feeFixed', {default: 'Fixed part'})}
-                                                help={$t('tools.pacAllocator.planner.brokerEditor.feeFixedHelp', {default: 'Paid on every purchase, whatever the amount, on top of the percentage part. 0 = none.'})}
-                                            />
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="min-w-0 flex-1">
-                                                <ExactDecimalInput id="{ids}-{mode.key}-fixed" bind:value={mode.fixedFee} step={cldrCurrencyStep(mode.currency)} className={INPUT} testid={testId('mode-fee-fixed', profile)} />
-                                            </div>
-                                            <span class={INPUT_SUFFIX}><CurrencyCode code={mode.currency} /></span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    {/snippet}
-                </OrderableList>
-            {:else}
-                <p class="text-sm text-lf-warning" data-testid={testId('mode-empty', profile)}>{$t('tools.pacAllocator.planner.problems.brokerNoMode', {default: 'The Broker has no order mode.'})}</p>
-            {/if}
-        </section>
-
-        <section class="space-y-3" aria-labelledby="{ids}-conversion">
+        <section class="space-y-3" aria-labelledby="{ids}-modes" data-testid={testId('broker-editor-modes', profile)} data-origin={modesOrigin}>
             <div class="flex items-center gap-0.5">
-                <h3 id="{ids}-conversion" class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})}</h3>
+                <h3 id="{ids}-modes" class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.brokerEditor.modes', {default: 'How you buy, currency by currency'})}</h3>
                 <HelpTip
-                    label={$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})}
-                    help={$t('tools.pacAllocator.planner.brokers.conversionHelp', {
-                        default:
-                            'When a purchase needs a currency you do not hold here, money is converted at the rate and spread of the FX step. If you convert yourself, the plan gives the conversion as a numbered step before the orders; if the Broker converts when you buy, the plan shows it next to its orders. The calculation is the same either way.',
-                    })}
+                    label={$t('tools.pacAllocator.planner.brokerEditor.modes', {default: 'How you buy, currency by currency'})}
+                    help={$t('tools.pacAllocator.planner.brokerEditor.modesHelp', {default: 'One block for each currency you buy in at this Broker: an Asset priced in that currency is bought with its rules. Drag the blocks into the order you prefer.'})}
                 />
             </div>
-            <fieldset class="grid gap-2 sm:grid-cols-2" data-testid={testId('conversion-modes', profile)}>
-                <legend class="sr-only">{$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})}</legend>
-                {#each conversionOptions as option (option.mode)}
-                    {@const on = working.conversionMode === option.mode}
-                    <label class="flex cursor-pointer items-center gap-2 p-3 {TOGGLE_CARD} {on ? TOGGLE_ON : TOGGLE_OFF}" data-testid={testId('conversion-mode', profile)} data-mode={option.mode} data-selected={on ? 'true' : 'false'}>
-                        <input type="radio" name="{ids}-conversion" value={option.mode} bind:group={working.conversionMode} class="shrink-0 accent-lf-checked" data-testid={testId('conversion-mode-radio', profile)} />
-                        <span class="font-medium text-lf-primary">{option.label}</span>
-                    </label>
-                {/each}
-            </fieldset>
+            {#if addedKey}
+                <p class="rounded-md border border-lf-warning-line bg-lf-warning-soft px-2.5 py-1.5 text-xs text-lf-warning-on-soft" data-testid={testId('mode-added-for', profile)}>
+                    {$t('tools.pacAllocator.planner.brokerEditor.addedFor', {
+                        default: '{currency} mode added to buy {asset}, with starting values: check order type, increment and fees, then apply.',
+                        values: {currency: addCurrency, asset: addFor || '—'},
+                    })}
+                </p>
+            {/if}
+            {#if problems.length > 0}
+                <p class="text-sm text-lf-danger" role="alert" data-testid={testId('broker-editor-profile-problems', profile)}>
+                    {$t('tools.pacAllocator.planner.brokerEditor.fixBeforeApplying', {default: 'Some fields are not valid: fix the ones in red to apply.'})}
+                </p>
+            {/if}
+            <BrokerOperatingProfileBox draft={boxDraft} groups={BOX_GROUPS} {requiredCurrencies} testIdPrefix={profile.testIdPrefix} rootTestid={testId('broker-editor-profile', profile)} {stepFor} onchange={profileChanged} />
         </section>
 
         <section class="space-y-3" aria-labelledby="{ids}-funding">
@@ -425,11 +331,20 @@
             </ul>
         </section>
 
+        {#if savePhase}
+            <ProfileSaveConfirm phase={savePhase} brokerName={working.name} changes={savePlan?.changes ?? []} refusal={saveRefusal} onconfirm={confirmProfileSave} oncancel={closeProfileSave} />
+        {/if}
+
         <p class={HINT}>{$t('tools.pacAllocator.planner.brokerEditor.notYetSupported', {default: 'Not supported yet: tax regime, losses, sell fees.'})}</p>
     {/if}
 
     {#snippet footer()}
+        {#if savable}
+            <button type="button" class="{BUTTON_SECONDARY} sm:mr-auto" disabled={!saveHasChanges || problems.length > 0 || savePhase === 'reading' || savePhase === 'confirm' || savePhase === 'writing'} data-testid={testId('broker-editor-profile-save', profile)} onclick={startProfileSave}
+                >{$t('tools.pacAllocator.planner.brokerEditor.profileSave.button')}</button
+            >
+        {/if}
         <button type="button" class={BUTTON_SECONDARY} data-testid={testId('broker-editor-cancel', profile)} onclick={onclose}>{$t('common.cancel', {default: 'Cancel'})}</button>
-        <button type="button" class={BUTTON_PRIMARY} disabled={!working} data-testid={testId('broker-editor-apply', profile)} onclick={apply}>{$t('tools.pacAllocator.planner.applyToDraft', {default: 'Apply to the draft'})}</button>
+        <button type="button" class={BUTTON_PRIMARY} disabled={!working || problems.length > 0} data-testid={testId('broker-editor-apply', profile)} onclick={apply}>{$t('tools.pacAllocator.planner.applyToDraft', {default: 'Apply to the draft'})}</button>
     {/snippet}
 </PlannerDialog>
