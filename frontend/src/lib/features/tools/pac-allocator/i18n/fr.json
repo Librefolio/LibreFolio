@@ -1040,6 +1040,13 @@
         "policyScope": {
           "proportional": "Achats uniquement : ne vend rien."
         }
+      },
+      "progress": {
+        "validate": "Je contrôle les données",
+        "model": "Je construis le modèle",
+        "search": "Je cherche le plan",
+        "verify": "Je vérifie les comptes",
+        "report": "Je prépare le résultat"
       }
     }
   }

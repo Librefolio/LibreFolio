@@ -1040,6 +1040,13 @@
         "policyScope": {
           "proportional": "Purchases only: it sells nothing."
         }
+      },
+      "progress": {
+        "validate": "Checking the data",
+        "model": "Building the model",
+        "search": "Searching for the plan",
+        "verify": "Verifying the figures",
+        "report": "Preparing the result"
       }
     }
   }

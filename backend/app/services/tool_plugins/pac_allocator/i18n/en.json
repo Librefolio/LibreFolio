@@ -2,25 +2,11 @@
   "tools": {
     "pacAllocator": {
       "name": "PAC allocator",
-      "description": "Plan the purchases that bring a new investment as close as possible to its target allocation, in whole units or amounts, without placing orders.",
-      "progress": {
-        "validate": "Checking the data",
-        "model": "Building the model",
-        "search": "Searching for the plan",
-        "verify": "Verifying the figures",
-        "report": "Preparing the result"
-      }
+      "description": "Plan the purchases that bring a new investment as close as possible to its target allocation, in whole units or amounts, without placing orders."
     },
     "portfolioRebalancer": {
       "name": "Portfolio rebalancer",
-      "description": "Bring an already invested portfolio towards its targets: it buys and, if you allow it, sells, estimating fees and taxes. It places no orders.",
-      "progress": {
-        "validate": "Checking the data",
-        "model": "Building the model",
-        "search": "Searching for the plan",
-        "verify": "Verifying the figures",
-        "report": "Preparing the result"
-      }
+      "description": "Bring an already invested portfolio towards its targets: it buys and, if you allow it, sells, estimating fees and taxes. It places no orders."
     }
   }
 }

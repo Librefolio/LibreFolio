@@ -124,6 +124,15 @@
     },
     "version": "Versión",
     "backendVersion": "Backend/API",
-    "uiVersion": "UI"
+    "uiVersion": "UI",
+    "portfolioRebalancer": {
+      "progress": {
+        "validate": "Compruebo los datos",
+        "model": "Construyo el modelo",
+        "search": "Busco el plan",
+        "verify": "Verifico las cuentas",
+        "report": "Preparo el resultado"
+      }
+    }
   }
 }

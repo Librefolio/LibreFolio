@@ -2,25 +2,11 @@
   "tools": {
     "pacAllocator": {
       "name": "Allocatore PAC",
-      "description": "Pianifica gli acquisti che portano un nuovo investimento il più vicino possibile all'allocazione obiettivo, in quote intere o importi, senza inviare ordini.",
-      "progress": {
-        "validate": "Controllo i dati",
-        "model": "Costruisco il modello",
-        "search": "Cerco il piano",
-        "verify": "Verifico i conti",
-        "report": "Preparo il risultato"
-      }
+      "description": "Pianifica gli acquisti che portano un nuovo investimento il più vicino possibile all'allocazione obiettivo, in quote intere o importi, senza inviare ordini."
     },
     "portfolioRebalancer": {
       "name": "Ribilanciatore",
-      "description": "Porta un portafoglio già investito verso i suoi target: compra e, se lo autorizzi, vende, stimando commissioni e tasse. Non invia ordini.",
-      "progress": {
-        "validate": "Controllo i dati",
-        "model": "Costruisco il modello",
-        "search": "Cerco il piano",
-        "verify": "Verifico i conti",
-        "report": "Preparo il risultato"
-      }
+      "description": "Porta un portafoglio già investito verso i suoi target: compra e, se lo autorizzi, vende, stimando commissioni e tasse. Non invia ordini."
     }
   }
 }
