@@ -31,7 +31,7 @@
  * proof help: which help the proof badge opens is the cases' subject, so a wrong help is red there
  * and only there.
  *
- * Results. Minimal objects cast to `PacReadyResult`: `outcome`, `stop_reason`, `proof.kind`, and
+ * Results. Minimal objects cast to `PlannerReadyResult`: `outcome`, `stop_reason`, `proof.kind`, and
  * `primary_solution.validation` on the cases with a plan. The contract requires a primary
  * solution on `ready_incumbent` and knows its validation only as `decimal_verified`, so there the
  * Decimal-check badge appears and enters the catalogue check too.
@@ -42,7 +42,7 @@
  * a residual with no finite decimal (-47/21700 EUR). The filter reads it as such: it hides the
  * column when every residual is an exact zero and shows it for a nonzero ratio or decimal on any
  * row. Before fix A the field was decimal text, and the filter, reading an object as text, threw.
- * The rows are minimal objects cast to `PacLedgerRow`, every balance `'0'`, so the rounding
+ * The rows are minimal objects cast to `PlannerLedgerRow`, every balance `'0'`, so the rounding
  * residual is the only value that can make its column speak.
  *
  * Environment. `resultBadges` and `ledgerFields` read plain fields and touch no DOM: node is enough.
@@ -56,13 +56,13 @@ vi.mock('$lib/api', () => ({
 }));
 
 import en from '$lib/i18n/en.json';
-import type {PacExactNumber, PacLedgerRow, PacProof, PacReadyResult} from '../types';
+import type {PlannerExactNumber, PlannerLedgerRow, PlannerProof, PlannerReadyResult} from '../types';
 import {LEDGER_FIELDS, ledgerFields, resultBadges, type ResultBadge} from './model';
 
 interface ProofCase {
-    proof: PacProof['kind'];
-    outcome: PacReadyResult['outcome'];
-    stop_reason: PacReadyResult['stop_reason'];
+    proof: PlannerProof['kind'];
+    outcome: PlannerReadyResult['outcome'];
+    stop_reason: PlannerReadyResult['stop_reason'];
     /** The catalogue key of the help the proof badge must open. */
     help: string;
     /** Why that help: the assertion's message when it fails. */
@@ -89,9 +89,9 @@ function caseTitle(c: ProofCase): string {
 }
 
 /** Only what `resultBadges` reads. A plan carries its primary solution, as the contract requires. */
-function readyResult(c: ProofCase): PacReadyResult {
+function readyResult(c: ProofCase): PlannerReadyResult {
     const plan = c.outcome === 'incumbent_found' ? {primary_solution: {validation: 'decimal_verified'}} : {};
-    return {outcome: c.outcome, stop_reason: c.stop_reason, proof: {kind: c.proof}, ...plan} as unknown as PacReadyResult;
+    return {outcome: c.outcome, stop_reason: c.stop_reason, proof: {kind: c.proof}, ...plan} as unknown as PlannerReadyResult;
 }
 
 /** The badge with this id, found by what it is and never by its place in the list. */
@@ -151,16 +151,16 @@ describe('resultBadges — every fallback is the EN catalogue message at its key
 
 // Fix A: a ledger row's rounding residual is an exact number, no longer decimal text.
 
-const ZERO_RESIDUAL: PacExactNumber = {kind: 'finite_decimal', value: '0'};
+const ZERO_RESIDUAL: PlannerExactNumber = {kind: 'finite_decimal', value: '0'};
 /** A USD funding converted to EUR through the reciprocal of a stored EUR/USD: no finite decimal. */
-const RATIO_RESIDUAL: PacExactNumber = {kind: 'exact_ratio', numerator: '-47', denominator: '21700', display_decimal: '-0.002166', display_scale: 6, display_authority: 'non_authoritative'};
+const RATIO_RESIDUAL: PlannerExactNumber = {kind: 'exact_ratio', numerator: '-47', denominator: '21700', display_decimal: '-0.002166', display_scale: 6, display_authority: 'non_authoritative'};
 /** A terminating residual below the minor unit. */
-const DECIMAL_RESIDUAL: PacExactNumber = {kind: 'finite_decimal', value: '-0.0021'};
+const DECIMAL_RESIDUAL: PlannerExactNumber = {kind: 'finite_decimal', value: '-0.0021'};
 
 /** A ledger row of `broker-one` whose balances are all 0, so only its rounding residual can make a column speak. */
-function ledgerRow(currency: string, rounding_delta: PacExactNumber): PacLedgerRow {
+function ledgerRow(currency: string, rounding_delta: PlannerExactNumber): PlannerLedgerRow {
     const zeros = Object.fromEntries(LEDGER_FIELDS.map((field) => [field, '0']));
-    return {...zeros, broker_id: 'broker-one', currency, rounding_delta} as unknown as PacLedgerRow;
+    return {...zeros, broker_id: 'broker-one', currency, rounding_delta} as unknown as PlannerLedgerRow;
 }
 
 describe('ledgerFields — the rounding column reads an exact number', () => {

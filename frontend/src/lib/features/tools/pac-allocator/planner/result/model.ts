@@ -6,7 +6,21 @@
  */
 import {canonicalDecimal, compareDecimal, decimalSign} from '../decimal';
 import {exactDisplay} from '../format';
-import type {PacConversion, PacExactNumber, PacExposureRow, PacFundingAction, PacLedgerRow, PacNumberAvailability, PacOrderRow, PacPlannerResult, PacReadyResult, PacResolvedAsset, PacResolvedFundingRoute, PacResolvedOrderRoute, PacResolvedRequest} from '../types';
+import type {
+    PlannerConversion,
+    PlannerExactNumber,
+    PlannerExposureRow,
+    PlannerFundingAction,
+    PlannerLedgerRow,
+    PlannerNumberAvailability,
+    PlannerOrderRow,
+    PlannerResult,
+    PlannerReadyResult,
+    PlannerResolvedAsset,
+    PlannerResolvedFundingRoute,
+    PlannerResolvedOrderRoute,
+    PlannerResolvedRequest,
+} from '../types';
 
 export const UNCATEGORISED_CATEGORY_ID = 'allocation.uncategorised';
 
@@ -27,18 +41,18 @@ export interface ResultBadge {
 }
 
 const NO_INCUMBENT_HELP: BadgeHelp = {key: 'tools.pacAllocator.planner.result.states.noIncumbent.body', fallback: 'The solver found no plan before the limit. This is not a proof that no plan exists.'};
-const STOP_HELP: Record<PacReadyResult['stop_reason'], BadgeHelp> = {
+const STOP_HELP: Record<PlannerReadyResult['stop_reason'], BadgeHelp> = {
     completed: {key: 'tools.pacAllocator.planner.result.badges.help.completed', fallback: 'The solver ended its search by itself, without reaching a limit.'},
     time_limit: {key: 'tools.pacAllocator.planner.result.badges.help.timeLimit', fallback: 'The solver reached its time limit before ending the search.'},
     node_limit: {key: 'tools.pacAllocator.planner.result.badges.help.nodeLimit', fallback: 'The solver reached its node limit, the number of attempts it may make, before ending the search.'},
 };
 
-export function isReady(result: PacPlannerResult): result is PacReadyResult {
+export function isReady(result: PlannerResult): result is PlannerReadyResult {
     return result.availability === 'ready';
 }
 
 /** Four fields, four badges: availability, outcome, proof, stop reason (C1). "Completed" never means optimal. */
-export function resultBadges(result: PacReadyResult): ResultBadge[] {
+export function resultBadges(result: PlannerReadyResult): ResultBadge[] {
     const badges: ResultBadge[] = [];
     const verified = 'primary_solution' in result && result.primary_solution.validation === 'decimal_verified';
     switch (result.outcome) {
@@ -137,7 +151,7 @@ export function resultBadges(result: PacReadyResult): ResultBadge[] {
 }
 
 /** A published weight as a float fraction, for drawing only (bars, maps). Never summed or compared. */
-export function weightFraction(value: PacExactNumber | PacNumberAvailability | null | undefined): number | null {
+export function weightFraction(value: PlannerExactNumber | PlannerNumberAvailability | null | undefined): number | null {
     if (!value) return null;
     const exact = value.kind === 'available' ? value.value : value.kind === 'unavailable' ? null : value;
     if (!exact) return null;
@@ -146,20 +160,20 @@ export function weightFraction(value: PacExactNumber | PacNumberAvailability | n
 }
 
 /** A published weight as a CSS width (0–100%), relative to `scale` (the widest bar of the chart). */
-export function weightWidth(value: PacExactNumber | PacNumberAvailability | null | undefined, scale = 1): string {
+export function weightWidth(value: PlannerExactNumber | PlannerNumberAvailability | null | undefined, scale = 1): string {
     const fraction = weightFraction(value);
     if (fraction === null || !(scale > 0)) return '0%';
     return `${Math.min(100, Math.max(0, (fraction / scale) * 100)).toFixed(2)}%`;
 }
 
 /** The widest published weight, so that a chart fills its width. 1 when nothing is drawable. */
-export function weightScale(values: readonly (PacExactNumber | PacNumberAvailability | null | undefined)[]): number {
+export function weightScale(values: readonly (PlannerExactNumber | PlannerNumberAvailability | null | undefined)[]): number {
     const widest = Math.max(0, ...values.map((value) => weightFraction(value) ?? 0));
     return widest > 0 ? widest : 1;
 }
 
 /** The sign of an exact backend number, read without rounding: to hide a line that would say 0. */
-export function exactSign(value: PacExactNumber): -1 | 0 | 1 | null {
+export function exactSign(value: PlannerExactNumber): -1 | 0 | 1 | null {
     if (value.kind === 'finite_decimal') return decimalSign(value.value);
     try {
         const sign = BigInt(value.numerator) * BigInt(value.denominator);
@@ -170,7 +184,7 @@ export function exactSign(value: PacExactNumber): -1 | 0 | 1 | null {
 }
 
 /** An exact backend number as an integer ratio with a positive denominator; null when unreadable. */
-function exactRatio(value: PacExactNumber): {numerator: bigint; denominator: bigint} | null {
+function exactRatio(value: PlannerExactNumber): {numerator: bigint; denominator: bigint} | null {
     try {
         if (value.kind === 'finite_decimal') {
             const canonical = canonicalDecimal(value.value);
@@ -188,7 +202,7 @@ function exactRatio(value: PacExactNumber): {numerator: bigint; denominator: big
 }
 
 /** Two exact backend numbers compared without rounding (the ▲/▼/= of an exposure): no subtraction. */
-export function compareExact(left: PacExactNumber, right: PacExactNumber): -1 | 0 | 1 | null {
+export function compareExact(left: PlannerExactNumber, right: PlannerExactNumber): -1 | 0 | 1 | null {
     if (left.kind === 'finite_decimal' && right.kind === 'finite_decimal') return compareDecimal(left.value, right.value);
     const a = exactRatio(left);
     const b = exactRatio(right);
@@ -198,7 +212,7 @@ export function compareExact(left: PacExactNumber, right: PacExactNumber): -1 | 
     return x === y ? 0 : x < y ? -1 : 1;
 }
 
-export function availableNumber(value: PacNumberAvailability): PacExactNumber | null {
+export function availableNumber(value: PlannerNumberAvailability): PlannerExactNumber | null {
     return value.kind === 'available' ? value.value : null;
 }
 
@@ -214,8 +228,8 @@ export const UNAVAILABLE_FALLBACKS = {
 export interface WeightRow {
     id: string;
     label: string;
-    target: PacExactNumber;
-    final: PacNumberAvailability;
+    target: PlannerExactNumber;
+    final: PlannerNumberAvailability;
 }
 
 /** A geography row for the maps: `code` is the country code the world map is keyed by (ISO alpha-3). */
@@ -224,7 +238,7 @@ export interface MapWeightRow extends WeightRow {
 }
 
 /** A published weight in percent units, for a chart only (colour, bar length). Never shown as a number. */
-export function chartPercent(value: PacExactNumber | PacNumberAvailability | null | undefined): number | null {
+export function chartPercent(value: PlannerExactNumber | PlannerNumberAvailability | null | undefined): number | null {
     const fraction = weightFraction(value);
     return fraction === null ? null : fraction * 100;
 }
@@ -237,7 +251,7 @@ export interface ResultNames {
     broker: (id: string) => string;
 }
 
-export function resultNames(result: PacReadyResult): ResultNames {
+export function resultNames(result: PlannerReadyResult): ResultNames {
     const assets = new Map(result.catalogs.assets.map((row) => [row.asset_id, row]));
     const brokers = new Map(result.catalogs.brokers.map((row) => [row.broker_id, row]));
     return {
@@ -249,24 +263,24 @@ export function resultNames(result: PacReadyResult): ResultNames {
 
 // -- the request a result describes ------------------------------------------------
 
-export type PacProvenanceRow = PacReadyResult['provenance'][number];
+export type PlannerProvenanceRow = PlannerReadyResult['provenance'][number];
 
 /** A funding source, resolved for display: a Broker's cash in one currency, or a new contribution. */
 export type PlanSource = {kind: 'cash'; brokerId: string | null; currency: string | null; label: string} | {kind: 'contribution'; label: string; currency: string | null};
 
 /** Lookups into the request that produced the result: the result may be older than the draft. */
 export interface PlanLookup {
-    sourceLabel: (source: PacFundingAction['source']) => string;
-    source: (source: PacFundingAction['source']) => PlanSource;
-    route: (routeId: string) => PacResolvedOrderRoute | null;
-    fundingRoute: (fundingRouteId: string) => PacResolvedFundingRoute | null;
+    sourceLabel: (source: PlannerFundingAction['source']) => string;
+    source: (source: PlannerFundingAction['source']) => PlanSource;
+    route: (routeId: string) => PlannerResolvedOrderRoute | null;
+    fundingRoute: (fundingRouteId: string) => PlannerResolvedFundingRoute | null;
     /** How many funding routes of the request reach one Broker in one currency: a priority matters only above one. */
     fundingChoices: (brokerId: string, currency: string) => number;
-    quote: (assetId: string) => NonNullable<PacResolvedAsset['quote']> | null;
-    provenance: (id: string) => PacProvenanceRow | null;
+    quote: (assetId: string) => NonNullable<PlannerResolvedAsset['quote']> | null;
+    provenance: (id: string) => PlannerProvenanceRow | null;
 }
 
-export function planLookup(result: PacReadyResult, request: PacResolvedRequest, names: ResultNames): PlanLookup {
+export function planLookup(result: PlannerReadyResult, request: PlannerResolvedRequest, names: ResultNames): PlanLookup {
     const cash = new Map(request.existing_cash.map((row) => [row.cash_id, row]));
     const contributions = new Map(request.contributions.map((row) => [row.contribution_id, row]));
     const routes = new Map(request.order_routes.map((row) => [row.route_id, row]));
@@ -300,27 +314,27 @@ export function planLookup(result: PacReadyResult, request: PacResolvedRequest, 
 
 // -- operational plan (C10–C12) -------------------------------------------------------
 
-export type PlanStep = {kind: 'funding'; sequence: number; action: PacFundingAction} | {kind: 'conversion'; sequence: number; action: PacConversion};
+export type PlanStep = {kind: 'funding'; sequence: number; action: PlannerFundingAction} | {kind: 'conversion'; sequence: number; action: PlannerConversion};
 
 /** R4.9: funding and the conversions the user makes, in the backend's sequence; orders are listed per Broker. */
-export function planSteps(funding: readonly PacFundingAction[], conversions: readonly PacConversion[]): PlanStep[] {
+export function planSteps(funding: readonly PlannerFundingAction[], conversions: readonly PlannerConversion[]): PlanStep[] {
     const manual = conversions.flatMap((action) => (action.mode === 'manual' && action.sequence !== null ? [{kind: 'conversion' as const, sequence: action.sequence, action}] : []));
     const steps: PlanStep[] = [...funding.map((action) => ({kind: 'funding' as const, sequence: action.sequence, action})), ...manual];
     return steps.sort((a, b) => a.sequence - b.sequence);
 }
 
 /** R4.9: the conversions a Broker makes by itself when the orders are placed; they carry no step number. */
-export function automaticConversions(conversions: readonly PacConversion[], brokerId: string): PacConversion[] {
+export function automaticConversions(conversions: readonly PlannerConversion[], brokerId: string): PlannerConversion[] {
     return conversions.filter((action) => action.mode === 'automatic' && action.broker_id === brokerId);
 }
 
 /** R4.9: the conversions crediting the cash an order pays from; several source currencies can credit the same one. */
-export function conversionsFor(conversions: readonly PacConversion[], order: PacOrderRow): PacConversion[] {
+export function conversionsFor(conversions: readonly PlannerConversion[], order: PlannerOrderRow): PlannerConversion[] {
     return conversions.filter((action) => action.broker_id === order.broker_id && action.destination_credit.currency === order.cash_debit.currency);
 }
 
-export function ordersByBroker(orders: readonly PacOrderRow[]): {brokerId: string; orders: PacOrderRow[]}[] {
-    const groups = new Map<string, PacOrderRow[]>();
+export function ordersByBroker(orders: readonly PlannerOrderRow[]): {brokerId: string; orders: PlannerOrderRow[]}[] {
+    const groups = new Map<string, PlannerOrderRow[]>();
     for (const order of [...orders].sort((a, b) => a.sequence - b.sequence)) {
         if (!groups.has(order.broker_id)) groups.set(order.broker_id, []);
         groups.get(order.broker_id)!.push(order);
@@ -342,18 +356,18 @@ export const LEDGER_PAC_ZERO_FIELDS: ReadonlySet<LedgerField> = new Set(['gross_
 const LEDGER_ANCHORS: ReadonlySet<LedgerField> = new Set(['initial_selected', 'final_spendable']);
 
 /** A column says something when it is not 0 on some row; the physical balance, when it differs from the spendable one. */
-function ledgerFieldSpeaks(rows: readonly PacLedgerRow[], field: LedgerField): boolean {
+function ledgerFieldSpeaks(rows: readonly PlannerLedgerRow[], field: LedgerField): boolean {
     if (field === 'final_physical') return rows.some((row) => compareDecimal(row.final_physical, row.final_spendable) !== 0);
     if (field === 'rounding_delta') return rows.some((row) => exactSign(row.rounding_delta) !== 0);
     return rows.some((row) => decimalSign(row[field]) !== 0);
 }
 
 /** R9.8: the balance columns to show; `all` brings back the silent ones. */
-export function ledgerFields(rows: readonly PacLedgerRow[], all: boolean): LedgerField[] {
+export function ledgerFields(rows: readonly PlannerLedgerRow[], all: boolean): LedgerField[] {
     return LEDGER_FIELDS.filter((field) => all || LEDGER_ANCHORS.has(field) || ledgerFieldSpeaks(rows, field));
 }
 
-export function ledgerColumns(rows: readonly PacLedgerRow[]): PacLedgerRow[] {
+export function ledgerColumns(rows: readonly PlannerLedgerRow[]): PlannerLedgerRow[] {
     return [...rows].sort((a, b) => (a.broker_id === b.broker_id ? a.currency.localeCompare(b.currency) : a.broker_id.localeCompare(b.broker_id)));
 }
 
@@ -363,12 +377,12 @@ export const RESULT_DIMENSIONS = ['asset_type', 'geography', 'sector'] as const;
 
 export interface ExposureGroup {
     dimension: (typeof RESULT_DIMENSIONS)[number];
-    rows: PacExposureRow[];
+    rows: PlannerExposureRow[];
     /** Nothing declared: a single uncategorised row at 100%, folded into one line. */
     onlyUncategorised: boolean;
 }
 
-export function exposureGroups(rows: readonly PacExposureRow[]): ExposureGroup[] {
+export function exposureGroups(rows: readonly PlannerExposureRow[]): ExposureGroup[] {
     return RESULT_DIMENSIONS.map((dimension) => {
         const group = rows.filter((row) => row.dimension === dimension);
         return {dimension, rows: group, onlyUncategorised: group.length > 0 && group.every((row) => row.category_id === UNCATEGORISED_CATEGORY_ID)};

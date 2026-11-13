@@ -10,12 +10,12 @@ import {ToolClientError, assertToolAccount, type CompatibleToolDescriptor, type 
 import {notify} from '$lib/stores/app/notify.svelte';
 import {PAC_PLANNER_PROFILE, type PlannerProfile} from './profile';
 import type {BuiltRequest} from './request';
-import type {PacPlannerResult, PlannerContractVersion, PlannerToolCode} from './types';
+import type {PlannerResult, PlannerContractVersion, PlannerToolCode} from './types';
 
 export type PlannerDescriptor = CompatibleToolDescriptor<PlannerToolCode, PlannerContractVersion>;
 
 export type RunOutcome =
-    | {kind: 'result'; built: BuiltRequest; result: PacPlannerResult; metrics: ToolItemMetrics; batch: ToolBatchMetrics; executionId: string | null}
+    | {kind: 'result'; built: BuiltRequest; result: PlannerResult; metrics: ToolItemMetrics; batch: ToolBatchMetrics; executionId: string | null}
     | {kind: 'tool_error'; built: BuiltRequest; error: {code: string; retryable: boolean; issue_count: number}; metrics: ToolItemMetrics; batch: ToolBatchMetrics; executionId: string | null}
     | {kind: 'client_error'; built: BuiltRequest; error: ToolClientError};
 
@@ -70,7 +70,7 @@ export class PlannerRun {
             });
             if (!this.#current(sequence, accountGeneration)) return;
             if (item.status === 'success') {
-                const result = item.result as PacPlannerResult;
+                const result = item.result as PlannerResult;
                 this.outcome = {kind: 'result', built, result, metrics: item.metrics, batch: item.batch.metrics, executionId: item.execution_id ?? null};
                 // Signal for specs and diagnostics: states and counts only, never an amount.
                 notify({name: this.#profile.events.completed, detail: {resultState: result.result_state, revision: built.revision, issues: result.issues.length}});

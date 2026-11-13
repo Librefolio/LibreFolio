@@ -3,9 +3,9 @@
     import OriginBadge from '../shared/OriginBadge.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
     import {formatExactFxRate, formatExactMoneyPlain, formatExactPricePlain, formatPlannerMoneyPlain, formatPlannerTimestamp, type CurrencyDigits} from '../format';
-    import type {PacConversion, PacOrderRow} from '../types';
+    import type {PlannerConversion, PlannerOrderRow} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY} from '../ui';
-    import {conversionsFor, type PacProvenanceRow, type PlanLookup, type ResultNames} from './model';
+    import {conversionsFor, type PlannerProvenanceRow, type PlanLookup, type ResultNames} from './model';
     import {economicQuantityText, instructionStepText, instructionText, priceText, ratePercentText, routeCapText, routeMinimumText} from './text';
     import {getPlannerProfile, testId} from '../profile';
 
@@ -14,8 +14,8 @@
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
-        order: PacOrderRow | null;
-        conversions: readonly PacConversion[];
+        order: PlannerOrderRow | null;
+        conversions: readonly PlannerConversion[];
         names: ResultNames;
         lookup: PlanLookup;
         digits: CurrencyDigits;
@@ -32,16 +32,16 @@
     const quoteOrigin = $derived(quote ? lookup.provenance(quote.provenance_id) : null);
     /** R4.9: the conversions crediting the cash this order pays from; they may pay for other orders too. */
     const related = $derived(order ? conversionsFor(conversions, order) : []);
-    const provenance = $derived(order ? order.provenance_ids.map((id) => lookup.provenance(id)).filter((row): row is PacProvenanceRow => row !== null) : []);
+    const provenance = $derived(order ? order.provenance_ids.map((id) => lookup.provenance(id)).filter((row): row is PlannerProvenanceRow => row !== null) : []);
     const assetLabel = $derived(order ? [names.ticker(order.asset_id), names.asset(order.asset_id)].filter((part) => part).join(' ') : '');
     const title = $derived(order ? $t(`${KEY}.title`, {default: 'Order {sequence} · {asset} · {broker} · {currency}', values: {sequence: order.sequence, asset: assetLabel, broker: names.broker(order.broker_id), currency: order.cash_debit.currency}}) : '');
 
-    function provenanceLabel(row: PacProvenanceRow): string {
+    function provenanceLabel(row: PlannerProvenanceRow): string {
         if (row.kind === 'manual') return row.label;
         return row.source_label ?? $t(`${PLANNER_KEY}.result.domains.${row.domain}`, {default: row.domain});
     }
 
-    function provenanceWhen(row: PacProvenanceRow): string {
+    function provenanceWhen(row: PlannerProvenanceRow): string {
         return formatPlannerTimestamp(row.kind === 'manual' ? row.entered_at : row.captured_at);
     }
 
