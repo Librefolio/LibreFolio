@@ -14,6 +14,21 @@
         },
         "leave": {
           "title": "Quitter le rééquilibreur de portefeuille ?"
+        },
+        "positions": {
+          "title": "Positions",
+          "help": "Ce que vous détenez de cet actif, courtier par courtier, tel que LibreFolio l’enregistre aujourd’hui. Le plan part de ces quantités : vous pouvez en changer une pour simuler un autre portefeuille ; LibreFolio n’est pas modifié.",
+          "broker": "Courtier",
+          "quantity": "Quantité",
+          "quantityHelp": "Les unités du plan : votre part de ce que le courtier détient. Changez-la pour planifier sur une autre quantité.",
+          "quantityLabel": "Quantité de {asset} chez {broker}",
+          "custody": "En dépôt",
+          "custodyHelp": "Les unités que le courtier détient sur le compte, et votre part du compte lorsqu’il est partagé.",
+          "share": "votre part {share}"
+        },
+        "brokers": {
+          "cashOnly": "liquidités seulement",
+          "cashOnlyHint": "Aucun ordre ici : ses liquidités comptent dans le portefeuille, et le plan peut les déplacer vers les courtiers où il achète. Modifiez-le à l’étape Liquidités."
         }
       }
     }

@@ -14,6 +14,21 @@
         },
         "leave": {
           "title": "¿Salir del reequilibrador de cartera?"
+        },
+        "positions": {
+          "title": "Posiciones",
+          "help": "Lo que tienes de este activo, bróker por bróker, tal como LibreFolio lo registra hoy. El plan parte de estas cantidades: puedes cambiar una para simular otra cartera; LibreFolio no se modifica.",
+          "broker": "Bróker",
+          "quantity": "Cantidad",
+          "quantityHelp": "Las unidades del plan: tu parte de lo que custodia el bróker. Cámbiala para planificar con otra cantidad.",
+          "quantityLabel": "Cantidad de {asset} en {broker}",
+          "custody": "En custodia",
+          "custodyHelp": "Las unidades que el bróker custodia en la cuenta, y tu parte de la cuenta cuando es compartida.",
+          "share": "tu parte {share}"
+        },
+        "brokers": {
+          "cashOnly": "solo efectivo",
+          "cashOnlyHint": "Aquí ninguna orden: su efectivo cuenta en la cartera, y el plan puede moverlo a los brókeres donde compra. Edítalo en el paso Liquidez."
         }
       }
     }

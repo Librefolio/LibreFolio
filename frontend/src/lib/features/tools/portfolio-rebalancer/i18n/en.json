@@ -14,6 +14,21 @@
         },
         "leave": {
           "title": "Leave the portfolio rebalancer?"
+        },
+        "positions": {
+          "title": "Positions",
+          "help": "What you hold of this Asset, Broker by Broker, as LibreFolio records it today. The plan starts from these quantities: you can change one to simulate a different portfolio; LibreFolio is not changed.",
+          "broker": "Broker",
+          "quantity": "Quantity",
+          "quantityHelp": "The units of the plan: your part of what the Broker holds. Change it to plan on a different quantity.",
+          "quantityLabel": "Quantity of {asset} at {broker}",
+          "custody": "In custody",
+          "custodyHelp": "The units the Broker holds on the account, and your share of the account when it is shared.",
+          "share": "your share {share}"
+        },
+        "brokers": {
+          "cashOnly": "cash only",
+          "cashOnlyHint": "No order here: its cash counts in the portfolio, and the plan can move it to the Brokers where it buys. Edit it in the Liquidity step."
         }
       }
     }

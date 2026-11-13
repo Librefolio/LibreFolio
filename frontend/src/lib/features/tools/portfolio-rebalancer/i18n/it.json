@@ -14,6 +14,21 @@
         },
         "leave": {
           "title": "Uscire dal Ribilanciatore?"
+        },
+        "positions": {
+          "title": "Posizioni",
+          "help": "Quanto possiedi di questo Asset, Broker per Broker, come lo registra oggi LibreFolio. Il piano parte da queste quantità: puoi cambiarne una per simulare un portafoglio diverso; LibreFolio non viene modificato.",
+          "broker": "Broker",
+          "quantity": "Quantità",
+          "quantityHelp": "Le quote del piano: la tua parte di ciò che il Broker custodisce. Cambiala per pianificare su una quantità diversa.",
+          "quantityLabel": "Quantità di {asset} su {broker}",
+          "custody": "In custodia",
+          "custodyHelp": "Le quote che il Broker custodisce sul conto, e la tua quota del conto quando è condiviso.",
+          "share": "tua quota {share}"
+        },
+        "brokers": {
+          "cashOnly": "solo cassa",
+          "cashOnlyHint": "Qui nessun ordine: la sua cassa conta nel portafoglio, e il piano può spostarla sui Broker dove compra. Modificalo nel passo Liquidità."
         }
       }
     }
