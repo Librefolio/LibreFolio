@@ -18,6 +18,7 @@
     import type {PlannerConversion, PlannerFundingAction, PlannerOrderRow, PlannerSolution} from '../types';
     import {BADGE, HINT, NOTICE, STEP_NUMBER} from '../ui';
     import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
+    import AutomaticConversionNote from './AutomaticConversionNote.svelte';
     import {automaticConversions, conversionsFor, ordersByBroker, planSteps, type PlanLookup, type PlanSource, type ResultNames} from './model';
     import {withHelpCues} from '../shared/columnHelp';
     import TableColumns from '../shared/TableColumns.svelte';
@@ -196,6 +197,7 @@
 {/snippet}
 
 <div class="space-y-4" data-testid={testId('plan', profile)}>
+    <AutomaticConversionNote conversions={solution.conversions} {names} />
     <p class={HINT}>{$t(`${KEY}.sequenceHint`, {default: 'Follow the numbers: first the cash, then the currency exchanges, then the orders.'})}</p>
 
     {#if steps.length > 0}
