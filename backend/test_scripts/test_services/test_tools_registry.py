@@ -1313,3 +1313,28 @@ def test_registered_pac_allocator_service_is_the_v2_planner_card():
     served = next(item for item in catalog.items if item.tool_code == "pac_allocator")
     assert (served.description, served.description_i18n_key, served.ui) == (descriptor.description, descriptor.description_i18n_key, descriptor.ui)
     assert "pac_allocator" not in {item.tool_code for item in catalog.unavailable}
+
+
+def test_registered_portfolio_rebalancer_service_is_published():
+    """B3 test 12 (D9, U3 of project 67): the Rebalancer is the plugin's second service, ``plan`` only, with its own card,
+    component and page, and the catalog serves it."""
+    definition = ToolPluginRegistry.get_definition("portfolio_rebalancer")
+    assert definition is not None, "portfolio_rebalancer is not published by the application registry"
+    descriptor = definition.descriptor
+
+    assert (descriptor.name_i18n_key, descriptor.description_i18n_key) == ("tools.portfolioRebalancer.name", "tools.portfolioRebalancer.description")
+    assert descriptor.ui.model_dump(mode="json") == {"kind": "custom", "component_key": "portfolio-rebalancer", "version": "1.0.0"}
+    assert descriptor.documentation is not None and descriptor.documentation.path == "user/tools/portfolio-rebalancer/"
+    assert (descriptor.contract_version, descriptor.implementation_version) == ("2.0.0", "2.0.0")
+    assert [policy.operation for policy in descriptor.operations] == ["plan"]
+    assert descriptor.icon_key == "scale" and descriptor.name == "Portfolio rebalancer"
+    assert [wording for wording in P1_PROTOTYPE_WORDING if wording in descriptor.description.casefold()] == []
+
+    pac = ToolPluginRegistry.get_definition("pac_allocator").descriptor
+    # The same operation policy as the PAC: the same engine window and the same zero margin.
+    assert descriptor.operations == pac.operations
+
+    catalog = get_tool_catalog(ToolPlatformPolicy())
+    served = next(item for item in catalog.items if item.tool_code == "portfolio_rebalancer")
+    assert (served.description, served.description_i18n_key, served.ui) == (descriptor.description, descriptor.description_i18n_key, descriptor.ui)
+    assert "portfolio_rebalancer" not in {item.tool_code for item in catalog.unavailable}

@@ -1309,7 +1309,7 @@ Tests for REST API endpoints (server auto-started):
         isolation="pure",
     )
     add_test(api, "tools", api_tools, name="Tools API", desc="Catalog, bulk compute, diagnostics, and authorization")
-    add_test(api, "pac-planner-tool", api_pac_planner_tool, name="PAC Planner Tool API", desc="pac_allocator plan through the live compute endpoint")
+    add_test(api, "pac-planner-tool", api_pac_planner_tool, name="PAC Planner Tool API", desc="pac_allocator and portfolio_rebalancer plan through the live compute endpoint")
     add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics, and per-period asset eligibility")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
     add_test(

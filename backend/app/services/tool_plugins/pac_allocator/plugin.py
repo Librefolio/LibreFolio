@@ -1,4 +1,4 @@
-"""Tool adapter for the PAC planner v2.
+"""Tool adapter for the planner v2: the PAC and the Rebalancer.
 
 The P1 ``analyze`` services (``pac_allocator`` and ``portfolio_rebalancer``)
 were removed on 2026-09-21 by developer decision: they were never released,
@@ -7,11 +7,11 @@ prototype a non-goal. What replaces them is ``operation="plan"``, backed by
 ``plan_pac_allocation`` — SCIP, whose own status is the proof (D-X1), with
 every published number replayed in exact arithmetic.
 
-**The Rebalancer has no service here yet.** Its v2 policies (``invest_only``,
-``invest_and_sell``) and the SELL verifier do not exist, so registering a
-Rebalancer service would mean shipping a tool with nothing behind it. It comes
-back when those exist — which is the next piece of work, because PAC is the
-special case of the Rebalancer with an all-zero starting allocation.
+**The Rebalancer is the second service** (B3 of project 67):
+``portfolio_rebalancer``, ``operation="plan"``, backed by ``plan_rebalancing``
+— the same engine, the same proof, the same replay, the same operation policy.
+Until C1 it plans «Invest only»: its request refuses «Invest and sell» and any
+sale route at the schema, which the platform answers ``invalid_parameters``.
 
 Timeout envelope: only one number is a product decision — ``engine_timeout_ms``,
 the solver's own budget, set to 30 s by the developer. Every other value is
@@ -44,14 +44,14 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from backend.app.logging_config import get_logger
-from backend.app.schemas.pac_allocator.request import PacPlannerRequest
-from backend.app.schemas.pac_allocator.results import PacPlannerResult
+from backend.app.schemas.pac_allocator.request import PacPlannerRequest, RebalancerPlannerRequest
+from backend.app.schemas.pac_allocator.results import PacPlannerResult, RebalancerPlannerResult
 from backend.app.schemas.tools import (
     ToolDocumentation,
     ToolOperationPolicy,
     ToolUIDescriptor,
 )
-from backend.app.services.pac_allocator.planner import plan_pac_allocation
+from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
 from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import (
     ToolExecutionContext,
@@ -159,6 +159,28 @@ class PacAllocatorTool(ToolPlugin):
             input_type=PacPlannerRequest,
             output_type=PacPlannerResult,
         ),
+        ToolService(
+            tool_code="portfolio_rebalancer",
+            name="Portfolio rebalancer",
+            description="Bring an already invested portfolio towards its targets: it buys and, if you allow it, sells, estimating fees and taxes. It places no orders.",
+            name_i18n_key="tools.portfolioRebalancer.name",
+            description_i18n_key="tools.portfolioRebalancer.description",
+            category="allocation",
+            icon_key="scale",
+            ui=ToolUIDescriptor(
+                kind="custom",
+                component_key="portfolio-rebalancer",
+                version="1.0.0",
+            ),
+            documentation=ToolDocumentation(
+                path="user/tools/portfolio-rebalancer/",
+                version="1.0.0",
+            ),
+            # The same policy as the PAC: the same engine window, the same reserve, the same zero margin (module docstring).
+            operations=_PLAN_POLICY,
+            input_type=RebalancerPlannerRequest,
+            output_type=RebalancerPlannerResult,
+        ),
     )
 
     def compute(
@@ -166,10 +188,12 @@ class PacAllocatorTool(ToolPlugin):
         tool_code: str,
         parameters: BaseModel,
         context: ToolExecutionContext,
-    ) -> PacPlannerResult:
+    ) -> PacPlannerResult | RebalancerPlannerResult:
         # Dispatch on tool_code *and* the declared operation, never on the
         # shape of the parameters.
-        if tool_code == "pac_allocator" and isinstance(parameters, PacPlannerRequest) and parameters.operation == "plan":
+        planners = {"pac_allocator": (PacPlannerRequest, plan_pac_allocation), "portfolio_rebalancer": (RebalancerPlannerRequest, plan_rebalancing)}
+        request_type, plan = planners.get(tool_code, (None, None))
+        if request_type is not None and isinstance(parameters, request_type) and parameters.operation == "plan":
             # The engine window is the product decision this module's header
             # calls the only one: claiming it is what makes `engine_timeout_ms`
             # reach SCIP instead of leaving the solver on its own 3.5 s default.
@@ -192,7 +216,7 @@ class PacAllocatorTool(ToolPlugin):
             # reserve: at most 2.8 ms for a 28.5 KB result.
             window = context.claim_engine_window(post_engine_reserve_ms=_POST_ENGINE_RESERVE_MS)
             try:
-                return plan_pac_allocation(
+                return plan(
                     parameters,
                     checkpoint=context.checkpoint,
                     solver_time_budget_seconds=window.timeout_ms / 1000,

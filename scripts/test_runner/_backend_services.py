@@ -2624,7 +2624,7 @@ Note: No backend server required.
         "pac-planner-service",
         services_pac_planner_service,
         name="PAC/Rebalancer Plan Orchestration",
-        desc="plan_pac_allocation end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
+        desc="plan_pac_allocation and plan_rebalancing end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
         isolation="pure",
     )
     add_test(

@@ -40,12 +40,13 @@ from structlog.testing import capture_logs
 
 from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER
+from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_OUTPUT_ADAPTER
 from backend.app.services.accounts import user_service
-from backend.app.services.pac_allocator.planner import plan_pac_allocation
+from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
 from backend.app.services.tool_plugins.pac_allocator.plugin import _log_engine_failure
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_services import _reb_small_requests as reb
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -122,16 +123,16 @@ async def _tool_user() -> AsyncIterator[httpx.AsyncClient]:
 # ---------------------------------------------------------------------------
 
 
-async def _served_descriptor(client: httpx.AsyncClient) -> dict:
+async def _served_descriptor(client: httpx.AsyncClient, tool_code: str = TOOL_CODE) -> dict:
     response = await client.get(f"{API_BASE}/tools/catalog", timeout=TIMEOUT)
     assert response.status_code == 200, response.text
-    descriptor = next((item for item in response.json()["items"] if item["tool_code"] == TOOL_CODE), None)
-    assert descriptor is not None, "pac_allocator is not served by the catalog"
+    descriptor = next((item for item in response.json()["items"] if item["tool_code"] == tool_code), None)
+    assert descriptor is not None, f"{tool_code} is not served by the catalog"
     return descriptor
 
 
-async def _served_identity(client: httpx.AsyncClient) -> dict[str, str]:
-    descriptor = await _served_descriptor(client)
+async def _served_identity(client: httpx.AsyncClient, tool_code: str = TOOL_CODE) -> dict[str, str]:
+    descriptor = await _served_descriptor(client, tool_code)
     return {key: descriptor[key] for key in IDENTITY_KEYS}
 
 
@@ -494,6 +495,83 @@ LIBRARY_FRAME = "libreFolio_fake_library.py:2:boom"
 # Out of every source line a frame points at: a figure found in the log can only be a value.
 MESSAGE_FIGURE = "4242.42"
 LOCAL_FIGURE = "98765.43"
+
+
+# ---------------------------------------------------------------------------
+# B3 (project 67): the Rebalancer, the plugin's second service
+# ---------------------------------------------------------------------------
+
+REBALANCER_TOOL_CODE = "portfolio_rebalancer"
+
+
+@pytest.mark.asyncio
+async def test_rebalancer_compute_plans_to_a_proven_optimum(test_server):
+    """B3 test 13: T4 through ``POST /tools/compute`` buys 195 of B, proven optimal, exactly as the planner in process."""
+    async with _tool_user() as client:
+        identity = await _served_identity(client, REBALANCER_TOOL_CODE)
+        engine_timeout_ms = (await _served_descriptor(client, REBALANCER_TOOL_CODE))["operations"][0]["engine_timeout_ms"]
+        item = _item(identity, reb.t4())
+        payload, results = await _compute(client, item)
+
+    result = results[item["correlation_id"]]
+    assert result["status"] == "success", result
+    assert {key: result[key] for key in IDENTITY_KEYS} == identity
+    plan = result["result"]
+    assert (plan["result_state"], plan["proof"]["kind"]) == ("ready_incumbent", "optimal_proven")
+    (order,) = plan["primary_solution"]["order_rows"]
+    assert (order["asset_id"], order["instruction"]["amount"]) == ("asset-b", {"amount": "195", "currency": "EUR"})
+    in_process = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()), solver_time_budget_seconds=engine_timeout_ms / 1000)
+    assert plan == REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(in_process, mode="json", by_alias=True)
+
+
+@pytest.mark.asyncio
+async def test_rebalancer_compute_answers_missing_holdings_with_needs_input(test_server):
+    """B3 test 14: a Rebalancer request with no holdings is a planning outcome, ``needs_input`` with its code."""
+    payload_without_holdings = reb.t4()
+    payload_without_holdings["holdings"] = []
+    async with _tool_user() as client:
+        identity = await _served_identity(client, REBALANCER_TOOL_CODE)
+        item = _item(identity, payload_without_holdings)
+        _payload, results = await _compute(client, item)
+
+    result = results[item["correlation_id"]]
+    assert result["status"] == "success", result
+    plan = result["result"]
+    assert (plan["result_state"], plan["availability"]) == ("needs_input", "needs_input")
+    assert "portfolio_rebalancer.holdings_missing" in {issue["code"] for issue in plan["issues"]}
+
+
+@pytest.mark.asyncio
+async def test_rebalancer_and_pac_items_share_one_batch(test_server):
+    """B3 test 15: one batch, a Rebalancer item and a PAC item (two, the platform's two lanes): two successes."""
+    async with _tool_user() as client:
+        rebalancer = _item(await _served_identity(client, REBALANCER_TOOL_CODE), reb.t5())
+        pac = _item(await _served_identity(client), _buying_request())
+        payload, results = await _compute(client, rebalancer, pac)
+
+    assert (payload["success_count"], payload["failed_count"]) == (2, 0)
+    assert results[rebalancer["correlation_id"]]["result"]["result_state"] == "ready_no_op"
+    assert results[pac["correlation_id"]]["result"]["result_state"] == "ready_incumbent"
+
+
+@pytest.mark.asyncio
+async def test_rebalancer_compute_rejects_a_pac_request_and_invest_and_sell(test_server):
+    """B3 tests 16 and 19 (service half): parameters of the wrong kind, and «Invest and sell» before C1, are refused as
+    ``invalid_parameters`` with their path, never ``execution_failed``, never a plan."""
+    invest_and_sell = reb.t4()
+    invest_and_sell["policy"] = "invest_and_sell"
+    async with _tool_user() as client:
+        identity = await _served_identity(client, REBALANCER_TOOL_CODE)
+        pac_shaped = _item(identity, _buying_request())
+        selling = _item(identity, invest_and_sell)
+        payload, results = await _compute(client, pac_shaped, selling)
+
+    assert (payload["success_count"], payload["failed_count"]) == (0, 2)
+    for item in (pac_shaped, selling):
+        result = results[item["correlation_id"]]
+        assert result["status"] == "error" and "result" not in result, result
+        assert result["error"]["code"] == "invalid_parameters"
+    assert {"code": "literal_error", "path": ["policy"]} in results[selling["correlation_id"]]["error"]["issues"]
 
 
 def _compile_library_boom() -> Callable[[], None]:

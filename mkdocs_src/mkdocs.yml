@@ -965,6 +965,7 @@ nav:
       - 🧰 Tools:
           - Overview: user/tools/index.md
           - PAC allocator: user/tools/pac-allocator/index.md
+          - Portfolio rebalancer: user/tools/portfolio-rebalancer/index.md
       - 📈 Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md
