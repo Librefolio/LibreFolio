@@ -17,7 +17,7 @@ import type {PlannerStep} from './types';
 export type {ExposureDimension};
 
 export type FactOrigin = 'copied' | 'manual';
-export type CopyKind = 'liquidity' | 'brokers' | 'prices' | 'classifications' | 'fx' | 'distribution';
+export type CopyKind = 'liquidity' | 'brokers' | 'prices' | 'classifications' | 'fx' | 'distribution' | 'positions';
 export type ModeKind = 'whole_quantity' | 'monetary_amount';
 
 export const EXPOSURE_DIMENSIONS: readonly ExposureDimension[] = ['asset_type', 'sector', 'geography'];
@@ -185,6 +185,28 @@ export interface DraftFx {
 /** Why the backend needs a pair: to value the portfolio, to convert cash at a buy, or both. */
 export type FxPurpose = 'valuation' | 'conversion' | 'both';
 
+/**
+ * One position of the user, an Asset at a Broker (F3a of project 67): the Rebalancer's. Copied from the source with its
+ * custody quantity and the user's share, which are facts, and the planning quantity, proposed from the user's part and
+ * the user's to change (`planning_quantity` of the request). The model of `copiedPrice`: `copiedQuantity` is what the copy
+ * proposed, so an edit reads «modified» and a re-copy updates the copy only.
+ */
+export interface DraftPosition {
+    key: string;
+    assetKey: string;
+    brokerKey: string;
+    sourceBrokerId: number;
+    /** The Broker's name and icon as the copy saw them: the Broker need not be in the scenario's Brokers. */
+    brokerName: string;
+    brokerIconUrl: string | null;
+    custody: string;
+    ownershipShare: string;
+    quantity: string;
+    copiedQuantity: string;
+    stamp: CopyRef;
+    enteredAt: string;
+}
+
 export interface DraftData {
     asOf: string;
     valuationCurrency: string;
@@ -194,6 +216,8 @@ export interface DraftData {
     cash: DraftCash[];
     contributions: DraftContribution[];
     assets: DraftAsset[];
+    /** The user's positions (the Rebalancer's; always empty for the PAC). */
+    positions: DraftPosition[];
     routes: Record<string, DraftRoute>;
     targets: Record<string, string>;
     /** Minimum and maximum of each Asset's final value, as typed (F2 of project 67); an Asset with no limit has no entry. */
@@ -275,6 +299,11 @@ export function brokerModesModified(broker: DraftBroker): boolean {
     return modes || conversion;
 }
 
+/** A position whose planning quantity is still the one the copy proposed (`0.0` and `0` are the same quantity). */
+export function positionIsCopied(position: DraftPosition): boolean {
+    return canonicalText(position.quantity) === canonicalText(position.copiedQuantity);
+}
+
 /** A rate still equal to its copy (same rule as `priceIsCopied`). */
 export function rateIsCopied(fx: DraftFx): boolean {
     if (fx.manual || fx.stamp === null || fx.copiedRate === null) return false;
@@ -304,6 +333,7 @@ function emptyData(valuationCurrency: string): DraftData {
         cash: [],
         contributions: [],
         assets: [],
+        positions: [],
         routes: {},
         targets: {},
         limits: {},
@@ -532,9 +562,11 @@ export class PlannerDraft {
 
     /**
      * Every operative Broker may use every liquidity source unless the user says otherwise: a source
-     * without an entry gets one, enabled. An entry the user switched off stays off.
+     * without an entry gets one, enabled. An entry the user switched off stays off. A Tool that declares no
+     * funding routes (the Rebalancer, `profile.fundingRoutes`) keeps no entry at all.
      */
     syncFunding(): void {
+        if (!this.profile.fundingRoutes) return;
         for (const broker of this.data.brokers) {
             if (broker.fundingOnly) continue;
             for (const source of this.fundingCandidates(broker.key)) {
@@ -625,10 +657,16 @@ export class PlannerDraft {
 
     removeAsset(key: string): void {
         this.data.assets = this.data.assets.filter((item) => item.key !== key);
+        this.data.positions = this.data.positions.filter((item) => item.assetKey !== key);
         delete this.data.targets[key];
         delete this.data.limits[key];
         if (this.assetOrder.includes(key)) this.assetOrder = this.assetOrder.filter((item) => item !== key);
         this.syncRoutes();
+    }
+
+    /** The Asset's positions, as the live `$state` proxies, in the order they were copied. */
+    positionsOf(assetKey: string): DraftPosition[] {
+        return this.data.positions.filter((item) => item.assetKey === assetKey);
     }
 
     reorderAssets(keys: readonly string[]): void {

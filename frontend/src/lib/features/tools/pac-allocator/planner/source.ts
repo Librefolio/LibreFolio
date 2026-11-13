@@ -62,15 +62,28 @@ export interface SourceBroker {
     provenance_id: string;
 }
 
+/** The quantity of one holding: in custody, the user's share of it, and the user's part (`custody × share`, the backend's). */
+export interface SourceHoldingQuantity {
+    custody: string;
+    ownershipShare: string;
+    economic: string;
+}
+
 /**
- * Which Asset is held at which Broker. Identifiers only: the picker of the
- * user's own Assets needs no quantity, so none crosses into the planner.
+ * Which Asset is held at which Broker. The PAC's picker of the user's own Assets needs no quantity, so for the PAC
+ * none crosses into the planner (`quantity: null`); the Rebalancer works on positions and reads it (F3a of project 67).
  */
 export interface SourceHolding {
     holding_id: string;
     asset_id: string;
     broker_id: string;
     provenance_id: string;
+    quantity: SourceHoldingQuantity | null;
+}
+
+/** What a read keeps besides what every Tool needs: the quantities held, for a Tool that works on positions. */
+export interface SourceReadOptions {
+    positions?: boolean;
 }
 
 export interface SourceCash {
@@ -200,7 +213,7 @@ function refusal(error: unknown): PlannerSourceErrorCode | null {
 
 type RawResponse = Awaited<ReturnType<typeof zodiosApi.get_portfolio_allocation_source_api_v1_portfolio_allocation_source_post>>;
 
-function mapResponse(raw: RawResponse): PlannerSource {
+function mapResponse(raw: RawResponse, options: SourceReadOptions): PlannerSource {
     const distribution = raw.current_distribution;
     return {
         asOf: raw.snapshot.as_of,
@@ -241,6 +254,7 @@ function mapResponse(raw: RawResponse): PlannerSource {
             asset_id: row.asset_id,
             broker_id: row.broker_id,
             provenance_id: row.provenance_id,
+            quantity: options.positions ? {custody: row.custody_quantity, ownershipShare: row.ownership_share, economic: row.economic_quantity} : null,
         })),
         cash: raw.cash_balances.map((row) => ({
             cash_id: row.cash_id,
@@ -310,7 +324,7 @@ function mapResponse(raw: RawResponse): PlannerSource {
 }
 
 /** Reads one immutable domain snapshot. Every call is an explicit user action. */
-export async function fetchPlannerSource(query: SourceQuery, accountGeneration: number, signal?: AbortSignal): Promise<PlannerSource> {
+export async function fetchPlannerSource(query: SourceQuery, accountGeneration: number, signal?: AbortSignal, options: SourceReadOptions = {}): Promise<PlannerSource> {
     try {
         return await runToolSessionTask(
             accountGeneration,
@@ -326,7 +340,7 @@ export async function fetchPlannerSource(query: SourceQuery, accountGeneration: 
                     },
                     {signal: requestSignal},
                 );
-                return mapResponse(response);
+                return mapResponse(response, options);
             },
             signal,
         );

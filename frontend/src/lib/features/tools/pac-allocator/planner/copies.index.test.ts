@@ -19,7 +19,7 @@ function source(assets: SourceAsset[]): PlannerSource {
         provenance: [],
         assets,
         brokers: [{broker_id: 'broker-1', source_broker_id: 1, name: 'B', icon_url: null, access_role: 'OWNER', ownership_share: '1', observed_currencies: [], active: true, operating_profile_status: 'not_available', operating_profile: null, provenance_id: 'p'}],
-        holdings: assets.map((row) => ({holding_id: `h-${row.source_asset_id}`, asset_id: row.asset_id, broker_id: 'broker-1', provenance_id: 'p'})),
+        holdings: assets.map((row) => ({holding_id: `h-${row.source_asset_id}`, asset_id: row.asset_id, broker_id: 'broker-1', provenance_id: 'p', quantity: null})),
         cash: [],
         prices: [],
         classifications: [],
@@ -46,5 +46,17 @@ describe('ownedAssets', () => {
     it('keeps an Asset of any other type', () => {
         const owned = ownedAssets(source([asset(4, 'ETF_STOCK'), asset(5, 'OTHER')]));
         expect(owned.rows).toHaveLength(2);
+    });
+});
+
+describe('ownedAssets — positions (F3a of project 67, step 4)', () => {
+    it('keeps the holding of each position, its quantity included when the read kept it', () => {
+        const snapshot = source([asset(1, 'ETF')]);
+        snapshot.holdings = [{...snapshot.holdings[0], quantity: {custody: '10', ownershipShare: '0.5', economic: '5'}}];
+
+        const owned = ownedAssets(snapshot);
+
+        expect(owned.rows).toHaveLength(1);
+        expect(owned.rows[0].positions).toEqual([{brokerId: 1, holding: snapshot.holdings[0]}]);
     });
 });

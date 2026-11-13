@@ -174,3 +174,26 @@ describe('fetchPlannerSource — the broker operating profile (P3 of project 67,
         expect(effectiveTaxRegime(null)).toBe('declarative');
     });
 });
+
+describe('fetchPlannerSource — positions (F3a of project 67, step 4)', () => {
+    /** One served holding row: 10 units in custody, half of them the user's. */
+    function holdingRow() {
+        return {holding_id: 'holding:asset:11:broker:7', asset_id: 'asset:11', broker_id: 'broker:7', custody_quantity: '10', ownership_share: '0.5', economic_quantity: '5', quantity_unit: 'asset_unit', provenance_id: 'source:portfolio-ledger'};
+    }
+
+    it('holdings map quantity and share for the rebalancer', async () => {
+        allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, holdings: [holdingRow()]});
+
+        const source = await fetchPlannerSource({...QUERY, sections: ['holdings']}, getClientSessionGeneration(), undefined, {positions: true});
+
+        expect(source.holdings).toEqual([{holding_id: 'holding:asset:11:broker:7', asset_id: 'asset:11', broker_id: 'broker:7', provenance_id: 'source:portfolio-ledger', quantity: {custody: '10', ownershipShare: '0.5', economic: '5'}}]);
+    });
+
+    it('the PAC source mapping still drops quantities', async () => {
+        allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, holdings: [holdingRow()]});
+
+        const source = await fetchPlannerSource({...QUERY, sections: ['holdings']}, getClientSessionGeneration());
+
+        expect(source.holdings).toEqual([{holding_id: 'holding:asset:11:broker:7', asset_id: 'asset:11', broker_id: 'broker:7', provenance_id: 'source:portfolio-ledger', quantity: null}]);
+    });
+});

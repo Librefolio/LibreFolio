@@ -34,6 +34,17 @@ export interface PlannerProfile {
     readonly steps: readonly PlannerStep[];
     /** Which variant of a text that differs between the Tools a file shows. */
     readonly text: 'pac' | 'rebalancer';
+    /**
+     * Whether the Tool works on the user's positions (F3a of project 67): the Rebalancer reads the quantities held and
+     * sends them; the PAC buys from cash only and never reads a quantity.
+     */
+    readonly positions: boolean;
+    /**
+     * Whether the user chooses which cash and contributions pay for each Broker's purchases (the PAC's funding routes). The
+     * Rebalancer declares none: every cash reaches every Broker, and the backend generates the deposits and transfers
+     * (F3a of project 67, contract §5.4).
+     */
+    readonly fundingRoutes: boolean;
 }
 
 export const PAC_PLANNER_PROFILE: PlannerProfile = Object.freeze({
@@ -44,6 +55,8 @@ export const PAC_PLANNER_PROFILE: PlannerProfile = Object.freeze({
     events: Object.freeze({completed: 'tool.pac-plan.completed', failed: 'tool.pac-plan.failed'}),
     steps: Object.freeze([...PLANNER_STEPS]),
     text: 'pac',
+    positions: false,
+    fundingRoutes: true,
 });
 
 /**
@@ -58,6 +71,8 @@ export const REBALANCER_PLANNER_PROFILE: PlannerProfile = Object.freeze({
     events: Object.freeze({completed: 'tool.rebalancer-plan.completed', failed: 'tool.rebalancer-plan.failed'}),
     steps: Object.freeze([...PLANNER_STEPS]),
     text: 'rebalancer',
+    positions: true,
+    fundingRoutes: false,
 });
 
 const PROFILE_KEY = Symbol('planner-profile');

@@ -20,6 +20,9 @@ describe('planner profile', () => {
         expect(profile.steps).toEqual(PLANNER_STEPS);
         expect(profile.steps).toHaveLength(9);
         expect(profile.text).toBe('pac');
+        // The PAC buys from cash only: it never reads the quantities the user holds.
+        expect(profile.positions).toBe(false);
+        expect(profile.fundingRoutes).toBe(true);
     });
 
     it('testId joins prefix and suffix', () => {
@@ -54,6 +57,9 @@ describe('planner profile', () => {
         // The mockup's order; the «Tax» step comes with F3b, after Strategy.
         expect(profile.steps).toEqual(PLANNER_STEPS);
         expect(profile.text).toBe('rebalancer');
+        expect(profile.positions).toBe(true);
+        // Every cash reaches every Broker: the Rebalancer declares no funding route (contract §5.4).
+        expect(profile.fundingRoutes).toBe(false);
         expect(testId('continue', profile)).toBe('rebalancer-planner-continue');
         expect(Object.isFrozen(profile) && Object.isFrozen(profile.events) && Object.isFrozen(profile.steps)).toBe(true);
     });
