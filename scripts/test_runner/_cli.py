@@ -447,6 +447,12 @@ def _add_run_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
     parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived). Defaults to .testLog; pass an empty string to disable", default=DEFAULT_LOG_DIR)
     parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
+    parser.add_argument(
+        "--quotable",
+        action="store_true",
+        help="The run to quote, whole: stands for --fresh-run --coverage all --cov-clean-backend --cov-clean-backend-e2e --cov-clean-js. Needs the category `all` written; refuses --resume, test names, --fail-fast, the provider filters, a coverage other than `all`, --list and --run-status. Writes .coverage_data/coverage-summary.json",
+        default=False,
+    )
     parser.add_argument("--assume-scoped", dest="assume_scoped", action="store_true", help="Experiment: run every server-backed unit in parallel, whatever the catalogue says. The reds are the work list, not a regression", default=False)
     _add_runtime_args(parser)
 
@@ -778,7 +784,7 @@ def _dispatch_test_command(args):
     """Dispatch test command from dev.py, optionally teeing the full log to a file."""
     _common.line_buffer_output()
     args = _prepare_args(args)
-    refusal = _refused_test_names(args)
+    refusal = _refused_quotable(args) or _refused_test_names(args)
     if refusal:
         print_error(refusal)
         return 2
@@ -852,7 +858,13 @@ def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> 
     on a backend-only suite), in which case the caller must abort.
     """
     # A run starts from an empty ledger: nothing an earlier run of this process launched is expected again.
-    _coverage.LEDGER.reset(categories=[args.category] if getattr(args, "category", None) else [])
+    quotable = bool(getattr(args, "quotable", False))
+    _coverage.LEDGER.reset(categories=[args.category] if getattr(args, "category", None) else [], quotable=quotable)
+    if quotable:
+        # The old summary goes before anything runs, so a run that dies leaves none; the commit and the tree are read now,
+        # before the run's own writes and before the cleaning below.
+        _coverage.forget_summary()
+        _coverage.LEDGER.start_state = _coverage._git_state()
     _common._COVERAGE_MODE = coverage
     _common._RESUME_MODE = resume
     _common.set_fail_fast(getattr(args, "fail_fast", False))
@@ -1254,9 +1266,37 @@ def _finish_coverage(success: bool) -> int:
 
 def _prepare_args(args):
     """The one place where a flag that stands for other flags is expanded, before anything reads the arguments: called first by
-    ``main()`` and by ``_dispatch_test_command()``. Nothing stands for anything yet (step 3.5 adds ``--quotable``): the arguments
-    come back as they are."""
+    ``main()`` and by ``_dispatch_test_command()``, so the campaign (``_timed_run`` reads ``fresh_run``) opens on the expanded
+    arguments. ``--quotable`` stands for ``--fresh-run --coverage all --cov-clean-backend --cov-clean-backend-e2e
+    --cov-clean-js``; a ``--coverage`` the user gave is left as it is, for ``_refused_quotable`` to refuse. Without
+    ``--quotable`` the arguments come back as they are."""
+    if getattr(args, "quotable", False):
+        args.fresh_run = True
+        args.coverage = args.coverage or "all"
+        args.cov_clean_backend = args.cov_clean_backend_e2e = args.cov_clean_js = True
     return args
+
+
+def _refused_quotable(args) -> str | None:
+    """Why this ``--quotable`` command line is refused, or ``None``. Both entries ask, after ``_prepare_args`` and before
+    anything starts, and answer exit 2: a number to quote comes from one whole run of everything, so whatever makes a run
+    partial is refused, naming the flag. The category ``all`` has to be written: without it the bodies stop before measuring
+    anything."""
+    if not getattr(args, "quotable", False):
+        return None
+    refused = [
+        (getattr(args, "category", None) != "all", "it needs the category `all` written (dev.py test --quotable all): any other scope is not the whole run"),
+        (getattr(args, "resume", False), "--resume would skip what already passed, and its coverage is not in this run"),
+        (getattr(args, "fail_fast", False), "--fail-fast stops before every piece has run"),
+        (bool(getattr(args, "test_names", None)), "test names run part of a category: it takes no test names"),
+        (bool(getattr(args, "providers", None)), "--providers leaves providers out"),
+        (bool(getattr(args, "exclude_providers", None)), "--exclude-providers leaves providers out"),
+        (getattr(args, "coverage", None) not in (None, "all"), f"--coverage {getattr(args, 'coverage', None)} measures one language: it stands for --coverage all"),
+        (getattr(args, "list_tests", False), "--list runs nothing"),
+        (getattr(args, "run_status", False), "--run-status runs nothing"),
+    ]
+    reasons = [why for refuse, why in refused if refuse]
+    return f"--quotable refused: {'; '.join(reasons)}." if reasons else None
 
 
 def _dispatch_test_command_body(args):  # noqa: C901 — flat sequential step driver, no nested logic
@@ -1316,7 +1356,7 @@ def main():
 
     argcomplete.autocomplete(parser)
     args = _prepare_args(parser.parse_args(normalize_coverage_argv(sys.argv[1:])))
-    refusal = _refused_test_names(args)
+    refusal = _refused_quotable(args) or _refused_test_names(args)
     if refusal:
         print_error(refusal)
         return 2

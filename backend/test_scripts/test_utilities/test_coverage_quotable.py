@@ -26,6 +26,12 @@ coverage exists, and writes pure numbers. It lands in small steps, each pinned h
    frontend from the ``summary.json`` that ``js-coverage-report.js`` writes beside each report. ``summarize()`` writes them all to
    ``.coverage_data/coverage-summary.json`` (schema ``lf-coverage-summary/1``) and prints them.
 
+5. ``TestQuotable`` (step 3.5) — ``--quotable`` stands for ``--fresh-run --coverage all`` and the three ``--cov-clean-*``, expanded
+   by ``_prepare_args`` before the campaign opens; it needs ``all`` written and refuses everything that would make the run
+   partial (``--resume``, test names, ``--fail-fast``, the provider filters, another category, a coverage other than ``all``, a
+   listing, a status) with exit 2 before anything starts. The summary it writes says ``quotable`` only for a green run, with
+   every piece, from a tree that was clean when it began.
+
 Pure: no database, no server, no network, no subprocess. The runner's heavy parts are stood in for with ``monkeypatch``; the
 source of ``_cli.py`` is read as text (``ast``), never executed beyond its import. The coverage data of step 3.4 is real: a few
 lines of Python under ``tmp_path``, measured in process by coverage.py itself.
@@ -40,6 +46,7 @@ import inspect
 import json
 import os
 import sqlite3
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -69,6 +76,7 @@ RUN_FLAG_DESTS = (
     "log_dir",
     "no_shared_server",
     "assume_scoped",
+    "quotable",
 )
 
 
@@ -188,7 +196,7 @@ class TestOneCoverageTail:
     @pytest.mark.parametrize("entry", ["main", "_dispatch_test_command"])
     def test_prepare_args_runs_first_in_both_entries(self, entry: str) -> None:
         """CT-06 — ``main`` and ``_dispatch_test_command`` call ``_prepare_args`` before anything that reads the flags (the refusal of
-        test names, the log, the run): it is where ``--quotable`` will be expanded (step 3.5), so it must come first."""
+        test names, the log, the run): it is where ``--quotable`` is expanded (step 3.5), so it must come first."""
         assert callable(getattr(_cli, "_prepare_args", None)), "_cli._prepare_args does not exist"
         function = next(node for node in ast.parse(CLI_SOURCE).body if isinstance(node, ast.FunctionDef) and node.name == entry)
         calls = [node.func.id for node in ast.walk(function) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
@@ -198,7 +206,7 @@ class TestOneCoverageTail:
         assert ordered.index("_prepare_args") < ordered.index("_refused_test_names"), f"{entry}: _prepare_args must come before the refusal of test names; calls in order: {ordered}"
 
     def test_prepare_args_changes_nothing_yet(self) -> None:
-        """CT-07 — at this step ``_prepare_args`` returns the arguments as they are: the behaviour of the runner is unchanged."""
+        """CT-07 — without ``--quotable`` ``_prepare_args`` returns the arguments as they are: no flag stands for others."""
         args = _bodies_namespace(coverage="js")
         before = dict(vars(args))
 
@@ -533,18 +541,23 @@ def _js_summary(path: Path, lines: tuple[int, int], branches: tuple[int, int], r
     return path
 
 
+@pytest.fixture
+def summary_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """A project root of the test's own, a ledger of its own, and the git state stood in (a clean tree at a known commit)."""
+    ledger = _coverage.CoverageLedger()
+    monkeypatch.setattr(_coverage, "LEDGER", ledger)
+    monkeypatch.setattr(_coverage, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(_coverage, "_git_state", lambda: ("0123abc", False))
+    monkeypatch.chdir(tmp_path)
+    return SimpleNamespace(root=tmp_path, data=tmp_path / ".coverage_data", js=tmp_path / "frontend" / "coverage-js", ledger=ledger)
+
+
 class TestPureNumbers:
     """Step 3.4: lines and branches apart, covered / total, the percentage computed by the runner; one summary file."""
 
     @pytest.fixture
-    def run_root(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-        """A project root of the test's own, a ledger of its own, and the git state stood in (a clean tree at a known commit)."""
-        ledger = _coverage.CoverageLedger()
-        monkeypatch.setattr(_coverage, "LEDGER", ledger)
-        monkeypatch.setattr(_coverage, "PROJECT_ROOT", tmp_path)
-        monkeypatch.setattr(_coverage, "_git_state", lambda: ("0123abc", False))
-        monkeypatch.chdir(tmp_path)
-        return SimpleNamespace(root=tmp_path, data=tmp_path / ".coverage_data", js=tmp_path / "frontend" / "coverage-js", ledger=ledger)
+    def run_root(self, summary_root: SimpleNamespace):
+        return summary_root
 
     def test_backend_lines_and_branches_come_from_totals_never_percent_covered(self, run_root: SimpleNamespace) -> None:
         """PN-01 — real data, one ``if`` taken one way: lines 5 / 5 = 100 %, branches 1 / 2 = 50 %. coverage.py's mixed TOTAL
@@ -661,3 +674,146 @@ class TestPureNumbers:
         _coverage._finalize_coverage(is_front=False, is_all=False)
 
         assert "lines + branches" in capsys.readouterr().out
+
+
+class TestQuotable:
+    """Step 3.5: ``--quotable``, what it stands for, what it refuses, and when its summary says «quotable»."""
+
+    @pytest.fixture
+    def run_root(self, summary_root: SimpleNamespace):
+        return summary_root
+
+    @pytest.fixture
+    def entries(self, monkeypatch: pytest.MonkeyPatch):
+        """The two entries of the runner with everything after the expansion stood in: the campaign (``_timed_run``) records the
+        arguments it is opened with, the log and the snapshot do nothing. ``run(argv)`` returns ``(exit code, arguments or None)``."""
+        seen: list = []
+        monkeypatch.setattr(_cli, "_timed_run", lambda args, body: seen.append(args) or 0)
+        monkeypatch.setattr(_cli, "_activate_log_dir", lambda args: None)
+        monkeypatch.setattr(_cli, "_snapshot_log_dir_db", lambda: None)
+        monkeypatch.setattr(_common, "line_buffer_output", lambda: None)
+
+        def own(argv: list):
+            seen.clear()
+            monkeypatch.setattr(sys, "argv", ["scripts.test_runner", *argv])
+            return _cli.main(), (seen[0] if seen else None)
+
+        def via_dev(argv: list):
+            seen.clear()
+            sub_parsers = argparse.ArgumentParser().add_subparsers()
+            _cli.register_subparser(sub_parsers)
+            args = sub_parsers._name_parser_map["test"].parse_args(_cli.normalize_coverage_argv(argv))
+            return _cli._dispatch_test_command(args), (seen[0] if seen else None)
+
+        return {"python -m scripts.test_runner": own, "dev.py test": via_dev}
+
+    def test_quotable_expands_before_the_campaign_opens(self, entries: dict) -> None:
+        """QU-01 — ``--quotable all`` reaches the campaign (``_timed_run``) of both entries already standing for
+        ``--fresh-run --coverage all --cov-clean-backend --cov-clean-backend-e2e --cov-clean-js``: ``_timed_run`` reads
+        ``fresh_run`` before the body runs, so the expansion cannot wait for the body."""
+        for entry, run in entries.items():
+            rc, args = run(["--quotable", "all"])
+            assert rc == 0 and args is not None, f"{entry}: the run did not start"
+            assert (args.fresh_run, args.coverage, args.cov_clean_backend, args.cov_clean_backend_e2e, args.cov_clean_js) == (True, "all", True, True, True), entry
+            assert args.quotable is True and args.category == "all", entry
+
+    def test_without_quotable_nothing_is_expanded(self, entries: dict) -> None:
+        """QU-02 — the same command line without ``--quotable``: a plain run, none of the flags set."""
+        for entry, run in entries.items():
+            _rc, args = run(["all"])
+            assert (args.fresh_run, args.coverage, args.cov_clean_backend, args.cov_clean_js) == (False, None, False, False), entry
+
+    @pytest.mark.parametrize(
+        ("argv", "named"),
+        [
+            (["--quotable", "--resume", "all"], "--resume"),
+            (["--quotable", "--fail-fast", "all"], "--fail-fast"),
+            (["--quotable", "--coverage", "py", "all"], "--coverage"),
+            (["--quotable", "--coverage", "js", "all"], "--coverage"),
+            (["--quotable", "--run-status", "all"], "--run-status"),
+            (["--quotable", "all", "--providers", "yfinance"], "--providers"),
+            (["--quotable", "all", "--exclude-providers", "yfinance"], "--exclude-providers"),
+            (["--quotable", "api", "all"], "all"),
+            (["--quotable", "front-fx", "all"], "all"),
+            (["--quotable", "all-backend"], "all"),
+            (["--quotable"], "all"),
+        ],
+    )
+    def test_quotable_refuses_what_would_make_the_run_partial(self, entries: dict, capsys: pytest.CaptureFixture, argv: list, named: str) -> None:
+        """QU-03 — a command line that cannot be a whole run is refused by both entries with exit 2, before the campaign opens,
+        and the message names what is wrong."""
+        for entry, run in entries.items():
+            rc, args = run(argv)
+            out = capsys.readouterr().out
+            assert (rc, args) == (2, None), f"{entry} {argv}: exit {rc}, campaign opened: {args is not None}"
+            assert "--quotable" in out and named in out, f"{entry} {argv}: the refusal does not name {named}: {out!r}"
+
+    def test_quotable_refuses_test_names(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+        """QU-04 — test names (the ``-k`` filter after the action) make a run partial: refused. Through the function the two
+        entries call, since ``all`` takes no names at the parser."""
+        args = SimpleNamespace(quotable=True, category="all", action=None, test_names=["test_one"], resume=False, fail_fast=False, coverage=None, list_tests=False, run_status=False, providers=None, exclude_providers=None)
+
+        refusal = _cli._refused_quotable(args)
+
+        assert refusal and "test names" in refusal and "--quotable" in refusal
+        args.test_names = None
+        assert _cli._refused_quotable(args) is None, "a whole `--quotable all` is not refused"
+        args.list_tests = True
+        assert "--list" in (_cli._refused_quotable(args) or ""), "the parser gives `all` no --list, but a caller that sets it is refused"
+        args.list_tests = False
+        args.quotable = False
+        args.resume = True
+        assert _cli._refused_quotable(args) is None, "without --quotable nothing is refused here"
+
+    def test_the_run_starts_clean_and_remembers_the_tree(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
+        """QU-05 — ``_apply_coverage_mode`` of a quotable run deletes the previous summary, notes in the ledger that the run is
+        quotable-minded, and records the commit and the state of the tree as they are at the start (the run's own writes must not
+        decide it)."""
+        for name in ("_COVERAGE_MODE", "_RESUME_MODE", "_COVERAGE_SOURCE", "_COVERAGE_PY", "_COVERAGE_JS", "_FAIL_FAST"):
+            monkeypatch.setattr(_common, name, getattr(_common, name))
+        monkeypatch.setattr(_cli, "_clean_coverage_dirs", lambda *args: None)
+        monkeypatch.setattr(_cli, "_clean_js_coverage_dirs", lambda: None)
+        monkeypatch.setattr(_cli, "_coverage_capabilities", lambda category: {"py", "js"})
+        run_root.data.mkdir(parents=True)
+        (run_root.data / "coverage-summary.json").write_text("{}", encoding="utf-8")
+
+        assert _cli._apply_coverage_mode(SimpleNamespace(category="all", fail_fast=False, quotable=True), "all", False, True, True)
+
+        assert not (run_root.data / "coverage-summary.json").exists(), "the summary of the previous run is gone"
+        assert run_root.ledger.quotable is True
+        assert run_root.ledger.start_state == ("0123abc", False)
+
+    def test_a_red_or_incomplete_run_writes_quotable_false_with_reasons(self, run_root: SimpleNamespace) -> None:
+        """QU-06 — ``quotable`` is true only when the run asked for it, the tests passed and every piece is there; each failing
+        condition adds its own reason. A whole run from a clean tree says ``quotable: true`` with no reason."""
+        run_root.ledger.reset(categories=["all"], quotable=True)
+        run_root.ledger.start_state = ("0123abc", False)
+        missing = _coverage.PieceRow("Vitest unit", "frontend/coverage-js/unit/front-fx-1", "coverage-final.json, ≥1 file", "missing", False)
+
+        whole = _coverage.summarize(run_root.ledger, [], success=True)
+        red = _coverage.summarize(run_root.ledger, [], success=False)
+        incomplete = _coverage.summarize(run_root.ledger, [missing], success=True)
+
+        assert (whole["quotable"], whole["reasons"]) == (True, [])
+        assert red["quotable"] is False and any("red" in reason for reason in red["reasons"])
+        assert incomplete["quotable"] is False and any("piece" in reason for reason in incomplete["reasons"])
+        assert json.loads((run_root.data / "coverage-summary.json").read_text(encoding="utf-8"))["quotable"] is False, "the file holds the last summary written"
+
+    def test_a_dirty_tree_is_not_quotable(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
+        """QU-07 — a tree with changes when the run began, one whose state git cannot tell, or a commit that moved during the run
+        is not quotable; changes the run itself made to the tree after its start do not count (the state is read at the start)."""
+        run_root.ledger.reset(categories=["all"], quotable=True)
+
+        run_root.ledger.start_state = ("0123abc", True)
+        assert any("dirty" in reason for reason in _coverage.summarize(run_root.ledger, [], success=True)["reasons"])
+
+        run_root.ledger.start_state = (None, None)
+        assert any("unknown" in reason for reason in _coverage.summarize(run_root.ledger, [], success=True)["reasons"])
+
+        run_root.ledger.start_state = ("0123abc", False)
+        monkeypatch.setattr(_coverage, "_git_state", lambda: ("0123abc", True))
+        assert _coverage.summarize(run_root.ledger, [], success=True)["quotable"] is True, "dirty at the end, clean at the start"
+
+        monkeypatch.setattr(_coverage, "_git_state", lambda: ("fedcba9", False))
+        moved = _coverage.summarize(run_root.ledger, [], success=True)
+        assert moved["quotable"] is False and any("moved" in reason for reason in moved["reasons"])

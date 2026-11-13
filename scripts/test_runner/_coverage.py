@@ -51,9 +51,13 @@ class CoverageLedger:
     def __init__(self) -> None:
         self.reset()
 
-    def reset(self, categories: list[str] | None = None) -> None:
-        """Forget everything: a run starts from an empty ledger (``_apply_coverage_mode``), naming the categories it runs."""
+    def reset(self, categories: list[str] | None = None, quotable: bool = False) -> None:
+        """Forget everything: a run starts from an empty ledger (``_apply_coverage_mode``), naming the categories it runs and
+        whether it is a ``--quotable`` one; ``start_state`` is the commit and the state of the tree at its start (``None`` until
+        a quotable run records it)."""
         self.categories: list[str] = list(categories or [])
+        self.quotable = quotable
+        self.start_state: tuple[str | None, bool | None] | None = None
         self.units: list[str] = []
         self.python: set[str] = set()
         self.e2e_js = 0
@@ -672,26 +676,36 @@ def _files_cell(value: dict | None) -> str:
     return str(files) if isinstance(files, int) else f"{files['read']} read, {files['skipped']} skipped"
 
 
-def summarize(ledger: CoverageLedger, rows: list[PieceRow], *, success: bool, quotable_run: bool = False) -> dict:
+def forget_summary() -> None:
+    """Delete ``.coverage_data/coverage-summary.json``: a quotable run starts without the summary of an earlier one."""
+    (PROJECT_ROOT / ".coverage_data" / "coverage-summary.json").unlink(missing_ok=True)
+
+
+def summarize(ledger: CoverageLedger, rows: list[PieceRow], *, success: bool) -> dict:
     """Write ``.coverage_data/coverage-summary.json`` (schema ``lf-coverage-summary/1``) and print its numbers.
 
     The backend bases are what this run measured (the ledger): ``pytest`` (``.coverage_data/backend``), ``server`` (the E2E
     server, ``.coverage_data/frontend``), their union ``combined``, and ``financial_math``, the union restricted to its folder.
     The frontend levels come from the JS reports. Every number is lines and branches apart (``backend_totals``). ``quotable`` is
-    true only for a ``--quotable all`` run (step 3.5) whose tests passed, whose pieces are all there and whose tree was clean;
-    ``reasons`` says what kept it from it. The numbers are a note, not a gate (D6): nothing here turns a run red.
+    true only for a ``--quotable all`` run (step 3.5) whose tests passed, whose pieces are all there and whose tree was clean
+    when it began (``ledger.start_state``, read before the run's own writes); ``reasons`` says what kept it from it, one per
+    condition, the commit moving during the run included. The numbers are a note, not a gate (D6): nothing here turns a run red.
     """
-    sha, dirty = _git_state()
+    sha, dirty = ledger.start_state or _git_state()
     missing = [row for row in rows if not row.ok]
     reasons = []
-    if not quotable_run:
+    if not ledger.quotable:
         reasons.append("not a --quotable all run")
     if not success:
         reasons.append("tests red")
     if missing:
         reasons.append(f"{len(missing)} coverage piece(s) missing")
-    if dirty is not False:
-        reasons.append("working tree dirty" if dirty else "git state unknown")
+    if dirty is None or sha is None:
+        reasons.append("git state unknown")
+    elif dirty:
+        reasons.append("working tree dirty at the start")
+    elif ledger.start_state and _git_state()[0] != sha:
+        reasons.append("the commit moved during the run")
 
     data_dir = PROJECT_ROOT / ".coverage_data"
     measured = [data_dir / name for name in ("backend", "frontend") if name in ledger.python]
