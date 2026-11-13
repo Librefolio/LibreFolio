@@ -13,7 +13,7 @@
     import type {ToolBatchMetrics, ToolItemMetrics} from '$lib/features/tools/contracts';
     import {formatObjectiveValue, formatPlannerPlainDecimal, type CurrencyDigits} from '../format';
     import {OBJECTIVE_FALLBACKS, OBJECTIVE_HELP_FALLBACKS, OBJECTIVE_TIPS} from '../policies';
-    import type {PacReadyResult} from '../types';
+    import type {PlannerReadyResult} from '../types';
     import {HINT, ICON_BUBBLE, TILE, TILE_LABEL} from '../ui';
     import BackendTimingBar from './BackendTimingBar.svelte';
     import {resultBadges} from './model';
@@ -30,7 +30,7 @@
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
-        result: PacReadyResult;
+        result: PlannerReadyResult;
         metrics: ToolItemMetrics;
         batch: ToolBatchMetrics;
         digits: CurrencyDigits;
@@ -49,7 +49,7 @@
         relativeGap: 'The same distance, as a fraction of the value.',
     } as const;
 
-    type Stage = PacReadyResult['solver_evidence']['stages'][number];
+    type Stage = PlannerReadyResult['solver_evidence']['stages'][number];
     let stagesTable = $state<DataTable<Stage>>();
 
     const proof = $derived(result.proof);

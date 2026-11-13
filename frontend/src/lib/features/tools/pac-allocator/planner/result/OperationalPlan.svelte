@@ -15,7 +15,7 @@
     import CurrencyCode from '../shared/CurrencyCode.svelte';
     import HelpTip from '../shared/HelpTip.svelte';
     import PlannerBrokerIcon from '../shared/PlannerBrokerIcon.svelte';
-    import type {PacConversion, PacFundingAction, PacOrderRow, PacSolution} from '../types';
+    import type {PlannerConversion, PlannerFundingAction, PlannerOrderRow, PlannerSolution} from '../types';
     import {BADGE, HINT, NOTICE, STEP_NUMBER} from '../ui';
     import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
     import {automaticConversions, conversionsFor, ordersByBroker, planSteps, type PlanLookup, type PlanSource, type ResultNames} from './model';
@@ -28,12 +28,12 @@
     const profile = getPlannerProfile();
 
     interface Props {
-        solution: PacSolution;
+        solution: PlannerSolution;
         names: ResultNames;
         lookup: PlanLookup;
         digits: CurrencyDigits;
         draft: PlannerDraft;
-        onorder: (order: PacOrderRow) => void;
+        onorder: (order: PlannerOrderRow) => void;
     }
 
     let {solution, names, lookup, digits, draft, onorder}: Props = $props();
@@ -48,22 +48,22 @@
 
     const steps = $derived(planSteps(solution.funding_actions, solution.conversions));
     const groups = $derived(ordersByBroker(solution.order_rows));
-    let orderTables = $state<Record<string, DataTable<PacOrderRow> | undefined>>({});
+    let orderTables = $state<Record<string, DataTable<PlannerOrderRow> | undefined>>({});
     const otherTables = (brokerId: string) => groups.filter((group) => group.brokerId !== brokerId).map((group) => orderTables[group.brokerId]);
     const assetLabel = (id: string) => [names.ticker(id), names.asset(id)].filter((part) => part).join(' ');
-    const paidByAutomaticConversion = (order: PacOrderRow) => conversionsFor(solution.conversions, order).some((action) => action.mode === 'automatic');
+    const paidByAutomaticConversion = (order: PlannerOrderRow) => conversionsFor(solution.conversions, order).some((action) => action.mode === 'automatic');
     /** An automatic conversion is shown above its Broker's orders; one on a Broker with no order is listed after them, never dropped. */
     const orphanAutomatic = $derived(solution.conversions.filter((action) => action.mode === 'automatic' && !groups.some((group) => group.brokerId === action.broker_id)));
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
     const brokerCell = (brokerId: string, currency: string | null): ResultCellContent => ({type: 'broker', brokerId, label: names.broker(brokerId), broker: draft.broker(brokerId) ?? null, currency});
 
-    function fundingKind(action: PacFundingAction, source: PlanSource): FundingKind {
+    function fundingKind(action: PlannerFundingAction, source: PlanSource): FundingKind {
         if (source.kind === 'contribution') return 'deposit';
         return source.brokerId === action.destination_broker_id ? 'cash' : 'transfer';
     }
 
     /** The step as a sentence, with a marker where its amount goes (the badge is drawn there); the names are the Broker's, or the contribution's or account's own. */
-    function fundingSentence(action: PacFundingAction, source: PlanSource, kind: FundingKind): string {
+    function fundingSentence(action: PlannerFundingAction, source: PlanSource, kind: FundingKind): string {
         const sourceName = source.kind !== 'contribution' && source.brokerId ? names.broker(source.brokerId) : source.label;
         return $t(`${KEY}.sentence.${kind}`, {
             default: SENTENCE_FALLBACKS[kind],
@@ -72,15 +72,15 @@
     }
 
     /** The reason of a funding step; its priority is named only where the user set more than one route. */
-    function fundingDetail(action: PacFundingAction): string {
+    function fundingDetail(action: PlannerFundingAction): string {
         const reason = $t(`tools.pacAllocator.planner.result.reasons.${action.reason_code}`, {default: 'to pay for the orders of the plan'});
         const route = lookup.fundingRoute(action.funding_route_id);
         if (!route || lookup.fundingChoices(action.destination_broker_id, action.amount.currency) < 2) return reason;
         return $t(`${KEY}.fundingDetail`, {default: '{reason} · priority {priority}', values: {reason, priority: String(route.priority)}});
     }
 
-    const orderColumns = $derived.by((): ColumnDef<PacOrderRow>[] =>
-        withHelpCues<PacOrderRow>([
+    const orderColumns = $derived.by((): ColumnDef<PlannerOrderRow>[] =>
+        withHelpCues<PlannerOrderRow>([
             {
                 id: 'asset',
                 header: () => $t('tools.pacAllocator.planner.result.assets.asset', {default: 'Asset'}),
@@ -137,10 +137,10 @@
         ]),
     );
 
-    const orderActions = $derived.by((): RowAction<PacOrderRow>[] => [{id: 'detail', icon: Eye, label: () => $t(`${KEY}.detail`, {default: 'Detail'}), onClick: (order) => onorder(order), testid: testId('plan-order-detail', profile)}]);
+    const orderActions = $derived.by((): RowAction<PlannerOrderRow>[] => [{id: 'detail', icon: Eye, label: () => $t(`${KEY}.detail`, {default: 'Detail'}), onClick: (order) => onorder(order), testid: testId('plan-order-detail', profile)}]);
 </script>
 
-{#snippet pair(action: PacConversion)}
+{#snippet pair(action: PlannerConversion)}
     <span class="flex items-center gap-1.5">
         <CurrencyCode code={action.source_debit.currency} />
         <ArrowRight class="h-4 w-4 shrink-0 text-lf-muted" aria-hidden="true" />
@@ -148,7 +148,7 @@
     </span>
 {/snippet}
 
-{#snippet rates(action: PacConversion)}
+{#snippet rates(action: PlannerConversion)}
     <p class="{HINT} tabular-nums">
         {$t(`${KEY}.fxRates`, {
             default: '1 {source} = {spot} {destination} spot · {effective} effective · spread loss {loss}',
@@ -163,7 +163,7 @@
     </p>
 {/snippet}
 
-{#snippet autoBox(action: PacConversion, withBroker: boolean)}
+{#snippet autoBox(action: PlannerConversion, withBroker: boolean)}
     <div class="{NOTICE.info} space-y-1" data-testid={testId('plan-auto-conversion', profile)} data-conversion={action.conversion_id}>
         <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
             <div class="flex min-w-0 flex-wrap items-center gap-2">

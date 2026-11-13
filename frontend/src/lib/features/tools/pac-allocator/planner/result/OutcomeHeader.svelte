@@ -5,7 +5,7 @@
     import {formatObjectiveValue, formatPlannerDate, type CurrencyDigits} from '../format';
     import {L2_FORMULA_FALLBACK} from '../policies';
     import {tipHtml} from '../shared/tipHtml';
-    import type {PacReadyResult} from '../types';
+    import type {PlannerReadyResult} from '../types';
     import {BADGE, BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, HINT} from '../ui';
     import {objectiveStage, resultBadges, type BadgeTone} from './model';
     import ResultBadgeTip from './ResultBadgeTip.svelte';
@@ -16,7 +16,7 @@
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
-        result: PacReadyResult;
+        result: PlannerReadyResult;
         revision: number;
         apiVersion: string;
         digits: CurrencyDigits;

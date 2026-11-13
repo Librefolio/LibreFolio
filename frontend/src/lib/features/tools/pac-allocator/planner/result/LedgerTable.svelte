@@ -8,7 +8,7 @@
     import type {ColumnDef} from '$lib/components/table/types';
     import type {PlannerDraft} from '../draft.svelte';
     import {formatExactMoneyPlain, type CurrencyDigits} from '../format';
-    import type {PacAccounting, PacLedgerRow} from '../types';
+    import type {PlannerAccounting, PlannerLedgerRow} from '../types';
     import {BUTTON_LINK, HINT} from '../ui';
     import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
     import {LEDGER_FIELDS, LEDGER_PAC_ZERO_FIELDS, ledgerColumns, ledgerFields, type LedgerField, type ResultNames} from './model';
@@ -20,8 +20,8 @@
     const profile = getPlannerProfile();
 
     interface Props {
-        rows: readonly PacLedgerRow[];
-        accounting: PacAccounting;
+        rows: readonly PlannerLedgerRow[];
+        accounting: PlannerAccounting;
         names: ResultNames;
         digits: CurrencyDigits;
         draft: PlannerDraft;
@@ -61,7 +61,7 @@
     };
 
     let showAll = $state(false);
-    let table = $state<DataTable<PacLedgerRow>>();
+    let table = $state<DataTable<PlannerLedgerRow>>();
     const data = $derived(ledgerColumns(rows));
     // R11.8: every column stays in the table, so the column button lists them all. The silent ones
     // start hidden and «show more» only changes that default: a choice made in the button wins.
@@ -70,8 +70,8 @@
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
     const helpKey = (field: LedgerField) => (LEDGER_PAC_ZERO_FIELDS.has(field) ? 'alwaysZero' : field);
 
-    const columns = $derived.by((): ColumnDef<PacLedgerRow>[] =>
-        withHelpCues<PacLedgerRow>([
+    const columns = $derived.by((): ColumnDef<PlannerLedgerRow>[] =>
+        withHelpCues<PlannerLedgerRow>([
             {
                 id: 'pool',
                 header: () => $t(`${KEY}.item`, {default: 'Broker and currency'}),
@@ -83,7 +83,7 @@
                 cell: (row) => cell({type: 'broker', brokerId: row.broker_id, label: names.broker(row.broker_id), broker: draft.broker(row.broker_id) ?? null, currency: row.currency, testid: testId('ledger-row', profile)}),
             },
             ...LEDGER_FIELDS.map(
-                (field): ColumnDef<PacLedgerRow> => ({
+                (field): ColumnDef<PlannerLedgerRow> => ({
                     id: field,
                     hiddenByDefault: !showAll && !speaking.has(field),
                     header: () => $t(`${KEY}.fields.${field}`, {default: FALLBACKS[field]}),
