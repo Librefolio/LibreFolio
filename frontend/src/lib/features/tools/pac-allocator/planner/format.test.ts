@@ -170,7 +170,7 @@ import {
     plannerPlainDecimalCount,
     plannerQuantityCount,
 } from './format';
-import type {PacExactMoney, PacExactNumber, PacObjectiveUnit} from './types';
+import type {PlannerExactMoney, PlannerExactNumber, PlannerObjectiveUnit} from './types';
 
 const P = PRIVACY_PLACEHOLDER;
 const EMPTY = '—';
@@ -180,22 +180,22 @@ const digits = catalogCurrencyDigits([
     {currency: 'JPY', minor_unit: '1'},
 ]);
 
-const EUR_MONEY: PacObjectiveUnit = {kind: 'valuation_money', currency_code: 'EUR'};
-const JPY_MONEY: PacObjectiveUnit = {kind: 'valuation_money', currency_code: 'JPY'};
-const EUR_SQUARED: PacObjectiveUnit = {kind: 'valuation_money_squared', currency_code: 'EUR'};
-const COUNT: PacObjectiveUnit = {kind: 'count'};
-const PENALTY: PacObjectiveUnit = {kind: 'ordinal_penalty'};
+const EUR_MONEY: PlannerObjectiveUnit = {kind: 'valuation_money', currency_code: 'EUR'};
+const JPY_MONEY: PlannerObjectiveUnit = {kind: 'valuation_money', currency_code: 'JPY'};
+const EUR_SQUARED: PlannerObjectiveUnit = {kind: 'valuation_money_squared', currency_code: 'EUR'};
+const COUNT: PlannerObjectiveUnit = {kind: 'count'};
+const PENALTY: PlannerObjectiveUnit = {kind: 'ordinal_penalty'};
 
-function finite(value: string): PacExactNumber {
+function finite(value: string): PlannerExactNumber {
     return {kind: 'finite_decimal', value};
 }
 
 /** An exact ratio as the backend sends it. The display projection is not authoritative. */
-function ratio(numerator: string, denominator: string, display_decimal: string, display_scale = 6): PacExactNumber {
+function ratio(numerator: string, denominator: string, display_decimal: string, display_scale = 6): PlannerExactNumber {
     return {kind: 'exact_ratio', numerator, denominator, display_decimal, display_scale, display_authority: 'non_authoritative'};
 }
 
-function money(value: PacExactNumber, currency = 'EUR'): PacExactMoney {
+function money(value: PlannerExactNumber, currency = 'EUR'): PlannerExactMoney {
     return {value, currency};
 }
 

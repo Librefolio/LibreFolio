@@ -22,7 +22,7 @@ import {formatPercent} from '$lib/utils/core/formatPercent';
 import {maskable, shouldMaskAmount, type AmountSensitivity} from '$lib/utils/privacy/maskable';
 import {canonicalDecimal, decimalEqualsRatio, decimalScale, roundDecimal, roundRatio, shiftDecimal} from './decimal';
 import {defaultAsOf} from './defaults';
-import type {PacExactMoney, PacExactNumber, PacExactPrice, PacObjectiveUnit} from './types';
+import type {PlannerExactMoney, PlannerExactNumber, PlannerExactPrice, PlannerObjectiveUnit} from './types';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 
 export type CurrencyDigits = (currencyCode: string) => number;
@@ -54,19 +54,19 @@ export function catalogCurrencyDigits(currencies: readonly {currency: string; mi
 }
 
 /** Whether the backend display projection of an exact ratio equals the ratio. */
-function isExactProjection(value: Extract<PacExactNumber, {kind: 'exact_ratio'}>): boolean {
+function isExactProjection(value: Extract<PlannerExactNumber, {kind: 'exact_ratio'}>): boolean {
     const shown = canonicalDecimal(value.display_decimal);
     return shown !== null && decimalEqualsRatio(shown, value.numerator, value.denominator);
 }
 
 /** Decimal text to show for an exact backend number, and whether it is approximate. */
-export function exactDisplay(value: PacExactNumber): {text: string; approx: boolean} {
+export function exactDisplay(value: PlannerExactNumber): {text: string; approx: boolean} {
     if (value.kind === 'finite_decimal') return {text: value.value, approx: false};
     return {text: value.display_decimal, approx: !isExactProjection(value)};
 }
 
 /** R14: an exact backend number rounded to `places` fraction digits, and whether the rounding changed it. */
-function exactRoundedDisplay(value: PacExactNumber, places: number): {text: string; approx: boolean} {
+function exactRoundedDisplay(value: PlannerExactNumber, places: number): {text: string; approx: boolean} {
     if (value.kind === 'finite_decimal') {
         const canonical = canonicalDecimal(value.value);
         const rounded = canonical === null ? null : roundDecimal(canonical, places);
@@ -82,7 +82,7 @@ function exactRoundedDisplay(value: PacExactNumber, places: number): {text: stri
  * G3: a nonzero amount that would round to zero there is rounded at one place past its first nonzero
  * fraction digit instead (at most twenty), never shown as zero; a true zero stays an exact `0`.
  */
-export function exactMoneyDisplay(value: PacExactNumber, places: number): {text: string; approx: boolean} {
+export function exactMoneyDisplay(value: PlannerExactNumber, places: number): {text: string; approx: boolean} {
     const shown = exactRoundedDisplay(value, places);
     if (shown.text !== '0') return shown;
     const finest = exactRoundedDisplay(value, MAX_DISPLAY_FRACTION).text;
@@ -130,12 +130,12 @@ export function formatPlannerMoneyHtml(amount: string | null | undefined, curren
 }
 
 /** An amount the backend computed, at the minor unit of its currency (R14). */
-export function formatExactMoneyPlain(money: PacExactMoney, options: MoneyOptions = {}): string {
+export function formatExactMoneyPlain(money: PlannerExactMoney, options: MoneyOptions = {}): string {
     const shown = exactMoneyDisplay(money.value, (options.digits ?? cldrCurrencyDigits)(money.currency));
     return formatPlannerMoneyPlain(shown.text, money.currency, {...options, minorUnit: false, approx: shown.approx});
 }
 
-export function formatExactMoneyHtml(money: PacExactMoney, options: MoneyOptions = {}): string {
+export function formatExactMoneyHtml(money: PlannerExactMoney, options: MoneyOptions = {}): string {
     const shown = exactMoneyDisplay(money.value, (options.digits ?? cldrCurrencyDigits)(money.currency));
     return formatPlannerMoneyHtml(shown.text, money.currency, {...options, minorUnit: false, approx: shown.approx});
 }
@@ -149,7 +149,7 @@ export function formatPlannerPriceHtml(amount: string | null | undefined, curren
     return formatPlannerMoneyHtml(amount, currencyCode, {digits, sensitivity: 'public'});
 }
 
-export function formatExactPricePlain(price: PacExactPrice, digits?: CurrencyDigits): string {
+export function formatExactPricePlain(price: PlannerExactPrice, digits?: CurrencyDigits): string {
     const shown = exactDisplay(price.value);
     return formatPlannerMoneyPlain(shown.text, price.currency, {digits, approx: shown.approx, sensitivity: 'public'});
 }
@@ -163,7 +163,7 @@ export function formatPlannerQuantity(quantity: string | null | undefined, optio
     return options.approx ? '≈' + text : text;
 }
 
-export function formatExactQuantity(value: PacExactNumber): string {
+export function formatExactQuantity(value: PlannerExactNumber): string {
     const shown = exactDisplay(value);
     return formatPlannerQuantity(shown.text, {approx: shown.approx});
 }
@@ -196,7 +196,7 @@ export function plannerQuantityCount(quantity: string | null | undefined): numbe
 }
 
 /** The plural count of `formatExactQuantity`. */
-export function exactQuantityCount(value: PacExactNumber): number {
+export function exactQuantityCount(value: PlannerExactNumber): number {
     return pluralCount(exactDisplay(value).text, 'personal');
 }
 
@@ -214,7 +214,7 @@ export function formatPlannerFxRate(rate: string | null | undefined, options: {a
     return options.approx ? '≈' + text : text;
 }
 
-export function formatExactFxRate(value: PacExactNumber): string {
+export function formatExactFxRate(value: PlannerExactNumber): string {
     const shown = exactDisplay(value);
     return formatPlannerFxRate(shown.text, {approx: shown.approx});
 }
@@ -251,7 +251,7 @@ function formatRoundedPercent(percent: string, digits: number, signed: boolean):
  * Quantities and rates keep it; an amount carries it only when the rounding to the minor unit of its
  * currency changed it (R14). Amendments of the C0 rule, recorded in the plan.
  */
-export function formatExactPercent(value: PacExactNumber, digits = 2): string {
+export function formatExactPercent(value: PlannerExactNumber, digits = 2): string {
     // R14: the exact value, rounded once. A ratio's display_decimal is already a rounding (6 places): rounding it
     // again could turn 30.5949995% into 30.60%.
     const fraction = value.kind === 'finite_decimal' ? value.value : roundRatio(value.numerator, value.denominator, digits + 2);
@@ -262,7 +262,7 @@ export function formatExactPercent(value: PacExactNumber, digits = 2): string {
  * L2 distance in squared valuation money: personal, unit outside the mask (`≈••• EUR²`). R14: two decimals, `≈` when
  * the rounding changes it. Squared money has no minor unit, so G3 does not apply: 0.004 is `≈0`.
  */
-export function formatPlannerL2(value: PacExactNumber, currencyCode: string): string {
+export function formatPlannerL2(value: PlannerExactNumber, currencyCode: string): string {
     const shown = exactRoundedDisplay(value, SOLVER_COUNT_DIGITS);
     const canonical = canonicalDecimal(shown.text);
     if (canonical === null) return EMPTY;
@@ -271,7 +271,7 @@ export function formatPlannerL2(value: PacExactNumber, currencyCode: string): st
 }
 
 /** An objective or solver value, formatted by its declared unit. */
-export function formatObjectiveValue(value: PacExactNumber, unit: PacObjectiveUnit, digits?: CurrencyDigits): string {
+export function formatObjectiveValue(value: PlannerExactNumber, unit: PlannerObjectiveUnit, digits?: CurrencyDigits): string {
     if (unit.kind === 'valuation_money') return formatExactMoneyPlain({value, currency: unit.currency_code}, {digits});
     if (unit.kind === 'valuation_money_squared') return formatPlannerL2(value, unit.currency_code);
     const shown = exactDisplay(value);
@@ -283,7 +283,7 @@ export function formatObjectiveValue(value: PacExactNumber, unit: PacObjectiveUn
  * currency, a count to two decimals; `≈` when the rounding changes the reported float. A solver float is
  * not an exact amount, so G3 does not apply: 0.004 EUR is `≈0.00`.
  */
-export function formatSolverNumber(value: string | null | undefined, unit: PacObjectiveUnit, digits?: CurrencyDigits): string {
+export function formatSolverNumber(value: string | null | undefined, unit: PlannerObjectiveUnit, digits?: CurrencyDigits): string {
     if (value === null || value === undefined) return EMPTY;
     if (unit.kind === 'valuation_money') return formatPlannerMoneyPlain(value, unit.currency_code, {digits, minorUnit: true});
     if (unit.kind === 'valuation_money_squared') return formatPlannerL2({kind: 'finite_decimal', value}, unit.currency_code);

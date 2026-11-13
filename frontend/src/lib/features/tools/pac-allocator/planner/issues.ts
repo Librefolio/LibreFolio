@@ -10,7 +10,7 @@ import {formatPlannerMoneyPlain, formatPlannerPlainDecimal} from './format';
 import {type PlannerDraft} from './draft.svelte';
 import type {RequestIdMap} from './request';
 import type {PlannerSource, SourceIssue} from './source';
-import type {PacIssue, PlannerStep} from './types';
+import type {PlannerIssue, PlannerStep} from './types';
 
 export const TOOL_ERROR_KEY_PREFIX = 'tools.pacAllocator.planner.toolErrors';
 
@@ -28,7 +28,7 @@ export interface PresentedIssue {
     values: Record<string, string>;
 }
 
-type AnyIssue = PacIssue | SourceIssue;
+type AnyIssue = PlannerIssue | SourceIssue;
 type AnyPath = AnyIssue['path'];
 
 const SECTION_STEPS: Record<string, PlannerStep | null> = {
@@ -160,7 +160,7 @@ export function presentIssue(issue: AnyIssue, draft: PlannerDraft, ids?: Request
     };
 }
 
-export function presentIssues(issues: readonly PacIssue[], draft: PlannerDraft, ids?: RequestIdMap): PresentedIssue[] {
+export function presentIssues(issues: readonly PlannerIssue[], draft: PlannerDraft, ids?: RequestIdMap): PresentedIssue[] {
     return dedupe(issues.map((issue) => presentIssue(issue, draft, ids)));
 }
 

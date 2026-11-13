@@ -1,5 +1,5 @@
 /**
- * Draft → PacPlannerRequest (C2) and the local problems that block sending (D8).
+ * Draft → PlannerRequest (C2) and the local problems that block sending (D8).
  *
  * Local checks are shape and same-unit checks only; every economic rule
  * (reachability, fees, FX closure, minimums, feasibility) stays in the
@@ -16,7 +16,20 @@ import {canonicalInput, compareDecimal, decimalSign, isWholeDecimal, percentToFr
 import {PLANNER_OPERATION} from './defaults';
 import {priceIsCopied, routeKey, sameExposures, selectionExceedsAvailable, type CopyRef, type DraftAsset, type DraftBroker, type DraftMode, type DraftRoute, type PlannerDraft} from './draft.svelte';
 import {toPlannerId, toPlannerTimestamp} from './source';
-import type {PacPlannerRequest, PacRequestAsset, PacRequestBroker, PacRequestCapability, PacRequestCash, PacRequestExposure, PacRequestFeeSchedule, PacRequestFundingRoute, PacRequestOrderRoute, PacRequestProvenance, PacResolvedRequest, PlannerStep} from './types';
+import type {
+    PlannerRequest,
+    PlannerRequestAsset,
+    PlannerRequestBroker,
+    PlannerRequestCapability,
+    PlannerRequestCash,
+    PlannerRequestExposure,
+    PlannerRequestFeeSchedule,
+    PlannerRequestFundingRoute,
+    PlannerRequestOrderRoute,
+    PlannerRequestProvenance,
+    PlannerResolvedRequest,
+    PlannerStep,
+} from './types';
 
 export interface LocalProblem {
     id: string;
@@ -39,9 +52,9 @@ export interface RequestIdMap {
 
 export interface BuiltRequest {
     /** The compact body that is sent. */
-    request: PacPlannerRequest;
+    request: PlannerRequest;
     /** `request` as the codec resolves it, every default filled in: the result views read this one. */
-    resolved: PacResolvedRequest;
+    resolved: PlannerResolvedRequest;
     ids: RequestIdMap;
     revision: number;
     fingerprint: string;
@@ -113,7 +126,7 @@ function nonEmpty<T>(items: T[]): T[] | null {
  * every fee is zero: a route with no schedule is a BUY without fees. A
  * rate-only schedule therefore names no currency.
  */
-function feeSchedule(brokerKey: string, mode: DraftMode): PacRequestFeeSchedule | null {
+function feeSchedule(brokerKey: string, mode: DraftMode): PlannerRequestFeeSchedule | null {
     const money = (text: string) => {
         const amount = nonZero(wireDecimal(text) as string);
         return amount === null ? null : {amount, currency: mode.currency};
@@ -273,7 +286,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
     const data = draft.data;
     const late = new ProblemList();
     const ids: RequestIdMap = {routes: new Map(), funding: new Map(), capabilities: new Map(), provenance: new Map()};
-    const provenance = new Map<string, PacRequestProvenance>();
+    const provenance = new Map<string, PlannerRequestProvenance>();
     let newest = now.toISOString();
 
     const copied = (stamp: CopyRef, step: PlannerStep, entityKey: string): string => {
@@ -310,7 +323,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
 
     // Assets. A copied price keeps its date in the draft, where it drives the staleness
     // warnings (plan §5); the wire carries only the price and where it comes from.
-    const assets: PacRequestAsset[] = data.assets.map((asset) => {
+    const assets: PlannerRequestAsset[] = data.assets.map((asset) => {
         const price = asset.price;
         const quote = price
             ? {
@@ -324,7 +337,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
             exposuresUnchanged(asset) && provenanceId && asset.exposureStamp ? copied({copyId: asset.exposureStamp.copyId, provenanceId}, 'assets', asset.key) : manual(asset.key, '/exposures', 'manual exposures', asset.enteredAt, 'assets');
         const ticker = asset.ticker.trim() === '' ? null : asset.ticker.trim().slice(0, 128);
         const exposures = asset.exposures.map(
-            (exposure): PacRequestExposure => ({
+            (exposure): PlannerRequestExposure => ({
                 dimension: exposure.dimension,
                 category_id: toPlannerId(exposure.categoryId.trim()) as string,
                 label: exposure.label.trim().slice(0, 128),
@@ -343,17 +356,17 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
 
     // Brokers, capabilities, fee schedules. A mode whose fees are all zero sends no schedule.
     const sentSchedules = new Set<string>();
-    const brokers: PacRequestBroker[] = data.brokers.map((broker: DraftBroker) => {
+    const brokers: PlannerRequestBroker[] = data.brokers.map((broker: DraftBroker) => {
         const provenanceId = broker.origin === 'copied' && broker.stamp ? copied(broker.stamp, 'brokers', broker.key) : manual(broker.key, '', 'manual broker', broker.enteredAt, 'brokers');
         const modes = broker.fundingOnly ? [] : broker.modes;
         for (const mode of modes) ids.capabilities.set(capabilityId(broker.key, mode), {brokerKey: broker.key, modeKey: mode.key});
         const capabilities = modes.map(
-            (mode): PacRequestCapability =>
+            (mode): PlannerRequestCapability =>
                 mode.kind === 'whole_quantity'
                     ? {kind: 'whole_quantity', capability_id: capabilityId(broker.key, mode), quantity_unit: 'asset_unit', quantity_step: wireDecimal(mode.step) as string}
                     : {kind: 'monetary_amount', capability_id: capabilityId(broker.key, mode), order_amount_step: {amount: wireDecimal(mode.step) as string, currency: mode.currency}},
         );
-        const feeSchedules = modes.map((mode) => feeSchedule(broker.key, mode)).filter((schedule): schedule is PacRequestFeeSchedule => schedule !== null);
+        const feeSchedules = modes.map((mode) => feeSchedule(broker.key, mode)).filter((schedule): schedule is PlannerRequestFeeSchedule => schedule !== null);
         for (const schedule of feeSchedules) sentSchedules.add(schedule.fee_schedule_id);
         return {
             broker_id: broker.key,
@@ -366,7 +379,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
     });
 
     // Cash and contributions
-    const existingCash: PacRequestCash[] = data.cash.map((cash) => ({
+    const existingCash: PlannerRequestCash[] = data.cash.map((cash) => ({
         cash_id: cash.key,
         broker_id: cash.brokerKey,
         available: {amount: wireDecimal(cash.available) as string, currency: cash.currency},
@@ -382,7 +395,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
 
     // Funding routes: every source is allowed to every operative Broker until the user excludes it (syncFunding).
     // An empty transfer cap is left out: the backend then moves the whole selected amount of the source.
-    const fundingRoutes: PacRequestFundingRoute[] = [];
+    const fundingRoutes: PlannerRequestFundingRoute[] = [];
     for (const broker of data.brokers) {
         for (const funding of broker.funding) {
             if (!funding.enabled) continue;
@@ -404,15 +417,15 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
     }
 
     // Order routes (BUY only; a disabled route is simply not sent)
-    const orderRoutes: PacRequestOrderRoute[] = [];
+    const orderRoutes: PlannerRequestOrderRoute[] = [];
     for (const asset of data.assets) {
         for (const broker of draft.operativeBrokers) {
             const route: DraftRoute | undefined = data.routes[routeKey(asset.key, broker.key)];
             if (!route?.enabled) continue;
             const mode = draft.modeFor(asset.key, broker.key) as DraftMode;
-            const minimum = (value: string): NonNullable<PacRequestOrderRoute['minimum_if_active']> | null =>
+            const minimum = (value: string): NonNullable<PlannerRequestOrderRoute['minimum_if_active']> | null =>
                 value.trim() === '' ? null : mode.kind === 'whole_quantity' ? {kind: 'whole_quantity', quantity: wireDecimal(value) as string, unit: 'asset_unit'} : {kind: 'monetary_amount', amount: {amount: wireDecimal(value) as string, currency: mode.currency}};
-            const cap: NonNullable<PacRequestOrderRoute['cap']> | null =
+            const cap: NonNullable<PlannerRequestOrderRoute['cap']> | null =
                 route.cap.trim() === '' ? null : mode.kind === 'whole_quantity' ? {kind: 'quantity', quantity: wireDecimal(route.cap) as string, unit: 'asset_unit'} : {kind: 'notional', amount: {amount: wireDecimal(route.cap) as string, currency: mode.currency}};
             const priority = wireInteger(route.priority) as number;
             const scheduleId = feeScheduleId(broker.key, mode);
@@ -459,7 +472,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         target_weights: data.assets.map((asset) => ({kind: 'asset' as const, asset_id: asset.key, weight: wireFraction(data.targets[asset.key]?.trim() ? data.targets[asset.key] : '0') as string})),
         order_routes: orderRoutes,
         policy: data.policy,
-    } as PacPlannerRequest;
+    } as PlannerRequest;
 
     // The codec of the draft's Tool (F1 of project 67). Until F3a builds the Rebalancer's own request, the planner builds the
     // PAC's shape, so the result is read as the PAC's resolved request.
@@ -475,7 +488,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         ok: true,
         built: {
             request,
-            resolved: parsed.data as PacResolvedRequest,
+            resolved: parsed.data as PlannerResolvedRequest,
             ids,
             revision: draft.revision,
             fingerprint: draft.fingerprint,
