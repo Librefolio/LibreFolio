@@ -68,7 +68,7 @@ import es from '$lib/i18n/es.json';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {catalogCurrencyDigits, exactQuantityCount, formatExactPricePlain, formatExactQuantity, formatPlannerPlainDecimal, formatPlannerQuantity, plannerPlainDecimalCount, plannerQuantityCount} from '../format';
-import type {PacExactNumber, PacExactPrice, PacOrderRow, PacResolvedOrderRoute} from '../types';
+import type {PlannerExactNumber, PlannerExactPrice, PlannerOrderRow, PlannerResolvedOrderRoute} from '../types';
 import {economicQuantityText, instructionStepText, instructionText, priceText, routeCapText, routeMinimumText, type Translator} from './text';
 
 const KEY = 'tools.pacAllocator.planner.result.text';
@@ -104,12 +104,12 @@ afterEach(() => {
     setPrivacyEnabled(false);
 });
 
-type ExactRatio = Extract<PacExactNumber, {kind: 'exact_ratio'}>;
-type EconomicQuantity = PacOrderRow['economic_quantity'];
-type RouteMinimum = PacResolvedOrderRoute['minimum_if_active'];
-type RouteCap = PacResolvedOrderRoute['cap'];
+type ExactRatio = Extract<PlannerExactNumber, {kind: 'exact_ratio'}>;
+type EconomicQuantity = PlannerOrderRow['economic_quantity'];
+type RouteMinimum = PlannerResolvedOrderRoute['minimum_if_active'];
+type RouteCap = PlannerResolvedOrderRoute['cap'];
 
-function finite(value: string): PacExactNumber {
+function finite(value: string): PlannerExactNumber {
     return {kind: 'finite_decimal', value};
 }
 
@@ -119,13 +119,13 @@ function ratio(numerator: string, denominator: string, display_decimal: string, 
 }
 
 /** Only what the sentences read of an order: its instruction. */
-function wholeQuantityOrder(quantity: string, quantity_step = '1'): PacOrderRow {
-    const row: Pick<PacOrderRow, 'instruction'> = {instruction: {kind: 'whole_quantity', quantity, quantity_step, unit: 'asset_unit'}};
-    return row as PacOrderRow;
+function wholeQuantityOrder(quantity: string, quantity_step = '1'): PlannerOrderRow {
+    const row: Pick<PlannerOrderRow, 'instruction'> = {instruction: {kind: 'whole_quantity', quantity, quantity_step, unit: 'asset_unit'}};
+    return row as PlannerOrderRow;
 }
 
 /** A market price of 12.5 EUR for `quote_base_quantity` units. */
-function price(quote_base_quantity: string): PacExactPrice {
+function price(quote_base_quantity: string): PlannerExactPrice {
     return {currency: 'EUR', quantity_unit: 'asset_unit', quote_base_quantity, value: finite('12.5')};
 }
 
@@ -137,7 +137,7 @@ function quantityCap(quantity: string): RouteCap {
     return {kind: 'quantity', quantity, unit: 'asset_unit'};
 }
 
-function exactEconomic(value: PacExactNumber): EconomicQuantity {
+function exactEconomic(value: PlannerExactNumber): EconomicQuantity {
     return {kind: 'exact', unit: 'asset_unit', value};
 }
 
@@ -259,11 +259,11 @@ function capUnits(quantity: string, shown: string, count: number): SiteCase {
 }
 
 /** An exact number as a title shows it: the decimal, or the ratio. */
-function label(value: PacExactNumber): string {
+function label(value: PlannerExactNumber): string {
     return value.kind === 'finite_decimal' ? value.value : `${value.numerator}/${value.denominator}`;
 }
 
-function quantityExact(value: PacExactNumber, shown: string, count: number): SiteCase {
+function quantityExact(value: PlannerExactNumber, shown: string, count: number): SiteCase {
     return {
         site: 'economicQuantityText, exact',
         key: `${DETAIL_KEY}.quantityExact`,

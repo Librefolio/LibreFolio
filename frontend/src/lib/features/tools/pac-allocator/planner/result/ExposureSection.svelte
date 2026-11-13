@@ -12,7 +12,7 @@
     import {EXPOSURE_DIMENSIONS, type ExposureDimension} from '../draft.svelte';
     import {formatExactPercent} from '../format';
     import {DIMENSION_FALLBACKS} from '../labels';
-    import type {PacExposureRow} from '../types';
+    import type {PlannerExposureRow} from '../types';
     import {BUTTON_LINK, HINT} from '../ui';
     import ExposureBars from './ExposureBars.svelte';
     import ExposureMaps from './ExposureMaps.svelte';
@@ -25,7 +25,7 @@
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
-        rows: readonly PacExposureRow[];
+        rows: readonly PlannerExposureRow[];
     }
 
     let {rows}: Props = $props();
@@ -39,7 +39,7 @@
         untrack(() => labels.load(language));
     });
 
-    function label(row: PacExposureRow): string {
+    function label(row: PlannerExposureRow): string {
         // The backend sends a fixed English label for the undeclared share: the interface translates it.
         if (row.category_id === UNCATEGORISED_CATEGORY_ID) return $t(`${PLANNER_KEY}.result.exposures.uncategorised`, {default: 'Uncategorised'});
         // A type, sector or country code reads in the user's language, as on the Asset pages.

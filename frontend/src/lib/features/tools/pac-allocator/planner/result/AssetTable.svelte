@@ -4,7 +4,7 @@
     import type {ColumnDef, FooterCellContent} from '$lib/components/table/types';
     import type {PlannerDraft} from '../draft.svelte';
     import {formatExactMoneyPlain, type CurrencyDigits} from '../format';
-    import type {PacAccounting, PacAssetRow} from '../types';
+    import type {PlannerAccounting, PlannerAssetRow} from '../types';
     import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
     import {weightScale, type ResultNames} from './model';
     import {withHelpCues} from '../shared/columnHelp';
@@ -15,15 +15,15 @@
     const profile = getPlannerProfile();
 
     interface Props {
-        rows: readonly PacAssetRow[];
-        accounting: PacAccounting;
+        rows: readonly PlannerAssetRow[];
+        accounting: PlannerAccounting;
         names: ResultNames;
         digits: CurrencyDigits;
         draft: PlannerDraft;
     }
 
     let {rows, accounting, names, digits, draft}: Props = $props();
-    let table = $state<DataTable<PacAssetRow>>();
+    let table = $state<DataTable<PlannerAssetRow>>();
 
     const KEY = 'tools.pacAllocator.planner.result.assets';
     const data = $derived([...rows]);
@@ -31,8 +31,8 @@
     const assetLabel = (id: string) => [names.ticker(id), names.asset(id)].filter((part) => part).join(' ');
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
 
-    const columns = $derived.by((): ColumnDef<PacAssetRow>[] =>
-        withHelpCues<PacAssetRow>([
+    const columns = $derived.by((): ColumnDef<PlannerAssetRow>[] =>
+        withHelpCues<PlannerAssetRow>([
             {
                 id: 'asset',
                 header: () => $t(`${KEY}.asset`, {default: 'Asset'}),
