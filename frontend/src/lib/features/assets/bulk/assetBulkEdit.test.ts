@@ -19,6 +19,8 @@
  *   icon is «leave as is».
  * - `summarizeChanges(assets, draft)`: per touched field how many assets change and which already have the value; and
  *   one row per changing asset, with a cell per touched field: before, after and `unchanged` («già …»).
+ * - Removing (U7): `clear_icon` / `clear_user_url` in the draft say «remove it». They are the only way a `null` goes out,
+ *   and only for the assets that hold the value: the others have nothing to remove, are «already without» and are left out.
  * - `validateQuoteBase(input)`: `empty`, `notInteger`, `belowOne` or `ok` for what the user typed.
  */
 import {describe, expect, it} from 'vitest';
@@ -274,5 +276,53 @@ describe('validateQuoteBase', () => {
         [Number.NaN, 'notInteger'],
     ] as const)('%j → %s', (input, expected) => {
         expect(validateQuoteBase(input)).toBe(expected);
+    });
+});
+
+describe('removing the icon and the personal URL (U7)', () => {
+    const holders = [asset(1, {icon_url: 'https://i/1.png', user_url: 'https://u/1'}), asset(2), asset(3, {icon_url: 'https://i/3.png'})];
+
+    it('is a touched field, and a null goes out only for the assets that hold the value', () => {
+        expect(touchedFields({clear_icon: true})).toEqual(['icon_url']);
+        expect(touchedFields({clear_user_url: true})).toEqual(['user_url']);
+        expect(buildBulkPatch(holders, {clear_icon: true})).toEqual([
+            {asset_id: 1, icon_url: null},
+            {asset_id: 3, icon_url: null},
+        ]);
+        expect(buildBulkPatch(holders, {clear_icon: true, clear_user_url: true})).toEqual([
+            {asset_id: 1, icon_url: null, user_url: null},
+            {asset_id: 3, icon_url: null},
+        ]);
+    });
+
+    it('changes nothing, and does not turn «Continue» on, when no selected asset holds the value', () => {
+        const bare = [asset(1), asset(2)];
+        expect(buildBulkPatch(bare, {clear_icon: true})).toEqual([]);
+        expect(hasChanges(bare, {clear_icon: true})).toBe(false);
+        expect(hasChanges(holders, {clear_user_url: true})).toBe(true);
+    });
+
+    it('says in the summary «before → none» for a holder and «already without» for the others', () => {
+        const out = summarizeChanges(holders, {clear_icon: true});
+        expect(out.touched).toEqual(['icon_url']);
+        expect(out.fields[0]).toMatchObject({field: 'icon_url', after: null, changing: 2, total: 3, alreadyIds: [2]});
+        expect(out.rows.map((row) => row.id)).toEqual([1, 3]);
+        expect(out.rows[0].cells[0]).toEqual({field: 'icon_url', before: 'https://i/1.png', after: null, unchanged: false});
+    });
+
+    it('is mixed with other fields: each asset carries only its own changes', () => {
+        const items = buildBulkPatch(holders, {clear_user_url: true, active: false});
+        expect(items).toEqual([
+            {asset_id: 1, user_url: null, active: false},
+            {asset_id: 2, active: false},
+            {asset_id: 3, active: false},
+        ]);
+    });
+
+    it('a removal wins over a value in the draft: they are never both sent', () => {
+        expect(buildBulkPatch(holders, {clear_icon: true, icon_url: 'https://i/new.png'})).toEqual([
+            {asset_id: 1, icon_url: null},
+            {asset_id: 3, icon_url: null},
+        ]);
     });
 });

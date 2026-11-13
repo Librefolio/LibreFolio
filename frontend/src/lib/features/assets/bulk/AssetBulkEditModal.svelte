@@ -30,7 +30,7 @@
 <script lang="ts">
     import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Check, Loader2, Undo, Upload, X} from 'lucide-svelte';
+    import {Ban, Check, Loader2, Trash2, Undo, Upload, X} from 'lucide-svelte';
     import {zodiosApi} from '$lib/api';
     import {notify} from '$lib/stores/app/notify.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
@@ -67,6 +67,9 @@
     // What the user chose; '' and 'leave' are «Leave as is».
     let iconUrl = $state('');
     let userUrl = $state('');
+    // «Remove» is a choice of its own (U7): the removal and a chosen value never stand together.
+    let clearIcon = $state(false);
+    let clearUserUrl = $state(false);
     let assetType = $state('');
     let quoteBaseInput = $state('');
     let active = $state<Tri>('leave');
@@ -97,6 +100,8 @@
     let draft = $derived<BulkDraft>({
         icon_url: iconUrl || null,
         user_url: userUrl,
+        clear_icon: clearIcon,
+        clear_user_url: clearUserUrl,
         asset_type: assetType || null,
         quote_base_quantity: quoteCheck === 'ok' ? Number(quoteBaseInput.trim()) : null,
         active: triValue(active),
@@ -162,6 +167,8 @@
         step = 'fields';
         iconUrl = '';
         userUrl = '';
+        clearIcon = false;
+        clearUserUrl = false;
         assetType = '';
         quoteBaseInput = '';
         active = 'leave';
@@ -174,9 +181,13 @@
     }
 
     function resetField(field: BulkFieldKey) {
-        if (field === 'icon_url') iconUrl = '';
-        else if (field === 'user_url') userUrl = '';
-        else if (field === 'asset_type') assetType = '';
+        if (field === 'icon_url') {
+            iconUrl = '';
+            clearIcon = false;
+        } else if (field === 'user_url') {
+            userUrl = '';
+            clearUserUrl = false;
+        } else if (field === 'asset_type') assetType = '';
         else if (field === 'quote_base_quantity') quoteBaseInput = '';
         else if (field === 'active') active = 'leave';
         else benchmark = 'leave';
@@ -293,8 +304,19 @@
         return code ? $t(`assets.types.${code}`) : '';
     }
 
+    function toggleClearIcon() {
+        clearIcon = !clearIcon;
+        if (clearIcon) iconUrl = '';
+    }
+
+    function toggleClearUserUrl() {
+        clearUserUrl = !clearUserUrl;
+        if (clearUserUrl) userUrl = '';
+    }
+
     function handleIconChange(url: string) {
         iconUrl = url || '';
+        if (iconUrl) clearIcon = false;
         showImagePicker = false;
     }
 
@@ -344,7 +366,7 @@
     {#if impact}
         <p class="mt-1 text-[11px] text-lf-muted" data-testid="asset-bulk-{field}-impact" data-changing={impact.changing} data-total={impact.total}>
             {$t('assets.bulkEdit.changesFor', {values: {changing: impact.changing, total: impact.total}})}{#if impact.alreadyIds.length > 0 && impact.changing > 0}
-                · {$t('assets.bulkEdit.alreadyHave', {values: {already: impact.alreadyIds.length}})}{/if}
+                · {$t(impact.after === null ? 'assets.bulkEdit.alreadyWithout' : 'assets.bulkEdit.alreadyHave', {values: {already: impact.alreadyIds.length}})}{/if}
         </p>
     {/if}
 {/snippet}
@@ -551,12 +573,26 @@
                                         <span class="absolute inset-0 flex items-center justify-center rounded-full bg-lf-overlay opacity-0 transition-opacity group-hover:opacity-100">
                                             <Upload class="text-lf-on-overlay" size={16} />
                                         </span>
+                                    {:else if clearIcon}
+                                        <Ban size={20} />
                                     {:else}
                                         <Upload size={20} />
                                     {/if}
                                 </button>
                                 {@render undoSlot('icon_url')}
                             </div>
+                            {#if current.icon.with > 0}
+                                <button
+                                    type="button"
+                                    class="mt-2 inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors {clearIcon ? 'border-lf-danger-line bg-lf-danger-soft text-lf-danger-on-soft' : 'border-lf-input bg-lf-field text-lf-secondary hover:bg-lf-hover'}"
+                                    aria-pressed={clearIcon}
+                                    data-testid="asset-bulk-icon-remove"
+                                    onclick={toggleClearIcon}
+                                >
+                                    <Trash2 size={12} />
+                                    {$t('assets.bulkEdit.removeIcon')}
+                                </button>
+                            {/if}
                             <p class="mt-1 text-[11px] text-lf-muted" data-testid="asset-bulk-icon_url-now">
                                 {$t('assets.bulkEdit.now')}
                                 {$t('assets.bulkEdit.nowIcon', {values: {withIcon: current.icon.with, without: current.icon.without}})}
@@ -570,10 +606,25 @@
                                     id="asset-bulk-user-url"
                                     type="text"
                                     bind:value={userUrl}
-                                    placeholder={urlPlaceholder}
+                                    disabled={clearUserUrl}
+                                    placeholder={clearUserUrl ? $t('assets.bulkEdit.toBeRemoved') : urlPlaceholder}
                                     data-testid="asset-bulk-user-url"
-                                    class="min-w-0 flex-1 rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-2 focus:ring-lf-focus/50"
+                                    class="min-w-0 flex-1 rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-2 focus:ring-lf-focus/50 disabled:cursor-not-allowed disabled:opacity-60"
                                 />
+                                {#if current.user_url.distinct > 0}
+                                    <button
+                                        type="button"
+                                        class="inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors {clearUserUrl
+                                            ? 'border-lf-danger-line bg-lf-danger-soft text-lf-danger-on-soft'
+                                            : 'border-lf-input bg-lf-field text-lf-secondary hover:bg-lf-hover'}"
+                                        aria-pressed={clearUserUrl}
+                                        data-testid="asset-bulk-user-url-remove"
+                                        onclick={toggleClearUserUrl}
+                                    >
+                                        <Trash2 size={12} />
+                                        {$t('assets.bulkEdit.removeUrl')}
+                                    </button>
+                                {/if}
                                 {@render undoSlot('user_url')}
                             </div>
                             <p class="mt-1 text-[11px] text-lf-muted" data-testid="asset-bulk-user_url-now">

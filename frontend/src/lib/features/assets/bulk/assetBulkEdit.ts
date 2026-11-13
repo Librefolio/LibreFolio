@@ -11,8 +11,9 @@
  * `quote_base_quantity`, `active` and `is_benchmark` (Prezzo e stato).
  *
  * «Leave as is» is the default of every field: `null`, `undefined`, an empty or blank text, or a unit that is not a
- * whole number from 1. In bulk nothing is cleared: an empty URL or no icon never goes out as `null`; that is done from
- * the single asset's modal.
+ * whole number from 1. An empty URL or no icon never goes out as `null` by itself. Removing the icon or the personal
+ * URL is a choice of its own (`clear_icon`, `clear_user_url`, U7): it sends `null`, only for the assets that hold the
+ * value; the others have nothing to remove and are left out.
  */
 
 /** The fields of the modal, in the order of its zones. */
@@ -50,13 +51,19 @@ export interface BulkDraft {
     quote_base_quantity?: number | null;
     active?: boolean | null;
     is_benchmark?: boolean | null;
+    /** «Remove the icon»: `null` goes out for the assets that have one. Wins over `icon_url`. */
+    clear_icon?: boolean;
+    /** «Remove the personal URL»: `null` goes out for the assets that have one. Wins over `user_url`. */
+    clear_user_url?: boolean;
 }
 
 /** One item of the `PATCH /assets` and `POST /assets/validate` payload: the asset and only the fields that change for it. */
 export interface BulkPatchItem {
     asset_id: number;
-    icon_url?: string;
-    user_url?: string;
+    /** `null` removes it (U7). */
+    icon_url?: string | null;
+    /** `null` removes it (U7). */
+    user_url?: string | null;
     asset_type?: string;
     quote_base_quantity?: number;
     active?: boolean;
@@ -129,6 +136,8 @@ function chosenValue(draft: BulkDraft, field: BulkFieldKey): BulkValue | undefin
     switch (field) {
         case 'icon_url':
         case 'user_url': {
+            // A removal is a choice: `null` is «remove», `undefined` is «leave as is».
+            if (field === 'icon_url' ? draft.clear_icon === true : draft.clear_user_url === true) return null;
             const chosen = text(draft[field]);
             return chosen === '' ? undefined : chosen;
         }
@@ -221,7 +230,7 @@ export function summarizeCurrent(assets: readonly BulkAsset[]): CurrentSummary {
 /**
  * The items of `PATCH /assets` and `POST /assets/validate`: one per asset that changes, in the order of the selection,
  * with `asset_id` and only the fields whose chosen value differs from that asset's own. An asset that already has every
- * chosen value does not go. Nothing is cleared: no `null` is ever sent.
+ * chosen value does not go. A `null` goes out only for a removal (U7), and only for the assets that hold the value.
  */
 export function buildBulkPatch(assets: readonly BulkAsset[], draft: BulkDraft): BulkPatchItem[] {
     const touched = touchedFields(draft);

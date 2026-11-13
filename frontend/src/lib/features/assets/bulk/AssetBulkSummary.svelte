@@ -34,7 +34,7 @@
     /** A plain value as text; the types are drawn as badges by the snippet. */
     function valueText(field: BulkFieldKey, value: BulkValue): string {
         if (typeof value === 'boolean') return flagLabel(value);
-        if (value === null) return '—';
+        if (value === null) return field === 'user_url' ? $t('assets.bulkEdit.urlNone') : '—';
         return String(value);
     }
 </script>
