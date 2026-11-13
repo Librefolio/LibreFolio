@@ -59,6 +59,8 @@ Modules:
 * ``yield_on_cost`` — Yield on Cost of holdings, replayed from the transaction ledger.
 * ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, the ids
   an average-cost replay marks as a rescale, and the rule for a usable split ratio.
+* ``acceptable_cost`` — the Rebalancer's table «maximum acceptable cost»: rows of misplaced money to two significant
+  digits, ``2·λ·d²/F``, and ``λ`` from the euros typed on the reference row (B4 of project 67).
 * ``weights`` — a part's share of a total (none on a total at or below zero), the slices of an
   allocation (none on a sum at or below zero), gross weights, and concentration (largest weight, Herfindahl index).
 * ``holding_window`` — how long a position has been held at its broker: the oldest lot still
