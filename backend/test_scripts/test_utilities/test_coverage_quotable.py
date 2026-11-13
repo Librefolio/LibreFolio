@@ -436,7 +436,8 @@ class TestCompleteness:
     def test_playwright_and_the_server_under_coverage_are_in_the_ledger(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
         """CC-08 — a Playwright run under JS coverage expects worker files (both launchers: the consolidated group and a single
         action); under Python coverage, Playwright and the shared server expect the E2E server's data, ``.coverage_data/frontend``.
-        A backend category's shared server notes nothing: its parts are not combined by its run (open question of step 3.3)."""
+        A backend category's shared server (``api``, ``e2e``) notes ``backend_server`` instead: its parts are folded into
+        ``.coverage_data/backend`` by that run's finalizer (step 3.5b)."""
         monkeypatch.setattr(_common, "_COVERAGE_PY", True)
         monkeypatch.setattr(_common, "_COVERAGE_JS", True)
         monkeypatch.setattr(_common, "_COVERAGE_SOURCE", "frontend")
@@ -460,12 +461,13 @@ class TestCompleteness:
 
         monkeypatch.setattr(_server, "SharedTestServer", StoodInServer)
         monkeypatch.setattr(_cli, "_requires_shared_backend", lambda args: True)
-        for source, expected in (("backend", set()), ("frontend", {"frontend"})):
+        for source, expected, server_in_backend in (("backend", set(), True), ("frontend", {"frontend"}, False)):
             monkeypatch.setattr(_common, "_COVERAGE_SOURCE", source)
             run_root.ledger.reset()
             with _cli.shared_backend_for("api", SimpleNamespace(workers="1")):
                 pass
             assert run_root.ledger.python == expected, f"source {source}"
+            assert run_root.ledger.backend_server is server_in_backend, f"source {source}"
 
     def test_a_run_starts_from_an_empty_ledger(self, monkeypatch: pytest.MonkeyPatch, run_root: SimpleNamespace) -> None:
         """CC-09 — ``_apply_coverage_mode``, the first coverage step of both entries, empties the ledger, with or without
@@ -503,6 +505,30 @@ class TestCompleteness:
         red = [row for row in _coverage.check_coverage_pieces(run_root.ledger, "frontend", finalized) if not row.ok]
         assert len(red) == 1 and "this run" in red[0].piece, red
         assert all(row.ok for row in _coverage.check_coverage_pieces(run_root.ledger, "frontend", _coverage.PythonFinalized(server_parts=2, frontend_saved=True)))
+
+    def test_a_backend_server_that_left_no_part_is_a_red_row(self, run_root: SimpleNamespace) -> None:
+        """CC-12 — a backend category that started the shared server expects its parts folded into ``.coverage_data/backend`` in
+        this run: a finalizer that found none (a server killed before it saved) is a red row although the database, accumulated
+        from earlier runs, has rows; one that folded parts is green; a part left in the project root is a red row too. A
+        backend run that started no server expects none of this."""
+        run_root.ledger.expect_python("backend")
+        run_root.ledger.expect_backend_server()
+        _coverage_database(run_root.root / ".coverage_data" / "backend", 4)
+
+        none_found = _coverage.PythonFinalized(server_parts=0, frontend_saved=False)
+        red = [row for row in _coverage.check_coverage_pieces(run_root.ledger, "backend", none_found) if not row.ok]
+        assert len(red) == 1 and "server" in red[0].piece and "this run" in red[0].piece, red
+
+        folded = _coverage.PythonFinalized(server_parts=3, frontend_saved=False, backend_folded=True)
+        assert all(row.ok for row in _coverage.check_coverage_pieces(run_root.ledger, "backend", folded))
+
+        _coverage_database(run_root.root / ".coverage.host.4242.XabcdeX.Habcdefghijh", 2)
+        left = [row for row in _coverage.check_coverage_pieces(run_root.ledger, "backend", folded) if not row.ok]
+        assert len(left) == 1 and ".coverage.*" in left[0].where, left
+
+        run_root.ledger.reset()
+        run_root.ledger.expect_python("backend")
+        assert all(row.ok for row in _coverage.check_coverage_pieces(run_root.ledger, "backend", none_found)), "no server started: no server row, and parts in the root are nobody's"
 
 
 #: One ``if`` never taken the other way: every line runs, one branch of two. Lines 100 %, branches 50 %, coverage.py's TOTAL

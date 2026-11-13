@@ -605,10 +605,13 @@ def shared_backend_for(category: str, args):
     from ._scheduler import resolve_workers
     from ._server import SharedTestServer
 
-    # Under Python coverage the server's parts are combined into the E2E database by a frontend or a whole run's finalizer. A
-    # backend category's finalizer does not combine them, so there the server notes nothing (open question of step 3.3).
-    if _common._COVERAGE_PY and _common._COVERAGE_SOURCE != "backend":
-        _coverage.LEDGER.expect_python("frontend")
+    # Under Python coverage the server's parts are combined into the E2E database by a frontend or a whole run's finalizer, and
+    # folded into the backend database by the finalizer of one backend category (`api`, `e2e`).
+    if _common._COVERAGE_PY:
+        if _common._COVERAGE_SOURCE == "backend":
+            _coverage.LEDGER.expect_backend_server()
+        else:
+            _coverage.LEDGER.expect_python("frontend")
     with SharedTestServer(
         coverage=bool(_common._COVERAGE_PY),
         client_workers=resolve_workers(getattr(args, "workers", "1")),

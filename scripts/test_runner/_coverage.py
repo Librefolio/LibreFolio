@@ -61,6 +61,7 @@ class CoverageLedger:
         self.units: list[str] = []
         self.python: set[str] = set()
         self.e2e_js = 0
+        self.backend_server = False
         self._counts: dict[str, int] = {}
 
     def expect_unit(self, label: str) -> str:
@@ -73,6 +74,11 @@ class CoverageLedger:
     def expect_python(self, database: str) -> None:
         """Note a launch whose Python coverage ends in ``.coverage_data/<database>`` (``backend`` or ``frontend``)."""
         self.python.add(database)
+
+    def expect_backend_server(self) -> None:
+        """Note the shared backend started under Python coverage by a backend category (``api``, ``e2e``): its parts are folded into
+        ``.coverage_data/backend`` by that run's finalizer, so the run expects them folded."""
+        self.backend_server = True
 
     def expect_e2e_js(self) -> None:
         """Note a Playwright run under JS coverage: its workers write ``coverage-js/e2e-raw/worker-*.json``."""
@@ -345,11 +351,13 @@ def _finalize_js_coverage() -> None:
 
 class PythonFinalized(NamedTuple):
     """What ``_finalize_coverage`` did with the E2E server's data in this run: how many parts it found in the project root, and
-    whether it saved the combined data into ``.coverage_data/frontend``. ``.coverage_data/frontend`` accumulates across runs,
-    so its rows alone do not say that this run's server wrote anything."""
+    whether it saved the combined data into ``.coverage_data/frontend``; for one backend category, whether it folded them into
+    the pytest data it saved in ``.coverage_data/backend`` (``backend_folded``). The databases accumulate across runs, so
+    their rows alone do not say that this run's server wrote anything."""
 
     server_parts: int
     frontend_saved: bool
+    backend_folded: bool = False
 
 
 def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa: C901 — TODO(P2-refactor): mode matrix × combine/html pipeline, nested error handling
@@ -365,7 +373,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa
     def _archive_db(db_path: Path, label: str):
         archive_path(db_path, target_dir=data_dir, label=label)
 
-    server_parts, frontend_saved = 0, False
+    server_parts, frontend_saved, backend_folded = 0, False, False
 
     if is_front or is_all:
         if main_cov.exists():
@@ -429,6 +437,19 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa
         if r.returncode != 0:
             print_warning(f"coverage html failed: {r.stderr.strip()}")
     else:
+        # One backend category. The shared backend of `api` and `e2e` writes its parts into the working directory; they are
+        # folded into the pytest data (`.coverage`, appended to) before it is saved, so this run's database holds them. They
+        # used to wait there for the next run's pytest-cov, one run late and into whichever database that run saved.
+        parts = _coverage_parts(cwd)
+        server_parts = len(parts)
+        if parts:
+            print(f"{Colors.YELLOW}📊 Folding {len(parts)} shared-backend part(s) into the backend coverage...{Colors.NC}")
+            folded, leftovers, detail = combine_coverage_dir(cwd, cwd=cwd, append=True)
+            backend_folded = folded
+            if detail:
+                print_warning(f"   coverage combine: {detail}")
+            if leftovers:
+                print_warning(f"   {len(leftovers)} data file(s) not combined: {', '.join(f.name for f in leftovers)}")
         if main_cov.exists():
             _archive_db(backend_db, "backend")
             shutil.copy2(str(main_cov), str(backend_db))
@@ -454,7 +475,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> PythonFinalized:  # noqa
         print("└─▶ $ ./dev.py test coverage show combined   # merge backend + frontend")
     print()
 
-    return PythonFinalized(server_parts, frontend_saved)
+    return PythonFinalized(server_parts, frontend_saved, backend_folded)
 
 
 class PieceRow(NamedTuple):
@@ -511,7 +532,11 @@ def check_coverage_pieces(ledger: CoverageLedger, mode: str, finalized: PythonFi
         found = f"{finalized.server_parts} part(s), " + ("saved" if finalized.frontend_saved else "nothing saved")
         rows.append(PieceRow("E2E server data, this run", ".coverage.* → .coverage_data/frontend", "parts found and saved", found, finalized.frontend_saved))
 
-    if ledger.python and mode in ("frontend", "all"):
+    if ledger.backend_server and mode == "backend" and finalized is not None:
+        found = f"{finalized.server_parts} part(s), " + ("folded" if finalized.backend_folded else "none folded")
+        rows.append(PieceRow("backend server data, this run", ".coverage.* → .coverage_data/backend", "parts found and folded", found, finalized.backend_folded))
+
+    if (ledger.python and mode in ("frontend", "all")) or (ledger.backend_server and mode == "backend"):
         left = _coverage_parts(root)
         found = f"{len(left)} left" + (f": {_named(left)}" if left else "")
         rows.append(PieceRow("server parts", ".coverage.* (project root)", "none left after the combine", found, not left))

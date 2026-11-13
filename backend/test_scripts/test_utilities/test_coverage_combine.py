@@ -134,6 +134,7 @@ SOURCE = {
     P1_W0: "/fake/p1_w0.py",
     P1_W1: "/fake/p1_w1.py",
     P1_W1_SPAWN_CHILD: "/fake/p1_w1_spawn_child.py",
+    ".coverage": "/fake/pytest_own.py",
 }
 
 NON_EXISTENT = "Couldn't combine from non-existent path"
@@ -337,6 +338,61 @@ class TestSharedBackendPartsCombine:
         assert _parts_left(coverage_sandbox, ".coverage.*") == []
         assert coveragerc.is_file(), ".coveragerc was taken for a coverage part"
         assert NON_EXISTENT not in out
+
+
+class TestBackendCategoryServerParts:
+    """A backend category that starts the shared backend (``api``, ``e2e``) under ``--coverage py`` (project 71, step 3.5b).
+
+    Its pytest data is ``.coverage``; the server's parts land in the working directory, where the finalizer of a backend run
+    never combined them: they waited for the next run's pytest-cov, one run late and into whichever database that run was
+    saving. The finalizer folds them into the pytest data before saving ``.coverage_data/backend``.
+    """
+
+    def test_the_servers_parts_are_folded_into_the_backend_database(self, coverage_sandbox, monkeypatch, capsys):
+        """Both the pytest data and every server part (one renaming itself as the combine starts) end up in
+        ``.coverage_data/backend``; no part is left in the working directory; the finalizer reports the parts it folded.
+
+        Red today: ``.coverage_data/backend`` holds the pytest data alone and the parts stay where they are.
+        """
+        monkeypatch.chdir(coverage_sandbox)
+        (coverage_sandbox / ".coveragerc").write_text("[run]\nbranch = true\n", encoding="utf-8")
+        _write_part(coverage_sandbox, ".coverage")
+        for name in (SERVER, SERVER_TRACKER):
+            _write_part(coverage_sandbox, name)
+        hook = _hook_first_combine(monkeypatch, before=lambda: (coverage_sandbox / SERVER_TRACKER).rename(coverage_sandbox / SERVER_TRACKER_DONE))
+
+        finalized = _coverage._finalize_coverage(is_front=False, is_all=False)
+        out = capsys.readouterr().out
+
+        assert hook.combines, "no `coverage combine` was launched: the parts were never folded"
+        assert _measured(coverage_sandbox / ".coverage_data" / "backend") == {SOURCE[".coverage"], SOURCE[SERVER], SOURCE[SERVER_TRACKER]}, f"the backend database lacks the pytest data or a server part:\n{out}"
+        assert _parts_left(coverage_sandbox, ".coverage.*") == []
+        assert (finalized.server_parts, finalized.backend_folded, finalized.frontend_saved) == (2, True, False)
+        assert not (coverage_sandbox / ".coverage_data" / "frontend").exists(), "a backend run does not write the E2E database"
+        assert (coverage_sandbox / ".coveragerc").is_file()
+
+    def test_without_server_parts_the_backend_database_is_the_pytest_data(self, coverage_sandbox, monkeypatch):
+        """A backend category that started no server: nothing to fold, no ``coverage combine``, the database is the pytest data."""
+        monkeypatch.chdir(coverage_sandbox)
+        _write_part(coverage_sandbox, ".coverage")
+        hook = _hook_first_combine(monkeypatch)
+
+        finalized = _coverage._finalize_coverage(is_front=False, is_all=False)
+
+        assert hook.combines == []
+        assert _measured(coverage_sandbox / ".coverage_data" / "backend") == {SOURCE[".coverage"]}
+        assert (finalized.server_parts, finalized.backend_folded) == (0, False)
+
+    def test_a_server_alone_still_makes_the_backend_database(self, coverage_sandbox, monkeypatch):
+        """No pytest ``.coverage`` (an action that ran nothing under pytest-cov) but a server part: the part is the database."""
+        monkeypatch.chdir(coverage_sandbox)
+        _write_part(coverage_sandbox, SERVER)
+
+        finalized = _coverage._finalize_coverage(is_front=False, is_all=False)
+
+        assert _measured(coverage_sandbox / ".coverage_data" / "backend") == {SOURCE[SERVER]}
+        assert _parts_left(coverage_sandbox, ".coverage.*") == []
+        assert finalized.backend_folded is True
 
 
 def _parallel_pass(monkeypatch, combined: bool) -> tuple:
