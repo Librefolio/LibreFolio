@@ -64,6 +64,12 @@ class EconomicState:
     cash_targets: tuple[ExactCashTargetEvaluation, ...] = ()
 
 
+def initial_cash_by_cell(index: ScenarioIndex, ledgers: tuple[ExactBrokerLedgerEvaluation, ...]) -> dict[tuple[str, str], ExactRatio]:
+    """The selected cash every Broker and currency cell starts from, valued in the valuation currency: the «before» of a cash
+    item in the Rebalancer's report (contract §6.2), read like ``final_cash_by_cell``."""
+    return {(row.broker_id, row.currency): to_valuation(index, row.initial_selected, row.currency) for row in ledgers}
+
+
 def final_cash_by_cell(index: ScenarioIndex, ledgers: tuple[ExactBrokerLedgerEvaluation, ...]) -> dict[tuple[str, str], ExactRatio]:
     """The final spendable cash of every Broker and currency cell, valued in the valuation currency.
 

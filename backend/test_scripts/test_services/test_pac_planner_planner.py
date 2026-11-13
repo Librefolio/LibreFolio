@@ -50,8 +50,8 @@ needs D more" (test_rounding_top_up_*). Any other rejection raises
   and its old module path no longer resolves (test_exhaustive_oracle_is_test_only);
   a domain far too large to enumerate is planned without enumerating it
   (test_x1_*).
-* **``plan_rebalancing`` is deliberately absent**, and ``plan_pac_allocation`` is
-  deliberately *not* re-exported from the package ``__init__`` so P1 consumers
+* **``plan_rebalancing`` sits beside ``plan_pac_allocation``** (B3 of project 67); neither is
+  deliberately re-exported from the package ``__init__`` so P1 consumers
   do not drag SCIP in at import — pinned by a subprocess (item 9).
 * **A Broker's conversion mode changes no figure** (R4.9): the same FX plan,
   planned with manual and with automatic conversions, publishes the same
@@ -114,6 +114,8 @@ from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof,
 from backend.app.schemas.pac_allocator.results import (
     PAC_PLAN_INPUT_ADAPTER,
     PAC_PLAN_OUTPUT_ADAPTER,
+    REBALANCER_PLAN_INPUT_ADAPTER,
+    REBALANCER_PLAN_OUTPUT_ADAPTER,
     PacPlannerInvalidResult,
     PacPlannerNeedsInputResult,
     PacPlannerReadyIncumbentResult,
@@ -130,9 +132,10 @@ from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.models import ExactCashEntry, ExactLimit
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.numeric import ExactRatio as R
-from backend.app.services.pac_allocator.planner import plan_pac_allocation
+from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
 from backend.test_scripts.test_services import _pac_reference_values as ref
+from backend.test_scripts.test_services import _reb_small_requests as reb
 from backend.test_scripts.test_services._pac_fx_decisions import fx_id
 from backend.test_scripts.test_services._pac_synthetic_requests import FX_TRIANGLE, V, amount_limit, asset_entry, cash_entry, fx_conversion_request, make, scaled
 
@@ -732,18 +735,79 @@ def test_forced_infeasible_returns_ready_infeasible_not_raise():
 
 
 # --------------------------------------------------------------------------
-# Item 8 — plan_rebalancing is absent; __all__ is minimal.
+# Item 8 — plan_rebalancing is exported beside plan_pac_allocation (B3 of project 67).
 # --------------------------------------------------------------------------
-def test_plan_rebalancing_is_absent_and_all_is_minimal():
-    """Absent beats always-failing.
+def test_plan_rebalancing_is_exported_beside_plan_pac_allocation():
+    """B3 test 8: both service functions are exported, and nothing else; neither is re-exported by the package (item 9)."""
+    assert planner.__all__ == ["plan_pac_allocation", "plan_rebalancing"]
+    assert callable(planner.plan_rebalancing)
 
-    Every Rebalancer policy and the SELL verifier are deferred. A
-    ``plan_rebalancing`` that existed but always failed would invite wiring; an
-    absent one fails at import, in the exact place the missing work is obvious.
-    So the export surface is a single function and nothing more.
-    """
-    assert not hasattr(planner, "plan_rebalancing")
-    assert planner.__all__ == ["plan_pac_allocation"]
+
+# --------------------------------------------------------------------------
+# B3 (project 67) — plan_rebalancing on the small cases of specifica-REB §11
+# --------------------------------------------------------------------------
+def _rebalance(payload: dict):
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(payload))
+    return REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json")
+
+
+_REB_SMALL_CASES = (
+    pytest.param(reb.t1, "ready_no_op", {}, id="t1-no-trade"),
+    pytest.param(reb.t5, "ready_no_op", {}, id="t5-idle-cash-wins"),
+    pytest.param(reb.t4, "ready_incumbent", {"asset-b": {"kind": "monetary_amount", "amount": {"amount": "195", "currency": "EUR"}, "order_amount_step": {"amount": "1", "currency": "EUR"}}}, id="t4-buy-195-of-b"),
+    pytest.param(reb.t6, "ready_incumbent", {"asset-a": {"kind": "whole_quantity", "quantity": "1", "quantity_step": "1", "unit": "asset_unit"}}, id="t6-one-unit"),
+)
+
+
+@pytest.mark.parametrize(("build", "state", "orders"), _REB_SMALL_CASES)
+def test_plan_rebalancing_small_cases_end_to_end(build, state: str, orders: dict) -> None:
+    """B3 test 9: T1 (with its cash row at zero) and T5 are no operation; T4 buys 195 of B; T6 buys one unit and converts
+    nothing. Every run is «optimal proven» on a completed search."""
+    wire = _rebalance(build())
+    assert (wire["result_state"], wire["proof"]["kind"], wire["stop_reason"]) == (state, "optimal_proven", "completed")
+    solution = wire["primary_solution"]
+    assert {row["asset_id"]: row["instruction"] for row in solution["order_rows"]} == orders
+    assert solution["conversions"] == [] and solution["transfers"] == []
+    if build is reb.t1:
+        # T1's cash row is selected at zero: nothing is uninvested, before or after.
+        assert solution["uninvested_row"]["final_value"]["value"] == {"kind": "finite_decimal", "value": "0"}
+
+
+def test_rebalancer_ready_output_revalidates_against_the_wire_union() -> None:
+    """B3 test 10: a ready Rebalancer result survives ``REBALANCER_PLAN_OUTPUT_ADAPTER`` as Python and as JSON."""
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_python(result.model_dump(mode="python")) == result
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_json(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
+def _without_holdings() -> dict:
+    payload = reb.t4()
+    payload["holdings"] = []
+    return payload
+
+
+def _worth_nothing() -> dict:
+    payload = reb.t4()
+    for holding in payload["holdings"]:
+        holding["planning_quantity"] = "0"
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("build", "availability", "code"),
+    [
+        pytest.param(_without_holdings, "needs_input", "portfolio_rebalancer.holdings_missing", id="no-holdings"),
+        pytest.param(_worth_nothing, "needs_input", "portfolio_rebalancer.nonpositive_current_portfolio", id="worth-nothing"),
+        pytest.param(lambda: reb.t1(cash=None), "needs_input", "allocation.no_selected_funding", id="t1-without-a-cash-row"),
+    ],
+)
+def test_rebalancer_failure_availabilities(build, availability: str, code: str) -> None:
+    """B3 test 11: no holdings, a portfolio worth nothing, and T1 with no cash row and no contribution are answered with
+    their codes, never a plan."""
+    wire = _rebalance(build())
+    assert wire["availability"] == availability, wire["issues"]
+    assert code in {issue["code"] for issue in wire["issues"]}
+    assert "primary_solution" not in wire
 
 
 # --------------------------------------------------------------------------

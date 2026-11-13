@@ -58,6 +58,7 @@ from pyscipopt import Model as ScipModel
 from backend.app.services.pac_allocator import compiler as compiler_module
 from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
+from backend.app.services.pac_allocator import solver as solver_module
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.constraints import LedgerPostingScopeError
 from backend.app.services.pac_allocator.evaluation.bounds import transfer_decision_id
@@ -1038,3 +1039,28 @@ def test_invest_and_sell_fails_closed_at_compile_until_sales_are_modelled() -> N
     scenario = _invest_and_sell_scenario()
     with pytest.raises(LedgerPostingScopeError, match="sell_fee|gross_sell_credit"):
         compile_policy_program(scenario, build_exact_policy_view(scenario))
+
+
+def test_a_rejected_tie_break_is_reported_unfinished_and_keeps_the_best_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+    """D4 (the B2 review of project 67): a tie-break whose plan is worse in exact arithmetic on what precedes it keeps the
+    best plan, and its stage is reported ``unfinished`` and ``rejected``; the stop is still «completed»."""
+    scenario = cases.t4()
+    view = build_exact_policy_view(scenario)
+    program = compile_policy_program(scenario, view)
+    stages = program.objective_stages
+    assert [stage.code for stage in stages[:3]] == ["plan_score", "operation_count", "route_priority"] and stages[1].tie_break
+    cascade = solver_module._Cascade(program=program, checkpoint=None, reports=[])
+    best = object()
+    cascade.best, cascade.best_values = best, tuple(Fraction(0) for _ in stages)
+    worse = (Fraction(1), *(Fraction(0) for _ in stages[1:]))
+    monkeypatch.setattr(solver_module, "_exact_stage_values", lambda _cascade, _candidate: worse)
+
+    solver_module._take_candidate(cascade, object(), 2)
+    assert cascade.best is best and cascade.rejected == {2}
+
+    observation = solver_module._StageObservation(scip_status="optimal", has_solution=True, primal=1.0, dual=1.0, absolute_gap=0.0, relative_gap=0.0, solving_seconds=0.0, nodes=1)
+    assert solver_module._close_stage(cascade, stages[1], 1, observation)
+    (report,) = cascade.reports
+    assert (report.status, report.rejected, report.tie_break) == ("unfinished", True, True)
+    run = solver_module.SolverRunResult(view_id=view.view_id, outcome="incumbent", candidate=None, stages=(report,), engine="SCIP", version="x", settings=(), tolerances=solver_module.SolverTolerances(1e-6, 1e-9, 0.0, 0.0), wall_seconds=0.0, finished_stage_count=0, anomaly=None)
+    assert PR.build_stop_reason(run) == "completed"

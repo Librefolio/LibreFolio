@@ -213,3 +213,20 @@ type ReadyPlanProof = Annotated[
     Union[OptimalProvenProof, NotProvenProof],
     Field(discriminator="kind"),
 ]
+
+
+class RebalancerOptimalProvenProof(AllocationStrictModel):
+    """The Rebalancer's «optimal proven» (specifica §15 n. 10): about ``J``, or the «Target first» chain. Its tie-breaks, the
+    named ones and the fixed-order canonical vector, stand on one level (§6.4) and may stay open: the witness names the
+    stages that closed, and ``score.tie_breaks`` says how each tie-break ended. It has no ``tie_break_closed``; the PAC's
+    ``OptimalProvenProof`` keeps it (B3 of project 67)."""
+
+    kind: Literal["optimal_proven"]
+    proof_source: Literal["solver_status"]
+    witness: SolverStatusWitness
+
+
+type RebalancerReadyPlanProof = Annotated[
+    Union[RebalancerOptimalProvenProof, NotProvenProof],
+    Field(discriminator="kind"),
+]

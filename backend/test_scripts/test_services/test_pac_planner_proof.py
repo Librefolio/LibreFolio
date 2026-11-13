@@ -62,6 +62,7 @@ from backend.app.services.pac_allocator.proof import (
     conclude_with_solver,
 )
 from backend.app.services.pac_allocator.solver import SolverRunResult, SolverStageReport, solve_policy_program
+from backend.test_scripts.test_services import _reb_small_cases as cases
 from backend.test_scripts.test_services.test_pac_planner_evaluator import R, _candidate, _pac_scenario_with_asset_minimum
 from backend.test_scripts.test_services.test_pac_planner_oracle import _two_asset_pac_scenario
 
@@ -481,3 +482,44 @@ def test_objective_codes_disagreeing_with_scip_stages_are_a_forgery(request: pyt
     with pytest.raises(ProofForgeryError, match=reason) as raised:
         conclude_with_solver(run.result, objective_codes=codes, published=published)
     assert type(raised.value) is ProofForgeryError
+
+
+# --------------------------------------------------------------------------
+# D4 (the B2 review of project 67): the Rebalancer's named tie-breaks may stay open
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def rebalancer_run() -> _Run:
+    """T4 (specifica §11) closed at every stage: the score, the two named tie-breaks, the canonical vector."""
+    run = _real_run(cases.t4())
+    assert run.objective_codes == ("plan_score", "operation_count", "route_priority")
+    assert all(stage.status == "finished" for stage in run.result.stages), run.result.stages
+    return run
+
+
+@pytest.mark.parametrize("opening", [pytest.param({"status": "unfinished", "rejected": True}, id="rejected"), pytest.param({"status": "unfinished", "scip_status": "timelimit"}, id="cut-by-a-limit")])
+def test_open_named_tie_break_keeps_the_rebalancer_optimum(rebalancer_run: _Run, opening: dict[str, object]) -> None:
+    """A named tie-break left open, by the exact comparison (D4) or by a limit, keeps ``optimal_proven``: the proof is about
+    ``J``. The witness names the stages that closed."""
+    variant = _with_stage(rebalancer_run.result, "route_priority", **opening)
+    conclusion = conclude_with_solver(variant, objective_codes=rebalancer_run.objective_codes, published=variant.candidate)
+    assert isinstance(conclusion, OptimalProvenConclusion), conclusion
+    assert conclusion.witness.objective_codes == ("plan_score", "operation_count")
+
+
+def test_open_score_stage_downgrades_the_rebalancer(rebalancer_run: _Run) -> None:
+    """The score stage open: ``not_proven`` — the proof is about ``J``."""
+    variant = _with_stage(rebalancer_run.result, "plan_score", status="unfinished", scip_status="timelimit")
+    conclusion = conclude_with_solver(variant, objective_codes=rebalancer_run.objective_codes, published=variant.candidate)
+    assert isinstance(conclusion, UnprovenConclusion)
+
+
+def test_open_canonical_vector_keeps_the_rebalancer_optimum(rebalancer_run: _Run) -> None:
+    """The canonical vector is the fixed-order tie-break, on the same level as the named ones (specifica §6.4, the
+    consultant's answer to the B3 checkpoint): one of its stages open keeps ``optimal_proven``, the witness unchanged."""
+    stage_id = next(stage.stage for stage in rebalancer_run.result.stages if _is_tie(stage))
+    variant = _with_stage(rebalancer_run.result, stage_id, status="unfinished", scip_status="timelimit")
+    conclusion = conclude_with_solver(variant, objective_codes=rebalancer_run.objective_codes, published=variant.candidate)
+    assert isinstance(conclusion, OptimalProvenConclusion)
+    assert conclusion.witness.objective_codes == rebalancer_run.objective_codes

@@ -1,8 +1,11 @@
-"""PAC planner v2 orchestration.
+"""Planner orchestration for the two Tools: the PAC and the Rebalancer.
 
-One service function, ``plan_pac_allocation``: validate the request,
-normalize it, and either return a failure result or run the plan and project
-it onto the wire.
+Two service functions, ``plan_pac_allocation`` and ``plan_rebalancing``
+(B3 of project 67): validate the request, normalize it, and either return a
+failure result or run the plan and project it onto the wire. Both run one
+body, ``_plan`` and ``plan_exact_scenario``; the product is chosen in one
+place, a ``_Product`` that names the wire classes and the projection of the
+solution.
 
 The pipeline, and the reason each hop exists:
 
@@ -34,17 +37,15 @@ needs D more".
 publishing an unverified plan is the one outcome this package exists to
 prevent, and a SCIP plan the replay rejects is a defect, not a result.
 
-Only ``plan_pac_allocation`` is exported. ``plan_rebalancing`` deliberately
-does not exist: every Rebalancer policy and the SELL verifier are deferred,
-and a function that exists but always fails is worse than an absent one —
-it invites wiring, whereas an absent one fails at import in the exact place
-the missing work is obvious.
+Both functions are exported. The Rebalancer plans «Invest only» until C1:
+its request refuses «Invest and sell» and any sale route at the schema
+(S1), so a sale never reaches an engine that does not model it yet.
 
 Tool registration (``ToolService``/``ToolOperationPolicy``) is **not** done
 here; this module ships service functions only, and
 ``tool_plugins/pac_allocator/plugin.py`` owns the dispatch.
 
-``plan_pac_allocation`` is deliberately **not** re-exported from the package
+``plan_pac_allocation`` (and ``plan_rebalancing``) is deliberately **not** re-exported from the package
 ``__init__``, and that absence is load-bearing rather than an oversight. The
 import chain is ``planner -> compiler -> pyscipopt`` (``compiler.py`` imports
 ``Model`` at module level, because unlike ``constraints``/``objectives`` it
@@ -61,11 +62,12 @@ missing package-level export.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
-from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, OptimalProvenProof, SolverStatusWitness
+from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, OptimalProvenProof, RebalancerOptimalProvenProof, SolverStatusWitness
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
-from backend.app.schemas.pac_allocator.request import PacPlannerRequest
+from backend.app.schemas.pac_allocator.request import PacPlannerRequest, RebalancerPlannerRequest
 from backend.app.schemas.pac_allocator.results import (
     PacPlannerInvalidResult,
     PacPlannerNeedsInputResult,
@@ -76,9 +78,18 @@ from backend.app.schemas.pac_allocator.results import (
     PacPlannerResult,
     PacPlannerUnsupportedResult,
     PlannerResultSnapshot,
+    RebalancerPlannerInvalidResult,
+    RebalancerPlannerNeedsInputResult,
+    RebalancerPlannerReadyIncumbentResult,
+    RebalancerPlannerReadyInfeasibleResult,
+    RebalancerPlannerReadyNoIncumbentResult,
+    RebalancerPlannerReadyNoOpResult,
+    RebalancerPlannerResult,
+    RebalancerPlannerUnsupportedResult,
 )
-from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution, PacNoOpSolution
+from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution, PacNoOpSolution, RebalancerIncumbentSolution, RebalancerNoOpSolution
 from backend.app.services.pac_allocator import planner_report as report
+from backend.app.services.pac_allocator import rebalancer_report
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
@@ -95,7 +106,7 @@ from backend.app.services.pac_allocator.models import (
     ExactRoundingTopUp,
     check_budget,
 )
-from backend.app.services.pac_allocator.normalize import normalize_pac_plan
+from backend.app.services.pac_allocator.normalize import normalize_pac_plan, normalize_rebalancer_plan
 from backend.app.services.pac_allocator.proof import (
     InfeasibilityProvenConclusion,
     OptimalProvenConclusion,
@@ -106,7 +117,7 @@ from backend.app.services.pac_allocator.proof import (
 )
 from backend.app.services.pac_allocator.solver import SolverRunResult, solve_policy_program
 
-__all__ = ["plan_pac_allocation"]
+__all__ = ["plan_pac_allocation", "plan_rebalancing"]
 
 _PRIMARY_SOLUTION_ID = "solution:primary"
 
@@ -138,6 +149,25 @@ class _Search:
 
 
 @dataclass(frozen=True, slots=True)
+class _Product:
+    """What differs between the two Tools, in one place: the wire classes of every result state and solution, the scenario
+    basis, the solution's projection and what «no operation» means. Everything else is the shared body."""
+
+    needs_input: type
+    invalid: type
+    unsupported: type
+    no_op: type
+    incumbent: type
+    infeasible: type
+    no_incumbent: type
+    no_op_solution: type
+    incumbent_solution: type
+    basis: Callable[[ExactPlannerScenario, ExactEvaluation], object]
+    solution_parts: Callable[[ExactPlannerScenario, ExactPolicyView, ExactEvaluation, tuple[ExactRoundingTopUp, ...], SolverRunResult], dict]
+    is_no_op: Callable[[ExactEvaluation], bool]
+
+
+@dataclass(frozen=True, slots=True)
 class PlanReport:
     """A plan's wire result and what the wire cannot carry yet.
 
@@ -147,7 +177,7 @@ class PlanReport:
     ``allocation.bounds_unsatisfiable``; until then the wire result is the one of 1.0.0.
     """
 
-    result: PacPlannerResult
+    result: PacPlannerResult | RebalancerPlannerResult
     limited_entries: tuple[LimitEntry, ...] = ()
 
 
@@ -174,15 +204,36 @@ def plan_pac_allocation(
     ``None`` keeps ``solver.py``'s own default, which is only correct for a
     caller that has no window to claim — every Tool caller has one.
     """
+    return _plan(request, normalize_pac_plan, _PAC, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds)
+
+
+def plan_rebalancing(
+    request: RebalancerPlannerRequest,
+    *,
+    checkpoint: Checkpoint | None = None,
+    solver_time_budget_seconds: float | None = None,
+) -> RebalancerPlannerResult:
+    """Plan a rebalancing and return a wire result: ``plan_pac_allocation``'s body, with the Rebalancer's product.
+
+    The same promises: a planning outcome is a result, never an exception; the same two defects of the search propagate;
+    ``solver_time_budget_seconds`` is the caller's engine window. The basis publishes the request's fidelity as the request
+    wrote it (a level, a custom ``λ``, «Target first»), which the exact scenario keeps only as ``λ``.
+    """
+    product = _rebalancer_product(request.target_fidelity)
+    return _plan(request, normalize_rebalancer_plan, product, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds)
+
+
+def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | None, solver_time_budget_seconds: float | None):
+    """The one body of both service functions: normalize, then a failure result or the plan."""
     check_budget(checkpoint)
-    normalized = normalize_pac_plan(request)
+    normalized = normalize(request)
     # A failure has no exact scenario, so no scenario fingerprint: the field is empty, never the snapshot identifier (§6).
     snapshot = PlannerResultSnapshot(snapshot_id=request.snapshot.snapshot_id, request_fingerprint="")
 
     if not normalized.ready or normalized.normalized is None:
-        return _failure_result(normalized.availability, snapshot, list(normalized.issues))
+        return _failure_result(normalized.availability, snapshot, list(normalized.issues), product)
 
-    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds).result
+    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, product=product).result
 
 
 def plan_exact_scenario(
@@ -191,6 +242,7 @@ def plan_exact_scenario(
     issues: tuple[PlannerIssue, ...] = (),
     checkpoint: Checkpoint | None = None,
     solver_time_budget_seconds: float | None = None,
+    product: _Product | None = None,
 ) -> PlanReport:
     """Plan an already normalized scenario: search once, replay, publish, and say which limits a «no solution» concerns.
 
@@ -199,6 +251,7 @@ def plan_exact_scenario(
     known without searching again, because without limits doing nothing is always a valid plan (M20), and the
     ``SolverInfeasibilityContradictedError`` guard keeps that honest.
     """
+    product = product or (_rebalancer_product(None) if scenario.product == "rebalancer" else _PAC)
     view = build_exact_policy_view(scenario, purpose="primary")
     check_budget(checkpoint)
 
@@ -206,9 +259,9 @@ def plan_exact_scenario(
     issue_list = list(issues)
 
     if search.candidate is None:
-        result = _no_incumbent_result(scenario, view, search, issue_list)
+        result = _no_incumbent_result(scenario, view, search, issue_list, product)
         # Only a proven «no solution» names the limits; a search that ran out of time says nothing about them.
-        return PlanReport(result=result, limited_entries=limited_entries(scenario) if isinstance(result, PacPlannerReadyInfeasibleResult) else ())
+        return PlanReport(result=result, limited_entries=limited_entries(scenario) if isinstance(result, product.infeasible) else ())
 
     # The single non-negotiable hop: nothing is published that exact
     # arithmetic has not re-derived from the candidate itself. Its verdict is
@@ -219,7 +272,7 @@ def plan_exact_scenario(
 
     conclusion = _conclude(view, search, published=search.candidate)
     check_budget(checkpoint)
-    return PlanReport(result=_ready_result(scenario, view, search, evaluation, conclusion, issue_list, top_ups))
+    return PlanReport(result=_ready_result(scenario, view, search, evaluation, conclusion, issue_list, top_ups, product))
 
 
 def _search(
@@ -270,22 +323,23 @@ def _ready_result(
     conclusion: PlanConclusion,
     issues: list[PlannerIssue],
     top_ups: tuple[ExactRoundingTopUp, ...],
-) -> PacPlannerResult:
-    common = _common_ready_fields(scenario, view, search, evaluation, issues)
-    proof = _wire_proof(conclusion)
-    parts = _build_solution_parts(scenario, view, evaluation, top_ups)
+    product: _Product,
+):
+    common = _common_ready_fields(scenario, view, search, evaluation, issues, product)
+    proof = _wire_proof(conclusion, rebalancer=product.incumbent is RebalancerPlannerReadyIncumbentResult)
+    parts = product.solution_parts(scenario, view, evaluation, top_ups, search.solver)
 
     # The no-op decision is made *before* choosing the solution model, not
-    # after: `PacIncumbentSolution` requires at least one order row while
-    # `PacNoOpSolution` requires every action list to be empty, so the two are
+    # after: an incumbent solution requires at least one step while a no-op
+    # solution requires every action list to be empty, so the two are
     # mutually exclusive shapes over the same projected rows rather than one
     # being convertible into the other.
-    if _is_no_op(evaluation):
-        return PacPlannerReadyNoOpResult(result_state="ready_no_op", outcome="no_op", proof=proof, primary_solution=PacNoOpSolution(**parts), deployment=_DEPLOYMENT, **common)
-    return PacPlannerReadyIncumbentResult(result_state="ready_incumbent", outcome="incumbent_found", proof=proof, primary_solution=PacIncumbentSolution(**parts), deployment=_DEPLOYMENT, **common)
+    if product.is_no_op(evaluation):
+        return product.no_op(result_state="ready_no_op", outcome="no_op", proof=proof, primary_solution=product.no_op_solution(**parts), deployment=_DEPLOYMENT, **common)
+    return product.incumbent(result_state="ready_incumbent", outcome="incumbent_found", proof=proof, primary_solution=product.incumbent_solution(**parts), deployment=_DEPLOYMENT, **common)
 
 
-def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, search: _Search, issues: list[PlannerIssue]) -> PacPlannerResult:
+def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, search: _Search, issues: list[PlannerIssue], product: _Product):
     """No publishable plan: SCIP proved there is none, or found none in time.
 
     ``ready_infeasible`` needs an ``InfeasibilityProvenProof``, and only
@@ -312,28 +366,28 @@ def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, 
     if isinstance(conclusion, InfeasibilityProvenConclusion):
         # M20: a proven «no solution» with limits in the request names every entry that carries one; no second search says which is the cause.
         issues = [*issues, *(bounds_unsatisfiable_issue(entry.kind, entry.asset_id if entry.kind == "asset" else f"{entry.broker_id}:{entry.currency}") for entry in limited_entries(scenario))]
-    common = _common_ready_fields(scenario, view, search, evaluation, issues)
+    common = _common_ready_fields(scenario, view, search, evaluation, issues, product)
     if isinstance(conclusion, InfeasibilityProvenConclusion):
-        return PacPlannerReadyInfeasibleResult(result_state="ready_infeasible", outcome="infeasible_proven", proof=_wire_infeasibility(conclusion), **common)
+        return product.infeasible(result_state="ready_infeasible", outcome="infeasible_proven", proof=_wire_infeasibility(conclusion), **common)
 
-    return PacPlannerReadyNoIncumbentResult(result_state="ready_no_incumbent", outcome="no_incumbent", proof=NotProvenProof(kind="not_proven", reason_code=UnprovenConclusion().reason_code), **common)
+    return product.no_incumbent(result_state="ready_no_incumbent", outcome="no_incumbent", proof=NotProvenProof(kind="not_proven", reason_code=UnprovenConclusion().reason_code), **common)
 
 
-def _common_ready_fields(scenario, view, search: _Search, evaluation: ExactEvaluation, issues: list[PlannerIssue]) -> dict:
+def _common_ready_fields(scenario, view, search: _Search, evaluation: ExactEvaluation, issues: list[PlannerIssue], product: _Product) -> dict:
     return {
         "operation": "plan",
         "availability": "ready",
         "snapshot": report.build_result_snapshot(scenario, view),
         "catalogs": report.build_planner_catalogs(scenario),
         "provenance": report.build_planner_provenance(scenario),
-        "scenario_basis": report.build_scenario_basis(scenario, evaluation),
+        "scenario_basis": product.basis(scenario, evaluation),
         "stop_reason": report.build_stop_reason(search.solver),
         "solver_evidence": report.build_solver_evidence(scenario, view, search.solver),
         "issues": issues,
     }
 
 
-def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...]) -> dict:
+def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...], _solver: SolverRunResult | None = None) -> dict:
     """Assemble the primary solution.
 
     One ``_SequenceAllocator`` is shared across funding, manual conversions
@@ -365,8 +419,87 @@ def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView,
     }
 
 
+def _rebalancer_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...], solver: SolverRunResult) -> dict:
+    """Assemble a Rebalancer solution (contract §6): the PAC's shared rows plus the items on ``F``, the transfers, the plan
+    accounts and the score. One step counter, in execution order: deposits, transfers, the conversions the user performs,
+    then the orders. The tax parts are empty until a plan sells (C1, C2 of project 67)."""
+    sequence = report._SequenceAllocator()
+    funding_actions = report.build_funding_actions(scenario, evaluation, sequence)
+    transfers = rebalancer_report.build_transfers(evaluation, sequence)
+    conversions = report.build_conversions(scenario, evaluation, sequence)
+    order_rows = report.build_order_rows(scenario, evaluation, sequence)
+    return {
+        "solution_id": _PRIMARY_SOLUTION_ID,
+        "solution_kind": "primary",
+        "validation": "decimal_verified",
+        "asset_rows": rebalancer_report.build_rebalancer_asset_rows(scenario, evaluation),
+        "cash_rows": rebalancer_report.build_cash_item_rows(scenario, evaluation),
+        "uninvested_row": rebalancer_report.build_uninvested_row(scenario, evaluation),
+        "funding_actions": funding_actions,
+        "conversions": conversions,
+        "transfers": transfers,
+        "order_rows": order_rows,
+        "ledger_rows": report.build_ledger_rows(evaluation),
+        "rounding_top_ups": report.build_rounding_top_ups(scenario, top_ups),
+        "exposure_rows": rebalancer_report.build_rebalancer_exposure_rows(scenario, evaluation),
+        "accounting": report.build_accounting(scenario, evaluation),
+        "costs": report.build_costs(scenario, evaluation),
+        "plan_accounts": rebalancer_report.build_plan_accounts(scenario, evaluation),
+        "score": rebalancer_report.build_score(scenario, view, evaluation, solver),
+        "tax_basket_rows": [],
+        "tax_scope_rows": [],
+        "tax_reserves": [],
+        "asset_type_tax_rows": [],
+        "objectives": report.build_objective_results(scenario, view, evaluation),
+    }
+
+
 def _is_no_op(evaluation: ExactEvaluation) -> bool:
     return not evaluation.orders and not evaluation.funding_transfers and not evaluation.fx
+
+
+def _is_rebalancer_no_op(evaluation: ExactEvaluation) -> bool:
+    """A plan of transfers alone is not «no operation» (contract §6.3)."""
+    return _is_no_op(evaluation) and not any(posting.family == "transfer_out" and posting.exact_amount > 0 for posting in evaluation.postings)
+
+
+_PAC = _Product(
+    needs_input=PacPlannerNeedsInputResult,
+    invalid=PacPlannerInvalidResult,
+    unsupported=PacPlannerUnsupportedResult,
+    no_op=PacPlannerReadyNoOpResult,
+    incumbent=PacPlannerReadyIncumbentResult,
+    infeasible=PacPlannerReadyInfeasibleResult,
+    no_incumbent=PacPlannerReadyNoIncumbentResult,
+    no_op_solution=PacNoOpSolution,
+    incumbent_solution=PacIncumbentSolution,
+    basis=report.build_scenario_basis,
+    solution_parts=_build_solution_parts,
+    is_no_op=_is_no_op,
+)
+
+
+def _rebalancer_product(fidelity) -> _Product:
+    """The Rebalancer's product; ``fidelity`` is the request's, published by the basis as the request wrote it. Without a
+    request (a scenario built by hand) it is read back from the exact fidelity, «Balanced» for ``λ`` = 1."""
+
+    def basis(scenario: ExactPlannerScenario, evaluation: ExactEvaluation):
+        return rebalancer_report.build_rebalancer_scenario_basis(scenario, evaluation, fidelity if fidelity is not None else rebalancer_report.wire_fidelity(scenario.target_fidelity))
+
+    return _Product(
+        needs_input=RebalancerPlannerNeedsInputResult,
+        invalid=RebalancerPlannerInvalidResult,
+        unsupported=RebalancerPlannerUnsupportedResult,
+        no_op=RebalancerPlannerReadyNoOpResult,
+        incumbent=RebalancerPlannerReadyIncumbentResult,
+        infeasible=RebalancerPlannerReadyInfeasibleResult,
+        no_incumbent=RebalancerPlannerReadyNoIncumbentResult,
+        no_op_solution=RebalancerNoOpSolution,
+        incumbent_solution=RebalancerIncumbentSolution,
+        basis=basis,
+        solution_parts=_rebalancer_solution_parts,
+        is_no_op=_is_rebalancer_no_op,
+    )
 
 
 def _zero_candidate_evaluation(scenario: ExactPlannerScenario, view: ExactPolicyView) -> ExactEvaluation:
@@ -397,8 +530,10 @@ def _baseline_quanta(access) -> int:
     return access.frozen_quanta if access.mode == "frozen_exact" else access.baseline_quanta
 
 
-def _wire_proof(conclusion: PlanConclusion):
-    """Project a published plan's conclusion onto the wire union."""
+def _wire_proof(conclusion: PlanConclusion, *, rebalancer: bool = False):
+    """Project a published plan's conclusion onto the wire union; the Rebalancer's optimum has no ``tie_break_closed``."""
+    if isinstance(conclusion, OptimalProvenConclusion) and rebalancer:
+        return RebalancerOptimalProvenProof(kind="optimal_proven", proof_source="solver_status", witness=_wire_solver_witness(conclusion.witness))
     if isinstance(conclusion, OptimalProvenConclusion):
         return OptimalProvenProof(
             kind="optimal_proven",
@@ -417,15 +552,16 @@ def _wire_solver_witness(witness: SolverStatusWitnessFacts) -> SolverStatusWitne
     return SolverStatusWitness(kind="solver_status", objective_codes=list(witness.objective_codes))
 
 
-def _failure_result(availability: str, snapshot: PlannerResultSnapshot, issues: list[PlannerIssue]) -> PacPlannerResult:
+def _failure_result(availability: str, snapshot: PlannerResultSnapshot, issues: list[PlannerIssue], product: _Product = None):
     """Return the failure result matching the normalizer's availability.
 
     The schema requires a failure result to carry an error issue whose kind
     matches its availability, so this never invents one: if normalization
     said ``invalid`` it also produced the controlling issue.
     """
+    product = product or _PAC
     if availability == "needs_input":
-        return PacPlannerNeedsInputResult(operation="plan", result_state="needs_input", availability="needs_input", snapshot=snapshot, issues=issues)
+        return product.needs_input(operation="plan", result_state="needs_input", availability="needs_input", snapshot=snapshot, issues=issues)
     if availability == "unsupported":
-        return PacPlannerUnsupportedResult(operation="plan", result_state="unsupported", availability="unsupported", snapshot=snapshot, issues=issues)
-    return PacPlannerInvalidResult(operation="plan", result_state="invalid", availability="invalid", snapshot=snapshot, issues=issues)
+        return product.unsupported(operation="plan", result_state="unsupported", availability="unsupported", snapshot=snapshot, issues=issues)
+    return product.invalid(operation="plan", result_state="invalid", availability="invalid", snapshot=snapshot, issues=issues)

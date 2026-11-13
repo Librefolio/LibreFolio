@@ -69,6 +69,7 @@ from backend.app.schemas.pac_allocator.results import PacPlannerReadyIncumbentRe
 from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution
 from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
+from backend.app.services.pac_allocator import rebalancer_report as RR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactExposure
@@ -1327,3 +1328,72 @@ def test_solver_evidence_bounds_use_the_published_unit() -> None:
     assert float(published.primal) == pytest.approx(report.primal / 10_000, rel=1e-12)
     assert float(published.primal) == pytest.approx(1_001 / 200, rel=1e-6)
     assert float(published.dual) == pytest.approx(report.dual / 10_000, rel=1e-12)
+
+
+# --------------------------------------------------------------------------
+# B3 (project 67): the Rebalancer's report
+# --------------------------------------------------------------------------
+
+
+def _rebalancer_plan(scenario):
+    """SCIP's plan for ``scenario``, replayed, and the run: what the report reads."""
+    view, run = _solve(scenario)
+    assert run.candidate is not None
+    return view, evaluate_exact_candidate(scenario, view, run.candidate), run
+
+
+def _wire_fraction(money) -> Fraction:
+    return exact_fraction(money.value)
+
+
+def test_rebalancer_item_rows_cover_assets_cash_items_and_uninvested() -> None:
+    """B3 test 6 (contract §6.2): T4 with a cash item at 2 % — one row per Asset, one per cash item, and the uninvested row,
+    every weight a share of ``F``, the items with the uninvested row adding up to ``F`` before and after."""
+    scenario = cases.t4_cash_over_target()
+    view, evaluation, _run = _rebalancer_plan(scenario)
+    assets = RR.build_rebalancer_asset_rows(scenario, evaluation)
+    cash = RR.build_cash_item_rows(scenario, evaluation)
+    uninvested = RR.build_uninvested_row(scenario, evaluation)
+    wealth = Fraction(10_100)
+    assert [row.asset_id for row in assets] == ["asset:a", "asset:b"] and [(row.broker_id, row.currency) for row in cash] == [(cases.BROKER, "EUR")]
+    for row in [*assets, *cash]:
+        assert exact_fraction(row.target_weight) * wealth == _wire_fraction(row.target_value)
+        assert exact_fraction(row.before_weight) * wealth == _wire_fraction(row.before_value)
+        assert exact_fraction(row.final_weight) * wealth == _wire_fraction(row.final_value)
+    assert (_wire_fraction(cash[0].before_value), _wire_fraction(uninvested.before_value)) == (300, 0)
+    for side in ("before_value", "final_value"):
+        assert sum((_wire_fraction(getattr(row, side)) for row in [*assets, *cash]), Fraction()) + _wire_fraction(getattr(uninvested, side)) == wealth
+
+
+def test_rebalancer_objective_publishes_the_score_and_its_parts() -> None:
+    """B3 test 7 (specifica §6): T4 — ``J`` = λ·D/F + money lost (1 × 50/10 000 + 5 = 1 001/200), the stage of the score
+    equal to it, and the two tie-breaks by name, closed."""
+    scenario = cases.t4()
+    view, evaluation, run = _rebalancer_plan(scenario)
+    score = RR.build_score(scenario, view, evaluation, run)
+    assert (exact_fraction(score.distance_weight), exact_fraction(score.target_distance), _wire_fraction(score.wealth_loss)) == (1, 50, 5)
+    assert _wire_fraction(score.plan_score) == Fraction(1_001, 200) == _wire_fraction(score.distance_per_wealth) + 5
+    stages = {stage.objective_code: exact_fraction(stage.value) for stage in PR.build_objective_results(scenario, view, evaluation).stages}
+    assert stages["plan_score"] == Fraction(1_001, 200)
+    assert [(stage.objective_code, stage.status) for stage in score.tie_breaks] == [("operation_count", "closed"), ("route_priority", "closed"), ("canonical", "closed")]
+
+
+def test_rebalancer_publishes_the_largest_deviation_before_and_after() -> None:
+    """B3 test 20 (X14): T4, targets 50/50 on ``F`` = 10 000 — before B weighs 48 %, 2 points off; after the purchase of
+    195 it weighs 49.95 %, 1/20 of a point. Exact fractions."""
+    scenario = cases.t4()
+    view, evaluation, run = _rebalancer_plan(scenario)
+    score = RR.build_score(scenario, view, evaluation, run)
+    assert (exact_fraction(score.largest_deviation_before), exact_fraction(score.largest_deviation_after)) == (Fraction(1, 50), Fraction(1, 2_000))
+
+
+@pytest.mark.parametrize("build", [pytest.param(lambda: cases.t6(with_usd=True, target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(4))), id="rebalancer-t6-usd"), pytest.param(_coarse_funding_fx_scenario, id="pac-fx")])
+def test_plan_accounts_sum_the_money_lost_to_f_minus_w(build) -> None:
+    """The shared accounts type (contract §6.1) read off the exact accounting and costs: the entries, rounding included,
+    sum to ``F − W`` on a plan with a conversion spread and an FX credit rounded against the plan, for either product."""
+    scenario = build()
+    view, evaluation = _evaluate(scenario)
+    accounts = RR.build_plan_accounts(scenario, evaluation)
+    lost = accounts.money_lost.total()
+    assert lost == _wire_fraction(accounts.initial_wealth) - _wire_fraction(accounts.final_wealth)
+    assert lost == Fraction(evaluation.accounting.wealth_loss.numerator, evaluation.accounting.wealth_loss.denominator)

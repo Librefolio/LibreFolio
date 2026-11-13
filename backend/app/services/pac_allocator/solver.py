@@ -65,7 +65,7 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Literal
 
@@ -233,6 +233,11 @@ class SolverStageReport:
     # SCIP minimizes ``scale ×`` the view's objective (D2 of the step-2 plan of project 67): ``primal``, ``dual`` and
     # ``absolute_gap`` above are in SCIP's units, and the report divides them by this to publish the objective's own unit.
     scale: Fraction = Fraction(1)
+    # The stage is a tie-break of the Rebalancer (``ObjectiveStage.tie_break``): a named one or one of the canonical vector.
+    tie_break: bool = False
+    # D4: SCIP closed the stage, but its plan was worse in exact arithmetic on what precedes the tie-breaks, so the plan of
+    # the stage before stays the best one. Such a stage is reported ``unfinished``.
+    rejected: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -358,6 +363,7 @@ def _unfinished_report(stage: ObjectiveStage, ordinal: int, scope: Literal["glob
         solving_seconds=0.0,
         nodes=0,
         scale=stage.scale,
+        tie_break=stage.tie_break,
     )
 
 
@@ -459,6 +465,8 @@ class _Cascade:
     pending_pin: tuple[ObjectiveStage, float] | None = None
     # True from the first stage that stopped on a limit with a plan in hand.
     in_tail: bool = False
+    # D4: the ordinals of the tie-break stages whose plan was rejected by the exact comparison.
+    rejected: set[int] = field(default_factory=set)
 
     def flag(self, anomaly: str) -> None:
         """Keep the first anomaly: every later fact descends from it."""
@@ -528,6 +536,7 @@ def _take_candidate(cascade: _Cascade, candidate: CandidateActionVector, ordinal
     elif cascade.in_tail and cascade.best_values is not None and values > cascade.best_values:
         return
     elif cascade.best_values is not None and _worse_before_tie_break(cascade.program.objective_stages, ordinal, values, cascade.best_values):
+        cascade.rejected.add(ordinal)
         return
     cascade.best = candidate
     cascade.best_values = values
@@ -603,7 +612,7 @@ def _scope(index: int) -> Literal["global", "incumbent_face"]:
     return "global" if index == 0 else "incumbent_face"
 
 
-def _stage_report(stage: ObjectiveStage, index: int, observation: _StageObservation, status: Literal["finished", "unfinished", "infeasible"]) -> SolverStageReport:
+def _stage_report(stage: ObjectiveStage, index: int, observation: _StageObservation, status: Literal["finished", "unfinished", "infeasible"], *, rejected: bool = False) -> SolverStageReport:
     return SolverStageReport(
         stage=stage.code,
         objective_code=_objective_code(stage),
@@ -619,6 +628,8 @@ def _stage_report(stage: ObjectiveStage, index: int, observation: _StageObservat
         solving_seconds=observation.solving_seconds,
         nodes=observation.nodes,
         scale=stage.scale,
+        tie_break=stage.tie_break,
+        rejected=rejected,
     )
 
 
@@ -664,7 +675,11 @@ def _close_stage(cascade: _Cascade, stage: ObjectiveStage, index: int, observati
     finished = not cascade.in_tail and observation.scip_status == "optimal" and observation.has_solution
     # Only the first, still-global stage can say anything about the scenario itself.
     verdict = index == 0 and observation.scip_status == "infeasible"
-    cascade.reports.append(_stage_report(stage, index, observation, "finished" if finished else "infeasible" if verdict else "unfinished"))
+    # D4: a tie-break whose plan the exact comparison rejected is reported unfinished; the cascade goes on as after a
+    # finished stage, pinned on the plan it kept.
+    rejected = finished and index + 1 in cascade.rejected
+    status = "unfinished" if rejected else "finished" if finished else "infeasible" if verdict else "unfinished"
+    cascade.reports.append(_stage_report(stage, index, observation, status, rejected=rejected))
     if verdict:
         # A verdict, not an interruption: no face exists for a later stage
         # to run on, so none is run and none is reported.

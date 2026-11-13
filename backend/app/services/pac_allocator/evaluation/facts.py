@@ -19,11 +19,15 @@ from backend.app.services.pac_allocator.ledger import (
 from backend.app.services.pac_allocator.models import (
     Checkpoint,
     DecisionFamily,
+    ExactAccountingEvaluation,
+    ExactAssetEvaluation,
     ExactBrokerLedgerEvaluation,
+    ExactCashTargetEvaluation,
     ExactObjectiveCode,
     ExactOrderRoute,
     ExactPlannerScenario,
     ExactPolicyView,
+    ExactTargetFidelity,
     check_budget,
 )
 from backend.app.services.pac_allocator.numeric import (
@@ -544,18 +548,22 @@ def constraint_facts(
     return facts
 
 
-def _rebalancer_score(scenario: ExactPlannerScenario, state: EconomicState) -> dict[ExactObjectiveCode, ExactRatio]:
-    """The Rebalancer's objectives (specifica §6), in exact arithmetic.
+def rebalancer_score(
+    fidelity: ExactTargetFidelity | None,
+    assets: tuple[ExactAssetEvaluation, ...],
+    cash_targets: tuple[ExactCashTargetEvaluation, ...],
+    accounting: ExactAccountingEvaluation,
+) -> dict[ExactObjectiveCode, ExactRatio]:
+    """The Rebalancer's objectives (specifica §6), in exact arithmetic: the one place they are computed, read by the replay's
+    objectives and by the report's score (B3 of project 67).
 
     ``D``: the squared distance of the final portfolio from the targets ``w · F``, over every Asset, every cash cell with a
     target, and the uninvested ``N`` (target zero): the money lost stays inside ``N``, so wasting it never shortens ``D``.
     ``C = F − W``, the money lost. ``J = λ·D/F + C`` for a weighted fidelity. A scenario worth nothing (``F = 0``) has no
     distance to scale: ``J = C``, and ``REBALANCER_NONEMPTY`` refuses the plan anyway.
     """
-    accounting = state.accounting
-    distance = sum((item.residual.square() for item in (*state.assets, *state.cash_targets)), _EXACT_ZERO) + accounting.uninvested.square()
+    distance = sum((item.residual.square() for item in (*assets, *cash_targets)), _EXACT_ZERO) + accounting.uninvested.square()
     score = accounting.wealth_loss
-    fidelity = scenario.target_fidelity
     if fidelity is not None and fidelity.kind == "weighted" and accounting.initial_wealth > _EXACT_ZERO:
         score += fidelity.distance_weight * distance / accounting.initial_wealth
     return {"target_distance": distance, "wealth_loss": accounting.wealth_loss, "plan_score": score}
@@ -619,7 +627,7 @@ def objective_value_map(
         "route_priority": ExactRatio(route_priority),
     }
     if scenario.product == "rebalancer":
-        values |= _rebalancer_score(scenario, state)
+        values |= rebalancer_score(scenario.target_fidelity, state.assets, state.cash_targets, state.accounting)
         values["operation_count"] = _operation_count(view, quanta, state)
     expected = {item.code for item in view.objectives}
     if not expected.issubset(values):

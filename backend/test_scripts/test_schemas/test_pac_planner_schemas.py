@@ -587,14 +587,11 @@ def _primary_objective_codes(payload: JsonObject) -> list[str]:
     return codes
 
 
-def _optimal_proven_proof(objective_codes: list[str]) -> JsonObject:
-    """An optimum as the product wires it: SCIP's own status, over ``objective_codes``."""
-    return {
-        "kind": "optimal_proven",
-        "proof_source": "solver_status",
-        "witness": {"kind": "solver_status", "objective_codes": list(objective_codes)},
-        "tie_break_closed": True,
-    }
+def _optimal_proven_proof(objective_codes: list[str], product: str = "PAC") -> JsonObject:
+    """An optimum as the product wires it: SCIP's own status, over ``objective_codes``. The Rebalancer's has no
+    ``tie_break_closed``: its tie-breaks may stay open (specifica §15 n. 10, B3 of project 67)."""
+    proof = {"kind": "optimal_proven", "proof_source": "solver_status", "witness": {"kind": "solver_status", "objective_codes": list(objective_codes)}}
+    return proof if product == "Rebalancer" else {**proof, "tie_break_closed": True}
 
 
 def _finished_evidence_codes(payload: JsonObject) -> list[str]:
@@ -2727,7 +2724,7 @@ def test_optimal_proven_witness_covers_every_published_objective_stage_in_exact_
     payload = factory()
     published_codes = _primary_objective_codes(payload)
     assert _finished_evidence_codes(payload) == published_codes, product
-    payload["proof"] = _optimal_proven_proof(published_codes)
+    payload["proof"] = _optimal_proven_proof(published_codes, product)
 
     model, _emitted = _strict_roundtrip(adapter, payload)
     wire = adapter.dump_python(model, mode="json")
@@ -2736,7 +2733,23 @@ def test_optimal_proven_witness_covers_every_published_objective_stage_in_exact_
     assert wire["proof"]["proof_source"] == "solver_status"
     assert witness == {"kind": "solver_status", "objective_codes": published_codes}, product
     assert witness["objective_codes"] == [stage["objective_code"] for stage in wire["solver_evidence"]["stages"]]
-    assert wire["proof"]["tie_break_closed"] is True
+    assert wire["proof"].get("tie_break_closed", "absent") == ("absent" if product == "Rebalancer" else True)
+
+
+def _mutated_witness_codes(mutation: str, published_codes: list[str], extra_code: str) -> list[str]:
+    """The witness codes of one objective-closure mutation; the tie-closure mutations keep them as published."""
+    mutated = {
+        "missing": lambda: [published_codes[0], *published_codes[2:]],
+        "subset": lambda: published_codes[:2],
+        "reordered": lambda: [published_codes[1], published_codes[0], *published_codes[2:]],
+        "duplicate": lambda: [*published_codes, published_codes[-1]],
+        "extra": lambda: [*published_codes, extra_code],
+        "unknown": lambda: [*published_codes[:-1], "unknown_objective"],
+        "tie-closure-missing": lambda: published_codes,
+        "tie-closure-false": lambda: published_codes,
+    }
+    assert mutation in mutated, f"unhandled objective-closure mutation {mutation!r}"
+    return mutated[mutation]()
 
 
 @pytest.mark.parametrize(("product", "adapter", "factory", "extra_code"), OPTIMAL_PROOF_PRODUCT_CASES)
@@ -2750,27 +2763,15 @@ def test_optimal_proven_witness_rejects_incomplete_or_false_objective_closure(
 ) -> None:
     payload = factory()
     published_codes = _primary_objective_codes(payload)
-
-    if mutation == "missing":
-        witness_codes = [published_codes[0], *published_codes[2:]]
-    elif mutation == "subset":
-        witness_codes = published_codes[:2]
-    elif mutation == "reordered":
-        witness_codes = [published_codes[1], published_codes[0], *published_codes[2:]]
-    elif mutation == "duplicate":
-        witness_codes = [*published_codes, published_codes[-1]]
-    elif mutation == "extra":
+    if mutation == "extra":
         assert extra_code not in published_codes, product
-        witness_codes = [*published_codes, extra_code]
-    elif mutation == "unknown":
-        witness_codes = [*published_codes[:-1], "unknown_objective"]
-    elif mutation in {"tie-closure-missing", "tie-closure-false"}:
-        witness_codes = published_codes
-    else:
-        raise AssertionError(f"unhandled objective-closure mutation {mutation!r}")
+    witness_codes = _mutated_witness_codes(mutation, published_codes, extra_code)
 
-    payload["proof"] = _optimal_proven_proof(witness_codes)
-    if mutation == "tie-closure-missing":
+    payload["proof"] = _optimal_proven_proof(witness_codes, product)
+    if mutation == "tie-closure-missing" and product == "Rebalancer":
+        # The Rebalancer's proof has no such field: carrying it is the error.
+        payload["proof"]["tie_break_closed"] = True
+    elif mutation == "tie-closure-missing":
         payload["proof"].pop("tie_break_closed")
     elif mutation == "tie-closure-false":
         payload["proof"]["tie_break_closed"] = False
@@ -2853,14 +2854,17 @@ def test_ready_no_incumbent_is_only_a_limit_stop(product: str, adapter: TypeAdap
 
 def _optimal_ready_result(product: str) -> JsonObject:
     payload = _ready_source_result(product)
-    payload["proof"] = _optimal_proven_proof(_primary_objective_codes(payload))
+    payload["proof"] = _optimal_proven_proof(_primary_objective_codes(payload), product)
     return payload
 
 
 def _optimal_over_an_unfinished_stage(product: str) -> JsonObject:
+    """The PAC's last stage left open; for the Rebalancer, whose last stages are named tie-breaks that may stay open (D4),
+    the score stage itself and everything after it."""
     payload = _optimal_ready_result(product)
-    last = max(payload["solver_evidence"]["stages"], key=lambda stage: stage["ordinal"])
-    last["status"] = "unfinished"
+    stages = payload["solver_evidence"]["stages"]
+    for stage in stages if product == "Rebalancer" else [max(stages, key=lambda stage: stage["ordinal"])]:
+        stage["status"] = "unfinished"
     payload["stop_reason"] = "time_limit"
     return payload
 
@@ -3947,7 +3951,7 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "b7cb7c6917a05bb402440a2088322500ba5c17d867f904864c4a8b862a9283fa",
+        "3d115f3049333196c439ed6c40a2529762bb992eca5f2502d541569dabdb8afd",
         id="rebalancer",
     ),
 )
@@ -4454,3 +4458,56 @@ def test_rebalancer_result_carries_every_fidelity(build: PayloadFactory) -> None
         assert [stage["objective_code"] for stage in wire["primary_solution"]["objectives"]["stages"]][:2] == ["target_distance", "wealth_loss"]
     else:
         assert _money_wire_fraction(score["plan_score"]) == Fraction(5, 2) * Fraction(841949, 1000000) + Fraction(143, 100)
+
+
+def _optimal_with_open_tie_break(status: str) -> JsonObject:
+    """The medium plan proven optimal on ``J`` with ``route_priority`` left open: by a limit, or rejected by the exact
+    comparison (D4). The witness names the stages that closed."""
+    payload = _rebalancer_incumbent_result()
+    _find(payload["solver_evidence"]["stages"], "objective_code", "route_priority")["status"] = "unfinished"
+    _find(payload["primary_solution"]["score"]["tie_breaks"], "objective_code", "route_priority")["status"] = status
+    payload["proof"] = _optimal_proven_proof(["plan_score", "operation_count"], "Rebalancer")
+    payload["stop_reason"] = "completed" if status == "rejected" else "time_limit"
+    return payload
+
+
+@pytest.mark.parametrize("status", ["rejected", "unfinished"])
+def test_open_named_tie_break_keeps_the_proof_on_the_score(status: str) -> None:
+    """D4 (the B2 review of project 67): a named tie-break left open does not downgrade ``optimal_proven``; the witness names
+    the closed stages, ``score.tie_breaks`` says how the open one ended, and a rejected one ends a completed search."""
+    model, _emitted = _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, _optimal_with_open_tie_break(status))
+    wire = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
+    assert wire["proof"]["witness"]["objective_codes"] == ["plan_score", "operation_count"]
+
+
+OPEN_TIE_BREAK_REJECTION_CASES = (
+    pytest.param(lambda: {**_optimal_with_open_tie_break("rejected"), "proof": _optimal_proven_proof(["plan_score", "operation_count", "route_priority"], "Rebalancer")}, "Optimal proof witness must cover every published objective stage in order", id="witness-names-the-open-stage"),
+    pytest.param(lambda: {**_optimal_with_open_tie_break("unfinished"), "stop_reason": "completed"}, "Completed stops require no unfinished stage", id="limit-reported-as-completed"),
+    pytest.param(lambda: _medium_mutated(_set(("primary_solution", "score", "tie_breaks", ("objective_code", "operation_count"), "status"), "unfinished"))(), "A tie-break is closed exactly when its solver stage finished", id="status-against-the-evidence"),
+    pytest.param(lambda: _medium_mutated(_set(("primary_solution", "score", "tie_breaks"), [{"objective_code": "route_priority", "status": "closed"}]))(), "The score's tie-breaks must name the published tie-break stages in order", id="a-tie-break-missing"),
+)
+
+
+@pytest.mark.parametrize(("build", "message"), OPEN_TIE_BREAK_REJECTION_CASES)
+def test_open_named_tie_break_is_reported_consistently(build: PayloadFactory, message: str) -> None:
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
+
+
+def _optimal_with_open_canonical_vector(stop_reason: str) -> JsonObject:
+    """The medium plan proven optimal with the canonical vector left open by a limit: it has no evidence row of its own, so
+    its entry in ``score.tie_breaks`` is what the stop rule reads."""
+    payload = _rebalancer_incumbent_result()
+    _find(payload["primary_solution"]["score"]["tie_breaks"], "objective_code", "canonical")["status"] = "unfinished"
+    payload["proof"] = _optimal_proven_proof(["plan_score", "operation_count", "route_priority"], "Rebalancer")
+    payload["stop_reason"] = stop_reason
+    return payload
+
+
+def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
+    """The consultant's answer to the B3 checkpoint (2b): the canonical vector is a tie-break like the named ones; left open
+    by a limit it keeps ``optimal_proven``, and the stop is that limit, never «completed»."""
+    _strict_roundtrip(REBALANCER_PLAN_OUTPUT_ADAPTER, _optimal_with_open_canonical_vector("time_limit"))
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, _optimal_with_open_canonical_vector("completed"), "Completed stops require no unfinished stage")
+    missing = _rebalancer_incumbent_result()
+    missing["primary_solution"]["score"]["tie_breaks"] = [stage for stage in missing["primary_solution"]["score"]["tie_breaks"] if stage["objective_code"] != "canonical"]
+    _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, missing, "The score's tie-breaks must name the published tie-break stages in order")

@@ -182,7 +182,13 @@ def conclude_with_solver(
     * ``optimal_proven`` — ``incumbent``, no anomaly, every stage (the
       canonical tie-breaks included) closed ``optimal``, and ``published``
       exactly SCIP's candidate. A proof about SCIP's optimum is never
-      transferred to a candidate SCIP did not return.
+      transferred to a candidate SCIP did not return. The Rebalancer's
+      tie-breaks (``operation_count``, ``route_priority`` and its canonical
+      vector, on one level: specifica §6.4) are the one exception: one left
+      open, by a limit or by the exact comparison that rejected its plan
+      (D4), does not downgrade the proof, which is about ``J`` or the «Target
+      first» chain (§15 n. 10). The witness then names the stages that closed.
+      The PAC's stages are never tie-breaks, so its rule is unchanged.
     * ``not_proven`` — everything else. Downgrading is always sound.
 
     Raises ``ProofForgeryError`` when a run that would prove something did not
@@ -203,11 +209,12 @@ def conclude_with_solver(
 
     if solver.outcome != "incumbent" or solver.anomaly is not None or not solver.stages:
         return UnprovenConclusion()
-    if any(stage.status != "finished" or stage.scip_status != "optimal" for stage in solver.stages):
+    if any((stage.status != "finished" or stage.scip_status != "optimal") and not stage.tie_break for stage in solver.stages):
         return UnprovenConclusion()
     if published is None or solver.candidate is None or _quanta(published) != _quanta(solver.candidate):
         return UnprovenConclusion()
     normative = tuple(stage.objective_code for stage in solver.stages if not stage.objective_code.startswith(_TIE_STAGE_PREFIX))
     if normative != expected:
         raise ProofForgeryError(f"SCIP closed the stages {list(normative)}, but the view's objectives are {list(expected)}")
-    return OptimalProvenConclusion(witness=_witness(expected))
+    closed = tuple(stage.objective_code for stage in solver.stages if not stage.objective_code.startswith(_TIE_STAGE_PREFIX) and stage.status == "finished")
+    return OptimalProvenConclusion(witness=_witness(closed))

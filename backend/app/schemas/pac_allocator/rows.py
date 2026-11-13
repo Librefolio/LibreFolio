@@ -616,9 +616,10 @@ class PlannerPlanAccounts(AllocationStrictModel):
 
 class RebalancerTieBreakStage(AllocationStrictModel):
     """A tie-break of the Rebalancer, by name, and how SCIP left it: ``closed`` at its optimum, ``unfinished`` at a limit, or
-    ``rejected``: its plan failed the exact check and the plan of the stage before is published (D4)."""
+    ``rejected``: its plan failed the exact check and the plan of the stage before is published (D4). ``canonical`` is the
+    fixed-order tie-break vector, last, on the same level as the named ones (specifica §6.4)."""
 
-    objective_code: ObjectiveCode
+    objective_code: ObjectiveCode | Literal["canonical"]
     status: Literal["closed", "unfinished", "rejected"]
 
 

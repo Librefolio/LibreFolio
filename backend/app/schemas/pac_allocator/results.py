@@ -8,7 +8,15 @@ from typing import Annotated, Literal, Union
 from pydantic import Field, TypeAdapter, model_validator
 
 from backend.app.schemas.pac_allocator.base import AllocationStrictModel, CurrencyCode, PlannerId, PlannerRef, collect_currency_codes, require_unique
-from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, OptimalProvenProof, ReadyPlanProof, ReportedFloatingSolverEvidence
+from backend.app.schemas.pac_allocator.evidence import (
+    InfeasibilityProvenProof,
+    NotProvenProof,
+    OptimalProvenProof,
+    ReadyPlanProof,
+    RebalancerOptimalProvenProof,
+    RebalancerReadyPlanProof,
+    ReportedFloatingSolverEvidence,
+)
 from backend.app.schemas.pac_allocator.exact import ExactMoney, ExactNumberAvailability, available_fraction, exact_fraction, fixed_fraction, money_fraction, validate_weight_availability
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, PlannerProvenance, RebalancerFidelityInput, RebalancerPlannerRequest
@@ -439,25 +447,36 @@ def _validate_basis_solution(
         raise ValueError("Scenario basis and plan accounts disagree on the initial wealth")
 
 
+def _named_tie_breaks(solution: PacPlanSolution | RebalancerPlanSolution | None) -> dict[str, str]:
+    """The Rebalancer's named tie-breaks and how SCIP left them (``score.tie_breaks``); none for the PAC or without a plan."""
+    if not isinstance(solution, RebalancerPlanSolution):
+        return {}
+    return {stage.objective_code: stage.status for stage in solution.score.tie_breaks}
+
+
 def _validate_optimal_proof_objectives(
     proof: ReadyPlanProof | InfeasibilityProvenProof | None,
     solution: PacPlanSolution | RebalancerPlanSolution | None,
 ) -> None:
-    if not isinstance(proof, OptimalProvenProof):
+    """The witness covers every published stage in order; for the Rebalancer, the tie-breaks it left open are out of it (they
+    do not downgrade the proof, specifica §15 n. 10)."""
+    if not isinstance(proof, (OptimalProvenProof, RebalancerOptimalProvenProof)):
         return
     if solution is None:
         raise ValueError("optimal_proven requires a published primary solution")
     witness_codes = proof.witness.objective_codes
-    published_codes = [stage.objective_code for stage in solution.objectives.stages]
+    named = _named_tie_breaks(solution)
+    published_codes = [stage.objective_code for stage in solution.objectives.stages if named.get(stage.objective_code, "closed") == "closed"]
     if witness_codes != published_codes:
         raise ValueError("Optimal proof witness must cover every published objective stage in order")
-    if not proof.tie_break_closed:
+    if isinstance(proof, OptimalProvenProof) and not proof.tie_break_closed:
         raise ValueError("Optimal proof witness must close the published canonical tie-break")
 
 
 def _validate_solver_status_proof(
-    proof: ReadyPlanProof | InfeasibilityProvenProof | None,
+    proof: ReadyPlanProof | RebalancerReadyPlanProof | InfeasibilityProvenProof | None,
     solver_evidence: ReportedFloatingSolverEvidence,
+    named_tie_breaks: dict[str, str] | None = None,
 ) -> None:
     """Bind a ``solver_status`` proof to the evidence of the solve it rests on.
 
@@ -469,9 +488,13 @@ def _validate_solver_status_proof(
     """
     codes = [stage.objective_code for stage in solver_evidence.stages]
     infeasible = any(stage.status == "infeasible" for stage in solver_evidence.stages)
-    if isinstance(proof, OptimalProvenProof):
-        if any(stage.status != "finished" for stage in solver_evidence.stages):
+    if isinstance(proof, (OptimalProvenProof, RebalancerOptimalProvenProof)):
+        # The Rebalancer: a tie-break may be left open; every other stage closed, and the witness names the closed ones.
+        named = named_tie_breaks or {}
+        if any(stage.status != "finished" and stage.objective_code not in named for stage in solver_evidence.stages):
             raise ValueError("optimal_proven requires every solver stage finished")
+        if named:
+            codes = [stage.objective_code for stage in solver_evidence.stages if stage.status == "finished"]
         if codes != proof.witness.objective_codes:
             raise ValueError("Optimal proof witness must name exactly the finished solver stages in order")
     elif isinstance(proof, InfeasibilityProvenProof):
@@ -481,6 +504,20 @@ def _validate_solver_status_proof(
             raise ValueError("Infeasibility proof witness must name the infeasible solver stage")
     elif infeasible:
         raise ValueError("An infeasible solver stage requires an infeasibility proof")
+
+
+def _validate_tie_break_statuses(solution: RebalancerPlanSolution, solver_evidence: ReportedFloatingSolverEvidence) -> None:
+    """``score.tie_breaks`` names the published stages after the score (or the chain), each once, then ``canonical``; a named
+    one is ``closed`` exactly when its solver stage finished, so a «rejected» one matches an unfinished stage, never a finished
+    stage carrying the bounds of a plan that is not published."""
+    principal = {"plan_score", "target_distance", "wealth_loss"}
+    published = [stage.objective_code for stage in solution.objectives.stages if stage.objective_code not in principal] + ["canonical"]
+    if [stage.objective_code for stage in solution.score.tie_breaks] != published:
+        raise ValueError("The score's tie-breaks must name the published tie-break stages in order")
+    evidence = {stage.objective_code: stage.status for stage in solver_evidence.stages}
+    for stage in solution.score.tie_breaks:
+        if stage.objective_code in evidence and (stage.status == "closed") != (evidence[stage.objective_code] == "finished"):
+            raise ValueError("A tie-break is closed exactly when its solver stage finished")
 
 
 def _validate_rebalancer_policy_solution(
@@ -505,9 +542,14 @@ def _validate_solver_units(
 def _validate_stop_evidence(
     stop_reason: str,
     solver_evidence: ReportedFloatingSolverEvidence,
+    named_tie_breaks: dict[str, str] | None = None,
 ) -> None:
-    # An infeasible stage is a verdict, not an interruption: it ends a completed search.
-    unfinished = any(stage.status == "unfinished" for stage in solver_evidence.stages)
+    # An infeasible stage is a verdict, not an interruption: it ends a completed search. So is a Rebalancer tie-break whose
+    # plan the exact comparison rejected (D4): SCIP closed it, no limit stopped the search there.
+    named = named_tie_breaks or {}
+    rejected = {code for code, status in named.items() if status == "rejected"}
+    # The canonical vector has no evidence row: when a limit left it open, its entry in the score says so.
+    unfinished = any(stage.status == "unfinished" and stage.objective_code not in rejected for stage in solver_evidence.stages) or named.get("canonical") == "unfinished"
     if (stop_reason == "completed") == unfinished:
         raise ValueError("Completed stops require no unfinished stage; limit stops require an unfinished stage")
 
@@ -671,14 +713,16 @@ class _RebalancerReadyResultBase(AllocationStrictModel):
         proof = getattr(self, "proof", None)
         deployment = getattr(self, "deployment", None)
         solution = getattr(self, "primary_solution", None)
-        _validate_stop_evidence(self.stop_reason, self.solver_evidence)
+        named = _named_tie_breaks(solution)
+        _validate_stop_evidence(self.stop_reason, self.solver_evidence, named)
         _validate_solver_units(self.solver_evidence, self.scenario_basis.valuation_currency)
         _validate_optimal_proof_objectives(proof, solution)
-        _validate_solver_status_proof(proof, self.solver_evidence)
+        _validate_solver_status_proof(proof, self.solver_evidence, named)
         if solution is not None:
             _validate_basis_solution(self.scenario_basis, solution)
             _validate_ready_solution(self.catalogs, self.provenance, self.scenario_basis.valuation_currency, solution)
             _validate_rebalancer_policy_solution(self.scenario_basis.policy, solution)
+            _validate_tie_break_statuses(solution, self.solver_evidence)
         if isinstance(deployment, RebalancerDistinctDeployment) and solution is not None:
             _validate_basis_solution(self.scenario_basis, deployment.solution)
             _validate_ready_solution(self.catalogs, self.provenance, self.scenario_basis.valuation_currency, deployment.solution)
@@ -690,7 +734,7 @@ class _RebalancerReadyResultBase(AllocationStrictModel):
 class RebalancerPlannerReadyNoOpResult(_RebalancerReadyResultBase):
     result_state: Literal["ready_no_op"]
     outcome: Literal["no_op"]
-    proof: ReadyPlanProof
+    proof: RebalancerReadyPlanProof
     primary_solution: RebalancerNoOpSolution
     deployment: RebalancerDeployment
 
@@ -698,7 +742,7 @@ class RebalancerPlannerReadyNoOpResult(_RebalancerReadyResultBase):
 class RebalancerPlannerReadyIncumbentResult(_RebalancerReadyResultBase):
     result_state: Literal["ready_incumbent"]
     outcome: Literal["incumbent_found"]
-    proof: ReadyPlanProof
+    proof: RebalancerReadyPlanProof
     primary_solution: RebalancerIncumbentSolution
     deployment: RebalancerDeployment
 

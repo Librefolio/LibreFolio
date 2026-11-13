@@ -1562,6 +1562,10 @@
         {
           "objective_code": "route_priority",
           "status": "closed"
+        },
+        {
+          "objective_code": "canonical",
+          "status": "closed"
         }
       ]
     },

@@ -12,11 +12,9 @@ The one place it does arithmetic is the exposure projection, and even there
 it only aggregates quantities the solve already decided (see
 ``build_exposure_rows``).
 
-Scope: PAC only. ``plan_rebalancing`` deliberately does not exist yet — every
-Rebalancer policy and the SELL verifier are deferred, and a function that
-exists but always fails is worse than an absent one because it invites
-wiring, whereas an absent one fails at import in the exact place the missing
-work is obvious.
+Scope: the rows both Tools share, and the PAC's own. What only the Rebalancer
+publishes (the items on ``F``, the transfers, the plan accounts, the score) is
+projected by ``rebalancer_report``, which reuses the shared builders here.
 """
 
 from __future__ import annotations
@@ -167,16 +165,21 @@ def build_planner_provenance(scenario: ExactPlannerScenario) -> list[PlannerProv
 
 def build_scenario_basis(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> PacScenarioBasis:
     """Project the scenario-level accounting basis and its object counts."""
+    return PacScenarioBasis(**scenario_basis_fields(scenario, evaluation))
+
+
+def scenario_basis_fields(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> dict:
+    """The fields of the scenario basis both Tools share; the Rebalancer adds its own (``rebalancer_report``)."""
     accounting = evaluation.accounting
     if accounting is None:
         raise ValueError("scenario basis requires an evaluation that produced accounting")
     currency = scenario.valuation_currency
     capability_count = sum(len(broker.capabilities) for broker in scenario.brokers)
-    return PacScenarioBasis(
-        as_of=scenario.as_of_date.isoformat(),
-        valuation_currency=currency,
-        policy=scenario.policy,
-        counts=PlannerScenarioCounts(
+    return {
+        "as_of": scenario.as_of_date.isoformat(),
+        "valuation_currency": currency,
+        "policy": scenario.policy,
+        "counts": PlannerScenarioCounts(
             assets=len(scenario.assets),
             brokers=len(scenario.brokers),
             currencies=len(scenario.currency_specs),
@@ -189,12 +192,12 @@ def build_scenario_basis(scenario: ExactPlannerScenario, evaluation: ExactEvalua
             order_routes=len(scenario.order_routes),
             provenance=len(scenario.provenance),
         ),
-        current_invested=_money(accounting.current_invested, currency),
-        selected_funding=_money(accounting.selected_funding, currency),
-        reachable_funding=_money(accounting.reachable_funding, currency),
-        trapped_funding=_money(accounting.trapped_funding, currency),
-        fixed_reference=_money(accounting.fixed_reference, currency),
-    )
+        "current_invested": _money(accounting.current_invested, currency),
+        "selected_funding": _money(accounting.selected_funding, currency),
+        "reachable_funding": _money(accounting.reachable_funding, currency),
+        "trapped_funding": _money(accounting.trapped_funding, currency),
+        "fixed_reference": _money(accounting.fixed_reference, currency),
+    }
 
 
 def _money(value: ExactRatio, currency: str) -> ExactMoney:
@@ -845,13 +848,15 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     could reasonably suspect data loss. They are not lost — the tie-break is
     published separately, exactly once, as ``PlannerObjectiveResults.tie_break``.
 
-    **One fact about the tie stages does need a row, so it borrows one.** The
-    wire accepts a limit ``stop_reason`` only when some row is ``unfinished``
-    (``_validate_stop_evidence``). When every named stage finished but a
-    tie-break stage did not, no row could say so, and the result would fail
-    validation. So when any tie-break stage is ``unfinished``, the named row
-    with the highest ordinal is reported ``unfinished`` as well; its numbers
-    stay the ones SCIP reported.
+    **One fact about the tie stages does need a row, so the PAC borrows one.**
+    The wire accepts a limit ``stop_reason`` only when some row is
+    ``unfinished`` (``_validate_stop_evidence``). When every named stage
+    finished but a tie-break stage did not, no row could say so, and the result
+    would fail validation. So when any tie-break stage is ``unfinished``, the
+    named row with the highest ordinal is reported ``unfinished`` as well; its
+    numbers stay the ones SCIP reported. The Rebalancer borrows none: its
+    canonical vector is an entry of ``score.tie_breaks``, which the stop rule
+    reads.
 
     **The absolute gap is recomputed, exactly.** The schema checks
     ``absolute_gap >= |primal - dual|`` in exact arithmetic on the published
@@ -860,7 +865,8 @@ def build_solver_evidence(scenario: ExactPlannerScenario, view: ExactPolicyView,
     instead (``_published_gap``).
     """
     unit_by_code = {ref.code: ref.unit for ref in view.objectives}
-    tie_unfinished = any(report.status == "unfinished" and report.objective_code not in unit_by_code for report in result.stages)
+    # The Rebalancer's canonical vector has its own entry in ``score.tie_breaks`` (B3 of project 67): no row is borrowed.
+    tie_unfinished = scenario.product != "rebalancer" and any(report.status == "unfinished" and report.objective_code not in unit_by_code for report in result.stages)
     last_ordinal = max((report.ordinal for report in result.stages if report.objective_code in unit_by_code), default=None)
     settings = [SolverSettingEvidence(name=setting.name, value=setting.value) for setting in result.settings]
     tolerances = SolverToleranceEvidence(
@@ -992,7 +998,8 @@ def build_stop_reason(result: SolverRunResult) -> str:
     assets x brokers, not in assets, and do not read the table above as a
     promise.
     """
-    unfinished = [stage for stage in result.stages if stage.status == "unfinished"]
+    # D4: a tie-break whose plan the exact comparison rejected was closed by SCIP; no limit stopped the search there.
+    unfinished = [stage for stage in result.stages if stage.status == "unfinished" and not stage.rejected]
     if not unfinished:
         return "completed"
     deciding = next((stage for stage in unfinished if stage.scip_status != "optimal"), None)
