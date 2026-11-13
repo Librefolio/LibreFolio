@@ -477,7 +477,12 @@
       "saveFailedTitle": "⛔ Salvataggio non riuscito: nessun asset è stato modificato",
       "saveFailedBody": "Il salvataggio è tutto o niente: un asset non è passato, quindi non è cambiato nulla. Il riepilogo resta qui: togli l'asset o torna indietro.",
       "savedToast": "{count, plural, one {# asset aggiornato} other {# asset aggiornati}}: {fields}",
-      "saved": "Salvato"
+      "saved": "Salvato",
+      "removeIcon": "Rimuovi icona",
+      "removeUrl": "Rimuovi URL",
+      "toBeRemoved": "Da rimuovere",
+      "urlNone": "nessun URL",
+      "alreadyWithout": "{already} già senza"
     }
   },
   "events": {

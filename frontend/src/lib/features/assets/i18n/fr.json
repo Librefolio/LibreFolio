@@ -477,7 +477,12 @@
       "saveFailedTitle": "⛔ Échec de l'enregistrement : aucun actif n'a été modifié",
       "saveFailedBody": "L'enregistrement est tout ou rien : un actif n'est pas passé, donc rien n'a changé. Le récapitulatif reste ici : retirez l'actif ou revenez en arrière.",
       "savedToast": "{count, plural, one {# actif mis à jour} other {# actifs mis à jour}} : {fields}",
-      "saved": "Enregistré"
+      "saved": "Enregistré",
+      "removeIcon": "Retirer l'icône",
+      "removeUrl": "Retirer l'URL",
+      "toBeRemoved": "À retirer",
+      "urlNone": "aucune URL",
+      "alreadyWithout": "{already} déjà sans"
     }
   },
   "events": {

@@ -477,7 +477,12 @@
       "saveFailedTitle": "⛔ Guardado fallido: no se ha modificado ningún activo",
       "saveFailedBody": "El guardado es todo o nada: un activo no pasó, así que no ha cambiado nada. El resumen se queda aquí: quita el activo o vuelve atrás.",
       "savedToast": "{count, plural, one {# activo actualizado} other {# activos actualizados}}: {fields}",
-      "saved": "Guardado"
+      "saved": "Guardado",
+      "removeIcon": "Quitar el icono",
+      "removeUrl": "Quitar la URL",
+      "toBeRemoved": "Por quitar",
+      "urlNone": "ninguna URL",
+      "alreadyWithout": "{already} ya sin"
     }
   },
   "events": {
