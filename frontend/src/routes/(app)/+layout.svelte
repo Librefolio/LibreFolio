@@ -279,7 +279,7 @@
         <Sidebar bind:isOpen={sidebarOpen} bind:collapsed={sidebarCollapsed} />
 
         <!-- Main Content Area -->
-        <div class="min-h-screen flex flex-col transition-all duration-300 {sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}">
+        <div class="min-h-screen flex flex-col transition-all duration-300 {sidebarCollapsed ? 'lg:ml-16 lg:[--lf-content-left:4rem]' : 'lg:ml-64 lg:[--lf-content-left:16rem]'}">
             <!-- Header -->
             <Header onToggleSidebar={toggleSidebar} {sidebarOpen} guideActive={onboardingGuide.active !== null} routeKey={$page.url.pathname + $page.url.search} />
 
@@ -291,6 +291,8 @@
                 <InstanceNotices />
                 <slot />
             </main>
+            <!-- Room for the floating selection bar of the tables (DataTableToolbar, `--lf-selbar-space`): the last row is never hidden behind it. -->
+            <div class="shrink-0" aria-hidden="true" style="height: var(--lf-selbar-space, 0px)"></div>
         </div>
     </div>
     <ToastContainer />
