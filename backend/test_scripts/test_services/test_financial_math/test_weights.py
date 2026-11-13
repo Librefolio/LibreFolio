@@ -53,6 +53,8 @@ from types import ModuleType
 
 import pytest
 
+from backend.app.services.pac_allocator.numeric import ExactRatio as R
+
 WEIGHTS_MODULE = "backend.app.services.financial_math.weights"
 
 CENT = Decimal("0.01")
@@ -455,3 +457,24 @@ class TestMFC2Divergence:
         percents = _weights().slice_percents(amounts)
         assert list(percents) == list(amounts)
         assert all(value is None for value in percents.values()), f"expected None for every slice, got {percents}"
+
+
+class TestLargestWeightDeviation:
+    """``largest_weight_deviation(items, total)``: ``max |value / total − target|`` over the items, in the caller's number type
+    (X14 of project 67: the Rebalancer's largest deviation from the target, before and after the plan)."""
+
+    def test_t4_before_and_after_in_exact_ratios(self) -> None:
+        # T4 (specifica §11): F = 10 000, targets 50/50; before B is 4 800 (2 points off), after 4 995 (1/20 of a point).
+        total = R(10_000)
+        assert _weights().largest_weight_deviation([(R(5_000), R(1, 2)), (R(4_800), R(1, 2))], total) == R(1, 50)
+        assert _weights().largest_weight_deviation([(R(5_000), R(1, 2)), (R(4_995), R(1, 2))], total) == R(1, 2_000)
+
+    def test_decimal_and_signs(self) -> None:
+        assert _weights().largest_weight_deviation([(Decimal("30"), Decimal("0.1")), (Decimal("70"), Decimal("0.9"))], Decimal("100")) == Decimal("0.2")
+        # A cash item may end below zero (a top-up): the distance is still a magnitude.
+        assert _weights().largest_weight_deviation([(Decimal("-1"), Decimal("0"))], Decimal("100")) == Decimal("0.01")
+
+    def test_no_items_and_no_total(self) -> None:
+        assert _weights().largest_weight_deviation([], Decimal("100")) == Decimal("0")
+        assert _weights().largest_weight_deviation([(Decimal("1"), Decimal("0"))], Decimal("0")) is None
+        assert _weights().largest_weight_deviation([(Decimal("1"), Decimal("0"))], Decimal("-5")) is None
