@@ -13,6 +13,10 @@
     import {BADGE, CARD, HINT, SECTION_TITLE} from '../ui';
     import {exactSign, objectiveStage} from './model';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         solution: PacSolution | null;
@@ -135,28 +139,28 @@
     const computeTitle = $derived(text('compute.title', 'Calculation'));
 </script>
 
-<section class={CARD} aria-label={solution ? text('title', 'Key figures') : computeTitle} data-testid="pac-planner-kpi">
+<section class={CARD} aria-label={solution ? text('title', 'Key figures') : computeTitle} data-testid={testId('kpi', profile)}>
     {#if solution}
         <div class="mb-3 flex items-center gap-1">
             <h3 class={SECTION_TITLE}>{text('title', 'Key figures')}</h3>
-            <HelpTip label={text('title', 'Key figures')} help={text('source', 'Every figure comes from the backend accounting; the interface adds nothing up.')} testid="pac-planner-kpi-source" />
+            <HelpTip label={text('title', 'Key figures')} help={text('source', 'Every figure comes from the backend accounting; the interface adds nothing up.')} testid={testId('kpi-source', profile)} />
         </div>
     {/if}
     <div class={solution ? 'grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]' : ''}>
         {#if solution}
             <dl class="grid content-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {#each tiles as tile (tile.kpi)}
-                    <div class="rounded-lg border border-lf-subtle p-3" data-testid="pac-planner-kpi-item" data-kpi={tile.kpi} data-trapped={tile.kpi === 'selected_funding' ? (trapped ? 'true' : 'false') : undefined}>
+                    <div class="rounded-lg border border-lf-subtle p-3" data-testid={testId('kpi-item', profile)} data-kpi={tile.kpi} data-trapped={tile.kpi === 'selected_funding' ? (trapped ? 'true' : 'false') : undefined}>
                         <dt class="{HINT} flex items-center gap-1">
                             <span>{tile.label}</span>
-                            <HelpTip label={tile.label} help={tile.help} testid="pac-planner-kpi-help" />
+                            <HelpTip label={tile.label} help={tile.help} testid={testId('kpi-help', profile)} />
                         </dt>
                         <dd class="mt-1 text-lg font-semibold tabular-nums text-lf-primary">{tile.value}</dd>
                         {#if tile.chips.length > 0}
                             <dd class="mt-2">
                                 <ul class="flex flex-wrap gap-1">
                                     {#each tile.chips as chip (chip.id)}
-                                        <li class={BADGE[chip.tone]} data-testid="pac-planner-kpi-chip" data-chip={chip.id} data-tone={chip.tone}>
+                                        <li class={BADGE[chip.tone]} data-testid={testId('kpi-chip', profile)} data-chip={chip.id} data-tone={chip.tone}>
                                             <span>{chip.label}</span>
                                             {#if chip.value !== undefined}<span class="font-semibold tabular-nums">{chip.value}</span>{/if}
                                         </li>
@@ -168,19 +172,19 @@
                 {/each}
             </dl>
         {/if}
-        <div class="rounded-lg bg-lf-panel p-3" data-testid="pac-planner-kpi-compute">
+        <div class="rounded-lg bg-lf-panel p-3" data-testid={testId('kpi-compute', profile)}>
             <div class="flex items-center gap-1">
                 <svelte:element this={solution ? 'h4' : 'h3'} class={SECTION_TITLE}>{computeTitle}</svelte:element>
-                <HelpTip label={computeTitle} help={text('compute.help', 'How long the optimizer worked on this plan and how far it got within the time it was given. The details are in «Proof and solver».')} testid="pac-planner-kpi-compute-help" />
+                <HelpTip label={computeTitle} help={text('compute.help', 'How long the optimizer worked on this plan and how far it got within the time it was given. The details are in «Proof and solver».')} testid={testId('kpi-compute-help', profile)} />
             </div>
             <dl class="mt-2 space-y-2 text-sm">
-                <div data-testid="pac-planner-kpi-compute-row" data-row="time">
+                <div data-testid={testId('kpi-compute-row', profile)} data-row="time">
                     <dt class="{HINT} flex items-center gap-1">
                         <span>{text('compute.time', 'Calculation time')}</span>
                         <HelpTip
                             label={text('compute.time', 'Calculation time')}
                             help={text('compute.timeHelp', 'The time the backend spent computing the plan. The total also counts the wait in the queue, the start of the worker and the checks on input and output.')}
-                            testid="pac-planner-kpi-compute-row-help"
+                            testid={testId('kpi-compute-row-help', profile)}
                         />
                     </dt>
                     <dd class="font-semibold tabular-nums text-lf-primary">
@@ -191,26 +195,26 @@
                     </dd>
                 </div>
                 {#if budget !== null}
-                    <div data-testid="pac-planner-kpi-compute-row" data-row="budget">
+                    <div data-testid={testId('kpi-compute-row', profile)} data-row="budget">
                         <dt class="{HINT} flex items-center gap-1">
                             <span>{text('compute.budget', 'Time allowed')}</span>
                             <HelpTip
                                 label={text('compute.budget', 'Time allowed')}
                                 help={text('compute.budgetHelp', 'The longest the optimizer may search for each objective. When it runs out, the best plan found so far is kept and the result says it is not proven optimal.')}
-                                testid="pac-planner-kpi-compute-row-help"
+                                testid={testId('kpi-compute-row-help', profile)}
                             />
                         </dt>
                         <dd class="font-semibold tabular-nums text-lf-primary">{settingNumber(budget, formats.budget)}</dd>
                     </div>
                 {/if}
                 {#if !infeasible}
-                    <div data-testid="pac-planner-kpi-compute-row" data-row="objectives">
+                    <div data-testid={testId('kpi-compute-row', profile)} data-row="objectives">
                         <dt class="{HINT} flex items-center gap-1">
                             <span>{text('compute.objectives', 'Objectives closed')}</span>
                             <HelpTip
                                 label={text('compute.objectives', 'Objectives closed')}
                                 help={text('compute.objectivesHelp', 'The objectives are optimized one after the other. An objective is closed when the optimizer proved that nothing better exists for it; the others stopped at a limit.')}
-                                testid="pac-planner-kpi-compute-row-help"
+                                testid={testId('kpi-compute-row-help', profile)}
                             />
                         </dt>
                         <dd class="font-semibold tabular-nums text-lf-primary">
@@ -219,12 +223,12 @@
                     </div>
                 {/if}
                 {#if nodeLimit !== null}
-                    <div data-testid="pac-planner-kpi-compute-row" data-row="node_limit">
+                    <div data-testid={testId('kpi-compute-row', profile)} data-row="node_limit">
                         <dt class={HINT}>{text('compute.nodeLimit', 'Node limit')}</dt>
                         <dd class="font-semibold tabular-nums text-lf-primary">{settingNumber(nodeLimit, formats.integer)}</dd>
                     </div>
                 {/if}
-                <div data-testid="pac-planner-kpi-compute-row" data-row="engine">
+                <div data-testid={testId('kpi-compute-row', profile)} data-row="engine">
                     <dt class={HINT}>{text('compute.engine', 'Engine')}</dt>
                     <dd class="text-lf-primary">{engines}</dd>
                 </div>

@@ -14,6 +14,10 @@
     import {LEDGER_FIELDS, LEDGER_PAC_ZERO_FIELDS, ledgerColumns, ledgerFields, type LedgerField, type ResultNames} from './model';
     import {withHelpCues} from '../shared/columnHelp';
     import TableColumns from '../shared/TableColumns.svelte';
+    import {getPlannerProfile, storageKey, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         rows: readonly PacLedgerRow[];
@@ -76,7 +80,7 @@
                 filterable: false,
                 pinned: 'left',
                 minWidth: 180,
-                cell: (row) => cell({type: 'broker', brokerId: row.broker_id, label: names.broker(row.broker_id), broker: draft.broker(row.broker_id) ?? null, currency: row.currency, testid: 'pac-planner-ledger-row'}),
+                cell: (row) => cell({type: 'broker', brokerId: row.broker_id, label: names.broker(row.broker_id), broker: draft.broker(row.broker_id) ?? null, currency: row.currency, testid: testId('ledger-row', profile)}),
             },
             ...LEDGER_FIELDS.map(
                 (field): ColumnDef<PacLedgerRow> => ({
@@ -90,21 +94,25 @@
                     align: 'right',
                     minWidth: 150,
                     cell: (row) =>
-                        cell(field === 'rounding_delta' ? {type: 'exactMoney', money: {value: row.rounding_delta, currency: row.currency}, digits, testid: `pac-planner-ledger-${field}`} : {type: 'money', amount: row[field], currency: row.currency, digits, testid: `pac-planner-ledger-${field}`}),
+                        cell(
+                            field === 'rounding_delta'
+                                ? {type: 'exactMoney', money: {value: row.rounding_delta, currency: row.currency}, digits, testid: testId(`ledger-${field}`, profile)}
+                                : {type: 'money', amount: row[field], currency: row.currency, digits, testid: testId(`ledger-${field}`, profile)},
+                        ),
                 }),
             ),
         ]),
     );
 </script>
 
-<div class="space-y-3" data-testid="pac-planner-ledger">
-    <TableColumns {table} testid="pac-planner-ledger-columns" />
+<div class="space-y-3" data-testid={testId('ledger', profile)}>
+    <TableColumns {table} testid={testId('ledger-columns', profile)} />
     <DataTable
         bind:this={table}
         {data}
         {columns}
         getRowId={(row) => `${row.broker_id}|${row.currency}`}
-        storageKey="pac-planner-result-ledger"
+        storageKey={storageKey('result-ledger', profile)}
         enableSorting={false}
         enableSelection={false}
         selectionMode="none"
@@ -119,12 +127,12 @@
     {#if hidden > 0}
         <p class="{HINT} flex flex-wrap items-center gap-2">
             {#if !showAll}<span>{$t(`${KEY}.zeroHint`, {default: 'Hidden: the columns at 0 in this plan, and the physical balance when it equals what is left available.'})}</span>{/if}
-            <button type="button" class={BUTTON_LINK} aria-expanded={showAll} data-testid="pac-planner-ledger-zero-toggle" onclick={() => (showAll = !showAll)}>
+            <button type="button" class={BUTTON_LINK} aria-expanded={showAll} data-testid={testId('ledger-zero-toggle', profile)} onclick={() => (showAll = !showAll)}>
                 {showAll ? $t(`${KEY}.hideZero`, {default: 'Show fewer columns'}) : $t(`${KEY}.showZero`, {default: 'Show {count, plural, one {# more column} other {# more columns}}', values: {count: hidden}})}
             </button>
         </p>
     {/if}
-    <p class="text-sm" data-testid="pac-planner-ledger-free-cash">
+    <p class="text-sm" data-testid={testId('ledger-free-cash', profile)}>
         {$t(`${KEY}.freeCash`, {default: 'Cash left free at the end of the plan, in total: {amount}', values: {amount: formatExactMoneyPlain(accounting.free_cash, {digits})}})}
     </p>
 </div>
