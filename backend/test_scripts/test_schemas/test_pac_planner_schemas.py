@@ -4549,8 +4549,8 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # union, so the fingerprint the catalog publishes covers both. It moves for both services here, the PAC's included (accepted:
 # 1.4 still serves one contract 2.0.0). The two fingerprints above stay the ``plan`` contract alone (its own result union).
 TOOL_SCHEMA_FINGERPRINT_CASES = (
-    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "b6947412548a914cac33e3f65c513e4234f4862cd283dfc6a606f8365eed11e3", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "5f4b27e3640eeb25804be4962275023987c5d042e583f46585e8fce6fbde8ff7", id="rebalancer"),
+    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "26b9e8d33466cfd12cb9b639e5a84cfc1772aa39d6d232ee8fc24b819358363d", id="pac"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "1c9479d164cefc631565706b48a6b613120e6b25d922c66cec6012414677b596", id="rebalancer"),
 )
 
 

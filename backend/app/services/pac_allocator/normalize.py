@@ -88,9 +88,15 @@ _FX_STORED_RATE_HALF_UNIT = ExactRatio(1, 2 * 10**10)
 
 @dataclass(frozen=True, slots=True)
 class PlannerV2NormalizationResult:
+    """The normalizer's answer. ``limit_problems`` are the three cross checks of the limits (M1, T12) that made it
+    ``invalid`` (they are in ``issues`` too), and ``counted`` the scenario they were found on: the preview counts on it
+    (B4, consultant's Q2), the plan never reads it."""
+
     availability: PlannerAvailability
     issues: tuple[PlannerIssue, ...]
     normalized: ExactPlannerScenario | None
+    limit_problems: tuple[PlannerIssue, ...] = ()
+    counted: ExactPlannerScenario | None = None
 
     @property
     def ready(self) -> bool:
@@ -1180,8 +1186,13 @@ class _PlannerV2Normalizer:
             if limit_issues:
                 self.issues.extend(limit_issues)
                 issues = canonicalize_issues(self.issues)
-                availability = normalization_availability(issues)
-                normalized = None
+                return PlannerV2NormalizationResult(
+                    availability=normalization_availability(issues),
+                    issues=issues,
+                    normalized=None,
+                    limit_problems=canonicalize_issues(limit_issues),
+                    counted=normalized,
+                )
         return PlannerV2NormalizationResult(availability=availability, issues=issues, normalized=normalized)
 
     def check_limits(self, scenario: ExactPlannerScenario) -> list[PlannerIssue]:

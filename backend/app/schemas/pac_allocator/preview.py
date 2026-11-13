@@ -3,7 +3,8 @@
 The numbers the screen shows **before** a plan is computed, from the backend (N1): the total of the plan; for the Rebalancer
 today's value and weight of every target entry and the table «maximum acceptable cost» with the λ of the three levels and,
 for the «custom» fidelity, λ and its euros side by side. No optimizer runs. A preview that cannot count (a missing price or
-rate, no holdings, a portfolio worth nothing) answers ``needs_input`` or ``invalid`` with the codes of ``plan``.
+rate, no holdings, a portfolio worth nothing) answers ``needs_input`` or ``invalid`` with the codes of ``plan``. Limits that
+contradict each other or the portfolio do not stop it: it stays ready and names them in ``limit_problems``.
 
 Its result states are ``preview_*``, so that one discriminated union per service carries both operations' results.
 """
@@ -141,6 +142,10 @@ class PlannerPreviewUnsupportedResult(_PreviewFailureBase):
     availability: Literal["unsupported"]
 
 
+# The limits' cross checks (M1, T12) that keep a plan from being computed but not a preview from counting (B4, Q2).
+LIMIT_PROBLEM_CODES = frozenset({"allocation.bound_min_above_max", "allocation.bounds_min_sum_exceeds_reference", "allocation.bound_max_below_current"})
+
+
 class _PreviewReadyBase(AllocationStrictModel):
     operation: Literal["preview"]
     result_state: Literal["preview_ready"]
@@ -149,11 +154,14 @@ class _PreviewReadyBase(AllocationStrictModel):
     valuation_currency: CurrencyCode
     total: ExactMoney = Field(description="The total of the plan in the valuation currency: F in the Rebalancer, the cash the PAC invests.")
     issues: list[PlannerIssue]
+    limit_problems: list[PlannerIssue] = Field(description=("The cross checks of the limits the plan would refuse (a minimum above its maximum, minimums over the total, " "a maximum below today's value), each naming its entry: the preview still counts, the plan answers invalid."))
 
     @model_validator(mode="after")
     def validate_total(self) -> _PreviewReadyBase:
         if any(issue.severity == "error" for issue in self.issues):
             raise ValueError("Ready results cannot contain error-severity issues")
+        if any(problem.code not in LIMIT_PROBLEM_CODES for problem in self.limit_problems):
+            raise ValueError("limit_problems carries only the three cross checks of the limits")
         if self.total.currency != self.valuation_currency or money_fraction(self.total) < 0:
             raise ValueError("The total is a nonnegative amount in the valuation currency")
         return self

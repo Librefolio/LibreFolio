@@ -11,7 +11,11 @@ exact arithmetic, and return the numbers the screen shows before the calculation
 The numbers come from the replay of the do-nothing plan (``evaluation.evaluator.evaluate_do_nothing``), the same exact
 reading the planner publishes in a scenario basis. **No optimizer**: this module never imports the compiler, the solver or
 SCIP, so it answers in milliseconds and stays importable where SCIP is not. A request that cannot be counted answers like
-``plan`` does, with the normalizer's issues.
+``plan`` does, with the normalizer's issues. Limits that contradict each other or the portfolio (the normalizer's three
+cross checks) do not stop it: they make the plan ``invalid``, while the preview counts and names them in ``limit_problems``.
+
+The «custom» λ computed from euros is rounded to six significant digits (``lambda_from_reference_amount``), and its euros
+and column come from that rounded λ: the page sends it back to ``plan`` as it is.
 """
 
 from __future__ import annotations
@@ -40,7 +44,7 @@ from backend.app.services.pac_allocator.evaluation.economics import initial_cash
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
 from backend.app.services.pac_allocator.models import FIDELITY_LEVEL_WEIGHTS, Checkpoint, ExactEvaluation, ExactPlannerScenario, check_budget
-from backend.app.services.pac_allocator.normalize import normalize_pac_plan, normalize_rebalancer_plan
+from backend.app.services.pac_allocator.normalize import PlannerV2NormalizationResult, normalize_pac_plan, normalize_rebalancer_plan
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.wire_numbers import ratio_to_exact_number, ratio_to_money
 
@@ -53,11 +57,11 @@ def preview_pac_allocation(request: PacPlannerRequest, *, checkpoint: Checkpoint
     """The PAC's preview: the cash the plan invests, or the issues that keep it from being counted."""
     check_budget(checkpoint)
     normalized = normalize_pac_plan(request)
-    if not normalized.ready or normalized.normalized is None:
+    scenario = _counted(normalized)
+    if scenario is None:
         return _failure(normalized.availability, request.snapshot.snapshot_id, list(normalized.issues))
-    scenario = normalized.normalized
     accounting = _do_nothing(scenario, checkpoint).accounting
-    return PacPreviewReadyResult(**_ready_fields(scenario, list(normalized.issues)), total=ratio_to_money(accounting.fixed_reference, scenario.valuation_currency))
+    return PacPreviewReadyResult(**_ready_fields(scenario, normalized), total=ratio_to_money(accounting.fixed_reference, scenario.valuation_currency))
 
 
 def preview_rebalancing(request: RebalancerPlannerRequest, *, checkpoint: Checkpoint | None = None):
@@ -65,9 +69,9 @@ def preview_rebalancing(request: RebalancerPlannerRequest, *, checkpoint: Checkp
     fidelity both ways (the euros typed win over a custom λ in the request); or the issues that keep it from being counted."""
     check_budget(checkpoint)
     normalized = normalize_rebalancer_plan(request)
-    if not normalized.ready or normalized.normalized is None:
+    scenario = _counted(normalized)
+    if scenario is None:
         return _failure(normalized.availability, request.snapshot.snapshot_id, list(normalized.issues))
-    scenario = normalized.normalized
     evaluation = _do_nothing(scenario, checkpoint)
     wealth = evaluation.accounting.initial_wealth
     currency = scenario.valuation_currency
@@ -88,7 +92,15 @@ def preview_rebalancing(request: RebalancerPlannerRequest, *, checkpoint: Checkp
     custom = None
     if custom_weight is not None:
         custom = CustomFidelityPreview(distance_weight=ratio_to_exact_number(custom_weight), reference_amount=_cost(custom_weight, rows[REFERENCE_ROW_INDEX], wealth, currency))
-    return RebalancerPreviewReadyResult(**_ready_fields(scenario, list(normalized.issues)), total=ratio_to_money(wealth, currency), items=_items(scenario, evaluation), table=table, custom=custom)
+    return RebalancerPreviewReadyResult(**_ready_fields(scenario, normalized), total=ratio_to_money(wealth, currency), items=_items(scenario, evaluation), table=table, custom=custom)
+
+
+def _counted(normalized: PlannerV2NormalizationResult) -> ExactPlannerScenario | None:
+    """The scenario the preview counts on: the normalized one, or the one the limits' cross checks were found on (Q2: the
+    plan refuses it, the preview counts and names them); none when the request cannot be counted."""
+    if normalized.ready and normalized.normalized is not None:
+        return normalized.normalized
+    return normalized.counted
 
 
 def _do_nothing(scenario: ExactPlannerScenario, checkpoint: Checkpoint | None) -> ExactEvaluation:
@@ -124,14 +136,17 @@ def _items(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list:
     return items
 
 
-def _ready_fields(scenario: ExactPlannerScenario, issues: list[PlannerIssue]) -> dict:
+def _ready_fields(scenario: ExactPlannerScenario, normalized: PlannerV2NormalizationResult) -> dict:
+    """The fields of every ready preview; the limits' cross checks move from ``issues`` to ``limit_problems``."""
+    limit_problems = list(normalized.limit_problems)
     return {
         "operation": "preview",
         "result_state": "preview_ready",
         "availability": "ready",
         "snapshot": PlannerResultSnapshot(snapshot_id=scenario.snapshot.snapshot_id, request_fingerprint=exact_scenario_fingerprint(scenario)),
         "valuation_currency": scenario.valuation_currency,
-        "issues": issues,
+        "issues": [issue for issue in normalized.issues if issue not in limit_problems],
+        "limit_problems": limit_problems,
     }
 
 

@@ -18,9 +18,11 @@ from fractions import Fraction
 import pytest
 
 from backend.app.services.financial_math.acceptable_cost import (
+    LAMBDA_SIGNIFICANT_DIGITS,
     acceptable_cost_rows,
     lambda_from_reference_amount,
     max_acceptable_cost,
+    significant_digits,
     two_significant_digits,
 )
 from backend.app.services.pac_allocator.numeric import ExactRatio as R
@@ -74,3 +76,37 @@ def test_max_acceptable_cost_and_lambda_from_euros() -> None:
     assert lambda_from_reference_amount(Decimal("60"), Decimal("20000"), Decimal("1000")) == Decimal("0.6")
     lam = lambda_from_reference_amount(R(60), R(20_000), R(1_000))
     assert lam == R(3, 5) and max_acceptable_cost(lam, R(1_000), R(20_000)) == R(60)
+
+
+@pytest.mark.parametrize(
+    ("value", "digits", "rounded"),
+    [
+        (Fraction(40371, 44890), 6, Fraction(899332, 1_000_000)),
+        (Fraction(1234565, 10), 6, Fraction(123457)),
+        (Fraction(999_9995, 10_000_000), 6, Fraction(1)),
+        (Fraction(1, 100_000), 6, Fraction(1, 100_000)),
+        (Fraction(1, 3), 1, Fraction(3, 10)),
+    ],
+)
+def test_significant_digits(value: Fraction, digits: int, rounded: Fraction) -> None:
+    """Half up to ``digits`` significant digits, in the caller's number type."""
+    assert significant_digits(value, digits) == rounded
+    assert significant_digits(R(value.numerator, value.denominator), digits) == R(rounded.numerator, rounded.denominator)
+
+
+def test_significant_digits_refuses_a_negative_value_or_no_digit() -> None:
+    with pytest.raises(ValueError):
+        significant_digits(Fraction(-1), 6)
+    with pytest.raises(ValueError):
+        significant_digits(Fraction(1), 0)
+
+
+def test_lambda_from_euros_has_six_significant_digits() -> None:
+    """Consultant's Q1 on B4: 60 € on F = 13 457 € (reference row 670) is 60·13 457/(2·670²), with 67² in its
+    denominator; the λ comes back to six significant digits, a decimal, and its euros on the reference row are still
+    60 € to the cent. A tiny amount never gives λ = 0: 0.01 € on 200 000 € (row 10 000) is 1e-5."""
+    assert LAMBDA_SIGNIFICANT_DIGITS == 6
+    lam = lambda_from_reference_amount(Fraction(60), Fraction(13_457), Fraction(670))
+    assert lam == Fraction(899332, 1_000_000)
+    assert abs(max_acceptable_cost(lam, Fraction(670), Fraction(13_457)) - 60) < Fraction(1, 200)
+    assert lambda_from_reference_amount(Decimal("0.01"), Decimal("200000"), Decimal("10000")) == Decimal("0.00001")

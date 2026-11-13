@@ -4,7 +4,9 @@ A plan scores ``J = λ·D/F + (F − W)``. Moving ``d`` misplaced euros back to 
 ``2·d²`` (``d`` from one item to another), so a plan accepts to spend up to ``2·λ·d²/F`` for it: that is the table the
 strategy step shows, one row per amount of misplaced money and one column per fidelity level. The rows are 1 %, 2.5 %, 5 %
 and 10 % of the plan's total, rounded to two significant digits; the reference row is the 5 % one, and the «custom»
-fidelity turns the euros typed on it into ``λ`` with the figure **shown** in that row, never the exact 5 %.
+fidelity turns the euros typed on it into ``λ`` with the figure **shown** in that row, never the exact 5 %. That ``λ`` is
+rounded to six significant digits (``LAMBDA_SIGNIFICANT_DIGITS``): it travels back to the plan as a decimal, and the euros
+and the column the page shows are computed from the rounded ``λ``, so what the table shows is what the plan runs on.
 
 Every function is generic on the number type, like ``fx_rates.oriented_rate``: the caller's ``Decimal``, ``Fraction`` or the
 PAC's ``ExactRatio`` comes back in kind. The frontend computes none of this (N1): it reads the preview.
@@ -14,11 +16,21 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-__all__ = ["REFERENCE_ROW_INDEX", "acceptable_cost_rows", "lambda_from_reference_amount", "max_acceptable_cost", "two_significant_digits"]
+__all__ = [
+    "LAMBDA_SIGNIFICANT_DIGITS",
+    "REFERENCE_ROW_INDEX",
+    "acceptable_cost_rows",
+    "lambda_from_reference_amount",
+    "max_acceptable_cost",
+    "significant_digits",
+    "two_significant_digits",
+]
 
 # The rows' shares of the plan's total: 1 %, 2.5 %, 5 %, 10 % (§7.3). The reference row is the 5 % one.
 _ROW_SHARES = (Fraction(1, 100), Fraction(1, 40), Fraction(1, 20), Fraction(1, 10))
 REFERENCE_ROW_INDEX = 2
+# The significant digits of a «custom» λ computed from euros (B4, consultant's Q1): a ppm at most on every cell.
+LAMBDA_SIGNIFICANT_DIGITS = 6
 
 
 def _as_fraction(value) -> Fraction:
@@ -32,22 +44,30 @@ def _like[N](value: N, fraction: Fraction) -> N:
     return kind(fraction.numerator) / kind(fraction.denominator)
 
 
-def two_significant_digits[N](value: N) -> N:
-    """``value`` rounded to two significant digits, half up (134.57 → 130, 335 → 340, 995 → 1 000); zero stays zero. A
-    negative value is refused: the table's rows are amounts of misplaced money."""
+def significant_digits[N](value: N, digits: int) -> N:
+    """``value`` rounded to ``digits`` significant digits, half up (two digits: 134.57 → 130, 335 → 340, 995 → 1 000); zero
+    stays zero. A negative value is refused: the table's rows and λ are positive quantities."""
     exact = _as_fraction(value)
     if exact < 0:
-        raise ValueError("two significant digits of a negative amount")
+        raise ValueError("significant digits of a negative value")
+    if digits < 1:
+        raise ValueError("at least one significant digit")
     if exact == 0:
         return value
+    top, bottom = Fraction(10**digits), Fraction(10 ** (digits - 1))
     scale = Fraction(1)
-    while exact / scale >= 100:
+    while exact / scale >= top:
         scale *= 10
-    while exact / scale < 10:
+    while exact / scale < bottom:
         scale /= 10
     mantissa = exact / scale
     rounded = int(mantissa) + (1 if mantissa - int(mantissa) >= Fraction(1, 2) else 0)
     return _like(value, rounded * scale)
+
+
+def two_significant_digits[N](value: N) -> N:
+    """``value`` rounded to two significant digits, half up: the table's rows."""
+    return significant_digits(value, 2)
 
 
 def acceptable_cost_rows[N](total: N) -> tuple[N, ...]:
@@ -62,6 +82,7 @@ def max_acceptable_cost[N](distance_weight: N, misplaced: N, total: N) -> N:
 
 
 def lambda_from_reference_amount[N](amount: N, total: N, reference: N) -> N:
-    """``x·F / (2·d_ref²)``: the ``λ`` that accepts to spend ``amount`` to put the reference row's ``reference`` euros back;
-    ``reference`` is the figure shown in the row."""
-    return amount * total / (2 * reference * reference)
+    """``x·F / (2·d_ref²)`` to ``LAMBDA_SIGNIFICANT_DIGITS``: the ``λ`` that accepts to spend ``amount`` to put the reference
+    row's ``reference`` euros back; ``reference`` is the figure shown in the row. Rounded, so that it has a decimal form the
+    plan reads back; the caller derives the euros it shows from this ``λ``, never from ``amount``."""
+    return significant_digits(amount * total / (2 * reference * reference), LAMBDA_SIGNIFICANT_DIGITS)

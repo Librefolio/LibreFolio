@@ -19,6 +19,7 @@ import pytest
 
 from backend.app.schemas.pac_allocator.exact import exact_fraction
 from backend.app.schemas.pac_allocator.preview import PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER
+from backend.app.services.pac_allocator.planner import plan_rebalancing
 from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _pac_request
 from backend.test_scripts.test_services import _reb_small_requests as reb
@@ -78,11 +79,11 @@ def test_preview_custom_from_lambda_gives_the_euros() -> None:
 
 def test_preview_rows_follow_the_scenario_total() -> None:
     """B4 test 6: on 13 457 EUR the rows are 130, 340, 670, 1 300, and λ is computed with 670, the figure shown, never the
-    exact 5 % (672.85)."""
+    exact 5 % (672.85): 60·13 457/(2·670²), to six significant digits (Q1)."""
     payload = reb.request("f-13457", holdings={"asset-a": "7000", "asset-b": "6000"}, cash="457", weights={"asset-a": "0.5", "asset-b": "0.5"})
     result = _rebalancer_preview(payload, custom_reference_amount={"amount": "60", "currency": "EUR"})
     assert [row[0] for row in _table(result)] == [130, 340, 670, 1_300]
-    assert exact_fraction(result.custom.distance_weight) == Fraction(60 * 13_457, 2 * 670 * 670)
+    assert exact_fraction(result.custom.distance_weight) == Fraction(899_332, 1_000_000)
 
 
 def test_preview_current_values_and_weights_per_item() -> None:
@@ -199,3 +200,104 @@ def test_preview_result_fits_its_byte_cap_on_a_large_request() -> None:
     assert result.result_state == "preview_ready", [issue.code for issue in result.issues]
     size = len(REBALANCER_TOOL_OUTPUT_ADAPTER.dump_json(result))
     assert size < len(json.dumps({**payload, "operation": "preview"})), size
+
+
+# --------------------------------------------------------------------------
+# The consultant's answer to the B4 checkpoint: Q1 (the custom λ rounded in the backend) and Q2 (limit problems)
+# --------------------------------------------------------------------------
+
+
+def _cents(value: Fraction) -> Fraction:
+    """``value`` to the cent, half up: how the screen shows an amount."""
+    return Fraction(int(value * 100 + Fraction(1, 2)), 100)
+
+
+def test_custom_lambda_round_trip_is_stable() -> None:
+    """Q1: on 13 457 EUR, 60 EUR give λ rounded to 6 significant digits, with the euros and the column derived from that λ;
+    sending that λ back gives the same λ and again 60.00 EUR on the reference row."""
+    payload = reb.request("f-13457", holdings={"asset-a": "7000", "asset-b": "6000"}, cash="457", weights={"asset-a": "0.5", "asset-b": "0.5"})
+    first = _rebalancer_preview(payload, custom_reference_amount={"amount": "60", "currency": "EUR"})
+    lam = exact_fraction(first.custom.distance_weight)
+    assert lam != Fraction(60 * 13_457, 2 * 670 * 670)
+    assert len(str(lam.numerator).strip("0")) <= 6 and all(prime in (2, 5) for prime in _prime_factors(lam.denominator))
+    assert _cents(_money(first.custom.reference_amount)) == 60
+    sent = _decimal_text(lam)
+    second = _rebalancer_preview({**payload, "target_fidelity": {"kind": "custom", "lambda": sent}})
+    assert exact_fraction(second.custom.distance_weight) == lam
+    assert _cents(_money(second.custom.reference_amount)) == 60
+    assert [_money(row.custom) for row in second.table.rows] == [_money(row.custom) for row in first.table.rows]
+
+
+def _prime_factors(n: int) -> set[int]:
+    found, factor = set(), 2
+    while factor * factor <= n:
+        while n % factor == 0:
+            found.add(factor)
+            n //= factor
+        factor += 1
+    return found | ({n} if n > 1 else set())
+
+
+def _decimal_text(value: Fraction) -> str:
+    """A terminating fraction as plain decimal text."""
+    scale = 0
+    while (value * 10**scale).denominator != 1:
+        scale += 1
+    digits = str(int(value * 10**scale)).rjust(scale + 1, "0")
+    return digits if scale == 0 else f"{digits[:-scale]}.{digits[-scale:]}"
+
+
+def test_a_tiny_custom_amount_never_gives_a_zero_lambda() -> None:
+    """Q1: 0.01 EUR on F = 200 000 EUR (reference row 10 000) gives λ = 1/100 000, still positive at 6 significant digits."""
+    payload = reb.request("f-200000", holdings={"asset-a": "100000", "asset-b": "90000"}, cash="10000", weights={"asset-a": "0.5", "asset-b": "0.5"})
+    result = _rebalancer_preview(payload, custom_reference_amount={"amount": "0.01", "currency": "EUR"})
+    assert exact_fraction(result.custom.distance_weight) == Fraction(1, 100_000)
+
+
+def _with_limits(payload: dict, *, minimum: str | None = None, maximum: str | None = None) -> dict:
+    entry = next(entry for entry in payload["target_weights"] if entry.get("asset_id") == "asset-a")
+    if minimum is not None:
+        entry["minimum"] = {"kind": "amount", "amount": {"amount": minimum, "currency": "EUR"}}
+    if maximum is not None:
+        entry["maximum"] = {"kind": "amount", "amount": {"amount": maximum, "currency": "EUR"}}
+    return payload
+
+
+LIMIT_PROBLEM_CASES = (
+    pytest.param({"minimum": "6000", "maximum": "5500"}, "allocation.bound_min_above_max", id="min-above-max"),
+    pytest.param({"minimum": "20000"}, "allocation.bounds_min_sum_exceeds_reference", id="min-over-the-total"),
+    pytest.param({"maximum": "4000"}, "allocation.bound_max_below_current", id="max-below-current"),
+)
+
+
+@pytest.mark.parametrize(("limits", "code"), LIMIT_PROBLEM_CASES)
+def test_preview_keeps_its_numbers_with_limit_problems(limits: dict, code: str) -> None:
+    """Q2: the three cross checks of the limits keep the preview ready, with the total and today's items, and name the
+    problem in ``limit_problems`` (same code, same entry); the plan still answers ``invalid``."""
+    result = _rebalancer_preview(_with_limits(reb.t4(), **limits))
+    assert result.result_state == "preview_ready"
+    assert _money(result.total) == 10_000 and result.items
+    assert {(problem.code, problem.path.entity_id) for problem in result.limit_problems} >= {(code, "asset-a")}
+    assert not [issue for issue in result.issues if issue.severity == "error"]
+
+    plan = plan_rebalancing(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(_with_limits(reb.t4(), **limits)))
+    assert plan.result_state == "invalid" and code in {issue.code for issue in plan.issues}
+
+
+def test_a_limit_of_the_wrong_shape_still_makes_the_preview_invalid() -> None:
+    """Q2: a single limit of the wrong shape (here a share over 100 %) stays ``preview_invalid``."""
+    payload = reb.t4()
+    payload["target_weights"][0]["maximum"] = {"kind": "share", "share": "1.5"}
+    result = _rebalancer_preview(payload)
+    assert result.result_state == "preview_invalid"
+    assert "allocation.target_weight_out_of_range" in {issue.code for issue in result.issues}
+
+
+def test_pac_preview_keeps_its_total_with_a_limit_problem() -> None:
+    """Q2 for the PAC: a minimum over the cash it invests keeps the total and names the problem."""
+    payload = {**_pac_request(), "operation": "preview"}
+    payload["target_weights"][0]["minimum"] = {"kind": "amount", "amount": {"amount": "50", "currency": "EUR"}}
+    result = preview_pac_allocation(PAC_TOOL_INPUT_ADAPTER.validate_python(payload))
+    assert PAC_TOOL_OUTPUT_ADAPTER.validate_python(result.model_dump(mode="python")) == result
+    assert result.result_state == "preview_ready" and _money(result.total) == 5
+    assert "allocation.bounds_min_sum_exceeds_reference" in {problem.code for problem in result.limit_problems}
