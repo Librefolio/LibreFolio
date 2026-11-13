@@ -155,4 +155,26 @@ describe('BrokerOperatingProfileBox', () => {
         ]);
         expect(within(block('USD')).getByTestId('broker-profile-mode-required')).toBeVisible();
     });
+    it('a caller can rename the root and reset the increment when the order type changes (the planner, P3)', async () => {
+        const stepFor = (kind: string, currency: string) => (kind === 'whole_quantity' ? '1' : currency === 'EUR' ? '0.01' : '1');
+        const onchange = mount(toDraft(DOCUMENT), {rootTestid: 'probe-root', stepFor});
+        expect(screen.getByTestId('probe-root')).toBeVisible();
+        expect(screen.queryByTestId('broker-profile')).toBeNull();
+        expect(block('EUR').getAttribute('data-kind')).toBe('whole_quantity');
+
+        await fireEvent.click(within(block('EUR')).getByTestId('broker-profile-mode-kind-button'));
+        await fireEvent.click(await screen.findByTestId('broker-profile-mode-kind-option-monetary_amount'));
+        flushSync();
+
+        expect(last(onchange).rules[0]).toMatchObject({orderKind: 'monetary_amount', step: '0.01'});
+        expect(block('EUR').getAttribute('data-kind')).toBe('monetary_amount');
+        expect((within(block('EUR')).getByTestId('broker-profile-mode-step') as HTMLInputElement).value).toBe('0.01');
+    });
+
+    it('without stepFor the increment stays as typed («Edit broker»)', async () => {
+        const onchange = mount(toDraft(DOCUMENT));
+        await fireEvent.click(within(block('EUR')).getByTestId('broker-profile-mode-kind-button'));
+        await fireEvent.click(await screen.findByTestId('broker-profile-mode-kind-option-monetary_amount'));
+        expect(last(onchange).rules[0]).toMatchObject({orderKind: 'monetary_amount', step: '1'});
+    });
 });

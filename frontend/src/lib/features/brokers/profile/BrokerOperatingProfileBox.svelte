@@ -8,7 +8,8 @@
   conversion and the tax regime as big choice cards (M6), «Declarative» badged as the default (M18).
 
   `groups` chooses what is shown (every group when absent: «Edit broker»); a hidden group is kept in the draft and handed
-  back untouched (P2, fact 8). `requiredCurrencies` (the planner's) adds an empty block for each currency the plan
+  back untouched (P2, fact 8). `stepFor` lets the caller reset the increment when the order type changes, `rootTestid`
+  rename the root when its page already uses the prefix as an id (both P3, the planner). `requiredCurrencies` (the planner's) adds an empty block for each currency the plan
   trades in and the profile lacks. Project controls only (M5): `CurrencySearchSelect`, `SimpleSelect`, `ExactDecimalInput`;
   an empty field is as tall as a filled one (M8). It imports nothing from `features/tools/` (D17).
 -->
@@ -28,11 +29,18 @@
         groups?: readonly ProfileGroup[];
         requiredCurrencies?: readonly string[];
         testIdPrefix?: string;
+        /** The root's test id, `testIdPrefix` unless the caller's page already uses that id (P3: the planner's root). */
+        rootTestid?: string;
+        /**
+         * The increment a rule takes when its order type, or the currency of a rule by amount, changes (P3: the planner's
+         * rule, the currency's smallest unit by amount). Absent: the increment stays as typed.
+         */
+        stepFor?: (kind: OrderKind, currency: string) => string;
         disabled?: boolean;
         onchange: (draft: ProfileDraft) => void;
     }
 
-    let {draft, groups = PROFILE_GROUPS, requiredCurrencies = [], testIdPrefix = 'broker-profile', disabled = false, onchange}: Props = $props();
+    let {draft, groups = PROFILE_GROUPS, requiredCurrencies = [], testIdPrefix = 'broker-profile', rootTestid, stepFor, disabled = false, onchange}: Props = $props();
 
     const P = 'brokers.operatingProfile';
 
@@ -145,14 +153,14 @@
     </div>
 {/snippet}
 
-<div class="space-y-4 text-lf-primary" data-testid={testIdPrefix}>
+<div class="space-y-4 text-lf-primary" data-testid={rootTestid ?? testIdPrefix}>
     <section class="space-y-3" data-testid={id('group')} data-group="orderMode">
         {#if working.rules.length === 0}
             <p class="text-sm text-lf-muted" data-testid={id('mode-empty')}>{$_(`${P}.empty`)}</p>
         {/if}
         {#each working.rules as rule (rule.key)}
             {@const required = requiredCurrencies.includes(rule.currency)}
-            <div class="space-y-3 rounded-lg border border-lf-subtle bg-lf-card p-3" data-testid={id('mode')} data-currency={rule.currency} data-rule-key={rule.key} data-required={required ? 'true' : 'false'}>
+            <div class="space-y-3 rounded-lg border border-lf-subtle bg-lf-card p-3" data-testid={id('mode')} data-currency={rule.currency} data-kind={rule.orderKind} data-rule-key={rule.key} data-required={required ? 'true' : 'false'}>
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div class="w-44 space-y-1">
                         <span class="block text-xs font-medium text-lf-secondary">{$_(`${P}.currency`)}</span>
@@ -164,6 +172,7 @@
                             testId={id('mode-currency')}
                             onchange={(value) => {
                                 rule.currency = value;
+                                if (stepFor && rule.orderKind === 'monetary_amount') rule.step = stepFor(rule.orderKind, value);
                                 changed();
                             }}
                         />
@@ -199,7 +208,9 @@
                             ariaLabel={$_(`${P}.orderKind`)}
                             optionTestId={(option) => id(`mode-kind-option-${option.value}`)}
                             onchange={(value) => {
+                                if (value === rule.orderKind) return;
                                 rule.orderKind = value as OrderKind;
+                                if (stepFor) rule.step = stepFor(rule.orderKind, rule.currency);
                                 changed();
                             }}
                         />
