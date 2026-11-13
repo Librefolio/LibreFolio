@@ -17,6 +17,10 @@
     import {HINT} from '../ui';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import LinkedStackedBar from '$lib/components/ui/display/LinkedStackedBar.svelte';
+    import {getPlannerProfile, domId, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         metrics: ToolItemMetrics;
@@ -86,10 +90,10 @@
     });
 
     const TEST_IDS = {
-        bar: 'pac-planner-timing-bar',
-        segment: () => 'pac-planner-timing-segment',
-        legend: 'pac-planner-timing-legend',
-        item: () => 'pac-planner-timing-item',
+        bar: testId('timing-bar', profile),
+        segment: () => testId('timing-segment', profile),
+        legend: testId('timing-legend', profile),
+        item: () => testId('timing-item', profile),
     };
 
     /** The shared bar's segments: the share of the bar and the fill, with the phase's own fields kept. */
@@ -101,8 +105,8 @@
 </script>
 
 {#if total !== null && segments.length > 0}
-    <section class="min-w-0 rounded-xl border border-lf-subtle bg-lf-card p-4 text-lf-primary" aria-labelledby="pac-planner-timing-title" data-testid="pac-planner-timing">
-        <h4 id="pac-planner-timing-title" class="flex items-center gap-2 text-sm font-semibold">
+    <section class="min-w-0 rounded-xl border border-lf-subtle bg-lf-card p-4 text-lf-primary" aria-labelledby={domId('timing-title', profile)} data-testid={testId('timing', profile)}>
+        <h4 id={domId('timing-title', profile)} class="flex items-center gap-2 text-sm font-semibold">
             <ChartBarStacked size={16} aria-hidden="true" class="shrink-0" />
             {$t(`${KEY}.title`, {default: 'Where the time went'})}
         </h4>
@@ -127,7 +131,7 @@
             {#snippet row(segment)}
                 <span class="flex min-w-0 flex-1 items-center gap-1 text-lf-secondary">
                     <span class="min-w-0 break-words">{segment.label}</span>
-                    {#if segment.help}<HelpTip label={segment.label} help={segment.help} testid="pac-planner-timing-help" />{/if}
+                    {#if segment.help}<HelpTip label={segment.label} help={segment.help} testid={testId('timing-help', profile)} />{/if}
                 </span>
                 <span class="shrink-0 tabular-nums text-lf-primary">{duration(segment.ms)} · {formats.share.format(segment.share)}</span>
             {/snippet}
