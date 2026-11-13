@@ -16,14 +16,14 @@
  * and a text that differs is chosen in its own file between two whole literal keys, on `profile.text` (§3 n. 2(a)).
  */
 import {getContext, setContext} from 'svelte';
-import {PLANNER_STEPS, type PlannerStep} from './types';
+import {PLANNER_CONTRACT_VERSION, PLANNER_TOOL_CODE} from './defaults';
+import {PLANNER_STEPS, type PlannerContractVersion, type PlannerStep, type PlannerToolCode} from './types';
 
-/** The Tools that share the planner. */
-export type PlannerToolCode = 'pac_allocator' | 'portfolio_rebalancer';
+export type {PlannerToolCode} from './types';
 
 export interface PlannerProfile {
     readonly toolCode: PlannerToolCode;
-    readonly contractVersion: '2.0.0';
+    readonly contractVersion: PlannerContractVersion;
     /** The head of every test id, table `storageKey` and DOM id of the planner: `pac-planner` for the PAC. */
     readonly testIdPrefix: string;
     /** The head of a run's correlation id: `pac-rev` for the PAC (`pac-rev-<revision>-<sequence>`). */
@@ -37,8 +37,8 @@ export interface PlannerProfile {
 }
 
 export const PAC_PLANNER_PROFILE: PlannerProfile = Object.freeze({
-    toolCode: 'pac_allocator',
-    contractVersion: '2.0.0',
+    toolCode: PLANNER_TOOL_CODE,
+    contractVersion: PLANNER_CONTRACT_VERSION,
     testIdPrefix: 'pac-planner',
     correlationPrefix: 'pac-rev',
     events: Object.freeze({completed: 'tool.pac-plan.completed', failed: 'tool.pac-plan.failed'}),

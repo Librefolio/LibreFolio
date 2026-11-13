@@ -1,5 +1,6 @@
 /**
- * Wire types of the PAC planner 1.0.0, derived from the generated contract.
+ * Wire types of the planner 2.0.0, derived from the generated contract: generic roots on the Tool, and the PAC's
+ * names (`Pac…`) derived from them.
  *
  * Nothing here is hand-written against the backend: every type is an
  * extraction of `ToolInput`/`ToolOutput`, so a contract change surfaces as a
@@ -12,12 +13,24 @@
  *   default filled in. The result views read this one.
  */
 import type {z} from 'zod';
-import type {ToolContractMap, ToolInput, ToolOutput} from '$lib/features/tools/contracts';
+import type {ToolContractMap, ToolInput, ToolOutput, ToolVersion} from '$lib/features/tools/contracts';
 
-export type PacPlannerRequest = ToolInput<'pac_allocator', '2.0.0'>;
-export type PacResolvedRequest = z.output<ToolContractMap['pac_allocator']['2.0.0']['input']>;
-// The service answers two operations (B4 of project 67); the planner sends ``plan`` and its views read the plan's results.
-export type PacPlannerResult = Extract<ToolOutput<'pac_allocator', '2.0.0'>, {operation: 'plan'}>;
+/** The Tools that share the planner (F1 of project 67), and the contract version they answer. */
+export type PlannerToolCode = 'pac_allocator' | 'portfolio_rebalancer';
+export type PlannerContractVersion = '2.0.0';
+
+/** The planner's version of Tool `C`: `2.0.0`, written so that TypeScript can check it for a generic `C`. */
+type PlannerVersionOf<C extends PlannerToolCode> = PlannerContractVersion & ToolVersion<C>;
+
+/** The root types, generic on the Tool; the PAC when none is named. */
+export type PlannerToolRequest<C extends PlannerToolCode = 'pac_allocator'> = ToolInput<C, PlannerVersionOf<C>>;
+export type PlannerToolResolvedRequest<C extends PlannerToolCode = 'pac_allocator'> = z.output<ToolContractMap[C][PlannerContractVersion]['input']>;
+// The services answer two operations (B4 of project 67); the planner sends ``plan`` and its views read the plan's results.
+export type PlannerToolResult<C extends PlannerToolCode = 'pac_allocator'> = Extract<ToolOutput<C, PlannerVersionOf<C>>, {operation: 'plan'}>;
+
+export type PacPlannerRequest = PlannerToolRequest<'pac_allocator'>;
+export type PacResolvedRequest = PlannerToolResolvedRequest<'pac_allocator'>;
+export type PacPlannerResult = PlannerToolResult<'pac_allocator'>;
 export type PacResultState = PacPlannerResult['result_state'];
 
 export type PacFailureResult = Extract<PacPlannerResult, {result_state: 'needs_input' | 'invalid' | 'unsupported'}>;
