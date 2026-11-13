@@ -8,7 +8,7 @@
     import {presentIssues} from '../issues';
     import {listIssue} from '../labels';
     import type {RunOutcome} from '../run.svelte';
-    import type {PacOrderRow, PlannerStep} from '../types';
+    import type {PlannerOrderRow, PlannerStep} from '../types';
     import {BUTTON_LINK, CARD, SECTION_TITLE} from '../ui';
     import AssetTable from './AssetTable.svelte';
     import ExposureSection from './ExposureSection.svelte';
@@ -60,7 +60,7 @@
     const resultState = $derived(outcome.kind === 'result' ? outcome.result.result_state : outcome.kind);
 
     const open = new SvelteSet<string>();
-    let selectedOrder = $state<PacOrderRow | null>(null);
+    let selectedOrder = $state<PlannerOrderRow | null>(null);
 
     // A new result starts from the default sections; without a solution the proof is the only one, and it opens.
     $effect(() => {

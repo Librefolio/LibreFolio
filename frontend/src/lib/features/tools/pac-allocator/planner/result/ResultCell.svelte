@@ -1,7 +1,7 @@
 <script lang="ts" module>
     import type {DraftAsset, DraftBroker} from '../draft.svelte';
     import type {CurrencyDigits} from '../format';
-    import type {PacExactMoney, PacExactNumber, PacExactPrice, PacNumberAvailability, PacObjectiveUnit, PacOrderRow} from '../types';
+    import type {PlannerExactMoney, PlannerExactNumber, PlannerExactPrice, PlannerNumberAvailability, PlannerObjectiveUnit, PlannerOrderRow} from '../types';
 
     /**
      * R9.8: one cell of the result tables. The table picks the column, this component draws it,
@@ -11,14 +11,14 @@
         | {type: 'broker'; brokerId: string; label: string; broker: DraftBroker | null; currency?: string | null; testid?: string}
         | {type: 'contribution'; label: string; currency: string | null}
         | {type: 'asset'; assetId: string; label: string; asset: DraftAsset | null; sequence?: number; orderId?: string; testid?: string}
-        | {type: 'weight'; value: PacExactNumber | PacNumberAvailability}
-        | {type: 'bars'; target: PacExactNumber; final: PacNumberAvailability; scale: number}
+        | {type: 'weight'; value: PlannerExactNumber | PlannerNumberAvailability}
+        | {type: 'bars'; target: PlannerExactNumber; final: PlannerNumberAvailability; scale: number}
         | {type: 'money'; amount: string | null; currency: string; digits: CurrencyDigits; signed?: boolean; testid?: string}
-        | {type: 'exactMoney'; money: PacExactMoney; digits: CurrencyDigits; signed?: boolean; testid?: string}
-        | {type: 'price'; price: PacExactPrice; digits: CurrencyDigits}
-        | {type: 'instruction'; order: PacOrderRow; digits: CurrencyDigits; autoConversion?: boolean}
+        | {type: 'exactMoney'; money: PlannerExactMoney; digits: CurrencyDigits; signed?: boolean; testid?: string}
+        | {type: 'price'; price: PlannerExactPrice; digits: CurrencyDigits}
+        | {type: 'instruction'; order: PlannerOrderRow; digits: CurrencyDigits; autoConversion?: boolean}
         | {type: 'label'; text: string; sequence?: number; testid?: string; attrs?: Record<string, string>}
-        | {type: 'solver'; value: string | null; unit: PacObjectiveUnit; digits?: CurrencyDigits; testid?: string};
+        | {type: 'solver'; value: string | null; unit: PlannerObjectiveUnit; digits?: CurrencyDigits; testid?: string};
 </script>
 
 <script lang="ts">
