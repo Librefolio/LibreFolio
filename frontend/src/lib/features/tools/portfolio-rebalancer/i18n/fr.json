@@ -1,0 +1,21 @@
+{
+  "tools": {
+    "portfolioRebalancer": {
+      "progress": {
+        "validate": "Je contrôle les données",
+        "model": "Je construis le modèle",
+        "search": "Je cherche le plan",
+        "verify": "Je vérifie les comptes",
+        "report": "Je prépare le résultat"
+      },
+      "planner": {
+        "scenario": {
+          "intro": "Vous rééquilibrez un portefeuille que vous détenez déjà : le calcul part des positions et des liquidités que vous apportez au plan, les compte, et rapproche l’ensemble au plus près des poids cibles. C’est une simulation : aucun ordre n’est envoyé."
+        },
+        "leave": {
+          "title": "Quitter le rééquilibreur de portefeuille ?"
+        }
+      }
+    }
+  }
+}

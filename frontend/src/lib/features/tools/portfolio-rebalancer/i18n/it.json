@@ -1,0 +1,21 @@
+{
+  "tools": {
+    "portfolioRebalancer": {
+      "progress": {
+        "validate": "Controllo i dati",
+        "model": "Costruisco il modello",
+        "search": "Cerco il piano",
+        "verify": "Verifico i conti",
+        "report": "Preparo il risultato"
+      },
+      "planner": {
+        "scenario": {
+          "intro": "Ribilanci un portafoglio che possiedi già: il calcolo parte dalle posizioni e dalla liquidità che porti nel piano, le conta, e avvicina l'insieme il più possibile ai pesi obiettivo. È una simulazione: nessun ordine viene inviato."
+        },
+        "leave": {
+          "title": "Uscire dal Ribilanciatore?"
+        }
+      }
+    }
+  }
+}

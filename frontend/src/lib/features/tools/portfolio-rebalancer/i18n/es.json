@@ -1,0 +1,21 @@
+{
+  "tools": {
+    "portfolioRebalancer": {
+      "progress": {
+        "validate": "Compruebo los datos",
+        "model": "Construyo el modelo",
+        "search": "Busco el plan",
+        "verify": "Verifico las cuentas",
+        "report": "Preparo el resultado"
+      },
+      "planner": {
+        "scenario": {
+          "intro": "Reequilibras una cartera que ya tienes: el cálculo parte de las posiciones y la liquidez que aportas al plan, las tiene en cuenta y acerca el conjunto lo más posible a los pesos objetivo. Es una simulación: no se envía ninguna orden."
+        },
+        "leave": {
+          "title": "¿Salir del reequilibrador de cartera?"
+        }
+      }
+    }
+  }
+}

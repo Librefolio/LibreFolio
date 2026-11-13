@@ -1,0 +1,21 @@
+{
+  "tools": {
+    "portfolioRebalancer": {
+      "progress": {
+        "validate": "Checking the data",
+        "model": "Building the model",
+        "search": "Searching for the plan",
+        "verify": "Verifying the figures",
+        "report": "Preparing the result"
+      },
+      "planner": {
+        "scenario": {
+          "intro": "You rebalance a portfolio you already hold: the calculation starts from the positions and the cash you bring into the plan, counts them, and moves the whole as close as possible to the target weights. It is a simulation: no order is sent."
+        },
+        "leave": {
+          "title": "Leave the portfolio rebalancer?"
+        }
+      }
+    }
+  }
+}
