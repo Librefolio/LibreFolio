@@ -27,6 +27,10 @@
     import RemovalConfirm from '../shared/RemovalConfirm.svelte';
     import AssetEditor from './AssetEditor.svelte';
     import OwnedAssetsDialog from './OwnedAssetsDialog.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const KEY = 'tools.pacAllocator.planner.assets';
     /** Categories shown on a card line; the rest open in a tooltip. */
     const VISIBLE_CATEGORIES = 3;
@@ -157,12 +161,12 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="pac-planner-assets" aria-busy={reader.busy} data-busy={reader.busy ? 'true' : 'false'}>
+<div class="space-y-4" data-testid={testId('assets', profile)} aria-busy={reader.busy} data-busy={reader.busy ? 'true' : 'false'}>
     <div class="flex flex-wrap items-center gap-2">
         <div class="w-full max-w-sm">
-            <AssetPickerPanel mode="single" assets={catalogue} blockedLabel={$t('risk.benchmark.blocked')} bind:value={searchValue} placeholder={$t(`${KEY}.search`, {default: 'Search Asset'})} loading={catalogueLoading} testId="pac-planner-asset-search" onchange={addFromSearch} />
+            <AssetPickerPanel mode="single" assets={catalogue} blockedLabel={$t('risk.benchmark.blocked')} bind:value={searchValue} placeholder={$t(`${KEY}.search`, {default: 'Search Asset'})} loading={catalogueLoading} testId={testId('asset-search', profile)} onchange={addFromSearch} />
         </div>
-        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-owned-assets-open" onclick={() => (owning = true)}>
+        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('owned-assets-open', profile)} onclick={() => (owning = true)}>
             <Briefcase class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.ownedAssets.open', {default: 'Your Assets'})}
         </button>
         <HelpTip
@@ -171,21 +175,21 @@
                 default:
                     'An Asset added from LibreFolio arrives with its latest stored price and its composition. The composition is the one of LibreFolio and is not changed here. The price is «Auto»: read again just before the calculation; switch it to «Manual» to use a price of your own. No provider is called: the prices are the ones LibreFolio already has.',
             })}
-            testid="pac-planner-assets-auto-help"
+            testid={testId('assets-auto-help', profile)}
         />
-        <button type="button" class="{BUTTON_SECONDARY} ml-auto" data-testid="pac-planner-asset-add" onclick={() => (editing = {key: null})}>
+        <button type="button" class="{BUTTON_SECONDARY} ml-auto" data-testid={testId('asset-add', profile)} onclick={() => (editing = {key: null})}>
             <Plus class="h-4 w-4" aria-hidden="true" />{$t(`${KEY}.addManual`, {default: 'Manual Asset'})}
         </button>
     </div>
 
     {#if reader.error}
-        <div class="{NOTICE.warning} flex flex-wrap items-start justify-between gap-2" role="alert" data-testid="pac-planner-assets-price-error">
+        <div class="{NOTICE.warning} flex flex-wrap items-start justify-between gap-2" role="alert" data-testid={testId('assets-price-error', profile)}>
             <p>{$t(reader.error.key, {default: reader.error.fallback})}</p>
             <div class="flex shrink-0 gap-3">
                 {#if reader.canRetry}
-                    <button type="button" class={BUTTON_LINK} data-testid="pac-planner-assets-read-retry" onclick={() => reader.retry(draft, accountGeneration)}>{$t('common.retry', {default: 'Retry'})}</button>
+                    <button type="button" class={BUTTON_LINK} data-testid={testId('assets-read-retry', profile)} onclick={() => reader.retry(draft, accountGeneration)}>{$t('common.retry', {default: 'Retry'})}</button>
                 {/if}
-                <button type="button" class={BUTTON_LINK} data-testid="pac-planner-assets-price-error-dismiss" onclick={() => reader.dismiss()}>{$t('common.close', {default: 'Close'})}</button>
+                <button type="button" class={BUTTON_LINK} data-testid={testId('assets-price-error-dismiss', profile)} onclick={() => reader.dismiss()}>{$t('common.close', {default: 'Close'})}</button>
             </div>
         </div>
     {/if}
@@ -198,7 +202,7 @@
                 {@const lacking = reader.lackingOf(draft, asset.sourceAssetId)}
                 <section
                     class="space-y-3 p-1 sm:p-2"
-                    data-testid="pac-planner-asset"
+                    data-testid={testId('asset', profile)}
                     data-asset-key={asset.key}
                     data-origin={asset.origin}
                     data-price={priceMissing(asset) ? 'missing' : 'set'}
@@ -210,24 +214,24 @@
                         <div class="flex min-w-0 flex-1 basis-56 items-center gap-2.5">
                             <AssetIcon iconUrl={asset.iconUrl} assetType={asset.assetClass.toUpperCase()} altText="" size="md" />
                             <div class="min-w-0 flex-1">
-                                <h3 class="min-w-0 font-semibold text-lf-primary" data-testid="pac-planner-asset-title">
+                                <h3 class="min-w-0 font-semibold text-lf-primary" data-testid={testId('asset-title', profile)}>
                                     <span use:scrollOnOverflow class={overflowScrollTextClass} title={title(asset)}>{title(asset) || '—'}</span>
                                 </h3>
                                 <p class="flex flex-wrap items-center gap-1.5 text-xs text-lf-muted">
-                                    <span data-testid="pac-planner-asset-type">{typeText(asset)}</span>
-                                    {#if asset.origin === 'manual'}<OriginBadge origin="manual" testid="pac-planner-asset-origin" />{/if}
+                                    <span data-testid={testId('asset-type', profile)}>{typeText(asset)}</span>
+                                    {#if asset.origin === 'manual'}<OriginBadge origin="manual" testid={testId('asset-origin', profile)} />{/if}
                                     {#if !asset.active}<span class={BADGE.warning}>{$t('tools.pacAllocator.planner.scope.inactive', {default: 'Inactive'})}</span>{/if}
-                                    {#if priceMissing(asset) && !reading}<span class={BADGE.danger} data-testid="pac-planner-asset-alert" aria-label={$t(`${KEY}.priceMissingShort`, {default: 'Price missing'})}>!</span>{/if}
+                                    {#if priceMissing(asset) && !reading}<span class={BADGE.danger} data-testid={testId('asset-alert', profile)} aria-label={$t(`${KEY}.priceMissingShort`, {default: 'Price missing'})}>!</span>{/if}
                                 </p>
                             </div>
                         </div>
                         <div class="flex shrink-0 gap-2">
                             {#if asset.origin === 'manual'}
-                                <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-asset-edit" onclick={() => (editing = {key: asset.key})}>
+                                <button type="button" class={BUTTON_SECONDARY} data-testid={testId('asset-edit', profile)} onclick={() => (editing = {key: asset.key})}>
                                     <Pencil class="h-4 w-4" aria-hidden="true" />{$t('common.edit', {default: 'Edit'})}
                                 </button>
                             {/if}
-                            <button type="button" class={BUTTON_DANGER} data-testid="pac-planner-asset-remove" onclick={() => askRemove(asset)}>
+                            <button type="button" class={BUTTON_DANGER} data-testid={testId('asset-remove', profile)} onclick={() => askRemove(asset)}>
                                 <Trash2 class="h-4 w-4" aria-hidden="true" />{$t('common.remove', {default: 'Remove'})}
                             </button>
                         </div>
@@ -237,16 +241,16 @@
                         <dt class="text-lf-muted">{$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})}</dt>
                         <dd class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                             {#if asset.priceManual && asset.price}
-                                <span class="flex flex-wrap items-center gap-2" data-testid="pac-planner-asset-price-manual">
+                                <span class="flex flex-wrap items-center gap-2" data-testid={testId('asset-price-manual', profile)}>
                                     <span class="w-36">
-                                        <ExactDecimalInput value={asset.price.amount} step="0.01" className={INPUT} ariaLabel={$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})} testid="pac-planner-asset-price-input" onchange={(value) => setPriceAmount(asset, value)} />
+                                        <ExactDecimalInput value={asset.price.amount} step="0.01" className={INPUT} ariaLabel={$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})} testid={testId('asset-price-input', profile)} onchange={(value) => setPriceAmount(asset, value)} />
                                     </span>
                                     <CurrencyCode code={asset.price.currency} />
                                     <span class={HINT}>{unitsText(asset.price)}</span>
-                                    <HelpTip label={$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})} help={manualPriceHelp(asset)} testid="pac-planner-asset-price-help" />
+                                    <HelpTip label={$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})} help={manualPriceHelp(asset)} testid={testId('asset-price-help', profile)} />
                                 </span>
                             {:else if asset.price}
-                                <span class="flex flex-wrap items-center gap-2" data-testid="pac-planner-asset-price">
+                                <span class="flex flex-wrap items-center gap-2" data-testid={testId('asset-price', profile)}>
                                     <span class="tabular-nums text-lf-primary">
                                         {$t(`${KEY}.priceLine`, {
                                             default: '{price} / {units} {count, plural, one {unit} other {units}}',
@@ -254,28 +258,28 @@
                                         })}
                                     </span>
                                     {#if asset.priceStamp}
-                                        <HelpTip label={$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})} help={priceHelp(asset)} testid="pac-planner-asset-price-help" />
+                                        <HelpTip label={$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})} help={priceHelp(asset)} testid={testId('asset-price-help', profile)} />
                                     {/if}
                                 </span>
                             {:else if reading}
-                                <span class="flex items-center gap-2 {HINT}" role="status" data-testid="pac-planner-asset-price-reading">
+                                <span class="flex items-center gap-2 {HINT}" role="status" data-testid={testId('asset-price-reading', profile)}>
                                     <LoaderCircle class="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />{$t(`${KEY}.priceReading`, {default: 'Reading the data stored in LibreFolio…'})}
                                 </span>
                             {:else if priceNotStored}
-                                <span class="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="pac-planner-asset-no-price">
+                                <span class="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid={testId('asset-no-price', profile)}>
                                     <span class="text-lf-warning-on-soft">{$t(`${KEY}.priceNotStored`, {default: 'LibreFolio has no stored price for this Asset: add one on its page, or switch to «Manual» and type it. In «Auto» it is read again just before the calculation.'})}</span>
                                     {#if asset.sourceAssetId !== null}
-                                        <a class={BUTTON_LINK} href="/assets/{asset.sourceAssetId}" target="_blank" rel="noopener noreferrer" data-testid="pac-planner-asset-open-page">
+                                        <a class={BUTTON_LINK} href="/assets/{asset.sourceAssetId}" target="_blank" rel="noopener noreferrer" data-testid={testId('asset-open-page', profile)}>
                                             {$t(`${KEY}.openAssetPage`, {default: 'Open the Asset page'})}<ExternalLink class="h-3.5 w-3.5" aria-hidden="true" />
                                         </a>
                                     {/if}
                                 </span>
                             {:else}
-                                <span class="text-lf-warning-on-soft" data-testid="pac-planner-asset-no-price">{$t(`${KEY}.priceMissing`, {default: 'Price missing: it stays in the draft, the calculation will ask for it.'})}</span>
+                                <span class="text-lf-warning-on-soft" data-testid={testId('asset-no-price', profile)}>{$t(`${KEY}.priceMissing`, {default: 'Price missing: it stays in the draft, the calculation will ask for it.'})}</span>
                             {/if}
                             {#if asset.sourceAssetId !== null}
                                 <span class="ml-auto">
-                                    <AutoManualToggle manual={asset.priceManual} label={$t(`${KEY}.priceMode`, {default: 'Price of {name}', values: {name: title(asset)}})} testid="pac-planner-asset-price-mode" onchange={(manual) => switchPrice(asset, manual)} />
+                                    <AutoManualToggle manual={asset.priceManual} label={$t(`${KEY}.priceMode`, {default: 'Price of {name}', values: {name: title(asset)}})} testid={testId('asset-price-mode', profile)} onchange={(manual) => switchPrice(asset, manual)} />
                                 </span>
                             {/if}
                         </dd>
@@ -287,7 +291,7 @@
                                 help={$t(`${KEY}.compositionHelp`, {default: 'What the Asset holds, by sector and geography. It is used only by the result report, to show the portfolio before and after: it does not change the orders. A share that is not indicated counts as “Uncategorised”.'})}
                             />
                         </dt>
-                        <dd class="min-w-0 space-y-0.5" data-testid="pac-planner-asset-exposures">
+                        <dd class="min-w-0 space-y-0.5" data-testid={testId('asset-exposures', profile)}>
                             {#if asset.exposures.length === 0 && reading}
                                 <span class="flex items-center gap-2 {HINT}" role="status">
                                     <LoaderCircle class="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />{$t(`${KEY}.priceReading`, {default: 'Reading the data stored in LibreFolio…'})}
@@ -296,7 +300,7 @@
                                 {#each COMPOSITION_DIMENSIONS as dimension (dimension)}
                                     {@const rows = rowsOf(asset, dimension)}
                                     {@const whole = isWhole(rows)}
-                                    <p class="text-lf-primary" data-testid="pac-planner-asset-dimension" data-dimension={dimension} data-state={rows.length > 0 ? 'set' : lacking.includes(dimension) ? 'not-stored' : 'missing'}>
+                                    <p class="text-lf-primary" data-testid={testId('asset-dimension', profile)} data-dimension={dimension} data-state={rows.length > 0 ? 'set' : lacking.includes(dimension) ? 'not-stored' : 'missing'}>
                                         <span class="text-lf-muted">{dimensionName(dimension)}:</span>
                                         {#if rows.length > 0}
                                             {rows
@@ -312,7 +316,7 @@
                                                     position="top"
                                                     maxWidth="360px"
                                                 >
-                                                    <span class={BADGE.neutral} data-testid="pac-planner-asset-dimension-more">+{rows.length - VISIBLE_CATEGORIES}</span>
+                                                    <span class={BADGE.neutral} data-testid={testId('asset-dimension-more', profile)}>+{rows.length - VISIBLE_CATEGORIES}</span>
                                                 </Tooltip>
                                             {/if}
                                         {:else if lacking.includes(dimension)}
@@ -331,7 +335,7 @@
     {/if}
 
     {#if draft.data.assets.length === 0}
-        <p class={NOTICE.info} data-testid="pac-planner-assets-empty">{$t('tools.pacAllocator.planner.assets.empty', {default: 'Search an Asset of the database or add a manual one: the Tool works without any Asset in the database.'})}</p>
+        <p class={NOTICE.info} data-testid={testId('assets-empty', profile)}>{$t('tools.pacAllocator.planner.assets.empty', {default: 'Search an Asset of the database or add a manual one: the Tool works without any Asset in the database.'})}</p>
     {/if}
 </div>
 
@@ -347,7 +351,7 @@
     title={$t('tools.pacAllocator.planner.removal.title', {default: 'Remove {name}?', values: {name: removal?.name ?? ''}})}
     message={$t('tools.pacAllocator.planner.removal.message', {default: 'It leaves the draft only; nothing changes in the system.'})}
     impact={removal?.impact ?? null}
-    testId="pac-planner-asset-removal"
+    testId={testId('asset-removal', profile)}
     onConfirm={confirmRemoval}
     onCancel={() => (removal = null)}
 />

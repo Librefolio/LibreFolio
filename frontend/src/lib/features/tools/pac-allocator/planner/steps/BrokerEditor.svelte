@@ -19,6 +19,10 @@
     import HelpTip from '../shared/HelpTip.svelte';
     import PlannerBrokerIcon from '../shared/PlannerBrokerIcon.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         draft: PlannerDraft;
@@ -138,7 +142,7 @@
     }
 </script>
 
-<PlannerDialog open title={$t('tools.pacAllocator.planner.brokerEditor.title', {default: 'Configure {name} · scenario data (the Broker is not changed)', values: {name: working?.name || '—'}})} testid="pac-planner-broker-editor" {onclose} maxWidth="4xl">
+<PlannerDialog open title={$t('tools.pacAllocator.planner.brokerEditor.title', {default: 'Configure {name} · scenario data (the Broker is not changed)', values: {name: working?.name || '—'}})} testid={testId('broker-editor', profile)} {onclose} maxWidth="4xl">
     {#if working}
         <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
             <PlannerBrokerIcon broker={working} size={32} />
@@ -146,11 +150,11 @@
                 <span class="min-w-0 truncate text-base font-semibold text-lf-primary">{working.name}</span>
             {:else}
                 <div class="min-w-0 flex-1 sm:max-w-sm">
-                    <input class={TITLE_INPUT} bind:value={working.name} maxlength="120" aria-label={$t('common.name', {default: 'Name'})} placeholder={$t('common.name', {default: 'Name'})} data-testid="pac-planner-broker-editor-name" />
+                    <input class={TITLE_INPUT} bind:value={working.name} maxlength="120" aria-label={$t('common.name', {default: 'Name'})} placeholder={$t('common.name', {default: 'Name'})} data-testid={testId('broker-editor-name', profile)} />
                 </div>
             {/if}
             {#if working.origin === 'copied'}
-                <button type="button" class="{BUTTON_LINK} sm:ml-auto" data-testid="pac-planner-broker-editor-restore" onclick={restoreProposed}>
+                <button type="button" class="{BUTTON_LINK} sm:ml-auto" data-testid={testId('broker-editor-restore', profile)} onclick={restoreProposed}>
                     {$t('tools.pacAllocator.planner.brokerEditor.restore', {default: 'Restore the copied values'})}
                 </button>
             {/if}
@@ -165,27 +169,27 @@
                         help={$t('tools.pacAllocator.planner.brokerEditor.modesHelp', {default: 'One block for each currency you buy in at this Broker: an Asset priced in that currency is bought with its rules. Drag the blocks into the order you prefer.'})}
                     />
                 </div>
-                <button type="button" class={BUTTON_SECONDARY} disabled={adding} data-testid="pac-planner-mode-add" onclick={() => (adding = true)}>
+                <button type="button" class={BUTTON_SECONDARY} disabled={adding} data-testid={testId('mode-add', profile)} onclick={() => (adding = true)}>
                     <Plus class="h-4 w-4" aria-hidden="true" />{$t('tools.pacAllocator.planner.brokerEditor.addCurrency', {default: 'Add currency'})}
                 </button>
             </div>
 
             {#if adding}
-                <div class="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-lf-checked bg-lf-selected/50 p-3" data-testid="pac-planner-mode-pending">
+                <div class="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-lf-checked bg-lf-selected/50 p-3" data-testid={testId('mode-pending', profile)}>
                     <div class="w-full sm:w-72">
                         <p class={LABEL_ROW}>{$t('tools.pacAllocator.planner.brokerEditor.pickCurrency', {default: 'Currency of the new block'})}</p>
-                        <CurrencySearchSelect bind:value={pendingCurrency} excludedCurrencies={usedCurrencies} testId="pac-planner-mode-add-currency" onchange={(currency) => addMode(currency)} />
+                        <CurrencySearchSelect bind:value={pendingCurrency} excludedCurrencies={usedCurrencies} testId={testId('mode-add-currency', profile)} onchange={(currency) => addMode(currency)} />
                     </div>
-                    <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-mode-add-cancel" onclick={closeAdd}>{$t('common.cancel', {default: 'Cancel'})}</button>
+                    <button type="button" class={BUTTON_SECONDARY} data-testid={testId('mode-add-cancel', profile)} onclick={closeAdd}>{$t('common.cancel', {default: 'Cancel'})}</button>
                 </div>
             {/if}
 
             {#if working.modes.length > 0}
                 <OrderableList items={working.modes} keyFn={(mode) => mode.key} onReorder={(next) => working && (working.modes = next)}>
                     {#snippet children({item: mode})}
-                        <div class="space-y-3 p-1 sm:p-2" data-testid="pac-planner-mode" data-currency={mode.currency} data-kind={mode.kind} data-added={mode.key === addedKey ? 'true' : undefined}>
+                        <div class="space-y-3 p-1 sm:p-2" data-testid={testId('mode', profile)} data-currency={mode.currency} data-kind={mode.kind} data-added={mode.key === addedKey ? 'true' : undefined}>
                             {#if mode.key === addedKey && mode.currency === addCurrency}
-                                <p class="rounded-md border border-lf-warning-line bg-lf-warning-soft px-2.5 py-1.5 text-xs text-lf-warning-on-soft" data-testid="pac-planner-mode-added-for">
+                                <p class="rounded-md border border-lf-warning-line bg-lf-warning-soft px-2.5 py-1.5 text-xs text-lf-warning-on-soft" data-testid={testId('mode-added-for', profile)}>
                                     {$t('tools.pacAllocator.planner.brokerEditor.addedFor', {
                                         default: '{currency} mode added to buy {asset}, with starting values: check order type, increment and fees, then apply.',
                                         values: {currency: mode.currency, asset: addFor || '—'},
@@ -194,9 +198,9 @@
                             {/if}
                             <div class="flex items-center justify-between gap-2">
                                 <div class="w-full max-w-64">
-                                    <CurrencySearchSelect value={mode.currency} compact excludedCurrencies={otherCurrencies(mode)} testId="pac-planner-mode-currency" onchange={(currency) => setCurrency(mode, currency)} />
+                                    <CurrencySearchSelect value={mode.currency} compact excludedCurrencies={otherCurrencies(mode)} testId={testId('mode-currency', profile)} onchange={(currency) => setCurrency(mode, currency)} />
                                 </div>
-                                <button type="button" class={BUTTON_DANGER_SMALL} data-testid="pac-planner-mode-remove" onclick={() => removeMode(mode.key)}>
+                                <button type="button" class={BUTTON_DANGER_SMALL} data-testid={testId('mode-remove', profile)} onclick={() => removeMode(mode.key)}>
                                     <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />{$t('common.remove', {default: 'Remove'})}
                                 </button>
                             </div>
@@ -210,7 +214,7 @@
                                             help={$t('tools.pacAllocator.planner.brokers.orderKindHelp', {default: 'How you enter an order at this Broker: by number of units (you buy 3 units) or by amount (you invest 150). It sets the unit of the increment and of the limits on each order.'})}
                                         />
                                     </div>
-                                    <SimpleSelect value={mode.kind} options={kindOptions} testId="pac-planner-mode-kind" ariaLabel={$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})} onchange={(value) => setKind(mode, value)} />
+                                    <SimpleSelect value={mode.kind} options={kindOptions} testId={testId('mode-kind', profile)} ariaLabel={$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})} onchange={(value) => setKind(mode, value)} />
                                 </div>
                                 <div>
                                     <div class={LABEL_ROW}>
@@ -224,7 +228,7 @@
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <div class="min-w-0 flex-1">
-                                            <ExactDecimalInput id="{ids}-{mode.key}-step" bind:value={mode.step} step={mode.kind === 'whole_quantity' ? '1' : cldrCurrencyStep(mode.currency)} className={INPUT} testid="pac-planner-mode-step" />
+                                            <ExactDecimalInput id="{ids}-{mode.key}-step" bind:value={mode.step} step={mode.kind === 'whole_quantity' ? '1' : cldrCurrencyStep(mode.currency)} className={INPUT} testid={testId('mode-step', profile)} />
                                         </div>
                                         <span class={INPUT_SUFFIX}>
                                             {#if mode.kind === 'monetary_amount'}<CurrencyCode code={mode.currency} />{:else}{modeUnitText($t, mode)}{/if}
@@ -252,7 +256,7 @@
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <div class="min-w-0 flex-1">
-                                                <ExactDecimalInput id="{ids}-{mode.key}-floor" bind:value={mode.floor} step={cldrCurrencyStep(mode.currency)} className={INPUT} testid="pac-planner-mode-fee-floor" />
+                                                <ExactDecimalInput id="{ids}-{mode.key}-floor" bind:value={mode.floor} step={cldrCurrencyStep(mode.currency)} className={INPUT} testid={testId('mode-fee-floor', profile)} />
                                             </div>
                                             <span class={INPUT_SUFFIX}><CurrencyCode code={mode.currency} /></span>
                                         </div>
@@ -267,7 +271,7 @@
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <div class="min-w-0 flex-1">
-                                                <ExactDecimalInput id="{ids}-{mode.key}-rate" bind:value={mode.ratePercent} step="0.01" className={INPUT} testid="pac-planner-mode-fee-rate" />
+                                                <ExactDecimalInput id="{ids}-{mode.key}-rate" bind:value={mode.ratePercent} step="0.01" className={INPUT} testid={testId('mode-fee-rate', profile)} />
                                             </div>
                                             <span class={INPUT_SUFFIX}>%</span>
                                         </div>
@@ -279,7 +283,14 @@
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <div class="min-w-0 flex-1">
-                                                <ExactDecimalInput id="{ids}-{mode.key}-cap" bind:value={mode.cap} step={cldrCurrencyStep(mode.currency)} placeholder={$t('tools.pacAllocator.planner.brokerEditor.feeCapNone', {default: 'none'})} className={INPUT} testid="pac-planner-mode-fee-cap" />
+                                                <ExactDecimalInput
+                                                    id="{ids}-{mode.key}-cap"
+                                                    bind:value={mode.cap}
+                                                    step={cldrCurrencyStep(mode.currency)}
+                                                    placeholder={$t('tools.pacAllocator.planner.brokerEditor.feeCapNone', {default: 'none'})}
+                                                    className={INPUT}
+                                                    testid={testId('mode-fee-cap', profile)}
+                                                />
                                             </div>
                                             <span class={INPUT_SUFFIX}><CurrencyCode code={mode.currency} /></span>
                                         </div>
@@ -294,7 +305,7 @@
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <div class="min-w-0 flex-1">
-                                                <ExactDecimalInput id="{ids}-{mode.key}-fixed" bind:value={mode.fixedFee} step={cldrCurrencyStep(mode.currency)} className={INPUT} testid="pac-planner-mode-fee-fixed" />
+                                                <ExactDecimalInput id="{ids}-{mode.key}-fixed" bind:value={mode.fixedFee} step={cldrCurrencyStep(mode.currency)} className={INPUT} testid={testId('mode-fee-fixed', profile)} />
                                             </div>
                                             <span class={INPUT_SUFFIX}><CurrencyCode code={mode.currency} /></span>
                                         </div>
@@ -305,7 +316,7 @@
                     {/snippet}
                 </OrderableList>
             {:else}
-                <p class="text-sm text-lf-warning" data-testid="pac-planner-mode-empty">{$t('tools.pacAllocator.planner.problems.brokerNoMode', {default: 'The Broker has no order mode.'})}</p>
+                <p class="text-sm text-lf-warning" data-testid={testId('mode-empty', profile)}>{$t('tools.pacAllocator.planner.problems.brokerNoMode', {default: 'The Broker has no order mode.'})}</p>
             {/if}
         </section>
 
@@ -320,12 +331,12 @@
                     })}
                 />
             </div>
-            <fieldset class="grid gap-2 sm:grid-cols-2" data-testid="pac-planner-conversion-modes">
+            <fieldset class="grid gap-2 sm:grid-cols-2" data-testid={testId('conversion-modes', profile)}>
                 <legend class="sr-only">{$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})}</legend>
                 {#each conversionOptions as option (option.mode)}
                     {@const on = working.conversionMode === option.mode}
-                    <label class="flex cursor-pointer items-center gap-2 p-3 {TOGGLE_CARD} {on ? TOGGLE_ON : TOGGLE_OFF}" data-testid="pac-planner-conversion-mode" data-mode={option.mode} data-selected={on ? 'true' : 'false'}>
-                        <input type="radio" name="{ids}-conversion" value={option.mode} bind:group={working.conversionMode} class="shrink-0 accent-lf-checked" data-testid="pac-planner-conversion-mode-radio" />
+                    <label class="flex cursor-pointer items-center gap-2 p-3 {TOGGLE_CARD} {on ? TOGGLE_ON : TOGGLE_OFF}" data-testid={testId('conversion-mode', profile)} data-mode={option.mode} data-selected={on ? 'true' : 'false'}>
+                        <input type="radio" name="{ids}-conversion" value={option.mode} bind:group={working.conversionMode} class="shrink-0 accent-lf-checked" data-testid={testId('conversion-mode-radio', profile)} />
                         <span class="font-medium text-lf-primary">{option.label}</span>
                     </label>
                 {/each}
@@ -342,7 +353,7 @@
             </div>
             <ul class="space-y-2">
                 {#each localCash as cash (cash.key)}
-                    <li class="flex flex-wrap items-center gap-2 p-2 {TOGGLE_CARD} {TOGGLE_ON}" data-testid="pac-planner-funding-local" data-currency={cash.currency}>
+                    <li class="flex flex-wrap items-center gap-2 p-2 {TOGGLE_CARD} {TOGGLE_ON}" data-testid={testId('funding-local', profile)} data-currency={cash.currency}>
                         <PlannerBrokerIcon broker={working} size={20} />
                         <span class="font-medium text-lf-primary">{working.name || '—'}</span>
                         <CurrencyCode code={cash.currency} />
@@ -353,8 +364,8 @@
                     {@const funding = fundingOf(source)}
                     {@const info = sourceOf(source)}
                     {@const enabled = funding?.enabled === true}
-                    <li class="{TOGGLE_CARD} {enabled ? TOGGLE_ON : TOGGLE_OFF}" data-testid="pac-planner-funding" data-source={sourceKey(source)} data-enabled={enabled ? 'true' : 'false'}>
-                        <button type="button" class="flex w-full cursor-pointer flex-wrap items-center gap-2 p-2 text-left" aria-pressed={enabled} data-testid="pac-planner-funding-toggle" onclick={() => toggleFunding(source, !enabled)}>
+                    <li class="{TOGGLE_CARD} {enabled ? TOGGLE_ON : TOGGLE_OFF}" data-testid={testId('funding', profile)} data-source={sourceKey(source)} data-enabled={enabled ? 'true' : 'false'}>
+                        <button type="button" class="flex w-full cursor-pointer flex-wrap items-center gap-2 p-2 text-left" aria-pressed={enabled} data-testid={testId('funding-toggle', profile)} onclick={() => toggleFunding(source, !enabled)}>
                             {#if source.kind === 'contribution'}
                                 <span class={ICON_BUBBLE} style="width: 20px; height: 20px;"><PiggyBank size={12} aria-hidden="true" /></span>
                             {:else}
@@ -377,7 +388,7 @@
                                             help={$t('tools.pacAllocator.planner.brokerEditor.priorityHelp', {default: 'It counts only between plans that get equally close to the target: then the plan uses first the sources with the lowest number. 0 = preferred.'})}
                                         />
                                     </div>
-                                    <ExactDecimalInput id="{ids}-{funding.key}-priority" bind:value={funding.priority} step="1" maxFractionDigits={0} className={INPUT} testid="pac-planner-funding-priority" />
+                                    <ExactDecimalInput id="{ids}-{funding.key}-priority" bind:value={funding.priority} step="1" maxFractionDigits={0} className={INPUT} testid={testId('funding-priority', profile)} />
                                 </div>
                                 <div>
                                     <div class={LABEL_ROW}>
@@ -395,7 +406,7 @@
                                                 step={info.currency ? cldrCurrencyStep(info.currency) : '0.01'}
                                                 placeholder={$t('tools.pacAllocator.planner.brokerEditor.fundingCapAll', {default: 'all'})}
                                                 className={INPUT}
-                                                testid="pac-planner-funding-cap"
+                                                testid={testId('funding-cap', profile)}
                                             />
                                         </div>
                                         <span class={INPUT_SUFFIX}
@@ -408,7 +419,7 @@
                     </li>
                 {:else}
                     {#if localCash.length === 0}
-                        <li class={HINT} data-testid="pac-planner-funding-empty">{$t('tools.pacAllocator.planner.brokerEditor.noFunding', {default: 'No liquidity can reach this Broker yet: add cash or a contribution in the Liquidity step.'})}</li>
+                        <li class={HINT} data-testid={testId('funding-empty', profile)}>{$t('tools.pacAllocator.planner.brokerEditor.noFunding', {default: 'No liquidity can reach this Broker yet: add cash or a contribution in the Liquidity step.'})}</li>
                     {/if}
                 {/each}
             </ul>
@@ -418,7 +429,7 @@
     {/if}
 
     {#snippet footer()}
-        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-broker-editor-cancel" onclick={onclose}>{$t('common.cancel', {default: 'Cancel'})}</button>
-        <button type="button" class={BUTTON_PRIMARY} disabled={!working} data-testid="pac-planner-broker-editor-apply" onclick={apply}>{$t('tools.pacAllocator.planner.applyToDraft', {default: 'Apply to the draft'})}</button>
+        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('broker-editor-cancel', profile)} onclick={onclose}>{$t('common.cancel', {default: 'Cancel'})}</button>
+        <button type="button" class={BUTTON_PRIMARY} disabled={!working} data-testid={testId('broker-editor-apply', profile)} onclick={apply}>{$t('tools.pacAllocator.planner.applyToDraft', {default: 'Apply to the draft'})}</button>
     {/snippet}
 </PlannerDialog>
