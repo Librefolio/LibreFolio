@@ -12,7 +12,7 @@
  *
  * @see https://github.com/ecyrbe/zodios
  */
-import axios, {type AxiosError, type InternalAxiosRequestConfig} from 'axios';
+import axios, {AxiosError, AxiosHeaders, type InternalAxiosRequestConfig} from 'axios';
 import {zodValidationPlugin} from '@zodios/core';
 import {createApiClient} from './generated';
 import {reportApiFailure, requestPath} from './apiErrorConsole';
@@ -145,40 +145,70 @@ axiosInstance.interceptors.response.use(
         return response;
     },
     (error: AxiosError) => {
-        // One console line for an unexpected failure, without a word of its data (H-60): apiErrorConsole.ts
-        reportApiFailure(error);
-
-        // A 401 means the session is gone: go to the login, carrying the page to come back to.
-        // On the root the login is already there, and a failed sign-in answers 401 too; a link page has no session.
-        if (error.response?.status === 401) {
-            if (browser && window.location.pathname !== '/' && !isLinkPage(window.location.pathname)) {
-                debug.log('API', '401 Unauthorized - redirecting to login');
-                goto(loginUrl(window.location.pathname + window.location.search));
-            }
-        }
-
-        // A 423 `instance_blocked`: the hosting provider blocked this instance, and the layout shows the block page.
-        if (isInstanceBlockedError(error.response?.status, error.response?.data)) {
-            instanceBlockState.markBlocked();
-        }
-
-        // A 423 `user_limit_exceeded` (A5-7): the active accounts outnumber the plan, and the layout shows the choice (an
-        // administrator) or the wait (anyone else).
-        if (isUserLimitError(error.response?.status, error.response?.data)) {
-            userLimitState.markExceeded();
-        }
-
-        // A 423 `instance_awaiting_restore` (H-62: the hosting panel is restoring this instance) or
-        // `instance_restore_interrupted` (B-33: the state of the restore cannot be read). Read the instance's
-        // configuration again, so the root layout's gate shows its page even when it was read before the state began. A dynamic import: the configuration is a runes module that imports this client.
-        if (isInstanceAwaitingRestoreError(error.response?.status, error.response?.data) || isInstanceRestoreInterruptedError(error.response?.status, error.response?.data)) {
-            void import('$lib/features/instance/instanceConfig.svelte').then(({instanceConfig}) => instanceConfig.load({force: true}));
-        }
-
+        handleApiError(error);
         // Let the error propagate - Zodios will handle it
         return Promise.reject(error);
     },
 );
+
+/** What every failed API call does, whatever transport made it: the console line, the 401 redirect, the 423 states. */
+function handleApiError(error: AxiosError): void {
+    // One console line for an unexpected failure, without a word of its data (H-60): apiErrorConsole.ts
+    reportApiFailure(error);
+
+    // A 401 means the session is gone: go to the login, carrying the page to come back to.
+    // On the root the login is already there, and a failed sign-in answers 401 too; a link page has no session.
+    if (error.response?.status === 401) {
+        if (browser && window.location.pathname !== '/' && !isLinkPage(window.location.pathname)) {
+            debug.log('API', '401 Unauthorized - redirecting to login');
+            goto(loginUrl(window.location.pathname + window.location.search));
+        }
+    }
+
+    // A 423 `instance_blocked`: the hosting provider blocked this instance, and the layout shows the block page.
+    if (isInstanceBlockedError(error.response?.status, error.response?.data)) {
+        instanceBlockState.markBlocked();
+    }
+
+    // A 423 `user_limit_exceeded` (A5-7): the active accounts outnumber the plan, and the layout shows the choice (an
+    // administrator) or the wait (anyone else).
+    if (isUserLimitError(error.response?.status, error.response?.data)) {
+        userLimitState.markExceeded();
+    }
+
+    // A 423 `instance_awaiting_restore` (H-62: the hosting panel is restoring this instance) or
+    // `instance_restore_interrupted` (B-33: the state of the restore cannot be read). Read the instance's
+    // configuration again, so the root layout's gate shows its page even when it was read before the state began. A dynamic import: the configuration is a runes module that imports this client.
+    if (isInstanceAwaitingRestoreError(error.response?.status, error.response?.data) || isInstanceRestoreInterruptedError(error.response?.status, error.response?.data)) {
+        void import('$lib/features/instance/instanceConfig.svelte').then(({instanceConfig}) => instanceConfig.load({force: true}));
+    }
+}
+
+/**
+ * A `POST` made with `fetch` instead of Axios (the Tool stream, lot V1 of project 67, reads its answer line by line),
+ * seen by the same rules as an Axios call: pass the answer's status and headers, or nothing for a call nothing answered.
+ * A success feeds the price-refresh notice; a failure runs the same handling as an Axios failure and comes back as the
+ * `AxiosError` an Axios call would have rejected with, so the caller maps it as before.
+ */
+export function observeFetchAnswer(url: string, answer: {status: number; headers: Headers; data?: unknown} | null): AxiosError | null {
+    const headers = new AxiosHeaders();
+    answer?.headers.forEach((value, name) => headers.set(name, value));
+    if (answer && answer.status >= 200 && answer.status < 300) {
+        priceRefresh.observe(headers);
+        return null;
+    }
+    const config = {url, method: 'post', headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+    const response = answer ? {status: answer.status, statusText: '', data: answer.data, headers, config} : undefined;
+    const code = answer ? (answer.status >= 500 ? AxiosError.ERR_BAD_RESPONSE : AxiosError.ERR_BAD_REQUEST) : AxiosError.ERR_NETWORK;
+    const error = new AxiosError(answer ? `Request failed with status code ${answer.status}` : 'Network Error', code, config, null, response);
+    handleApiError(error);
+    return error;
+}
+
+/** The headers every API call carries, for a call that does not go through Axios. */
+export function apiRequestHeaders(): Record<string, string> {
+    return {'Accept-Language': getCurrentLanguage()};
+}
 
 // =============================================================================
 // ZODIOS CLIENT
