@@ -3,6 +3,7 @@
  * backend will receive. Counts and labels only; no amount is added,
  * converted or compared here.
  */
+import {hasLimit} from './limits';
 import {daysBetween, priceIsCopied, rateIsCopied, samePrice, type FactOrigin, type PlannerDraft} from './draft.svelte';
 import type {PlannerStep} from './types';
 
@@ -13,7 +14,8 @@ export interface SectionCounts {
     /** `missing` = Assets still without a price. */
     assets: {count: number; priced: number; missing: number; stale: number; withExposures: number};
     routing: {enabled: number; assetsWithRoute: number};
-    targets: {count: number};
+    /** `limited`: Assets with a minimum or a maximum typed (F2 of project 67). */
+    targets: {count: number; limited: number};
     /** R9.4: only the pairs the scenario needs; `pairs` of them have a rate (`missing` do not), `conversions` move cash. */
     fx: {needed: number; pairs: number; missing: number; stale: number; conversions: number; spreadPercent: string};
     strategy: {policy: string};
@@ -86,7 +88,7 @@ export function sectionCounts(draft: PlannerDraft): SectionCounts {
             withExposures: data.assets.filter((asset) => asset.exposures.length > 0).length,
         },
         routing: {enabled: enabledRoutes.length, assetsWithRoute: new Set(enabledRoutes.map((route) => route.assetKey)).size},
-        targets: {count: data.assets.filter((asset) => hasAmount(data.targets[asset.key] ?? '')).length},
+        targets: {count: data.assets.filter((asset) => hasAmount(data.targets[asset.key] ?? '')).length, limited: data.assets.filter((asset) => hasLimit(data.limits[asset.key])).length},
         fx: {
             needed: draft.requiredPairs.length,
             pairs: rated.length,

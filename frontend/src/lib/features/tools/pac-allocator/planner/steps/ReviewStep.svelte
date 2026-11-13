@@ -85,7 +85,12 @@
             case 'routing':
                 return {text: $t(`${KEY}.routes`, {default: '{assets} of {total, plural, one {# Asset} other {# Assets}} can be bought', values: {assets: counts.routing.assetsWithRoute, total: counts.assets.count}}), currencies: []};
             case 'targets':
-                return {text: $t(`${KEY}.targets`, {default: '{count} of {total, plural, one {# Asset} other {# Assets}} with a target', values: {count: counts.targets.count, total: counts.assets.count}}), currencies: []};
+                return {
+                    text:
+                        $t(`${KEY}.targets`, {default: '{count} of {total, plural, one {# Asset} other {# Assets}} with a target', values: {count: counts.targets.count, total: counts.assets.count}}) +
+                        $t(`${KEY}.limited`, {default: '{count, plural, =0 {} one { · # with a limit} other { · # with limits}}', values: {count: counts.targets.limited}}),
+                    currencies: [],
+                };
             case 'fx':
                 return {
                     text: $t(`${KEY}.fxRated`, {

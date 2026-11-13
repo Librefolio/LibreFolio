@@ -73,6 +73,7 @@
                 return [
                     {id: 'assets', label: $t('tools.pacAllocator.planner.summary.assets', {default: 'Assets'}), value: String(c.assets.count)},
                     {id: 'total', label: $t('tools.pacAllocator.planner.summary.total', {default: 'Total (control)'}), value: draft.targetTotal === null ? '—' : formatPlannerPercentUnits(draft.targetTotal)},
+                    {id: 'limits', label: $t('tools.pacAllocator.planner.summary.limits', {default: 'With a limit'}), value: String(c.targets.limited)},
                 ];
             case 'fx':
                 return [
