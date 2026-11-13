@@ -138,11 +138,12 @@ the Asset on that Broker:
 
 - **Minimum purchase** $q_{\min}$: if the plan buys there, it buys at least
   this much, so $q = 0$ or $q \ge q_{\min}$.
-- **Required purchase** $q_{\text{req}}$: bought whatever happens,
-  $q \ge q_{\text{req}}$. If the resources are not enough, the plan becomes
-  impossible.
 - **Maximum purchase** $q_{\max}$: the most the plan may buy there,
   $q \le q_{\max}$.
+
+A route never forces a purchase: **Minimum purchase** only applies if the plan
+buys there. To make the plan buy at least a given value of an Asset, give the
+Asset itself a minimum, on its target.
 
 Two more settings shape how the plan buys there:
 
@@ -157,7 +158,7 @@ Two more settings shape how the plan buys there:
 Empty fields restrict nothing.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="tools" data-name="pac-step-routing" alt="The Routing step: for each Broker, its order settings, Allow all, Exclude all and how many Assets it may buy; on the first Broker, excluded Assets and an allowed one with its Minimum purchase, Required purchase, Maximum purchase, Price margin and Priority">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-routing" alt="The Routing step: for each Broker, its order settings, Allow all, Exclude all and how many Assets it may buy; on the first Broker, excluded Assets and an allowed one with its Minimum purchase, Maximum purchase, Price margin and Priority">
 </div>
 
 ### ⚖️ Targets
@@ -375,7 +376,7 @@ A calculation ends with one of these outcomes:
 |---|---|
 | **Plan available** | A plan that respects every constraint. A second badge says what it is worth. **Proven optimal**: the solver proved, within its small calculation margin (which grows with the amounts), that no better plan exists, objective by objective in the order of the **Strategy** step, and the exact check of the plan matches its numbers. **Optimality not proven**: the solver reached its time or node limit, or its own numbers do not match the exact check of the plan; it is then the best plan found, but it is not proven to be the best. |
 | **No operation** | With the cash you chose, no purchase meets the constraints: the plan is to do nothing. No order, no currency exchange, and no funding. |
-| **Infeasible with these constraints** | Marked **Infeasibility proven**: no combination meets every hard constraint together. The constraints involved are listed (each **Required purchase**, and the liquidity that can reach the Brokers), each with a link to the step where you can change it. The planner does not choose which one to relax, and no partial plan is shown as valid. |
+| **Infeasible with these constraints** | Marked **Infeasibility proven**: no combination meets every hard constraint together. The constraints involved are listed (the liquidity that can reach the Brokers), each with a link to the step where you can change it. The planner does not choose which one to relax, and no partial plan is shown as valid. |
 | **No plan within the limits** | The solver found no plan before reaching its limit. This is not a proof that none exists. A lighter search helps: fewer Assets or routes, a lower **Maximum purchase**, or a larger **Increment**. |
 | **More data needed** | Something is missing. Your draft is intact, and no Asset is removed silently: add the missing fact or remove the Asset yourself. |
 | **Input not valid** | Some of the data are not valid. |
@@ -459,7 +460,7 @@ With privacy mode on (see [User preferences](../../settings/preferences.md)),
 the result hides what would tell how much you own: every amount (key figures,
 values, balances, order amounts, fees and costs, and the objective and solver
 values measured in money, the **L2 distance** included), every quantity, and
-the purchase limits of a route (**Minimum purchase**, **Required purchase**,
+the purchase limits of a route (**Minimum purchase** and
 **Maximum purchase**). The amounts in the problems listed when a calculation
 could not start are hidden too. Market prices, exchange rates, percentages
 (targets, shares, exposure weights, spreads, and margins), increments,
