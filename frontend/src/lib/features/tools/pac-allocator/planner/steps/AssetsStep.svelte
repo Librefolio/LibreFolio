@@ -45,7 +45,8 @@
 
     let {draft, accountGeneration}: Props = $props();
 
-    const reader = new AddedAssetFacts();
+    // The Rebalancer's reader also copies the user's positions in an Asset added by search (Q-F3a-5a).
+    const reader = new AddedAssetFacts({positions: profile.positions});
     const labels = new CategoryLabels();
     onDestroy(() => reader.stop());
     let owning = $state(false);
