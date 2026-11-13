@@ -17,7 +17,7 @@
  * checked once against the digits put in; the broker is the stub's name. Nothing here reads
  * translated text: the sentence around those values belongs to the catalogue.
  *
- * Results. Minimal objects cast to `PacReadyResult`: `result_state`, `stop_reason`,
+ * Results. Minimal objects cast to `PlannerReadyResult`: `result_state`, `stop_reason`,
  * `solver_evidence.stages`, `primary_solution.rounding_top_ups`, and exactly what the branch
  * each case renders reads (the no-op's selected funding, the infeasible proof source and
  * reachable funding, the request's order routes).
@@ -42,7 +42,7 @@ import {cleanup, render, screen, setupI18n, within} from '$test/component';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {catalogCurrencyDigits, formatPlannerMoneyPlain} from '../format';
-import type {PacReadyResult} from '../types';
+import type {PlannerReadyResult} from '../types';
 import type {ResultNames} from './model';
 import StateNotice from './StateNotice.svelte';
 
@@ -78,32 +78,32 @@ function money(value: string) {
     return {value: {kind: 'finite_decimal', value}, currency: 'EUR'};
 }
 
-function incumbent(stop_reason: 'completed' | 'time_limit', rounding_top_ups: TopUp[]): PacReadyResult {
+function incumbent(stop_reason: 'completed' | 'time_limit', rounding_top_ups: TopUp[]): PlannerReadyResult {
     const stages = stop_reason === 'completed' ? [{status: 'finished'}] : [{status: 'finished'}, {status: 'unfinished'}];
-    return {result_state: 'ready_incumbent', stop_reason, solver_evidence: {stages}, primary_solution: {rounding_top_ups}} as unknown as PacReadyResult;
+    return {result_state: 'ready_incumbent', stop_reason, solver_evidence: {stages}, primary_solution: {rounding_top_ups}} as unknown as PlannerReadyResult;
 }
 
-function noOp(): PacReadyResult {
+function noOp(): PlannerReadyResult {
     return {
         result_state: 'ready_no_op',
         stop_reason: 'completed',
         solver_evidence: {stages: [{status: 'finished'}]},
         primary_solution: {accounting: {selected_funding: money('5.00')}, rounding_top_ups: []},
-    } as unknown as PacReadyResult;
+    } as unknown as PlannerReadyResult;
 }
 
-function noIncumbent(): PacReadyResult {
-    return {result_state: 'ready_no_incumbent', stop_reason: 'time_limit', solver_evidence: {stages: [{status: 'unfinished'}]}} as unknown as PacReadyResult;
+function noIncumbent(): PlannerReadyResult {
+    return {result_state: 'ready_no_incumbent', stop_reason: 'time_limit', solver_evidence: {stages: [{status: 'unfinished'}]}} as unknown as PlannerReadyResult;
 }
 
-function infeasible(): PacReadyResult {
+function infeasible(): PlannerReadyResult {
     return {
         result_state: 'ready_infeasible',
         stop_reason: 'completed',
         solver_evidence: {stages: [{status: 'infeasible'}]},
         proof: {kind: 'infeasibility_proven', proof_source: 'solver_status'},
         scenario_basis: {reachable_funding: money('100.00')},
-    } as unknown as PacReadyResult;
+    } as unknown as PlannerReadyResult;
 }
 
 /** What a row must show for `row`, with privacy as it currently is. */
@@ -111,7 +111,7 @@ function amountOf(row: TopUp): string {
     return formatPlannerMoneyPlain(row.amount, row.currency, {digits});
 }
 
-async function mount(result: PacReadyResult): Promise<void> {
+async function mount(result: PlannerReadyResult): Promise<void> {
     render(StateNotice, {result, names, digits, ongoto: vi.fn(), onedit: vi.fn()});
     flushSync();
     await tick();

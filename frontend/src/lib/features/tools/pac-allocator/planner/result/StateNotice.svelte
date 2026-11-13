@@ -1,7 +1,7 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
     import {formatExactMoneyPlain, formatPlannerMoneyPlain, type CurrencyDigits} from '../format';
-    import type {PacReadyResult, PacRoundingTopUp, PlannerStep} from '../types';
+    import type {PlannerReadyResult, PlannerRoundingTopUp, PlannerStep} from '../types';
     import {BUTTON_LINK, BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
     import type {ResultNames} from './model';
     import {getPlannerProfile, testId} from '../profile';
@@ -11,7 +11,7 @@
     const PLANNER_KEY = 'tools.pacAllocator.planner';
 
     interface Props {
-        result: PacReadyResult;
+        result: PlannerReadyResult;
         names: ResultNames;
         digits: CurrencyDigits;
         ongoto: (step: PlannerStep) => void;
@@ -25,7 +25,7 @@
     const stages = $derived(result.solver_evidence.stages);
     const finished = $derived(stages.filter((stage) => stage.status === 'finished').length);
     // Cash the plan still needs per pool because every posting rounds against the plan (QX1-b): computed by the backend.
-    const topUps: PacRoundingTopUp[] = $derived('primary_solution' in result ? result.primary_solution.rounding_top_ups : []);
+    const topUps: PlannerRoundingTopUp[] = $derived('primary_solution' in result ? result.primary_solution.rounding_top_ups : []);
     const goToLabel = (step: PlannerStep, fallback: string) => $t(`${PLANNER_KEY}.actions.goTo`, {default: 'Go to {step}', values: {step: $t(`${PLANNER_KEY}.steps.${step}`, {default: fallback})}});
 </script>
 
