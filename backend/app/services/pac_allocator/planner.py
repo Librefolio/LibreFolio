@@ -107,6 +107,7 @@ from backend.app.services.pac_allocator.models import (
     check_budget,
 )
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan, normalize_rebalancer_plan
+from backend.app.services.pac_allocator.progress import ProgressReporter, report_phase
 from backend.app.services.pac_allocator.proof import (
     InfeasibilityProvenConclusion,
     OptimalProvenConclusion,
@@ -186,6 +187,7 @@ def plan_pac_allocation(
     *,
     checkpoint: Checkpoint | None = None,
     solver_time_budget_seconds: float | None = None,
+    progress: ProgressReporter | None = None,
 ) -> PacPlannerResult:
     """Plan a PAC allocation and return a wire result.
 
@@ -204,7 +206,7 @@ def plan_pac_allocation(
     ``None`` keeps ``solver.py``'s own default, which is only correct for a
     caller that has no window to claim — every Tool caller has one.
     """
-    return _plan(request, normalize_pac_plan, _PAC, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds)
+    return _plan(request, normalize_pac_plan, _PAC, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress)
 
 
 def plan_rebalancing(
@@ -212,6 +214,7 @@ def plan_rebalancing(
     *,
     checkpoint: Checkpoint | None = None,
     solver_time_budget_seconds: float | None = None,
+    progress: ProgressReporter | None = None,
 ) -> RebalancerPlannerResult:
     """Plan a rebalancing and return a wire result: ``plan_pac_allocation``'s body, with the Rebalancer's product.
 
@@ -220,12 +223,14 @@ def plan_rebalancing(
     wrote it (a level, a custom ``λ``, «Target first»), which the exact scenario keeps only as ``λ``.
     """
     product = _rebalancer_product(request.target_fidelity)
-    return _plan(request, normalize_rebalancer_plan, product, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds)
+    return _plan(request, normalize_rebalancer_plan, product, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress)
 
 
-def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | None, solver_time_budget_seconds: float | None):
-    """The one body of both service functions: normalize, then a failure result or the plan."""
+def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | None, solver_time_budget_seconds: float | None, progress: ProgressReporter | None = None):
+    """The one body of both service functions: normalize, then a failure result or the plan. ``progress`` hears the phases
+    (V2, ``progress.py``); a failure stops at ``validate``, the phase it is born in."""
     check_budget(checkpoint)
+    report_phase(progress, "validate")
     normalized = normalize(request)
     # A failure has no exact scenario, so no scenario fingerprint: the field is empty, never the snapshot identifier (§6).
     snapshot = PlannerResultSnapshot(snapshot_id=request.snapshot.snapshot_id, request_fingerprint="")
@@ -233,7 +238,7 @@ def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | Non
     if not normalized.ready or normalized.normalized is None:
         return _failure_result(normalized.availability, snapshot, list(normalized.issues), product)
 
-    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, product=product).result
+    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, product=product, progress=progress).result
 
 
 def plan_exact_scenario(
@@ -243,6 +248,7 @@ def plan_exact_scenario(
     checkpoint: Checkpoint | None = None,
     solver_time_budget_seconds: float | None = None,
     product: _Product | None = None,
+    progress: ProgressReporter | None = None,
 ) -> PlanReport:
     """Plan an already normalized scenario: search once, replay, publish, and say which limits a «no solution» concerns.
 
@@ -252,14 +258,16 @@ def plan_exact_scenario(
     ``SolverInfeasibilityContradictedError`` guard keeps that honest.
     """
     product = product or (_rebalancer_product(None) if scenario.product == "rebalancer" else _PAC)
+    report_phase(progress, "model")
     view = build_exact_policy_view(scenario, purpose="primary")
     check_budget(checkpoint)
 
-    search = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds)
+    search = _search(scenario, view, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress)
     issue_list = list(issues)
 
     if search.candidate is None:
-        result = _no_incumbent_result(scenario, view, search, issue_list, product)
+        report_phase(progress, "verify")
+        result = _no_incumbent_result(scenario, view, search, issue_list, product, progress)
         # Only a proven «no solution» names the limits; a search that ran out of time says nothing about them.
         return PlanReport(result=result, limited_entries=limited_entries(scenario) if isinstance(result, product.infeasible) else ())
 
@@ -267,11 +275,13 @@ def plan_exact_scenario(
     # arithmetic has not re-derived from the candidate itself. Its verdict is
     # final: a rounding deficit within the threshold comes back as top-ups,
     # any other rejection raises.
+    report_phase(progress, "verify")
     evaluation = evaluate_exact_candidate(scenario, view, search.candidate, checkpoint=checkpoint)
     top_ups = rounding_top_ups(scenario, evaluation)
 
     conclusion = _conclude(view, search, published=search.candidate)
     check_budget(checkpoint)
+    report_phase(progress, "report")
     return PlanReport(result=_ready_result(scenario, view, search, evaluation, conclusion, issue_list, top_ups, product))
 
 
@@ -281,6 +291,7 @@ def _search(
     *,
     checkpoint: Checkpoint | None,
     solver_time_budget_seconds: float | None = None,
+    progress: ProgressReporter | None = None,
 ) -> _Search:
     """Compile the view and run SCIP, the only production search engine (D-X1).
 
@@ -296,6 +307,7 @@ def _search(
     solver = solve_policy_program(
         program,
         checkpoint=checkpoint,
+        progress=progress,
         **({} if solver_time_budget_seconds is None else {"time_budget_seconds": solver_time_budget_seconds}),
     )
     return _Search(candidate=solver.candidate, solver=solver)
@@ -339,7 +351,7 @@ def _ready_result(
     return product.incumbent(result_state="ready_incumbent", outcome="incumbent_found", proof=proof, primary_solution=product.incumbent_solution(**parts), deployment=_DEPLOYMENT, **common)
 
 
-def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, search: _Search, issues: list[PlannerIssue], product: _Product):
+def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, search: _Search, issues: list[PlannerIssue], product: _Product, progress: ProgressReporter | None = None):
     """No publishable plan: SCIP proved there is none, or found none in time.
 
     ``ready_infeasible`` needs an ``InfeasibilityProvenProof``, and only
@@ -366,6 +378,7 @@ def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, 
     if isinstance(conclusion, InfeasibilityProvenConclusion):
         # M20: a proven «no solution» with limits in the request names every entry that carries one; no second search says which is the cause.
         issues = [*issues, *(bounds_unsatisfiable_issue(entry.kind, entry.asset_id if entry.kind == "asset" else f"{entry.broker_id}:{entry.currency}") for entry in limited_entries(scenario))]
+    report_phase(progress, "report")
     common = _common_ready_fields(scenario, view, search, evaluation, issues, product)
     if isinstance(conclusion, InfeasibilityProvenConclusion):
         return product.infeasible(result_state="ready_infeasible", outcome="infeasible_proven", proof=_wire_infeasibility(conclusion), **common)

@@ -80,6 +80,7 @@ from backend.app.services.pac_allocator.models import (
     check_budget,
 )
 from backend.app.services.pac_allocator.objectives import ObjectiveStage
+from backend.app.services.pac_allocator.progress import ProgressReporter, report_phase
 
 __all__ = [
     "DEFAULT_SOLVER_TIME_BUDGET_SECONDS",
@@ -389,6 +390,7 @@ def solve_policy_program(
     time_budget_seconds: float = DEFAULT_SOLVER_TIME_BUDGET_SECONDS,
     node_limit: int | None = None,
     checkpoint: Checkpoint | None = None,
+    progress: ProgressReporter | None = None,
 ) -> SolverRunResult:
     """Run the lexicographic cascade over ``program`` and return a candidate.
 
@@ -409,6 +411,7 @@ def solve_policy_program(
         time_budget_seconds=time_budget_seconds,
         started=started,
         checkpoint=checkpoint,
+        progress=progress,
     )
 
     return SolverRunResult(
@@ -728,15 +731,21 @@ def _solve_stages(
     time_budget_seconds: float,
     started: float,
     checkpoint: Checkpoint | None,
+    progress: ProgressReporter | None = None,
 ) -> tuple[list[SolverStageReport], CandidateActionVector | None, Literal["incumbent", "reported_infeasible", "no_incumbent"], str | None]:
     cascade = _Cascade(program=program, checkpoint=checkpoint, reports=[])
     reserve = stage_one_reserve_seconds(time_budget_seconds)
     stages = program.objective_stages
+    # V2 (project 67): the phase ``search`` counts the named stages only; the canonical vector is one stage per decision.
+    named_total = sum(1 for stage in stages if not stage.code.startswith(_TIE_STAGE_PREFIX))
 
     for index, stage in enumerate(stages):
         # Cooperative polling happens between stages only; it cannot preempt a
         # running optimize() (module docstring, Step3 §16.4 risk 1).
         check_budget(checkpoint)
+        # And so does the phase report (V2): between stages, never from inside SCIP.
+        if index < named_total:
+            report_phase(progress, "search", index + 1, named_total)
         remaining = time_budget_seconds - (time.monotonic() - started)
         if remaining <= 0.0:
             cascade.reports.append(_unfinished_report(stage, index + 1, _scope(index), "budget_exhausted"))

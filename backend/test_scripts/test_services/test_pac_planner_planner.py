@@ -2337,3 +2337,78 @@ def test_result_without_limits_has_no_cash_rows_and_null_asset_limits():
     wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json", by_alias=True)["primary_solution"]
     assert wire["cash_rows"] == []
     assert all((row["minimum"], row["maximum"]) == (None, None) for row in wire["asset_rows"])
+
+
+# --------------------------------------------------------------------------
+# V2 (project 67) — the planner reports its phases
+# --------------------------------------------------------------------------
+_PLANNER_PHASES = ("validate", "model", "search", "verify", "report")
+# The cap of messages per item the platform will set (V1); a constant of the test until V1 lands.
+_PROGRESS_CAP = 50
+
+
+class _Recorder:
+    """A progress function that only records what it is told, as ``report_progress(phase, step=None, total=None)``."""
+
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, int | None, int | None]] = []
+
+    def __call__(self, phase: str, step: int | None = None, total: int | None = None) -> None:
+        self.messages.append((phase, step, total))
+
+
+def _pac_buying_request():
+    payload = _pac_request()
+    for cash in payload["existing_cash"]:
+        cash["available"]["amount"] = "50.00"
+        cash["selected"]["amount"] = "50.00"
+    return PAC_PLAN_INPUT_ADAPTER.validate_python(payload)
+
+
+def test_pac_plan_reports_its_phases_in_order() -> None:
+    """V2 test 1: validate, model, search over the five named stages of the PAC cascade («2 of 5»), verify, report."""
+    recorder = _Recorder()
+    plan_pac_allocation(_pac_buying_request(), progress=recorder)
+    assert recorder.messages == [("validate", None, None), ("model", None, None), *(("search", step, 5) for step in range(1, 6)), ("verify", None, None), ("report", None, None)]
+
+
+@pytest.mark.parametrize(("fidelity", "total"), [pytest.param(reb.BALANCED, 3, id="weighted"), pytest.param({"kind": "target_first"}, 4, id="target-first")])
+def test_rebalancer_search_counts_the_score_then_the_tie_breaks(fidelity: dict, total: int) -> None:
+    """V2 test 2: the search counts the stages of the program by name: the score (or the chain's two) first, then the two
+    named tie-breaks; the canonical vector, one stage per decision, is not counted."""
+    recorder = _Recorder()
+    plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4(fidelity=fidelity)), progress=recorder)
+    searches = [message for message in recorder.messages if message[0] == "search"]
+    assert searches == [("search", step, total) for step in range(1, total + 1)]
+
+
+@pytest.mark.parametrize("plan", [pytest.param(lambda progress: plan_pac_allocation(_pac_buying_request(), progress=progress), id="pac"), pytest.param(lambda progress: plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()), progress=progress), id="rebalancer-t4")])
+def test_a_plan_without_reporter_is_unchanged(plan) -> None:
+    """V2 test 3: the same result, field by field, with and without the progress function."""
+    assert plan(_Recorder()).model_dump(mode="json") == plan(None).model_dump(mode="json")
+
+
+def test_validation_failure_reports_only_the_validate_phase() -> None:
+    """V2 test 4: a result without a plan stops at the phase it is born in: a request without holdings, only ``validate``."""
+    payload = reb.t4()
+    payload["holdings"] = []
+    recorder = _Recorder()
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(payload), progress=recorder)
+    assert result.result_state == "needs_input"
+    assert recorder.messages == [("validate", None, None)]
+
+
+@pytest.mark.parametrize("plan", [pytest.param(lambda progress: plan_pac_allocation(_pac_buying_request(), progress=progress), id="pac"), pytest.param(lambda progress: plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()), progress=progress), id="rebalancer-t4")])
+def test_progress_messages_carry_only_a_phase_and_two_counts(plan) -> None:
+    """V2 test 5: each message is one of the five phase names and at most two whole counts, never a datum of the scenario
+    or of the result; tests 6: under the cap, no (phase, step) twice."""
+    recorder = _Recorder()
+    plan(recorder)
+    assert recorder.messages
+    for phase, step, total in recorder.messages:
+        assert phase in _PLANNER_PHASES
+        assert all(value is None or (type(value) is int and value >= 1) for value in (step, total))
+        assert (step is None) == (total is None) == (phase != "search")
+    assert len(recorder.messages) <= _PROGRESS_CAP
+    assert len({(phase, step) for phase, step, _total in recorder.messages}) == len(recorder.messages)
+    assert list(dict.fromkeys(phase for phase, _step, _total in recorder.messages)) == list(_PLANNER_PHASES)
