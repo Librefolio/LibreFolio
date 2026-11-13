@@ -5,7 +5,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import {PLANNER_STEPS} from './types';
-import {PAC_PLANNER_PROFILE, domId, getPlannerProfile, storageKey, testId, type PlannerProfile} from './profile';
+import {PAC_PLANNER_PROFILE, REBALANCER_PLANNER_PROFILE, domId, getPlannerProfile, storageKey, testId, type PlannerProfile} from './profile';
 
 describe('planner profile', () => {
     it('the default profile is the PAC profile', () => {
@@ -41,5 +41,20 @@ describe('planner profile', () => {
         expect(Object.isFrozen(PAC_PLANNER_PROFILE)).toBe(true);
         expect(Object.isFrozen(PAC_PLANNER_PROFILE.events)).toBe(true);
         expect(Object.isFrozen(PAC_PLANNER_PROFILE.steps)).toBe(true);
+    });
+
+    it('the rebalancer profile lists its steps and prefix (F3a of project 67)', () => {
+        const profile: PlannerProfile = REBALANCER_PLANNER_PROFILE;
+
+        expect(profile.toolCode).toBe('portfolio_rebalancer');
+        expect(profile.contractVersion).toBe('2.0.0');
+        expect(profile.testIdPrefix).toBe('rebalancer-planner');
+        expect(profile.correlationPrefix).toBe('reb-rev');
+        expect(profile.events).toEqual({completed: 'tool.rebalancer-plan.completed', failed: 'tool.rebalancer-plan.failed'});
+        // The mockup's order; the «Tax» step comes with F3b, after Strategy.
+        expect(profile.steps).toEqual(PLANNER_STEPS);
+        expect(profile.text).toBe('rebalancer');
+        expect(testId('continue', profile)).toBe('rebalancer-planner-continue');
+        expect(Object.isFrozen(profile) && Object.isFrozen(profile.events) && Object.isFrozen(profile.steps)).toBe(true);
     });
 });

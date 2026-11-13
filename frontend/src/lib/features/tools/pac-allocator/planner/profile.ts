@@ -46,6 +46,20 @@ export const PAC_PLANNER_PROFILE: PlannerProfile = Object.freeze({
     text: 'pac',
 });
 
+/**
+ * The Rebalancer's profile (F3a of project 67): its own Tool, test id prefix (plan §3 n. 3: `rebalancer-planner`), run names
+ * and text variant. Its steps are the mockup's order; in F3a they are the PAC's nine (the «Tax» step comes with F3b, §3 n. 5).
+ */
+export const REBALANCER_PLANNER_PROFILE: PlannerProfile = Object.freeze({
+    toolCode: 'portfolio_rebalancer',
+    contractVersion: '2.0.0',
+    testIdPrefix: 'rebalancer-planner',
+    correlationPrefix: 'reb-rev',
+    events: Object.freeze({completed: 'tool.rebalancer-plan.completed', failed: 'tool.rebalancer-plan.failed'}),
+    steps: Object.freeze([...PLANNER_STEPS]),
+    text: 'rebalancer',
+});
+
 const PROFILE_KEY = Symbol('planner-profile');
 
 /** Called by a Tool's wrapper, while it is being created: every planner component below it reads this profile. */

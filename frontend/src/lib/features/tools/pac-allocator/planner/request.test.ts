@@ -66,6 +66,7 @@ import {draftAssetFromInfo} from './copies';
 import {PlannerDraft, priceIsCopied, routeKey, type DraftAsset, type DraftFunding, type DraftMode} from './draft.svelte';
 import {buildRequest, capabilityId, feeScheduleId, localProblems, stepOfWirePath, type BuiltRequest} from './request';
 import {issueStep} from './issues';
+import {REBALANCER_PLANNER_PROFILE} from './profile';
 import type {PlannerStep} from './types';
 
 const NOW = new Date('2026-09-16T12:00:00Z');
@@ -687,5 +688,24 @@ describe('the pre-calculation limit codes go to the Targets step (F2)', () => {
         expect(stepOfWirePath(['target_weights', 0, 'minimum', 'share'])).toBe('targets');
         expect(issueStep({section: 'targets', entity_kind: 'asset', entity_id: 'manual-asset:3', field: 'minimum'} as Parameters<typeof issueStep>[0])).toBe('targets');
         expect(issueStep({section: 'targets', entity_kind: 'asset', entity_id: 'manual-asset:3'} as Parameters<typeof issueStep>[0])).toBe('targets');
+    });
+});
+
+describe('the Rebalancer before its own request (F3a of project 67, steps 0–3)', () => {
+    it("a complete draft under the Rebalancer's profile is not sent: its codec refuses the PAC-shaped body", () => {
+        const draft = new PlannerDraft('EUR', 'proportional', REBALANCER_PLANNER_PROFILE);
+        draft.data.asOf = AS_OF;
+        draft.addManualBroker('Broker probe');
+        const asset = manualAsset(draft, 'Manual ETF probe');
+        draft.addAsset(asset);
+        draft.data.targets[asset.key] = '100';
+        draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
+        expect(localProblems(draft)).toEqual([]);
+
+        const outcome = buildRequest(draft, NOW);
+
+        // Until step 11 builds the Rebalancer's request, «Calculate» stops on a local structure problem: nothing is sent.
+        expect(outcome.ok).toBe(false);
+        expect(outcome.ok ? [] : outcome.problems.map((problem) => problem.key)).toContain('structureInvalid');
     });
 });
