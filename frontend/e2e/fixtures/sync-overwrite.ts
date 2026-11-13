@@ -33,6 +33,8 @@ const API = '/api/v1';
 
 /** The catalogue key of the warning's sentence. */
 export const OVERWRITE_WARNING_KEY = 'fx.sync.overwriteWarning';
+/** The sentence the assets' dialog adds when some of the stored prices were entered by hand (`SyncModalBase.svelte`). */
+export const OVERWRITE_MANUAL_KEY = 'assets.sync.overwriteManual';
 
 /** The two sync endpoints a sync dialog calls when it is started. */
 const SYNC_PATHS: readonly string[] = [`${API}/assets/prices/sync`, `${API}/fx/currencies/sync`];
@@ -149,13 +151,27 @@ export async function pageLanguage(page: Page): Promise<string> {
 
 /**
  * `fx.sync.overwriteWarning` for these counts, as the `lang` catalogue words it: the message read from the catalogue
- * file and formatted by `intl-messageformat`. A catalogue without the message fails here, by name — a key that
+ * file and formatted by `intl-messageformat`, followed by `assets.sync.overwriteManual` when `manual` prices among them
+ * were entered by hand, as the assets' dialog shows it. A catalogue without a message fails here, by name — a key that
  * resolved to itself would let a dialog printing the key pass.
  */
-export function overwriteWarningSentence(lang: string, existing: number, total: number): string {
+export function overwriteWarningSentence(lang: string, existing: number, total: number, manual = 0): string {
     const message = catalogueText(lang, OVERWRITE_WARNING_KEY);
     expect(message, `the "${lang}" catalogue has a message for ${OVERWRITE_WARNING_KEY}`).not.toBe(OVERWRITE_WARNING_KEY);
-    return String(new IntlMessageFormat(message, lang).format({existing, total}));
+    const sentence = String(new IntlMessageFormat(message, lang).format({existing, total}));
+    if (manual <= 0) return sentence;
+    const manualMessage = catalogueText(lang, OVERWRITE_MANUAL_KEY);
+    expect(manualMessage, `the "${lang}" catalogue has a message for ${OVERWRITE_MANUAL_KEY}`).not.toBe(OVERWRITE_MANUAL_KEY);
+    return `${sentence} ${String(new IntlMessageFormat(manualMessage, lang).format({manual}))}`;
+}
+
+/**
+ * How many of the stored prices the warning counts were entered by hand (`data-manual`; absent when none). The database is
+ * shared: other specs enter manual prices in the same range, so a spec reads the count instead of assuming it is zero.
+ */
+export async function overwriteManualCount(warning: Locator): Promise<number> {
+    const manual = await warning.getAttribute('data-manual');
+    return manual === null ? 0 : Number(manual);
 }
 
 /** A warning's three published values, read once it is on screen; a missing or non-numeric count fails here. */
