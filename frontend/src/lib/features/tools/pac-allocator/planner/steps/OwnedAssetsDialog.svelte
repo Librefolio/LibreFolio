@@ -78,7 +78,14 @@
     /** Brokers with a lower role stay listed, disabled, never dropped in silence (N18). */
     const brokerOptions = $derived<SelectOption[]>([{value: '', label: $t('tools.pacAllocator.planner.ownedAssets.allBrokers', {default: 'All Brokers'})}, ...(scope ?? []).map((broker) => ({value: String(broker.id), label: broker.name, disabled: !broker.selectable}))]);
     const visible = $derived(brokerFilter === '' ? owned.rows : owned.rows.filter((row) => row.brokerIds.includes(Number(brokerFilter))));
-    const pickable = $derived(visible.filter((row) => !inPlan(row.asset.source_asset_id)));
+    /**
+     * An Asset already in the plan: locked for the PAC (nothing more to add); for the Rebalancer it stays pickable, marked,
+     * and «Add» copies or updates its positions (Q-F3a-5a: the Rebalancer sees the portfolio as it is).
+     */
+    function locked(assetId: number): boolean {
+        return !profile.positions && inPlan(assetId);
+    }
+    const pickable = $derived(visible.filter((row) => !locked(row.asset.source_asset_id)));
     const picked = $derived(pickable.filter((row) => !excluded.includes(row.asset.source_asset_id)));
 
     function inPlan(assetId: number): boolean {
@@ -199,10 +206,11 @@
                 {#each visible as row (row.asset.asset_id)}
                     {@const assetId = row.asset.source_asset_id}
                     {@const already = inPlan(assetId)}
-                    {@const checked = !already && !excluded.includes(assetId)}
+                    {@const lockedRow = locked(assetId)}
+                    {@const checked = !lockedRow && !excluded.includes(assetId)}
                     <li data-testid="{testid}-asset" data-asset-id={assetId} data-in-plan={already ? 'true' : 'false'} data-selected={checked ? 'true' : 'false'}>
-                        <label class="flex items-center gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle'} {already ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-lf-link'}">
-                            <input type="checkbox" class="rounded border-lf-input text-lf-link focus:ring-lf-focus" {checked} disabled={already} data-testid="{testid}-check" onchange={(event) => toggle(assetId, event.currentTarget.checked)} />
+                        <label class="flex items-center gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle'} {lockedRow ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-lf-link'}">
+                            <input type="checkbox" class="rounded border-lf-input text-lf-link focus:ring-lf-focus" {checked} disabled={lockedRow} data-testid="{testid}-check" onchange={(event) => toggle(assetId, event.currentTarget.checked)} />
                             <AssetIcon iconUrl={row.asset.icon_url} assetType={row.asset.asset_class} altText="" size="sm" />
                             <span class="min-w-0 flex-1">
                                 <span class="flex flex-wrap items-center gap-2">

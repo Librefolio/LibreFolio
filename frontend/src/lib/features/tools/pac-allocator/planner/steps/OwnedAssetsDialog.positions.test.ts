@@ -122,7 +122,9 @@ describe('«Your Assets» and the positions', () => {
     it('the Rebalancer lists an Asset already in the plan, marked, and copies its positions', async () => {
         const draft = await addAll(REBALANCER_PLANNER_PROFILE, inPlan);
 
-        expect(screen.queryByTestId('rebalancer-planner-owned-assets-in-plan')).toBeNull(); // closed after «Add»
+        // Marked as already in the plan, and still selectable.
+        expect(screen.getByTestId('rebalancer-planner-owned-assets-in-plan')).toBeTruthy();
+        expect((screen.getByTestId('rebalancer-planner-owned-assets-check') as HTMLInputElement).disabled).toBe(false);
         expect(draft.data.positions.map((item) => item.key)).toEqual(['holding:asset:11:broker:7']);
         expect(draft.data.assets).toHaveLength(1);
     });
