@@ -127,7 +127,7 @@ from backend.app.schemas.pac_allocator.results import (
 )
 from backend.app.services.pac_allocator import planner
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactReplayRejectedError
-from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.models import ExactCashEntry, ExactLimit
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
@@ -2075,7 +2075,7 @@ def test_solver_infeasibility_contradicted_by_the_exact_zero_plan_raises(monkeyp
     normalized = normalize_pac_plan(request)
     assert normalized.ready, f"PREMISE: the request normalizes, issues {[issue.code for issue in normalized.issues]}"
     scenario = normalized.normalized
-    zero = planner._zero_candidate_evaluation(scenario, build_exact_policy_view(scenario, purpose="primary"))
+    zero = evaluate_do_nothing(scenario, build_exact_policy_view(scenario, purpose="primary"))
     assert (zero.candidate_valid, zero.feasible) == (True, True), f"PREMISE: the do-nothing plan is valid and feasible, conflicts {zero.conflict_codes}"
 
     real_solve = planner.solve_policy_program
@@ -2114,7 +2114,7 @@ def test_huge_amounts_never_turn_a_feasible_zero_plan_into_proven_infeasibility(
     normalized = normalize_pac_plan(request)
     assert normalized.ready, f"PREMISE: the scaled request normalizes, issues {[issue.code for issue in normalized.issues]}"
     scenario = normalized.normalized
-    zero = planner._zero_candidate_evaluation(scenario, build_exact_policy_view(scenario, purpose="primary"))
+    zero = evaluate_do_nothing(scenario, build_exact_policy_view(scenario, purpose="primary"))
     assert (zero.candidate_valid, zero.feasible) == (True, True), f"PREMISE: the do-nothing plan is valid and feasible, conflicts {zero.conflict_codes}"
 
     try:
@@ -2160,7 +2160,7 @@ def test_zero_plan_passes_the_replay_without_limits_or_required_minimum(name):
     payload = builders[name]()
     assert not ref.uses_required_minimum(payload)
     scenario = normalize_pac_plan(_validated(payload)).normalized
-    evaluation = planner._zero_candidate_evaluation(scenario, build_exact_policy_view(scenario, purpose="primary"))
+    evaluation = evaluate_do_nothing(scenario, build_exact_policy_view(scenario, purpose="primary"))
     assert (evaluation.candidate_valid, evaluation.feasible) == (True, True), evaluation.conflict_codes
 
 

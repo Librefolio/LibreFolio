@@ -24,6 +24,7 @@ from backend.app.schemas.pac_allocator.base import PlannerFixedDecimal
 from backend.app.schemas.pac_allocator.evidence import SolverStageEvidence, ValuationMoneyUnit
 from backend.app.schemas.pac_allocator.exact import ExactNumber
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
+from backend.app.schemas.pac_allocator.preview import PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, PlannerBrokerIdentity, RebalancerPlannerRequest, RebalancerTaxInput
 from backend.app.schemas.pac_allocator.results import (
     PAC_PLAN_INPUT_ADAPTER,
@@ -46,6 +47,7 @@ from backend.app.schemas.pac_allocator.results import (
     RebalancerPlannerUnsupportedResult,
 )
 from backend.app.schemas.pac_allocator.rows import ObjectiveStageResult, PlannerSellOrderRow, RebalancerAssetTypeTaxRow, RebalancerTaxBasketRow, RebalancerTaxReserveRow, RebalancerTaxScopeRow
+from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.services.tools.schema import (
     declared_operations,
     generate_tool_schema,
@@ -752,6 +754,8 @@ REBALANCER_ROOT_DEFAULTED_FIELDS: dict[str, Any] = {
     **{name: value for name, value in ROOT_DEFAULTED_FIELDS.items() if name != "funding_routes"},
     "holdings": [],
     "tax": RebalancerTaxInput(),
+    # The preview's euros of the «custom» fidelity (B4 of project 67): absent unless a preview carries them.
+    "custom_reference_amount": None,
 }
 REBALANCER_ROOT_SCHEMA_DEFAULTS: dict[str, Any] = {
     **REBALANCER_ROOT_DEFAULTED_FIELDS,
@@ -790,7 +794,8 @@ def test_all_three_request_roots_strict_roundtrip_and_reject_impossible_shapes(
 
     for field_name in model_type.model_fields:
         missing = deepcopy(payload)
-        missing.pop(field_name)
+        # An optional field the fixture leaves out (the preview's euros) is already missing.
+        missing.pop(field_name, None)
         if field_name not in defaulted:
             _reject(adapter, missing)
             continue
@@ -3955,6 +3960,7 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
 # objective codes, an empty request_fingerprint on a failure, the ledger columns (transfers, foreign withholding), the cost line, the limit rows.
 # The PAC fingerprint is the gate of blocks B and C: it does not move again in A4.
 # Rounding direction fix: recomputed for description-only changes (``PlannerRoundingTopUp`` docstring, ``rounding_top_ups`` description, new ``rounding_bound`` description).
+# B4 (project 67, decisioni-REB §11.6): both move once more, for ``operation`` = ``plan`` | ``preview`` and the preview's euros.
 # B3 (project 67, S1, D11): only the Rebalancer's moves, to its final request (one class, fidelity, ``tax``, no funding routes)
 # and result (items on F, cash items, uninvested, transfers, top-ups, plan accounts, score, tax parts, the final sale row);
 # the PAC's stays where A4 left it. C1 moves the Rebalancer's once more, to widen the strategy field.
@@ -3964,13 +3970,13 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "0a4f829eff1e8a31dc6ae02d69c5ae0fd37e25540e5b3ff2659d2e3e1f03503f",
+        "b6aa8a5734d303082533c8497f074f5f43abfa1153d0443151b6e5d00b74eec1",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "3d115f3049333196c439ed6c40a2529762bb992eca5f2502d541569dabdb8afd",
+        "74d3ea58c8880f3fcbb3334e6c51f81e6c44c330987ef47b2dfbe4d1390d93dd",
         id="rebalancer",
     ),
 )
@@ -3992,6 +3998,10 @@ PLANNER_SCHEMA_CASES = (
     pytest.param("rebalancer-input", REBALANCER_PLAN_INPUT_ADAPTER, "validation", 1, None, id="rebalancer-input"),
     pytest.param("pac-output", PAC_PLAN_OUTPUT_ADAPTER, "serialization", 7, "result_state", id="pac-output"),
     pytest.param("rebalancer-output", REBALANCER_PLAN_OUTPUT_ADAPTER, "serialization", 7, "result_state", id="rebalancer-output"),
+    # What each service serves since B4 (project 67): one request model whose ``operation`` is ``plan`` or ``preview``, and
+    # one output union on ``result_state`` with both operations' results.
+    pytest.param("pac-tool-output", PAC_TOOL_OUTPUT_ADAPTER, "serialization", 11, "result_state", id="pac-tool-output"),
+    pytest.param("rebalancer-tool-output", REBALANCER_TOOL_OUTPUT_ADAPTER, "serialization", 11, "result_state", id="rebalancer-tool-output"),
 )
 
 
@@ -4060,7 +4070,8 @@ def test_exported_planner_schema_profile_has_only_closed_required_codegen_safe_s
 ) -> None:
     schema = generate_tool_schema(adapter, mode)
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
-    assert declared_operations(schema) == frozenset({"plan"})
+    # A request serves both operations; a ``plan`` result union says only ``plan``, a service's output union both.
+    assert declared_operations(schema) == (frozenset({"plan", "preview"}) if mode == "validation" or "-tool-" in _label else frozenset({"plan"}))
     assert len(list(root_models(schema))) == expected_roots
     _assert_acyclic_local_references(schema)
     open_map_node_ids = _open_map_property_schema_node_ids(schema)
@@ -4163,13 +4174,15 @@ def test_exported_planner_contract_uses_all_required_named_discriminator_familie
         (REBALANCER_PLAN_INPUT_ADAPTER, "validation"),
         (PAC_PLAN_OUTPUT_ADAPTER, "serialization"),
         (REBALANCER_PLAN_OUTPUT_ADAPTER, "serialization"),
+        (REBALANCER_TOOL_OUTPUT_ADAPTER, "serialization"),
     ):
         schema = generate_tool_schema(adapter, mode)
         for node in walk_schema(schema):
             discriminator = node.get("discriminator")
             if isinstance(discriminator, dict) and isinstance(discriminator.get("propertyName"), str):
                 observed.add(discriminator["propertyName"])
-    # The Rebalancer request is one class since B3 (project 67): no union on ``policy`` any more.
+    # The Rebalancer request is one class since B3 (project 67): no union on ``policy`` any more. Since B4 a request's
+    # ``operation`` is ``plan`` or ``preview`` on the same model, so validation paths stay the same for both.
     assert observed == {"result_state", "kind", "side"}
 
 
@@ -4530,3 +4543,32 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
     missing = _rebalancer_incumbent_result()
     missing["primary_solution"]["score"]["tie_breaks"] = [stage for stage in missing["primary_solution"]["score"]["tie_breaks"] if stage["objective_code"] != "canonical"]
     _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, missing, "The score's tie-breaks must name the published tie-break stages in order")
+
+
+# B4 (project 67, decisioni-REB §11.6): what each service serves is ``plan`` and ``preview``, one request model and one output
+# union, so the fingerprint the catalog publishes covers both. It moves for both services here, the PAC's included (accepted:
+# 1.4 still serves one contract 2.0.0). The two fingerprints above stay the ``plan`` contract alone (its own result union).
+TOOL_SCHEMA_FINGERPRINT_CASES = (
+    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "b6947412548a914cac33e3f65c513e4234f4862cd283dfc6a606f8365eed11e3", id="pac"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "5f4b27e3640eeb25804be4962275023987c5d042e583f46585e8fce6fbde8ff7", id="rebalancer"),
+)
+
+
+@pytest.mark.parametrize(("tool_code", "input_adapter", "output_adapter", "expected_fingerprint"), TOOL_SCHEMA_FINGERPRINT_CASES)
+def test_tool_schema_fingerprints_are_frozen_and_served(tool_code: str, input_adapter: TypeAdapter[Any], output_adapter: TypeAdapter[Any], expected_fingerprint: str) -> None:
+    input_schema = generate_tool_schema(input_adapter, "validation")
+    output_schema = generate_tool_schema(output_adapter, "serialization")
+    assert declared_operations(input_schema) == frozenset({"plan", "preview"})
+    fingerprint = schema_fingerprint(input_schema, output_schema, frozenset({"plan", "preview"}))
+    assert fingerprint == expected_fingerprint
+    assert ToolPluginRegistry.get_definition(tool_code).descriptor.schema_fingerprint == fingerprint
+
+
+def test_custom_reference_amount_belongs_to_the_preview() -> None:
+    """B4 (contract §11): the euros of the «custom» fidelity come only with ``preview``; a plan reads λ from the fidelity."""
+    payload = _rebalancer_request()
+    payload["custom_reference_amount"] = {"amount": "60", "currency": "EUR"}
+    _reject_because(REBALANCER_PLAN_INPUT_ADAPTER, payload, "custom_reference_amount belongs to the preview")
+    preview = {**payload, "operation": "preview"}
+    _strict_roundtrip(REBALANCER_PLAN_INPUT_ADAPTER, preview)
+    _reject_because(REBALANCER_PLAN_INPUT_ADAPTER, {**preview, "custom_reference_amount": {"amount": "60", "currency": "USD"}}, "custom_reference_amount must be in the valuation currency")

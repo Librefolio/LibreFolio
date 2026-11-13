@@ -16,7 +16,8 @@ import type {ToolContractMap, ToolInput, ToolOutput} from '$lib/features/tools/c
 
 export type PacPlannerRequest = ToolInput<'pac_allocator', '2.0.0'>;
 export type PacResolvedRequest = z.output<ToolContractMap['pac_allocator']['2.0.0']['input']>;
-export type PacPlannerResult = ToolOutput<'pac_allocator', '2.0.0'>;
+// The service answers two operations (B4 of project 67); the planner sends ``plan`` and its views read the plan's results.
+export type PacPlannerResult = Extract<ToolOutput<'pac_allocator', '2.0.0'>, {operation: 'plan'}>;
 export type PacResultState = PacPlannerResult['result_state'];
 
 export type PacFailureResult = Extract<PacPlannerResult, {result_state: 'needs_input' | 'invalid' | 'unsupported'}>;

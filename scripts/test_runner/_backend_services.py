@@ -110,6 +110,7 @@ PAC_PLANNER_PROOF_TEST_PATH = "backend/test_scripts/test_services/test_pac_plann
 PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_wire_numbers.py"
 PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
+PAC_PLANNER_PREVIEW_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_preview.py"
 PAC_PLANNER_REFERENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_reference.py"
 
 
@@ -176,6 +177,13 @@ def services_pac_planner_service(verbose: bool = False, test_names: list = None)
     print_section("Services: PAC/Rebalancer Plan Orchestration")
     cmd = _build_pytest_cmd(PAC_PLANNER_SERVICE_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer plan orchestration tests", verbose=verbose)
+
+
+def services_pac_planner_preview(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scenario preview of both Tools: the total, today's items, the table «maximum acceptable cost», no SCIP."""
+    print_section("Services: PAC/Rebalancer Scenario Preview")
+    cmd = _build_pytest_cmd(PAC_PLANNER_PREVIEW_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer scenario preview tests", verbose=verbose)
 
 
 def services_pac_planner_reference(verbose: bool = False, test_names: list = None) -> bool:
@@ -2625,6 +2633,14 @@ Note: No backend server required.
         services_pac_planner_service,
         name="PAC/Rebalancer Plan Orchestration",
         desc="plan_pac_allocation and plan_rebalancing end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-preview",
+        services_pac_planner_preview,
+        name="PAC/Rebalancer Scenario Preview",
+        desc="preview_pac_allocation and preview_rebalancing: the plan's total, today's items on F, the table «maximum acceptable cost» and the custom fidelity both ways, exact, without SCIP",
         isolation="pure",
     )
     add_test(

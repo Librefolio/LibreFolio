@@ -92,12 +92,11 @@ from backend.app.services.pac_allocator import planner_report as report
 from backend.app.services.pac_allocator import rebalancer_report
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
-from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, limited_entries
 from backend.app.services.pac_allocator.issues import bounds_unsatisfiable_issue
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
-    CandidateDecision,
     Checkpoint,
     ExactEvaluation,
     ExactObjectiveCode,
@@ -370,7 +369,7 @@ def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, 
     it is published with its rounding top-ups, or ``plan_pac_allocation``
     raises ``ExactReplayRejectedError``.
     """
-    evaluation = _zero_candidate_evaluation(scenario, view)
+    evaluation = evaluate_do_nothing(scenario, view)
     conclusion = _conclude(view, search, published=None)
     if isinstance(conclusion, InfeasibilityProvenConclusion) and evaluation.candidate_valid and evaluation.feasible:
         raise SolverInfeasibilityContradictedError("the solver reported the scenario infeasible, but the do-nothing plan passes the exact replay")
@@ -514,34 +513,6 @@ def _rebalancer_product(fidelity) -> _Product:
         solution_parts=_rebalancer_solution_parts,
         is_no_op=_is_rebalancer_no_op,
     )
-
-
-def _zero_candidate_evaluation(scenario: ExactPlannerScenario, view: ExactPolicyView) -> ExactEvaluation:
-    """Evaluate the do-nothing candidate.
-
-    Needed even when no plan is publishable, because every ready result still
-    carries a scenario basis.
-    """
-    candidate = CandidateActionVector(
-        view_id=view.view_id,
-        candidate_id="plan:zero",
-        decisions=tuple(CandidateDecision(decision_id=access.decision_id, quanta=_baseline_quanta(access)) for access in view.decisions),
-    )
-    return evaluate_exact_candidate(scenario, view, candidate)
-
-
-def _baseline_quanta(access) -> int:
-    """The do-nothing quanta for one decision, guaranteed contract-valid.
-
-    A blind ``0`` is *not* always valid: a ``frozen_exact`` decision with a
-    nonzero ``frozen_quanta``, or any decision whose ``lower_quanta`` exceeds
-    zero, would be rejected by the candidate contract. Using the decision's
-    own frozen or baseline value is valid for any well-formed view, and for
-    the all-mutable PAC-primary shape it is exactly zero anyway. Same
-    reasoning as ``compiler.py``'s probe candidate; re-derived here rather
-    than importing another module's private helper.
-    """
-    return access.frozen_quanta if access.mode == "frozen_exact" else access.baseline_quanta
 
 
 def _wire_proof(conclusion: PlanConclusion, *, rebalancer: bool = False):

@@ -40,9 +40,11 @@ from structlog.testing import capture_logs
 
 from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
+from backend.app.schemas.pac_allocator.preview import PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER
 from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_OUTPUT_ADAPTER
 from backend.app.services.accounts import user_service
 from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
+from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
 from backend.app.services.tool_plugins.pac_allocator.plugin import _log_engine_failure
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -572,6 +574,26 @@ async def test_rebalancer_compute_rejects_a_pac_request_and_invest_and_sell(test
         assert result["status"] == "error" and "result" not in result, result
         assert result["error"]["code"] == "invalid_parameters"
     assert {"code": "literal_error", "path": ["policy"]} in results[selling["correlation_id"]]["error"]["issues"]
+
+
+@pytest.mark.asyncio
+async def test_preview_over_http(test_server):
+    """B4 test 14 (contract §11): ``operation="preview"`` through ``POST /tools/compute`` gives, for each service, exactly the
+    numbers the preview computes in process: the PAC's total, the Rebalancer's F, items and table."""
+    pac_payload = {**_buying_request(), "operation": "preview"}
+    rebalancer_payload = {**reb.t4(), "operation": "preview"}
+    async with _tool_user() as client:
+        pac = _item(await _served_identity(client), pac_payload)
+        rebalancer = _item(await _served_identity(client, REBALANCER_TOOL_CODE), rebalancer_payload)
+        payload, results = await _compute(client, pac, rebalancer)
+
+    assert (payload["success_count"], payload["failed_count"]) == (2, 0)
+    pac_in_process = preview_pac_allocation(PAC_TOOL_INPUT_ADAPTER.validate_python(pac_payload))
+    rebalancer_in_process = preview_rebalancing(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(rebalancer_payload))
+    assert results[pac["correlation_id"]]["result"] == PAC_TOOL_OUTPUT_ADAPTER.dump_python(pac_in_process, mode="json", by_alias=True)
+    assert results[rebalancer["correlation_id"]]["result"] == REBALANCER_TOOL_OUTPUT_ADAPTER.dump_python(rebalancer_in_process, mode="json", by_alias=True)
+    assert results[rebalancer["correlation_id"]]["result"]["result_state"] == "preview_ready"
+    assert results[rebalancer["correlation_id"]]["result"]["total"] == {"value": {"kind": "finite_decimal", "value": "10000"}, "currency": "EUR"}
 
 
 def _compile_library_boom() -> Callable[[], None]:

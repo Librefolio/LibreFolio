@@ -29,6 +29,7 @@ from backend.app.services.pac_allocator.evaluation.references import build_const
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, build_scenario_index, exact_scenario_fingerprint, to_valuation
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
+    CandidateDecision,
     Checkpoint,
     DecisionAccess,
     ExactConflict,
@@ -340,6 +341,23 @@ _ROUNDING_DEFICIT_CODES = frozenset(
         "SPENDABLE_CASH_NONNEGATIVE",
     }
 )
+
+
+def evaluate_do_nothing(scenario: ExactPlannerScenario, view: ExactPolicyView, *, checkpoint: Checkpoint | None = None) -> ExactEvaluation:
+    """Evaluate the do-nothing plan: every decision at its frozen or baseline quanta.
+
+    The planner needs it even when no plan is publishable, because every ready result still carries a scenario basis; the
+    scenario preview (B4 of project 67) reads today's values and ``F`` from it, with no optimizer. A blind ``0`` is *not*
+    always valid: a ``frozen_exact`` decision with a nonzero ``frozen_quanta``, or any decision whose ``lower_quanta``
+    exceeds zero, would be rejected by the candidate contract; the decision's own frozen or baseline value is valid for any
+    well-formed view, and for the all-mutable primary shape it is exactly zero anyway.
+    """
+    candidate = CandidateActionVector(
+        view_id=view.view_id,
+        candidate_id="plan:zero",
+        decisions=tuple(CandidateDecision(decision_id=access.decision_id, quanta=access.frozen_quanta if access.mode == "frozen_exact" else access.baseline_quanta) for access in view.decisions),
+    )
+    return evaluate_exact_candidate(scenario, view, candidate, checkpoint=checkpoint)
 
 
 def _require_rounding_only_rejection(evaluation: ExactEvaluation) -> frozenset[str]:

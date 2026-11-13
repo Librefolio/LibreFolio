@@ -1300,7 +1300,7 @@ def test_registered_pac_allocator_service_is_the_v2_planner_card():
     assert descriptor.description_i18n_key == "tools.pacAllocator.description"
     assert descriptor.ui.model_dump(mode="json") == {"kind": "custom", "component_key": "pac-allocator", "version": "2.0.0"}
     assert (descriptor.contract_version, descriptor.implementation_version) == ("2.0.0", "2.0.0")
-    assert [policy.operation for policy in descriptor.operations] == ["plan"]
+    assert [policy.operation for policy in descriptor.operations] == ["plan", "preview"]
 
     # The English fallback is shown whenever a catalogue misses the key: it must
     # describe the planner, not the deleted prototype.
@@ -1315,6 +1315,20 @@ def test_registered_pac_allocator_service_is_the_v2_planner_card():
     assert "pac_allocator" not in {item.tool_code for item in catalog.unavailable}
 
 
+def test_both_services_declare_plan_and_preview():
+    """B4 test 13 (contract §11): each planner service answers ``plan`` and ``preview``; the preview claims no engine window
+    of its own (the platform's short defaults) and returns a small result; both services share the two policies."""
+    pac = ToolPluginRegistry.get_definition("pac_allocator").descriptor
+    rebalancer = ToolPluginRegistry.get_definition("portfolio_rebalancer").descriptor
+    for descriptor in (pac, rebalancer):
+        policies = {policy.operation: policy for policy in descriptor.operations}
+        assert list(policies) == ["plan", "preview"]
+        assert policies["preview"].engine_timeout_ms < policies["plan"].engine_timeout_ms
+        assert policies["preview"].request_timeout_ms < policies["plan"].request_timeout_ms
+        assert policies["preview"].max_result_bytes <= policies["plan"].max_result_bytes
+    assert pac.operations == rebalancer.operations
+
+
 def test_registered_portfolio_rebalancer_service_is_published():
     """B3 test 12 (D9, U3 of project 67): the Rebalancer is the plugin's second service, ``plan`` only, with its own card,
     component and page, and the catalog serves it."""
@@ -1326,7 +1340,7 @@ def test_registered_portfolio_rebalancer_service_is_published():
     assert descriptor.ui.model_dump(mode="json") == {"kind": "custom", "component_key": "portfolio-rebalancer", "version": "1.0.0"}
     assert descriptor.documentation is not None and descriptor.documentation.path == "user/tools/portfolio-rebalancer/"
     assert (descriptor.contract_version, descriptor.implementation_version) == ("2.0.0", "2.0.0")
-    assert [policy.operation for policy in descriptor.operations] == ["plan"]
+    assert [policy.operation for policy in descriptor.operations] == ["plan", "preview"]
     assert descriptor.icon_key == "scale" and descriptor.name == "Portfolio rebalancer"
     assert [wording for wording in P1_PROTOTYPE_WORDING if wording in descriptor.description.casefold()] == []
 

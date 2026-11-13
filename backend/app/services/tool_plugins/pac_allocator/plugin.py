@@ -13,6 +13,11 @@ every published number replayed in exact arithmetic.
 Until C1 it plans «Invest only»: its request refuses «Invest and sell» and any
 sale route at the schema, which the platform answers ``invalid_parameters``.
 
+**Both services also answer ``operation="preview"``** (B4 of project 67): the
+numbers the screen shows before the calculation, read with the normalizer and
+one exact replay (``pac_allocator/preview.py``). No optimizer, no engine window,
+no phases; the platform's short default deadlines.
+
 Timeout envelope: only one number is a product decision — ``engine_timeout_ms``,
 the solver's own budget, set to 30 s by the developer. Every other value is
 *derived* from identities the platform validators impose, not chosen:
@@ -44,14 +49,15 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from backend.app.logging_config import get_logger
+from backend.app.schemas.pac_allocator.preview import PacToolOutput, RebalancerToolOutput
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, RebalancerPlannerRequest
-from backend.app.schemas.pac_allocator.results import PacPlannerResult, RebalancerPlannerResult
 from backend.app.schemas.tools import (
     ToolDocumentation,
     ToolOperationPolicy,
     ToolUIDescriptor,
 )
 from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
+from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
 from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import (
     ToolExecutionContext,
@@ -79,7 +85,7 @@ _REPO_ROOT = _BACKEND_ROOT.parent
 # rather than only here, because an accurate comment ages without announcing it.
 _POST_ENGINE_RESERVE_MS = 2_000
 
-_PLAN_POLICY = (
+_OPERATION_POLICIES = (
     ToolOperationPolicy(
         operation="plan",
         pure=True,
@@ -94,6 +100,17 @@ _PLAN_POLICY = (
         cleanup_timeout_ms=5_000,
         request_timeout_ms=59_000,
         client_timeout_ms=65_000,
+    ),
+    # The scenario preview (B4 of project 67): the normalizer and one exact replay, no optimizer, so no engine window is
+    # claimed and the platform's short defaults hold. Its answer has one row per target entry, smaller than the entry in the
+    # request, so the plan's result cap holds it for any request the parameter cap admits.
+    ToolOperationPolicy(
+        operation="preview",
+        pure=True,
+        deterministic=True,
+        deduplication="none",
+        max_parameter_bytes=262_144,
+        max_result_bytes=_PLAN_RESULT_BYTES,
     ),
 )
 
@@ -155,9 +172,9 @@ class PacAllocatorTool(ToolPlugin):
                 path="user/tools/pac-allocator/",
                 version="1.0.0",
             ),
-            operations=_PLAN_POLICY,
+            operations=_OPERATION_POLICIES,
             input_type=PacPlannerRequest,
-            output_type=PacPlannerResult,
+            output_type=PacToolOutput,
         ),
         ToolService(
             tool_code="portfolio_rebalancer",
@@ -177,9 +194,9 @@ class PacAllocatorTool(ToolPlugin):
                 version="1.0.0",
             ),
             # The same policy as the PAC: the same engine window, the same reserve, the same zero margin (module docstring).
-            operations=_PLAN_POLICY,
+            operations=_OPERATION_POLICIES,
             input_type=RebalancerPlannerRequest,
-            output_type=RebalancerPlannerResult,
+            output_type=RebalancerToolOutput,
         ),
     )
 
@@ -188,12 +205,27 @@ class PacAllocatorTool(ToolPlugin):
         tool_code: str,
         parameters: BaseModel,
         context: ToolExecutionContext,
-    ) -> PacPlannerResult | RebalancerPlannerResult:
+    ) -> BaseModel:
         # Dispatch on tool_code *and* the declared operation, never on the
         # shape of the parameters.
-        planners = {"pac_allocator": (PacPlannerRequest, plan_pac_allocation), "portfolio_rebalancer": (RebalancerPlannerRequest, plan_rebalancing)}
-        request_type, plan = planners.get(tool_code, (None, None))
-        if request_type is not None and isinstance(parameters, request_type) and parameters.operation == "plan":
+        services = {
+            "pac_allocator": (PacPlannerRequest, plan_pac_allocation, preview_pac_allocation),
+            "portfolio_rebalancer": (RebalancerPlannerRequest, plan_rebalancing, preview_rebalancing),
+        }
+        request_type, plan, preview = services.get(tool_code, (None, None, None))
+        if request_type is None or not isinstance(parameters, request_type):
+            raise ToolExecutionError("invalid_parameters")
+        if parameters.operation == "preview":
+            # No optimizer, so no engine window and no phases: the normalizer and one exact replay (B4 of project 67). A
+            # failure is logged like the plan's: the class and the code location, never the amounts.
+            try:
+                return preview(parameters, checkpoint=context.checkpoint)
+            except ToolExecutionError:
+                raise
+            except Exception as exc:
+                _log_engine_failure(exc, context.execution_id)
+                raise
+        if parameters.operation == "plan":
             # The engine window is the product decision this module's header
             # calls the only one: claiming it is what makes `engine_timeout_ms`
             # reach SCIP instead of leaving the solver on its own 3.5 s default.
