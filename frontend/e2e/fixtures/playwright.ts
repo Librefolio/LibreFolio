@@ -22,7 +22,7 @@ import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {TEST_USER} from './test-users';
 import {cspCollectorEnabled, isKnown, loadBaseline, type CspViolation} from './csp';
-import {WorkerCoverageSink, type CoveragePayload} from './js-coverage-sink';
+import {WorkerCoverageSink, TimingLog, payloadBytes, timingEnabled, timingRecord, type CoveragePayload} from './js-coverage-sink';
 
 const COVERAGE_ON = process.env.COVERAGE_JS === '1';
 
@@ -49,6 +49,10 @@ const INSTRUMENTED_BUILD = (() => {
 
 /** Where each worker writes the sum of its tests' `window.__coverage__` (`worker-<parallelIndex>-<pid>.json`). */
 const E2E_COVERAGE_DIR = fileURLToPath(new URL('../../coverage-js/e2e-raw', import.meta.url));
+
+/** `LF_COV_TIMING=1`: one line per test of what its collection cost, in `coverage-js/timing/` (measure only, project 71 step 3.6). */
+const TIMING_ON = COVERAGE_ON && timingEnabled();
+const E2E_TIMING_DIR = fileURLToPath(new URL('../../coverage-js/timing', import.meta.url));
 
 /**
  * The JS coverage collection's own time budget. Collecting is not the test's work: once the test is over, the
@@ -351,7 +355,7 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknow
     ],
 
     jsCoverage: [
-        async ({context, jsCoverageSink}, use) => {
+        async ({context, jsCoverageSink}, use, testInfo) => {
             if (!COVERAGE_ON || !jsCoverageSink) {
                 await use();
                 return;
@@ -369,6 +373,7 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknow
             // That is also why there is no monocart here any more: resolving
             // V8 ranges to sources was its entire job, and instrumenting the
             // build removed the job.
+            const evaluateStart = TIMING_ON ? performance.now() : 0;
             const entries = (
                 await Promise.all(
                     context.pages().map(async (page) => {
@@ -381,6 +386,7 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknow
                     }),
                 )
             ).filter(Boolean);
+            const evaluateMs = TIMING_ON ? performance.now() - evaluateStart : 0;
 
             if (entries.length === 0) {
                 if (!INSTRUMENTED_BUILD) warnUninstrumentedOnce();
@@ -392,7 +398,10 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknow
             // per worker every few tests. Every page is summed: a module two
             // pages loaded counts the hits of both.
             try {
-                await jsCoverageSink.add(...(entries as CoveragePayload[]));
+                const added = await jsCoverageSink.add(...(entries as CoveragePayload[]));
+                // The size is measured, and the line written, only with the stopwatches on: the payload is ~17 MB, and
+                // stringifying it again is a cost the collection must not pay for a number nobody asked for.
+                if (TIMING_ON) await new TimingLog(E2E_TIMING_DIR, testInfo.parallelIndex).append(timingRecord(evaluateMs, payloadBytes(entries), added));
             } catch (e) {
                 console.warn('[coverage-js] collection failed:', e);
             }

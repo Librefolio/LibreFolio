@@ -50,6 +50,12 @@
  * file is either the old sum or the new one. The `.tmp` suffix also keeps a
  * half-written file out of both readers (`*.json`).
  *
+ * ### The stopwatches
+ *
+ * Under `LF_COV_TIMING=1` the fixture writes, per test, one line into `coverage-js/timing/worker-<i>-<pid>.jsonl` (`TimingLog`):
+ * the page read, the size of what it returned, the merge and the write (`add()` and `flush()` return their own milliseconds) and
+ * the worker's memory. Measure only: nothing here changes what is collected. See `scripts/js-coverage-probe.mjs timing`.
+ *
  * ### Why a new worker absorbs the files of dead ones
  *
  * The runner splits a category into Playwright runs of a few specs under JS
@@ -70,14 +76,55 @@
  * hit once). Nothing is ever lost to it.
  */
 import {createRequire} from 'node:module';
-import {mkdir, readdir, readFile, rename, rm, writeFile} from 'node:fs/promises';
+import {appendFile, mkdir, readdir, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
+import {performance} from 'node:perf_hooks';
 
 /** Tests with counters between two writes of the worker file. See «How often the file is written». */
 const FLUSH_EVERY_TESTS = 20;
 
 /** The slice of `window.__coverage__` the fixture reads: istanbul file coverage, keyed by path. */
 export type CoveragePayload = Record<string, unknown>;
+
+/** What one `add()` cost, in milliseconds: summing the slices into the map, and the write it triggered (0 when it did not write). */
+export type AddTiming = {merge_ms: number; flush_ms: number};
+
+/** The line the fixture writes for one test under `LF_COV_TIMING=1`: what each part of its collection cost. */
+export type TimingRecord = {evaluate_ms: number; payload_bytes: number; merge_ms: number; flush_ms: number; rss_mb: number; heap_mb: number};
+
+const MB = 1024 * 1024;
+
+/** Are the stopwatches on? Only `LF_COV_TIMING=1`: a flag that is not set costs the collection nothing, not even the size of the payload. */
+export function timingEnabled(env: Record<string, string | undefined> = process.env): boolean {
+    return env.LF_COV_TIMING === '1';
+}
+
+/** The size of what the page handed over, in bytes on the wire (UTF-8), as `JSON.stringify` writes it. Called only with the stopwatches on. */
+export function payloadBytes(payloads: unknown): number {
+    return Buffer.byteLength(JSON.stringify(payloads));
+}
+
+/** One test's record: the page read (`evaluateMs`), the size of what it returned, what the sink spent, and the worker's memory now. */
+export function timingRecord(evaluateMs: number, bytes: number, added: AddTiming): TimingRecord {
+    const memory = process.memoryUsage();
+    return {evaluate_ms: evaluateMs, payload_bytes: bytes, merge_ms: added.merge_ms, flush_ms: added.flush_ms, rss_mb: memory.rss / MB, heap_mb: memory.heapUsed / MB};
+}
+
+/** One worker's timing file, `coverage-js/timing/worker-<parallelIndex>-<pid>.jsonl`: a JSON object per line, appended. */
+export class TimingLog {
+    readonly file: string;
+    private readonly dir: string;
+
+    constructor(dir: string, parallelIndex: number, pid: number = process.pid) {
+        this.dir = dir;
+        this.file = join(dir, `worker-${parallelIndex}-${pid}.jsonl`);
+    }
+
+    async append(record: TimingRecord): Promise<void> {
+        await mkdir(this.dir, {recursive: true});
+        await appendFile(this.file, JSON.stringify(record) + '\n');
+    }
+}
 
 /** The part of istanbul-lib-coverage used here. The package ships no types, and none is installed. */
 type CoverageMap = {merge(data: CoveragePayload | CoverageMap): void; files(): string[]; toJSON(): unknown};
@@ -187,19 +234,24 @@ export class WorkerCoverageSink {
     /**
      * Add one test's counters, one payload per page of its context: every page is summed into the worker's map,
      * so a module two pages loaded counts the hits of both. Write the worker file every `flushEvery` tests.
+     * Returns what the merge and the write cost (two clock reads: the stopwatches' own cost is not worth a flag).
      */
-    async add(...payloads: CoveragePayload[]): Promise<void> {
+    async add(...payloads: CoveragePayload[]): Promise<AddTiming> {
+        const start = performance.now();
         let merged = 0;
         for (const payload of payloads) merged += this.mergeEach(fileCoverageOnly(payload));
-        if (merged === 0) return;
+        const mergeMs = performance.now() - start;
+        if (merged === 0) return {merge_ms: 0, flush_ms: 0};
         this.dirty = true;
         this.sinceFlush += 1;
-        if (this.sinceFlush >= this.flushEvery) await this.flush();
+        const flushMs = this.sinceFlush >= this.flushEvery ? await this.flush() : 0;
+        return {merge_ms: mergeMs, flush_ms: flushMs};
     }
 
-    /** Write the whole sum atomically, then delete the predecessors' files it now contains. */
-    async flush(): Promise<void> {
-        if (!this.dirty) return;
+    /** Write the whole sum atomically, then delete the predecessors' files it now contains. Returns how long the write took, in milliseconds (0 when there was nothing to write). */
+    async flush(): Promise<number> {
+        if (!this.dirty) return 0;
+        const start = performance.now();
         await mkdir(this.dir, {recursive: true});
         const tmp = `${this.file}.tmp`;
         await writeFile(tmp, JSON.stringify(this.map.toJSON()));
@@ -210,5 +262,6 @@ export class WorkerCoverageSink {
         // write, rather than leaving its tests counted twice for the rest of the run.
         const results = await Promise.allSettled(this.absorbed.map((path) => rm(path, {force: true})));
         this.absorbed = this.absorbed.filter((_, i) => results[i].status === 'rejected');
+        return performance.now() - start;
     }
 }
