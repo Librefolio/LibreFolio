@@ -7,7 +7,26 @@
  * nothing prices an Asset (`/assets/prices/current` is never called).
  */
 import {canonicalInput, compareDecimal, decimalSign, fractionToPercent} from '$lib/utils/core/exactDecimal';
-import {EXPOSURE_DIMENSIONS, PlannerDraft, nowTimestamp, priceIsCopied, rateIsCopied, samePrice, type CopyKind, type CopyRecord, type CopyRef, type DraftAsset, type DraftBroker, type DraftCash, type DraftExposure, type DraftFx, type DraftPrice, type ExposureDimension} from './draft.svelte';
+import {modesFromProfile} from './brokerProfileAdapter';
+import {
+    EXPOSURE_DIMENSIONS,
+    PlannerDraft,
+    nowTimestamp,
+    priceIsCopied,
+    rateIsCopied,
+    sameModes,
+    samePrice,
+    type CopyKind,
+    type CopyRecord,
+    type CopyRef,
+    type DraftAsset,
+    type DraftBroker,
+    type DraftCash,
+    type DraftExposure,
+    type DraftFx,
+    type DraftPrice,
+    type ExposureDimension,
+} from './draft.svelte';
 import {rememberFxPairIssues} from './fxIssues';
 import type {PlannerSource, SourceAsset, SourceBroker, SourceCurrentWeight, SourceIssue, SourceQuery, SourceSection} from './source';
 
@@ -177,8 +196,12 @@ function upsertBroker(draft: PlannerDraft, row: SourceBroker, copy: CopyRecord):
     const key = domainBrokerKey(row.source_broker_id);
     const stamp = stampOf(draft, copy, row.provenance_id);
     const existing = draft.broker(key);
+    // P3 (D11 a): the profile's modes, and only those; none (or no profile) gives the default mode per observed currency.
+    const profileModes = modesFromProfile(row.operating_profile, () => draft.nextId('mode'));
+    const profileConversion = row.operating_profile ? (row.operating_profile.conversion_mode ?? 'manual') : null;
     if (existing) {
-        // Identity facts follow the source; modes and funding are the user's configuration.
+        // Identity facts follow the source; modes and funding are the user's configuration. The copy of the
+        // profile follows the source too (D12): «Restore» and the review's «modified» read it.
         existing.name = row.name;
         existing.iconUrl = row.icon_url;
         existing.active = row.active;
@@ -186,6 +209,9 @@ function upsertBroker(draft: PlannerDraft, row: SourceBroker, copy: CopyRecord):
         existing.ownershipShare = row.ownership_share;
         existing.observedCurrencies = [...row.observed_currencies];
         existing.stamp = stamp;
+        // An unchanged profile keeps its copy as it is, keys included: a re-copy with nothing new changes no fingerprint.
+        if (!(existing.copiedModes && profileModes && sameModes(existing.copiedModes, profileModes))) existing.copiedModes = profileModes;
+        existing.copiedConversionMode = profileConversion;
         return existing;
     }
     const broker: DraftBroker = {
@@ -201,8 +227,10 @@ function upsertBroker(draft: PlannerDraft, row: SourceBroker, copy: CopyRecord):
         observedCurrencies: [...row.observed_currencies],
         stamp,
         enteredAt: nowTimestamp(),
-        modes: draft.defaultModes(row.observed_currencies),
-        conversionMode: 'manual',
+        modes: profileModes ? profileModes.map((mode) => ({...mode})) : draft.defaultModes(row.observed_currencies),
+        conversionMode: profileConversion ?? 'manual',
+        copiedModes: profileModes,
+        copiedConversionMode: profileConversion,
         funding: [],
     };
     draft.data.brokers.push(broker);

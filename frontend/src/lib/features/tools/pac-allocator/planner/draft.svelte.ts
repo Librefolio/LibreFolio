@@ -80,6 +80,14 @@ export interface DraftBroker {
     enteredAt: string;
     modes: DraftMode[];
     conversionMode: ConversionMode;
+    /**
+     * P3 of project 67 (D12, the model of `copiedPrice`): the modes and the conversion mode as the account's operating
+     * profile gave them at the last copy. A re-copy updates these, never `modes` and `conversionMode`, which are the
+     * user's; «Restore» puts them back. `copiedModes` is `null` when the profile has no order mode (D11: the default
+     * modes, as without a profile); both are `null` when the Broker was never copied with a profile.
+     */
+    copiedModes: DraftMode[] | null;
+    copiedConversionMode: ConversionMode | null;
     funding: DraftFunding[];
 }
 
@@ -242,6 +250,29 @@ export function samePrice(left: DraftPrice | null, right: DraftPrice | null): bo
  */
 export function priceIsCopied(asset: DraftAsset): boolean {
     return !asset.priceManual && asset.priceStamp !== null && asset.copiedPrice !== null && samePrice(asset.price, asset.copiedPrice);
+}
+
+function canonicalText(text: string): string {
+    return canonicalInput(text) ?? text.trim();
+}
+
+/** What a mode means, without its key: the same value written another way («0.190», «0.19») is the same mode. */
+function modeSignature(mode: DraftMode): string {
+    return JSON.stringify([mode.currency, mode.kind, canonicalText(mode.step), canonicalText(mode.fixedFee), canonicalText(mode.ratePercent), canonicalText(mode.floor), canonicalText(mode.cap)]);
+}
+
+/** Two lists of modes with the same meaning, in any order. */
+export function sameModes(left: readonly DraftMode[], right: readonly DraftMode[]): boolean {
+    const a = left.map(modeSignature).sort();
+    const b = right.map(modeSignature).sort();
+    return a.length === b.length && a.every((item, index) => item === b[index]);
+}
+
+/** P3 (D12): a Broker copied with a profile whose modes or conversion mode the user changed since. */
+export function brokerModesModified(broker: DraftBroker): boolean {
+    const modes = broker.copiedModes !== null && !sameModes(broker.modes, broker.copiedModes);
+    const conversion = broker.copiedConversionMode !== null && broker.conversionMode !== broker.copiedConversionMode;
+    return modes || conversion;
 }
 
 /** A rate still equal to its copy (same rule as `priceIsCopied`). */
@@ -445,6 +476,8 @@ export class PlannerDraft {
             enteredAt,
             modes: [],
             conversionMode: 'manual',
+            copiedModes: null,
+            copiedConversionMode: null,
             funding: [],
         };
         const cash: DraftCash = {
@@ -542,6 +575,8 @@ export class PlannerDraft {
             enteredAt: nowTimestamp(),
             modes: this.defaultModes([]),
             conversionMode: 'manual',
+            copiedModes: null,
+            copiedConversionMode: null,
             funding: [],
         };
         this.data.brokers.push(broker);

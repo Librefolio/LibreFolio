@@ -4,7 +4,7 @@
  * converted or compared here.
  */
 import {hasLimit} from './limits';
-import {daysBetween, priceIsCopied, rateIsCopied, samePrice, type FactOrigin, type PlannerDraft} from './draft.svelte';
+import {brokerModesModified, daysBetween, priceIsCopied, rateIsCopied, samePrice, type FactOrigin, type PlannerDraft} from './draft.svelte';
 import type {PlannerStep} from './types';
 
 export interface SectionCounts {
@@ -113,7 +113,7 @@ export function snapshotFacts(draft: PlannerDraft): SnapshotFact[] {
             entity: broker.name,
             subject: {type: 'broker', brokerKey: broker.key},
             origin: broker.origin,
-            modified: false,
+            modified: brokerModesModified(broker),
             referenceDate: null,
             stale: false,
             value: {kind: 'modes', currencies: [...new Set(broker.modes.map((mode) => mode.currency))], fundingOnly: broker.fundingOnly},
