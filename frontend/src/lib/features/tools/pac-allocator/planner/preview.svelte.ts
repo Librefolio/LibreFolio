@@ -8,7 +8,8 @@
  * here. It
  *   - calls once, `PREVIEW_DELAY_MS` after the last change (`schedule`), with the latest draft;
  *   - while it waits, keeps the previous numbers, `stale`;
- *   - drops an answer older than the latest asked;
+ *   - never sends while a call is on its way (one batch per user: a second call would be refused): a change made
+ *     meanwhile waits for it, then the latest draft is sent once, so answers always come in order;
  *   - on a failure drops the numbers and keeps the reason: the first issue's code of an answer that cannot count,
  *     `incomplete` for a draft the request cannot carry yet, `unavailable` for the network, the tool error's code;
  *   - waits while a calculation runs (`blocked`): the Tools API admits one batch per user (`queue_full`, 429) and frees it
@@ -24,20 +25,14 @@ import type {PlannerDraft} from './draft.svelte';
 import type {PlannerProfile} from './profile';
 import {buildRequest} from './request';
 import type {PlannerDescriptor} from './run.svelte';
+import type {PlannerExactMoney, PlannerExactNumber} from './types';
 
 /** The pause after the last change before the preview is asked. */
 export const PREVIEW_DELAY_MS = 600;
 
-/** An exact number of the wire: a finite decimal, or a value the backend could not write as one. */
-export interface PreviewNumber {
-    kind: string;
-    value?: string;
-}
-
-export interface PreviewMoney {
-    value: PreviewNumber;
-    currency: string;
-}
+/** An exact number and an exact amount of the wire, as the result views read them. */
+export type PreviewNumber = PlannerExactNumber;
+export type PreviewMoney = PlannerExactMoney;
 
 /** The fields of a ready preview the planner reads (`RebalancerPreviewReadyResult`, `PacPreviewReadyResult`). */
 export interface PreviewReady {
@@ -92,6 +87,8 @@ export class PlannerPreview {
     #sequence = 0;
     #customEuros: string | null = null;
     #inFlight: Promise<void> | null = null;
+    /** A change arrived while a call was on its way: send the latest draft when it lands. */
+    #queued = false;
 
     constructor(deps: PreviewDeps) {
         this.#deps = deps;
@@ -133,9 +130,12 @@ export class PlannerPreview {
             this.#arm();
             return;
         }
+        // One batch per user: never a second call while one runs; the latest draft goes when it lands.
+        if (this.#inFlight !== null) {
+            this.#queued = true;
+            return;
+        }
         const sequence = ++this.#sequence;
-        this.#controller?.abort();
-        this.#controller = null;
         const euros = this.#customEuros;
         const built = buildRequest(draft, new Date(), {operation: 'preview', customReferenceAmount: euros});
         if (!built.ok) {
@@ -154,9 +154,12 @@ export class PlannerPreview {
             },
         );
         const settled = flight.finally(() => {
-            if (this.#inFlight === settled) {
-                this.#inFlight = null;
-                this.busy = false;
+            if (this.#inFlight !== settled) return;
+            this.#inFlight = null;
+            this.busy = false;
+            if (this.#queued) {
+                this.#queued = false;
+                this.#fire();
             }
         });
         this.#inFlight = settled;
@@ -177,7 +180,8 @@ export class PlannerPreview {
         const ready = result as unknown as PreviewReady;
         this.numbers = ready;
         this.reason = null;
-        this.state = 'ready';
+        // A newer draft waits to be sent: these numbers are already stale.
+        this.state = this.#queued ? 'waiting' : 'ready';
         if (euros === null) return;
         // The euros reached the backend: later previews send λ. The λ they give, as the answer gives it, goes to the draft
         // only while its choice is still «Custom» (the user may have picked a level meanwhile).
@@ -191,11 +195,12 @@ export class PlannerPreview {
     #fail(reason: string): void {
         this.numbers = null;
         this.reason = reason;
-        this.state = 'error';
+        this.state = this.#queued ? 'waiting' : 'error';
     }
 
     dispose(): void {
         this.#sequence += 1;
+        this.#queued = false;
         if (this.#timer !== null) clearTimeout(this.#timer);
         this.#timer = null;
         this.#controller?.abort();

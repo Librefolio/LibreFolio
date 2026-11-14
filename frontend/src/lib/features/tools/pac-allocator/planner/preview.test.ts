@@ -125,24 +125,29 @@ describe('PlannerPreview', () => {
         preview.dispose();
     });
 
-    it('an older preview answer never overwrites a newer one', async () => {
+    it('a change while a preview is on its way waits for it, then sends the latest draft once', async () => {
+        // One batch per user: a second call while the first runs would be refused (429), so it is never sent.
         const draft = draftOf();
         const {call, pending} = controlled();
         const preview = new PlannerPreview({call, blocked: () => false});
         preview.schedule(draft);
         vi.advanceTimersByTime(PREVIEW_DELAY_MS);
+        draft.data.targets['asset:probe'] = '70';
+        preview.schedule(draft);
         draft.data.targets['asset:probe'] = '80';
         preview.schedule(draft);
-        vi.advanceTimersByTime(PREVIEW_DELAY_MS);
-        expect(call).toHaveBeenCalledTimes(2);
+        vi.advanceTimersByTime(PREVIEW_DELAY_MS * 3);
+        expect(call).toHaveBeenCalledOnce();
 
-        pending[1].resolve(ready('200'));
-        await vi.runAllTimersAsync();
         pending[0].resolve(ready('100'));
         await vi.runAllTimersAsync();
-
-        expect(preview.numbers?.total.value).toEqual({kind: 'finite_decimal', value: '200'});
-        expect(preview.state).toBe('ready');
+        expect(call).toHaveBeenCalledTimes(2);
+        expect((pending[1].request.target_weights as {asset_id?: string; weight: string}[]).find((entry) => entry.asset_id === 'asset:probe')?.weight).toBe('0.8');
+        // The first answer is shown, stale, until the second lands.
+        expect([preview.stale, preview.numbers?.total.value]).toEqual([true, {kind: 'finite_decimal', value: '100'}]);
+        pending[1].resolve(ready('200'));
+        await vi.runAllTimersAsync();
+        expect([preview.state, preview.numbers?.total.value]).toEqual(['ready', {kind: 'finite_decimal', value: '200'}]);
         preview.dispose();
     });
 
