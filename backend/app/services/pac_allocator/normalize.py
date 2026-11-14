@@ -86,6 +86,11 @@ _RATIO_WIRE_INTEGER_CHARS = 192
 _FX_STORED_RATE_HALF_UNIT = ExactRatio(1, 2 * 10**10)
 
 
+# The issues that keep a plan from running but not the preview from counting (F3a step 8 of project 67): the weights the
+# user is still typing. A ready preview leaves them out of its issues: the screen shows the control total itself.
+COUNTED_ANYWAY = frozenset({"allocation.target_total_not_one"})
+
+
 @dataclass(frozen=True, slots=True)
 class PlannerV2NormalizationResult:
     """The normalizer's answer. ``limit_problems`` are the three cross checks of the limits (M1, T12) that made it
@@ -1068,7 +1073,21 @@ class _PlannerV2Normalizer:
             return ExactLimit(kind="amount", value=ExactRatio.from_decimal(Decimal(limit.amount.amount)))
         return ExactLimit(kind="share", value=ExactRatio.from_decimal(Decimal(limit.share)))
 
-    def build_scenario(self) -> ExactPlannerScenario:
+    def build_scenario(self, *, neutral_weights: bool = False) -> ExactPlannerScenario:
+        """The exact scenario. ``neutral_weights`` (the preview's counted scenario of targets that do not sum to one, F3a step 8
+        of project 67): every entry gets an equal share, so the scenario's invariants hold (the weights sum to one, a cash entry
+        says something); the entries themselves, their limits and today's facts are the request's. Nothing the preview answers
+        reads a weight; the plan never receives such a scenario."""
+        asset_entries = sorted((value for value in self.request.target_weights if value.kind == "asset"), key=lambda value: value.asset_id)
+        rebalancer = isinstance(self.request, RebalancerPlannerRequest)
+        cash_items = [item for item in sorted((value for value in self.request.target_weights if value.kind == "cash"), key=lambda value: (value.broker_id, value.currency)) if item.minimum is not None or item.maximum is not None or (rebalancer and Decimal(item.weight) != 0)]
+
+        weighted = len(asset_entries) + (len(cash_items) if rebalancer else 0)
+        neutral = ExactRatio(1, weighted) if neutral_weights and weighted > 0 else ExactRatio(0)
+
+        def weight_of(item) -> ExactRatio:
+            return neutral if neutral_weights else ExactRatio.from_decimal(Decimal(item.weight))
+
         fx_rates = tuple(
             ExactFxRate(
                 pair_first=pair.partition("/")[0],
@@ -1147,21 +1166,14 @@ class _PlannerV2Normalizer:
             contributions=contributions,
             funding_routes=funding_routes,
             order_routes=order_routes,
-            target_weights=tuple(
-                ExactTargetWeight(asset_id=item.asset_id, weight=ExactRatio.from_decimal(Decimal(item.weight)), minimum=self.build_limit(item.minimum), maximum=self.build_limit(item.maximum))
-                for item in sorted((value for value in self.request.target_weights if value.kind == "asset"), key=lambda value: value.asset_id)
-            ),
+            target_weights=tuple(ExactTargetWeight(asset_id=item.asset_id, weight=weight_of(item), minimum=self.build_limit(item.minimum), maximum=self.build_limit(item.maximum)) for item in asset_entries),
             # Sales and their tax facts enter with C1 and C2 (project 67): the request carries no sale before then.
             sell_context=None,
             # Transfers between Brokers: none in the PAC, whose funding routes stay as the user declares them; the Rebalancer
             # moves cash between every pair of its Brokers (specification §15 n. 2, B3 of project 67).
             transfer_lanes=_rebalancer_lanes(self.request) if isinstance(self.request, RebalancerPlannerRequest) else (),
             # A cash entry with no weight, no minimum and no maximum says nothing: it is left out. The PAC's weight is zero.
-            cash_entries=tuple(
-                ExactCashEntry(broker_id=item.broker_id, currency=item.currency, minimum=self.build_limit(item.minimum), maximum=self.build_limit(item.maximum), weight=ExactRatio.from_decimal(Decimal(item.weight)) if isinstance(self.request, RebalancerPlannerRequest) else ExactRatio(0))
-                for item in sorted((value for value in self.request.target_weights if value.kind == "cash"), key=lambda value: (value.broker_id, value.currency))
-                if item.minimum is not None or item.maximum is not None or (isinstance(self.request, RebalancerPlannerRequest) and Decimal(item.weight) != 0)
-            ),
+            cash_entries=tuple(ExactCashEntry(broker_id=item.broker_id, currency=item.currency, minimum=self.build_limit(item.minimum), maximum=self.build_limit(item.maximum), weight=weight_of(item) if rebalancer else ExactRatio(0)) for item in cash_items),
             # «Balanced» until B3 (project 67) reads the fidelity from the Rebalancer's request (specifica §14 n. 9).
             target_fidelity=exact_fidelity(self.request.target_fidelity) if isinstance(self.request, RebalancerPlannerRequest) else None,
         )
@@ -1181,6 +1193,15 @@ class _PlannerV2Normalizer:
         issues = canonicalize_issues(self.issues)
         availability = normalization_availability(issues)
         normalized = self.build_scenario() if availability == "ready" else None
+        # Targets that do not sum to one yet (F3a step 8 of project 67): the plan refuses them, as before (this branch is the
+        # preview's only); the preview counts on the scenario anyway, because the total, today's items and the table do not
+        # depend on the weights the user is still typing. As with the limits' cross checks, the scenario travels as `counted`.
+        if normalized is None and self.request.operation == "preview" and availability == "invalid" and normalization_availability([issue for issue in issues if issue.code not in COUNTED_ANYWAY]) == "ready":
+            counted = self._counted_with_neutral_weights()
+            if counted is not None:
+                limit_issues = self.check_limits(counted)
+                self.issues.extend(limit_issues)
+                return PlannerV2NormalizationResult(availability=availability, issues=canonicalize_issues(self.issues), normalized=None, limit_problems=canonicalize_issues(limit_issues), counted=counted)
         if normalized is not None:
             limit_issues = self.check_limits(normalized)
             if limit_issues:
@@ -1194,6 +1215,15 @@ class _PlannerV2Normalizer:
                     counted=normalized,
                 )
         return PlannerV2NormalizationResult(availability=availability, issues=issues, normalized=normalized)
+
+    def _counted_with_neutral_weights(self) -> ExactPlannerScenario | None:
+        """The preview's counted scenario of targets that do not sum to one; ``None`` when even neutral weights cannot make a
+        scenario (no target entry at all): the preview then answers the refusal, as before."""
+        try:
+            return self.build_scenario(neutral_weights=True)
+        except ValueError:
+            # A model invariant the request breaks beyond its weights: the refusal already in `issues` is the answer.
+            return None
 
     def check_limits(self, scenario: ExactPlannerScenario) -> list[PlannerIssue]:
         """The three checks before the calculation (M1, T12), on the built scenario; each names the entries that cause it.

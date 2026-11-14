@@ -122,6 +122,69 @@ def test_pac_preview_total_is_the_cash_to_invest() -> None:
     assert not hasattr(result, "table")
 
 
+def test_preview_counts_targets_that_do_not_sum_to_one_and_the_plan_still_refuses_them() -> None:
+    """F3a step 8 of project 67: the preview counts while the user is still typing the targets (the plan's «even incomplete»).
+    F, today's items and the table do not depend on the weights: with A and B at 30 % each (total 60 %) T4 still previews
+    F = 10 000 (the screen shows the control total itself: the ready preview carries no error); the plan refuses the same
+    request as before, with `allocation.target_total_not_one`."""
+    payload = reb.t4()
+    for entry in payload["target_weights"]:
+        entry["weight"] = "0.3"
+    # A cash entry with a weight only (no limit) is still an entry of the counted scenario.
+    payload["target_weights"].append({"kind": "cash", "broker_id": reb.BROKER, "currency": "EUR", "weight": "0.1", "minimum": None, "maximum": None})
+
+    result = _rebalancer_preview(payload)
+
+    assert result.result_state == "preview_ready" and _money(result.total) == 10_000
+    assert {item.asset_id: _money(item.value) for item in result.items if item.kind == "asset"} == {"asset-a": 5_000, "asset-b": 4_800}
+    assert [(item.broker_id, _money(item.value)) for item in result.items if item.kind == "cash"] == [(reb.BROKER, 200)]
+    assert result.issues == []
+    plan = plan_rebalancing(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(payload))
+    assert (plan.availability, [issue.code for issue in plan.issues]) == ("invalid", ["allocation.target_total_not_one"])
+
+
+def test_preview_numbers_do_not_depend_on_the_weights() -> None:
+    """What the preview answers reads no weight: the same scenario with complete weights and with 30 % + 30 % gives the same
+    total, items, table and limit problems (the counted scenario's neutral weights never show)."""
+    complete = reb.t4()
+    complete["target_weights"][0]["maximum"] = {"kind": "amount", "amount": {"amount": "100", "currency": "EUR"}}
+    incomplete = reb.t4()
+    incomplete["target_weights"][0]["maximum"] = {"kind": "amount", "amount": {"amount": "100", "currency": "EUR"}}
+    for entry in incomplete["target_weights"]:
+        entry["weight"] = "0.3"
+
+    left, right = _rebalancer_preview(complete), _rebalancer_preview(incomplete)
+
+    assert (left.total, left.items, left.table, [issue.code for issue in left.limit_problems]) == (right.total, right.items, right.table, [issue.code for issue in right.limit_problems])
+    assert [issue.code for issue in left.limit_problems] == ["allocation.bound_max_below_current"]
+
+
+def test_plan_refusal_of_incomplete_targets_is_unchanged() -> None:
+    """The counted scenario is the preview's only: ``plan`` answers incomplete targets exactly as before, with the target
+    total's issue alone (no limit cross check is run for it)."""
+    payload = reb.t4()
+    payload["target_weights"][0]["maximum"] = {"kind": "amount", "amount": {"amount": "100", "currency": "EUR"}}
+    for entry in payload["target_weights"]:
+        entry["weight"] = "0.3"
+
+    plan = plan_rebalancing(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(payload))
+
+    assert (plan.availability, [issue.code for issue in plan.issues]) == ("invalid", ["allocation.target_total_not_one"])
+
+
+def test_pac_preview_counts_targets_that_do_not_sum_to_one() -> None:
+    """The same for the PAC: its total is the cash it invests, whatever the weights say so far."""
+    payload = _pac_request()
+    for entry in payload["target_weights"]:
+        entry["weight"] = "0.1"
+    request = PAC_TOOL_INPUT_ADAPTER.validate_python({**payload, "operation": "preview"})
+
+    result = preview_pac_allocation(request)
+
+    assert (result.result_state, _money(result.total)) == ("preview_ready", 5)
+    assert result.issues == []
+
+
 def _without_a_price(payload: dict) -> dict:
     payload["assets"][0]["quote"] = None
     return payload

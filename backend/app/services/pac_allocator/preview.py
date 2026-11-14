@@ -44,7 +44,7 @@ from backend.app.services.pac_allocator.evaluation.economics import initial_cash
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
 from backend.app.services.pac_allocator.models import FIDELITY_LEVEL_WEIGHTS, Checkpoint, ExactEvaluation, ExactPlannerScenario, check_budget
-from backend.app.services.pac_allocator.normalize import PlannerV2NormalizationResult, normalize_pac_plan, normalize_rebalancer_plan
+from backend.app.services.pac_allocator.normalize import COUNTED_ANYWAY, PlannerV2NormalizationResult, normalize_pac_plan, normalize_rebalancer_plan
 from backend.app.services.pac_allocator.numeric import ExactRatio
 from backend.app.services.pac_allocator.wire_numbers import ratio_to_exact_number, ratio_to_money
 
@@ -145,7 +145,8 @@ def _ready_fields(scenario: ExactPlannerScenario, normalized: PlannerV2Normaliza
         "availability": "ready",
         "snapshot": PlannerResultSnapshot(snapshot_id=scenario.snapshot.snapshot_id, request_fingerprint=exact_scenario_fingerprint(scenario)),
         "valuation_currency": scenario.valuation_currency,
-        "issues": [issue for issue in normalized.issues if issue not in limit_problems],
+        # A target total not yet one (F3a step 8 of project 67) is the plan's refusal, not the preview's: the screen shows it.
+        "issues": [issue for issue in normalized.issues if issue not in limit_problems and issue.code not in COUNTED_ANYWAY],
         "limit_problems": limit_problems,
     }
 
