@@ -977,7 +977,8 @@
           "limitMinAboveMax": "Il minimo ({minimum}) supera il massimo ({maximum}).",
           "limitsNoteTotal": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale (35%) del totale, il denaro che investi ora: {total}. Campo vuoto = nessun limite.",
           "previewIncomplete": "Le cifre di oggi compaiono quando nessun campo della bozza è segnato in rosso, in nessun passo.",
-          "previewUnavailable": "Le cifre di oggi non sono disponibili ora; il calcolo non ne risente."
+          "previewUnavailable": "Le cifre di oggi non sono disponibili ora; il calcolo non ne risente.",
+          "addCashHelp": "La cassa di un Broker in una valuta diventa una riga degli obiettivi con i soli limiti: quanto deve restare almeno, o al massimo, alla fine del piano. Non ha un obiettivo e non conta nel totale."
         },
         "toolErrors": {
           "cleanup_failed": "Il calcolo è terminato, ma la piattaforma non è riuscita a ripulire dopo di esso.",
