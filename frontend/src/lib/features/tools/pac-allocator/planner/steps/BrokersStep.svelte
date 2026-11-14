@@ -1,8 +1,12 @@
 <script lang="ts">
+    import {onDestroy} from 'svelte';
     import {Pencil, PiggyBank, Plus, Trash2} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {CopyFlow} from '../copyFlow.svelte';
+    import {applyBrokerCopy, newCopyRecord} from '../copies';
+    import {SourceLoad} from '../sourceLoad.svelte';
     import type {DraftBroker, FundingSourceRef, PlannerDraft, RemovalImpact} from '../draft.svelte';
     import {fundingSourceHelp, modeFeeText, modeIncrementText, modeKindText} from '../modeText';
     import {BADGE, BUTTON_DANGER, BUTTON_SECONDARY, CARD, HINT, ICON_BUBBLE, LABEL_ROW, NOTICE} from '../ui';
@@ -51,6 +55,28 @@
     }
 
     const CHIP = 'inline-flex items-center gap-1.5 rounded-full border border-lf-subtle bg-lf-panel py-0.5 pl-0.5 pr-2 text-xs text-lf-primary';
+
+    // -- «Positions only» Brokers (Q-F3a-5b): a position held at a Broker outside the scenario --------------------------
+
+    const brokerRead = new SourceLoad();
+    onDestroy(() => brokerRead.stop());
+    let addingBroker = $state<string | null>(null);
+    let addFailed = $state<string | null>(null);
+
+    /** «Add to the plan»: reads the Broker from LibreFolio and copies it as any copied Broker, operating profile included (P3). */
+    async function addToPlan(item: {brokerKey: string; sourceBrokerId: number}): Promise<void> {
+        addingBroker = item.brokerKey;
+        addFailed = null;
+        draft.refreshAsOf();
+        const source = await brokerRead.load({asOf: draft.data.asOf, targetCurrency: draft.data.valuationCurrency, sections: ['brokers'], brokerIds: [item.sourceBrokerId], assetIds: [], fxPairs: []}, accountGeneration);
+        addingBroker = null;
+        if (!source || !source.brokers.some((row) => row.source_broker_id === item.sourceBrokerId)) {
+            addFailed = item.brokerKey;
+            return;
+        }
+        // The same notice as a copy from «Copy from a Broker»: a Broker without an operating profile says so (Q-P3b).
+        flow.accept(applyBrokerCopy(draft, source, newCopyRecord(draft, 'brokers', source), [item.sourceBrokerId]), source);
+    }
 
     function askRemove(broker: DraftBroker): void {
         removal = {key: broker.key, name: broker.name, impact: draft.brokerRemovalImpact(broker.key)};
@@ -223,6 +249,27 @@
             <p class={HINT}>
                 {profile.fundingRoutes ? $t('tools.pacAllocator.planner.brokers.fundingOnlyHint', {default: 'No order: it funds other Brokers through routes. Edit it in the Liquidity step.'}) : $t('tools.portfolioRebalancer.planner.brokers.cashOnlyHint')}
             </p>
+        </section>
+    {/each}
+
+    {#each draft.positionOnlyBrokers as item (item.brokerKey)}
+        <section class="{CARD} space-y-1" data-testid={testId('broker-positions-only', profile)} data-broker-key={item.brokerKey}>
+            <div class="flex flex-wrap items-start justify-between gap-2">
+                <div class="flex min-w-0 items-center gap-2">
+                    <BrokerIcon brokerId={item.sourceBrokerId} iconUrl={item.iconUrl} altText="" size={28} />
+                    <h3 class="truncate font-semibold text-lf-primary">{item.name || '—'}</h3>
+                </div>
+                <div class="flex flex-wrap items-center gap-1">
+                    <span class={BADGE.neutral}>{$t('tools.portfolioRebalancer.planner.brokers.positionsOnly')}</span>
+                    <button type="button" class={BUTTON_SECONDARY} disabled={copyDisabled || addingBroker !== null} data-testid={testId('broker-positions-only-add', profile)} onclick={() => addToPlan(item)}>
+                        <Plus class="h-4 w-4" aria-hidden="true" />{$t('tools.portfolioRebalancer.planner.brokers.addToPlan')}
+                    </button>
+                </div>
+            </div>
+            <p class={HINT}>{$t('tools.portfolioRebalancer.planner.brokers.positionsOnlyHint')}</p>
+            {#if addFailed === item.brokerKey}
+                <p class="text-sm text-lf-danger" role="alert" data-testid={testId('broker-positions-only-error', profile)}>{$t('tools.portfolioRebalancer.planner.brokers.addToPlanFailed')}</p>
+            {/if}
         </section>
     {/each}
 
