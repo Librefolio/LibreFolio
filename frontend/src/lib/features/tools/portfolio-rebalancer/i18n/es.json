@@ -28,7 +28,11 @@
         },
         "brokers": {
           "cashOnly": "solo efectivo",
-          "cashOnlyHint": "Aquí ninguna orden: su efectivo cuenta en la cartera, y el plan puede moverlo a los brókeres donde compra. Edítalo en el paso Liquidez."
+          "cashOnlyHint": "Aquí ninguna orden: su efectivo cuenta en la cartera, y el plan puede moverlo a los brókeres donde compra. Edítalo en el paso Liquidez.",
+          "positionsOnly": "solo posiciones",
+          "positionsOnlyHint": "Sus posiciones cuentan en la cartera, pero el plan no compra ni vende aquí ni usa su efectivo. Añádelo al plan para operar también aquí.",
+          "addToPlan": "Añadir al plan",
+          "addToPlanFailed": "No se ha podido leer el bróker: no se ha añadido nada."
         },
         "targets": {
           "cashEntry": "Efectivo · {broker} · {currency}",

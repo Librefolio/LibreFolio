@@ -28,7 +28,11 @@
         },
         "brokers": {
           "cashOnly": "liquidités seulement",
-          "cashOnlyHint": "Aucun ordre ici : ses liquidités comptent dans le portefeuille, et le plan peut les déplacer vers les courtiers où il achète. Modifiez-le à l’étape Liquidités."
+          "cashOnlyHint": "Aucun ordre ici : ses liquidités comptent dans le portefeuille, et le plan peut les déplacer vers les courtiers où il achète. Modifiez-le à l’étape Liquidités.",
+          "positionsOnly": "positions seulement",
+          "positionsOnlyHint": "Ses positions comptent dans le portefeuille, mais le plan n’achète ni ne vend ici et n’utilise pas ses liquidités. Ajoutez-le au plan pour opérer ici aussi.",
+          "addToPlan": "Ajouter au plan",
+          "addToPlanFailed": "Le courtier n’a pas pu être lu : rien n’a été ajouté."
         },
         "targets": {
           "cashEntry": "Liquidités · {broker} · {currency}",

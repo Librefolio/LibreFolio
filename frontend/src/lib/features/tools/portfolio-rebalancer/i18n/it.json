@@ -28,7 +28,11 @@
         },
         "brokers": {
           "cashOnly": "solo cassa",
-          "cashOnlyHint": "Qui nessun ordine: la sua cassa conta nel portafoglio, e il piano può spostarla sui Broker dove compra. Modificalo nel passo Liquidità."
+          "cashOnlyHint": "Qui nessun ordine: la sua cassa conta nel portafoglio, e il piano può spostarla sui Broker dove compra. Modificalo nel passo Liquidità.",
+          "positionsOnly": "solo posizioni",
+          "positionsOnlyHint": "Le sue posizioni contano nel portafoglio, ma il piano qui non compra né vende e non usa la sua cassa. Aggiungilo al piano per operare anche qui.",
+          "addToPlan": "Aggiungi al piano",
+          "addToPlanFailed": "Non è stato possibile leggere il Broker: non è stato aggiunto niente."
         },
         "targets": {
           "cashEntry": "Cassa · {broker} · {currency}",

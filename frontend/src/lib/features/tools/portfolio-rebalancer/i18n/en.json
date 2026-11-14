@@ -28,7 +28,11 @@
         },
         "brokers": {
           "cashOnly": "cash only",
-          "cashOnlyHint": "No order here: its cash counts in the portfolio, and the plan can move it to the Brokers where it buys. Edit it in the Liquidity step."
+          "cashOnlyHint": "No order here: its cash counts in the portfolio, and the plan can move it to the Brokers where it buys. Edit it in the Liquidity step.",
+          "positionsOnly": "positions only",
+          "positionsOnlyHint": "Its positions count in the portfolio, but the plan buys and sells nothing here and does not use its cash. Add it to the plan to trade here too.",
+          "addToPlan": "Add to the plan",
+          "addToPlanFailed": "The Broker could not be read: nothing was added."
         },
         "targets": {
           "cashEntry": "Cash · {broker} · {currency}",

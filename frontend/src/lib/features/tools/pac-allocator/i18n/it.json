@@ -442,7 +442,8 @@
           "limitInvalid": "Un limite non è un importo o una percentuale da 0 in su.",
           "limitShareAboveHundred": "Un limite in percentuale non può superare il 100%.",
           "limitMinAboveMax": "Il minimo supera il massimo.",
-          "limitShareMinimumsAboveHundred": "I minimi in percentuale sommano più del 100%: {assets}."
+          "limitShareMinimumsAboveHundred": "I minimi in percentuale sommano più del 100%: {assets}.",
+          "positionQuantityInvalid": "La quantità di una posizione è vuota, non è un numero o è sotto zero."
         },
         "removal": {
           "cash": "Riga di cassa {broker} · {currency}",
@@ -1008,7 +1009,8 @@
             "fx": "{count, plural, one {# tasso FX aggiornato} other {# tassi FX aggiornati}}",
             "cash": "{count, plural, one {# saldo aggiornato} other {# saldi aggiornati}}",
             "unchanged": "nessun valore è cambiato",
-            "missing": "Non trovati, resta il valore copiato: {names}."
+            "missing": "Non trovati, resta il valore copiato: {names}.",
+            "positions": "{count, plural, one {# posizione aggiornata} other {# posizioni aggiornate}}"
           }
         },
         "ownedAssets": {

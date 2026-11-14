@@ -442,7 +442,8 @@
           "limitInvalid": "Un límite no es un importe ni un porcentaje desde 0.",
           "limitShareAboveHundred": "Un límite en porcentaje no puede superar el 100 %.",
           "limitMinAboveMax": "El mínimo supera el máximo.",
-          "limitShareMinimumsAboveHundred": "Los mínimos en porcentaje suman más del 100 %: {assets}."
+          "limitShareMinimumsAboveHundred": "Los mínimos en porcentaje suman más del 100 %: {assets}.",
+          "positionQuantityInvalid": "La cantidad de una posición está vacía, no es un número o es menor que cero."
         },
         "removal": {
           "cash": "Fila de efectivo {broker} · {currency}",
@@ -1008,7 +1009,8 @@
             "fx": "{count, plural, one {# tipo de cambio actualizado} other {# tipos de cambio actualizados}}",
             "cash": "{count, plural, one {# saldo actualizado} other {# saldos actualizados}}",
             "unchanged": "ningún valor ha cambiado",
-            "missing": "No encontrados, se mantiene el valor copiado: {names}."
+            "missing": "No encontrados, se mantiene el valor copiado: {names}.",
+            "positions": "{count, plural, one {# posición actualizada} other {# posiciones actualizadas}}"
           }
         },
         "ownedAssets": {

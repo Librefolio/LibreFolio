@@ -442,7 +442,8 @@
           "limitInvalid": "Une limite n’est ni un montant ni un pourcentage à partir de 0.",
           "limitShareAboveHundred": "Une limite en pourcentage ne peut pas dépasser 100 %.",
           "limitMinAboveMax": "Le minimum dépasse le maximum.",
-          "limitShareMinimumsAboveHundred": "Les minimums en pourcentage totalisent plus de 100 % : {assets}."
+          "limitShareMinimumsAboveHundred": "Les minimums en pourcentage totalisent plus de 100 % : {assets}.",
+          "positionQuantityInvalid": "La quantité d’une position est vide, n’est pas un nombre ou est inférieure à zéro."
         },
         "removal": {
           "cash": "Ligne de liquidités {broker} · {currency}",
@@ -1008,7 +1009,8 @@
             "fx": "{count, plural, one {# taux de change mis à jour} other {# taux de change mis à jour}}",
             "cash": "{count, plural, one {# solde mis à jour} other {# soldes mis à jour}}",
             "unchanged": "aucune valeur n’a changé",
-            "missing": "Introuvables, la valeur copiée est conservée : {names}."
+            "missing": "Introuvables, la valeur copiée est conservée : {names}.",
+            "positions": "{count, plural, one {# position mise à jour} other {# positions mises à jour}}"
           }
         },
         "ownedAssets": {
