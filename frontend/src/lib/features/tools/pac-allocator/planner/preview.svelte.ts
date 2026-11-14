@@ -44,7 +44,8 @@ export interface PreviewReady {
     total: PreviewMoney;
     issues: {code: string}[];
     limit_problems: {code: string}[];
-    items?: ({kind: 'asset'; asset_id: string; value: PreviewMoney; weight: PreviewNumber} | {kind: 'cash'; broker_id: string; currency: string; value: PreviewMoney; weight: PreviewNumber})[];
+    /** Every target entry today, and «other cash» (the cash outside the entries, G5-2 of project 67). */
+    items?: ({kind: 'asset'; asset_id: string; value: PreviewMoney; weight: PreviewNumber} | {kind: 'cash'; broker_id: string; currency: string; value: PreviewMoney; weight: PreviewNumber} | {kind: 'other_cash'; value: PreviewMoney; weight: PreviewNumber})[];
     table?: unknown;
     custom?: {distance_weight: PreviewNumber; reference_amount: PreviewMoney} | null;
 }

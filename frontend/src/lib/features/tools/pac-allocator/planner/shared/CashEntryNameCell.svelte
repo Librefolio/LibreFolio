@@ -8,23 +8,39 @@
     import CashEntryIcon from './CashEntryIcon.svelte';
     import HelpTip from './HelpTip.svelte';
     import MarqueeName from './MarqueeName.svelte';
+    import NowLine, {type NowLineContent} from './NowLine.svelte';
 
     interface Props {
         broker?: DraftBroker | null;
         currency?: string | null;
         /** `other`: the row of all the cash without a target of its own. */
         other?: boolean;
+        /** «Now» under the name, in the targets table while its column is hidden (G5-1 of project 67). */
+        now?: NowLineContent | null;
     }
 
-    let {broker = null, currency = null, other = false}: Props = $props();
+    let {broker = null, currency = null, other = false, now = null}: Props = $props();
 
     const label = $derived(other ? $t('tools.portfolioRebalancer.planner.targets.otherCash') : $t('tools.portfolioRebalancer.planner.targets.cashEntry', {values: {broker: broker?.name || '—', currency: currency ?? '—'}}));
 </script>
 
 <span class="flex min-w-0 items-center gap-2">
     <CashEntryIcon broker={other ? null : broker} currency={other ? null : currency} size={24} />
-    <MarqueeName text={label} />
-    {#if other}
-        <HelpTip {label} help={$t('tools.portfolioRebalancer.planner.targets.otherCashHelp')} />
+    {#if now}
+        <!-- The help stays beside the name, «now» goes under both (G5-1). -->
+        <span class="flex min-w-0 flex-col">
+            <span class="flex min-w-0 items-center gap-2">
+                <MarqueeName text={label} />
+                {#if other}
+                    <HelpTip {label} help={$t('tools.portfolioRebalancer.planner.targets.otherCashHelp')} />
+                {/if}
+            </span>
+            <NowLine {now} />
+        </span>
+    {:else}
+        <MarqueeName text={label} />
+        {#if other}
+            <HelpTip {label} help={$t('tools.portfolioRebalancer.planner.targets.otherCashHelp')} />
+        {/if}
     {/if}
 </span>

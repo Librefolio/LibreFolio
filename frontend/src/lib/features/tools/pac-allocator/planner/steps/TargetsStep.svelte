@@ -66,7 +66,8 @@
         return row.kind === 'asset' || (row.kind === 'cash' && profile.cashEntries === 'full');
     }
     /** «Other cash»: some cash of the scenario has no entry of its own (the Rebalancer only). */
-    const otherCash = $derived(profile.cashEntries === 'full' && draft.data.cash.some((cash) => !draft.data.cashEntries.some((entry) => entry.brokerKey === cash.brokerKey && entry.currency === cash.currency)));
+    // «Other cash»: the cash without a cash entry of its own, and the contributions (new money with no target of its own, G5-2).
+    const otherCash = $derived(profile.cashEntries === 'full' && (draft.data.cash.some((cash) => !draft.data.cashEntries.some((entry) => entry.brokerKey === cash.brokerKey && entry.currency === cash.currency)) || draft.data.contributions.some((item) => item.amount.trim() !== '')));
     const rows = $derived<TableRow[]>([...draft.targetRows, ...(otherCash ? [{kind: 'other' as const, key: OTHER_CASH_KEY}] : [])]);
     /** The rows whose targets the balancing reads and writes, in table order. */
     const editable = $derived(draft.targetRows.filter(targetable));
@@ -147,21 +148,38 @@
     const phone = new MediaQuery('max-width: 768px');
 
     /** The name cell: an Asset's icon and name, or a cash row's icon (M3) and name. */
-    function nameCell(row: TableRow) {
-        if (row.kind === 'asset') return {type: 'custom' as const, component: AssetNameCell, props: {label: rowLabel(row), iconUrl: row.asset.iconUrl, assetType: row.asset.assetClass ? row.asset.assetClass.toUpperCase() : null}};
-        if (row.kind === 'cash') return {type: 'custom' as const, component: CashEntryNameCell, props: {broker: draft.broker(row.entry.brokerKey), currency: row.entry.currency}};
-        return {type: 'custom' as const, component: CashEntryNameCell, props: {other: true}};
+    /**
+     * «Now» under the name (G5-1 of project 67, mockup screen 5 on a phone): only while the «Now» column is hidden, as it is
+     * by default on a phone; «Columns» brings the column back and the line goes.
+     */
+    const nowColumnHidden = $derived(showNow && (tableRef as DataTable<TableRow> | undefined)?.getColumnsForVisibility().find((column) => column.id === 'now')?.visible === false);
+
+    function nowLine(row: TableRow): {text: string; key: string; stale: boolean} | null {
+        if (!nowColumnHidden) return null;
+        const weight = nowText(row);
+        return weight === '' ? null : {text: $t('tools.portfolioRebalancer.planner.targets.nowLine', {values: {weight}}), key: row.key, stale};
     }
 
-    /** Today's weight of a row, as the preview gives it; empty without a preview, and for «Other cash». */
-    function nowHtml(row: TableRow): string {
+    function nameCell(row: TableRow) {
+        const now = nowLine(row);
+        if (row.kind === 'asset') return {type: 'custom' as const, component: AssetNameCell, props: {label: rowLabel(row), iconUrl: row.asset.iconUrl, assetType: row.asset.assetClass ? row.asset.assetClass.toUpperCase() : null, now}};
+        if (row.kind === 'cash') return {type: 'custom' as const, component: CashEntryNameCell, props: {broker: draft.broker(row.entry.brokerKey), currency: row.entry.currency, now}};
+        return {type: 'custom' as const, component: CashEntryNameCell, props: {other: true, now}};
+    }
+
+    /** Today's weight of a row, as the preview gives it (G5-2: «Other cash» too); empty without a preview. */
+    function nowText(row: TableRow): string {
         const item =
             row.kind === 'asset'
                 ? numbers?.items?.find((candidate) => candidate.kind === 'asset' && candidate.asset_id === row.key)
                 : row.kind === 'cash'
                   ? numbers?.items?.find((candidate) => candidate.kind === 'cash' && candidate.broker_id === row.entry.brokerKey && candidate.currency === row.entry.currency)
-                  : undefined;
-        const text = item ? formatExactPercent(item.weight, 1) : '';
+                  : numbers?.items?.find((candidate) => candidate.kind === 'other_cash');
+        return item ? formatExactPercent(item.weight, 1) : '';
+    }
+
+    function nowHtml(row: TableRow): string {
+        const text = nowText(row);
         return `<span class="font-mono ${stale ? 'text-lf-muted' : 'text-lf-secondary'}" data-testid="${testId('target-now', profile)}" data-asset-key="${escapeHtml(row.key)}">${escapeHtml(text)}</span>`;
     }
 

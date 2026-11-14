@@ -17,7 +17,7 @@ vi.mock('$lib/api', () => ({
     axiosInstance: {get: vi.fn(), post: vi.fn()},
 }));
 
-import {cleanup, render, screen, setupI18n} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
@@ -34,7 +34,13 @@ beforeAll(async () => {
 afterEach(() => {
     cleanup();
     setPrivacyEnabled(false);
+    vi.restoreAllMocks();
 });
+
+/** jsdom has no media queries: answer the table's phone breakpoint (768 px) as a phone does. */
+function asPhone(): void {
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({matches: query.includes('max-width: 768px'), media: query, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false}) as MediaQueryList);
+}
 
 const TOTAL = {value: {kind: 'finite_decimal' as const, value: '12345.67'}, currency: 'EUR'};
 
@@ -77,6 +83,7 @@ function ready(brokerKey: string): PreviewReady {
         items: [
             {kind: 'asset', asset_id: 'asset:probe', value: TOTAL, weight: {kind: 'finite_decimal', value: '0.42'}},
             {kind: 'cash', broker_id: brokerKey, currency: 'EUR', value: TOTAL, weight: {kind: 'finite_decimal', value: '0.06'}},
+            {kind: 'other_cash', value: TOTAL, weight: {kind: 'finite_decimal', value: '0.12'}},
         ],
     };
 }
@@ -167,5 +174,53 @@ describe('the Targets step and the preview', () => {
         flushSync();
         await tick();
         expect(note()).toContain(shown);
+    });
+
+    it('«Other cash» shows its own weight today, from the preview (G5-2)', () => {
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        draft.addCashEntry(brokerKey, 'EUR');
+        // A manual account: cash without a target of its own, so the «Other cash» row is there.
+        draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+
+        const other = screen.getAllByTestId('rebalancer-planner-target-now').find((cell) => cell.getAttribute('data-asset-key') === 'other-cash');
+        expect(other?.textContent?.trim()).toBe(formatExactPercent({kind: 'finite_decimal', value: '0.12'}, 1));
+    });
+
+    it('a contribution alone is «Other cash» too: the row is there with its weight (G5-2)', () => {
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        const contribution = draft.addContribution('EUR', 'Salary probe');
+        draft.contribution(contribution.key)!.amount = '300';
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+
+        const other = screen.getAllByTestId('rebalancer-planner-target-now').find((cell) => cell.getAttribute('data-asset-key') === 'other-cash');
+        expect(other?.textContent?.trim()).toBe(formatExactPercent({kind: 'finite_decimal', value: '0.12'}, 1));
+    });
+
+    it('on a phone, where «Now» starts hidden, each name carries its weight today under it (G5-1)', async () => {
+        asPhone();
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        const entry = draft.addCashEntry(brokerKey, 'EUR');
+        draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+
+        expect(screen.queryAllByTestId('rebalancer-planner-target-now')).toHaveLength(0);
+        const lines = screen.getAllByTestId('rebalancer-planner-target-now-line').map((line) => [line.getAttribute('data-asset-key'), line.textContent ?? '']);
+        expect(lines.map(([key]) => key)).toEqual(['asset:probe', entry.key, 'other-cash']);
+        const percent = (value: string) => formatExactPercent({kind: 'finite_decimal', value}, 1);
+        expect(lines.map(([, text], index) => (text ?? '').includes(percent(['0.42', '0.06', '0.12'][index])))).toEqual([true, true, true]);
+
+        // «Columns» brings the column back: the lines go, the cells show the weights.
+        await fireEvent.click(within(screen.getByTestId('rebalancer-planner-targets-columns')).getByTestId('column-visibility-toggle'));
+        await fireEvent.click(await screen.findByTestId('column-visibility-item-now'));
+        flushSync();
+        expect(screen.queryAllByTestId('rebalancer-planner-target-now-line')).toHaveLength(0);
+        expect(screen.getAllByTestId('rebalancer-planner-target-now').map((cell) => cell.getAttribute('data-asset-key'))).toEqual(['asset:probe', entry.key, 'other-cash']);
+        cleanup();
+
+        // On a wide screen the column shows it: no line under the names.
+        vi.restoreAllMocks();
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+        expect(screen.queryAllByTestId('rebalancer-planner-target-now-line')).toHaveLength(0);
     });
 });
