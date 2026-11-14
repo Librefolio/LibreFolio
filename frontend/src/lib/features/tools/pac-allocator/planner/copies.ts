@@ -12,6 +12,7 @@ import {
     EXPOSURE_DIMENSIONS,
     PlannerDraft,
     nowTimestamp,
+    positionIsCopied,
     priceIsCopied,
     rateIsCopied,
     sameModes,
@@ -562,6 +563,8 @@ export interface RefreshPlan {
     assetIds: number[];
     cashBrokerIds: number[];
     fxPairs: string[];
+    /** The Rebalancer's positions still equal to their copy (Q-F3a-5c): read again by the rule of the prices. */
+    positionKeys: string[];
 }
 
 export interface RefreshSummary {
@@ -570,6 +573,8 @@ export interface RefreshSummary {
     prices: number;
     fx: number;
     cash: number;
+    /** The Rebalancer's positions whose copied quantity changed (Q-F3a-5c). */
+    positions: number;
     unchanged: number;
     /** Labels of facts the source no longer publishes: they keep the copied value. */
     missing: string[];
@@ -604,8 +609,19 @@ export function refreshPlan(draft: PlannerDraft): RefreshPlan | null {
         const fx = draft.fx(pair);
         return !fx || rateIsCopied(fx) || rateAwaitsRead(fx);
     });
-    if (assetIds.length === 0 && cashBrokerIds.length === 0 && fxPairs.length === 0) return null;
-    return {assetIds, cashBrokerIds, fxPairs};
+    const positionKeys = draft.profile.positions ? draft.data.positions.filter((position) => positionIsCopied(position) && draft.asset(position.assetKey)?.sourceAssetId != null).map((position) => position.key) : [];
+    if (assetIds.length === 0 && cashBrokerIds.length === 0 && fxPairs.length === 0 && positionKeys.length === 0) return null;
+    return {assetIds, cashBrokerIds, fxPairs, positionKeys};
+}
+
+/** The Assets and Brokers (database ids) of the positions a plan reads again. */
+function positionScope(draft: PlannerDraft, plan: RefreshPlan): {assetIds: number[]; brokerIds: number[]} {
+    const positions = draft.data.positions.filter((position) => plan.positionKeys.includes(position.key));
+    const assetIds = positions.flatMap((position) => {
+        const id = draft.asset(position.assetKey)?.sourceAssetId;
+        return id === null || id === undefined ? [] : [id];
+    });
+    return {assetIds: [...new Set(assetIds)].sort(ascending), brokerIds: [...new Set(positions.map((position) => position.sourceBrokerId))].sort(ascending)};
 }
 
 /**
@@ -619,8 +635,8 @@ export function copiedOnly(draft: PlannerDraft, plan: RefreshPlan): RefreshPlan 
         const fx = draft.fx(pair);
         return fx !== undefined && rateIsCopied(fx);
     });
-    if (assetIds.length === 0 && plan.cashBrokerIds.length === 0 && fxPairs.length === 0) return null;
-    return {assetIds, cashBrokerIds: plan.cashBrokerIds, fxPairs};
+    if (assetIds.length === 0 && plan.cashBrokerIds.length === 0 && fxPairs.length === 0 && plan.positionKeys.length === 0) return null;
+    return {assetIds, cashBrokerIds: plan.cashBrokerIds, fxPairs, positionKeys: plan.positionKeys};
 }
 
 /**
@@ -630,15 +646,17 @@ export function copiedOnly(draft: PlannerDraft, plan: RefreshPlan): RefreshPlan 
  */
 export function refreshQuery(draft: PlannerDraft, plan: RefreshPlan, owners: readonly number[]): SourceQuery {
     const sections: SourceSection[] = [];
+    const positions = positionScope(draft, plan);
     if (plan.assetIds.length > 0) sections.push('assets', 'prices');
     if (plan.cashBrokerIds.length > 0) sections.push('brokers', 'cash_balances');
     if (plan.fxPairs.length > 0) sections.push('fx_quotes');
+    if (plan.positionKeys.length > 0) for (const section of ['assets', 'brokers', 'holdings'] as const) if (!sections.includes(section)) sections.push(section);
     return {
         asOf: draft.data.asOf,
         targetCurrency: draft.data.valuationCurrency,
         sections,
-        brokerIds: [...new Set([...owners, ...plan.cashBrokerIds])].sort(ascending),
-        assetIds: plan.assetIds,
+        brokerIds: [...new Set([...owners, ...plan.cashBrokerIds, ...positions.brokerIds])].sort(ascending),
+        assetIds: [...new Set([...plan.assetIds, ...positions.assetIds])].sort(ascending),
         fxPairs: plan.fxPairs,
     };
 }
@@ -660,6 +678,7 @@ export function refreshCopiedFacts(draft: PlannerDraft, source: PlannerSource, p
         prices: 0,
         fx: 0,
         cash: 0,
+        positions: 0,
         unchanged: 0,
         missing: [],
         issues: selectedBrokerIssues(source, plan.cashBrokerIds).filter((issue) => issue.code !== EXECUTION_PROFILE_CODE),
@@ -694,6 +713,26 @@ export function refreshCopiedFacts(draft: PlannerDraft, source: PlannerSource, p
         asset.copiedPrice = clonePrice(incoming);
         asset.priceStamp = stampOf(draft, record('prices'), row.provenance_id);
         asset.priceSource = row.source;
+    }
+
+    // Positions (Q-F3a-5c): a quantity still equal to its copy follows the source, with the custody facts; the check is
+    // repeated here, so an edit made while the read was running stays the user's. A position the source no longer has
+    // keeps its copy and is reported, as a price is.
+    const holdings = new Map(source.holdings.map((row) => [row.holding_id, row]));
+    for (const position of draft.data.positions) {
+        if (!plan.positionKeys.includes(position.key) || !positionIsCopied(position)) continue;
+        const quantity = holdings.get(position.key)?.quantity;
+        if (!quantity) {
+            summary.missing.push(`${draft.asset(position.assetKey)?.name ?? position.assetKey} · ${position.brokerName}`);
+            continue;
+        }
+        if (canonicalInput(quantity.economic) === canonicalInput(position.copiedQuantity) && canonicalInput(quantity.custody) === canonicalInput(position.custody)) summary.unchanged += 1;
+        else summary.positions += 1;
+        position.custody = quantity.custody;
+        position.ownershipShare = quantity.ownershipShare;
+        position.quantity = quantity.economic;
+        position.copiedQuantity = quantity.economic;
+        position.stamp = stampOf(draft, record('positions'), (holdings.get(position.key) as SourceHolding).provenance_id);
     }
 
     const reread: string[] = [];

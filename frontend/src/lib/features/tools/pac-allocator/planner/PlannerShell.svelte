@@ -70,7 +70,8 @@
     const draft = new PlannerDraft(userSettings.get()?.base_currency ?? '', defaultPolicy(profile), profile);
     const run = new PlannerRun(() => descriptor, profile);
     /** Re-reads the copied facts the user has not changed, right before every «Calcola». */
-    const refreshLoad = new SourceLoad();
+    // The Rebalancer's re-read also keeps the quantities held, for its copied positions (Q-F3a-5c).
+    const refreshLoad = new SourceLoad({positions: profile.positions});
 
     const SCOPE_ERROR: SourceLoadError = {key: 'tools.pacAllocator.planner.copy.scopeError', fallback: 'The Broker list could not be loaded. Nothing was copied.'};
     const NO_OWNER_ERROR: SourceLoadError = {key: 'tools.pacAllocator.planner.copy.noOwner', fallback: 'Copying needs at least one Broker you own. Enter the values by hand instead.'};

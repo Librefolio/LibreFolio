@@ -18,8 +18,9 @@ vi.mock('$lib/api', () => ({
     axiosInstance: {get: vi.fn(), post: vi.fn()},
 }));
 
-import {applyOwnedPositions, domainAssetKey, domainBrokerKey, newCopyRecord, ownedAssets} from './copies';
+import {applyOwnedPositions, domainAssetKey, domainBrokerKey, newCopyRecord, ownedAssets, refreshCopiedFacts, refreshPlan, refreshQuery} from './copies';
 import {PlannerDraft, positionIsCopied} from './draft.svelte';
+import {REBALANCER_PLANNER_PROFILE} from './profile';
 import type {PlannerSource, SourceHoldingQuantity} from './source';
 
 const AS_OF = '2026-11-14';
@@ -121,5 +122,46 @@ describe('the user positions in the draft', () => {
         expect(added).toBe(0);
         expect(draft.data.positions).toEqual([]);
         expect(draft.asset(ASSET)).toBeDefined();
+    });
+
+    // Q-F3a-5c: before «Calculate» the positions are read again by the rule of the prices: only a quantity still equal to
+    // its copy follows the source; one the user changed stays the user's; one the source no longer has keeps its copy.
+    it('the re-read before «Calculate» updates the copied positions only', () => {
+        const draft = new PlannerDraft('EUR', 'proportional', REBALANCER_PLANNER_PROFILE);
+        copy(
+            draft,
+            source({
+                7: {custody: '20', ownershipShare: '1', economic: '20'},
+                8: {custody: '12', ownershipShare: '0.5', economic: '6'},
+            }),
+        );
+        draft.positionsOf(ASSET).find((item) => item.sourceBrokerId === 8)!.quantity = '4';
+
+        const plan = refreshPlan(draft);
+        expect(plan?.positionKeys).toEqual(['holding:asset:11:broker:7']);
+        const query = refreshQuery(draft, plan!, [7, 8]);
+        expect(query.sections).toEqual(expect.arrayContaining(['holdings', 'assets', 'brokers']));
+        expect(query.assetIds).toContain(11);
+
+        const reread = source({7: {custody: '25', ownershipShare: '1', economic: '25'}, 8: {custody: '12', ownershipShare: '0.5', economic: '6'}});
+        const summary = refreshCopiedFacts(draft, reread, plan!);
+
+        expect(summary.positions).toBe(1);
+        expect(draft.positionsOf(ASSET).map((item) => [item.sourceBrokerId, item.quantity, item.copiedQuantity])).toEqual([
+            [7, '25', '25'],
+            [8, '4', '6'],
+        ]);
+    });
+
+    it('a copied position the re-read no longer finds keeps its copy and is reported', () => {
+        const draft = new PlannerDraft('EUR', 'proportional', REBALANCER_PLANNER_PROFILE);
+        copy(draft, source({7: {custody: '20', ownershipShare: '1', economic: '20'}}));
+        const plan = refreshPlan(draft)!;
+
+        const summary = refreshCopiedFacts(draft, {...source({}), holdings: []}, plan);
+
+        expect(summary.positions).toBe(0);
+        expect(summary.missing).toHaveLength(1);
+        expect(draft.positionsOf(ASSET)[0].quantity).toBe('20');
     });
 });

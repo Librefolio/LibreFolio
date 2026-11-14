@@ -106,7 +106,7 @@ async function reread(issues: readonly SourceIssue[]): Promise<PlannerSource> {
 
 /** What the re-read of one Auto pair reports: its rate changed; `issues` as the cure fills it. */
 function summaryWith(source: PlannerSource, issues: SourceIssue[]): RefreshSummary {
-    return {readAt: source.generatedAt, prices: 0, fx: 1, cash: 0, unchanged: 0, missing: [], issues};
+    return {readAt: source.generatedAt, prices: 0, fx: 1, cash: 0, positions: 0, unchanged: 0, missing: [], issues};
 }
 
 /** Mounted as `PacPlannerTool` will mount it: the summary, the draft's date, the draft and the re-read source. */
