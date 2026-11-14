@@ -151,6 +151,62 @@ describe('PlannerPreview', () => {
         preview.dispose();
     });
 
+    it('an answer that lands while a newer change waits for its pause stays waiting, never ready or error', async () => {
+        // Found in G5: the answer of an older draft, landing in the pause after the last change, showed `ready` (or `error`)
+        // and not stale, so the screen, and a shot waiting for `ready`, took old numbers for current ones.
+        const draft = draftOf();
+        const {call, pending} = controlled();
+        const preview = new PlannerPreview({call, blocked: () => false});
+        preview.schedule(draft);
+        vi.advanceTimersByTime(PREVIEW_DELAY_MS);
+        draft.data.targets['asset:probe'] = '70';
+        preview.schedule(draft);
+        pending[0].resolve(ready('100'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect([preview.state, preview.stale, preview.numbers?.total.value]).toEqual(['waiting', true, {kind: 'finite_decimal', value: '100'}]);
+
+        draft.data.targets['asset:probe'] = '80';
+        preview.schedule(draft);
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        expect(call).toHaveBeenCalledTimes(2);
+        draft.data.targets['asset:probe'] = '90';
+        preview.schedule(draft);
+        pending[1].resolve({kind: 'answer', result: {operation: 'preview', result_state: 'preview_needs_input', issues: [{code: 'allocation.fx_rate_missing'}]}});
+        await vi.advanceTimersByTimeAsync(0);
+        expect([preview.state, preview.numbers, preview.reason]).toEqual(['waiting', null, 'allocation.fx_rate_missing']);
+
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        expect(call).toHaveBeenCalledTimes(3);
+        pending[2].resolve(ready('300'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect([preview.state, preview.stale, preview.numbers?.total.value]).toEqual(['ready', false, {kind: 'finite_decimal', value: '300'}]);
+        preview.dispose();
+    });
+
+    it('the latest draft goes once, even when a change arms the pause while another waits in the queue', async () => {
+        const draft = draftOf();
+        const {call, pending} = controlled();
+        const preview = new PlannerPreview({call, blocked: () => false});
+        preview.schedule(draft);
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        draft.data.targets['asset:probe'] = '70';
+        preview.schedule(draft);
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        draft.data.targets['asset:probe'] = '80';
+        preview.schedule(draft);
+        pending[0].resolve(ready('100'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(call).toHaveBeenCalledTimes(2);
+        expect((pending[1].request.target_weights as {asset_id?: string; weight: string}[]).find((entry) => entry.asset_id === 'asset:probe')?.weight).toBe('0.8');
+
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS * 2);
+        pending[1].resolve(ready('200'));
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS * 2);
+        expect(call).toHaveBeenCalledTimes(2);
+        expect([preview.state, preview.numbers?.total.value]).toEqual(['ready', {kind: 'finite_decimal', value: '200'}]);
+        preview.dispose();
+    });
+
     it('a failed preview drops the numbers and keeps the reason', async () => {
         const draft = draftOf();
         const {call, pending} = controlled();

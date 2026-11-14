@@ -7,7 +7,8 @@
  * «maximum acceptable cost» and the «custom» fidelity both ways. This class only reads and forwards: no figure is computed
  * here. It
  *   - calls once, `PREVIEW_DELAY_MS` after the last change (`schedule`), with the latest draft;
- *   - while it waits, keeps the previous numbers, `stale`;
+ *   - while it waits, keeps the previous numbers, `stale`; an answer that lands while a newer change is still to be sent
+ *     (queued, or in its pause) leaves it waiting: its numbers are already stale;
  *   - never sends while a call is on its way (one batch per user: a second call would be refused): a change made
  *     meanwhile waits for it, then the latest draft is sent once, so answers always come in order;
  *   - on a failure drops the numbers and keeps the reason: the first issue's code of an answer that cannot count,
@@ -116,12 +117,19 @@ export class PlannerPreview {
         return this.#inFlight ?? Promise.resolve();
     }
 
+    /** A newer draft is still to be sent: queued behind the call on its way, or in its pause after the last change. */
+    get #pending(): boolean {
+        return this.#queued || this.#timer !== null;
+    }
+
     #arm(): void {
         if (this.#timer !== null) clearTimeout(this.#timer);
         this.#timer = setTimeout(() => this.#fire(), PREVIEW_DELAY_MS);
     }
 
     #fire(): void {
+        // Called by the queue too: a pause armed meanwhile would send the same draft a second time.
+        if (this.#timer !== null) clearTimeout(this.#timer);
         this.#timer = null;
         const draft = this.#draft;
         if (!draft) return;
@@ -181,7 +189,7 @@ export class PlannerPreview {
         this.numbers = ready;
         this.reason = null;
         // A newer draft waits to be sent: these numbers are already stale.
-        this.state = this.#queued ? 'waiting' : 'ready';
+        this.state = this.#pending ? 'waiting' : 'ready';
         if (euros === null) return;
         // The euros reached the backend: later previews send λ. The λ they give, as the answer gives it, goes to the draft
         // only while its choice is still «Custom» (the user may have picked a level meanwhile).
@@ -195,7 +203,7 @@ export class PlannerPreview {
     #fail(reason: string): void {
         this.numbers = null;
         this.reason = reason;
-        this.state = this.#queued ? 'waiting' : 'error';
+        this.state = this.#pending ? 'waiting' : 'error';
     }
 
     dispose(): void {
