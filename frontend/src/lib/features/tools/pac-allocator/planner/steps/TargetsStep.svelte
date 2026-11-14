@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {PieChart, Scale} from 'lucide-svelte';
+    import {PieChart, Plus, Scale, Trash2} from 'lucide-svelte';
     import {MediaQuery} from 'svelte/reactivity';
     import {t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -7,10 +7,13 @@
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {canonicalInput, compareDecimal, decimalSign, rebalanceControlPercentages, remainingControlPercentage, sumControlPercentages} from '$lib/utils/core/exactDecimal';
-    import type {DraftAsset, PlannerDraft} from '../draft.svelte';
+    import type {PlannerDraft, TargetRow} from '../draft.svelte';
     import {formatPlannerPercentUnits} from '../format';
     import {BUTTON_SECONDARY, NOTICE} from '../ui';
     import AssetNameCell from '../shared/AssetNameCell.svelte';
+    import CashEntryIcon from '../shared/CashEntryIcon.svelte';
+    import CashEntryNameCell from '../shared/CashEntryNameCell.svelte';
+    import PlannerDialog from '../shared/PlannerDialog.svelte';
     import HelpTip from '../shared/HelpTip.svelte';
     import TargetInputCell from '../shared/TargetInputCell.svelte';
     import LimitInputCell from '../shared/LimitInputCell.svelte';
@@ -37,9 +40,25 @@
     const BAR_CLASS: Record<TotalState, string> = STATUS_TONES.pacTargetBar;
     const TOTAL_CLASS: Record<TotalState, string> = STATUS_TONES.pacTargetTotal;
 
+    /** A row of the table: an Asset, a cash entry (F3a of project 67), or the fixed «Other cash» row of the Rebalancer. */
+    type TableRow = TargetRow | {kind: 'other'; key: string};
+    const OTHER_CASH_KEY = 'other-cash';
+    const R = 'tools.portfolioRebalancer.planner.targets';
+
     let copying = $state(false);
+    let addingCash = $state(false);
     let selectedKeys = $state<string[]>([]);
-    let tableRef: DataTable<DraftAsset> | undefined = $state(undefined);
+    let tableRef: DataTable<TableRow> | undefined = $state(undefined);
+
+    /** A row with a target of its own: an Asset, or a cash entry where the Tool gives cash a target (`full`). */
+    function targetable(row: TableRow): boolean {
+        return row.kind === 'asset' || (row.kind === 'cash' && profile.cashEntries === 'full');
+    }
+    /** «Other cash»: some cash of the scenario has no entry of its own (the Rebalancer only). */
+    const otherCash = $derived(profile.cashEntries === 'full' && draft.data.cash.some((cash) => !draft.data.cashEntries.some((entry) => entry.brokerKey === cash.brokerKey && entry.currency === cash.currency)));
+    const rows = $derived<TableRow[]>([...draft.targetRows, ...(otherCash ? [{kind: 'other' as const, key: OTHER_CASH_KEY}] : [])]);
+    /** The rows whose targets the balancing reads and writes, in table order. */
+    const editable = $derived(draft.targetRows.filter(targetable));
 
     const copyDisabled = $derived(!/^[A-Z]{3}$/.test(draft.data.valuationCurrency) || !draft.data.assets.some((asset) => asset.sourceAssetId !== null));
     const total = $derived(draft.targetTotal);
@@ -52,10 +71,12 @@
         return 'unknown';
     });
     const excess = $derived(remaining === null ? null : remainingControlPercentage(remaining, '0'));
-    const maxWeight = $derived(Math.max(1, ...draft.data.assets.map((asset) => percentNumber(draft.data.targets[asset.key]))));
+    const maxWeight = $derived(Math.max(1, ...editable.map((row) => percentNumber(draft.data.targets[row.key]))));
 
-    function assetLabel(asset: DraftAsset): string {
-        return [asset.ticker, asset.name].filter((part) => part.trim() !== '').join(' ');
+    function rowLabel(row: TableRow): string {
+        if (row.kind === 'asset') return [row.asset.ticker, row.asset.name].filter((part) => part.trim() !== '').join(' ');
+        if (row.kind === 'cash') return $t(`${R}.cashEntry`, {values: {broker: draft.broker(row.entry.brokerKey)?.name || '—', currency: row.entry.currency}});
+        return $t(`${R}.otherCash`);
     }
 
     /** Bar length only: a picture of the target, never a value that is sent. */
@@ -65,26 +86,27 @@
         return Number.isFinite(number) ? Math.max(0, number) : 0;
     }
 
-    function barHtml(asset: DraftAsset): string {
-        const width = Math.min(100, (percentNumber(draft.data.targets[asset.key]) / maxWeight) * 100);
-        return `<div data-testid="${testId('target-bar', profile)}" data-asset-key="${escapeHtml(asset.key)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-lf-neutral"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}%"></div></div>`;
+    function barHtml(row: TableRow): string {
+        if (!targetable(row)) return '';
+        const width = Math.min(100, (percentNumber(draft.data.targets[row.key]) / maxWeight) * 100);
+        return `<div data-testid="${testId('target-bar', profile)}" data-asset-key="${escapeHtml(row.key)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-lf-neutral"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}%"></div></div>`;
     }
 
-    /** Gives this Asset what is missing, or takes away the excess, within 0–100. */
-    function balance(asset: DraftAsset): void {
-        if (remaining === null) return;
-        const next = sumControlPercentages([canonicalInput(draft.data.targets[asset.key] ?? '') ?? '0', remaining]);
+    /** Gives this row what is missing, or takes away the excess, within 0–100. */
+    function balance(row: TableRow): void {
+        if (remaining === null || !targetable(row)) return;
+        const next = sumControlPercentages([canonicalInput(draft.data.targets[row.key] ?? '') ?? '0', remaining]);
         if (next === null) return;
-        if ((compareDecimal(next, '0') ?? 0) < 0) draft.data.targets[asset.key] = '0';
-        else if ((compareDecimal(next, '100') ?? 0) > 0) draft.data.targets[asset.key] = '100';
-        else draft.data.targets[asset.key] = next;
+        if ((compareDecimal(next, '0') ?? 0) < 0) draft.data.targets[row.key] = '0';
+        else if ((compareDecimal(next, '100') ?? 0) > 0) draft.data.targets[row.key] = '100';
+        else draft.data.targets[row.key] = next;
     }
 
     /** Targets in row order; an empty field counts as 0, text that is not a number stops the balancing. */
-    const controlValues = $derived(draft.orderedAssets.map((asset) => ((draft.data.targets[asset.key] ?? '').trim() === '' ? '0' : canonicalInput(draft.data.targets[asset.key]))));
+    const controlValues = $derived(editable.map((row) => ((draft.data.targets[row.key] ?? '').trim() === '' ? '0' : canonicalInput(draft.data.targets[row.key]))));
     const selectedIndices = $derived.by(() => {
         const keys = new Set(selectedKeys);
-        return draft.orderedAssets.flatMap((asset, index) => (keys.has(asset.key) ? [index] : []));
+        return editable.flatMap((row, index) => (keys.has(row.key) ? [index] : []));
     });
 
     /** Rescales the chosen rows, keeping their ratios, so the total is exactly 100% (equal parts if they are all 0). */
@@ -93,13 +115,13 @@
         return rebalanceControlPercentages(controlValues as string[], indices);
     }
 
-    const canBalanceAll = $derived(draft.orderedAssets.length > 0 && rebalanced(draft.orderedAssets.map((_, index) => index)) !== null);
+    const canBalanceAll = $derived(editable.length > 0 && rebalanced(editable.map((_, index) => index)) !== null);
     const canBalanceSelected = $derived(selectedIndices.length > 0 && rebalanced(selectedIndices) !== null);
 
     function applyBalance(indices: readonly number[]): void {
         const next = rebalanced(indices);
         if (next === null) return;
-        for (const index of indices) draft.data.targets[draft.orderedAssets[index].key] = next[index];
+        for (const index of indices) draft.data.targets[editable[index].key] = next[index];
     }
 
     function balanceSelected(): void {
@@ -113,8 +135,20 @@
     // 100%» opens from the row's menu on a long press (`enableContextMenu`, as on the Review step, P3), «Balance all» stays in the toolbar.
     const phone = new MediaQuery('max-width: 768px');
 
-    const columns = $derived.by((): ColumnDef<DraftAsset>[] =>
-        withHelpCues<DraftAsset>([
+    /** The name cell: an Asset's icon and name, or a cash row's icon (M3) and name. */
+    function nameCell(row: TableRow) {
+        if (row.kind === 'asset') return {type: 'custom' as const, component: AssetNameCell, props: {label: rowLabel(row), iconUrl: row.asset.iconUrl, assetType: row.asset.assetClass ? row.asset.assetClass.toUpperCase() : null}};
+        if (row.kind === 'cash') return {type: 'custom' as const, component: CashEntryNameCell, props: {broker: draft.broker(row.entry.brokerKey), currency: row.entry.currency}};
+        return {type: 'custom' as const, component: CashEntryNameCell, props: {other: true}};
+    }
+
+    /** «Other cash» always counts 0 %: shown, never edited (mockup screen 5). */
+    function fixedZeroHtml(): string {
+        return `<span class="font-mono text-lf-muted" data-testid="${testId('target-other-cash', profile)}">${escapeHtml(formatPlannerPercentUnits('0'))}</span>`;
+    }
+
+    const columns = $derived.by((): ColumnDef<TableRow>[] =>
+        withHelpCues<TableRow>([
             {
                 id: 'asset',
                 header: () => $t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'}),
@@ -122,8 +156,8 @@
                 sortable: false,
                 filterable: false,
                 minWidth: phone.current ? 80 : 160,
-                getValue: (asset) => assetLabel(asset),
-                cell: (asset) => ({type: 'custom', component: AssetNameCell, props: {label: assetLabel(asset), iconUrl: asset.iconUrl, assetType: asset.assetClass ? asset.assetClass.toUpperCase() : null}}),
+                getValue: (row) => rowLabel(row),
+                cell: (row) => nameCell(row),
             },
             {
                 id: 'bar',
@@ -134,7 +168,7 @@
                 width: 200,
                 minWidth: 100,
                 hiddenByDefault: phone.current,
-                cell: (asset) => ({type: 'html', html: barHtml(asset)}),
+                cell: (row) => ({type: 'html', html: barHtml(row)}),
             },
             {
                 id: 'target',
@@ -146,7 +180,7 @@
                 align: 'right',
                 width: phone.current ? 96 : 140,
                 minWidth: phone.current ? 84 : 128,
-                cell: (asset) => ({type: 'custom', component: TargetInputCell, props: {draft, assetKey: asset.key, label: assetLabel(asset)}}),
+                cell: (row) => (targetable(row) ? {type: 'custom', component: TargetInputCell, props: {draft, assetKey: row.key, label: rowLabel(row)}} : {type: 'html', html: row.kind === 'other' ? fixedZeroHtml() : ''}),
             },
             {
                 // F2 of project 67 (M1, M17): minimum and maximum of the final value; the total a percentage refers to is named, not computed.
@@ -162,21 +196,35 @@
                 align: 'right',
                 width: phone.current ? 96 : 184,
                 minWidth: phone.current ? 92 : 176,
-                cell: (asset) => ({type: 'custom', component: LimitInputCell, props: {draft, assetKey: asset.key, label: assetLabel(asset)}}),
+                cell: (row) => (row.kind === 'other' ? {type: 'html', html: ''} : {type: 'custom', component: LimitInputCell, props: {draft, assetKey: row.key, label: rowLabel(row)}}),
             },
         ]),
     );
 
-    const rowActions = $derived.by((): RowAction<DraftAsset>[] => [
+    const rowActions = $derived.by((): RowAction<TableRow>[] => [
         {
             id: 'balance',
             icon: Scale,
             label: () => $t(`${KEY}.balance`, {default: 'Balance to 100%'}),
-            onClick: (asset) => balance(asset),
+            onClick: (row) => balance(row),
+            visible: (row) => targetable(row),
             disabled: () => totalState === 'balanced' || totalState === 'unknown',
             testid: testId('target-balance', profile),
         },
+        {
+            id: 'remove-cash',
+            icon: Trash2,
+            label: () => $t(`${R}.removeCash`),
+            onClick: (row) => draft.removeCashEntry(row.key),
+            visible: (row) => row.kind === 'cash',
+            testid: testId('cash-entry-remove', profile),
+        },
     ]);
+
+    function addCash(brokerKey: string, currency: string): void {
+        draft.addCashEntry(brokerKey, currency);
+        addingCash = false;
+    }
 </script>
 
 <div class="space-y-3" data-testid={testId('targets', profile)}>
@@ -199,7 +247,7 @@
                 />
             {/if}
             {#if draft.data.assets.length > 0}
-                <button type="button" class={BUTTON_SECONDARY} disabled={!canBalanceAll} data-testid={testId('targets-balance-all', profile)} onclick={() => applyBalance(draft.orderedAssets.map((_, index) => index))}>
+                <button type="button" class={BUTTON_SECONDARY} disabled={!canBalanceAll} data-testid={testId('targets-balance-all', profile)} onclick={() => applyBalance(editable.map((_, index) => index))}>
                     <Scale class="h-4 w-4" aria-hidden="true" />
                     {$t(`${KEY}.balanceAll`, {default: 'Balance all'})}
                 </button>
@@ -218,6 +266,15 @@
                     testid={testId('distribution-help', profile)}
                 />
             </div>
+            {#if profile.cashEntries !== 'none'}
+                <div class="flex items-center gap-0.5">
+                    <button type="button" class={BUTTON_SECONDARY} data-testid={testId('cash-entry-add', profile)} onclick={() => (addingCash = true)}>
+                        <Plus class="h-4 w-4" aria-hidden="true" />
+                        {$t(`${R}.addCash`)}
+                    </button>
+                    <HelpTip label={$t(`${R}.addCash`)} help={$t(`${R}.addCashHelp`)} />
+                </div>
+            {/if}
             {#if draft.data.assets.length > 0}
                 <TableColumns table={tableRef} testid={testId('targets-columns', profile)} />
             {/if}
@@ -230,9 +287,9 @@
         <div data-testid={testId('targets-table', profile)}>
             <DataTable
                 bind:this={tableRef}
-                data={draft.orderedAssets}
+                data={rows}
                 {columns}
-                getRowId={(asset) => asset.key}
+                getRowId={(row) => row.key}
                 storageKey={storageKey('targets', profile)}
                 enableSorting={false}
                 enablePagination={false}
@@ -279,4 +336,23 @@
 
 {#if copying}
     <DistributionDialog {draft} {accountGeneration} onclose={() => (copying = false)} />
+{/if}
+{#if addingCash}
+    <PlannerDialog open title={$t(`${R}.addCash`)} testid={testId('cash-entry-dialog', profile)} onclose={() => (addingCash = false)}>
+        {#if draft.cashEntryChoices.length === 0}
+            <p class={NOTICE.info} data-testid={testId('cash-entry-none', profile)}>{$t(`${R}.addCashNone`)}</p>
+        {:else}
+            <ul class="grid gap-2 sm:grid-cols-2">
+                {#each draft.cashEntryChoices as choice (choice.brokerKey + choice.currency)}
+                    {@const broker = draft.broker(choice.brokerKey)}
+                    <li>
+                        <button type="button" class="{BUTTON_SECONDARY} w-full justify-start" data-testid={testId('cash-entry-choice', profile)} data-broker-key={choice.brokerKey} data-currency={choice.currency} onclick={() => addCash(choice.brokerKey, choice.currency)}>
+                            <CashEntryIcon {broker} currency={choice.currency} size={24} />
+                            <span class="min-w-0 truncate">{$t(`${R}.cashEntry`, {values: {broker: broker?.name || '—', currency: choice.currency}})}</span>
+                        </button>
+                    </li>
+                {/each}
+            </ul>
+        {/if}
+    </PlannerDialog>
 {/if}

@@ -39,6 +39,9 @@
         for (const item of impact.funding) {
             list.push($t('tools.pacAllocator.planner.removal.funding', {default: 'Funding route {source} → {broker}', values: {source: sourceLabel(item.funding.source), broker: item.broker.name}}));
         }
+        for (const entry of impact.cashEntries ?? []) {
+            list.push($t('tools.portfolioRebalancer.planner.removal.cashEntry', {values: {broker: draft.broker(entry.brokerKey)?.name ?? entry.brokerKey, currency: entry.currency}}));
+        }
         if (impact.target) list.push($t('tools.pacAllocator.planner.removal.target', {default: 'Its target percentage'}));
         return list;
     });

@@ -632,6 +632,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/steps/AssetsStep.positions.test.ts",
             "src/lib/features/tools/pac-allocator/planner/steps/Funding.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/assetRead.positions.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/cashEntries.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/steps/TargetsStep.cash.test.ts",
             "src/lib/features/tools/pac-allocator/planner/profileContext.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/BusyPanel.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/AutomaticConversionNote.test.ts",
