@@ -153,15 +153,28 @@ describe('the user positions in the draft', () => {
         ]);
     });
 
-    it('a copied position the re-read no longer finds keeps its copy and is reported', () => {
+    // Q-F3a-11 (a): for a holding, absence means zero: a copied, unedited position the source no longer has is closed.
+    it("a copied position the re-read no longer finds goes to 0, an edited one stays the user's", () => {
         const draft = new PlannerDraft('EUR', 'proportional', REBALANCER_PLANNER_PROFILE);
-        copy(draft, source({7: {custody: '20', ownershipShare: '1', economic: '20'}}));
+        copy(
+            draft,
+            source({
+                7: {custody: '20', ownershipShare: '1', economic: '20'},
+                8: {custody: '12', ownershipShare: '0.5', economic: '6'},
+            }),
+        );
+        draft.positionsOf(ASSET).find((item) => item.sourceBrokerId === 8)!.quantity = '4';
         const plan = refreshPlan(draft)!;
 
         const summary = refreshCopiedFacts(draft, {...source({}), holdings: []}, plan);
 
+        expect(summary.closedPositions).toBe(1);
         expect(summary.positions).toBe(0);
-        expect(summary.missing).toHaveLength(1);
-        expect(draft.positionsOf(ASSET)[0].quantity).toBe('20');
+        expect(summary.missing).toEqual([]);
+        expect(draft.positionsOf(ASSET).map((item) => [item.sourceBrokerId, item.custody, item.quantity, item.copiedQuantity])).toEqual([
+            [7, '0', '0', '0'],
+            [8, '12', '4', '6'],
+        ]);
+        expect(draft.asset(ASSET)).toBeDefined();
     });
 });

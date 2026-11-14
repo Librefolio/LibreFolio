@@ -36,12 +36,25 @@
             summary.fx > 0 ? $t(`${KEY}.fx`, {default: '{count, plural, one {# FX rate updated} other {# FX rates updated}}', values: {count: summary.fx}}) : null,
             summary.cash > 0 ? $t(`${KEY}.cash`, {default: '{count, plural, one {# balance updated} other {# balances updated}}', values: {count: summary.cash}}) : null,
             summary.positions > 0 ? $t(`${KEY}.positions`, {values: {count: summary.positions}}) : null,
+            summary.closedPositions > 0 ? $t(`${KEY}.positionsClosed`, {values: {count: summary.closedPositions}}) : null,
         ].filter((part): part is string => part !== null);
         return parts.length > 0 ? parts.join(' · ') : $t(`${KEY}.unchanged`, {default: 'no value changed'});
     });
 </script>
 
-<div class={warn ? NOTICE.warning : NOTICE.info} role="status" data-testid={testid} data-prices={summary.prices} data-fx={summary.fx} data-cash={summary.cash} data-positions={summary.positions} data-unchanged={summary.unchanged} data-missing={summary.missing.length} data-issues={issues.length}>
+<div
+    class={warn ? NOTICE.warning : NOTICE.info}
+    role="status"
+    data-testid={testid}
+    data-prices={summary.prices}
+    data-fx={summary.fx}
+    data-cash={summary.cash}
+    data-positions={summary.positions}
+    data-closed-positions={summary.closedPositions}
+    data-unchanged={summary.unchanged}
+    data-missing={summary.missing.length}
+    data-issues={issues.length}
+>
     <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span class={BADGE.neutral} data-testid="{testid}-stamp"><RefreshCw size={12} aria-hidden="true" />{stamp}</span>
         <span>{$t(`${KEY}.summary`, {default: 'Copied data read again from LibreFolio: {changes}.', values: {changes}})}</span>

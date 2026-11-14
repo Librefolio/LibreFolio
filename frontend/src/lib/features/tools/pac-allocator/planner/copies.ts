@@ -575,6 +575,8 @@ export interface RefreshSummary {
     cash: number;
     /** The Rebalancer's positions whose copied quantity changed (Q-F3a-5c). */
     positions: number;
+    /** The Rebalancer's copied positions the source no longer has: closed, at zero (Q-F3a-11). */
+    closedPositions: number;
     unchanged: number;
     /** Labels of facts the source no longer publishes: they keep the copied value. */
     missing: string[];
@@ -679,6 +681,7 @@ export function refreshCopiedFacts(draft: PlannerDraft, source: PlannerSource, p
         fx: 0,
         cash: 0,
         positions: 0,
+        closedPositions: 0,
         unchanged: 0,
         missing: [],
         issues: selectedBrokerIssues(source, plan.cashBrokerIds).filter((issue) => issue.code !== EXECUTION_PROFILE_CODE),
@@ -716,14 +719,17 @@ export function refreshCopiedFacts(draft: PlannerDraft, source: PlannerSource, p
     }
 
     // Positions (Q-F3a-5c): a quantity still equal to its copy follows the source, with the custody facts; the check is
-    // repeated here, so an edit made while the read was running stays the user's. A position the source no longer has
-    // keeps its copy and is reported, as a price is.
+    // repeated here, so an edit made while the read was running stays the user's. A position the source no longer has is
+    // closed (Q-F3a-11): for a holding absence means zero, so it goes to 0, its copy too; the Asset stays in the plan.
     const holdings = new Map(source.holdings.map((row) => [row.holding_id, row]));
     for (const position of draft.data.positions) {
         if (!plan.positionKeys.includes(position.key) || !positionIsCopied(position)) continue;
         const quantity = holdings.get(position.key)?.quantity;
         if (!quantity) {
-            summary.missing.push(`${draft.asset(position.assetKey)?.name ?? position.assetKey} · ${position.brokerName}`);
+            if (decimalSign(canonicalInput(position.custody) ?? '0') !== 0 || decimalSign(canonicalInput(position.copiedQuantity) ?? '0') !== 0) summary.closedPositions += 1;
+            position.custody = '0';
+            position.quantity = '0';
+            position.copiedQuantity = '0';
             continue;
         }
         if (canonicalInput(quantity.economic) === canonicalInput(position.copiedQuantity) && canonicalInput(quantity.custody) === canonicalInput(position.custody)) summary.unchanged += 1;
