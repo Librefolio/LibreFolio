@@ -218,6 +218,12 @@ export interface DraftCashEntry {
     enteredAt: string;
 }
 
+/**
+ * The Rebalancer's target fidelity (§7.3, M29): one of three levels, a custom λ (the preview turns the user's figure in
+ * money into it; the draft keeps λ), or «Target first». «Balanced» by default.
+ */
+export type DraftFidelity = {kind: 'level'; level: 'cost_aware' | 'balanced' | 'faithful'} | {kind: 'custom'; lambda: string} | {kind: 'target_first'};
+
 /** A row of the targets table: an Asset, or a cash entry. */
 export type TargetRow = {kind: 'asset'; key: string; asset: DraftAsset} | {kind: 'cash'; key: string; entry: DraftCashEntry};
 
@@ -239,6 +245,8 @@ export interface DraftData {
     positions: DraftPosition[];
     /** The cash entries of the targets, in the order they were added (none for the PAC in F3a). */
     cashEntries: DraftCashEntry[];
+    /** The Rebalancer's target fidelity (unused by the PAC). */
+    fidelity: DraftFidelity;
     routes: Record<string, DraftRoute>;
     targets: Record<string, string>;
     /** Minimum and maximum of each Asset's final value, as typed (F2 of project 67); an Asset with no limit has no entry. */
@@ -358,6 +366,7 @@ function emptyData(valuationCurrency: string): DraftData {
         assets: [],
         positions: [],
         cashEntries: [],
+        fidelity: {kind: 'level', level: 'balanced'},
         routes: {},
         targets: {},
         limits: {},
@@ -691,6 +700,21 @@ export class PlannerDraft {
         if (this.assetOrder.includes(key)) this.assetOrder = this.assetOrder.filter((item) => item !== key);
         this.syncRoutes();
     }
+
+    /**
+     * The Brokers that hold a position of the scenario and are not among its Brokers (Q-F3a-5b): «positions only». Their
+     * positions count in the portfolio; the plan neither buys nor sells there until the user adds them to the plan.
+     */
+    readonly positionOnlyBrokers = $derived.by((): {brokerKey: string; sourceBrokerId: number; name: string; iconUrl: string | null}[] => {
+        const seen = new Set(this.data.brokers.map((broker) => broker.key));
+        const found: {brokerKey: string; sourceBrokerId: number; name: string; iconUrl: string | null}[] = [];
+        for (const position of this.data.positions) {
+            if (seen.has(position.brokerKey) || !this.asset(position.assetKey)) continue;
+            seen.add(position.brokerKey);
+            found.push({brokerKey: position.brokerKey, sourceBrokerId: position.sourceBrokerId, name: position.brokerName, iconUrl: position.brokerIconUrl});
+        }
+        return found;
+    });
 
     /** The Asset's positions, as the live `$state` proxies, in the order they were copied. */
     positionsOf(assetKey: string): DraftPosition[] {

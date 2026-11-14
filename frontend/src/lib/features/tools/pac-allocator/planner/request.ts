@@ -14,7 +14,8 @@
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
 import {canonicalInput, compareDecimal, decimalSign, isWholeDecimal, percentToFraction, sumControlPercentages} from '$lib/utils/core/exactDecimal';
 import {PLANNER_OPERATION} from './defaults';
-import {limitsConflict, parseLimit, shareAboveHundred} from './limits';
+import {limitsConflict, parseLimit, shareAboveHundred, wireLimit} from './limits';
+import {cashTargetEntries, positionOnlyBrokers, positionQuantityValid, rebalancerHoldings, wireFidelity} from './request.rebalancer';
 import {priceIsCopied, routeKey, sameExposures, selectionExceedsAvailable, type CopyRef, type DraftAsset, type DraftBroker, type DraftMode, type DraftRoute, type PlannerDraft} from './draft.svelte';
 import {toPlannerId, toPlannerTimestamp} from './source';
 import type {
@@ -192,13 +193,6 @@ export function limitProblems(draft: PlannerDraft): LimitProblem[] {
     return found;
 }
 
-/** The wire form of one typed limit (contract 2.0.0 §5.2), or null for no limit. Problems were reported before. */
-function wireLimit(text: string | undefined, currency: string): {kind: 'amount'; amount: {amount: string; currency: string}} | {kind: 'share'; share: string} | null {
-    const limit = parseLimit(text);
-    if (limit === null || limit === 'invalid') return null;
-    return limit.kind === 'amount' ? {kind: 'amount', amount: {amount: limit.value, currency}} : {kind: 'share', share: percentToFraction(limit.percent) as string};
-}
-
 /** D8: problems that stop the request before it is sent. */
 export function localProblems(draft: PlannerDraft): LocalProblem[] {
     const problems = new ProblemList();
@@ -277,6 +271,11 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
         }
     }
 
+    // Positions (the Rebalancer's): a planning quantity is a number from zero.
+    for (const position of draft.profile.positions ? data.positions : []) {
+        if (!positionQuantityValid(position)) problems.add('assets', 'positionQuantityInvalid', 'A position quantity is empty, not a number or below zero.', `${draft.asset(position.assetKey)?.name ?? position.assetKey} · ${position.brokerName}`);
+    }
+
     // Routing
     const buyRoutes = Object.values(data.routes).filter((route) => route.enabled);
     if (data.assets.length > 0 && draft.operativeBrokers.length > 0 && buyRoutes.length === 0) problems.add('routing', 'noEnabledRoute', 'No order route is enabled.');
@@ -295,9 +294,11 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
     }
 
     // Targets (control percentages, Q-C0-2)
-    for (const asset of data.assets) {
-        const value = data.targets[asset.key] ?? '';
-        if (value.trim() !== '' && (canonicalInput(value) === null || decimalSign(canonicalInput(value) as string) === -1)) problems.add('targets', 'targetInvalid', 'The target is not a number from 0.', asset.name);
+    for (const row of draft.targetRows) {
+        if (row.kind === 'cash' && draft.profile.cashEntries !== 'full') continue;
+        const value = data.targets[row.key] ?? '';
+        const name = row.kind === 'asset' ? row.asset.name : `${draft.broker(row.entry.brokerKey)?.name ?? row.entry.brokerKey} · ${row.entry.currency}`;
+        if (value.trim() !== '' && (canonicalInput(value) === null || decimalSign(canonicalInput(value) as string) === -1)) problems.add('targets', 'targetInvalid', 'The target is not a number from 0.', name);
     }
     for (const problem of limitProblems(draft)) problems.add('targets', problem.key, problem.fallback, problem.entity, problem.values);
     const total = draft.targetTotal;
@@ -494,10 +495,22 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         if (rate !== null) fxRates[pair] = rate;
     }
 
-    if (late.items.length > 0) return {ok: false, problems: late.items};
-
     const fxSpread = wireFraction(data.fxSpreadPercent) ?? '0';
-    const request = {
+    const assetTargets = data.assets.map((asset) => ({
+        kind: 'asset' as const,
+        asset_id: asset.key,
+        weight: wireFraction(data.targets[asset.key]?.trim() ? data.targets[asset.key] : '0') as string,
+        ...field('minimum', wireLimit(data.limits[asset.key]?.minimum, data.valuationCurrency)),
+        ...field('maximum', wireLimit(data.limits[asset.key]?.maximum, data.valuationCurrency)),
+    }));
+    // The Rebalancer (F3a of project 67, step 11): positions, the Brokers that only hold them, cash entries, the fidelity;
+    // `invest_only` always before F3b (S1), and no funding route (contract §5.4).
+    const rebalancer = draft.profile.toolCode === 'portfolio_rebalancer';
+    const holdings = rebalancer ? rebalancerHoldings(draft, copied, manual) : [];
+    const heldOnly = rebalancer ? positionOnlyBrokers(draft, copied) : [];
+    if (late.items.length > 0) return {ok: false, problems: late.items};
+    // The key order is the PAC's as before (its tests compare the body as JSON); the Rebalancer's keys take the same places.
+    const head = {
         operation: PLANNER_OPERATION,
         snapshot: {snapshot_id: `draft:${draft.revision}`, draft_revision: draft.revision, captured_at: newest},
         as_of: data.asOf,
@@ -506,23 +519,18 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
         ...field('fx_rates', Object.keys(fxRates).length > 0 ? fxRates : null),
         ...field('fx_spread_rate', nonZero(fxSpread)),
         assets,
-        brokers,
+        brokers: [...brokers, ...heldOnly],
         ...field('existing_cash', nonEmpty(existingCash)),
         ...field('contributions', nonEmpty(contributions)),
-        ...field('funding_routes', nonEmpty(fundingRoutes)),
-        target_weights: data.assets.map((asset) => ({
-            kind: 'asset' as const,
-            asset_id: asset.key,
-            weight: wireFraction(data.targets[asset.key]?.trim() ? data.targets[asset.key] : '0') as string,
-            ...field('minimum', wireLimit(data.limits[asset.key]?.minimum, data.valuationCurrency)),
-            ...field('maximum', wireLimit(data.limits[asset.key]?.maximum, data.valuationCurrency)),
-        })),
-        order_routes: orderRoutes,
-        policy: data.policy,
-    } as PlannerRequest;
+    };
+    const request = (
+        rebalancer
+            ? {...head, ...field('holdings', nonEmpty(holdings)), target_weights: [...assetTargets, ...cashTargetEntries(draft)], order_routes: orderRoutes, policy: 'invest_only', target_fidelity: wireFidelity(data.fidelity)}
+            : {...head, ...field('funding_routes', nonEmpty(fundingRoutes)), target_weights: assetTargets, order_routes: orderRoutes, policy: data.policy}
+    ) as PlannerRequest;
 
-    // The codec of the draft's Tool (F1 of project 67). Until F3a builds the Rebalancer's own request, the planner builds the
-    // PAC's shape, so the result is read as the PAC's resolved request.
+    // The codec of the draft's Tool (F1 of project 67). The result views still read the resolved request as the PAC's shape
+    // (the Rebalancer's result views come with F4a).
     const parsed = toolContractMap[draft.profile.toolCode][draft.profile.contractVersion].input.safeParse(request);
     if (!parsed.success) {
         const structural = new ProblemList();
@@ -552,6 +560,8 @@ export function stepOfWirePath(path: readonly (string | number)[]): PlannerStep 
         case 'brokers':
         case 'funding_routes':
             return 'brokers';
+        case 'holdings':
+            return 'assets';
         case 'existing_cash':
         case 'contributions':
             return 'liquidity';

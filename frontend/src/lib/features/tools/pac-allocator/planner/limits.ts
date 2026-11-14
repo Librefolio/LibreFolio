@@ -5,7 +5,7 @@
  * «500» is an amount in the valuation currency, «35%» a share of the plan's total, an empty field is no limit.
  * No calculation here: a share and an amount are compared only by the backend, which knows the Tool's reference.
  */
-import {canonicalInput, compareDecimal, decimalSign} from '$lib/utils/core/exactDecimal';
+import {canonicalInput, compareDecimal, decimalSign, percentToFraction} from '$lib/utils/core/exactDecimal';
 
 export type LimitSide = 'minimum' | 'maximum';
 
@@ -45,4 +45,11 @@ export function limitsConflict(limits: DraftLimits | undefined): boolean {
 /** True when the entry has at least one limit typed. */
 export function hasLimit(limits: DraftLimits | undefined): boolean {
     return (limits?.minimum ?? '').trim() !== '' || (limits?.maximum ?? '').trim() !== '';
+}
+
+/** The wire form of one typed limit (contract 2.0.0 §5.2), or null for no limit. Problems were reported before. */
+export function wireLimit(text: string | undefined, currency: string): {kind: 'amount'; amount: {amount: string; currency: string}} | {kind: 'share'; share: string} | null {
+    const limit = parseLimit(text);
+    if (limit === null || limit === 'invalid') return null;
+    return limit.kind === 'amount' ? {kind: 'amount', amount: {amount: limit.value, currency}} : {kind: 'share', share: percentToFraction(limit.percent) as string};
 }

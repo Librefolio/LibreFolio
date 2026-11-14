@@ -691,9 +691,9 @@ describe('the pre-calculation limit codes go to the Targets step (F2)', () => {
     });
 });
 
-describe('the Rebalancer before its own request (F3a of project 67, steps 0–3)', () => {
-    it("a complete draft under the Rebalancer's profile is not sent: its codec refuses the PAC-shaped body", () => {
-        const draft = new PlannerDraft('EUR', 'proportional', REBALANCER_PLANNER_PROFILE);
+describe('the Rebalancer and its own request (F3a of project 67, step 11)', () => {
+    it("a complete draft under the Rebalancer's profile builds the Rebalancer's own request (step 11)", () => {
+        const draft = new PlannerDraft('EUR', 'invest_only', REBALANCER_PLANNER_PROFILE);
         draft.data.asOf = AS_OF;
         draft.addManualBroker('Broker probe');
         const asset = manualAsset(draft, 'Manual ETF probe');
@@ -704,8 +704,10 @@ describe('the Rebalancer before its own request (F3a of project 67, steps 0–3)
 
         const outcome = buildRequest(draft, NOW);
 
-        // Until step 11 builds the Rebalancer's request, «Calculate» stops on a local structure problem: nothing is sent.
-        expect(outcome.ok).toBe(false);
-        expect(outcome.ok ? [] : outcome.problems.map((problem) => problem.key)).toContain('structureInvalid');
+        // Step 11 builds it, checked by the Rebalancer's codec (`request.rebalancer.test.ts` holds the details).
+        expect(outcome.ok ? [] : outcome.problems.map((problem) => problem.key)).toEqual([]);
+        if (!outcome.ok) return;
+        expect(outcome.built.request).toMatchObject({policy: 'invest_only', target_fidelity: {kind: 'level', level: 'balanced'}});
+        expect(outcome.built.request).not.toHaveProperty('funding_routes');
     });
 });

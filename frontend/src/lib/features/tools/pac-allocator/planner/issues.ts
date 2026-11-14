@@ -33,7 +33,8 @@ type AnyPath = AnyIssue['path'];
 
 const SECTION_STEPS: Record<string, PlannerStep | null> = {
     input: 'scenario',
-    holdings: 'scenario',
+    // The user's positions are edited in the Assets step (F3a of project 67).
+    holdings: 'assets',
     assets: 'assets',
     brokers: 'brokers',
     cash: 'liquidity',
