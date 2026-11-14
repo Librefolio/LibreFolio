@@ -55,6 +55,29 @@
         },
         "removal": {
           "cashEntry": "Cassa degli obiettivi {broker} · {currency}"
+        },
+        "review": {
+          "brokers": "{operative, plural, one {# Broker} other {# Broker}}{external, plural, =0 {} one { · # conto esterno} other { · # conti esterni}}{held, plural, =0 {} one { · # solo con posizioni} other { · # solo con posizioni}}",
+          "assets": "{count, plural, one {# Asset} other {# Asset}}{positions, plural, =0 {} one { · # posizione} other { · # posizioni}}{missing, plural, =0 {} other { · # senza prezzo}}{stale, plural, =0 {} one { · # prezzo non di oggi} other { · # prezzi non di oggi}}",
+          "targets": "{count} di {total, plural, one {# voce} other {# voci}} con un obiettivo",
+          "strategy": "{strategy} · {fidelity}",
+          "kindPosition": "Posizione"
+        },
+        "summary": {
+          "positionsOnly": "Solo posizioni",
+          "positions": "Posizioni",
+          "entries": "Voci",
+          "fidelity": "Fedeltà al target"
+        },
+        "strategy": {
+          "investOnly": "Investi soltanto",
+          "fidelity": {
+            "costAware": "Attento ai costi",
+            "balanced": "Bilanciato",
+            "faithful": "Fedele al target",
+            "targetFirst": "Target prima di tutto",
+            "custom": "Personalizzata"
+          }
         }
       }
     }

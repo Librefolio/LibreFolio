@@ -55,6 +55,29 @@
         },
         "removal": {
           "cashEntry": "Cash entry of the targets {broker} · {currency}"
+        },
+        "review": {
+          "brokers": "{operative, plural, one {# Broker} other {# Brokers}}{external, plural, =0 {} one { · # external account} other { · # external accounts}}{held, plural, =0 {} one { · # with positions only} other { · # with positions only}}",
+          "assets": "{count, plural, one {# Asset} other {# Assets}}{positions, plural, =0 {} one { · # position} other { · # positions}}{missing, plural, =0 {} other { · # without a price}}{stale, plural, =0 {} one { · # price not of today} other { · # prices not of today}}",
+          "targets": "{count} of {total, plural, one {# entry} other {# entries}} with a target",
+          "strategy": "{strategy} · {fidelity}",
+          "kindPosition": "Position"
+        },
+        "summary": {
+          "positionsOnly": "Positions only",
+          "positions": "Positions",
+          "entries": "Entries",
+          "fidelity": "Target fidelity"
+        },
+        "strategy": {
+          "investOnly": "Invest only",
+          "fidelity": {
+            "costAware": "Cost-aware",
+            "balanced": "Balanced",
+            "faithful": "Faithful to the target",
+            "targetFirst": "Target first",
+            "custom": "Custom"
+          }
         }
       }
     }

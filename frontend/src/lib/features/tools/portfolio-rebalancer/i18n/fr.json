@@ -55,6 +55,29 @@
         },
         "removal": {
           "cashEntry": "Liquidités des objectifs {broker} · {currency}"
+        },
+        "review": {
+          "brokers": "{operative, plural, one {# courtier} other {# courtiers}}{external, plural, =0 {} one { · # compte externe} other { · # comptes externes}}{held, plural, =0 {} one { · # avec positions seulement} other { · # avec positions seulement}}",
+          "assets": "{count, plural, one {# actif} other {# actifs}}{positions, plural, =0 {} one { · # position} other { · # positions}}{missing, plural, =0 {} other { · # sans prix}}{stale, plural, =0 {} other { · # prix pas du jour}}",
+          "targets": "{count} sur {total, plural, one {# ligne} other {# lignes}} avec un objectif",
+          "strategy": "{strategy} · {fidelity}",
+          "kindPosition": "Position"
+        },
+        "summary": {
+          "positionsOnly": "Positions seulement",
+          "positions": "Positions",
+          "entries": "Lignes",
+          "fidelity": "Fidélité à la cible"
+        },
+        "strategy": {
+          "investOnly": "Investir seulement",
+          "fidelity": {
+            "costAware": "Attentif aux coûts",
+            "balanced": "Équilibré",
+            "faithful": "Fidèle à la cible",
+            "targetFirst": "La cible avant tout",
+            "custom": "Personnalisée"
+          }
         }
       }
     }

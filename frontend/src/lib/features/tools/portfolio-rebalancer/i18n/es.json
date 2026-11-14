@@ -55,6 +55,29 @@
         },
         "removal": {
           "cashEntry": "Efectivo de los objetivos {broker} · {currency}"
+        },
+        "review": {
+          "brokers": "{operative, plural, one {# bróker} other {# brókeres}}{external, plural, =0 {} one { · # cuenta externa} other { · # cuentas externas}}{held, plural, =0 {} one { · # solo con posiciones} other { · # solo con posiciones}}",
+          "assets": "{count, plural, one {# activo} other {# activos}}{positions, plural, =0 {} one { · # posición} other { · # posiciones}}{missing, plural, =0 {} other { · # sin precio}}{stale, plural, =0 {} one { · # precio no de hoy} other { · # precios no de hoy}}",
+          "targets": "{count} de {total, plural, one {# partida} other {# partidas}} con un objetivo",
+          "strategy": "{strategy} · {fidelity}",
+          "kindPosition": "Posición"
+        },
+        "summary": {
+          "positionsOnly": "Solo posiciones",
+          "positions": "Posiciones",
+          "entries": "Partidas",
+          "fidelity": "Fidelidad al objetivo"
+        },
+        "strategy": {
+          "investOnly": "Solo invertir",
+          "fidelity": {
+            "costAware": "Atento a los costes",
+            "balanced": "Equilibrado",
+            "faithful": "Fiel al objetivo",
+            "targetFirst": "El objetivo ante todo",
+            "custom": "Personalizada"
+          }
         }
       }
     }
