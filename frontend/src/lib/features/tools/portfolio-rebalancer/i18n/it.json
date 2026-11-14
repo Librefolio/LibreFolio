@@ -41,7 +41,17 @@
           "addCash": "Aggiungi una cassa",
           "addCashHelp": "La cassa di un Broker in una valuta diventa una riga degli obiettivi, con obiettivo e limiti, come un Asset.",
           "addCashNone": "Ogni Broker e valuta dello scenario ha già una sua cassa.",
-          "removeCash": "Togli la cassa"
+          "removeCash": "Togli la cassa",
+          "intro": "Come dividere il totale che entra nel piano, cassa compresa, in percentuale.",
+          "introTotal": "Come dividere il totale che entra nel piano ({total}), cassa compresa, in percentuale.",
+          "limitsNote": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale (35%) del totale che entra nel piano. Campo vuoto = nessun limite.",
+          "limitsNoteTotal": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale (35%) del totale che entra nel piano: {total}. Campo vuoto = nessun limite.",
+          "now": "Ora",
+          "nowHelp": "Il peso di oggi di questa riga sul totale che entra nel piano. Solo informativo: non è un obiettivo.",
+          "entry": "Voce",
+          "wire": "La quota del totale che entra nel piano che questa riga deve avere alla fine, in percentuale. Sono ammessi i decimali.",
+          "limitsHelp": "Minimo e massimo del valore di questa riga alla fine del piano. Scrivi un importo nella valuta di valutazione (500) o una percentuale del totale che entra nel piano (35%). Campo vuoto = nessun limite.",
+          "totalHelp": "Gli obiettivi dividono il totale che entra nel piano, posizioni e cassa comprese: per calcolare devono sommare esattamente 100%. «Bilancia tutto» riscala ogni obiettivo mantenendo le proporzioni (parti uguali se sono tutti 0). Spunta alcune righe per riscalare solo quelle. «Bilancia al 100%» su una riga le dà ciò che manca, o toglie l’eccesso."
         },
         "removal": {
           "cashEntry": "Cassa degli obiettivi {broker} · {currency}"

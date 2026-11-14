@@ -973,7 +973,10 @@
           "limitMaximumLabel": "Máximo de {asset}",
           "limitsNote": "Límites sobre el valor al final del plan. Escribe un importe (500) o un porcentaje del total (35 %). Campo vacío = sin límite.",
           "limitsCheck": "Revisa los límites",
-          "limitMinAboveMax": "El mínimo ({minimum}) supera el máximo ({maximum})."
+          "limitMinAboveMax": "El mínimo ({minimum}) supera el máximo ({maximum}).",
+          "limitsNoteTotal": "Límites del valor al final del plan. Escribe un importe (500) o un porcentaje (35%) del total, el dinero que inviertes ahora: {total}. Campo vacío = ningún límite.",
+          "previewIncomplete": "Las cifras de hoy aparecen cuando ningún campo del borrador está marcado en rojo, en ningún paso.",
+          "previewUnavailable": "Las cifras de hoy no están disponibles ahora; el cálculo no se ve afectado."
         },
         "toolErrors": {
           "cleanup_failed": "El cálculo terminó, pero la plataforma no pudo limpiar después.",

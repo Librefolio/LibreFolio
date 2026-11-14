@@ -973,7 +973,10 @@
           "limitMaximumLabel": "Maximum de {asset}",
           "limitsNote": "Limites sur la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage du total (35 %). Champ vide = aucune limite.",
           "limitsCheck": "Vérifiez les limites",
-          "limitMinAboveMax": "Le minimum ({minimum}) dépasse le maximum ({maximum})."
+          "limitMinAboveMax": "Le minimum ({minimum}) dépasse le maximum ({maximum}).",
+          "limitsNoteTotal": "Limites de la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage (35%) du total, l’argent que vous investissez maintenant : {total}. Champ vide = aucune limite.",
+          "previewIncomplete": "Les chiffres d’aujourd’hui apparaissent quand aucun champ du brouillon n’est marqué en rouge, à aucune étape.",
+          "previewUnavailable": "Les chiffres d’aujourd’hui ne sont pas disponibles pour le moment ; le calcul n’en est pas affecté."
         },
         "toolErrors": {
           "cleanup_failed": "Le calcul est terminé, mais la plateforme n’a pas pu nettoyer après lui.",

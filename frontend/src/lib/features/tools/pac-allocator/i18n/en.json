@@ -973,7 +973,10 @@
           "limitMaximumLabel": "Maximum of {asset}",
           "limitsNote": "Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.",
           "limitsCheck": "Check the limits",
-          "limitMinAboveMax": "The minimum ({minimum}) is above the maximum ({maximum})."
+          "limitMinAboveMax": "The minimum ({minimum}) is above the maximum ({maximum}).",
+          "limitsNoteTotal": "Limits on the value at the end of the plan. Write an amount (500) or a percentage (35%) of the total, the money you invest now: {total}. Empty field = no limit.",
+          "previewIncomplete": "Today's figures appear once no field of the draft is marked in red, on any step.",
+          "previewUnavailable": "Today's figures are not available right now; the calculation is not affected."
         },
         "toolErrors": {
           "cleanup_failed": "The calculation finished, but the platform could not clean up after it.",
