@@ -223,9 +223,12 @@
                         data-testid={`tool-card-${descriptor.tool_code}`}
                         data-interface-state={entry.interfaceState}
                     >
-                        <div class="flex items-start gap-3">
-                            <Icon size={22} class="shrink-0 text-lf-link" aria-hidden="true" />
-                            <h2 class="min-w-0 flex-1 break-words font-semibold text-lf-primary">{toolName(descriptor, $t)}</h2>
+                        <!-- The title wraps at words (G5-5 of project 67): the documentation link goes under it when both do not fit. -->
+                        <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                            <div class="flex min-w-0 flex-[1_1_auto] items-start gap-3">
+                                <Icon size={22} class="shrink-0 text-lf-link" aria-hidden="true" />
+                                <h2 class="min-w-0 break-words font-semibold text-lf-primary">{toolName(descriptor, $t)}</h2>
+                            </div>
                             {#if documentation}
                                 <span class="relative z-20 shrink-0">
                                     <DocsLink path={documentation} label={$t('common.documentation')} labelDisplay="responsive" icon="book" size={18} testId={`tool-docs-${descriptor.tool_code}`} />
