@@ -103,6 +103,16 @@ def test_preview_current_values_and_weights_per_item() -> None:
     }
 
 
+def test_preview_counts_a_positions_only_broker_in_f_and_today() -> None:
+    """Q-F3a-5b of project 67: a position at a Broker outside the scenario counts in F and in «Now». T4 (A 5 000, B 4 800,
+    cash 200) plus 1 000 of A at a positions-only Broker: F = 11 000, A today 6 000."""
+    result = _rebalancer_preview(reb.with_positions_only_broker(reb.t4()))
+
+    assert result.result_state == "preview_ready" and _money(result.total) == 11_000
+    by_asset = {item.asset_id: _money(item.value) for item in result.items if item.kind == "asset"}
+    assert by_asset == {"asset-a": 6_000, "asset-b": 4_800}
+
+
 def test_pac_preview_total_is_the_cash_to_invest() -> None:
     """B4 test 8: the PAC's total is the cash it invests (the min fixture's 5 EUR); the PAC has no table."""
     request = PAC_TOOL_INPUT_ADAPTER.validate_python({**_pac_request(), "operation": "preview"})

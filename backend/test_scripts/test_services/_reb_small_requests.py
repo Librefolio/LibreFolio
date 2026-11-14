@@ -101,3 +101,19 @@ def t5(**fields) -> JsonObject:
 def t6(**fields) -> JsonObject:
     """T6: one Asset at 4 000 EUR a unit, one unit held, cash 6 000, «Faithful» (``λ = 4``); the best plan buys one unit."""
     return request("t6", holdings={"asset-a": "1"}, cash="6000", weights={"asset-a": "1"}, prices={"asset-a": "4000"}, whole_units=frozenset({"asset-a"}), **({"fidelity": FAITHFUL} | fields))
+
+
+HELD_BROKER = "broker-held"
+
+
+def with_positions_only_broker(payload: JsonObject, *, asset_id: str = "asset-a", quantity: str = "1000") -> JsonObject:
+    """``payload`` plus a «positions only» Broker (Q-F3a-5b of project 67): it holds ``quantity`` of ``asset_id`` and has no
+    order mode, no fee, no cash and no route — what the planner sends for a Broker outside the scenario that holds a position.
+    """
+    payload = {**payload}
+    payload["brokers"] = [*payload["brokers"], {"broker_id": HELD_BROKER, "identity": {"kind": "domain_broker", "source_broker_id": "9", "name": "Held Broker", "active": True}, "provenance_id": PROVENANCE, "conversion_mode": "manual"}]
+    payload["holdings"] = [
+        *payload["holdings"],
+        {"holding_id": f"holding-held-{asset_id}", "asset_id": asset_id, "broker_id": HELD_BROKER, "custody_quantity": quantity, "economic_share": "1", "planning_quantity": quantity, "quantity_unit": "asset_unit", "provenance_id": PROVENANCE},
+    ]
+    return payload

@@ -96,6 +96,7 @@ from __future__ import annotations
 import ast
 import copy
 import importlib.util
+import json
 import math
 import os
 import re
@@ -773,6 +774,18 @@ def test_plan_rebalancing_small_cases_end_to_end(build, state: str, orders: dict
     if build is reb.t1:
         # T1's cash row is selected at zero: nothing is uninvested, before or after.
         assert solution["uninvested_row"]["final_value"]["value"] == {"kind": "finite_decimal", "value": "0"}
+
+
+def test_rebalancer_positions_only_broker_gets_no_order_and_no_transfer() -> None:
+    """Q-F3a-5b of project 67 (the consultant's (a)): the portfolio counts everything owned, the plan acts only where the user
+    chose. T4 plus a Broker that only holds 1 000 of A (no capability, no fee, no cash, no route): the plan still runs, and
+    no order row, transfer, funding action or conversion names that Broker."""
+    wire = _rebalance(reb.with_positions_only_broker(reb.t4()))
+
+    assert wire["availability"] == "ready"
+    solution = wire["primary_solution"]
+    for section in ("order_rows", "transfers", "funding_actions", "conversions"):
+        assert reb.HELD_BROKER not in json.dumps(solution[section]), section
 
 
 def test_rebalancer_ready_output_revalidates_against_the_wire_union() -> None:
