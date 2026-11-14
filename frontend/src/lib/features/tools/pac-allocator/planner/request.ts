@@ -319,11 +319,26 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
 }
 
 /**
+ * The local problems the scenario preview (F3a of project 67, step 8) passes over: the request is still well formed, and
+ * the backend's preview answers them itself (the total and the limits it counts) or does not need them (a route, a
+ * strategy, a funding source).
+ */
+const PREVIEW_TOLERATED = new Set(['targetTotalNotHundred', 'limitInvalid', 'limitShareAboveHundred', 'limitMinAboveMax', 'limitShareMinimumsAboveHundred', 'noEnabledRoute', 'noLiquidity', 'policyMissing']);
+
+export interface BuildOptions {
+    /** `preview`: the request of the scenario preview, built from a draft still being typed (the tolerated problems pass). */
+    operation?: 'plan' | 'preview';
+    /** The preview only: the «custom» fidelity as the euros typed on the reference row (the preview turns them into λ). */
+    customReferenceAmount?: string | null;
+}
+
+/**
  * Builds the exact wire request. Returns local problems instead when any
  * shape is wrong, including a structural rejection by the compiled codec.
  */
-export function buildRequest(draft: PlannerDraft, now: Date = new Date()): BuildOutcome {
-    const problems = localProblems(draft);
+export function buildRequest(draft: PlannerDraft, now: Date = new Date(), options: BuildOptions = {}): BuildOutcome {
+    const preview = options.operation === 'preview';
+    const problems = localProblems(draft).filter((problem) => !preview || !PREVIEW_TOLERATED.has(problem.key));
     if (problems.length > 0) return {ok: false, problems};
     const data = draft.data;
     const late = new ProblemList();
@@ -506,12 +521,13 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
     // The Rebalancer (F3a of project 67, step 11): positions, the Brokers that only hold them, cash entries, the fidelity;
     // `invest_only` always before F3b (S1), and no funding route (contract §5.4).
     const rebalancer = draft.profile.toolCode === 'portfolio_rebalancer';
+    const reference = options.customReferenceAmount ? canonicalInput(options.customReferenceAmount) : null;
     const holdings = rebalancer ? rebalancerHoldings(draft, copied, manual) : [];
     const heldOnly = rebalancer ? positionOnlyBrokers(draft, copied) : [];
     if (late.items.length > 0) return {ok: false, problems: late.items};
     // The key order is the PAC's as before (its tests compare the body as JSON); the Rebalancer's keys take the same places.
     const head = {
-        operation: PLANNER_OPERATION,
+        operation: preview ? 'preview' : PLANNER_OPERATION,
         snapshot: {snapshot_id: `draft:${draft.revision}`, draft_revision: draft.revision, captured_at: newest},
         as_of: data.asOf,
         valuation_currency: data.valuationCurrency,
@@ -525,7 +541,15 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date()): Build
     };
     const request = (
         rebalancer
-            ? {...head, ...field('holdings', nonEmpty(holdings)), target_weights: [...assetTargets, ...cashTargetEntries(draft)], order_routes: orderRoutes, policy: 'invest_only', target_fidelity: wireFidelity(data.fidelity)}
+            ? {
+                  ...head,
+                  ...field('holdings', nonEmpty(holdings)),
+                  target_weights: [...assetTargets, ...cashTargetEntries(draft)],
+                  order_routes: orderRoutes,
+                  policy: 'invest_only',
+                  target_fidelity: wireFidelity(data.fidelity, preview),
+                  ...field('custom_reference_amount', preview && reference !== null ? {amount: reference, currency: data.valuationCurrency} : null),
+              }
             : {...head, ...field('funding_routes', nonEmpty(fundingRoutes)), target_weights: assetTargets, order_routes: orderRoutes, policy: data.policy}
     ) as PlannerRequest;
 

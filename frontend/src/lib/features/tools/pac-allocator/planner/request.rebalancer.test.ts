@@ -248,4 +248,24 @@ describe('the Rebalancer request, «Invest only»', () => {
     it('holding issues go to Assets', () => {
         expect(stepOfWirePath(['holdings', 0, 'planning_quantity'])).toBe('assets');
     });
+
+    it('the preview carries the euros, and a «Custom» still without λ as «Balanced»; the plan refuses that «Custom»', () => {
+        const {draft, entryKey} = scenario();
+        draft.data.fidelity = {kind: 'custom', lambda: ''};
+        // An incomplete total: the preview builds anyway.
+        draft.data.targets[entryKey] = '';
+
+        const preview = buildRequest(draft, NOW, {operation: 'preview', customReferenceAmount: '60'});
+        expect(preview.ok ? [] : preview.problems.map((problem) => problem.key)).toEqual([]);
+        if (!preview.ok) return;
+        expect(preview.built.request).toMatchObject({operation: 'preview', target_fidelity: {kind: 'level', level: 'balanced'}, custom_reference_amount: {amount: '60', currency: 'EUR'}});
+
+        draft.data.targets[entryKey] = '10';
+        const plan = buildRequest(draft, NOW);
+        expect(plan.ok ? [] : plan.problems.map((problem) => problem.key)).toContain('structureInvalid');
+        // The euros never travel with a plan.
+        draft.data.fidelity = {kind: 'custom', lambda: '0.0123'};
+        const planned = buildRequest(draft, NOW, {customReferenceAmount: '60'});
+        expect(planned.ok && planned.built.request).not.toHaveProperty('custom_reference_amount');
+    });
 });

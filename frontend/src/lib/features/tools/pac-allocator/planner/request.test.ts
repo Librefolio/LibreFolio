@@ -710,4 +710,24 @@ describe('the Rebalancer and its own request (F3a of project 67, step 11)', () =
         expect(outcome.built.request).toMatchObject({policy: 'invest_only', target_fidelity: {kind: 'level', level: 'balanced'}});
         expect(outcome.built.request).not.toHaveProperty('funding_routes');
     });
+
+    it("the PAC's preview request: operation preview, built while the targets do not sum to 100 yet", () => {
+        const draft = new PlannerDraft('EUR', 'proportional');
+        draft.data.asOf = AS_OF;
+        draft.addManualBroker('Broker probe');
+        const asset = manualAsset(draft, 'Manual ETF probe');
+        draft.addAsset(asset);
+        draft.data.targets[asset.key] = '40';
+        draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
+        expect(localProblems(draft).map((problem) => problem.key)).toEqual(['targetTotalNotHundred']);
+
+        const outcome = buildRequest(draft, NOW, {operation: 'preview'});
+
+        expect(outcome.ok ? [] : outcome.problems.map((problem) => problem.key)).toEqual([]);
+        if (!outcome.ok) return;
+        expect(outcome.built.request).toMatchObject({operation: 'preview', policy: 'proportional'});
+        expect(outcome.built.request).not.toHaveProperty('custom_reference_amount');
+        // The plan still stops on it.
+        expect(buildRequest(draft, NOW).ok).toBe(false);
+    });
 });
