@@ -29,6 +29,18 @@
         "brokers": {
           "cashOnly": "cash only",
           "cashOnlyHint": "No order here: its cash counts in the portfolio, and the plan can move it to the Brokers where it buys. Edit it in the Liquidity step."
+        },
+        "targets": {
+          "cashEntry": "Cash · {broker} · {currency}",
+          "otherCash": "Other cash",
+          "otherCashHelp": "All the cash without a target of its own: it always counts 0 %, and the plan can use it to buy.",
+          "addCash": "Add a cash entry",
+          "addCashHelp": "A Broker's cash in one currency becomes a row of the targets, with a target and limits, like an Asset.",
+          "addCashNone": "Every Broker and currency of the scenario already has a cash entry.",
+          "removeCash": "Remove the cash entry"
+        },
+        "removal": {
+          "cashEntry": "Cash entry of the targets {broker} · {currency}"
         }
       }
     }

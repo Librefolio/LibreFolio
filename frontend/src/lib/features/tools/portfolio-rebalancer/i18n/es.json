@@ -29,6 +29,18 @@
         "brokers": {
           "cashOnly": "solo efectivo",
           "cashOnlyHint": "Aquí ninguna orden: su efectivo cuenta en la cartera, y el plan puede moverlo a los brókeres donde compra. Edítalo en el paso Liquidez."
+        },
+        "targets": {
+          "cashEntry": "Efectivo · {broker} · {currency}",
+          "otherCash": "Otro efectivo",
+          "otherCashHelp": "Todo el efectivo sin un objetivo propio: siempre cuenta 0 %, y el plan puede usarlo para comprar.",
+          "addCash": "Añadir efectivo",
+          "addCashHelp": "El efectivo de un bróker en una divisa se convierte en una fila de los objetivos, con objetivo y límites, como un activo.",
+          "addCashNone": "Cada bróker y divisa del escenario ya tiene su efectivo.",
+          "removeCash": "Quitar el efectivo"
+        },
+        "removal": {
+          "cashEntry": "Efectivo de los objetivos {broker} · {currency}"
         }
       }
     }

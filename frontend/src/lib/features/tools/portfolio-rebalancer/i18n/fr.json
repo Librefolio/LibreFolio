@@ -29,6 +29,18 @@
         "brokers": {
           "cashOnly": "liquidités seulement",
           "cashOnlyHint": "Aucun ordre ici : ses liquidités comptent dans le portefeuille, et le plan peut les déplacer vers les courtiers où il achète. Modifiez-le à l’étape Liquidités."
+        },
+        "targets": {
+          "cashEntry": "Liquidités · {broker} · {currency}",
+          "otherCash": "Autres liquidités",
+          "otherCashHelp": "Toutes les liquidités sans objectif propre : elles comptent toujours 0 %, et le plan peut les utiliser pour acheter.",
+          "addCash": "Ajouter des liquidités",
+          "addCashHelp": "Les liquidités d’un courtier dans une devise deviennent une ligne des objectifs, avec objectif et limites, comme un actif.",
+          "addCashNone": "Chaque courtier et devise du scénario a déjà sa ligne de liquidités.",
+          "removeCash": "Retirer les liquidités"
+        },
+        "removal": {
+          "cashEntry": "Liquidités des objectifs {broker} · {currency}"
         }
       }
     }
