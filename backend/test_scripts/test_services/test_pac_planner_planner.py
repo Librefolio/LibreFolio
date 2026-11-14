@@ -788,6 +788,19 @@ def test_rebalancer_positions_only_broker_gets_no_order_and_no_transfer() -> Non
         assert reb.HELD_BROKER not in json.dumps(solution[section]), section
 
 
+def test_rebalancer_plan_with_a_custom_fidelity_publishes_its_lambda() -> None:
+    """F3a step 10b of project 67, found in the browser: a plan with the «custom» fidelity failed while building its basis
+    (the request's λ reached the basis by its Python name, ``lambda_``). T4 at λ = 0.6 is a ready plan, and its basis
+    publishes the fidelity as the request wrote it, on the wire as ``lambda``."""
+    result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4(fidelity={"kind": "custom", "lambda": "0.6"})))
+    wire = REBALANCER_PLAN_OUTPUT_ADAPTER.dump_python(result, mode="json")
+
+    assert wire["availability"] == "ready"
+    assert wire["scenario_basis"]["target_fidelity"] == {"kind": "custom", "lambda": "0.6"}
+    # The result survives its wire union both ways, as every ready Rebalancer result.
+    assert REBALANCER_PLAN_OUTPUT_ADAPTER.validate_json(REBALANCER_PLAN_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
 def test_rebalancer_ready_output_revalidates_against_the_wire_union() -> None:
     """B3 test 10: a ready Rebalancer result survives ``REBALANCER_PLAN_OUTPUT_ADAPTER`` as Python and as JSON."""
     result = plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4()))

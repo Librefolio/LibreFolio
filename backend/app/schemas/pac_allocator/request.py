@@ -376,7 +376,11 @@ class RebalancerCustomFidelityInput(AllocationStrictModel):
 
     ``lambda`` is a Python keyword, so the field is ``lambda_`` with the wire name as its alias, read and written by it."""
 
-    model_config = AllocationStrictModel.model_config | ConfigDict(serialize_by_alias=True)
+    # An instance is not validated again where another model receives it (``revalidate_instances``): a strict model re-reads
+    # an instance by its field names, which the alias-only field refuses, so a plan with this fidelity could not publish its
+    # basis (F3a step 10b of project 67). It is frozen and was validated once. Kept out of the docstring: the docstring is the
+    # JSON schema's description, and the contract's fingerprint must not move.
+    model_config = AllocationStrictModel.model_config | ConfigDict(serialize_by_alias=True, revalidate_instances="never")
 
     kind: Literal["custom"]
     lambda_: PlannerPositiveDecimal = Field(alias="lambda", description="The distance weight λ of the score J = λ·D/F + (F − W); greater than zero.")
