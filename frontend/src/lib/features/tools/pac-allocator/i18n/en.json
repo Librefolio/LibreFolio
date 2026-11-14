@@ -443,7 +443,8 @@
           "limitShareAboveHundred": "A limit in percent cannot be above 100%.",
           "limitMinAboveMax": "The minimum is above the maximum.",
           "limitShareMinimumsAboveHundred": "The minimums in percent add up to more than 100%: {assets}.",
-          "positionQuantityInvalid": "A position quantity is empty, not a number or below zero."
+          "positionQuantityInvalid": "A position quantity is empty, not a number or below zero.",
+          "fidelityCustomMissing": "«Custom»: write how much you accept to spend for the reference row, a figure above zero."
         },
         "removal": {
           "cash": "Cash row {broker} · {currency}",

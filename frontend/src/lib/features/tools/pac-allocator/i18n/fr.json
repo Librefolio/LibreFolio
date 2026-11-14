@@ -443,7 +443,8 @@
           "limitShareAboveHundred": "Une limite en pourcentage ne peut pas dépasser 100 %.",
           "limitMinAboveMax": "Le minimum dépasse le maximum.",
           "limitShareMinimumsAboveHundred": "Les minimums en pourcentage totalisent plus de 100 % : {assets}.",
-          "positionQuantityInvalid": "La quantité d’une position est vide, n’est pas un nombre ou est inférieure à zéro."
+          "positionQuantityInvalid": "La quantité d’une position est vide, n’est pas un nombre ou est inférieure à zéro.",
+          "fidelityCustomMissing": "«Personnalisée» : écrivez combien vous acceptez de dépenser pour la ligne de référence, un montant supérieur à zéro."
         },
         "removal": {
           "cash": "Ligne de liquidités {broker} · {currency}",

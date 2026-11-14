@@ -78,6 +78,37 @@
             "faithful": "Faithful to the target",
             "targetFirst": "Target first",
             "custom": "Custom"
+          },
+          "investOnlyHelp": "It uses the cash to buy what is below target. It sells nothing.",
+          "investAndSell": "Invest and sell",
+          "investAndSellHelp": "It can also sell, to get closer to the target. It estimates fees and taxes: it needs the Tax step.",
+          "comingSoon": "coming soon",
+          "fidelityTitle": "Target fidelity",
+          "fidelityLead": "How much putting back what is off target is worth to you.",
+          "fidelityHelp": "The plan spends on fees, to put back money that is off target, at most what the table below accepts for that amount. The higher the fidelity, the more it accepts to spend.",
+          "fidelityNote": {
+            "costAware": "It moves only for large deviations.",
+            "balanced": "A middle way.",
+            "faithful": "It moves for small deviations too.",
+            "targetFirst": "It pays any cost to get closer."
+          },
+          "defaultBadge": "default",
+          "customSentence": "With {reference} in the wrong place I accept to spend up to",
+          "customLabel": "The most you accept to spend for the reference row",
+          "customInvalid": "Write a figure above zero.",
+          "table": {
+            "title": "Maximum acceptable cost",
+            "lead": "The most the plan may spend, in fees and taxes, to put that money back. If it costs more, it leaves it where it is.",
+            "leadTotal": "The figures hold for your total of {total}.",
+            "misplaced": "Money in the wrong place",
+            "reference": "reference",
+            "upTo": "up to {amount}",
+            "costAwareShort": "Cost-aware",
+            "faithfulShort": "Faithful",
+            "customShort": "Yours",
+            "targetFirst": "«Target first» has no maximum: it first gets as close as it can, then picks the way that costs least.",
+            "incomplete": "The figures appear once the fields marked in red are complete.",
+            "unavailable": "The figures are not available right now; the calculation is not affected."
           }
         }
       }

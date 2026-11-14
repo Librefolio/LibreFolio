@@ -78,6 +78,37 @@
             "faithful": "Fiel al objetivo",
             "targetFirst": "El objetivo ante todo",
             "custom": "Personalizada"
+          },
+          "investOnlyHelp": "Usa el efectivo para comprar lo que está por debajo del objetivo. No vende nada.",
+          "investAndSell": "Invertir y vender",
+          "investAndSellHelp": "También puede vender, para acercarse más al objetivo. Estima comisiones e impuestos: necesita el paso Fiscalidad.",
+          "comingSoon": "próximamente",
+          "fidelityTitle": "Fidelidad al objetivo",
+          "fidelityLead": "Cuánto vale, para ti, recolocar lo que está fuera del objetivo.",
+          "fidelityHelp": "Para recolocar el dinero fuera del objetivo, el plan gasta en comisiones como máximo lo que la tabla de abajo acepta para esa cifra. Cuanto más alta la fidelidad, más acepta gastar.",
+          "fidelityNote": {
+            "costAware": "Solo se mueve con desviaciones grandes.",
+            "balanced": "Un término medio.",
+            "faithful": "Se mueve también con desviaciones pequeñas.",
+            "targetFirst": "Paga cualquier coste con tal de acercarse."
+          },
+          "defaultBadge": "predeterminado",
+          "customSentence": "Con {reference} en el lugar equivocado acepto gastar hasta",
+          "customLabel": "Lo máximo que aceptas gastar para la fila de referencia",
+          "customInvalid": "Escribe una cifra mayor que cero.",
+          "table": {
+            "title": "Coste máximo aceptable",
+            "lead": "Lo máximo que el plan puede gastar, en comisiones e impuestos, para recolocar ese dinero. Si cuesta más, lo deja donde está.",
+            "leadTotal": "Las cifras valen para tu total de {total}.",
+            "misplaced": "Dinero en el lugar equivocado",
+            "reference": "referencia",
+            "upTo": "hasta {amount}",
+            "costAwareShort": "Atento",
+            "faithfulShort": "Fiel",
+            "customShort": "La tuya",
+            "targetFirst": "«El objetivo ante todo» no tiene máximo: primero se acerca todo lo posible y luego elige el camino que cuesta menos.",
+            "incomplete": "Las cifras aparecen cuando los campos en rojo están completos.",
+            "unavailable": "Las cifras no están disponibles ahora; el cálculo no se ve afectado."
           }
         }
       }

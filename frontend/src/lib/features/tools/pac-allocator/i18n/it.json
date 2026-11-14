@@ -443,7 +443,8 @@
           "limitShareAboveHundred": "Un limite in percentuale non può superare il 100%.",
           "limitMinAboveMax": "Il minimo supera il massimo.",
           "limitShareMinimumsAboveHundred": "I minimi in percentuale sommano più del 100%: {assets}.",
-          "positionQuantityInvalid": "La quantità di una posizione è vuota, non è un numero o è sotto zero."
+          "positionQuantityInvalid": "La quantità di una posizione è vuota, non è un numero o è sotto zero.",
+          "fidelityCustomMissing": "«Personalizzata»: scrivi quanto accetti di spendere per la riga di riferimento, una cifra maggiore di zero."
         },
         "removal": {
           "cash": "Riga di cassa {broker} · {currency}",

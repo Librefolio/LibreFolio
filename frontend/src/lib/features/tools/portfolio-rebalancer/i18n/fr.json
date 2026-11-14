@@ -78,6 +78,37 @@
             "faithful": "Fidèle à la cible",
             "targetFirst": "La cible avant tout",
             "custom": "Personnalisée"
+          },
+          "investOnlyHelp": "Utilise les liquidités pour acheter ce qui est sous l’objectif. Ne vend rien.",
+          "investAndSell": "Investir et vendre",
+          "investAndSellHelp": "Peut aussi vendre, pour se rapprocher davantage de l’objectif. Estime frais et impôts : il faut l’étape Fiscalité.",
+          "comingSoon": "bientôt",
+          "fidelityTitle": "Fidélité à la cible",
+          "fidelityLead": "Ce que vaut, pour vous, la remise en place de ce qui s’écarte de l’objectif.",
+          "fidelityHelp": "Pour remettre en place l’argent hors objectif, le plan dépense en frais au plus ce que le tableau ci-dessous accepte pour ce montant. Plus la fidélité est haute, plus il accepte de dépenser.",
+          "fidelityNote": {
+            "costAware": "Ne bouge que pour de grands écarts.",
+            "balanced": "Un juste milieu.",
+            "faithful": "Bouge aussi pour de petits écarts.",
+            "targetFirst": "Paie n’importe quel coût pour se rapprocher."
+          },
+          "defaultBadge": "par défaut",
+          "customSentence": "Avec {reference} au mauvais endroit, j’accepte de dépenser jusqu’à",
+          "customLabel": "Ce que vous acceptez de dépenser au plus pour la ligne de référence",
+          "customInvalid": "Écrivez un montant supérieur à zéro.",
+          "table": {
+            "title": "Coût maximal acceptable",
+            "lead": "Ce que le plan peut dépenser au maximum, en frais et impôts, pour remettre cet argent en place. Si cela coûte plus, il le laisse où il est.",
+            "leadTotal": "Les chiffres valent pour votre total de {total}.",
+            "misplaced": "Argent au mauvais endroit",
+            "reference": "référence",
+            "upTo": "jusqu’à {amount}",
+            "costAwareShort": "Attentif",
+            "faithfulShort": "Fidèle",
+            "customShort": "La vôtre",
+            "targetFirst": "«La cible avant tout» n’a pas de maximum : il se rapproche d’abord autant que possible, puis choisit la voie la moins coûteuse.",
+            "incomplete": "Les chiffres apparaissent une fois les champs en rouge complétés.",
+            "unavailable": "Les chiffres ne sont pas disponibles pour le moment ; le calcul n’en est pas affecté."
           }
         }
       }

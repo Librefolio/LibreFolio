@@ -78,6 +78,37 @@
             "faithful": "Fedele al target",
             "targetFirst": "Target prima di tutto",
             "custom": "Personalizzata"
+          },
+          "investOnlyHelp": "Usa la liquidità per comprare ciò che è sotto obiettivo. Non vende niente.",
+          "investAndSell": "Investi e vendi",
+          "investAndSellHelp": "Può anche vendere, per avvicinarsi di più all'obiettivo. Stima commissioni e tasse: serve il passo Fisco.",
+          "comingSoon": "in arrivo",
+          "fidelityTitle": "Fedeltà al target",
+          "fidelityLead": "Quanto vale, per te, rimettere a posto ciò che è fuori obiettivo.",
+          "fidelityHelp": "Per rimettere a posto i soldi fuori obiettivo il piano spende in commissioni al massimo quanto la tabella sotto accetta per quella cifra. Più alta è la fedeltà, più accetta di spendere.",
+          "fidelityNote": {
+            "costAware": "Si muove solo per scostamenti grandi.",
+            "balanced": "Una via di mezzo.",
+            "faithful": "Si muove anche per scostamenti piccoli.",
+            "targetFirst": "Paga qualsiasi costo pur di avvicinarsi."
+          },
+          "defaultBadge": "predefinito",
+          "customSentence": "Con {reference} nel posto sbagliato accetto di spendere fino a",
+          "customLabel": "Quanto accetti di spendere al massimo per la riga di riferimento",
+          "customInvalid": "Scrivi una cifra maggiore di zero.",
+          "table": {
+            "title": "Costo massimo accettabile",
+            "lead": "Quanto il piano può spendere al massimo, in commissioni e tasse, per rimettere a posto quei soldi. Se costa di più, li lascia dove sono.",
+            "leadTotal": "Le cifre valgono per il tuo totale di {total}.",
+            "misplaced": "Soldi nel posto sbagliato",
+            "reference": "riferimento",
+            "upTo": "fino a {amount}",
+            "costAwareShort": "Attento",
+            "faithfulShort": "Fedele",
+            "customShort": "Tua",
+            "targetFirst": "«Target prima di tutto» non ha un massimo: prima si avvicina il più possibile, poi sceglie la strada che costa meno.",
+            "incomplete": "Le cifre compaiono quando i campi in rosso sono completi.",
+            "unavailable": "Le cifre non sono disponibili ora; il calcolo non ne risente."
           }
         }
       }
