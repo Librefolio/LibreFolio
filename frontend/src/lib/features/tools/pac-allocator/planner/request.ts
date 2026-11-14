@@ -315,6 +315,11 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
 
     // Strategy
     if (data.policy === '') problems.add('strategy', 'policyMissing', 'Choose a strategy.');
+    // The Rebalancer's «Custom» fidelity travels as λ, which the preview gives for the euros typed (step 10b of project 67).
+    if (draft.profile.toolCode === 'portfolio_rebalancer' && data.fidelity.kind === 'custom') {
+        const lambda = canonicalInput(data.fidelity.lambda);
+        if (lambda === null || decimalSign(lambda) !== 1) problems.add('strategy', 'fidelityCustomMissing', '«Custom»: write how much you accept to spend for the reference row, a figure above zero.');
+    }
     return problems.items;
 }
 
@@ -323,7 +328,7 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
  * the backend's preview answers them itself (the total and the limits it counts) or does not need them (a route, a
  * strategy, a funding source).
  */
-const PREVIEW_TOLERATED = new Set(['targetTotalNotHundred', 'limitInvalid', 'limitShareAboveHundred', 'limitMinAboveMax', 'limitShareMinimumsAboveHundred', 'noEnabledRoute', 'noLiquidity', 'policyMissing']);
+const PREVIEW_TOLERATED = new Set(['targetTotalNotHundred', 'limitInvalid', 'limitShareAboveHundred', 'limitMinAboveMax', 'limitShareMinimumsAboveHundred', 'noEnabledRoute', 'noLiquidity', 'policyMissing', 'fidelityCustomMissing']);
 
 export interface BuildOptions {
     /** `preview`: the request of the scenario preview, built from a draft still being typed (the tolerated problems pass). */

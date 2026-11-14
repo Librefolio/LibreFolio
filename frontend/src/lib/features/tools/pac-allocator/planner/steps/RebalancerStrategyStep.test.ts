@@ -1,0 +1,194 @@
+// @vitest-environment jsdom
+/**
+ * The Rebalancer's Strategy step (F3a of project 67, step 10b; M29–M33, decisioni-REB §7.3).
+ *
+ * Two strategies as cards: «Invest only» chosen, «Invest and sell» visible but off, «coming soon» (S1: no draft produces
+ * `invest_and_sell` before F3b). The target fidelity as five cards (M29): the three levels («Balanced» the default, with
+ * its badge), «Target first», «Custom». «Custom» has one field, in euros, inside its card: the most the user accepts to
+ * spend for the reference row; the euros go to the preview, which gives λ back to the draft (the draft keeps λ, never the
+ * euros). Empty, zero or negative: an error on the field and a local problem of the step. Without the preview's table (a
+ * total that cannot be counted yet) the field is off. The table «Maximum acceptable cost» sits under the choices.
+ * Nothing reads translated text.
+ */
+import {flushSync, tick} from 'svelte';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+
+vi.mock('$lib/api', () => ({
+    zodiosApi: new Proxy({}, {get: () => vi.fn(async () => undefined)}),
+    axiosInstance: {get: vi.fn(), post: vi.fn()},
+}));
+
+import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
+import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
+import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
+import {PlannerDraft} from '../draft.svelte';
+import {defaultPolicy} from '../policies';
+import {PlannerPreview, type PreviewReady} from '../preview.svelte';
+import {REBALANCER_PLANNER_PROFILE} from '../profile';
+import {localProblems} from '../request';
+import RebalancerStrategyStep from './RebalancerStrategyStep.svelte';
+
+beforeAll(async () => {
+    await setupI18n();
+});
+
+afterEach(() => {
+    cleanup();
+    setPrivacyEnabled(false);
+});
+
+const money = (value: string) => ({value: {kind: 'finite_decimal' as const, value}, currency: 'EUR'});
+const number = (value: string) => ({kind: 'finite_decimal' as const, value});
+
+function ready(customEuros: string | null): PreviewReady {
+    const custom = customEuros !== null;
+    const row = (misplaced: string, reference: boolean) => ({misplaced: money(misplaced), reference, cost_aware: money('1'), balanced: money('4'), faithful: money('16'), custom: custom ? money('2') : null});
+    return {
+        operation: 'preview',
+        result_state: 'preview_ready',
+        availability: 'ready',
+        valuation_currency: 'EUR',
+        total: money('20000'),
+        issues: [],
+        limit_problems: [],
+        items: [],
+        table: {level_weights: {cost_aware: number('0.25'), balanced: number('1'), faithful: number('4')}, rows: [row('200', false), row('500', false), row('1000', true), row('2000', false)]},
+        custom: custom ? {distance_weight: number('0.6'), reference_amount: money(customEuros)} : null,
+    };
+}
+
+function setup(numbers: PreviewReady | null = ready(null), state: PlannerPreview['state'] = 'ready') {
+    const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
+    const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+    preview.state = state;
+    preview.numbers = numbers;
+    preview.reason = numbers ? null : 'allocation.price_missing';
+    const sent = vi.spyOn(preview, 'setCustomEuros').mockImplementation(() => {});
+    render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: RebalancerStrategyStep, childProps: {draft, preview}}});
+    flushSync();
+    return {draft, preview, sent};
+}
+
+function choice(name: string): HTMLElement {
+    const found = screen.getAllByTestId('rebalancer-planner-fidelity-choice').find((card) => card.getAttribute('data-choice') === name);
+    if (!found) throw new Error(`no fidelity choice ${name}`);
+    return found;
+}
+
+/** «Custom» is a card holding its field: its name is the button that chooses it. */
+function chooseCustom(): Promise<boolean> {
+    return fireEvent.click(within(choice('custom')).getByTestId('rebalancer-planner-fidelity-choice-button'));
+}
+
+describe('the Rebalancer Strategy step', () => {
+    it('«Invest only» is the strategy; «Invest and sell» is shown, off, coming soon', async () => {
+        const {draft} = setup();
+        const cards = screen.getAllByTestId('rebalancer-planner-strategy-card');
+        expect(cards.map((card) => [card.getAttribute('data-strategy'), card.getAttribute('data-selected')])).toEqual([
+            ['invest_only', 'true'],
+            ['invest_and_sell', 'false'],
+        ]);
+        const sell = cards[1];
+        expect((sell as HTMLButtonElement).disabled).toBe(true);
+        expect(screen.getByTestId('rebalancer-planner-strategy-coming-soon')).toBeTruthy();
+        await fireEvent.click(sell);
+        expect(draft.data.policy).toBe('invest_only');
+    });
+
+    it('five fidelity choices, «Balanced» the default with its badge; a choice goes to the draft', async () => {
+        const {draft} = setup();
+        expect(screen.getAllByTestId('rebalancer-planner-fidelity-choice').map((card) => card.getAttribute('data-choice'))).toEqual(['cost_aware', 'balanced', 'faithful', 'target_first', 'custom']);
+        expect(choice('balanced').getAttribute('data-selected')).toBe('true');
+        expect(choice('balanced').querySelector('[data-testid="rebalancer-planner-fidelity-default"]')).not.toBeNull();
+
+        await fireEvent.click(choice('faithful'));
+        expect(draft.data.fidelity).toEqual({kind: 'level', level: 'faithful'});
+        await fireEvent.click(choice('target_first'));
+        expect(draft.data.fidelity).toEqual({kind: 'target_first'});
+        expect(choice('target_first').getAttribute('data-selected')).toBe('true');
+    });
+
+    it('«Custom»: the euros go to the preview; empty or zero is an error on the field and a problem of the step', async () => {
+        const {draft, sent} = setup();
+        await chooseCustom();
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
+        const field = screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement;
+        expect(field.disabled).toBe(false);
+
+        await fireEvent.input(field, {target: {value: '60'}});
+        expect(sent).toHaveBeenLastCalledWith(draft, '60');
+        expect(screen.queryByTestId('rebalancer-planner-fidelity-custom-error')).toBeNull();
+
+        await fireEvent.input(field, {target: {value: '0'}});
+        expect(screen.getByTestId('rebalancer-planner-fidelity-custom-error')).toBeTruthy();
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
+        expect(localProblems(draft).map((problem) => `${problem.step}:${problem.key}`)).toContain('strategy:fidelityCustomMissing');
+    });
+
+    it("typing new euros clears the draft's λ until the preview gives the new one; a cleared field drops the euros sent", async () => {
+        const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
+        draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
+        const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+        preview.state = 'ready';
+        preview.numbers = ready('60');
+        const sent = vi.spyOn(preview, 'setCustomEuros').mockImplementation(() => {});
+        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: RebalancerStrategyStep, childProps: {draft, preview}}});
+        flushSync();
+        const field = screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement;
+
+        // The λ of 60 must not travel with 600 on screen.
+        await fireEvent.input(field, {target: {value: '600'}});
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
+        expect(sent).toHaveBeenLastCalledWith(draft, '600');
+
+        await fireEvent.input(field, {target: {value: ''}});
+        expect(sent).toHaveBeenLastCalledWith(draft, '');
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
+    });
+
+    it('«Custom» with a λ shows the euros the preview gives for it; the table is under the choices', () => {
+        const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
+        draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
+        const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+        preview.state = 'ready';
+        preview.numbers = ready('60');
+        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: RebalancerStrategyStep, childProps: {draft, preview}}});
+        flushSync();
+        expect((screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement).value).toBe('60');
+        expect(screen.getByTestId('rebalancer-planner-fidelity')).toBeTruthy();
+        expect(localProblems(draft).map((problem) => problem.key)).not.toContain('fidelityCustomMissing');
+    });
+
+    it('without the preview table (a total that cannot be counted yet) the «Custom» field is off', async () => {
+        setup(null, 'error');
+        await chooseCustom();
+        expect((screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement).disabled).toBe(true);
+        expect(screen.getByTestId('rebalancer-planner-fidelity-reason')).toBeTruthy();
+    });
+
+    it('in privacy mode the «Custom» figures are masked, the field gives way to its mask; back again when privacy is off', async () => {
+        const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
+        draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
+        const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+        preview.state = 'ready';
+        preview.numbers = ready('60');
+        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: RebalancerStrategyStep, childProps: {draft, preview}}});
+        flushSync();
+        const card = () => choice('custom');
+
+        setPrivacyEnabled(true);
+        flushSync();
+        await tick();
+        expect(screen.queryByTestId('rebalancer-planner-fidelity-custom-input')).toBeNull();
+        expect(screen.getByTestId('rebalancer-planner-fidelity-custom-masked').textContent).toContain(PRIVACY_PLACEHOLDER);
+        // The reference row's figure in the sentence is masked too.
+        expect(card().textContent).not.toMatch(/1[.,]?000/);
+
+        setPrivacyEnabled(false);
+        flushSync();
+        await tick();
+        expect((screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement).value).toBe('60');
+        expect(card().textContent).toMatch(/1[.,]?000/);
+    });
+});

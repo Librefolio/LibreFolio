@@ -35,6 +35,23 @@ export const PREVIEW_DELAY_MS = 600;
 export type PreviewNumber = PlannerExactNumber;
 export type PreviewMoney = PlannerExactMoney;
 
+/** One row of the table «maximum acceptable cost» (M30): money in the wrong place and, per level, the most a plan accepts to spend
+ * to put it back; `custom` only while the «custom» fidelity has a λ. */
+export interface PreviewCostRow {
+    misplaced: PreviewMoney;
+    reference: boolean;
+    cost_aware: PreviewMoney;
+    balanced: PreviewMoney;
+    faithful: PreviewMoney;
+    custom: PreviewMoney | null;
+}
+
+/** The table «maximum acceptable cost» of the Rebalancer's preview: four rows, the third the reference (M32). */
+export interface PreviewCostTable {
+    level_weights: {cost_aware: PreviewNumber; balanced: PreviewNumber; faithful: PreviewNumber};
+    rows: PreviewCostRow[];
+}
+
 /** The fields of a ready preview the planner reads (`RebalancerPreviewReadyResult`, `PacPreviewReadyResult`). */
 export interface PreviewReady {
     operation: 'preview';
@@ -46,7 +63,7 @@ export interface PreviewReady {
     limit_problems: {code: string}[];
     /** Every target entry today, and «other cash» (the cash outside the entries, G5-2 of project 67). */
     items?: ({kind: 'asset'; asset_id: string; value: PreviewMoney; weight: PreviewNumber} | {kind: 'cash'; broker_id: string; currency: string; value: PreviewMoney; weight: PreviewNumber} | {kind: 'other_cash'; value: PreviewMoney; weight: PreviewNumber})[];
-    table?: unknown;
+    table?: PreviewCostTable;
     custom?: {distance_weight: PreviewNumber; reference_amount: PreviewMoney} | null;
 }
 
@@ -192,9 +209,11 @@ export class PlannerPreview {
         // A newer draft waits to be sent: these numbers are already stale.
         this.state = this.#pending ? 'waiting' : 'ready';
         if (euros === null) return;
+        // Newer euros were typed, or the field was cleared, while this answer was on its way: its λ is not the field's (10b).
+        if (this.#customEuros !== euros) return;
         // The euros reached the backend: later previews send λ. The λ they give, as the answer gives it, goes to the draft
         // only while its choice is still «Custom» (the user may have picked a level meanwhile).
-        if (this.#customEuros === euros) this.#customEuros = null;
+        this.#customEuros = null;
         const lambda = ready.custom?.distance_weight.kind === 'finite_decimal' ? ready.custom.distance_weight.value : undefined;
         if (lambda !== undefined && draft.data.fidelity.kind === 'custom' && draft.data.fidelity.lambda !== lambda) {
             draft.data.fidelity = {kind: 'custom', lambda};

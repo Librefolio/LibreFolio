@@ -42,6 +42,7 @@
     import TargetsStep from './steps/TargetsStep.svelte';
     import FxStep from './steps/FxStep.svelte';
     import StrategyStep from './steps/StrategyStep.svelte';
+    import RebalancerStrategyStep from './steps/RebalancerStrategyStep.svelte';
     import ReviewStep from './steps/ReviewStep.svelte';
     import BusyPanel from './result/BusyPanel.svelte';
     import RefreshFailedPanel from './result/RefreshFailedPanel.svelte';
@@ -448,7 +449,11 @@
                 {:else if step === 'fx'}
                     <FxStep {draft} {accountGeneration} />
                 {:else if step === 'strategy'}
-                    <StrategyStep {draft} />
+                    {#if profile.toolCode === 'portfolio_rebalancer'}
+                        <RebalancerStrategyStep {draft} {preview} />
+                    {:else}
+                        <StrategyStep {draft} />
+                    {/if}
                 {:else}
                     <ReviewStep {draft} problems={reviewProblems} busy={working} hasResult={run.outcome !== null} ongoto={go} oncalculate={() => void calculate()} onshowresult={showResult} />
                 {/if}

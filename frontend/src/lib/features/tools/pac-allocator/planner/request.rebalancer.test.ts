@@ -262,7 +262,8 @@ describe('the Rebalancer request, «Invest only»', () => {
 
         draft.data.targets[entryKey] = '10';
         const plan = buildRequest(draft, NOW);
-        expect(plan.ok ? [] : plan.problems.map((problem) => problem.key)).toContain('structureInvalid');
+        // Step 10b: the plan refuses it as a problem of the Strategy step, the field's (no longer a structure error).
+        expect(plan.ok ? [] : plan.problems.map((problem) => `${problem.step}:${problem.key}`)).toEqual(['strategy:fidelityCustomMissing']);
         // The euros never travel with a plan.
         draft.data.fidelity = {kind: 'custom', lambda: '0.0123'};
         const planned = buildRequest(draft, NOW, {customReferenceAmount: '60'});

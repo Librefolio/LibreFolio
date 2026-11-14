@@ -277,6 +277,37 @@ describe('PlannerPreview', () => {
         preview.dispose();
     });
 
+    it('a λ lands only for the euros still typed: newer euros, or a cleared field, drop the older answer (10b)', async () => {
+        const custom = (lambda: string, euros: string) => ({custom: {distance_weight: {kind: 'finite_decimal', value: lambda}, reference_amount: {value: {kind: 'finite_decimal', value: euros}, currency: 'EUR'}}});
+        const draft = draftOf();
+        draft.data.fidelity = {kind: 'custom', lambda: ''};
+        const {call, pending} = controlled();
+        const preview = new PlannerPreview({call, blocked: () => false});
+
+        // 60, then 600 before the answer for 60 lands: that answer gives no λ; the one for 600 does.
+        preview.setCustomEuros(draft, '60');
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        preview.setCustomEuros(draft, '600');
+        pending[0].resolve(ready('150', custom('0.0123', '60')));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        expect(pending[1].request.custom_reference_amount).toEqual({amount: '600', currency: 'EUR'});
+        pending[1].resolve(ready('150', custom('0.123', '600')));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.123'});
+
+        // 70, then the field cleared before the answer: no λ for 70.
+        draft.data.fidelity = {kind: 'custom', lambda: ''};
+        preview.setCustomEuros(draft, '70');
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        preview.setCustomEuros(draft, '');
+        pending[2].resolve(ready('150', custom('0.0143', '70')));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
+        preview.dispose();
+    });
+
     it('a λ never overwrites a choice the user changed meanwhile', async () => {
         const draft = draftOf();
         draft.data.fidelity = {kind: 'custom', lambda: ''};
