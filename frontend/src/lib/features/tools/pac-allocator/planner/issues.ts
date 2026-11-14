@@ -87,10 +87,17 @@ export function entityLabel(draft: PlannerDraft, entity: {kind: string; id: stri
         case 'cash': {
             const cash = draft.cashRow(entity.id);
             if (cash) return `${draft.broker(cash.brokerKey)?.name ?? cash.brokerKey} · ${cash.currency}`;
-            // A target entry for a cash cell is named «broker:CURRENCY» (contract 2.0.0).
-            const [brokerId, currency] = entity.id.split(':');
-            const broker = brokerId ? draft.broker(brokerId) : undefined;
-            return broker && currency ? `${broker.name} · ${currency}` : entity.id;
+            // A target entry for a cash cell is named «<broker id>:CURRENCY» (contract 2.0.0); the broker id has its own
+            // colon (`broker:1`), so the currency is what follows the last one.
+            const cut = entity.id.lastIndexOf(':');
+            const broker = cut > 0 ? draft.broker(entity.id.slice(0, cut)) : undefined;
+            return broker ? `${broker.name} · ${entity.id.slice(cut + 1)}` : entity.id;
+        }
+        case 'holding': {
+            // A position of the Rebalancer (F3a of project 67): its Broker need not be among the scenario's Brokers.
+            const position = draft.data.positions.find((item) => item.key === entity.id);
+            if (!position) return entity.id;
+            return `${draft.asset(position.assetKey)?.name ?? position.assetKey} · ${draft.broker(position.brokerKey)?.name ?? position.brokerName}`;
         }
         case 'contribution':
             return draft.contribution(entity.id)?.label || entity.id;

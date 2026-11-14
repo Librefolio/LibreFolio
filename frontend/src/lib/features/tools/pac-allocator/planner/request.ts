@@ -597,6 +597,8 @@ export function stepOfWirePath(path: readonly (string | number)[]): PlannerStep 
         case 'fx_spread_rate':
             return 'fx';
         case 'policy':
+        case 'target_fidelity':
+        case 'custom_reference_amount':
             return 'strategy';
         default:
             return 'scenario';
