@@ -51,7 +51,8 @@
           "entry": "Partida",
           "wire": "La parte del total que entra en el plan que esta fila debe tener al final, en porcentaje. Se admiten decimales.",
           "limitsHelp": "Mínimo y máximo del valor de esta fila al final del plan. Escribe un importe en la divisa de valoración (500) o un porcentaje del total que entra en el plan (35%). Campo vacío = ningún límite.",
-          "totalHelp": "Los objetivos reparten el total que entra en el plan, posiciones y efectivo incluidos: para calcular deben sumar exactamente 100 %. «Equilibrar todo» reescala cada objetivo manteniendo las proporciones (partes iguales si todos son 0). Marca algunas filas para reescalar solo esas. «Equilibrar al 100 %» en una fila le da lo que falta, o quita el exceso."
+          "totalHelp": "Los objetivos reparten el total que entra en el plan, posiciones y efectivo incluidos: para calcular deben sumar exactamente 100 %. «Equilibrar todo» reescala cada objetivo manteniendo las proporciones (partes iguales si todos son 0). Marca algunas filas para reescalar solo esas. «Equilibrar al 100 %» en una fila le da lo que falta, o quita el exceso.",
+          "nowLine": "ahora {weight}"
         },
         "removal": {
           "cashEntry": "Efectivo de los objetivos {broker} · {currency}"

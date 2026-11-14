@@ -6,7 +6,7 @@
     },
     "portfolioRebalancer": {
       "name": "Ribilanciatore",
-      "description": "Porta un portafoglio già investito verso i suoi target: compra e, se lo autorizzi, vende, stimando commissioni e tasse. Non invia ordini."
+      "description": "Porta un portafoglio già investito verso i suoi obiettivi: compra e, se lo autorizzi, vende, stimando commissioni e tasse. Non invia ordini."
     }
   }
 }

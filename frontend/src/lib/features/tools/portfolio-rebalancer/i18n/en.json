@@ -51,7 +51,8 @@
           "entry": "Entry",
           "wire": "The share of the total that enters the plan this row should have at the end, in percent. Decimals are allowed.",
           "limitsHelp": "Minimum and maximum of this row's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the total that enters the plan (35%). Empty field = no limit.",
-          "totalHelp": "The targets split the total that enters the plan, positions and cash included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those. «Balance to 100%» on a row gives it what is missing, or takes away the excess."
+          "totalHelp": "The targets split the total that enters the plan, positions and cash included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those. «Balance to 100%» on a row gives it what is missing, or takes away the excess.",
+          "nowLine": "now {weight}"
         },
         "removal": {
           "cashEntry": "Cash entry of the targets {broker} · {currency}"

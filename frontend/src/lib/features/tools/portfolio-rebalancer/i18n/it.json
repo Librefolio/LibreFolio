@@ -51,7 +51,8 @@
           "entry": "Voce",
           "wire": "La quota del totale che entra nel piano che questa riga deve avere alla fine, in percentuale. Sono ammessi i decimali.",
           "limitsHelp": "Minimo e massimo del valore di questa riga alla fine del piano. Scrivi un importo nella valuta di valutazione (500) o una percentuale del totale che entra nel piano (35%). Campo vuoto = nessun limite.",
-          "totalHelp": "Gli obiettivi dividono il totale che entra nel piano, posizioni e cassa comprese: per calcolare devono sommare esattamente 100%. «Bilancia tutto» riscala ogni obiettivo mantenendo le proporzioni (parti uguali se sono tutti 0). Spunta alcune righe per riscalare solo quelle. «Bilancia al 100%» su una riga le dà ciò che manca, o toglie l’eccesso."
+          "totalHelp": "Gli obiettivi dividono il totale che entra nel piano, posizioni e cassa comprese: per calcolare devono sommare esattamente 100%. «Bilancia tutto» riscala ogni obiettivo mantenendo le proporzioni (parti uguali se sono tutti 0). Spunta alcune righe per riscalare solo quelle. «Bilancia al 100%» su una riga le dà ciò che manca, o toglie l’eccesso.",
+          "nowLine": "ora {weight}"
         },
         "removal": {
           "cashEntry": "Cassa degli obiettivi {broker} · {currency}"
