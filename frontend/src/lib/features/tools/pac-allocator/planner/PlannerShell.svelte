@@ -8,7 +8,7 @@
      * the PAC's when none is set. Every figure comes from the backend: the wizard
      * only edits the draft.
      */
-    import {onDestroy, onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {MediaQuery, SvelteSet} from 'svelte/reactivity';
     import {afterNavigate, beforeNavigate, goto} from '$app/navigation';
     import {ArrowLeft, ArrowRight, ChevronDown, ChevronUp, CircleStop} from 'lucide-svelte';
@@ -22,6 +22,7 @@
     import {STEP_FALLBACKS, listLocalProblem, stepKey, type ListedIssue} from './labels';
     import {defaultPolicy} from './policies';
     import {buildRequest, localProblems} from './request';
+    import {PlannerPreview, toolPreviewCall} from './preview.svelte';
     import {PlannerRun, type PlannerDescriptor} from './run.svelte';
     import {loadCopyScope, selectableIds} from './scope';
     import {SourceLoad, type SourceLoadError} from './sourceLoad.svelte';
@@ -69,6 +70,26 @@
     // Props are fixed for the life of a mount: an account change unmounts the renderer.
     const draft = new PlannerDraft(userSettings.get()?.base_currency ?? '', defaultPolicy(profile), profile);
     const run = new PlannerRun(() => descriptor, profile);
+    /** True from «Calcola» until the run has started: no preview may start in between (one batch per user), and the page is busy. */
+    let launching = $state(false);
+    /** The request waiting for the preview in flight; shown in the waiting panel as the run's own. */
+    let launchingBuilt = $state.raw<Parameters<PlannerRun['start']>[0] | null>(null);
+    /** «Stop» pressed while waiting for the preview: the run does not start. */
+    let launchStopped = false;
+    // The scenario preview (F3a of project 67, steps 8 and 9a): the backend's numbers before the calculation.
+    const preview = new PlannerPreview({
+        call: toolPreviewCall(
+            () => descriptor,
+            profile,
+            () => accountGeneration,
+        ),
+        blocked: () => run.running || launching,
+    });
+    $effect(() => {
+        // Every edit of the draft asks again, after the pause; the class keeps the latest only.
+        void draft.fingerprint;
+        untrack(() => preview.schedule(draft));
+    });
     /** Re-reads the copied facts the user has not changed, right before every «Calcola». */
     // The Rebalancer's re-read also keeps the quantities held, for its copied positions (Q-F3a-5c).
     const refreshLoad = new SourceLoad({positions: profile.positions});
@@ -129,7 +150,7 @@
     });
     const navVariant = $derived(desktop.current ? 'vertical' : tablet.current ? 'horizontal' : 'compact');
     const leaveCounts = $derived({assets: draft.data.assets.length, sources: draft.data.cash.length + draft.data.contributions.length});
-    const working = $derived(run.running || refreshing);
+    const working = $derived(run.running || refreshing || launching);
     const reviewNotice = $derived(step === 'review' && refreshNotice !== null && refreshNotice.fingerprint === draft.fingerprint && reviewProblems.length > 0 ? refreshNotice : null);
 
     async function focusFirst(...ids: string[]): Promise<void> {
@@ -176,7 +197,7 @@
     }
 
     async function calculate(options: {refresh: boolean} = {refresh: true}): Promise<void> {
-        if (run.running || refreshing) return;
+        if (run.running || refreshing || launching) return;
         draft.refreshAsOf();
         refreshFailure = null;
         refreshNotice = null;
@@ -249,6 +270,18 @@
 
     async function launch(built: Parameters<PlannerRun['start']>[0]): Promise<void> {
         view = 'result';
+        // One batch per user: a preview still on its way is waited for (it is short, no optimizer), never aborted, since the
+        // server frees the user's slot only when the job ends.
+        launching = true;
+        launchingBuilt = built;
+        launchStopped = false;
+        try {
+            await preview.settled();
+        } finally {
+            launching = false;
+            launchingBuilt = null;
+        }
+        if (destroyed || launchStopped) return;
         const running = run.start(built, accountGeneration);
         void focusFirst(BUSY_TITLE_ID);
         await running;
@@ -257,7 +290,7 @@
 
     function retry(): void {
         const outcome = run.outcome;
-        if (outcome && !run.running) void launch(outcome.built);
+        if (outcome && !run.running && !launching) void launch(outcome.built);
     }
 
     function discard(): void {
@@ -311,6 +344,7 @@
         refreshSequence += 1;
         refreshLoad.stop();
         run.dispose();
+        preview.dispose();
     });
 </script>
 
@@ -322,6 +356,9 @@
             <RefreshFailedPanel error={refreshFailure} onretry={() => void calculate()} onproceed={() => void calculate({refresh: false})} onedit={() => editStep('review')} />
         {:else if run.busy}
             <BusyPanel built={run.busy} {timeoutMs} progressPhases={planPhases} progressPhase={run.progress} onstop={() => run.stop()} />
+        {:else if launchingBuilt}
+            <!-- The preview in flight ends first (one batch per user): the calculation is about to start. -->
+            <BusyPanel built={launchingBuilt} {timeoutMs} progressPhases={planPhases} progressPhase={null} onstop={() => (launchStopped = true)} />
         {:else if run.outcome}
             {#if run.stopped}
                 <p class={NOTICE.info} role="status" data-testid={testId('stopped-previous', profile)}>
@@ -407,7 +444,7 @@
                 {:else if step === 'routing'}
                     <RoutingStep {draft} />
                 {:else if step === 'targets'}
-                    <TargetsStep {draft} {accountGeneration} />
+                    <TargetsStep {draft} {accountGeneration} {preview} />
                 {:else if step === 'fx'}
                     <FxStep {draft} {accountGeneration} />
                 {:else if step === 'strategy'}

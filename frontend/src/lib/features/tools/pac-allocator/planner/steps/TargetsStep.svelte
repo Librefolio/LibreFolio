@@ -8,8 +8,9 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {canonicalInput, compareDecimal, decimalSign, rebalanceControlPercentages, remainingControlPercentage, sumControlPercentages} from '$lib/utils/core/exactDecimal';
     import type {PlannerDraft, TargetRow} from '../draft.svelte';
-    import {formatPlannerPercentUnits} from '../format';
-    import {BUTTON_SECONDARY, NOTICE} from '../ui';
+    import {formatExactMoneyPlain, formatExactPercent, formatPlannerPercentUnits} from '../format';
+    import type {PlannerPreview} from '../preview.svelte';
+    import {BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
     import AssetNameCell from '../shared/AssetNameCell.svelte';
     import CashEntryIcon from '../shared/CashEntryIcon.svelte';
     import CashEntryNameCell from '../shared/CashEntryNameCell.svelte';
@@ -30,9 +31,19 @@
     interface Props {
         draft: PlannerDraft;
         accountGeneration: number;
+        /** The scenario preview (F3a of project 67, step 9a): the total, «Now» and the limits note's figure; none before 9a's shell. */
+        preview?: PlannerPreview | null;
     }
 
-    let {draft, accountGeneration}: Props = $props();
+    let {draft, accountGeneration, preview = null}: Props = $props();
+
+    // -- The preview's figures (N1: the backend's, never counted here) --------------------------------------------------
+    const numbers = $derived(preview?.numbers ?? null);
+    /** The total of the plan, the user's money: masked in privacy mode. */
+    const totalText = $derived(numbers ? formatExactMoneyPlain(numbers.total) : null);
+    const stale = $derived(preview?.stale ?? false);
+    /** «Now» (U5): a Tool that works on positions shows each row's weight today. */
+    const showNow = $derived(profile.positions);
 
     const KEY = 'tools.pacAllocator.planner.targets';
     type TotalState = 'balanced' | 'excess' | 'missing' | 'unknown';
@@ -142,6 +153,18 @@
         return {type: 'custom' as const, component: CashEntryNameCell, props: {other: true}};
     }
 
+    /** Today's weight of a row, as the preview gives it; empty without a preview, and for «Other cash». */
+    function nowHtml(row: TableRow): string {
+        const item =
+            row.kind === 'asset'
+                ? numbers?.items?.find((candidate) => candidate.kind === 'asset' && candidate.asset_id === row.key)
+                : row.kind === 'cash'
+                  ? numbers?.items?.find((candidate) => candidate.kind === 'cash' && candidate.broker_id === row.entry.brokerKey && candidate.currency === row.entry.currency)
+                  : undefined;
+        const text = item ? formatExactPercent(item.weight, 1) : '';
+        return `<span class="font-mono ${stale ? 'text-lf-muted' : 'text-lf-secondary'}" data-testid="${testId('target-now', profile)}" data-asset-key="${escapeHtml(row.key)}">${escapeHtml(text)}</span>`;
+    }
+
     /** «Other cash» always counts 0 %: shown, never edited (mockup screen 5). */
     function fixedZeroHtml(): string {
         return `<span class="font-mono text-lf-muted" data-testid="${testId('target-other-cash', profile)}">${escapeHtml(formatPlannerPercentUnits('0'))}</span>`;
@@ -151,7 +174,7 @@
         withHelpCues<TableRow>([
             {
                 id: 'asset',
-                header: () => $t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'}),
+                header: () => (profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.targets.entry') : $t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'})),
                 type: 'text',
                 sortable: false,
                 filterable: false,
@@ -159,6 +182,23 @@
                 getValue: (row) => rowLabel(row),
                 cell: (row) => nameCell(row),
             },
+            ...(showNow
+                ? [
+                      {
+                          id: 'now',
+                          header: () => $t('tools.portfolioRebalancer.planner.targets.now'),
+                          headerTooltip: () => $t('tools.portfolioRebalancer.planner.targets.nowHelp'),
+                          type: 'custom' as const,
+                          sortable: false,
+                          filterable: false,
+                          align: 'right' as const,
+                          width: 80,
+                          minWidth: 64,
+                          hiddenByDefault: phone.current,
+                          cell: (row: TableRow) => ({type: 'html' as const, html: nowHtml(row)}),
+                      },
+                  ]
+                : []),
             {
                 id: 'bar',
                 header: () => $t(`${KEY}.shape`, {default: 'Distribution'}),
@@ -173,7 +213,7 @@
             {
                 id: 'target',
                 header: () => $t(`${KEY}.target`, {default: 'Target %'}),
-                headerTooltip: () => $t(`${KEY}.wire`, {default: 'The share of the money you invest now that goes to this Asset, in percent. Decimals are allowed.'}),
+                headerTooltip: () => (profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.targets.wire') : $t(`${KEY}.wire`, {default: 'The share of the money you invest now that goes to this Asset, in percent. Decimals are allowed.'})),
                 type: 'custom',
                 sortable: false,
                 filterable: false,
@@ -187,9 +227,11 @@
                 id: 'limits',
                 header: () => $t(`${KEY}.limits`, {default: 'Limits'}),
                 headerTooltip: () =>
-                    $t(`${KEY}.limitsHelp`, {
-                        default: "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the money you invest now. Empty field = no limit.",
-                    }),
+                    profile.text === 'rebalancer'
+                        ? $t('tools.portfolioRebalancer.planner.targets.limitsHelp')
+                        : $t(`${KEY}.limitsHelp`, {
+                              default: "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the money you invest now. Empty field = no limit.",
+                          }),
                 type: 'custom',
                 sortable: false,
                 filterable: false,
@@ -227,9 +269,15 @@
     }
 </script>
 
-<div class="space-y-3" data-testid={testId('targets', profile)}>
+<div class="space-y-3" data-testid={testId('targets', profile)} data-preview={preview?.state ?? 'none'} data-stale={stale ? 'true' : 'false'}>
     <div class="flex flex-wrap items-center gap-2">
-        <p class="text-sm text-lf-secondary">{$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}</p>
+        <p class="text-sm text-lf-secondary" data-testid={testId('targets-intro', profile)}>
+            {#if profile.text === 'rebalancer'}
+                {totalText !== null ? $t('tools.portfolioRebalancer.planner.targets.introTotal', {values: {total: totalText}}) : $t('tools.portfolioRebalancer.planner.targets.intro')}
+            {:else}
+                {$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}
+            {/if}
+        </p>
         <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5">
             {#if selectedKeys.length > 0}
                 <DataTableToolbar
@@ -281,6 +329,12 @@
         </div>
     </div>
 
+    {#if preview?.state === 'error' && preview.reason}
+        <p class={HINT} role="status" data-testid={testId('targets-preview-reason', profile)} data-reason={preview.reason}>
+            {preview.reason === 'incomplete' ? $t(`${KEY}.previewIncomplete`) : preview.reason === 'unavailable' ? $t(`${KEY}.previewUnavailable`) : $t(`tools.pacAllocator.planner.issues.${preview.reason}`, {default: $t(`${KEY}.previewUnavailable`)})}
+        </p>
+    {/if}
+
     {#if draft.data.assets.length === 0}
         <p class={NOTICE.info} data-testid={testId('targets-empty', profile)}>{$t('tools.pacAllocator.planner.problems.noAssets', {default: 'Add at least one Asset.'})}</p>
     {:else}
@@ -319,17 +373,25 @@
             {/if}
             <HelpTip
                 label={$t(`${KEY}.total`, {default: 'Total'})}
-                help={$t(`${KEY}.totalHelp`, {
-                    default:
-                        'The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.',
-                })}
+                help={profile.text === 'rebalancer'
+                    ? $t('tools.portfolioRebalancer.planner.targets.totalHelp')
+                    : $t(`${KEY}.totalHelp`, {
+                          default:
+                              'The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.',
+                      })}
                 testid={testId('targets-total-help', profile)}
             />
         </div>
 
         <LimitProblems {draft} />
         <p class={NOTICE.info} data-testid={testId('targets-limits-note', profile)}>
-            {$t(`${KEY}.limitsNote`, {default: 'Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.'})}
+            {#if profile.text === 'rebalancer'}
+                {totalText !== null ? $t('tools.portfolioRebalancer.planner.targets.limitsNoteTotal', {values: {total: totalText}}) : $t('tools.portfolioRebalancer.planner.targets.limitsNote')}
+            {:else if totalText !== null}
+                {$t(`${KEY}.limitsNoteTotal`, {values: {total: totalText}})}
+            {:else}
+                {$t(`${KEY}.limitsNote`, {default: 'Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.'})}
+            {/if}
         </p>
     {/if}
 </div>
