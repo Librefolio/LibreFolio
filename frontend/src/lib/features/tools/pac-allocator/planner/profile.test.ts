@@ -23,6 +23,8 @@ describe('planner profile', () => {
         // The PAC buys from cash only: it never reads the quantities the user holds.
         expect(profile.positions).toBe(false);
         expect(profile.fundingRoutes).toBe(true);
+        // No cash entry in the PAC's targets until step 14 of F3a (limits only, U8).
+        expect(profile.cashEntries).toBe('none');
     });
 
     it('testId joins prefix and suffix', () => {
@@ -60,6 +62,7 @@ describe('planner profile', () => {
         expect(profile.positions).toBe(true);
         // Every cash reaches every Broker: the Rebalancer declares no funding route (contract §5.4).
         expect(profile.fundingRoutes).toBe(false);
+        expect(profile.cashEntries).toBe('full');
         expect(testId('continue', profile)).toBe('rebalancer-planner-continue');
         expect(Object.isFrozen(profile) && Object.isFrozen(profile.events) && Object.isFrozen(profile.steps)).toBe(true);
     });

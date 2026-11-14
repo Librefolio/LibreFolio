@@ -172,9 +172,11 @@ export type LimitProblem = Omit<LocalProblem, 'id' | 'step'> & {assetKey: string
 export function limitProblems(draft: PlannerDraft): LimitProblem[] {
     const found: LimitProblem[] = [];
     const shareMinimums: {name: string; percent: string}[] = [];
-    for (const asset of draft.orderedAssets) {
-        const limits = draft.data.limits[asset.key];
+    for (const row of draft.targetRows) {
+        const limits = draft.data.limits[row.key];
         if (!limits) continue;
+        // A cash entry is named by its Broker and currency; the checks below are the same for both kinds of row.
+        const asset = row.kind === 'asset' ? row.asset : {key: row.key, name: `${draft.broker(row.entry.brokerKey)?.name ?? row.entry.brokerKey} · ${row.entry.currency}`};
         const minimum = parseLimit(limits.minimum);
         const maximum = parseLimit(limits.maximum);
         if (minimum === 'invalid' || maximum === 'invalid') found.push({key: 'limitInvalid', fallback: 'A limit is not an amount or a percentage from 0.', entity: asset.name, assetKey: asset.key, values: {}});

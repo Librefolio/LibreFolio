@@ -45,6 +45,11 @@ export interface PlannerProfile {
      * (F3a of project 67, contract §5.4).
      */
     readonly fundingRoutes: boolean;
+    /**
+     * The Broker × currency cash entries of the targets (contract §5.2): `full` (the Rebalancer: a target and limits, M12),
+     * `limits` (the PAC from step 14 of F3a: limits only, U8), `none` (the PAC until then).
+     */
+    readonly cashEntries: 'none' | 'limits' | 'full';
 }
 
 export const PAC_PLANNER_PROFILE: PlannerProfile = Object.freeze({
@@ -57,6 +62,7 @@ export const PAC_PLANNER_PROFILE: PlannerProfile = Object.freeze({
     text: 'pac',
     positions: false,
     fundingRoutes: true,
+    cashEntries: 'none',
 });
 
 /**
@@ -73,6 +79,7 @@ export const REBALANCER_PLANNER_PROFILE: PlannerProfile = Object.freeze({
     text: 'rebalancer',
     positions: true,
     fundingRoutes: false,
+    cashEntries: 'full',
 });
 
 const PROFILE_KEY = Symbol('planner-profile');

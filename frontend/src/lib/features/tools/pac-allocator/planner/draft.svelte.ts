@@ -207,6 +207,25 @@ export interface DraftPosition {
     enteredAt: string;
 }
 
+/**
+ * A cash entry of the targets (F3a of project 67, contract §5.2): a Broker's cash in one currency, with a target and the
+ * limits of F2. Its target and limits live in `targets` and `limits` under the entry's own key, as an Asset's do.
+ */
+export interface DraftCashEntry {
+    key: string;
+    brokerKey: string;
+    currency: string;
+    enteredAt: string;
+}
+
+/** A row of the targets table: an Asset, or a cash entry. */
+export type TargetRow = {kind: 'asset'; key: string; asset: DraftAsset} | {kind: 'cash'; key: string; entry: DraftCashEntry};
+
+/** The key of the cash entry of `brokerKey` in `currency`. */
+export function cashEntryKey(brokerKey: string, currency: string): string {
+    return `cash-entry:${brokerKey}:${currency}`;
+}
+
 export interface DraftData {
     asOf: string;
     valuationCurrency: string;
@@ -218,6 +237,8 @@ export interface DraftData {
     assets: DraftAsset[];
     /** The user's positions (the Rebalancer's; always empty for the PAC). */
     positions: DraftPosition[];
+    /** The cash entries of the targets, in the order they were added (none for the PAC in F3a). */
+    cashEntries: DraftCashEntry[];
     routes: Record<string, DraftRoute>;
     targets: Record<string, string>;
     /** Minimum and maximum of each Asset's final value, as typed (F2 of project 67); an Asset with no limit has no entry. */
@@ -232,6 +253,8 @@ export interface RemovalImpact {
     cash: DraftCash[];
     funding: {broker: DraftBroker; funding: DraftFunding}[];
     target: boolean;
+    /** The cash entries of the targets that go too (F3a of project 67): those of a removed Broker. */
+    cashEntries?: DraftCashEntry[];
 }
 
 export function routeKey(assetKey: string, brokerKey: string): string {
@@ -334,6 +357,7 @@ function emptyData(valuationCurrency: string): DraftData {
         contributions: [],
         assets: [],
         positions: [],
+        cashEntries: [],
         routes: {},
         targets: {},
         limits: {},
@@ -532,6 +556,7 @@ export class PlannerDraft {
         this.data.cash = this.data.cash.filter((item) => item.key !== key);
         this.dropFundingFrom({kind: 'cash', cashKey: key});
         this.forgetLiquidityEntry(liquidityEntryKey('cash', key));
+        this.pruneCashEntries();
     }
 
     reorderLiquidity(keys: readonly string[]): void {
@@ -621,20 +646,23 @@ export class PlannerDraft {
         if (index < 0) return;
         this.data.brokers[index] = next;
         this.syncRoutes();
+        this.pruneCashEntries();
     }
 
     brokerRemovalImpact(key: string): RemovalImpact {
         const cash = this.data.cash.filter((item) => item.brokerKey === key);
         const cashKeys = new Set(cash.map((item) => item.key));
         const funding = this.data.brokers.flatMap((broker) => (broker.key === key ? [] : broker.funding.filter((item) => item.source.kind === 'cash' && cashKeys.has(item.source.cashKey)).map((item) => ({broker, funding: item}))));
-        return {routes: Object.values(this.data.routes).filter((route) => route.brokerKey === key), cash, funding, target: false};
+        return {routes: Object.values(this.data.routes).filter((route) => route.brokerKey === key), cash, funding, target: false, cashEntries: this.data.cashEntries.filter((item) => item.brokerKey === key)};
     }
 
     removeBroker(key: string): void {
+        for (const entry of this.data.cashEntries.filter((item) => item.brokerKey === key)) this.removeCashEntry(entry.key);
         const impact = this.brokerRemovalImpact(key);
         for (const cash of impact.cash) this.removeCash(cash.key);
         this.data.brokers = this.data.brokers.filter((item) => item.key !== key);
         this.syncRoutes();
+        this.pruneCashEntries();
     }
 
     // -- assets ------------------------------------------------------------
@@ -711,10 +739,59 @@ export class PlannerDraft {
 
     // -- targets (control percentages only, Q-C0-2) --------------------------
 
+    /** The rows of the targets table: the Assets in their order, then the cash entries a Tool with targets on cash has. */
+    readonly targetRows = $derived.by((): TargetRow[] => [...this.orderedAssets.map((asset): TargetRow => ({kind: 'asset', key: asset.key, asset})), ...(this.profile.cashEntries === 'none' ? [] : this.data.cashEntries.map((entry): TargetRow => ({kind: 'cash', key: entry.key, entry})))]);
+
+    /** The control total: the targets of the Assets and, where a cash entry has a target (`full`), of the cash entries. */
     readonly targetTotal = $derived.by(() => {
-        const values = this.data.assets.map((asset) => canonicalInput(this.data.targets[asset.key] ?? '') ?? '0');
-        return sumControlPercentages(values);
+        const keys = [...this.data.assets.map((asset) => asset.key), ...(this.profile.cashEntries === 'full' ? this.data.cashEntries.map((entry) => entry.key) : [])];
+        return sumControlPercentages(keys.map((key) => canonicalInput(this.data.targets[key] ?? '') ?? '0'));
     });
+
+    /**
+     * The Broker × currency pairs a cash entry can name, in the Brokers' order: the cash rows of the Liquidity step and the
+     * currencies an operative Broker buys in, without the pairs already an entry. None for a Tool without cash entries.
+     */
+    readonly cashEntryChoices = $derived.by((): {brokerKey: string; currency: string}[] => {
+        if (this.profile.cashEntries === 'none') return [];
+        const taken = new Set(this.data.cashEntries.map((entry) => entry.key));
+        return this.data.brokers.flatMap((broker) => {
+            const currencies = new Set([...this.data.cash.filter((cash) => cash.brokerKey === broker.key).map((cash) => cash.currency), ...(broker.fundingOnly ? [] : broker.modes.map((mode) => mode.currency))]);
+            return [...currencies]
+                .filter((currency) => /^[A-Z]{3}$/.test(currency) && !taken.has(cashEntryKey(broker.key, currency)))
+                .sort()
+                .map((currency) => ({brokerKey: broker.key, currency}));
+        });
+    });
+
+    /** Adds the cash entry of `brokerKey` in `currency`, or returns the one already there. */
+    addCashEntry(brokerKey: string, currency: string): DraftCashEntry {
+        const key = cashEntryKey(brokerKey, currency);
+        const existing = this.data.cashEntries.find((item) => item.key === key);
+        if (existing) return existing;
+        this.data.cashEntries.push({key, brokerKey, currency, enteredAt: nowTimestamp()});
+        return this.data.cashEntries[this.data.cashEntries.length - 1];
+    }
+
+    /**
+     * Removes the cash entries whose Broker × currency pair left the scenario: the Broker is gone, or it has neither a cash
+     * row nor (operative) an order mode in that currency any more. An entry never outlives the pair it names.
+     */
+    private pruneCashEntries(): void {
+        for (const entry of [...this.data.cashEntries]) {
+            const broker = this.broker(entry.brokerKey);
+            const cash = this.data.cash.some((item) => item.brokerKey === entry.brokerKey && item.currency === entry.currency);
+            const mode = broker !== undefined && !broker.fundingOnly && broker.modes.some((item) => item.currency === entry.currency);
+            if (!broker || !(cash || mode)) this.removeCashEntry(entry.key);
+        }
+    }
+
+    /** Removes a cash entry with its target and limits. */
+    removeCashEntry(key: string): void {
+        this.data.cashEntries = this.data.cashEntries.filter((item) => item.key !== key);
+        delete this.data.targets[key];
+        delete this.data.limits[key];
+    }
 
     readonly targetRemaining = $derived(this.targetTotal === null ? null : remainingControlPercentage(this.targetTotal));
 
