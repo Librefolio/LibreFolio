@@ -12,6 +12,7 @@ import {zodiosApi} from '$lib/api';
 import {safeToolTransportError} from '$lib/features/tools/client';
 import {ToolClientError, assertToolAccount, runToolSessionTask} from '$lib/features/tools/contracts';
 import type {OperatingProfileDocument} from '$lib/features/brokers/profile/brokerOperatingProfile';
+import {canonicalDecimal} from '$lib/utils/core/exactDecimal';
 
 export type SourceSection = 'assets' | 'brokers' | 'holdings' | 'cash_balances' | 'prices' | 'classifications' | 'wac_contexts' | 'fx_quotes' | 'current_distribution';
 export type SourceDomain = 'portfolio' | 'market_data' | 'broker' | 'fx' | 'wac';
@@ -192,6 +193,11 @@ export class PlannerSourceError extends Error {
 
 // The generated TS types widen nullable fields to `X | null | Array<X | null>`;
 // the runtime Zod schema is `X | null`. These guards keep the runtime truth.
+/** A decimal the backend served, in canonical form; the text as served when it is not one (the codec already checked it). */
+function canonicalServed(value: string): string {
+    return canonicalDecimal(value) ?? value;
+}
+
 function text(value: unknown): string | null {
     return typeof value === 'string' ? value : null;
 }
@@ -254,7 +260,8 @@ function mapResponse(raw: RawResponse, options: SourceReadOptions): PlannerSourc
             asset_id: row.asset_id,
             broker_id: row.broker_id,
             provenance_id: row.provenance_id,
-            quantity: options.positions ? {custody: row.custody_quantity, ownershipShare: row.ownership_share, economic: row.economic_quantity} : null,
+            // Canonical form (G5-3): the ledger serves its scale, `7.0000000000`; the planner shows and compares `7`.
+            quantity: options.positions ? {custody: canonicalServed(row.custody_quantity), ownershipShare: canonicalServed(row.ownership_share), economic: canonicalServed(row.economic_quantity)} : null,
         })),
         cash: raw.cash_balances.map((row) => ({
             cash_id: row.cash_id,

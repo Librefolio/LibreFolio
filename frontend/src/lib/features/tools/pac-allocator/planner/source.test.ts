@@ -189,6 +189,15 @@ describe('fetchPlannerSource — positions (F3a of project 67, step 4)', () => {
         expect(source.holdings).toEqual([{holding_id: 'holding:asset:11:broker:7', asset_id: 'asset:11', broker_id: 'broker:7', provenance_id: 'source:portfolio-ledger', quantity: {custody: '10', ownershipShare: '0.5', economic: '5'}}]);
     });
 
+    it('quantities served with trailing zeros reach the planner in canonical form (G5-3)', async () => {
+        // The ledger serves its scale (`7.0000000000`); the quantity field showed it whole, cut at 390 px.
+        allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, holdings: [{...holdingRow(), custody_quantity: '17.5000000000', ownership_share: '0.4000000000', economic_quantity: '7.0000000000'}]});
+
+        const source = await fetchPlannerSource({...QUERY, sections: ['holdings']}, getClientSessionGeneration(), undefined, {positions: true});
+
+        expect(source.holdings[0].quantity).toEqual({custody: '17.5', ownershipShare: '0.4', economic: '7'});
+    });
+
     it('the PAC source mapping still drops quantities', async () => {
         allocationSource.mockResolvedValue({...sourceResponse([]), current_distribution: null, holdings: [holdingRow()]});
 
