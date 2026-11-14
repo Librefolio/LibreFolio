@@ -35,6 +35,7 @@ from backend.app.schemas.pac_allocator.preview import (
     PlannerPreviewUnsupportedResult,
     PreviewAssetItem,
     PreviewCashItem,
+    PreviewOtherCashItem,
     RebalancerPreviewReadyResult,
 )
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, RebalancerPlannerRequest
@@ -92,7 +93,7 @@ def preview_rebalancing(request: RebalancerPlannerRequest, *, checkpoint: Checkp
     custom = None
     if custom_weight is not None:
         custom = CustomFidelityPreview(distance_weight=ratio_to_exact_number(custom_weight), reference_amount=_cost(custom_weight, rows[REFERENCE_ROW_INDEX], wealth, currency))
-    return RebalancerPreviewReadyResult(**_ready_fields(scenario, normalized), total=ratio_to_money(wealth, currency), items=_items(scenario, evaluation), table=table, custom=custom)
+    return RebalancerPreviewReadyResult(**_ready_fields(scenario, normalized), total=ratio_to_money(wealth, currency), items=_items(scenario, evaluation, request), table=table, custom=custom)
 
 
 def _counted(normalized: PlannerV2NormalizationResult) -> ExactPlannerScenario | None:
@@ -124,15 +125,22 @@ def _cost(weight: ExactRatio, misplaced: ExactRatio, wealth: ExactRatio, currenc
     return ratio_to_money(max_acceptable_cost(weight, misplaced, wealth), currency)
 
 
-def _items(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list:
-    """Every target entry today: the Assets' current values and the cash entries' selected cash, each on ``F``."""
+def _items(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, request: RebalancerPlannerRequest) -> list:
+    """Every target entry today, each on ``F``: the Assets' current values and the cash entries' selected cash, every cash
+    entry of the request (one still at 0 % with no limit, which the scenario leaves out, included); and «other cash» (G5-2 of
+    project 67): what of ``F`` no entry holds, the cash outside the entries and the contributions, zero when none is left.
+    The items cover ``F`` whole."""
     wealth = evaluation.accounting.initial_wealth
     currency = scenario.valuation_currency
     before = initial_cash_by_cell(build_scenario_index(scenario), evaluation.ledgers)
     items: list = [PreviewAssetItem(kind="asset", asset_id=row.asset_id, value=ratio_to_money(row.current_value, currency), weight=ratio_to_exact_number(row.current_value / wealth)) for row in evaluation.assets]
-    for entry in scenario.cash_entries:
+    held = sum((row.current_value for row in evaluation.assets), _ZERO)
+    for entry in (item for item in request.target_weights if item.kind == "cash"):
         value = before.get((entry.broker_id, entry.currency), _ZERO)
+        held += value
         items.append(PreviewCashItem(kind="cash", broker_id=entry.broker_id, currency=entry.currency, value=ratio_to_money(value, currency), weight=ratio_to_exact_number(value / wealth)))
+    other = wealth - held
+    items.append(PreviewOtherCashItem(kind="other_cash", value=ratio_to_money(other, currency), weight=ratio_to_exact_number(other / wealth)))
     return items
 
 

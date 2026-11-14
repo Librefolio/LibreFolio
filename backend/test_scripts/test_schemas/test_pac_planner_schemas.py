@@ -4554,9 +4554,10 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # B4 (project 67, decisioni-REB §11.6): what each service serves is ``plan`` and ``preview``, one request model and one output
 # union, so the fingerprint the catalog publishes covers both. It moves for both services here, the PAC's included (accepted:
 # 1.4 still serves one contract 2.0.0). The two fingerprints above stay the ``plan`` contract alone (its own result union).
+# G5-2 of project 67 moves the Rebalancer's alone: its preview gains the «other cash» item (the PAC's preview has no items).
 TOOL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "26b9e8d33466cfd12cb9b639e5a84cfc1772aa39d6d232ee8fc24b819358363d", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "8f8aac9cce5ede8ed07fda76f1f33798f2a826617fbf2bd372d3e712da362d63", id="rebalancer"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "fa7ab9ee8f39aaabeb653f0d1cec53e8e57d2f4661c17db1400805bf67a387da", id="rebalancer"),
 )
 
 

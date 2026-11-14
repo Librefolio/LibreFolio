@@ -59,7 +59,16 @@ class PreviewCashItem(AllocationStrictModel):
     weight: ExactNumber
 
 
-type PreviewItem = Annotated[Union[PreviewAssetItem, PreviewCashItem], Field(discriminator="kind")]
+class PreviewOtherCashItem(AllocationStrictModel):
+    """«Other cash» (G5-2 of project 67): the cash outside the cash entries, today, and its weight on the total ``F``; zero
+    when the entries cover it all. The frontend may not derive it by subtraction (N1)."""
+
+    kind: Literal["other_cash"]
+    value: ExactMoney
+    weight: ExactNumber
+
+
+type PreviewItem = Annotated[Union[PreviewAssetItem, PreviewCashItem, PreviewOtherCashItem], Field(discriminator="kind")]
 
 
 class FidelityLevelWeights(AllocationStrictModel):

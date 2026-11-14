@@ -34,6 +34,9 @@ def _rebalancer_preview(payload: dict, **extra):
     result = preview_rebalancing(request)
     # The real gate: every preview survives its service's output union, both ways.
     assert REBALANCER_TOOL_OUTPUT_ADAPTER.validate_json(REBALANCER_TOOL_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+    # G5-2: the items cover F whole, «other cash» included (the screen's «Now» column sums to 100 %).
+    if result.result_state == "preview_ready":
+        assert sum((_money(item.value) for item in result.items), Fraction(0)) == _money(result.total)
     return result
 
 
@@ -95,12 +98,45 @@ def test_preview_current_values_and_weights_per_item() -> None:
         {"kind": "cash", "broker_id": reb.BROKER, "currency": "EUR", "weight": "0.02", "minimum": None, "maximum": None},
     ]
     result = _rebalancer_preview(payload)
-    by_entry = {(item.kind, getattr(item, "asset_id", None) or f"{item.broker_id}:{item.currency}"): (_money(item.value), exact_fraction(item.weight)) for item in result.items}
+    by_entry = {(item.kind, getattr(item, "asset_id", None) or f"{item.broker_id}:{item.currency}"): (_money(item.value), exact_fraction(item.weight)) for item in result.items if item.kind != "other_cash"}
     assert by_entry == {
         ("asset", "asset-a"): (5_000, Fraction(1, 2)),
         ("asset", "asset-b"): (4_800, Fraction(12, 25)),
         ("cash", f"{reb.BROKER}:EUR"): (200, Fraction(1, 50)),
     }
+
+
+def test_preview_other_cash_is_an_item_of_its_own() -> None:
+    """G5-2 of project 67: «Altra cassa», the cash outside the cash entries, has its value and weight today, from the engine
+    (the frontend may not subtract, N1). T4 (A 5 000, B 4 800, cash 200): without a cash entry the 200 are other cash, 1/50
+    of F; with the entry on that cell there is none left, 0."""
+    payload = reb.t4()
+    payload["target_weights"] = [
+        {"kind": "asset", "asset_id": "asset-a", "weight": "0.5", "minimum": None, "maximum": None},
+        {"kind": "asset", "asset_id": "asset-b", "weight": "0.5", "minimum": None, "maximum": None},
+    ]
+    other = [item for item in _rebalancer_preview(payload).items if item.kind == "other_cash"]
+    assert [(_money(item.value), exact_fraction(item.weight)) for item in other] == [(200, Fraction(1, 50))]
+
+    payload["target_weights"] = [*payload["target_weights"][:1], {**payload["target_weights"][1], "weight": "0.48"}, {"kind": "cash", "broker_id": reb.BROKER, "currency": "EUR", "weight": "0.02", "minimum": None, "maximum": None}]
+    other = [item for item in _rebalancer_preview(payload).items if item.kind == "other_cash"]
+    assert [(_money(item.value), exact_fraction(item.weight)) for item in other] == [(0, 0)]
+
+
+def test_preview_other_cash_counts_the_contributions_and_every_cash_entry_has_its_now() -> None:
+    """G5-2: a contribution is money of F without a target of its own, so it is «other cash» too. T4 plus 300 of
+    contribution: F = 10 300; without a cash entry other cash is 500. A cash entry still at 0 % (no weight, no limit: the
+    engine leaves it out of the scenario) shows its 200 today all the same, and other cash keeps the 300."""
+    payload = reb.t4()
+    payload["contributions"] = [{"contribution_id": "salary", "label": "Salary", "amount": {"amount": "300", "currency": "EUR"}, "provenance_id": reb.PROVENANCE}]
+    result = _rebalancer_preview(payload)
+    assert _money(result.total) == 10_300
+    assert [_money(item.value) for item in result.items if item.kind == "other_cash"] == [500]
+
+    payload["target_weights"] = [*payload["target_weights"], {"kind": "cash", "broker_id": reb.BROKER, "currency": "EUR", "weight": "0", "minimum": None, "maximum": None}]
+    items = _rebalancer_preview(payload).items
+    assert [(item.broker_id, _money(item.value)) for item in items if item.kind == "cash"] == [(reb.BROKER, 200)]
+    assert [_money(item.value) for item in items if item.kind == "other_cash"] == [300]
 
 
 def test_preview_counts_a_positions_only_broker_in_f_and_today() -> None:
