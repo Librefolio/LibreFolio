@@ -23,8 +23,8 @@ describe('planner profile', () => {
         // The PAC buys from cash only: it never reads the quantities the user holds.
         expect(profile.positions).toBe(false);
         expect(profile.fundingRoutes).toBe(true);
-        // No cash entry in the PAC's targets until step 14 of F3a (limits only, U8).
-        expect(profile.cashEntries).toBe('none');
+        // Cash rows in the PAC's targets carry limits only, no weight (F3a step 14, U8).
+        expect(profile.cashEntries).toBe('limits');
     });
 
     it('testId joins prefix and suffix', () => {

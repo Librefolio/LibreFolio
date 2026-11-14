@@ -66,6 +66,7 @@ import {draftAssetFromInfo} from './copies';
 import {PlannerDraft, priceIsCopied, routeKey, type DraftAsset, type DraftFunding, type DraftMode} from './draft.svelte';
 import {buildRequest, capabilityId, feeScheduleId, localProblems, stepOfWirePath, type BuiltRequest} from './request';
 import {issueStep} from './issues';
+import {sectionCounts} from './review';
 import {REBALANCER_PLANNER_PROFILE} from './profile';
 import type {PlannerStep} from './types';
 
@@ -680,6 +681,41 @@ describe('localProblems: the limits of a target entry (F2)', () => {
         draft.setLimit(secondKey, 'maximum', '');
         draft.setLimit(secondKey, 'minimum', '120%');
         expect(limitProblemsOf(draft)).toEqual([{step: 'targets', key: 'limitShareAboveHundred', entity: 'Second probe'}]);
+    });
+});
+
+describe('the PAC cash rows (F3a of project 67, step 14; U8)', () => {
+    it('PAC cash rows carry only minimum and maximum', () => {
+        const {draft, brokerKey} = cashScenario();
+        const limited = draft.addCashEntry(brokerKey, 'EUR');
+        draft.setLimit(limited.key, 'minimum', '100');
+        draft.setLimit(limited.key, 'maximum', '20%');
+        // A stray figure in the targets never travels: the PAC's cash has no weight (contract §5.2).
+        draft.data.targets[limited.key] = '5';
+        // A cash row with no limit says nothing: it does not travel.
+        draft.addCashEntry(draft.data.cash[0].brokerKey, 'EUR');
+
+        const wire = wireOf(build(draft));
+        const cash = asList(wire.target_weights).filter((entry) => entry.kind === 'cash');
+        expect(cash).toEqual([{kind: 'cash', broker_id: brokerKey, currency: 'EUR', weight: '0', minimum: {kind: 'amount', amount: {amount: '100', currency: 'EUR'}}, maximum: {kind: 'share', share: '0.2'}}]);
+        // The total of the targets is the Assets' alone.
+        expect(localProblems(draft).map((problem) => problem.key)).not.toContain('targetTotalNotHundred');
+    });
+});
+
+describe('the PAC cash rows: problems and the Review (F3a of project 67, step 14)', () => {
+    it('a wrong limit on a PAC cash row is a local problem of Targets, named «Broker · currency»', () => {
+        const {draft, brokerKey} = cashScenario();
+        const row = draft.addCashEntry(brokerKey, 'EUR');
+        draft.setLimit(row.key, 'maximum', '-5');
+        expect(limitProblemsOf(draft)).toEqual([{step: 'targets', key: 'limitInvalid', entity: 'Broker probe · EUR'}]);
+    });
+
+    it('the Review counts a limited PAC cash row «with a limit»; the entries stay the Assets', () => {
+        const {draft, brokerKey} = cashScenario();
+        const row = draft.addCashEntry(brokerKey, 'EUR');
+        draft.setLimit(row.key, 'minimum', '10');
+        expect(sectionCounts(draft).targets).toEqual({entries: 1, count: 1, limited: 1});
     });
 });
 

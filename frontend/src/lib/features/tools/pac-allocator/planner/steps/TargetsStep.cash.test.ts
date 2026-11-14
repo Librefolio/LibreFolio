@@ -123,12 +123,25 @@ describe('the targets table and the cash entries', () => {
         expect(screen.getAllByTestId('rebalancer-planner-limit')).toHaveLength(1);
     });
 
-    it('the PAC has no cash entry and no «Other cash» in F3a', () => {
-        const {draft} = scenario(PAC_PLANNER_PROFILE);
+    it('the PAC adds cash rows with limits only: no target, outside the total, and no «Other cash» (step 14, U8)', async () => {
+        const {draft, brokerKey} = scenario(PAC_PLANNER_PROFILE);
         mount(null, draft);
 
-        expect(screen.getByTestId('pac-planner-targets-table')).toBeTruthy();
-        expect(screen.queryByTestId('pac-planner-cash-entry-add')).toBeNull();
+        await fireEvent.click(screen.getByTestId('pac-planner-cash-entry-add'));
+        const dialog = screen.getByTestId('pac-planner-cash-entry-dialog');
+        const eur = within(dialog)
+            .getAllByTestId('pac-planner-cash-entry-choice')
+            .find((choice) => choice.getAttribute('data-currency') === 'EUR') as HTMLElement;
+        await fireEvent.click(eur);
+        flushSync();
+        await tick();
+
+        const key = cashEntryKey(brokerKey, 'EUR');
+        expect(draft.data.cashEntries.map((entry) => entry.key)).toEqual([key]);
+        // The row has its limits and no target field; the total stays the Assets'.
+        expect(screen.getAllByTestId('pac-planner-limit').map((cell) => cell.getAttribute('data-asset-key'))).toContain(key);
+        expect(screen.getAllByTestId('pac-planner-target').map((cell) => cell.getAttribute('data-asset-key'))).toEqual(['asset:probe']);
+        expect(draft.targetTotal).toBe('90');
         expect(screen.queryByTestId('pac-planner-target-other-cash')).toBeNull();
     });
 });

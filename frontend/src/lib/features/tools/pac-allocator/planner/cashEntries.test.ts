@@ -115,11 +115,15 @@ describe('cash entries in the targets', () => {
         expect(draft.data.targets).not.toHaveProperty(second.key);
     });
 
-    it('the PAC offers no cash entry in F3a', () => {
-        const {draft} = scenario(PAC_PLANNER_PROFILE);
+    it('the PAC offers cash rows too, with limits only: their figure never counts in the total (step 14, U8)', () => {
+        const {draft, brokerKey, asset} = scenario(PAC_PLANNER_PROFILE);
+        draft.data.targets[asset.key] = '100';
 
-        expect(draft.cashEntryChoices).toEqual([]);
-        expect(draft.targetRows.every((row) => row.kind === 'asset')).toBe(true);
+        expect(draft.cashEntryChoices.map((choice) => choice.currency)).toContain('EUR');
+        const entry = draft.addCashEntry(brokerKey, 'EUR');
+        expect(draft.targetRows.map((row) => row.kind)).toContain('cash');
+        draft.data.targets[entry.key] = '5';
+        expect(draft.targetTotal).toBe('100');
     });
 
     it('an entry whose pair leaves the scenario goes with it', () => {

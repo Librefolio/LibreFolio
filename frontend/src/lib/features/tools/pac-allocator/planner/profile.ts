@@ -62,7 +62,7 @@ export const PAC_PLANNER_PROFILE: PlannerProfile = Object.freeze({
     text: 'pac',
     positions: false,
     fundingRoutes: true,
-    cashEntries: 'none',
+    cashEntries: 'limits',
 });
 
 /**

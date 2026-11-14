@@ -555,7 +555,7 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date(), option
                   target_fidelity: wireFidelity(data.fidelity, preview),
                   ...field('custom_reference_amount', preview && reference !== null ? {amount: reference, currency: data.valuationCurrency} : null),
               }
-            : {...head, ...field('funding_routes', nonEmpty(fundingRoutes)), target_weights: assetTargets, order_routes: orderRoutes, policy: data.policy}
+            : {...head, ...field('funding_routes', nonEmpty(fundingRoutes)), target_weights: [...assetTargets, ...pacCashLimitEntries(draft)], order_routes: orderRoutes, policy: data.policy}
     ) as PlannerRequest;
 
     // The codec of the draft's Tool (F1 of project 67). The result views still read the resolved request as the PAC's shape
@@ -582,6 +582,21 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date(), option
 }
 
 /** The first segment of a wire path names the step that owns it. */
+/**
+ * The PAC's cash rows (F3a of project 67, step 14; U8): limits only, weight zero (contract §5.2: a weight other than zero is
+ * «unsupported» there). A row with no limit says nothing and does not travel.
+ */
+function pacCashLimitEntries(draft: PlannerDraft) {
+    if (draft.profile.cashEntries !== 'limits') return [];
+    const data = draft.data;
+    return data.cashEntries.flatMap((entry) => {
+        const minimum = wireLimit(data.limits[entry.key]?.minimum, data.valuationCurrency);
+        const maximum = wireLimit(data.limits[entry.key]?.maximum, data.valuationCurrency);
+        if (!minimum && !maximum) return [];
+        return [{kind: 'cash' as const, broker_id: entry.brokerKey, currency: entry.currency, weight: '0', ...(minimum ? {minimum} : {}), ...(maximum ? {maximum} : {})}];
+    });
+}
+
 export function stepOfWirePath(path: readonly (string | number)[]): PlannerStep {
     switch (path[0]) {
         case 'assets':

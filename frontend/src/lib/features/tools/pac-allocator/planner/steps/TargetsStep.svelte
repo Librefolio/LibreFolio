@@ -183,6 +183,11 @@
         return `<span class="font-mono ${stale ? 'text-lf-muted' : 'text-lf-secondary'}" data-testid="${testId('target-now', profile)}" data-asset-key="${escapeHtml(row.key)}">${escapeHtml(text)}</span>`;
     }
 
+    /** A PAC cash row has limits only (F3a step 14, U8): no target, a dash in its place. */
+    function noTargetHtml(): string {
+        return '<span class="text-lf-muted" aria-hidden="true">—</span>';
+    }
+
     /** «Other cash» always counts 0 %: shown, never edited (mockup screen 5). */
     function fixedZeroHtml(): string {
         return `<span class="font-mono text-lf-muted" data-testid="${testId('target-other-cash', profile)}">${escapeHtml(formatPlannerPercentUnits('0'))}</span>`;
@@ -238,7 +243,7 @@
                 align: 'right',
                 width: phone.current ? 96 : 140,
                 minWidth: phone.current ? 84 : 128,
-                cell: (row) => (targetable(row) ? {type: 'custom', component: TargetInputCell, props: {draft, assetKey: row.key, label: rowLabel(row)}} : {type: 'html', html: row.kind === 'other' ? fixedZeroHtml() : ''}),
+                cell: (row) => (targetable(row) ? {type: 'custom', component: TargetInputCell, props: {draft, assetKey: row.key, label: rowLabel(row)}} : {type: 'html', html: row.kind === 'other' ? fixedZeroHtml() : noTargetHtml()}),
             },
             {
                 // F2 of project 67 (M1, M17): minimum and maximum of the final value; the total a percentage refers to is named, not computed.
@@ -338,7 +343,7 @@
                         <Plus class="h-4 w-4" aria-hidden="true" />
                         {$t(`${R}.addCash`)}
                     </button>
-                    <HelpTip label={$t(`${R}.addCash`)} help={$t(`${R}.addCashHelp`)} />
+                    <HelpTip label={$t(`${R}.addCash`)} help={profile.text === 'rebalancer' ? $t(`${R}.addCashHelp`) : $t(`${KEY}.addCashHelp`)} />
                 </div>
             {/if}
             {#if draft.data.assets.length > 0}
