@@ -4,30 +4,36 @@
  * converted or compared here.
  */
 import {hasLimit} from './limits';
-import {brokerModesModified, daysBetween, priceIsCopied, rateIsCopied, samePrice, type FactOrigin, type PlannerDraft} from './draft.svelte';
+import {brokerModesModified, daysBetween, positionIsCopied, priceIsCopied, rateIsCopied, samePrice, type DraftFidelity, type FactOrigin, type PlannerDraft} from './draft.svelte';
+import {requestPositions} from './request.rebalancer';
 import type {PlannerStep} from './types';
 
 export interface SectionCounts {
     scenario: {currency: string};
     liquidity: {sources: number; cash: number; contributions: number; currencies: string[]};
-    brokers: {operative: number; fundingOnly: number; modes: number; fundingRoutes: number};
-    /** `missing` = Assets still without a price. */
-    assets: {count: number; priced: number; missing: number; stale: number; withExposures: number};
+    /** `positionsOnly`: the Brokers that only hold positions (the Rebalancer, Q-F3a-5b); 0 for the PAC. */
+    brokers: {operative: number; fundingOnly: number; modes: number; fundingRoutes: number; positionsOnly: number};
+    /** `missing` = Assets still without a price; `positions` = the positions the request carries (the Rebalancer). */
+    assets: {count: number; priced: number; missing: number; stale: number; withExposures: number; positions: number};
     routing: {enabled: number; assetsWithRoute: number};
-    /** `limited`: Assets with a minimum or a maximum typed (F2 of project 67). */
-    targets: {count: number; limited: number};
+    /**
+     * `entries`: the rows that can carry a target (the Assets, and the Rebalancer's cash entries); `count`: those with one;
+     * `limited`: every row with a minimum or a maximum typed (F2 of project 67), a PAC cash row too (step 14).
+     */
+    targets: {entries: number; count: number; limited: number};
     /** R9.4: only the pairs the scenario needs; `pairs` of them have a rate (`missing` do not), `conversions` move cash. */
     fx: {needed: number; pairs: number; missing: number; stale: number; conversions: number; spreadPercent: string};
-    strategy: {policy: string};
+    /** `fidelity`: the Rebalancer's target fidelity; `null` for the PAC. */
+    strategy: {policy: string; fidelity: DraftFidelity | null};
 }
 
-export type FactValue = {kind: 'money'; amount: string; currency: string; selected: string | null} | {kind: 'price'; amount: string; currency: string; units: string} | {kind: 'rate'; rate: string} | {kind: 'modes'; currencies: string[]; fundingOnly: boolean};
+export type FactValue = {kind: 'money'; amount: string; currency: string; selected: string | null} | {kind: 'price'; amount: string; currency: string; units: string} | {kind: 'rate'; rate: string} | {kind: 'modes'; currencies: string[]; fundingOnly: boolean} | {kind: 'quantity'; quantity: string};
 
 /** R11.3: the composition for the maps is not a fact of the calculation, so it has no row here. */
-export type FactKind = 'broker' | 'cash' | 'contribution' | 'price' | 'fx';
+export type FactKind = 'broker' | 'cash' | 'contribution' | 'price' | 'position' | 'fx';
 
 /** R9.7: what the fact is about, so the Review can draw the same icons as the steps. */
-export type FactSubject = {type: 'broker'; brokerKey: string} | {type: 'cash'; brokerKey: string; currency: string} | {type: 'contribution'; currency: string} | {type: 'asset'; assetKey: string} | {type: 'pair'; base: string; quote: string};
+export type FactSubject = {type: 'broker'; brokerKey: string} | {type: 'cash'; brokerKey: string; currency: string} | {type: 'contribution'; currency: string} | {type: 'asset'; assetKey: string} | {type: 'position'; assetKey: string; brokerKey: string} | {type: 'pair'; base: string; quote: string};
 
 /** R9.7: `librefolio` = copied and untouched; `modified` = copied, then changed or overridden by the user. */
 export type FactOriginState = 'librefolio' | 'manual' | 'modified';
@@ -71,6 +77,8 @@ export function sectionCounts(draft: PlannerDraft): SectionCounts {
         return fx && fx.rate.trim() !== '' ? [fx] : [];
     });
     const enabledRoutes = Object.values(data.routes).filter((route) => route.enabled && !draft.broker(route.brokerKey)?.fundingOnly);
+    // The rows that can carry a target: a cash entry can in the Rebalancer, not in the PAC (step 14: limits only).
+    const targetable = draft.targetRows.filter((row) => row.kind === 'asset' || draft.profile.cashEntries === 'full');
     return {
         scenario: {currency: data.valuationCurrency},
         liquidity: {sources: selectedCash.length + contributions.length, cash: selectedCash.length, contributions: contributions.length, currencies},
@@ -79,6 +87,7 @@ export function sectionCounts(draft: PlannerDraft): SectionCounts {
             fundingOnly: draft.fundingOnlyBrokers.length,
             modes: draft.operativeBrokers.reduce((count, broker) => count + broker.modes.length, 0),
             fundingRoutes: data.brokers.reduce((count, broker) => count + broker.funding.filter((item) => item.enabled).length, 0),
+            positionsOnly: draft.profile.positions ? draft.positionOnlyBrokers.length : 0,
         },
         assets: {
             count: data.assets.length,
@@ -86,9 +95,14 @@ export function sectionCounts(draft: PlannerDraft): SectionCounts {
             missing: data.assets.length - priced.length,
             stale: priced.filter((asset) => priceIsCopied(asset) && isStale(asset.price!.referenceDate, data.asOf)).length,
             withExposures: data.assets.filter((asset) => asset.exposures.length > 0).length,
+            positions: draft.profile.positions ? requestPositions(draft).length : 0,
         },
         routing: {enabled: enabledRoutes.length, assetsWithRoute: new Set(enabledRoutes.map((route) => route.assetKey)).size},
-        targets: {count: data.assets.filter((asset) => hasAmount(data.targets[asset.key] ?? '')).length, limited: data.assets.filter((asset) => hasLimit(data.limits[asset.key])).length},
+        targets: {
+            entries: targetable.length,
+            count: targetable.filter((row) => hasAmount(data.targets[row.key] ?? '')).length,
+            limited: draft.targetRows.filter((row) => hasLimit(data.limits[row.key])).length,
+        },
         fx: {
             needed: draft.requiredPairs.length,
             pairs: rated.length,
@@ -97,7 +111,7 @@ export function sectionCounts(draft: PlannerDraft): SectionCounts {
             conversions: draft.conversionPairs.length,
             spreadPercent: data.fxSpreadPercent,
         },
-        strategy: {policy: data.policy},
+        strategy: {policy: data.policy, fidelity: draft.profile.toolCode === 'portfolio_rebalancer' ? data.fidelity : null},
     };
 }
 
@@ -161,6 +175,25 @@ export function snapshotFacts(draft: PlannerDraft): SnapshotFact[] {
                 referenceDate: priceIsCopied(asset) ? asset.price.referenceDate || null : null,
                 stale: priceIsCopied(asset) && isStale(asset.price.referenceDate, data.asOf),
                 value: {kind: 'price', amount: asset.price.amount, currency: asset.price.currency, units: asset.price.quoteBaseQuantity},
+            });
+        }
+    }
+    // The Rebalancer's positions, as the request carries them (`holdings`): every one comes from a copy.
+    if (draft.profile.positions) {
+        for (const position of requestPositions(draft)) {
+            const owner = draft.asset(position.assetKey)!;
+            const label = [owner.ticker, owner.name].filter((part) => part.trim() !== '').join(' ');
+            facts.push({
+                id: `position|${position.key}`,
+                step: 'assets',
+                kind: 'position',
+                entity: `${label} · ${draft.broker(position.brokerKey)?.name ?? position.brokerName}`,
+                subject: {type: 'position', assetKey: position.assetKey, brokerKey: position.brokerKey},
+                origin: 'copied',
+                modified: !positionIsCopied(position),
+                referenceDate: null,
+                stale: false,
+                value: {kind: 'quantity', quantity: position.quantity},
             });
         }
     }

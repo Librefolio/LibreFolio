@@ -17,7 +17,7 @@
     import {CircleAlert, CircleCheck, PiggyBank} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {formatPlannerDate, formatPlannerFxRate, formatPlannerMoneyPlain, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from '../format';
+    import {formatPlannerDate, formatPlannerFxRate, formatPlannerMoneyPlain, formatPlannerPlainDecimal, formatPlannerPricePlain, formatPlannerQuantity, plannerPlainDecimalCount} from '../format';
     import {STEP_FALLBACKS, stepKey} from '../labels';
     import {factOriginState} from '../review';
     import {ICON_BUBBLE} from '../ui';
@@ -68,7 +68,7 @@
             <span class={ICON_BUBBLE} style="width: 24px; height: 24px;"><PiggyBank class="h-3.5 w-3.5" aria-hidden="true" /></span>
             <MarqueeName text={fact.entity} />
             <CurrencyCode code={subject.currency} />
-        {:else if subject.type === 'asset'}
+        {:else if subject.type === 'asset' || subject.type === 'position'}
             <AssetNameCell label={fact.entity} iconUrl={cell.asset?.iconUrl ?? null} assetType={cell.asset?.assetClass ? cell.asset.assetClass.toUpperCase() : null} />
         {:else}
             <span class="flex items-center gap-1.5 font-medium text-lf-primary">
@@ -97,6 +97,8 @@
             })}
         {:else if value.kind === 'rate'}
             {formatPlannerFxRate(value.rate)}
+        {:else if value.kind === 'quantity'}
+            <span class="font-mono">{formatPlannerQuantity(value.quantity)}</span>
         {:else if value.fundingOnly}
             {$t(`${KEY}.externalAccount`, {default: 'External account'})}
         {:else if value.currencies.length > 0}

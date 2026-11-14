@@ -3,6 +3,7 @@
     import type {PlannerDraft} from '../draft.svelte';
     import {formatPlannerPercentUnits} from '../format';
     import {sectionCounts} from '../review';
+    import {fidelityName, rebalancerStrategyName} from '../strategyText';
     import type {PlannerStep} from '../types';
     import {SECTION_TITLE} from '../ui';
     import {getPlannerProfile, testId} from '../profile';
@@ -46,15 +47,19 @@
                     {id: 'currencies', label: $t('tools.pacAllocator.planner.summary.currencies', {default: 'Currencies'}), value: c.liquidity.currencies.join(', ') || '—'},
                 ];
             case 'brokers':
+                // The Rebalancer has no funding route (contract §5.4), and its Brokers that only hold positions; an external account
+                // (a manual account in Liquidity) it has like the PAC.
                 return [
                     {id: 'operative', label: $t('tools.pacAllocator.planner.summary.brokers', {default: 'Brokers'}), value: String(c.brokers.operative)},
+                    ...(profile.positions ? [{id: 'positions-only', label: $t('tools.portfolioRebalancer.planner.summary.positionsOnly'), value: String(c.brokers.positionsOnly)}] : []),
                     {id: 'funding-only', label: $t('tools.pacAllocator.planner.summary.fundingOnly', {default: 'Funding only'}), value: String(c.brokers.fundingOnly)},
                     {id: 'modes', label: $t('tools.pacAllocator.planner.summary.modes', {default: 'Order modes'}), value: String(c.brokers.modes)},
-                    {id: 'funding-routes', label: $t('tools.pacAllocator.planner.summary.fundingRoutes', {default: 'Funding routes'}), value: String(c.brokers.fundingRoutes)},
+                    ...(profile.fundingRoutes ? [{id: 'funding-routes', label: $t('tools.pacAllocator.planner.summary.fundingRoutes', {default: 'Funding routes'}), value: String(c.brokers.fundingRoutes)}] : []),
                 ];
             case 'assets':
                 return [
                     {id: 'assets', label: $t('tools.pacAllocator.planner.summary.assets', {default: 'Assets'}), value: String(c.assets.count)},
+                    ...(profile.positions ? [{id: 'positions', label: $t('tools.portfolioRebalancer.planner.summary.positions'), value: String(c.assets.positions)}] : []),
                     {id: 'prices', label: $t('tools.pacAllocator.planner.summary.prices', {default: 'Prices'}), value: [c.assets.priced, c.assets.count].join('/'), warn: c.assets.priced < c.assets.count},
                     {id: 'stale', label: $t('tools.pacAllocator.planner.summary.stale', {default: 'Not of the day'}), value: String(c.assets.stale)},
                     {id: 'exposures', label: $t('tools.pacAllocator.planner.summary.exposures', {default: 'Exposures'}), value: [c.assets.withExposures, c.assets.count].join('/')},
@@ -71,7 +76,7 @@
                 ];
             case 'targets':
                 return [
-                    {id: 'assets', label: $t('tools.pacAllocator.planner.summary.assets', {default: 'Assets'}), value: String(c.assets.count)},
+                    profile.cashEntries === 'full' ? {id: 'entries', label: $t('tools.portfolioRebalancer.planner.summary.entries'), value: String(c.targets.entries)} : {id: 'assets', label: $t('tools.pacAllocator.planner.summary.assets', {default: 'Assets'}), value: String(c.assets.count)},
                     {id: 'total', label: $t('tools.pacAllocator.planner.summary.total', {default: 'Total (control)'}), value: draft.targetTotal === null ? '—' : formatPlannerPercentUnits(draft.targetTotal)},
                     {id: 'limits', label: $t('tools.pacAllocator.planner.summary.limits', {default: 'With a limit'}), value: String(c.targets.limited)},
                 ];
@@ -81,7 +86,13 @@
                     {id: 'stale', label: $t('tools.pacAllocator.planner.summary.stale', {default: 'Not of the day'}), value: String(c.fx.stale)},
                     ...(c.fx.conversions > 0 ? [{id: 'spread', label: $t('tools.pacAllocator.planner.summary.spread', {default: 'Spread'}), value: c.fx.spreadPercent ? formatPlannerPercentUnits(c.fx.spreadPercent) : '—'}] : []),
                 ];
-            case 'strategy':
+            case 'strategy': {
+                const fidelity = c.strategy.fidelity;
+                if (fidelity !== null)
+                    return [
+                        {id: 'policy', label: $t('tools.pacAllocator.planner.summary.strategy', {default: 'Strategy'}), value: rebalancerStrategyName($t, c.strategy.policy)},
+                        {id: 'fidelity', label: $t('tools.portfolioRebalancer.planner.summary.fidelity'), value: fidelityName($t, fidelity)},
+                    ];
                 return [
                     {
                         id: 'policy',
@@ -89,6 +100,7 @@
                         value: c.strategy.policy ? $t(`${PLANNER_KEY}.policies.${c.strategy.policy}`, {default: POLICY_FALLBACKS[c.strategy.policy] ?? c.strategy.policy}) : '—',
                     },
                 ];
+            }
             case 'review': {
                 const facts = draft.factCounts;
                 return [

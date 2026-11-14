@@ -26,20 +26,23 @@ export function positionQuantityValid(position: DraftPosition): boolean {
     return value !== null && decimalSign(value) !== -1;
 }
 
+/** The positions the request carries: those of an Asset still in the scenario (the Review counts the same). */
+export function requestPositions(draft: PlannerDraft): DraftPosition[] {
+    return draft.data.positions.filter((position) => draft.asset(position.assetKey) !== undefined);
+}
+
 /** The positions as the request's holdings. */
 export function rebalancerHoldings(draft: PlannerDraft, copied: Copied, manual: Manual) {
-    return draft.data.positions
-        .filter((position) => draft.asset(position.assetKey) !== undefined)
-        .map((position) => ({
-            holding_id: position.key,
-            asset_id: position.assetKey,
-            broker_id: position.brokerKey,
-            custody_quantity: canonicalInput(position.custody) as string,
-            economic_share: canonicalInput(position.ownershipShare) as string,
-            planning_quantity: canonicalInput(position.quantity) as string,
-            quantity_unit: 'asset_unit' as const,
-            provenance_id: positionIsCopied(position) ? copied(position.stamp, 'assets', position.key) : manual(position.key, '/quantity', 'manual position quantity', position.enteredAt, 'assets'),
-        }));
+    return requestPositions(draft).map((position) => ({
+        holding_id: position.key,
+        asset_id: position.assetKey,
+        broker_id: position.brokerKey,
+        custody_quantity: canonicalInput(position.custody) as string,
+        economic_share: canonicalInput(position.ownershipShare) as string,
+        planning_quantity: canonicalInput(position.quantity) as string,
+        quantity_unit: 'asset_unit' as const,
+        provenance_id: positionIsCopied(position) ? copied(position.stamp, 'assets', position.key) : manual(position.key, '/quantity', 'manual position quantity', position.enteredAt, 'assets'),
+    }));
 }
 
 /** The Brokers that hold a position and are not among the scenario's Brokers: identity only, no order mode. */

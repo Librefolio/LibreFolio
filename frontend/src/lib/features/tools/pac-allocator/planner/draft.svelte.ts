@@ -950,6 +950,14 @@ export class PlannerDraft {
             } else if (fx.stamp) modified += 1;
             else manual += 1;
         }
+        // The Rebalancer's positions the request carries (the Review lists the same): copied until the quantity changes.
+        if (this.profile.positions) {
+            for (const position of this.data.positions) {
+                if (!this.asset(position.assetKey)) continue;
+                if (positionIsCopied(position)) copied += 1;
+                else modified += 1;
+            }
+        }
         return {copied, manual, modified, stale};
     });
 }

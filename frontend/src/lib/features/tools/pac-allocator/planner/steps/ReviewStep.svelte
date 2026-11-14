@@ -7,6 +7,7 @@
     import type {PlannerDraft} from '../draft.svelte';
     import type {ListedIssue} from '../labels';
     import {factOriginState, sectionCounts, snapshotFacts, type FactKind, type FactOriginState, type SnapshotFact} from '../review';
+    import {fidelityName, rebalancerStrategyName} from '../strategyText';
     import type {PlannerStep} from '../types';
     import {BUTTON_PRIMARY, BUTTON_SECONDARY, HINT, NOTICE, SECTION_TITLE} from '../ui';
     import HelpTip from '../shared/HelpTip.svelte';
@@ -41,8 +42,8 @@
     const PLANNER_KEY = 'tools.pacAllocator.planner';
     const POLICY_FALLBACKS: Record<string, string> = {proportional: 'Proportional'};
     const SECTIONS: PlannerStep[] = ['scenario', 'liquidity', 'brokers', 'assets', 'routing', 'targets', 'fx', 'strategy'];
-    const KIND_ORDER: FactKind[] = ['broker', 'cash', 'contribution', 'price', 'fx'];
-    const KIND_FALLBACKS: Record<FactKind, string> = {broker: 'Broker', cash: 'Cash', contribution: 'Contribution', price: 'Price', fx: 'Exchange rate'};
+    const KIND_ORDER: FactKind[] = ['broker', 'cash', 'contribution', 'price', 'position', 'fx'];
+    const KIND_FALLBACKS: Record<Exclude<FactKind, 'position'>, string> = {broker: 'Broker', cash: 'Cash', contribution: 'Contribution', price: 'Price', fx: 'Exchange rate'};
     const ORIGIN_ORDER: FactOriginState[] = ['librefolio', 'manual', 'modified'];
 
     // On a phone (the table's own 768 px breakpoint) the columns are fluid down to a floor each, and the facts' secondary columns are hidden by
@@ -67,6 +68,7 @@
             case 'liquidity':
                 return {text: $t(`${KEY}.sources`, {default: '{count, plural, one {# source} other {# sources}}', values: {count: counts.liquidity.sources}}), currencies: counts.liquidity.currencies};
             case 'brokers':
+                if (profile.positions) return {text: $t('tools.portfolioRebalancer.planner.review.brokers', {values: {operative: counts.brokers.operative, external: counts.brokers.fundingOnly, held: counts.brokers.positionsOnly}}), currencies: []};
                 return {
                     text: $t(`${KEY}.brokers`, {
                         default: '{operative, plural, one {# Broker} other {# Brokers}}{external, plural, =0 {} one { · # external account} other { · # external accounts}}',
@@ -75,6 +77,11 @@
                     currencies: [],
                 };
             case 'assets':
+                if (profile.positions)
+                    return {
+                        text: $t('tools.portfolioRebalancer.planner.review.assets', {values: {count: counts.assets.count, positions: counts.assets.positions, missing: counts.assets.missing, stale: counts.assets.stale}}),
+                        currencies: [],
+                    };
                 return {
                     text: $t(`${KEY}.assets`, {
                         default: '{count, plural, one {# Asset} other {# Assets}}{missing, plural, =0 {} other { · # without a price}}{stale, plural, =0 {} one { · # price not of today} other { · # prices not of today}}',
@@ -87,7 +94,9 @@
             case 'targets':
                 return {
                     text:
-                        $t(`${KEY}.targets`, {default: '{count} of {total, plural, one {# Asset} other {# Assets}} with a target', values: {count: counts.targets.count, total: counts.assets.count}}) +
+                        (profile.cashEntries === 'full'
+                            ? $t('tools.portfolioRebalancer.planner.review.targets', {values: {count: counts.targets.count, total: counts.targets.entries}})
+                            : $t(`${KEY}.targets`, {default: '{count} of {total, plural, one {# Asset} other {# Assets}} with a target', values: {count: counts.targets.count, total: counts.assets.count}})) +
                         $t(`${KEY}.limited`, {default: '{count, plural, =0 {} one { · # with a limit} other { · # with limits}}', values: {count: counts.targets.limited}}),
                     currencies: [],
                 };
@@ -100,6 +109,11 @@
                     currencies: [],
                 };
             case 'strategy':
+                if (counts.strategy.fidelity !== null)
+                    return {
+                        text: $t('tools.portfolioRebalancer.planner.review.strategy', {values: {strategy: rebalancerStrategyName($t, counts.strategy.policy), fidelity: fidelityName($t, counts.strategy.fidelity)}}),
+                        currencies: [],
+                    };
                 return {text: counts.strategy.policy ? $t(`${PLANNER_KEY}.policies.${counts.strategy.policy}`, {default: POLICY_FALLBACKS[counts.strategy.policy] ?? counts.strategy.policy}) : '—', currencies: []};
             default:
                 return {text: '', currencies: []};
@@ -132,6 +146,7 @@
     const sectionActions = $derived.by((): RowAction<SectionRow>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (row) => ongoto(row.step), testid: testId('review-goto', profile)}]);
 
     function kindLabel(kind: FactKind): string {
+        if (kind === 'position') return $t('tools.portfolioRebalancer.planner.review.kindPosition');
         return $t(`${KEY}.kind.${kind}`, {default: KIND_FALLBACKS[kind]});
     }
 
@@ -171,7 +186,7 @@
                         type: 'entity',
                         fact,
                         broker: fact.subject.type === 'broker' || fact.subject.type === 'cash' ? (draft.broker(fact.subject.brokerKey) ?? null) : null,
-                        asset: fact.subject.type === 'asset' ? (draft.asset(fact.subject.assetKey) ?? null) : null,
+                        asset: fact.subject.type === 'asset' || fact.subject.type === 'position' ? (draft.asset(fact.subject.assetKey) ?? null) : null,
                     },
                 },
             }),
