@@ -1010,7 +1010,8 @@
             "cash": "{count, plural, one {# solde mis à jour} other {# soldes mis à jour}}",
             "unchanged": "aucune valeur n’a changé",
             "missing": "Introuvables, la valeur copiée est conservée : {names}.",
-            "positions": "{count, plural, one {# position mise à jour} other {# positions mises à jour}}"
+            "positions": "{count, plural, one {# position mise à jour} other {# positions mises à jour}}",
+            "positionsClosed": "{count, plural, one {# position clôturée} other {# positions clôturées}}"
           }
         },
         "ownedAssets": {

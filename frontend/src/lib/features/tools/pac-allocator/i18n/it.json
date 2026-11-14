@@ -1010,7 +1010,8 @@
             "cash": "{count, plural, one {# saldo aggiornato} other {# saldi aggiornati}}",
             "unchanged": "nessun valore è cambiato",
             "missing": "Non trovati, resta il valore copiato: {names}.",
-            "positions": "{count, plural, one {# posizione aggiornata} other {# posizioni aggiornate}}"
+            "positions": "{count, plural, one {# posizione aggiornata} other {# posizioni aggiornate}}",
+            "positionsClosed": "{count, plural, one {# posizione chiusa} other {# posizioni chiuse}}"
           }
         },
         "ownedAssets": {
