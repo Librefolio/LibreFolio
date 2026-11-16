@@ -7315,6 +7315,40 @@ test.describe('Asset Global risk laboratory', () => {
         // a reload that had asked too — early or late, held or not — would make it four.
         expect(gate.asked() - beforeReload.asked, 'from the reload to the end, only the sync may have asked the eligibility engine: the catalogue and the selection, once each').toBe(2);
     });
+
+    /**
+     * RN-09 (C-23): on opening, each section asks once — after the eligibility verdicts.
+     *
+     * The lab leaves out of every request what the engine rules out (`analysedIds`). A section
+     * that asks before the verdicts land asks about the whole selection, and asks again about
+     * the admitted part when they do: two requests, the first one wasted and drawn for a moment.
+     * Only L3° waited (`labL3Waits`). Here one selected asset is ruled out, so a section that does
+     * not wait is caught by the scope of its first request.
+     *
+     * Counted over every scope, not only the one on screen: the wasted request is precisely the
+     * one about another scope. Read once the three sections have drawn, so both requests of a
+     * section that asked twice have left. The replay rides the correlation section's flight.
+     */
+    test('on opening, each section asks once, about the admitted assets only', async ({page}) => {
+        const cast = await castBenchmark(page);
+        await storeLabOpening(page, cast.selection, null);
+        const requests = await installRiskMocks(page);
+        const ruledOut = cast.selection[0];
+        await answerEligibility(page, (assetId) => (assetId === ruledOut ? NO_PRICES : ELIGIBLE));
+        await openLabOn(page, cast.selection);
+        await waitForLossTable(page);
+        await waitForPaidTable(page);
+        await expect(page.getByTestId('risk-correlation-heatmap')).toBeVisible({timeout: 15_000});
+
+        const admitted = scopeKey(cast.selection.filter((assetId) => assetId !== ruledOut));
+        const sections = {
+            correlation: assetSetHistoricalRequests(requests).filter((request) => codesOf(request).has('correlation') && !request.analytics.some((analytic) => isAssetSetLevel(analytic))),
+            loss: assetSetLevelRequests(requests).filter((request) => carriesAny(request, LOSS_LEVEL_CODES)),
+            paid: assetSetLevelRequests(requests).filter((request) => carriesAny(request, PAID_LEVEL_CODES)),
+        };
+        const scopes = Object.fromEntries(Object.entries(sections).map(([name, sent]) => [name, sent.map((request) => (request.scope.kind === ASSET_SET_SCOPE ? scopeKey(request.scope.asset_ids) : request.scope.kind))]));
+        expect(scopes, `each section must ask once, about the admitted assets (${admitted}): a section that did not wait for the verdicts asked first about the whole selection`).toEqual({correlation: [admitted], loss: [admitted], paid: [admitted]});
+    });
 });
 
 /**
