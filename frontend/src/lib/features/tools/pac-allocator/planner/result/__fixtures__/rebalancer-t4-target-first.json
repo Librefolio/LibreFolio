@@ -299,8 +299,8 @@
             "kind": "valuation_money_squared",
             "currency_code": "EUR"
           },
-          "primal": "50",
-          "dual": "50",
+          "primal": "50.000000000007816",
+          "dual": "50.000000000007816",
           "absolute_gap": "0",
           "relative_gap": "0",
           "tolerances": {

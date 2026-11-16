@@ -230,26 +230,31 @@ describe('notesBesideLimitsBanner — the backend notes that would repeat the li
 
 /**
  * The plan's steps on the backend counter (F4a of project 67, step 1; contract §6.3). The fixture is the engine's own
- * answer to the G5 browser scenario, in the executable order the engine gives it: the euro transfer (1), the exchange it
- * pays for (2), the dollar transfer that spends the exchange's proceeds (3), then the purchases (4–8). The lists come in
- * their own order (the transfers together); the steps follow `sequence` and nothing else, with no rule of the frontend
+ * answer to the G5 browser scenario, in the executable order the engine gives it: under the cash rule (lot CR) the euros
+ * travel to the Broker that spends them (1), which changes them into dollars (2), then the purchases (3–7). The lists come
+ * in their own order (the transfers apart); the steps follow `sequence` and nothing else, with no rule of the frontend
  * about which kind goes first. The purchases are not steps here: they are listed per Broker.
  */
 describe('planSteps — the backend counter, transfers included (F4a step 1)', () => {
     const solution = browser.result.primary_solution as unknown as RebalancerSolution;
 
-    it('plan steps follow the backend counter: a transfer, the conversion, then the other transfer', () => {
+    it('plan steps follow the backend counter: the transfer, then the conversion it pays for', () => {
         const steps = planSteps(solution.funding_actions, solution.conversions, solution.transfers);
         expect(steps.map((step) => [step.kind, step.sequence])).toEqual([
             ['transfer', 1],
             ['conversion', 2],
-            ['transfer', 3],
         ]);
     });
 
-    it('keeps the counter whatever order the lists come in', () => {
-        const steps = planSteps(solution.funding_actions, solution.conversions, [...solution.transfers].reverse());
-        expect(steps.map((step) => step.sequence)).toEqual([1, 2, 3]);
+    it('follows the counter, not the kind: a conversion numbered first comes first', () => {
+        // The same two steps with their numbers swapped (built here, the fixture untouched).
+        const conversions = solution.conversions.map((row) => (row.sequence === null ? row : {...row, sequence: 1}));
+        const transfers = solution.transfers.map((row) => ({...row, sequence: 2}));
+        const steps = planSteps(solution.funding_actions, conversions, transfers);
+        expect(steps.map((step) => [step.kind, step.sequence])).toEqual([
+            ['conversion', 1],
+            ['transfer', 2],
+        ]);
     });
 
     it('a plan of transfers only is still a plan', () => {

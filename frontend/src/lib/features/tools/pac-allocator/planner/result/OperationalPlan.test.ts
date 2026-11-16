@@ -2,9 +2,9 @@
 /**
  * The Rebalancer's operational plan (F4a of project 67, step 2; contract §6.3, M12).
  *
- * The fixture is the engine's answer to the G5 browser scenario (`rebalancer-browser.json`, never edited): a transfer
- * between Brokers (1), the currency exchange it pays for (2), a transfer of the exchange's proceeds (3), then five
- * purchases (4–8). The plan shows the numbered
+ * The fixture is the engine's answer to the G5 browser scenario (`rebalancer-browser.json`, never edited): under the cash
+ * rule (lot CR) a transfer of euros between Brokers (1), the currency exchange it pays for on the receiving Broker (2), then
+ * the purchases. The plan shows the numbered
  * steps in the backend's counter, transfers as steps of their own, and the purchases in one «Purchases on {broker}»
  * section per Broker, each order keeping its counter number. Figures are compared with the planner's own formatter and the
  * heading with the catalogue at its key: nothing reads a translated sentence.
@@ -62,7 +62,6 @@ describe('the Rebalancer operational plan', () => {
         expect(steps.map((step) => [step.getAttribute('data-kind'), step.getAttribute('data-sequence')])).toEqual([
             ['transfer', '1'],
             ['conversion', '2'],
-            ['transfer', '3'],
         ]);
         // A transfer says where the money goes, and how much, through the planner's formatter.
         const first = solution.transfers.find((transfer) => transfer.sequence === 1)!;
