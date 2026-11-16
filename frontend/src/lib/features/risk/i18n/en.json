@@ -658,7 +658,8 @@
       "open": "Period from {start} · in {currency}"
     },
     "docsHelp": {
-      "header": "How much the portfolio can lose, whether it is diversified, whether the risk is paid and what could happen: the four questions of the Risk tab, on the period shown."
+      "header": "How much the portfolio can lose, whether it is diversified, whether the risk is paid and what could happen: the four questions of the Risk tab, on the period shown.",
+      "assetSet": "Pick a few assets and compare them over the period: how much each one lost, what it paid for its risk, which of them move together, and how they would have weathered past crises."
     }
   }
 }

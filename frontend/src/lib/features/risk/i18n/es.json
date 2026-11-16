@@ -658,7 +658,8 @@
       "open": "Período desde el {start} · en {currency}"
     },
     "docsHelp": {
-      "header": "Cuánto puede perder la cartera, si está diversificada, si el riesgo se paga y qué podría pasar: las cuatro preguntas de la pestaña Riesgo, sobre el período indicado."
+      "header": "Cuánto puede perder la cartera, si está diversificada, si el riesgo se paga y qué podría pasar: las cuatro preguntas de la pestaña Riesgo, sobre el período indicado.",
+      "assetSet": "Elige algunos activos y compáralos en el período: cuánto perdió cada uno, cuánto rindió por su riesgo, cuáles se mueven juntos y cómo habrían atravesado las crisis pasadas."
     }
   }
 }

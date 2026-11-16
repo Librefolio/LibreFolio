@@ -658,7 +658,8 @@
       "open": "Periodo dal {start} · in {currency}"
     },
     "docsHelp": {
-      "header": "Quanto può perdere il portafoglio, se è diversificato, se il rischio è pagato e cosa potrebbe succedere: le quattro domande della scheda Rischio, sul periodo indicato."
+      "header": "Quanto può perdere il portafoglio, se è diversificato, se il rischio è pagato e cosa potrebbe succedere: le quattro domande della scheda Rischio, sul periodo indicato.",
+      "assetSet": "Scegli alcuni asset e confrontali nel periodo: quanto ha perso ciascuno, quanto ha reso per il rischio corso, quali si muovono insieme e come avrebbero attraversato le crisi passate."
     }
   }
 }

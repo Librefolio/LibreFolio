@@ -658,7 +658,8 @@
       "open": "Période depuis le {start} · en {currency}"
     },
     "docsHelp": {
-      "header": "Combien le portefeuille peut perdre, s'il est diversifié, si le risque est rémunéré et ce qui pourrait arriver : les quatre questions de l'onglet Risque, sur la période indiquée."
+      "header": "Combien le portefeuille peut perdre, s'il est diversifié, si le risque est rémunéré et ce qui pourrait arriver : les quatre questions de l'onglet Risque, sur la période indiquée.",
+      "assetSet": "Choisissez quelques actifs et comparez-les sur la période : combien chacun a perdu, ce qu'il a rapporté pour son risque, lesquels évoluent ensemble et comment ils auraient traversé les crises passées."
     }
   }
 }

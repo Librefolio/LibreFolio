@@ -102,6 +102,7 @@
     import {addPairSides, buildSyncTargets, labQualityAction} from './syncTargets';
     import RiskPeriodLine from './levels/RiskPeriodLine.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     interface AssetOption {
         id: number;
@@ -828,6 +829,7 @@
                     {$t('risk.assetSet.selectedCount', {values: {selected: analysedIds.length, total: candidates.length}})}
                 </span>
             </Tooltip>
+            <DocsLink path="user/assets/correlation/" label={$t('risk.docsHelp.assetSet')} icon="book" size={16} testId="risk-asset-set-docs" />
         </div>
 
         {#if brokerLoadFailed}
