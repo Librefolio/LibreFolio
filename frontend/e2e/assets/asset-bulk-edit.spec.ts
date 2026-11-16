@@ -331,7 +331,7 @@ test.describe('Asset bulk edit', () => {
             await expect.poll(async () => (await bodyScroll()).scroll > (await bodyScroll()).client, {timeout: 5_000}).toBe(true);
             // The scrollbar is hidden (the shared utility), the scroll is not: the body takes no width for a bar, and the keyboard and the
             // wheel still move it.
-            const bar = await page.getByTestId('asset-bulk-body').evaluate((el) => ({width: el.offsetWidth - el.clientWidth, scrollbarWidth: getComputedStyle(el).scrollbarWidth}));
+            const bar = await page.getByTestId('asset-bulk-body').evaluate((el: HTMLElement) => ({width: el.offsetWidth - el.clientWidth, scrollbarWidth: getComputedStyle(el).scrollbarWidth}));
             expect(bar.scrollbarWidth, 'the bar is hidden').toBe('none');
             expect(bar.width, 'no gutter for a bar').toBe(0);
             await page.getByTestId('asset-bulk-body').focus();
