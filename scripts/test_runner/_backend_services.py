@@ -1559,6 +1559,15 @@ def services_asset_profile_double_write(verbose: bool = False, test_names: list 
     return run_command(cmd, "Asset profile double write tests", verbose=verbose)
 
 
+def services_asset_profile_merge(verbose: bool = False, test_names: list = None) -> bool:
+    """Run what merging two assets and deleting an asset do to the asset profile (project 68, lot A5)."""
+    print_section("Services: Asset Profile Merge")
+    print_info("Testing: AssetCRUDService.merge_assets / delete_assets_bulk on the profile and the enrichers")
+    print_info("Tests: a voice only the source holds now moves whole (same ids, read_on, order); shared, empty-now and target-emptied voices stay the target's; the column follows the moved classification voices; enrichers; dry run; no orphan; delete")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_profile_merge.py", test_names)
+    return run_command(cmd, "Asset profile merge tests", verbose=verbose)
+
+
 def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
     """Run the C-97a digit limits: manual prices and events refused beyond them, provider prices truncated."""
     print_section("Services: Asset Digit Limits")
@@ -3643,6 +3652,16 @@ Note: No backend server required.
         services_asset_profile_double_write,
         name="Asset Profile Double Write",
         desc="Project 68 A4: until D7, classification_params sent to create_assets_bulk / patch_assets_bulk (keyword user_id) is also written into the profile in the same transaction: source user, user_id the author, read_on today in scheduler_timezone and never before the voice's now; POST: three rows for description, geography and sector, none without classification; PATCH: only the voices it touches (sector alone: one row, even when the profile's geography differs from the column), sector_area null a NULL row, classification_params null NULL rows for the voices with a value only, the value now (another spelling) no row; the dry run (commit=False) and a batch rolled back on patchFailed write none; a patch that does not touch the classification writes none; a description of spaces counts as empty (no row on POST, an empty row on PATCH)",
+        # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
+        # no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-profile-merge",
+        services_asset_profile_merge,
+        name="Asset Profile Merge",
+        desc="Project 68 A5: merge_assets moves to the target every voice the source holds now with a non-empty value and the target has no row of, whole, by changing only asset_id (same row ids, read_on, source, user_id, source_date, created_at, NULL rows of its history included), seen by current_rows and read_steps of the target; a voice both hold keeps the target's rows only, a voice empty now on the source is not moved, a voice the target emptied on purpose stays the target's and empty (no mixing of histories); until D7 a moved description / geography / sector sets that part of the target's classification_params from the moved value, never from the source's column, the other parts and a shared voice's part kept; the source's asset_enrichers row deleted, the target's unchanged (or still none); dry_run moves and deletes nothing; no profile or enrichers row points at the source afterwards; delete_assets_bulk deletes the asset's profile rows and enrichers row and leaves another asset's (guard: ON DELETE CASCADE)",
         # PURE: every database is a private SQLite file under tmp_path built with create_all; no session on the lane DB,
         # no server, no network.
         isolation="pure",
