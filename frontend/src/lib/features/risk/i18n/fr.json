@@ -362,7 +362,9 @@
       "historical_replay_mostly_excluded": "Le résultat ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu du rejeu.",
       "assets_excluded_no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} du calcul : aucune source de prix attribuée et aucun prix jamais enregistré — {names}.",
       "total_loss_no_recovery": "La valeur est tombée à zéro : aucun gain ne peut la ramener à son sommet, la reprise nécessaire n'est donc pas affichée.",
-      "total_loss_no_recovery_assets": "{count, plural, one {# actif est tombé} other {# actifs sont tombés}} à zéro : aucun gain ne peut {count, plural, one {le ramener à son sommet} other {les ramener à leur sommet}}, la reprise nécessaire n'est donc pas affichée — {names}."
+      "total_loss_no_recovery_assets": "{count, plural, one {# actif est tombé} other {# actifs sont tombés}} à zéro : aucun gain ne peut {count, plural, one {le ramener à son sommet} other {les ramener à leur sommet}}, la reprise nécessaire n'est donc pas affichée — {names}.",
+      "analysis_starts_late": "L'analyse commence le {start} : avant ce jour, aucun jour de prix complet n'est disponible.",
+      "short_history": "{names} : aucun prix avant le début de la période, leur historique commence donc à l'intérieur."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",
@@ -448,7 +450,8 @@
         "when": "Quand",
         "since": "Depuis",
         "duration": "Durée",
-        "daysCount": "{days, plural, one {# jour} other {# jours}}"
+        "daysCount": "{days, plural, one {# jour} other {# jours}}",
+        "sameFallToday": "{amount} · la même chute, sur la valeur d'aujourd'hui"
       },
       "l2": {
         "title": "Suis-je aussi diversifié que je le crois ?",
@@ -649,6 +652,10 @@
     "benchmark": {
       "measuredHere": "Cette référence est aussi un actif mesuré ici et ne peut pas servir de mesure à elle-même : choisissez-en une autre pour la comparaison.",
       "blocked": "Inutilisables sur cette période"
+    },
+    "period": {
+      "range": "Période {start} – {end} · en {currency}",
+      "open": "Période depuis le {start} · en {currency}"
     }
   }
 }

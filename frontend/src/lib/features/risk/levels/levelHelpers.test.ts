@@ -30,7 +30,9 @@ import {
     lossMagnitude,
     uncoveredWeight,
     warningSentence,
+    type WarningTranslator,
 } from './levelHelpers';
+import {dayFormatter} from '../eligibility';
 
 /** A successful result carrying `output`, shaped like the API's. */
 function ok(analyticCode: string, output: Record<string, unknown>, instanceId = `base-historical-${analyticCode}`): RiskAnalyticResult {
@@ -1645,5 +1647,22 @@ describe('the catalogues word every remedy a refusal can name', () => {
         expect(new Set(sentences).size, `two remedies read alike in ${locale}.json: ${JSON.stringify(sentences)}`).toBe(REMEDIES.length);
         // The ceiling as a number of its own: «1000» contains the digits and cites another one.
         expect(sentences[REMEDIES.indexOf('positions')], `${remedyKey('positions')} does not cite the ceiling of ${POSITIONS_CEILING} positions in ${locale}.json`).toMatch(new RegExp(`(?<!\\d)${POSITIONS_CEILING}(?!\\d)`));
+    });
+});
+
+describe('warningSentence — a day travels in the reader’s format (RN-11)', () => {
+    it('formats an ISO day parameter in the interface locale, and leaves every other string as it came', () => {
+        // `analysis_starts_late` carries the day the analysis really starts as an ISO day: shown
+        // raw it would read «2026-03-16» in a sentence of words. A string that only contains a day
+        // (a name) is not a day.
+        const seen: Record<string, unknown>[] = [];
+        const translate: WarningTranslator = (_id, options) => {
+            seen.push({...(options?.values ?? {})});
+            return 'translated';
+        };
+        warningSentence({code: 'analysis_starts_late', message: 'The analysis starts on 2026-03-16.', message_i18n_key: 'risk.warnings.analysis_starts_late', message_params: {start: '2026-03-16', names: 'Fund 2026-03-16', count: 2}}, translate);
+        const day = dayFormatter()('2026-03-16');
+        expect(day, 'premise: the reader’s format is not the ISO day').not.toBe('2026-03-16');
+        expect(seen[0], 'the ISO day reached the sentence as it came, or a non-day string was rewritten').toEqual({start: day, names: 'Fund 2026-03-16', count: 2});
     });
 });

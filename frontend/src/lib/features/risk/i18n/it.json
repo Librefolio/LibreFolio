@@ -362,7 +362,9 @@
       "historical_replay_mostly_excluded": "Il risultato descrive solo una parte del tuo portafoglio ({covered, number, percent}): il resto è escluso dal replay.",
       "assets_excluded_no_price_source": "{count, plural, one {# asset escluso} other {# asset esclusi}} dal calcolo: nessuna fonte di prezzo assegnata e nessun prezzo mai registrato — {names}.",
       "total_loss_no_recovery": "Il valore è sceso a zero: nessun guadagno può riportarlo al picco, quindi il recupero richiesto non è mostrato.",
-      "total_loss_no_recovery_assets": "{count, plural, one {# asset è sceso} other {# asset sono scesi}} a zero: nessun guadagno può {count, plural, one {riportarlo} other {riportarli}} al picco, quindi il recupero richiesto non è mostrato — {names}."
+      "total_loss_no_recovery_assets": "{count, plural, one {# asset è sceso} other {# asset sono scesi}} a zero: nessun guadagno può {count, plural, one {riportarlo} other {riportarli}} al picco, quindi il recupero richiesto non è mostrato — {names}.",
+      "analysis_starts_late": "L'analisi parte dal {start}: prima di quel giorno non c'è un giorno di prezzi completo.",
+      "short_history": "{names}: nessun prezzo prima dell'inizio del periodo, quindi la loro storia comincia al suo interno."
     },
     "assetDetail": {
       "overviewTab": "Panoramica",
@@ -448,7 +450,8 @@
         "when": "Quando",
         "since": "Dal",
         "duration": "Durata",
-        "daysCount": "{days, plural, one {# giorno} other {# giorni}}"
+        "daysCount": "{days, plural, one {# giorno} other {# giorni}}",
+        "sameFallToday": "{amount} · la stessa caduta, sul valore di oggi"
       },
       "l2": {
         "title": "Sono diversificato come credo?",
@@ -649,6 +652,10 @@
     "benchmark": {
       "measuredHere": "Questo benchmark è anche un asset misurato qui e non può fare da metro a sé stesso: scegline un altro per il confronto.",
       "blocked": "Non utilizzabili in questo periodo"
+    },
+    "period": {
+      "range": "Periodo {start} – {end} · in {currency}",
+      "open": "Periodo dal {start} · in {currency}"
     }
   }
 }

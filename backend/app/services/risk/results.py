@@ -36,6 +36,9 @@ from backend.app.services.risk.scope import ScopeInputs, scope_exclusions, scope
 # What the scope says about its per-asset composition: the assets left without a series, and a
 # zero-return residual that includes value in transit. Neither enters the portfolio TWRR.
 _COMPOSITION_WARNING_CODES = frozenset({"assets_excluded", "zero_risk_residual_includes_in_transit"})
+# RN-11: what the per-asset preparation says about its own window. A TWRR reader measures another series, and a
+# hypothetical shock no window at all, so neither carries them.
+_HISTORY_WINDOW_WARNING_CODES = frozenset({"analysis_starts_late", "short_history"})
 
 
 def _days(first: date, last: date) -> Iterator[date]:
@@ -122,6 +125,44 @@ def warning_asset_ids(warning: RiskWarning) -> list[int]:
     if raw is None and "asset_id" in warning.details:
         raw = [warning.details["asset_id"]]
     return [asset_id for asset_id in (raw or []) if isinstance(asset_id, int) and not isinstance(asset_id, bool)]
+
+
+def history_window_warnings(prepared: PreparedAssetSeriesSet, requested_range: DateRangeModel) -> list[RiskWarning]:
+    """The late start of the prepared series, as warnings (RN-11, Q14, D383).
+
+    The preparation flags it (`market_series.py`): `baseline_inside_requested_range` when no complete
+    day lies before the requested start — a start on a Saturday has its Friday, so it raises nothing —
+    and `short_history:<id>` for each asset with no point before it. Two warnings, neither degrading:
+    the day the analysis really starts (the start of the analysed range, so the sentence and the
+    level's box say the same day) and the assets whose history begins inside the period, named by
+    `with_warning_asset_names`.
+    """
+    flags = set(prepared.warnings)
+    warnings: list[RiskWarning] = []
+    if "baseline_inside_requested_range" in flags and prepared.effective_range is not None:
+        start = prepared.effective_range.start.isoformat()
+        warnings.append(
+            RiskWarning(
+                code="analysis_starts_late",
+                message_i18n_key="risk.warnings.analysis_starts_late",
+                message_params={"start": start},
+                message=f"The analysis starts on {start}: there is no complete day of prices before the requested start.",
+                details={"start": start, "requested_start": requested_range.start.isoformat()},
+                degrades_result=False,
+            )
+        )
+    short_ids = sorted(int(flag.split(":", 1)[1]) for flag in flags if flag.startswith("short_history:") and flag.split(":", 1)[1].isdigit())
+    if short_ids:
+        warnings.append(
+            RiskWarning(
+                code="short_history",
+                message_i18n_key="risk.warnings.short_history",
+                message="Some assets have no price before the requested start: their history begins inside the period.",
+                details={"asset_ids": short_ids},
+                degrades_result=False,
+            )
+        )
+    return warnings
 
 
 def assets_excluded_warnings(excluded_assets: tuple[RiskExcludedAsset, ...]) -> list[RiskWarning]:
@@ -220,6 +261,7 @@ def build_execution_context(
     )
     execution_warnings = list(scope_inputs.warnings)
     execution_warnings.extend(assets_excluded_warnings(excluded_assets))
+    execution_warnings.extend(history_window_warnings(prepared, request.date_range))
 
     primary_baseline_date: Optional[date] = None
     primary_return_dates: tuple[date, ...] = ()
@@ -376,10 +418,10 @@ def success_result(
     context_warnings = context.execution_warnings
     context_exclusions = context.excluded_assets
     if is_hypothetical_plan(plan):
-        context_warnings = tuple(warning for warning in context_warnings if warning.code != "assets_excluded")
+        context_warnings = tuple(warning for warning in context_warnings if warning.code != "assets_excluded" and warning.code not in _HISTORY_WINDOW_WARNING_CODES)
         context_exclusions = ()
     elif reads_the_twrr_alone(plan, context):
-        context_warnings = tuple(warning for warning in context_warnings if warning.code not in _COMPOSITION_WARNING_CODES)
+        context_warnings = tuple(warning for warning in context_warnings if warning.code not in _COMPOSITION_WARNING_CODES | _HISTORY_WINDOW_WARNING_CODES)
         context_exclusions = ()
     warnings = dedupe_warnings(
         (
