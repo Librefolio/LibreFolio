@@ -809,9 +809,10 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                 // `risk_contribution` answer above gives them (0.6 and 0.35), and the 0.05 that
                 // answer calls cash is here a third holding, with no price in the window. Every
                 // weight travels as the raw fraction it is, and the names are synthetic markers
-                // where `service.py` would put display names — so a test reads these numbers back
-                // and tells the sentences apart without reading a translated word. With the
-                // option absent, and on every other scope, the replay answers as it always has.
+                // where `with_warning_asset_names` (`risk/results.py`) would put display names — so a
+                // test reads these numbers back and tells the sentences apart without reading a
+                // translated word. With the option absent, and on every other scope, the replay
+                // answers as it always has.
                 if (request.scope.kind === 'portfolio' && options.replayExclusions) {
                     const askedRange = (analytic.parameters?.replay_range ?? request.date_range) as {start: string; end: string};
                     // The late listing's first quote: 10 days after the panel's own window starts,
@@ -2144,7 +2145,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.locator('[data-testid="risk-level-1-metadata-row"][data-codes="historical_var drawdown_summary"]')).toHaveCount(1);
         await expect(panel.locator('[data-testid="risk-level-1-metadata-row"][data-codes="historical_kpi"]')).toHaveCount(1);
 
-        // The guard of `translateOrRaw` on the real catalogue: `RiskResultFrame:108`
+        // The guard of `translateOrRaw` on the real catalogue: the return-basis line of `RiskResultFrame`
         // builds this same key unguarded, and a basis it has not seen prints
         // `risk.returnBasis.<value>` on screen. Neither row may do that.
         for (const text of await bases.allTextContents()) {

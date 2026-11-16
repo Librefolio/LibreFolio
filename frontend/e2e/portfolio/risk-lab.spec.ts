@@ -286,7 +286,7 @@ const SHORT_OBSERVATIONS = 5;
 const INSUFFICIENT_HISTORY = 'insufficient_history';
 
 /**
- * The warning `_assets_excluded_warnings` (`service.py`) sends for the assets a request
+ * The warning `assets_excluded_warnings` (`risk/results.py`) sends for the assets a request
  * could not prepare, one per reason.
  *
  * Each carries the catalogue key of its reason, and the backend's English `message`
@@ -1046,8 +1046,9 @@ function replayAudit(request: RiskRequest) {
 
 /**
  * The exclusion warning `_replay_exclusion_warning` sends for that holding, one per reason,
- * named the way `service.py` names an asset it has no display name for. The section leaves
- * it to the block since D372; nothing here reads it, it is sent because the engine sends it.
+ * named the way `with_warning_asset_names` (`risk/results.py`) names an asset it has no display
+ * name for. The section leaves it to the block since D372; nothing here reads it, it is sent
+ * because the engine sends it.
  */
 function replayExclusionWarnings(request: RiskRequest) {
     const leftOut = replayLeftOutAssetId(request);
@@ -2042,7 +2043,7 @@ async function expectNoMoneyOnPanel(panel: Locator, rendered: string, requests: 
  * already carried `data-busy`.
  *
  * It speaks for the replay below as well, and not by luck: `fetchRiskCatalog`
- * holds a module-level cache plus an in-flight promise (`riskStore:74-77`), so
+ * holds a module-level cache plus an in-flight promise (`catalogCache` and `catalogInflight` in `riskStore.svelte.ts`), so
  * the two sibling controllers await the *same* promise and both assign their
  * catalog in the same microtask drain — before any DOM flush could publish
  * `ready` here. Should that ever stop being true, the `expect.poll` on the
@@ -3848,7 +3849,7 @@ test.describe('Asset Global risk laboratory', () => {
         // on a legitimate label and still miss `$12,345.67`.
         //
         // The test is deliberately hostile: the stub above sends monetary fields the
-        // real backend never sends for this scope (`service.py` builds
+        // real backend never sends for this scope (`load_scope_inputs` in `risk/scope.py` builds
         // `asset_values={}` and `scope_value=None` for an `AssetSetRiskScope`). It
         // therefore fails the day someone wires those amounts through to the view —
         // which is its entire purpose.
