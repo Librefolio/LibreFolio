@@ -22,7 +22,7 @@ The Federal Reserve provides exchange rate data through FRED (Federal Reserve Ec
 
   The rate is returned as published, «1 base = rate quote»; the FX service normalizes the pair (alphabetical order,
   inverted when needed). Nothing is inverted in the plugin. Every series declares its direction: a new series without
-  one cannot be added by mistake, and `test_fx_provider_quotes.py` pins all 23 against a table written by hand.
+  one cannot be added by mistake, and `test_fx_fed_quotes.py` pins all 23 against a table written by hand.
 - **`first_day`**: the first day a series is in the currency's present unit. Only VES has one (see below): the request
   starts there and earlier lines are dropped; a range ending before it makes no request.
 - **Multi-unit currencies**: none (FRED quotes every currency per 1 unit, JPY included).
