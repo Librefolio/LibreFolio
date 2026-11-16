@@ -22,7 +22,7 @@ import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import type {DraftFidelity} from '../draft.svelte';
-import {formatExactMoneyPlain} from '../format';
+import {formatExactMoneyCompact, formatExactMoneyPlain} from '../format';
 import {PlannerPreview, type PreviewReady} from '../preview.svelte';
 import {REBALANCER_PLANNER_PROFILE} from '../profile';
 import FidelityTable from './FidelityTable.svelte';
@@ -38,8 +38,8 @@ afterEach(() => {
 
 const money = (value: string) => ({value: {kind: 'finite_decimal' as const, value}, currency: 'EUR'});
 const number = (value: string) => ({kind: 'finite_decimal' as const, value});
-/** The table shows whole currency units, as the mockup («up to 4 €»). */
-const whole = (value: string) => formatExactMoneyPlain(money(value), {digits: () => 0});
+/** The table shows two significant digits and the symbol alone (G6-1), as the mockup («up to 4 €», «2,4 €»). */
+const whole = (value: string) => formatExactMoneyCompact(money(value));
 
 /** The mockup's table on 20 000 €, with the custom column at 60 € on the reference row. */
 function ready(custom: boolean): PreviewReady {
@@ -108,6 +108,14 @@ describe('the table «Maximum acceptable cost»', () => {
     it('the «Custom» column is there while that choice is active and the answer carries it', () => {
         mount(previewWith('ready', ready(true)), {kind: 'custom', lambda: '0.6'});
         expect(cells('custom').map((text, index) => text.includes(whole(['2.4', '15', '60', '240'][index])))).toEqual([true, true, true, true]);
+        // G6-2: the «Custom» column stands out; the levels do not.
+        const highlighted = (level: string) =>
+            screen
+                .getAllByTestId('rebalancer-planner-fidelity-cell')
+                .filter((cell) => cell.getAttribute('data-level') === level)
+                .map((cell) => cell.getAttribute('data-highlight'));
+        expect(highlighted('custom')).toEqual(['true', 'true', 'true', 'true']);
+        expect(highlighted('balanced')).toEqual(['false', 'false', 'false', 'false']);
         cleanup();
 
         // Another choice: the column goes, even if the answer still carries it.

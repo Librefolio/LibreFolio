@@ -152,6 +152,7 @@ import {
     exactQuantityCount,
     formatCopyStamp,
     formatExactFxRate,
+    formatExactMoneyCompact,
     formatExactMoneyHtml,
     formatExactMoneyPlain,
     formatExactPercent,
@@ -461,6 +462,35 @@ describe('formatExactMoneyPlain / formatExactMoneyHtml — privacy on', () => {
         // Control for the masked expectation: in the clear the same call shows the digits.
         privacy(false);
         expect(digitsOf(formatExactMoneyHtml(money(finite('1234.5678')), {digits}))).toBe('123457');
+    });
+});
+
+describe('formatExactMoneyCompact — two significant digits and the symbol only, for a table that names its currency once (G6-1)', () => {
+    it('keeps two significant digits, with ≈ only where the rounding changed the amount', () => {
+        const exact = formatExactMoneyCompact(money(finite('2.4')));
+        expect(digitsOf(exact)).toBe('24');
+        expect(exact).not.toContain('≈');
+        expect(digitsOf(formatExactMoneyCompact(money(finite('12.0937'))))).toBe('12');
+        expect(formatExactMoneyCompact(money(finite('12.0937')))).toMatch(/^≈/);
+        expect(digitsOf(formatExactMoneyCompact(money(finite('1208.97'))))).toBe('1200');
+        expect(digitsOf(formatExactMoneyCompact(money(finite('1600'))))).toBe('1600');
+        expect(formatExactMoneyCompact(money(finite('1600')))).not.toContain('≈');
+        expect(digitsOf(formatExactMoneyCompact(money(finite('0.125'))))).toBe('013');
+        expect(digitsOf(formatExactMoneyCompact(money(ratio('1', '3', '0.333333'))))).toBe('033');
+        expect(formatExactMoneyCompact(money(finite('0')))).not.toContain('≈');
+    });
+
+    it('names the currency by its symbol alone: no flag, no code', () => {
+        const text = formatExactMoneyCompact(money(finite('2.4')));
+        expect(text.endsWith(' €')).toBe(true);
+        expect(text).not.toContain('EUR');
+        expect(text).not.toContain('🇪🇺');
+    });
+
+    it('masks the number in privacy mode, keeping ≈ and the symbol', () => {
+        privacy(true);
+        expect(formatExactMoneyCompact(money(finite('12.0937')))).toBe(`≈${P} €`);
+        expect(formatExactMoneyCompact(money(finite('1600')))).toBe(`${P} €`);
     });
 });
 

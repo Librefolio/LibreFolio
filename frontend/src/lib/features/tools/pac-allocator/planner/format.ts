@@ -15,6 +15,7 @@
  * significant digits instead, so a fraction of a cent never reads as zero.
  */
 import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {formatDateTime} from '$lib/utils/core/formatDateTime';
 import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
 import {formatExactDecimal} from '$lib/utils/core/formatFixed';
@@ -133,6 +134,39 @@ export function formatPlannerMoneyHtml(amount: string | null | undefined, curren
 export function formatExactMoneyPlain(money: PlannerExactMoney, options: MoneyOptions = {}): string {
     const shown = exactMoneyDisplay(money.value, (options.digits ?? cldrCurrencyDigits)(money.currency));
     return formatPlannerMoneyPlain(shown.text, money.currency, {...options, minorUnit: false, approx: shown.approx});
+}
+
+/** Display only: a decimal text rounded to `significant` digits, half away from zero, exactly (`1208.97` → `1200`). */
+function roundSignificant(text: string, significant: number): string | null {
+    const canonical = canonicalDecimal(text);
+    if (canonical === null) return null;
+    const [whole, fraction = ''] = canonical.replace('-', '').split('.');
+    if (/^0*$/.test(whole + fraction)) return '0';
+    // The position of the first significant digit: 10^magnitude.
+    const magnitude = whole !== '0' ? whole.length - 1 : -(fraction.search(/[1-9]/) + 1);
+    const places = significant - 1 - magnitude;
+    if (places >= 0) return roundDecimal(canonical, places);
+    const scaled = shiftDecimal(canonical, places);
+    const rounded = scaled === null ? null : roundDecimal(scaled, 0);
+    return rounded === null ? null : shiftDecimal(rounded, -places);
+}
+
+/**
+ * G6-1 of project 67: an exact backend amount in a compact form, for a table that names its currency once above it (the
+ * Rebalancer's «Maximum acceptable cost»): two significant digits (`2,4 €`, `12 €`, `1.200 €`), the currency's symbol
+ * alone (its code when it has no symbol), `≈` when the rounding changed it (R14). Personal: masked in privacy mode, the
+ * sign outside the mask. Display only.
+ */
+export function formatExactMoneyCompact(money: PlannerExactMoney, significant = 2): string {
+    const fine = exactRoundedDisplay(money.value, MAX_DISPLAY_FRACTION);
+    const rounded = roundSignificant(fine.text, significant) ?? fine.text;
+    const approx = fine.approx || canonicalDecimal(rounded) !== canonicalDecimal(fine.text);
+    const places = decimalScale(rounded);
+    const value = Number(rounded);
+    const abs = Math.abs(value).toLocaleString(uiLocale(), {minimumFractionDigits: places, maximumFractionDigits: places});
+    const symbol = getCurrencyInfo(money.currency).symbol;
+    const unit = symbol && symbol !== money.currency ? symbol : money.currency;
+    return `${approx ? '≈' : ''}${value < 0 ? '-' : ''}${maskable(abs, 'personal')} ${unit}`;
 }
 
 export function formatExactMoneyHtml(money: PlannerExactMoney, options: MoneyOptions = {}): string {

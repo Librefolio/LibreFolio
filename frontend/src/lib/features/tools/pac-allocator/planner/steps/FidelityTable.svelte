@@ -14,7 +14,7 @@
     import type {ColumnDef} from '$lib/components/table/types';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import type {DraftFidelity} from '../draft.svelte';
-    import {formatExactMoneyPlain} from '../format';
+    import {formatExactMoneyCompact, formatExactMoneyPlain} from '../format';
     import type {PlannerPreview, PreviewCostRow, PreviewMoney} from '../preview.svelte';
     import {fidelityName} from '../strategyText';
     import {BADGE, HINT, SECTION_TITLE} from '../ui';
@@ -50,15 +50,16 @@
     const showCustom = $derived(fidelity.kind === 'custom' && (table?.rows[0]?.custom ?? null) !== null);
     const totalText = $derived(numbers ? formatExactMoneyPlain(numbers.total) : null);
 
-    /** Whole currency units, as the mockup («up to 4 €»): a ceiling for guidance, not a booking; `≈` when rounded. */
-    const WHOLE = {digits: () => 0};
-
     function cellHtml(row: Row, level: Level | 'misplaced', amount: PreviewMoney | null): string {
-        const figure = amount ? formatExactMoneyPlain(amount, WHOLE) : '';
+        // G6-1: two significant digits and the symbol alone; the currency is named once, in the line above the table.
+        const figure = amount ? formatExactMoneyCompact(amount) : '';
         const text = level === 'misplaced' || phone.current || figure === '' ? figure : $t(`${T}.upTo`, {values: {amount: figure}});
         const reference = level === 'misplaced' && row.row.reference ? ` <span class="${BADGE.neutral}">${escapeHtml($t(`${T}.reference`))}</span>` : '';
-        const tone = stale ? 'text-lf-muted' : level === 'misplaced' ? 'text-lf-primary' : 'text-lf-secondary';
-        return `<span class="whitespace-nowrap tabular-nums ${tone}" data-testid="${testId('fidelity-cell', profile)}" data-level="${level}" data-row="${row.index}" data-reference="${row.row.reference ? 'true' : 'false'}">${escapeHtml(text)}${reference}</span>`;
+        const tone = stale ? 'text-lf-muted' : level === 'misplaced' || level === 'custom' ? 'text-lf-primary' : 'text-lf-secondary';
+        // G6-2: the «Custom» column in the chosen cards' shade, bold, as the mockup.
+        const highlight = level === 'custom';
+        const shade = highlight ? ' rounded-md bg-lf-selected px-2 py-0.5 font-semibold' : '';
+        return `<span class="whitespace-nowrap tabular-nums ${tone}${shade}" data-testid="${testId('fidelity-cell', profile)}" data-level="${level}" data-row="${row.index}" data-reference="${row.row.reference ? 'true' : 'false'}" data-highlight="${highlight ? 'true' : 'false'}">${escapeHtml(text)}${reference}</span>`;
     }
 
     function levelHeader(level: Level): string {
