@@ -452,7 +452,7 @@
       "continue": "Continuer vers le récapitulatif",
       "blockIndexTitle": "⛔ « Indice » n'accepte pas de transactions",
       "blockIndexBody": "{count, plural, one {# actif sélectionné a déjà des transactions} other {# actifs sélectionnés ont déjà des transactions}} : avec le type Indice, ils ne pourraient plus en avoir. Retirez-les de la modification, ou choisissez un autre type. Rien n'est enregistré tant que le blocage reste.",
-      "blockIndexRow": "{name} — {count, plural, one {# transaction} other {# transactions}}",
+      "blockIndexRow": "{name} : {count, plural, one {# transaction} other {# transactions}}",
       "blockOtherTitle": "⛔ L'enregistrement serait refusé",
       "blockOtherBody": "Rien n'est enregistré tant qu'un blocage reste.",
       "removeBlocked": "{count, plural, one {Retirer cet actif de la modification} other {Retirer ces # de la modification}}",
