@@ -91,6 +91,9 @@ class _FetchedRefreshData:
     events: list[dict]
     #: Reasons the result reports beside its prices: a refused current value (X-R51)
     notes: tuple[str, ...] = ()
+    #: The day of a current value dated before today that the round's history did not have (project 76, C3b): written
+    #: only if the database has no price for that day either, since a current value never replaces a past day's close
+    quote_only_if_missing: date_type | None = None
 
 
 async def _prepare_refresh_items(  # noqa: C901 — per-item validation maps each rejection to a typed result
@@ -235,6 +238,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
     """
     refusal: AssetRateLimitedError | None = None
     refused_note: str | None = None  # a current value no price column keeps (X-R51)
+    quote_only_if_missing: date_type | None = None  # a past day the quote may add, never replace (C3b)
     prov = prep.provider
     identifier = prep.identifier
     # Map ProviderInputType (stored in DB) to IdentifierType (expected by plugin methods)
@@ -379,9 +383,17 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                 "close": current_data.value,
                                 "currency": current_data.currency,
                             }
-                            prices_data = [p for p in prices_data if p.get("date") != current_price["date"]]
-                            prices_data.append(current_price)
-                            logger.debug(f"Added current price for asset {asset_id}: {current_data.value}")
+                            quote_day = current_price["date"]
+                            if quote_day < today and any(p.get("date") == quote_day for p in prices_data):
+                                # C3b, the midnight rule: a quote dated before today (read before midnight, cached for
+                                # the provider's interval) never replaces a past day's close; the history decides
+                                logger.debug("Current value of a past day left out: the history has that day", asset_id=asset_id, day=str(quote_day))
+                            else:
+                                if quote_day < today:
+                                    quote_only_if_missing = quote_day  # added, but written only if the DB lacks the day
+                                prices_data = [p for p in prices_data if p.get("date") != quote_day]
+                                prices_data.append(current_price)
+                                logger.debug(f"Added current price for asset {asset_id}: {current_data.value}")
                     except Exception as curr_e:
                         refusal = _refusal_of(curr_e, refusal)
                         logger.warning(f"Current value fetch failed for asset {asset_id}: {curr_e}")
@@ -395,6 +407,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                         source=provider_code,
                         events=events_data,
                         notes=(refused_note,) if refused_note else (),
+                        quote_only_if_missing=quote_only_if_missing,
                     ),
                     None,
                     refusal,
@@ -628,6 +641,15 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
     # Isolated session for this asset's DB writes
     try:
         async with AsyncSession(engine, expire_on_commit=False) as persist_session:
+            # C3b, the midnight rule: a current value dated before today, which the round's history did not have, is
+            # written only if the database has no price for that day either (a resume asks no history, so yesterday's
+            # close may be stored only). Still counted as fetched, like an unchanged point
+            past_day = remote_data.quote_only_if_missing
+            if past_day is not None and price_items:
+                stored = await persist_session.execute(select(PriceHistory.date).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date == past_day)).limit(1))
+                if stored.first() is not None:
+                    price_items = [p for p in price_items if p.date != past_day]
+                    upsert_obj = FAUpsert.model_construct(asset_id=asset_id, prices=price_items)
             # Count actual changes BEFORE upserting (compare with DB)
             if price_items:
                 # Only the dates the upsert keeps are counted and announced: a value no column keeps loses its date in
