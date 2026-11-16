@@ -50,6 +50,10 @@
         refreshVersion: number;
         /** The lots panel synced rates or added a pair from its banner (project 69, L4): the view's report is asked again. */
         onLotsRatesChanged?: () => void;
+        /** «Globale / Broker» (project 74): the grouping on screen, whether the switch is shown, and the user's choice. */
+        grouping: PanelProps['grouping'];
+        groupingAvailable: boolean;
+        onGroupingChange: PanelProps['onGroupingChange'];
     }
 
     let {
@@ -76,6 +80,9 @@
         onCloseAnalysis,
         refreshVersion,
         onLotsRatesChanged,
+        grouping,
+        groupingAvailable,
+        onGroupingChange,
     }: Props = $props();
 
     const summaryLoading = $derived(snapshot.reportLoading && !snapshot.summary);
@@ -106,6 +113,10 @@
         {rollingSelection}
         {rollingAutoPreset}
         {onRollingSelectionChange}
+        {grouping}
+        {groupingAvailable}
+        {onGroupingChange}
+        groupedSummary={snapshot.groupedSummary}
     />
     <LotsAnalysisPanel
         open={activeAssetId != null}
