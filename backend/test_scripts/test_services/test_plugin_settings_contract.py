@@ -177,6 +177,8 @@ def test_the_family_rules_are_the_documented_ones():
         "brim": FamilyRules(user_scope=True, secrets=True),
         "tool": FamilyRules(user_scope=True, secrets=False),
         "enricher": FamilyRules(user_scope=False, secrets=True),
+        # G1 (project 76): a settings group is the instance's: no user field, secrets allowed (its plugins' family rules judge them).
+        "group": FamilyRules(user_scope=False, secrets=True),
     }
 
 

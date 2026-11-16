@@ -2030,6 +2030,14 @@ def services_secret_masking(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Secret masking tests", verbose=verbose)
 
 
+def services_plugin_settings_groups(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shared settings groups: declaration, binding without own fields, missing, masking, fingerprint, gate."""
+    print_section("Services: Plugin Settings Groups")
+    print_info("Testing: register_group, validate_plugin_groups, BoundSettings.group, configure_instance, call_provider")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_groups.py", test_names)
+    return run_command(cmd, "Plugin settings groups tests", verbose=verbose)
+
+
 def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
     """Test the plugin settings guards: variables documented, derived names unique, AI Export never reads them."""
     print_section("Services: Plugin Settings Guards")
@@ -4065,6 +4073,16 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-runtime", services_plugin_settings_runtime, name="Plugin Settings Resolution", desc="env > _FILE > row > default, invalid variable unconfigures, unusable key, fingerprints, configure_instance, NOT_CONFIGURED and masking at both boundaries", isolation="pure")
     add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
     add_test(cat, "secret-masking", services_secret_masking, name="Secret Masking", desc="mask_text with the URL forms, mask_exception through chains and groups, structlog processor and logging filter, the context variable across threads and tasks, the wiring in configure_logging", isolation="pure")
+    # Shared settings groups (project 76, G1). PURE: private SQLite under tmp_path through a private engine, a test instance
+    # key, every variable through monkeypatch; each test registers its own g1_ groups and releases them at teardown.
+    add_test(
+        cat,
+        "plugin-settings-groups",
+        services_plugin_settings_groups,
+        name="Plugin Settings Groups",
+        desc="register_group refusals and variable claims, validate_plugin_groups, binding with no own field (env > row > default), missing as group.key, masking, fingerprint, unbound, pickle, NOT_CONFIGURED, gate",
+        isolation="pure",
+    )
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(
         cat,
