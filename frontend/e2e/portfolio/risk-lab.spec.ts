@@ -63,9 +63,9 @@ interface RiskRequest {
  *
  * Today the euro on this page is *latent*, not present: for an `AssetSetRiskScope`
  * the backend builds `asset_values={}` and `scope_value=None`
- * (`risk/service.py`), so the replay plugin returns `impact_amount=None` on every
- * row (`stress/plugin.py:542`) and leaves `portfolio_return` null (`:480-494`), which
- * makes the top-level amount unreachable too (`:564`). So loading the page and
+ * (`load_scope_inputs`, `risk/scope.py`), so the replay plugin returns `impact_amount=None` on every
+ * row and leaves `portfolio_return` null (`StressAnalytic._historical`, `stress/plugin.py`),
+ * which makes the top-level amount unreachable too. So loading the page and
  * finding no `€` would prove nothing — it would stay green with the rule
  * deleted, because the data simply is not there.
  *
@@ -282,7 +282,7 @@ const AMPLE_OBSERVATIONS = 60;
  */
 const SHORT_OBSERVATIONS = 5;
 
-/** What `service.py:234` answers with when a window is below `min_observations`. */
+/** What `RiskService.execute` (`risk/service.py`) answers with when a window is below `min_observations`. */
 const INSUFFICIENT_HISTORY = 'insufficient_history';
 
 /**
@@ -335,7 +335,7 @@ function unnamedAsset(assetId: number): string {
  * whoever edited it last.
  *
  * `historical_kpi` carried one of those drifts until that test was written: it
- * was declared `['historical']` while `historical_kpi/plugin.py:119` advertises
+ * was declared `['historical']` while `HistoricalKpiAnalytic.supported_modes` advertises
  * `(HISTORICAL, CURRENT_COMPOSITION)`. Corrected here rather than tolerated in
  * the guard — a guard with an exemption list is a guard that stops guarding. The
  * correction is inert on this page (the code is `ASSET`/`PORTFOLIO`-scoped, so an
@@ -376,7 +376,7 @@ const ASSET_SET_LEVEL_CODES = ['asset_set_kpi', 'asset_set_var', 'asset_set_draw
 /**
  * L1°'s share (`risk-asset-set-loss`): the bad day and the bad month — two instances of
  * `asset_set_var` — and the drawdown. Never `asset_set_comparison`, whatever the benchmark: the
- * engine prepares a request's comparison asset together with its scope (`risk/service.py:183-196`),
+ * engine prepares a request's comparison asset together with its scope (`RiskService.execute`, `risk/service.py`),
  * so a benchmark riding with L1° would move L1°'s window. The developer saw L1° turn «Partial»
  * because of one, and split the levels' request in two (02/10/2026).
  */
@@ -469,7 +469,7 @@ interface RiskStubOptions {
      * A window shorter than four of the five analytics can measure.
      *
      * `asset_set_drawdown` declares `min_observations = 2` where the other four
-     * declare 20, so the gate at `service.py:230-243` genuinely returns one `ok`
+     * declare 20, so the observation gate of `RiskService.execute` genuinely returns one `ok`
      * beside four `unavailable` — same selection, same period, same window, in
      * whichever level's request each of the five rides.
      */
@@ -545,7 +545,7 @@ function observationCount(options: RiskStubOptions): number {
  * The scope ids the stub could prepare, and the ones it had to drop.
  *
  * The dropped id is taken from the **end** of the request's own array, which the
- * client canonicalises ascending (`riskRequest.ts:83`, `asset_ids:
+ * client canonicalises ascending (`canonicalizeScope` in `riskRequest.ts`, `asset_ids:
  * sortedNumbers(...)`). A caller therefore recovers the omitted id by reading
  * the captured request rather than by assuming which asset the page happened to
  * seed — and the assertion stays true whatever the seed contains.
@@ -637,7 +637,7 @@ function metadata(request: RiskRequest, analytic: RiskAnalyticRequest, options: 
         excluded_assets: isHistoricalReplay(analytic) ? [] : excludedAssets(request, options),
         algorithm_version: MOCK_ALGORITHM_VERSION,
         computed_at: '2026-01-31T12:00:00Z',
-        // `service.py:860` copies the plugin's audit into the metadata of every
+        // `result_metadata` (`risk/results.py`) copies the plugin's audit into the metadata of every
         // replay, and `L4Replay` lists what the replay left out from it
         // (`risk-replay-excluded`) — the presence barrier the no-money tests stand
         // on since D372 retired the one-line audit. Omitting it here would leave
@@ -852,7 +852,7 @@ function assetSetKpiOutput(request: RiskRequest, analytic: RiskAnalyticRequest, 
     return {
         kind: 'kpi_set',
         // An echo of the request parameter, which the page never overrides, so
-        // the plugin's own default (`asset_set_kpi/plugin.py:59-60`) is what comes back.
+        // the plugin's own default (`AssetSetKpiParams.drawdown_confidence_level`) is what comes back.
         drawdown_confidence_level: Number(analytic.parameters?.drawdown_confidence_level ?? 0.95),
         items: covered.map((assetId, index) => {
             // The same figure `asset_set_drawdown` reports, because both are
@@ -971,8 +971,8 @@ function assetSetLevelOutput(request: RiskRequest, analytic: RiskAnalyticRequest
  * whether it still refuses to show it.
  *
  * `portfolio_return` is the other half of the same bait, and it is deliberately
- * NOT what the backend does here: `stress/plugin.py:480-494` leaves it null on an
- * unweighted scope, and `L4Replay:207` therefore *withholds* the whole sentence
+ * NOT what the backend does here: `StressAnalytic._historical` (`stress/plugin.py`) leaves it null on an
+ * unweighted scope, and `L4Replay` therefore *withholds* the whole sentence
  * rather than degrading it. Reproduce that faithfully and `output.impact_amount`
  * becomes unreachable by construction — its absence would then prove nothing
  * about the guard, which is the precise failure {@link MONEY_AMOUNT} warns
@@ -980,7 +980,7 @@ function assetSetLevelOutput(request: RiskRequest, analytic: RiskAnalyticRequest
  * the only thing left between the payload and a euro on screen.
  *
  * Shape-faithful in every other respect: a replay carries no `dimension` and no
- * `configured_buckets` (`stress/plugin.py:561-567`), which is what makes `tornadoRows`
+ * `configured_buckets` (`StressAnalytic._historical`), which is what makes `tornadoRows`
  * take its per-asset branch — the branch that reads `impact_amount`. A bucket
  * row carries `amount: null` and would have quietly disarmed the row half of
  * this test. And the holding the replay left out ({@link replayLeftOutAssetId})
@@ -1002,7 +1002,7 @@ function replayOutput(request: RiskRequest) {
             asset_id: assetId,
             // Spread so the bars differ from each other; `contribution_return` is
             // omitted because an unweighted scope has no weights to contribute
-            // with (`stress/plugin.py:541`), which sends `tornadoRows` to `shock_return`.
+            // with (`StressAnalytic._historical`), which sends `tornadoRows` to `shock_return`.
             shock_return: REPLAY_RETURN + index / 1000,
             impact_amount: MONEY_AMOUNT,
             metadata_fallback: false,
@@ -1089,9 +1089,9 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
     };
 
     // A window below this analytic's own `min_observations` never reaches the
-    // plugin: `service.py:230-243` answers `unavailable` with the count it had
+    // plugin: the observation gate of `RiskService.execute` answers `unavailable` with the count it had
     // and the count it needed, carrying metadata and data quality but **no
-    // warnings** — `_unavailable` does not take any. That asymmetry is what makes
+    // warnings** — `unavailable_result` (`risk/results.py`) does not take any. That asymmetry is what makes
     // `{testId}-errors` and `{testId}-reasons` two different disclosures rather
     // than two views of one, and reproducing it is what lets a test tell them
     // apart.
@@ -3025,7 +3025,7 @@ async function expectNoComparison(page: Page, requests: readonly RiskRequest[], 
  * asked yet cannot satisfy it.
  *
  * Read off the wire because the wire is the one place this spec can see a benchmark reach L1°. The
- * engine prepares a request's comparison asset together with its scope (`risk/service.py:183-196`),
+ * engine prepares a request's comparison asset together with its scope (`RiskService.execute`, `risk/service.py`),
  * so a benchmark joins the prepared set of everything in its request and can move its window — what
  * turned L1° «Partial» for the developer. The stub answers every analytic on its own and reproduces
  * none of that, so L1°'s figures and provenance would be drawn the same with or without a benchmark
@@ -4589,7 +4589,7 @@ test.describe('Asset Global risk laboratory', () => {
         await waitForRiskCatalog(page);
         await waitForLossTable(page);
 
-        // ① ONE REQUEST PER LEVEL. `service.py:170` prepares the joint series once
+        // ① ONE REQUEST PER LEVEL. `RiskService.execute` prepares the joint series once
         // per request, before the analytic loop, so a level split across requests
         // would pay for one preparation per piece and — the part that reaches the
         // reader — would draw one table, or one chart, from several calendars.
@@ -4597,7 +4597,7 @@ test.describe('Asset Global risk laboratory', () => {
         // together" is observable exactly here, on the wire, and nowhere else.
         //
         // And never one request for both levels: the engine prepares a request's
-        // comparison asset with its scope (`service.py:183-196`), so a level riding
+        // comparison asset with its scope (`RiskService.execute`), so a level riding
         // with L3°'s benchmark would be measured on the benchmark's calendar too —
         // the «Partial» the developer saw on L1°.
         //

@@ -611,7 +611,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             // written down and the provenance is not dressed up as a measurement.
             //
             //  1. `portfolio_volatility` is strictly positive. At zero
-            //     `capitalMarketLine` (`scatterChartHelpers.ts:111`) returns null
+            //     `capitalMarketLine` (`scatterChartHelpers.ts`) returns null
             //     and the line vanishes *silently*, leaving a chart that still
             //     looks finished.
             //  2. Two items with **different** volatilities. `hasScatter` is
