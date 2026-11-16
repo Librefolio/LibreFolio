@@ -166,7 +166,9 @@
           "last7d": "Últimos 7 días",
           "last30d": "Últimos 30 días",
           "deferred": "Aplazado: proveedor en pausa",
-          "retryAt": "Reintento a las {time}"
+          "retryAt": "Reintento a las {time}",
+          "profileRead": "Lectura de perfiles",
+          "voicesWritten": "{count, plural, one {# campo del perfil escrito} other {# campos del perfil escritos}}"
         },
         "status": {
           "title": "Estado del Planificador",
@@ -180,7 +182,13 @@
         },
         "timezone": "Zona horaria",
         "timezoneChangeWarning": "Cambiar la zona horaria mantiene iguales estas horas y días, pero cambia el instante real de ejecución en UTC.",
-        "timezoneHintLocal": "Las horas y los días siguientes se interpretan en esta zona horaria."
+        "timezoneHintLocal": "Las horas y los días siguientes se interpretan en esta zona horaria.",
+        "profileReadSection": "Lectura de perfiles de activos",
+        "profileReadHint": "Lee el perfil de cada activo (tipo, emisor, costes, distribución) de sus fuentes de datos, en la zona horaria del planificador. Los perfiles cambian poco: una vez por semana basta.",
+        "profileReadTimesLabel": "Horas de lectura",
+        "profileReadDaysLabel": "Días de lectura",
+        "profileReadTimesRemove": "Quitar la hora de lectura de perfiles {slot}",
+        "profileReadDay": "Leer los perfiles el {day}"
       }
     },
     "devicePixelRatioHint": "Relación entre los píxeles físicos del dispositivo y los píxeles CSS. 1x = pantalla estándar, 2x+ = pantalla Retina/HiDPI.",
