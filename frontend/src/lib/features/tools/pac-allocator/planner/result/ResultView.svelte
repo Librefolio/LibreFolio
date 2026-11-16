@@ -153,7 +153,8 @@
                 open={open.has('exposures')}
                 ontoggle={toggle}
             >
-                <ExposureSection rows={solution.exposure_rows} />
+                <!-- The Rebalancer's «Cash» rows have no category (F4a step 8 draws them in its own chart); the PAC has none. -->
+                <ExposureSection rows={solution.exposure_rows.filter((row) => (row as {kind?: string}).kind !== 'cash')} />
             </ResultSection>
             <ResultSection id="ledger" title={title('ledger', 'Balances per Broker and currency')} open={open.has('ledger')} ontoggle={toggle}>
                 <LedgerTable rows={solution.ledger_rows} accounting={solution.accounting} {names} {digits} {draft} />

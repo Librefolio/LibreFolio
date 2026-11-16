@@ -284,7 +284,8 @@ export function planLookup(result: PlannerReadyResult, request: PlannerResolvedR
     const cash = new Map(request.existing_cash.map((row) => [row.cash_id, row]));
     const contributions = new Map(request.contributions.map((row) => [row.contribution_id, row]));
     const routes = new Map(request.order_routes.map((row) => [row.route_id, row]));
-    const fundingRoutes = new Map(request.funding_routes.map((row) => [row.funding_route_id, row]));
+    // The Rebalancer's request carries no funding route (contract §5.4): it has deposits and transfers instead.
+    const fundingRoutes = new Map((request.funding_routes ?? []).map((row) => [row.funding_route_id, row]));
     const assets = new Map(request.assets.map((row) => [row.asset_id, row]));
     const provenance = new Map(result.provenance.map((row) => [row.provenance_id, row]));
     return {
@@ -306,7 +307,8 @@ export function planLookup(result: PlannerReadyResult, request: PlannerResolvedR
         },
         route: (routeId) => routes.get(routeId) ?? null,
         fundingRoute: (fundingRouteId) => fundingRoutes.get(fundingRouteId) ?? null,
-        fundingChoices: (brokerId, currency) => request.funding_routes.filter((row) => row.broker_id === brokerId && row.currency === currency).length,
+        // Defensive: called only once a funding route is found, which the Rebalancer never has.
+        fundingChoices: (brokerId, currency) => (request.funding_routes ?? []).filter((row) => row.broker_id === brokerId && row.currency === currency).length,
         quote: (assetId) => assets.get(assetId)?.quote ?? null,
         provenance: (id) => provenance.get(id) ?? null,
     };
