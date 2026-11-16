@@ -21,6 +21,7 @@
     import {brimPluginName} from '$lib/utils/brim/pluginText';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     let toolPanelOpen = false;
 
@@ -264,6 +265,9 @@ Generated: ${new Date().toISOString()}
         <div>
             <h3 class="text-xl font-bold text-lf-primary" data-testid="about-app-name">LibreFolio</h3>
             <button type="button" class="text-lf-muted hover:text-lf-secondary transition-colors cursor-pointer text-left" title={$_('changelog.title')} onclick={() => changelogModal.show()} data-testid="about-version">{$_('settings.version')} {systemInfo?.app_version ?? '...'}</button>
+        </div>
+        <div class="ml-auto">
+            <DocsLink path="user/settings/about/" label={$_('settings.docsHelp.about')} icon="book" size={16} testId="about-docs" />
         </div>
     </div>
 

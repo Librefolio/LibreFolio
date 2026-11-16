@@ -476,6 +476,13 @@
       "rateLimited": "Demasiadas solicitudes: vuelve a intentarlo en unos minutos.",
       "deliveryFailed": "No se ha podido enviar el correo: tu dirección no ha cambiado. Inténtalo más tarde.",
       "unavailable": "Esta instancia no puede enviar correos ahora: el cambio no se puede confirmar."
+    },
+    "docsHelp": {
+      "profile": "Tu cuenta: nombre, correo, avatar y contraseña.",
+      "global": "Los ajustes de toda la instancia, elegidos por un administrador: se aplican a todos los usuarios.",
+      "about": "Qué versión de LibreFolio funciona aquí, qué ha cambiado y su licencia.",
+      "users": "Las cuentas de esta instancia: quién puede entrar, quién es administrador y los enlaces de invitación.",
+      "security": "Cómo esta instancia protege los accesos y las conexiones: las comprobaciones que hace y qué corregir cuando una falla."
     }
   }
 }

@@ -28,6 +28,7 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
     import {accountErrorText, describeAccountError} from '../users/accountErrors';
     import {lockedByEnv, refreshRegistrationConfig, registrationModeOptions, saveRegistrationMode, REGISTRATION_VARIABLE, type RegistrationMode} from '../registrationMode';
     import type {AccountLink, AccountsUsage, AdminAccount, UserAction} from '../users/types';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     type Confirmable = 'deactivate' | 'cancel-setup' | 'promote' | 'demote' | 'sign-out' | 'restart-guides';
     type Pending = {kind: Confirmable; account: AdminAccount} | {kind: 'revoke-link'; link: AccountLink} | {kind: 'registration-open'};
@@ -327,6 +328,7 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
                 >
                     <UserPlus class="h-4 w-4" />{$_('settings.usersTab.invite.button')}
                 </button>
+                <DocsLink path="admin/users/" label={$_('settings.docsHelp.users')} icon="book" size={16} testId="users-docs" />
             </div>
         </div>
         <p class="mt-1 text-xs text-lf-muted">{$_('settings.usersTab.usageHint')}</p>

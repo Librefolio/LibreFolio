@@ -18,6 +18,7 @@
     import {sameEmail} from '$lib/features/auth/emailCase';
     import ProtectedEmailModal from '$lib/features/settings/ProtectedEmailModal.svelte';
     import PendingEmailChangeBox from '$lib/features/settings/PendingEmailChangeBox.svelte';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     /** The change of address a user waits for, read from the account. The generated type of the field is `PendingEmailChangeRead | null | an array of them` (a quirk of the client generator, as for `whats_new`): only an object with both values counts. */
     function readPendingChange(value: unknown): {email: string; expires_at: string} | null {
@@ -512,6 +513,7 @@
                     <PencilOff size={18} />
                 {/if}
             </button>
+            <DocsLink path="user/settings/profile/" label={$_('settings.docsHelp.profile')} icon="book" size={16} testId="profile-docs" />
         </div>
     </div>
 
