@@ -156,6 +156,7 @@ import {
     formatExactMoneyHtml,
     formatExactMoneyPlain,
     formatExactPercent,
+    formatExactPoints,
     formatExactQuantity,
     formatObjectiveValue,
     formatPlannerDate,
@@ -1338,5 +1339,30 @@ describe('the percentages in the interface language: a tie rounds the same, writ
         expect(digitsOf(owed.share), 'control: with the digits of 30.60').toBe('3060');
 
         expect({share: formatPlannerPercent('0.30595'), units: formatPlannerPercentUnits('30.595')}).toEqual(owed);
+    });
+});
+
+/**
+ * F4a step 4 (project 67): the Rebalancer's «largest deviation from the target» is a share of one (0.1921), shown in
+ * percentage points («19,2»), the word «points» around it from the catalogue. Rounded once, exactly, to one decimal;
+ * public, like every weight: privacy does not mask it.
+ */
+describe('formatExactPoints — a share as percentage points (F4a step 4)', () => {
+    it('shows a share of one as points, one decimal, rounded once', () => {
+        const separator = new Intl.NumberFormat(uiLocale()).format(1.5).charAt(1);
+        expect(formatExactPoints(finite('0.192129505'))).toBe(`19${separator}2`);
+        expect(formatExactPoints(finite('0.0885449694'))).toBe(`8${separator}9`);
+        expect(formatExactPoints(finite('0'))).toBe(`0${separator}0`);
+        // An exact ratio: 1/3 is 33.33… points, 33.3 at one decimal.
+        expect(formatExactPoints(ratio('1', '3', '0.333333'))).toBe(`33${separator}3`);
+    });
+
+    it('stays public with privacy on', () => {
+        setPrivacyEnabled(true);
+        try {
+            expect(formatExactPoints(finite('0.25'))).not.toContain(PRIVACY_PLACEHOLDER);
+        } finally {
+            setPrivacyEnabled(false);
+        }
     });
 });

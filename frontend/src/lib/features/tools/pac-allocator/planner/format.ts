@@ -293,6 +293,20 @@ export function formatExactPercent(value: PlannerExactNumber, digits = 2): strin
 }
 
 /**
+ * F4a step 4 of project 67: a share of one as percentage points, the number only («19,2» for 0.192): the Rebalancer's
+ * «largest deviation from the target». The catalogue writes «points» around it. Rounded once, exactly, to `digits`;
+ * public, like every weight.
+ */
+export function formatExactPoints(value: PlannerExactNumber, digits = 1): string {
+    const fraction = value.kind === 'finite_decimal' ? value.value : roundRatio(value.numerator, value.denominator, digits + 2);
+    const canonical = canonicalDecimal(fraction);
+    const points = canonical === null ? null : shiftDecimal(canonical, 2);
+    const rounded = points === null ? null : roundDecimal(points, digits);
+    if (rounded === null) return EMPTY;
+    return maskable(Number(rounded).toLocaleString(uiLocale(), {minimumFractionDigits: digits, maximumFractionDigits: digits}), 'public');
+}
+
+/**
  * L2 distance in squared valuation money: personal, unit outside the mask (`≈••• EUR²`). R14: two decimals, `≈` when
  * the rounding changes it. Squared money has no minor unit, so G3 does not apply: 0.004 is `≈0`.
  */
