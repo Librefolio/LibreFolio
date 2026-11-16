@@ -71,7 +71,13 @@
     "loadFailed": "Failed to load asset info",
     "pricesLoadFailed": "Failed to load prices",
     "manualChip": "Manual",
-    "externalLinkHint": "{name}: open {site} in a new tab"
+    "externalLinkHint": "{name}: open {site} in a new tab",
+    "docsHelp": {
+      "header": "One asset in detail: its price chart and signals, measures, events and classification, with the source of its prices and your transactions in it.",
+      "measures": "Pick two days on the chart and read how much the asset, and the lines drawn with it, changed between them.",
+      "metadata": "What the asset is: its description, sectors and countries, identifiers, and the provider that prices it.",
+      "dataEditor": "Correct and complete the asset's data by hand: its daily prices and its events, such as dividends and splits."
+    }
   },
   "assets": {
     "create": "New asset",
@@ -483,6 +489,9 @@
       "toBeRemoved": "To be removed",
       "urlNone": "no URL",
       "alreadyWithout": "{already} already without"
+    },
+    "docsHelp": {
+      "list": "Every asset LibreFolio follows, with the source of its prices, its latest price and its change. Open one for its chart, events and data."
     }
   },
   "events": {
