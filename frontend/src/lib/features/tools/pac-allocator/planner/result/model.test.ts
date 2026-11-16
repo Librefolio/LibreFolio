@@ -230,22 +230,20 @@ describe('notesBesideLimitsBanner — the backend notes that would repeat the li
 
 /**
  * The plan's steps on the backend counter (F4a of project 67, step 1; contract §6.3). The fixture is the engine's own
- * answer to the G5 browser scenario: two transfers (1, 2), then a conversion (3), then the purchases (4–8). The arrays
- * come in their own order; the steps follow `sequence` and nothing else, with no rule of the frontend about which kind
- * goes first. The purchases are not steps here: they are listed per Broker.
- *
- * The test follows the engine's counter as it is, not as it should be: in this answer step 2 moves dollars out of a
- * Broker that has none until the exchange of step 3, a question raised with the engine lane (F4a checkpoint, steps 1–2).
+ * answer to the G5 browser scenario, in the executable order the engine gives it: the euro transfer (1), the exchange it
+ * pays for (2), the dollar transfer that spends the exchange's proceeds (3), then the purchases (4–8). The lists come in
+ * their own order (the transfers together); the steps follow `sequence` and nothing else, with no rule of the frontend
+ * about which kind goes first. The purchases are not steps here: they are listed per Broker.
  */
 describe('planSteps — the backend counter, transfers included (F4a step 1)', () => {
     const solution = browser.result.primary_solution as unknown as RebalancerSolution;
 
-    it('plan steps follow the backend counter: two transfers, then the conversion', () => {
+    it('plan steps follow the backend counter: a transfer, the conversion, then the other transfer', () => {
         const steps = planSteps(solution.funding_actions, solution.conversions, solution.transfers);
         expect(steps.map((step) => [step.kind, step.sequence])).toEqual([
             ['transfer', 1],
-            ['transfer', 2],
-            ['conversion', 3],
+            ['conversion', 2],
+            ['transfer', 3],
         ]);
     });
 

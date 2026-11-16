@@ -2051,7 +2051,7 @@
         {
           "conversion_id": "conversion:broker:2:EUR:USD",
           "mode": "manual",
-          "sequence": 3,
+          "sequence": 2,
           "broker_id": "broker:2",
           "source_debit": {
             "amount": "15089.09",
@@ -2100,7 +2100,7 @@
         },
         {
           "transfer_id": "transfer:8:broker:28:broker:1:USD",
-          "sequence": 2,
+          "sequence": 3,
           "source_broker_id": "broker:2",
           "destination_broker_id": "broker:1",
           "amount": {
