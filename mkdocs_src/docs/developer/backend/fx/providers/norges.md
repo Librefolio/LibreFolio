@@ -54,7 +54,7 @@ On 2026-11-16, 35 currencies plus NOK: AUD 🇦🇺, BDT 🇧🇩, BRL 🇧🇷,
 EUR 🇪🇺, GBP 🇬🇧, HKD 🇭🇰, HUF 🇭🇺, IDR 🇮🇩, ILS 🇮🇱, INR 🇮🇳, ISK 🇮🇸, JPY 🇯🇵, KRW 🇰🇷, MMK 🇲🇲, MXN 🇲🇽, MYR 🇲🇾, NZD 🇳🇿,
 PHP 🇵🇭, PKR 🇵🇰, PLN 🇵🇱, RON 🇷🇴, SEK 🇸🇪, SGD 🇸🇬, THB 🇹🇭, TRY 🇹🇷, TWD 🇹🇼, USD 🇺🇸, VND 🇻🇳, ZAR 🇿🇦.
 
-Beyond the ECB's list, Norges Bank quotes BDT, BYN, MMK, PKR, TWD and VND.
+Beyond the ECB provider's catalogue, Norges Bank quotes BDT, BYN, MMK, PKR and VND.
 
 #### 📋 The catalogue rule
 

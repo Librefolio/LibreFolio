@@ -20,8 +20,8 @@ Norges Bank publishes rates for about 35 currencies. LibreFolio reads the list f
 
 - **Major**: USD 🇺🇸, EUR 🇪🇺, GBP 🇬🇧, JPY 🇯🇵, CHF 🇨🇭, CAD 🇨🇦, AUD 🇦🇺, NZD 🇳🇿
 - **European/Regional**: SEK 🇸🇪, DKK 🇩🇰, ISK 🇮🇸, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, TRY 🇹🇷
-- **Global / Emerging**: CNY 🇨🇳, HKD 🇭🇰, SGD 🇸🇬, KRW 🇰🇷, INR 🇮🇳, IDR 🇮🇩, ILS 🇮🇱, MYR 🇲🇾, PHP 🇵🇭, THB 🇹🇭, BRL 🇧🇷, MXN 🇲🇽, ZAR 🇿🇦
-- **Not published by the ECB**: BDT 🇧🇩 (Bangladeshi taka), BYN 🇧🇾 (Belarusian rouble), MMK 🇲🇲 (Myanmar kyat), PKR 🇵🇰 (Pakistani rupee), TWD 🇹🇼 (New Taiwan dollar), VND 🇻🇳 (Vietnamese dong)
+- **Global / Emerging**: CNY 🇨🇳, HKD 🇭🇰, SGD 🇸🇬, KRW 🇰🇷, INR 🇮🇳, IDR 🇮🇩, TWD 🇹🇼, ILS 🇮🇱, MYR 🇲🇾, PHP 🇵🇭, THB 🇹🇭, BRL 🇧🇷, MXN 🇲🇽, ZAR 🇿🇦
+- **Not published by the ECB**: BDT 🇧🇩 (Bangladeshi taka), BYN 🇧🇾 (Belarusian rouble), MMK 🇲🇲 (Myanmar kyat), PKR 🇵🇰 (Pakistani rupee), VND 🇻🇳 (Vietnamese dong)
 
 Currencies the bank no longer publishes (such as the Russian rouble, the Croatian kuna and the Bulgarian lev) are not offered.
 

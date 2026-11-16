@@ -130,6 +130,8 @@ plugins:
             Bank of England (BOE): Banca d'Inghilterra (BoE)
             Swiss National Bank (SNB): Banca Nazionale Svizzera (BNS)
             Norges Bank (NORGES): Norges Bank (NORGES)
+            National Bank of Ukraine (NBU): National Bank of Ukraine (NBU)
+            Bank of Canada (BOC): Bank of Canada (BOC)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -142,6 +144,8 @@ plugins:
             BOE Tech: BOE Tech
             SNB Tech: SNB Tech
             NORGES Tech: NORGES Tech
+            NBU Tech: NBU Tech
+            BOC Tech: BOC Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -396,6 +400,8 @@ plugins:
             Bank of England (BOE): Banque d'Angleterre (BoE)
             Swiss National Bank (SNB): Banque Nationale Suisse (BNS)
             Norges Bank (NORGES): Norges Bank (NORGES)
+            National Bank of Ukraine (NBU): National Bank of Ukraine (NBU)
+            Bank of Canada (BOC): Bank of Canada (BOC)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -408,6 +414,8 @@ plugins:
             BOE Tech: BOE Tech
             SNB Tech: SNB Tech
             NORGES Tech: NORGES Tech
+            NBU Tech: NBU Tech
+            BOC Tech: BOC Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -663,6 +671,8 @@ plugins:
             Bank of England (BOE): Banco de Inglaterra (BoE)
             Swiss National Bank (SNB): Banco Nacional Suizo (BNS)
             Norges Bank (NORGES): Norges Bank (NORGES)
+            National Bank of Ukraine (NBU): National Bank of Ukraine (NBU)
+            Bank of Canada (BOC): Bank of Canada (BOC)
             # Developer provider entries — kept in English per dev-manual policy
             Overview Providers: Overview Providers
             Yahoo Finance Tech: Yahoo Finance Tech
@@ -675,6 +685,8 @@ plugins:
             BOE Tech: BOE Tech
             SNB Tech: SNB Tech
             NORGES Tech: NORGES Tech
+            NBU Tech: NBU Tech
+            BOC Tech: BOC Tech
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
@@ -1001,6 +1013,8 @@ nav:
               - Bank of England (BOE): user/fx/providers/boe.md
               - Swiss National Bank (SNB): user/fx/providers/snb.md
               - Norges Bank (NORGES): user/fx/providers/norges.md
+              - National Bank of Ukraine (NBU): user/fx/providers/nbu.md
+              - Bank of Canada (BOC): user/fx/providers/boc.md
           - 🔎 Pair Detail:
               - Overview: user/fx/detail/index.md
               - Interactive Chart: user/fx/detail/chart.md
@@ -1256,6 +1270,8 @@ nav:
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
                   - NORGES Tech: developer/backend/fx/providers/norges.md
+                  - NBU Tech: developer/backend/fx/providers/nbu.md
+                  - BOC Tech: developer/backend/fx/providers/boc.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
           - "📧 Email (SMTP)": developer/backend/email.md
           - "🧮 Financial Math Layer": developer/backend/financial_math.md
