@@ -1165,3 +1165,21 @@ describe('ExposureTable — the positions sold inside the period (FB-13)', () =>
         expect(document.querySelector('tbody tr.italic')).toBeNull();
     });
 });
+
+describe('ExposureTable — «Globale» (project 74): the brokers of a summed row', () => {
+    it('a row summed over two brokers shows their icons in the Broker column, a single-broker row its badge', async () => {
+        const summed = {...holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), broker_id: null, broker_name: null, broker_ids: [1, 2]};
+        render(ExposureTable, {
+            holdings: [summed, holding(22, 2, {yieldOnCost: noIncomeYieldOnCost()})],
+            displayCurrency: 'EUR',
+            brokers: [
+                {id: 1, name: 'One'},
+                {id: 2, name: 'Two'},
+            ],
+        } as never);
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(2));
+        const stack = screen.getByTestId('broker-badge-stack');
+        expect(stack.getAttribute('data-count')).toBe('2');
+        expect(stack.closest('tr')?.getAttribute('data-row-id')).toBe('11-0');
+    });
+});

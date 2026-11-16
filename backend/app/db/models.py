@@ -186,8 +186,11 @@ class AssetType(StrEnum):
       It contains REAL_ESTATE, but it is shocked in stress scenarios as the loan it is.
 
     Impact:
-    - INDEX forbids transactions (see transaction_batch_stages); every other value is
-      behaviourally inert in the backend.
+    - INDEX forbids transactions (rule in ``services/assets/type_rules.py``, enforced by the
+      transaction batch); every other value is behaviourally inert in the backend.
+    - The family of a type (``ETF_*`` -> ETF, ``CROWDFUND_*`` -> CROWDFUND, any other is its
+      own) is ``asset_type_family`` in ``services/assets/type_rules.py``; the bulk asset edit
+      warns when a change crosses families.
     - Drives portfolio breakdown and allocation analysis, where subtypes roll up to the
       base type they contain rather than to their family.
     - Supplies the `asset_class` buckets of stress scenarios. A type absent from a

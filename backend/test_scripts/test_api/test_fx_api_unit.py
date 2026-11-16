@@ -108,6 +108,7 @@ async def test_list_providers_filters_hidden_and_sorts_targets(monkeypatch):
         description = "Dummy provider"
         description_i18n = {"it": "Provider finto"}
         warning_i18n = {"en": "Testing only"}
+        warning_level = "info"
         docs_url = "https://example.test/fed"
 
         async def get_supported_currencies(self):
@@ -136,6 +137,7 @@ async def test_list_providers_filters_hidden_and_sorts_targets(monkeypatch):
     assert providers[0].docs_url == "https://example.test/fed"
     assert providers[0].description_i18n == {"it": "Provider finto"}
     assert providers[0].warning_i18n == {"en": "Testing only"}
+    assert providers[0].warning_level == "info", "the note's level reaches the client: an info note is no warning (lane 75)"
     print_success("Hidden providers filtered; targets sorted")
 
 

@@ -16,8 +16,8 @@ was itself refused while a SPLIT had costless incoming adjustments (X-R48).
    on the transactions linked to those events (the transactions stay), and keeps every SPLIT event with the transactions
    linked to it: an ADJUSTMENT without a cost stays linked to its SPLIT, so the position math is unchanged and no
    MISSING_COST_BASIS appears.
-3. The same currency, or an asset with nothing to lose, behaves as before. A mixed batch (an asset with market data, one
-   without, one not found) keeps 200 with partial success.
+3. The same currency, or an asset with nothing to lose, behaves as before. A mixed batch with an asset not found is all or
+   nothing since lane 65 B3: 200, ``committed`` false, nothing saved.
 
 Tests:
 
@@ -26,7 +26,7 @@ Tests:
 - N68.3 dividend- and interest-linked transactions are unlinked, not deleted, every other field as before.
 - N68.4 an asset that has only events (no price) changes currency too.
 - N68.5 same-currency PATCH leaves prices and events alone.
-- N68.6 mixed batch → 200, partial success, nothing blocked.
+- N68.6 mixed batch with a missing asset → 200, committed false, nothing saved (lane 65 B3).
 - N68.7 an asset nobody patched keeps its market data.
 - N68.8 an asset with nothing to lose changes currency (as before).
 
@@ -387,10 +387,12 @@ async def test_same_currency_patch_leaves_market_data_untouched(env):
 
 
 @pytest.mark.asyncio
-async def test_mixed_batch_keeps_200_with_partial_success(env):
-    """N68.6 — one asset with market data, one without, one that does not exist → 200; the two real assets succeed, the
-    missing one fails by itself (a message, no token)."""
-    print_section("N68.6 — mixed batch stays 200, partial success")
+async def test_mixed_batch_with_missing_asset_saves_nothing(env):
+    """N68.6 — since lane 65 B3 the batch is all or nothing: one asset with market data, one without, one that does not
+    exist → 200, ``committed`` false, one ``assetNotFound`` issue on the missing item, every result failed, and the two real
+    assets keep their currency and their prices. Red before B3: the two real assets were saved and the missing one failed
+    alone."""
+    print_section("N68.6 — mixed batch with a missing asset saves nothing")
     client, owned = env
     with_data = await _create_asset(client, owned, "N68.6-A", currency="USD")
     start = date.today() - timedelta(days=3)
@@ -408,17 +410,16 @@ async def test_mixed_batch_keeps_200_with_partial_success(env):
         ],
     )
 
-    assert resp.status_code == 200, f"expected 200 (partial), got {resp.status_code}: {resp.text}"
+    assert resp.status_code == 200, f"expected 200, got {resp.status_code}: {resp.text}"
     assert OLD_TOKEN not in resp.text, resp.text
     body = resp.json()
-    per_asset = {r["asset_id"]: r for r in body["results"]}
-    assert per_asset[with_data]["success"] is True, f"{per_asset[with_data]}. Red today (N68): refused with the token"
-    assert per_asset[empty]["success"] is True, per_asset[empty]
-    assert per_asset[ghost]["success"] is False and "not found" in per_asset[ghost]["message"], per_asset[ghost]
-    assert body["success_count"] == 2, body
-    assert await _currency(client, with_data) == "EUR" and await _currency(client, empty) == "EUR"
-    assert await _prices_of(client, with_data, start, 2) == []
-    print_success("partial success 200: two patched, one not found")
+    assert body["committed"] is False, body
+    assert [(i["code"], i["asset_id"], i["index"]) for i in body["issues"]] == [("assetNotFound", ghost, 2)], body["issues"]
+    assert len(body["results"]) == 3 and all(r["success"] is False for r in body["results"]), body["results"]
+    assert body["success_count"] == 0, body
+    assert await _currency(client, with_data) == "USD" and await _currency(client, empty) == "USD"
+    assert len(await _prices_of(client, with_data, start, 2)) == 2, "the rolled-back batch must not wipe the prices"
+    print_success("missing asset: nothing saved, nothing wiped")
 
 
 @pytest.mark.asyncio

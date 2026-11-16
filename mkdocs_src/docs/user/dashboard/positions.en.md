@@ -1,10 +1,10 @@
 # 🔍 Positions & Analysis
 
-The **Positions** tab shows what you hold, what each position earned in the period and, one click away, the FIFO lots behind any position. Each broker's page has the same tab for that broker alone, with the same table settings.
+The **Positions** tab shows what you hold, what each position earned in the period and, one click away, the lots behind any position, in FIFO or LIFO. Each broker's page has the same tab for that broker alone, with the same table settings.
 
 - 📋 **[Holdings](#holdings)** — what you own on the end date
 - 📈 **[Period](#performance)** — what each position earned in the period
-- 🔬 **[FIFO Lots Analysis](#fifo-lots-analysis)** — the lots behind one position
+- 🔬 **[Lots Analysis](#fifo-lots-analysis)** — the lots behind one position, in FIFO or LIFO
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Portfolio (Table)" alt="Portfolio Table View">
@@ -17,11 +17,26 @@ The **Positions** tab shows what you hold, what each position earned in the peri
 
 ## 🎛️ Choosing a view
 
-- **[Portfolio](#holdings) / [Period](#performance)** switches between what you own and what each position earned; **Table / Map** (the two icons) between a table and a chart.
-- **The eye icon** (in Table) shows, hides or reorders the columns; **Reset layout** restores them. **See all →** opens the Assets page.
-- **To dig into a position**, open its **⋮** menu in a table, or right-click it in any view: **Analyze Lots** opens the [FIFO Lots Analysis](#fifo-lots-analysis) below the positions (on the Dashboard as on a broker's page), **View Asset** the asset's page.
+- **[Portfolio](#holdings) / [Period](#performance)** switches between what you own and what each position earned; **[Global / Broker](#global-or-broker)** (the globe and the briefcase) between one row per asset and one row per asset and broker; **Table / Map** (the two icons) between a table and a chart. On a phone the three sit on a line of their own, under the title.
+- **The eye icon** (in Table) shows, hides or reorders the columns; **Reset layout** restores them. The **See all** badge opens the Assets page.
+- **To dig into a position**, open its **⋮** menu in a table, or right-click it in any view: **Analyze Lots** opens the [Lots Analysis](#fifo-lots-analysis) below the positions (on the Dashboard as on a broker's page), **View Asset** the asset's page.
 
 LibreFolio remembers your choices.
+
+### 🌐 Global or Broker {: #global-or-broker }
+
+When the same asset sits at two brokers or more, **Broker** (the default) shows a row for each broker, and **Global** one row for the asset. The switch appears only when the Dashboard shows two brokers or more; a broker's page never has it, since there the two views are the same.
+
+A **Global** row is the **sum of its brokers**, never a recalculation as if everything sat at one broker: each broker keeps its own purchase cost, lots and sales.
+
+- **Quantity, Value, P&L, Δ1, income and costs** are added up.
+- **Percentages are worked out from the sums**, never averaged. A position +10 % on 1 000 € at one broker and −10 % on 9 000 € at another is **−8 %** in Global (−800 € on 10 000 €), not 0 %.
+- **PMC** is the total cost over the total quantity; **Yield on Cost** the brokers' income over the total cost (`—` when a broker has none to give); the **Annualized** return is worked out on the sums too.
+- **The Broker column** shows the icons of the brokers that hold the asset; hover them for their names.
+- **In Period**, a sale keeps the cost of the broker that sold: buying 10 at 100 € at one broker and 10 at 200 € at another, then selling 5 at 250 € at the second, realizes +250 €, not the +750 € a single queue would invent. A transfer between two brokers you see moves nothing out of the asset. The **Other Period Effects** of the same kind are added up too, with the icons of their brokers.
+- **The Return of the positions chart** draws one line per asset, the sum of its brokers, instead of a solid and a dashed line on top of each other. Your ticks follow the switch.
+
+LibreFolio remembers the choice on this device, as the columns.
 
 ---
 
@@ -66,7 +81,7 @@ Which of your positions did better than the portfolio, and which worse? On the D
 - **Nothing ticked**: the chart shows the portfolio line only. **Tick a row**, in either table, to add a line for that position, and tick more to compare them.
 - **The legend** under the title has one button per line, named by the asset's name (a name too long for its button scrolls by itself): click it to turn the line off and on. A **flag** marks a position that closed, and a **warning mark** one with a missing price or exchange rate, whose line leaves those days out.
 - **Abs / % / Rolling** switch the view; the buttons are on the chart, top right, drawn as the Assets list draws them: the **line chart** icon for **Abs**, **%** for the percent, the **calendar with arrows** icon for **Rolling** (hover a button to read its name). **Abs** is the position's profit or loss in money, from the start of the period. **%** is its return in *base 100*: every line starts at 100 on the first day of the period, so 112 means +12%. **Rolling** is described below. LibreFolio remembers the view.
-- **Colours** are the asset's: a line wears the colour its asset has in the allocation pie and history beside it, whatever you tick and in whatever order. When two brokers hold the same asset, their lines share the colour and differ by pattern: the first is solid, the other dashed (then dotted, then dash-dotted).
+- **Colours** are the asset's: a line wears the colour its asset has in the allocation pie and history beside it, whatever you tick and in whatever order. When two brokers hold the same asset, their lines share the colour and differ by pattern: the first is solid, the other dashed (then dotted, then dash-dotted); in [Global](#global-or-broker) the asset has one line.
 - **The box that follows the cursor** lists every drawn line on that day; a name too long for the box scrolls by itself.
 - **A closed position's line ends on the day it closed**; hover the legend button for the date.
 - **Up to 50 positions** can be drawn at once.
@@ -121,9 +136,14 @@ Which positions made or lost money in the period, and how? **Period** lists ever
 
 ---
 
-## 🔬 FIFO Lots Analysis {: #fifo-lots-analysis }
+## 🔬 Lots Analysis (FIFO / LIFO) {: #fifo-lots-analysis }
 
-Which purchases make up a position, where are they held, and how has each one done? The **FIFO Lots Analysis** answers lot by lot: each purchase opens a *lot*, and each sale closes the **oldest** open lots first — First-In, First-Out.
+Which purchases make up a position, where are they held, and how has each one done? The **Lots Analysis** answers lot by lot: each purchase opens a *lot*, and each sale closes open lots in the order of the method you choose in the panel's header:
+
+- **FIFO** (First-In, First-Out): the **oldest** open lot first. The panel opens in FIFO.
+- **LIFO** (Last-In, First-Out): the **most recent** open lot first — the method Italian law names for the self-declared tax regime (see [Taxation](../../financial-theory/fundamentals/taxation.md#italy)).
+
+Switching is instant and is not saved: the panel opens in FIFO the next time. The lots are the same in both methods, so the lots you picked stay picked; what changes is which lot each sale closed, and the figures that follow — open quantity, realized P&L, value and return. Within one day, purchases count before sales, in both methods.
 
 Choose **Analyze Lots** on a position and the panel opens, for the brokers of the page: your broker filter on the Dashboard, the broker itself on its own page. On the Dashboard, as on a broker's page, it opens **below the positions**: the positions table and the return chart stay on screen. **View Asset** (↗) opens the asset; **✕** closes the panel, and so does the browser's back button.
 
@@ -139,7 +159,7 @@ Choose **Analyze Lots** on a position and the panel opens, for the brokers of th
 
 **How the blocks work together**
 
-- **One selection**: click bubbles, bars or table rows to pick lots; with none picked, every visible lot counts. **Open / Closed**, on the timeline, filters every block.
+- **One selection**: click bubbles, bars or table rows to pick lots; with none picked, every visible lot counts. **Open / Closed**, on the timeline, filters every block. The selection survives a switch between **FIFO** and **LIFO**, even for a lot the filter hides in one method.
 - **Double-click to jump**: from a chart marker to the lots of that transaction, from a timeline bar to its table row, and back.
 - **Full broker amounts**: on a broker you co-own, your share is not applied here, unlike the KPI cards and Holdings.
 
@@ -225,7 +245,7 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 
 ??? warning "⚠️ When the panel warns you"
 
-    - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner). The folded banner also lists income and costs that no lot could take — a dividend paid after every lot was sold, for example — each with its own amount and date.
+    - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner): for an exchange rate the panel's banner has the same buttons as the Dashboard's — **Add pair** when the pair is not configured, **Sync rates** when its rates are missing or old — and the panel, and the Dashboard, update once the rates are in. Each method has its own banner: with lots in two currencies, a rate may be missing in one method and not in the other. The folded banner also lists income and costs that no lot could take — a dividend paid after every lot was sold, for example — each with its own amount and date.
     - **A red message** means the quantities or transfers of some of the asset's transactions do not add up, so its lots cannot be rebuilt. It lists each transaction to fix with its day, its broker, what is wrong and a **Go to transaction** button. Meanwhile the panel hides the lots, their timeline and the comparison, and the first chart keeps only its **Avg. Cost** lines and the **Market Price**. Fix those transactions and the lots come back.
     - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale, no transfer whose cost counts as its price — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
 

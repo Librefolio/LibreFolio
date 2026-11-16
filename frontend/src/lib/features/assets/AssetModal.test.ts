@@ -568,6 +568,9 @@ describe('AssetModal — opt-in creation success links', () => {
         vi.mocked(zodiosApi.patch_assets_bulk_api_v1_assets_patch).mockResolvedValueOnce({
             results: [{asset_id: id, success: true, message: '[[patched-response]]'}],
             success_count: 1,
+            committed: true,
+            issues: [],
+            warnings: [],
         });
         vi.mocked(zodiosApi.remove_providers_bulk_api_v1_assets_provider_delete).mockResolvedValueOnce({
             results: [{asset_id: id, success: true, deleted_count: 0}],
@@ -771,7 +774,7 @@ describe('AssetModal — opt-in creation success links', () => {
 // =========================================================================
 describe('AssetModal — edit submit', () => {
     it('PATCHes with the asset id and the edited name, then fires onupdated', async () => {
-        patchFn().mockResolvedValue({results: [{success: true, asset_id: 7}], success_count: 1} as never);
+        patchFn().mockResolvedValue({results: [{success: true, asset_id: 7}], success_count: 1, committed: true, issues: [], warnings: []} as never);
         const onupdated = vi.fn();
         render(AssetModal, {
             open: true,
@@ -793,11 +796,45 @@ describe('AssetModal — edit submit', () => {
         expect(zodiosApi.provider_change_impact_api_v1_assets_provider_impact_post).not.toHaveBeenCalled();
     });
 
+    // Lane 65 (F1): the PATCH is all or nothing and answers 200 either way. `committed=false` means nothing was saved: the
+    // modal stays open on the draft, the inline banner carries the sentence of the first issue (the figures come from the
+    // issue's params, so they are asserted, not the wording), and nothing is announced as saved.
+    it.each([
+        {label: 'the INDEX block', code: 'indexWithTransactions', params: {tx_count: 37}, figure: '37'},
+        {label: 'a name another asset has', code: 'assetNameTaken', params: {name: 'Zeta Holdings Ltd'}, figure: 'Zeta Holdings Ltd'},
+    ])('committed=false ($label) keeps the modal open with the issue in the banner, and saves nothing', async ({code, params, figure}) => {
+        patchFn().mockResolvedValue({
+            results: [{success: false, asset_id: 7, message: 'English message of the backend', updated_fields: null}],
+            success_count: 0,
+            errors: [],
+            committed: false,
+            issues: [{asset_id: 7, index: 0, code, message: 'English message of the backend', params, field: code === 'assetNameTaken' ? 'display_name' : 'asset_type'}],
+            warnings: [],
+        } as never);
+        const onupdated = vi.fn();
+        render(AssetModal, {
+            open: true,
+            editMode: true,
+            editData: {id: 7, display_name: 'Old Name', currency: 'USD', asset_type: 'STOCK', quote_base_quantity: 1, active: true},
+            onupdated,
+        });
+        await waitForForm();
+        await waitFor(() => expect(nameInput().value).toBe('Old Name'));
+
+        await fill('asset-modal-display-name', 'New Name');
+        await fireEvent.click(saveBtn());
+
+        await waitFor(() => expect(screen.queryByTestId('asset-modal-form-error')).not.toBeNull());
+        expect(screen.getByTestId('asset-modal-form-error').textContent).toContain(figure);
+        expect(onupdated).not.toHaveBeenCalled();
+        expect(removeProviderFn(), 'a refused PATCH stops the save: no provider step follows').not.toHaveBeenCalled();
+    });
+
     // N68 (lot X5-3): the currency change is no longer blocked by the PATCH. The dry run (`GET /assets/{id}/market-data/summary`)
     // is asked before any write, the confirm modal opens only when something would be lost, and the old token/409 branch is
     // gone: the whole flow is in `AssetModal.currencyChange.test.ts` (it needs a currency list, which this file leaves empty).
     it('a save that keeps the currency never asks the currency-change dry run (N68)', async () => {
-        patchFn().mockResolvedValue({results: [{success: true, asset_id: 7}], success_count: 1} as never);
+        patchFn().mockResolvedValue({results: [{success: true, asset_id: 7}], success_count: 1, committed: true, issues: [], warnings: []} as never);
         const onupdated = vi.fn();
         render(AssetModal, {
             open: true,

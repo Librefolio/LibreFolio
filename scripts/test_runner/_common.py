@@ -51,6 +51,28 @@ def apply_subprocess_coverage_env(env: dict) -> dict:
     return env
 
 
+def server_coverage_dir() -> Path:
+    """The folder of the parts every backend server under coverage writes: ``.coverage_data/parts/server/``."""
+    return PROJECT_ROOT / ".coverage_data" / "parts" / "server"
+
+
+def apply_server_coverage_env(env: dict) -> dict:
+    """``apply_subprocess_coverage_env`` for a backend server (the runner's shared backend, Playwright's own webServer), with
+    ``COVERAGE_FILE`` in ``server_coverage_dir()``, which it creates: the server and its spawn children write
+    ``.coverage.<host>.pid<N>.<rand>`` there, never in the project root.
+
+    In the root they were within reach of pytest-cov, whose session-finish ``combine()`` takes every ``.coverage.*`` beside
+    its ``.coverage``: in the C3 run of 13/11/2026 the shared backend, paused for ``db create-clean``, left its parts there,
+    the next pytest session combined them, and the API and E2E server's whole measure went into ``.coverage_data/backend``.
+    The finalizer combines this folder where the run's mode says (``_coverage._finalize_coverage``).
+    """
+    apply_subprocess_coverage_env(env)
+    directory = server_coverage_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    env["COVERAGE_FILE"] = str(directory / ".coverage")
+    return env
+
+
 # Global flag for coverage mode (set by main())
 # Holds the requested language: "py", "js", "all" — or False when disabled.
 _COVERAGE_MODE = False
@@ -526,15 +548,9 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
             if verbose:
                 flags_to_add.append("-s")
             if use_coverage:
-                html_dir = "htmlcov-backend" if _COVERAGE_SOURCE != "frontend" else "htmlcov-backend-e2e"
-                flags_to_add.extend(
-                    [
-                        "--cov=backend/app",
-                        "--cov-append",
-                        f"--cov-report=html:{html_dir}",
-                        "--cov-report=term-missing:skip-covered",
-                    ]
-                )
+                # `--cov-report=` (no report): the finalizer writes each HTML once, at the end of the run (step 3.9). A report
+                # here rewrote htmlcov-backend from the whole accumulated database after every action.
+                flags_to_add.extend(["--cov=backend/app", "--cov-append", "--cov-report="])
             if flags_to_add:
                 cmd = cmd[: pytest_idx + 1] + flags_to_add + cmd[pytest_idx + 1 :]
                 if use_coverage:
@@ -544,6 +560,9 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
 
     # --- Coverage isolation: swap-in the correct accumulated DB ---
     if use_coverage:
+        from . import _coverage  # noqa: PLC0415 — _coverage imports this module
+
+        _coverage.LEDGER.expect_python(_COVERAGE_SOURCE or "backend")
         cwd_p = Path(os.getcwd())
         data_dir = cwd_p / ".coverage_data"
         data_dir.mkdir(exist_ok=True)

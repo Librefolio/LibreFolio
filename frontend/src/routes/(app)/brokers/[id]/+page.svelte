@@ -168,7 +168,7 @@
     }
 
     const txBulkActions = $derived([
-        {id: 'edit', icon: Pencil, label: () => $_('common.edit'), onClick: editSelectedTx},
+        {id: 'edit', icon: Pencil, label: () => $_('common.edit'), primary: true, onClick: editSelectedTx},
         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone'), onClick: cloneSelectedTx},
         {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger' as const, onClick: deleteSelectedTx},
     ]);
@@ -308,7 +308,7 @@
         </div>
         <div class="flex items-center gap-2">
             {#if canEdit && txSelectedRows.length > 0}
-                <DataTableToolbar selectedCount={txSelectedRows.length} bulkActions={txBulkActions} onClearSelection={clearTxSelection} />
+                <DataTableToolbar variant="floating" selectedCount={txSelectedRows.length} bulkActions={txBulkActions} onClearSelection={clearTxSelection} />
             {/if}
             <ColumnVisibilityToggle tableRef={table?.getTableRef()} />
             {#if canEdit}

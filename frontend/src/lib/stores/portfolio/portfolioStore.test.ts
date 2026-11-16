@@ -24,7 +24,7 @@ let store: Record<string, unknown>;
  */
 let mutation: Record<string, unknown>;
 
-type ReportOptions = {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean; fullShare?: boolean};
+type ReportOptions = {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean; fullShare?: boolean; groupByAsset?: boolean};
 /** `fetchReport`'s arguments without `force`: the same key, read synchronously. */
 type PeekReport = (brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, includeContribution?: boolean, includeBreakdown?: boolean, includeHistory?: boolean, includeAllocationHistory?: boolean, options?: ReportOptions) => {report: unknown; stale: boolean} | null;
 
@@ -340,5 +340,18 @@ describe('portfolioStore — the brokers counted whole (MF6-3, D4)', () => {
         expect(reportApi.mock.calls[1][0]).toMatchObject({apply_ownership_share: false});
         expect(peekReport([1], '2025-01-01', '2025-12-31', 'EUR')?.report).toMatchObject({marker: 'share'});
         expect(peekReport([1], '2025-01-01', '2025-12-31', 'EUR', false, false, true, true, {fullShare: true})?.report).toMatchObject({marker: 'whole'});
+    });
+
+    it('sends group_by=asset only when asked (project 74, «Globale»), and keeps it apart from the per-broker answer in the cache', async () => {
+        reportApi.mockResolvedValueOnce({marker: 'broker'}).mockResolvedValueOnce({marker: 'asset'});
+        const perBroker = await fetchReport([1, 2], '2025-01-01', '2025-12-31', 'EUR', false, true, false, false, false);
+        const perAsset = await fetchReport([1, 2], '2025-01-01', '2025-12-31', 'EUR', false, true, false, false, false, {groupByAsset: true});
+        expect(perBroker).toMatchObject({marker: 'broker'});
+        expect(perAsset).toMatchObject({marker: 'asset'});
+        expect(reportApi).toHaveBeenCalledTimes(2);
+        expect(reportApi.mock.calls[0][0]).not.toHaveProperty('group_by');
+        expect(reportApi.mock.calls[1][0]).toMatchObject({group_by: 'asset', include_positions_contribution: true});
+        expect(peekReport([1, 2], '2025-01-01', '2025-12-31', 'EUR', true, false, false, false)?.report).toMatchObject({marker: 'broker'});
+        expect(peekReport([1, 2], '2025-01-01', '2025-12-31', 'EUR', true, false, false, false, {groupByAsset: true})?.report).toMatchObject({marker: 'asset'});
     });
 });

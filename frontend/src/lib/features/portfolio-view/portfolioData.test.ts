@@ -10,7 +10,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {get} from 'svelte/store';
 import type {PortfolioReport} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {createPortfolioData, type PortfolioDataDeps, type PortfolioDataInputs} from './portfolioData';
-import type {PortfolioScope, ReportCall} from './portfolioDataScope';
+import type {PortfolioScope, PositionsGrouping, ReportCall} from './portfolioDataScope';
 import type {ActivePolling, ActivePollingOptions, ActivePollingState} from '$lib/features/live-updates/activePolling';
 import type {LivePriceResult} from '$lib/services/livePriceService';
 
@@ -32,8 +32,18 @@ function deferred<T>() {
 }
 
 /** What a controller needs from its page and from the network, all of it fake and all of it recorded. */
-function setup(overrides: {scope?: Partial<PortfolioScope>; canAsk?: boolean; brokersKnown?: boolean; livePrices?: boolean; today?: string} = {}) {
-    const state = {scope: {...baseScope, ...overrides.scope}, canAsk: overrides.canAsk ?? true, brokersKnown: overrides.brokersKnown ?? true, alive: true, generation: 1, broker2: true, livePrices: overrides.livePrices ?? true, today: overrides.today ?? '2026-10-28'};
+function setup(overrides: {scope?: Partial<PortfolioScope>; canAsk?: boolean; brokersKnown?: boolean; livePrices?: boolean; today?: string; grouping?: PositionsGrouping} = {}) {
+    const state = {
+        scope: {...baseScope, ...overrides.scope},
+        canAsk: overrides.canAsk ?? true,
+        brokersKnown: overrides.brokersKnown ?? true,
+        alive: true,
+        generation: 1,
+        broker2: true,
+        livePrices: overrides.livePrices ?? true,
+        today: overrides.today ?? '2026-10-28',
+        grouping: overrides.grouping ?? ('broker' as PositionsGrouping),
+    };
     /** The live pollers the controller started (FB-28): a case calls `run()` by hand, as the timer would. */
     const pollers: Array<{options: ActivePollingOptions; stopped: boolean}> = [];
     const priceCalls: number[][] = [];
@@ -83,16 +93,18 @@ function setup(overrides: {scope?: Partial<PortfolioScope>; canAsk?: boolean; br
         onFirstDay: (day) => firstDays.push(day),
         onRefreshFailed: () => failures.push(failures.length + 1),
         livePrices: () => state.livePrices,
+        grouping: () => state.grouping,
     };
     const data = createPortfolioData(inputs, deps);
     return {data, state, calls, answers, cache, firstDays, failures, pollers, priceCalls, priceAnswers};
 }
 
 /** The three questions, told apart the way the cache would: by what they ask. */
-function kindOf(call: ReportCall): 'main' | 'contribution' | 'candles' | 'light' {
+function kindOf(call: ReportCall): 'main' | 'contribution' | 'candles' | 'light' | 'contribution-asset' | 'light-asset' {
     if (call.options?.includePnlCandles) return 'candles';
-    if (call.includeContribution) return 'contribution';
-    return call.includeHistory ? 'main' : 'light';
+    if (call.includeContribution) return call.options?.groupByAsset ? 'contribution-asset' : 'contribution';
+    if (call.includeHistory) return 'main';
+    return call.options?.groupByAsset ? 'light-asset' : 'light';
 }
 
 beforeEach(() => {
@@ -168,7 +180,10 @@ describe('the main report', () => {
         const {data, answers} = setup();
         const first = deferred<PortfolioReport | null>();
         const second = deferred<PortfolioReport | null>();
-        answers.push(() => first.promise, () => second.promise);
+        answers.push(
+            () => first.promise,
+            () => second.promise,
+        );
         const older = data.loadAll(true);
         const newer = data.loadAll(true);
         second.resolve(report({summary: {net_worth: 2}}));
@@ -405,6 +420,81 @@ describe('the contribution', () => {
     });
 });
 
+describe('the grouping of the positions (project 74, «Globale»)', () => {
+    const grouped = (fields: Record<string, unknown> = {}) => report({summary: {net_worth: 1, holdings: [{asset_id: 7, broker_id: null, broker_ids: [1, 2]}]}, positions_contribution: {positions: ['asset']}, ...fields});
+
+    it('in Globale the contribution is asked with group_by asset, and the grouped holdings come from the same answer', async () => {
+        const {data, answers, calls} = setup({grouping: 'asset'});
+        answers.push(() => Promise.resolve(grouped()));
+        await data.loadContribution();
+        expect(calls.map((entry) => kindOf(entry.call))).toEqual(['contribution-asset']);
+        expect(get(data).positionsContribution).toEqual({positions: ['asset']});
+        expect(get(data).groupedSummary?.holdings).toEqual([{asset_id: 7, broker_id: null, broker_ids: [1, 2]}]);
+    });
+
+    it('in Broker nothing changes: the contribution of every broker, no grouped holdings', async () => {
+        const {data, answers, calls} = setup();
+        answers.push(() => Promise.resolve(report({positions_contribution: {positions: ['broker']}})));
+        await data.loadContribution();
+        expect(calls.map((entry) => kindOf(entry.call))).toEqual(['contribution']);
+        expect(get(data).groupedSummary).toBeNull();
+    });
+
+    it('a change of grouping drops the rows of the other one and shows the cached rows of the new one, asking nothing', async () => {
+        const {data, state, cache, answers, calls} = setup();
+        answers.push(() => Promise.resolve(report({positions_contribution: {positions: ['broker']}})));
+        await data.loadContribution();
+        state.grouping = 'asset';
+        data.groupingChanged();
+        expect(get(data).positionsContribution).toBeNull();
+        expect(get(data).groupedSummary).toBeNull();
+        cache.set('contribution-asset', {report: grouped(), stale: false});
+        state.grouping = 'broker';
+        data.groupingChanged();
+        state.grouping = 'asset';
+        data.groupingChanged();
+        expect(get(data).positionsContribution).toEqual({positions: ['asset']});
+        expect(get(data).groupedSummary?.holdings).toHaveLength(1);
+        expect(calls).toHaveLength(1);
+    });
+
+    it('a late answer of the grouping the user left is not applied', async () => {
+        const {data, state, answers} = setup();
+        const pending = deferred<PortfolioReport | null>();
+        answers.push(() => pending.promise);
+        const load = data.loadContribution();
+        state.grouping = 'asset';
+        data.groupingChanged();
+        pending.resolve(report({positions_contribution: {positions: ['broker']}}));
+        await load;
+        expect(get(data).positionsContribution).toBeNull();
+        expect(get(data).contributionLoading).toBe(false);
+    });
+
+    it('the main load shows the cached grouped rows and asks them again in background when stale', async () => {
+        const {data, cache, calls, answers} = setup({grouping: 'asset'});
+        cache.set('contribution-asset', {report: grouped(), stale: true});
+        answers.push(() => Promise.resolve(report()));
+        answers.push(() => Promise.resolve(grouped({summary: {net_worth: 1, holdings: [{asset_id: 7, broker_id: null, broker_ids: [1, 2], quantity: '9'}]}})));
+        await data.loadAll();
+        await vi.runAllTimersAsync();
+        expect(calls.map((entry) => kindOf(entry.call))).toEqual(['main', 'contribution-asset']);
+        expect(get(data).groupedSummary?.holdings).toEqual([{asset_id: 7, broker_id: null, broker_ids: [1, 2], quantity: '9'}]);
+    });
+
+    it('the live poll in Globale also asks the grouped summary, so the rows follow the prices', async () => {
+        const {data, answers, calls, pollers} = setup({grouping: 'asset'});
+        answers.push(() => Promise.resolve(report({summary: {net_worth: 1, holdings: [{asset_id: 7, broker_id: 1}]}})));
+        await data.loadAll();
+        answers.push(() => Promise.resolve(report({summary: {net_worth: 2, holdings: [{asset_id: 7, broker_id: 1}]}, history: undefined})));
+        answers.push(() => Promise.resolve(grouped({summary: {net_worth: 2, holdings: [{asset_id: 7, broker_id: null, broker_ids: [1, 2], quantity: '3'}]}})));
+        await pollers[0].options.run();
+        expect(calls.slice(-2).map((entry) => kindOf(entry.call))).toEqual(['light', 'light-asset']);
+        expect(calls[calls.length - 1].force).toBe(true);
+        expect(get(data).groupedSummary?.holdings).toEqual([{asset_id: 7, broker_id: null, broker_ids: [1, 2], quantity: '3'}]);
+    });
+});
+
 describe('the P&L candles', () => {
     it('asks the candles question once, and keeps the answer', async () => {
         const {data, answers, calls} = setup();
@@ -515,7 +605,6 @@ describe('the positions chart follows the same scope', () => {
     });
 });
 
-
 // =============================================================================
 // FB-28 · the Dashboard follows the current prices
 // =============================================================================
@@ -523,7 +612,14 @@ describe('the positions chart follows the same scope', () => {
 describe('the live poll (FB-28)', () => {
     const money = (amount: string) => ({code: 'EUR', amount});
     const holding = (assetId: number, brokerId: number) => ({asset_id: assetId, broker_id: brokerId});
-    const live = (fields: Record<string, unknown> = {}) => ({summary: {net_worth: money('100'), market_value: money('80'), cash_total: money('20'), holdings: [holding(7, 1), holding(8, 1), holding(7, 2)]}, history: [{date: '2026-10-27', nav_value: money('90')}, {date: '2026-10-28', nav_value: money('100')}], ...fields});
+    const live = (fields: Record<string, unknown> = {}) => ({
+        summary: {net_worth: money('100'), market_value: money('80'), cash_total: money('20'), holdings: [holding(7, 1), holding(8, 1), holding(7, 2)]},
+        history: [
+            {date: '2026-10-27', nav_value: money('90')},
+            {date: '2026-10-28', nav_value: money('100')},
+        ],
+        ...fields,
+    });
     const quote = (assetId: number, extra: Partial<LivePriceResult> = {}): LivePriceResult => ({assetId, value: 1, currency: 'EUR', source: null, error: null, errorCode: null, retryAfter: null, asOfDate: '2026-10-28', rangeChange: null, ...extra});
     const lightReport = (net: string) => report({summary: {net_worth: money(net), market_value: money('85'), cash_total: money('25'), holdings: [holding(7, 1)]}, history: undefined});
 

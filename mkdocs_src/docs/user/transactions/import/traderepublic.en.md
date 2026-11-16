@@ -1,7 +1,7 @@
 # <img src="https://traderepublic.com/favicon.ico" alt=""> Trade Republic
 
 LibreFolio imports Trade Republic's **Transaction export** (*Esportazione transazioni*), the CSV file Trade Republic
-offers since April 2026 for portfolio trackers. This guide comes from a real export shared by a user: thank you!
+offers since April 2026 for portfolio trackers. This guide comes from a real export shared by [valeriomicacchi-cpu](https://github.com/valeriomicacchi-cpu): thank you!
 
 ## 📥 How to Export
 

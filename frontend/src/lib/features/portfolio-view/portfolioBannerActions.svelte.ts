@@ -7,7 +7,8 @@
  * state lives here and both call `openFxPairModal`. `syncLoading` is what the view's `aria-busy` reads.
  *
  * Everything the actions need from the view comes in as a getter or a callback (`PortfolioBannerInputs`): the view stays the
- * owner of the report and of the counter that makes the open panels ask again.
+ * owner of the report and of the counter that makes the open panels ask again. The lots panel's banner (project 69, L4)
+ * builds its own instance on its own answer: its issues, its reload, `origin: 'lots-banner'`.
  */
 import {goto} from '$app/navigation';
 import {zodiosApi} from '$lib/api';
@@ -41,6 +42,8 @@ export interface PortfolioBannerInputs {
     /** New rates or prices: the open lots and risk panels ask again too, as after «Aggiorna». */
     onDataChanged: () => void;
     translate: (key: string, options?: Record<string, unknown>) => string;
+    /** Who raised the sync, in the `fx.rates.synced` event: `dashboard-banner` (the default) or `lots-banner`. */
+    origin?: string;
 }
 
 export class PortfolioBannerActions {
@@ -137,7 +140,7 @@ export class PortfolioBannerActions {
             }
             notify({
                 name: 'fx.rates.synced',
-                detail: {origin: 'dashboard-banner', pairs: request.pairs, start: request.start, end: request.end, outcome, stillMissing, stillStale: stillStale.length > 0},
+                detail: {origin: inputs.origin ?? 'dashboard-banner', pairs: request.pairs, start: request.start, end: request.end, outcome, stillMissing, stillStale: stillStale.length > 0},
                 toast: {variant, message},
             });
         } finally {

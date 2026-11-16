@@ -68,6 +68,8 @@ AI_EXPORT_PURE_TEST_PATHS = (
 PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
     "backend/test_scripts/test_services/test_fx_parse_errors.py",
+    "backend/test_scripts/test_services/test_fx_boe_quotes.py",
+    "backend/test_scripts/test_services/test_fx_fed_quotes.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
@@ -779,6 +781,16 @@ def services_owner_email_change(verbose: bool = False, test_names: list = None) 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_owner_email_change.py", test_names)
     return run_command(cmd, "Instance owner email change tests", verbose=verbose)
+
+
+def services_email_change(verbose: bool = False, test_names: list = None) -> bool:
+    """Test project 71, block 2: the change of address a user asks for from Profile."""
+    print_section("Services: Profile Email Change (project 71)")
+    print_info("Testing: services/accounts/email_change.py, user_service.py (revoke_pending_email_change, email_refusal, move_email), api/v1/auth.py change_password")
+    print_info("Tests: the revocations and the helpers; the request, resend, cancel, limits, the click with the account's session (D10), two clicks, refusals at the click, link_flow, pending_ids, the logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_change.py", test_names)
+    return run_command(cmd, "Profile email change tests", verbose=verbose)
 
 
 def services_owner_assignment(verbose: bool = False, test_names: list = None) -> bool:
@@ -1533,6 +1545,15 @@ def services_asset_event_store(verbose: bool = False, test_names: list = None) -
     print_info("Tests: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_event_store.py", test_names)
     return run_command(cmd, "Asset Event Store tests", verbose=verbose)
+
+
+def services_asset_type_rules(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the asset type rules: the family of a type and the INDEX rule (lane 65, lot B1)."""
+    print_section("Services: Asset Type Rules")
+    print_info("Testing: backend/app/services/assets/type_rules.py")
+    print_info("Tests: every AssetType has a family, ETF_*/CROWDFUND_* roll up, family change, INDEX with and without transactions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_type_rules.py", test_names)
+    return run_command(cmd, "Asset type rules tests", verbose=verbose)
 
 
 def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
@@ -2964,6 +2985,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "email-change",
+        services_email_change,
+        name="Profile Email Change (project 71)",
+        desc="A change of address asked from Profile waits for a link the account issued for itself (created_by_user_id): a password change (route), a password reset (link or command line) and a deactivation (administrator, user limit, command line) revoke it, an activation does not, and the host's link of the same account stays valid; email_refusal and move_email extracted from update_profile; email_change.py: a request issues one 24-hour link and changes nothing, confirmation to the new address and notice to the old, a refused send leaves nothing waiting, limits (5 an hour per account, resend after 60 s, 3 an hour per new mailbox, the instance budget) refuse before any write, a taken address refused, resend revokes the old link only after its email, cancel; the click: a dead link says why to anyone, a live one needs the account's session (D10) and without it nothing is written, the address moves verified and the sessions end, of two clicks one wins, a condition failed at the click revokes the link; link_flow, pending_ids, verification_mode; the owner flow untouched; no address or token in the log",
+        # PURE: every database is a private file under tmp_path built with create_all; the change-password route is called
+        # in this process on that file; profile and variables set with monkeypatch. No lane DB, no server, no email.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "owner-assignment",
         services_owner_assignment,
         name="Owner Assignment after a Restore (A5-2)",
@@ -3598,6 +3629,15 @@ Note: No backend server required.
         # every event and transaction written against them are visible to all concurrent tests.
         # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
         isolation="write-global",
+    )
+    add_test(
+        cat,
+        "asset-type-rules",
+        services_asset_type_rules,
+        name="Asset Type Rules",
+        desc="Lane 65 B1: asset_type_family (every AssetType member has a family; ETF_* -> ETF, CROWDFUND_* -> CROWDFUND, any other its own), family_changed, classify_type_change (ETF -> ETF_STOCK ok; CROWDFUND_REAL_ESTATE -> ETF_STOCK and STOCK -> BOND warn; ETF -> INDEX warns without transactions and is blocked with them, with no warning on top; an INDEX already holding transactions is left alone), only INDEX forbids transactions",
+        # PURE: functions over the enum, no session, no server.
+        isolation="pure",
     )
     add_test(
         cat,
@@ -4360,7 +4400,7 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52)",
+        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52); FED and BOE read each currency from its series, in the direction the bank quotes it (lane 75)",
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")

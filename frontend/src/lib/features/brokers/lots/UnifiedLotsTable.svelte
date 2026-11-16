@@ -1,6 +1,7 @@
 <script lang="ts">
     import {tick, untrack} from 'svelte';
     import {_} from '$lib/i18n';
+    import {translateOr} from '$lib/utils/core/translateOr';
     import {schemas} from '$lib/api';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -34,6 +35,8 @@
         onViewGanttLot?: (lotId: number) => void;
         onGotoOpeningTransaction?: (lot: LotSummarySchema) => void;
         onRowDoubleClick?: (lotId: number) => void;
+        /** The matching method on screen (project 69): the hint names it. */
+        matchingMethod?: string;
     }
 
     interface DisplayRow {
@@ -71,7 +74,7 @@
     const STATUS_FILTER_VALUES: LotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DISTRIBUTED', 'IN_TRANSIT', 'DEGRADED'];
     const IN_TRANSIT_FILTER_VALUE = '__IN_TRANSIT__';
 
-    let {lots = [], currency, brokers = [], selectedLotIds = undefined, onSelectionChange, onCustodyCellClick, onViewGanttLot, onGotoOpeningTransaction, onRowDoubleClick}: Props = $props();
+    let {lots = [], currency, brokers = [], selectedLotIds = undefined, onSelectionChange, onCustodyCellClick, onViewGanttLot, onGotoOpeningTransaction, onRowDoubleClick, matchingMethod = 'FIFO'}: Props = $props();
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
     let internalSelectedLotIds = $state<number[]>(untrack(() => selectedLotIds ?? []));
@@ -730,7 +733,7 @@
         <div class="flex min-w-0 items-center gap-3">
             <div>
                 <div class="text-base font-semibold text-lf-primary">{label('brokers.lots.unifiedLots', 'Lots')}</div>
-                <div class="text-xs text-lf-muted">{label('brokers.lots.unifiedLotsHint', 'Unified FIFO lots view with multi-selection and custody drill-down.')}</div>
+                <div class="text-xs text-lf-muted">{translateOr((key) => $_(key, {values: {method: matchingMethod}}), 'brokers.lots.unifiedLotsHint', `Unified lots view (${matchingMethod}) with multi-selection and custody drill-down.`)}</div>
             </div>
             <span class="inline-flex min-w-7 items-center justify-center rounded-full bg-lf-neutral px-2 py-0.5 text-xs font-semibold tabular-nums text-lf-secondary">
                 {lots.length}

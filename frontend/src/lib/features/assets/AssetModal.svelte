@@ -42,6 +42,7 @@
     import {trySave} from '$lib/utils/trySave';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {wipeRefusalMessage} from './currencyChangeErrors';
+    import {assertPatchCommitted} from './assetPatchResult';
     import {IMPACT_DIALOG, impactValues, loadProviderImpact, type ProviderImpact} from './providerImpact';
     import {currentLanguage} from '$lib/stores/app/language';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
@@ -1346,14 +1347,14 @@
             }
         }
 
-        const patchResp = await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
-        const resultItem = patchResp?.results?.[0];
-        if (!resultItem?.success) throw new Error(resultItem?.message || $t('assets.modal.saveFailed'));
+        // Lane 65: the PATCH is all or nothing and answers 200 either way. Not `committed` → nothing was saved: the sentence of
+        // the first issue (the INDEX block, a name another asset has, …) lands in the inline banner, in the interface language.
+        assertPatchCommitted(await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any), $t, $t('assets.modal.saveFailed'));
 
         // PATCH succeeded — sync the patched fields into the shared cache so
         // every consumer (transactions cell, AssetCard, AssetTable, …) sees
         // the new icon/name/etc. without a manual reload. The BE response
-        // only carries `{success, asset_id, message}`; we merge the fields
+        // only carries the per-item results; we merge the fields
         // the FE just submitted.
         mergeAssets([{id: assetId, ...(patchItem as unknown as Record<string, unknown>)}]);
 

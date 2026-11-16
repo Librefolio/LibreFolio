@@ -1,6 +1,6 @@
 # 🔬 Lots Analysis
 
-The **FIFO Lots Analysis** feature group is the frontend drill-down for the FIFO v3 subsystem. It is mounted from the **Dashboard Positions** tab and the **Broker detail Positions** tab, and complements the aggregate portfolio and WAC views with a per-lot perspective: **price vs WAC**, **custody topology**, **tabular inspection**, **value/return comparison**, and **lot-level chronology**.
+The **Lots Analysis** feature group is the frontend drill-down for the lot engine, in FIFO or LIFO (project 69). It is mounted from the **Dashboard Positions** tab and the **Broker detail Positions** tab, and complements the aggregate portfolio and WAC views with a per-lot perspective: **price vs WAC**, **custody topology**, **tabular inspection**, **value/return comparison**, and **lot-level chronology**.
 
 ---
 
@@ -74,6 +74,9 @@ When the panel opens or the asset / broker / date-range scope changes, `LotsAnal
 - `CUMULATIVE_WAC_HISTORY`
 - `INCOME_EVENTS`
 
+and `matching_methods: ['FIFO', 'LIFO']`: both methods in one answer (decision D1b), the common parts once and one block
+per method under `methods` (see [Response Shape](../../../backend/transactions/lots_analysis_service.md#response-shape)).
+
 This populates the shared lot list, the Gantt topology, Block 1 overlays, and the data-quality banner. A `FAILED` answer populates only the WAC lines, the market price line and the issues, and no selection fetch follows: see the `LotsAnalysisPanel` notes below.
 
 ### 2. Selection-scoped comparison fetch
@@ -83,7 +86,9 @@ A second `POST /portfolio/lots/analysis` request is triggered by the derived `ef
 - `VALUE_HISTORY`
 - `RETURN_HISTORY`
 
-This fetch is scoped to the current effective lot set and feeds **only** `LotComparisonChart`.
+with `matching_methods: [<the method on screen>]`. This fetch is scoped to the current effective lot set and the method
+on screen, and feeds **only** `LotComparisonChart`. Both fetches go through `lotsAnalysisStore` (page cache), whose key
+reads `matching_methods` as a list without order, like `broker_ids` and the analyses.
 
 ### 3. Shared selection model
 
@@ -96,6 +101,13 @@ This is encoded in:
 
 - `effectiveSelectionIds = selectedLotIds.length > 0 ? selectedLotIds : visibleLots.map(...)`
 - `effectiveSelectedLots = selectedLotIds.length > 0 ? selectedLots : visibleLots`
+
+**One selection for both methods** (decision D12). The lots are the same in FIFO and in LIFO — a lot is born of a
+purchase — so the selection stays when the method changes. Every new answer and every switch passes it through
+`keepSelection(selected, lots)` (`lotsAnalysisHelpers.ts`): the ids still among the answer's lots, in the user's order,
+and the very same array when none drops. It prunes on the **answer's** lots, never on the visible ones: a lot closed in
+one method and open in the other, hidden by the **Open** filter, stays picked across a switch and the histories are
+asked for it (E2E `LIFO-2`).
 
 The open/closed filter is also parent-owned. `LotGanttChart` renders the **Open / Closed** toggle, but `LotsAnalysisPanel` derives `visibleLots` so the WAC chart, table, and comparison chart stay consistent.
 
@@ -116,6 +128,15 @@ Then `LotCustodyModal` is rendered with the chosen lot and `history={lotEvents.f
 
 The parent is intentionally thin in business logic and heavy in orchestration:
 
+- owns the **matching method on screen** (`activeMethod`, project 69): a selector in its header, `lots-method-FIFO` /
+  `lots-method-LIFO` (`aria-pressed`), FIFO when the panel opens on an asset, never saved (D1). `applyMain(response)`
+  takes the common parts of a new answer — the market price line, the WAC lines, the range, `quote_base_quantity` — and
+  hands the rest to `applyMethod(response, method)`: the method's status, lots, Gantt, events, income markers, report
+  and `stale_fx_pairs`. A switch runs `applyMethod` alone on the answer on screen: nothing is asked, and the common parts
+  are not touched. The panel publishes the method whose block is on screen as `data-matching-method`;
+- names the method in the labels it passes down (`matchingMethod`): the title (`brokers.lots.detailTitle`), the table
+  hint (`unifiedLotsHint`), the realized P&L of the modal and of the comparison tooltip (`fifoPnl`, a key that keeps its
+  name, D5);
 - loads the initial payload and the selection payload in two separate `$effect`-driven requests;
 - resets `selectedLotIds`, shared zoom, and computed range when a new panel instance opens;
 - keeps Gantt and Block 1 zoom synchronized through `sharedZoomStart` / `sharedZoomEnd`;
@@ -133,7 +154,14 @@ The parent is intentionally thin in business logic and heavy in orchestration:
 The banner shows the issues `partitionLotIssues` leaves to it, folded when it mounts:
 
 - the header (`lot-data-quality-toggle`, `aria-expanded`) counts **categories** — issue codes — not issues: `dataQuality.headerErrors` and/or `dataQuality.headerWarnings`, or `dataQuality.headerInfoOnly` when every category is info;
-- unfolded, it draws one block per code (`lot-data-quality-issue-{code}`), errors first, then warnings, then info, without call-to-action buttons;
+- unfolded, it draws one block per code (`lot-data-quality-issue-{code}`), errors first, then warnings, then info;
+- **the Dashboard's pair actions** (project 69, L4 and L4b): on an issue whose `cta_action` is `add_fx_pair`,
+  `sync_fx_pair` or `sync_stale_fx` (`LOT_BANNER_ACTIONS`), the action hangs on that issue's own line, drawn by the
+  Dashboard banner's `DataQualityIssueActions` — the sync button above the line, one «add» chip per pair under it, the
+  same `data-testid`s as on the Dashboard. A click goes to the panel's own `PortfolioBannerActions` (see
+  [Data-Quality Banner](../../data-quality-banner.md)), built on the panel's report with `origin: 'lots-banner'`; its
+  forced reload asks the panel's analyses again and tells the host (`onRatesChanged`), whose report is asked again too.
+  Other actions draw nothing here: `navigate_asset` would open the asset the panel is already on;
 - `buildIssueGroups()` (`lotDataQualityHelpers.ts`, beside `partitionLotIssues` and `buildFailureRows`) gives each block its message lines: `IssueGroup.messages`, each `{key, messageKey, params}` and drawn as a `lot-data-quality-message`, in the order their issues came (J-53):
     - the code's issues **on a lot** — a finite `message_params.lot_id`, the lot visible or not — share **one** line, the first one's: they say the same thing of different lots, and the visible ones are the chips;
     - each issue **without a lot** — `lot_id` null, absent or not a number — gets a line of its own, with its own params: each orphan income or cost pool (`ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS`, one issue per pool) with its amount, currency and day, and each `MISSING_FX_RATES` notice (`dataQuality.missingFxRates` for the pairs with a provider, with their date range; `dataQuality.missingFxRatesManual` for the manual pairs). The same message key with the same params makes one line;
@@ -275,9 +303,9 @@ The list below reflects the literal `data-testid` strings present in the compone
 
 | Component | `data-testid` values |
 |---|---|
-| `LotsAnalysisPanel` | `lots-analysis-panel`, `lots-analysis-panel-title`, `lots-analysis-panel-asset-link`, `lots-analysis-panel-close`, `lots-analysis-panel-error`, `lots-analysis-panel-loading` |
+| `LotsAnalysisPanel` | `lots-analysis-panel` (with `data-matching-method`), `lots-method-selector`, `lots-method-FIFO`, `lots-method-LIFO`, `lots-analysis-panel-title`, `lots-analysis-panel-asset-link`, `lots-analysis-panel-close`, `lots-analysis-panel-error`, `lots-analysis-panel-loading` |
 | `LotAnalysisFailedNotice` | `lots-analysis-panel-failed`, `lots-analysis-failed-explanation`, `lots-analysis-failed-list`, `lots-analysis-failed-row-{code}-{transactionId}` (`none` in place of `{transactionId}` when the issue names no transaction), `lots-analysis-failed-date`, `lots-analysis-failed-broker`, `lots-analysis-failed-message`, `lots-analysis-failed-goto-{transactionId}` |
-| `LotDataQualityBanner` | `lot-data-quality-banner`, `lot-data-quality-toggle`, `lot-data-quality-issue-{code}`, `lot-data-quality-message` (one per message line of a block), `lot-data-quality-chip-{lotId}` |
+| `LotDataQualityBanner` | `lot-data-quality-banner`, `lot-data-quality-toggle`, `lot-data-quality-issue-{code}`, `lot-data-quality-message` (one per message line of a block), `lot-data-quality-chip-{lotId}`; the pair actions of `DataQualityIssueActions`: `data-quality-cta-{code}`, `data-quality-fx-pairs-{code}`, `data-quality-fx-pair-{slug}` |
 | `LotWacPriceChart` | `lot-wac-price-chart` (`data-state` is `drawn` when the chart draws, `empty` when it shows «No data available» instead; `data-price-line` is `drawn` when it also draws the market price line — out of «No data available», with a point of the line valued in the current **Abs** / **%** mode, the condition its series is pushed on — and `absent` otherwise), `lot-wac-yaxis-toggle`, `lot-wac-yaxis-auto`, `lot-wac-yaxis-zero`, `lot-wac-toggle-absolute`, `lot-wac-toggle-percentage` |
 | `LotGanttChart` | `lot-gantt-chart`, `lot-gantt-state-filter`, `lot-gantt-filter-open`, `lot-gantt-filter-closed`, `lot-gantt-scroll`, `lot-gantt-echart`, `lot-gantt-segment-{lotId}`, `lot-gantt-marker-{lotId}` (with `data-date` and `data-kinds`), `lot-gantt-sticky-axis`, `lot-gantt-legend`, `lot-gantt-legend-broker-{brokerId}`, `lot-gantt-legend-transit` |
 | `UnifiedLotsTable` | `unified-lots-table`, `unified-lots-custody-{lotId}` |

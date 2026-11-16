@@ -42,6 +42,7 @@ interface LotsBody {
     target_currency: string;
     requested_analyses: string[];
     selected_lot_ids?: number[];
+    matching_methods?: string[];
 }
 
 interface LotsStore {
@@ -275,5 +276,27 @@ describe('lotsAnalysisStore — first identity resolution', () => {
         lotsApi.mockResolvedValueOnce(answer('user 801'));
         expect(await store.fetchLotsAnalysis(MAIN)).toMatchObject(answer('user 801'));
         expect(lotsApi).toHaveBeenCalledTimes(2);
+    });
+
+    it('project 69: the methods asked are a list without order, and a method asked alone is its own question', async () => {
+        const store = await loadStore();
+        lotsApi.mockResolvedValue(answer('both'));
+        await store.fetchLotsAnalysis({...MAIN, matching_methods: ['FIFO', 'LIFO']});
+        expect(store.peekLotsAnalysis({...MAIN, matching_methods: ['LIFO', 'FIFO']}), 'the order of matching_methods made a new key').toMatchObject({response: answer('both'), stale: false});
+
+        lotsApi.mockResolvedValue(answer('fifo'));
+        await store.fetchLotsAnalysis({...SELECTION, matching_methods: ['FIFO']});
+        expect(store.peekLotsAnalysis({...SELECTION, matching_methods: ['LIFO']}), 'the LIFO histories of a selection share the key of its FIFO ones').toBeNull();
+    });
+
+    it('project 69 (D11): methodAnalysis reads the block of one method, or null when it was not asked', async () => {
+        const module = (await import(/* @vite-ignore */ STORE_MODULE)) as {methodAnalysis?: (response: unknown, method: string) => unknown};
+        expect(typeof module.methodAnalysis, 'lotsAnalysisStore exports no methodAnalysis()').toBe('function');
+        const fifo = {calculation_status: 'COMPLETE', lots: [{lot_id: 11}]};
+        const lifo = {calculation_status: 'DEGRADED', lots: [{lot_id: 11}]};
+        const response = {asset_id: 6, methods: {FIFO: fifo, LIFO: lifo}};
+        expect(module.methodAnalysis!(response, 'FIFO')).toBe(fifo);
+        expect(module.methodAnalysis!(response, 'LIFO')).toBe(lifo);
+        expect(module.methodAnalysis!({asset_id: 6, methods: {FIFO: fifo}}, 'LIFO')).toBeNull();
     });
 });

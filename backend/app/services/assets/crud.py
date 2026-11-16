@@ -29,6 +29,8 @@ from backend.app.schemas.assets.assets import (
     FAAssetDeleteResult,
     FAAssetMergePreview,
     FAAssetMergeResponse,
+    FAAssetPatchCode,
+    FAAssetPatchIssue,
     FAAssetPatchItem,
     FAAssetPatchResult,
     FABulkAssetCreateResponse,
@@ -41,6 +43,7 @@ from backend.app.schemas.common import (
     OldNew,
 )
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.type_rules import TypeChangeVerdict, classify_type_change
 from backend.app.services.financial_math.ledger_totals import position_quantities
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.asset.identifier import merge_other_identifiers
@@ -469,11 +472,20 @@ class AssetCRUDService:
         )
 
     @staticmethod
-    async def patch_assets_bulk(patches: List[FAAssetPatchItem], session: AsyncSession) -> FABulkAssetPatchResponse:  # noqa: C901 — per-field patch mapping, classification shallow-merge branch
+    async def patch_assets_bulk(patches: List[FAAssetPatchItem], session: AsyncSession, commit: bool = True) -> FABulkAssetPatchResponse:
         """
-        Patch multiple assets in bulk (partial success allowed).
+        Patch multiple assets in bulk: all or nothing.
 
-        Merge logic:
+        1. **Check** every item before anything is written (``_check_patch_items``): a missing asset and an asset with
+           transactions that would become an INDEX are issues; a change of type family is a warning, which never blocks.
+        2. **Any issue**: rollback, nothing saved, ``committed=False``, and every ``results[i].success`` is False.
+        3. **Apply** every item (``_apply_patch_item``, then a flush), and the currency change's wipe (N68). An exception
+           here becomes the issue ``patchFailed``, with rollback.
+        4. **Commit** once, then drop the provider caches of the assets whose currency changed. With ``commit=False``
+           (the dry run of ``POST /assets/validate``) the batch is rolled back instead, the caches stay, and the results
+           say what would have been saved.
+
+        Merge logic of one item:
         - Field absent in patch: IGNORE (keep existing value)
         - Field present with a value: UPDATE; an empty string clears it
         - Field present as None: CLEAR for the fields of ``CLEARED_BY_NULL`` (the edit modal sends ``icon_url: null``
@@ -481,27 +493,80 @@ class AssetCRUDService:
         - ``identifier_other``: a list replaces the whole list, an empty one clears it (stored as NULL); None = IGNORE
 
         For classification_params:
-        - If None: Set DB column to NULL
-        - If present: model_dump_json(exclude_none=True) to omit blank subfields
+        - If None or empty: Set DB column to NULL
+        - If present: shallow merge of the blocks sent (``exclude_unset``), an explicit null block removes that block
 
         Args:
-            patches: List of asset patches
+            patches: List of asset patches, each with its own fields
             session: Database session
+            commit: True saves the batch; False checks and applies it, then always rolls back (dry run)
 
         Returns:
-            FABulkAssetPatchResponse with per-item results
+            FABulkAssetPatchResponse with ``committed``, ``issues``, ``warnings`` and per-item results
         """
-
-        results: list[FAAssetPatchResult] = []
-
         # P0-5 (audit 08): no N+1. Preload every patched asset in ONE query.
         patch_ids = [patch.asset_id for patch in patches]
         asset_rows = (await session.execute(select(Asset).where(Asset.id.in_(patch_ids)))).scalars().all() if patch_ids else []
         assets_by_id = {asset.id: asset for asset in asset_rows}
+        prepared = AssetCRUDService._prepare_patch_payloads(patches)
 
-        # Prepare each patch's payload once (pure CPU — same semantics as the
-        # old in-loop computation, including the explicit-None clearing rule for
-        # classification_params).
+        # 1. Check, before any setattr.
+        issues, warnings = await AssetCRUDService._check_patch_items(prepared, assets_by_id, session)
+        if issues:
+            await session.rollback()
+            logger.info("Asset patch batch refused, nothing saved", issues=[(issue.asset_id, issue.code.value) for issue in issues])
+            return AssetCRUDService._unsaved_response(patches, issues, warnings)
+
+        # N68 (developer decision of 19/10/2026): a currency change is never blocked. The prices and the events that are
+        # not SPLITs carry the old currency, so they go with it, in the same transaction as the change; the SPLIT events
+        # and the transactions linked to them stay. The interface shows the counts first
+        # (``GET /assets/{id}/market-data/summary``) and asks.
+        # Imported here, not at the top: ``currency_change`` imports ``core``, whose theine cache starts a thread at import, and this
+        # module is in the import chain of the BRIM parse pool's forkserver preload, which must stay single-threaded.
+        from backend.app.services.assets.currency_change import delete_market_data_of_assets, drop_provider_caches, provider_cache_keys  # noqa: PLC0415 — keeps the forkserver preload single-threaded
+
+        # The currency each asset had before applying: the assets whose currency differs after it lose their prices and
+        # non-SPLIT events (N68), whatever the later fields of the item did.
+        currency_before = {asset_id: asset.currency for asset_id, asset in assets_by_id.items()}
+
+        # 2. Apply. Results are built from plain values: a rollback expires the rows.
+        results: list[FAAssetPatchResult] = []
+        failing = (0, patches[0].asset_id) if patches else (0, 0)
+        try:
+            for index, (patch, patch_dict) in enumerate(prepared):
+                failing = (index, patch.asset_id)
+                updated_fields = AssetCRUDService._apply_patch_item(assets_by_id[patch.asset_id], patch_dict)
+                await session.flush()
+                results.append(FAAssetPatchResult(asset_id=patch.asset_id, success=True, message=f"Asset patched successfully ({len(updated_fields)} fields)", updated_fields=updated_fields))
+                logger.info(f"Asset patched: id={patch.asset_id}, fields={updated_fields}")
+
+            currency_changed_ids = [asset_id for asset_id, asset in assets_by_id.items() if asset.currency != currency_before[asset_id]]
+            if currency_changed_ids:
+                failing = next((index, patch.asset_id) for index, (patch, _) in enumerate(prepared) if patch.asset_id in currency_changed_ids)
+            cache_keys = await provider_cache_keys(session, currency_changed_ids) if commit else []
+            await delete_market_data_of_assets(session, currency_changed_ids)
+        except Exception as exc:  # noqa: BLE001 — isolation boundary: any failure while applying rolls the whole batch back
+            index, asset_id = failing
+            logger.warning("Asset patch batch rolled back: applying an item failed", asset_id=asset_id, index=index, exc_info=exc)
+            await session.rollback()
+            issue = FAAssetPatchIssue(asset_id=asset_id, index=index, code=FAAssetPatchCode.PATCH_FAILED, message=f"Asset {asset_id} could not be saved ({type(exc).__name__})")
+            return AssetCRUDService._unsaved_response(patches, [issue], warnings)
+
+        if not commit:
+            # Dry run: what would have been saved, nothing written, no cache touched.
+            await session.rollback()
+            return FABulkAssetPatchResponse(results=results, success_count=len(results), errors=[], committed=False, issues=[], warnings=warnings)
+
+        # 3. The single commit of the batch.
+        await session.commit()
+
+        await drop_provider_caches(cache_keys, asset_ids=currency_changed_ids)
+
+        return FABulkAssetPatchResponse(results=results, success_count=len(results), errors=[], committed=True, issues=[], warnings=warnings)
+
+    @staticmethod
+    def _prepare_patch_payloads(patches: List[FAAssetPatchItem]) -> list[tuple[FAAssetPatchItem, dict]]:
+        """Each patch's payload, computed once (pure CPU), with the explicit-None clearing rules (T-2, classification)."""
         prepared: list[tuple[FAAssetPatchItem, dict]] = []
         for patch in patches:
             patch_dict = patch.model_dump(mode="json", exclude={"asset_id"}, exclude_unset=True, exclude_none=True)
@@ -515,118 +580,136 @@ class AssetCRUDService:
             if "classification_params" in patch.model_fields_set:
                 patch_dict["classification_params"] = patch.classification_params.model_dump(mode="json", exclude_unset=True) if patch.classification_params is not None else None
             prepared.append((patch, patch_dict))
+        return prepared
 
-        # The currency each asset had before the loop: the assets whose currency differs after it lose their prices and
-        # non-SPLIT events (N68), whatever the later fields of the item did.
-        currency_before = {asset_id: asset.currency for asset_id, asset in assets_by_id.items()}
+    @staticmethod
+    async def _check_patch_items(prepared: list[tuple[FAAssetPatchItem, dict]], assets_by_id: dict[int, Asset], session: AsyncSession) -> tuple[list[FAAssetPatchIssue], list[FAAssetPatchIssue]]:
+        """Judge every item of the batch, writing nothing: ``(issues, warnings)``, each sorted by item index.
 
-        for patch, patch_dict in prepared:
-            try:
-                # P0-5: the asset comes from the bulk preload above (identity map
-                # keeps sequential patches on the same id consistent).
-                asset = assets_by_id.get(patch.asset_id)
+        - an asset that does not exist -> issue ``assetNotFound``;
+        - a type that becomes INDEX on an asset that has transactions -> issue ``indexWithTransactions`` (``tx_count``);
+          an asset that already is INDEX is never blocked and never cleaned up;
+        - a name that another asset holds -> issue ``assetNameTaken`` (``name``), the clash ``uq_assets_display_name`` would
+          raise at the flush. Names are judged item after item, as the apply step meets them: a name an earlier item of the
+          batch has just left is free, a name still held (by an asset inside or outside the batch) is not, and an asset
+          that keeps its own name is no clash. Two items taking the same new name: the second one is the issue;
+        - a type that moves to another family -> warning ``assetFamilyChange`` (``from``, ``to``): it never blocks.
 
-                if not asset:
-                    results.append(
-                        FAAssetPatchResult(
-                            asset_id=patch.asset_id,
-                            success=False,
-                            message=f"Asset {patch.asset_id} not found",
-                            updated_fields=None,
-                        )
-                    )
-                    continue
-                asset_classification_params_before = json.loads(asset.classification_params) if asset.classification_params else {}
-                logger.debug(f"Asset found for patching: id={patch.asset_id}: {asset.model_dump_json()}")
+        The transactions are counted in one query, and only when an item turns an asset into an INDEX (P0-5); the names
+        in one query too, and only when an item renames an asset.
+        """
+        issues: list[FAAssetPatchIssue] = []
+        warnings: list[FAAssetPatchIssue] = []
+        # The type each asset would have, item after item: one batch may patch the same asset twice.
+        projected_type = {asset_id: AssetType(asset.asset_type) for asset_id, asset in assets_by_id.items()}
+        type_changes: list[tuple[int, int, AssetType, AssetType]] = []
+        # The asset that holds each name, item after item: the batch's assets by their loaded names, the others from one query.
+        held_by = await AssetCRUDService._names_held(prepared, assets_by_id, session)
+        for index, (patch, patch_dict) in enumerate(prepared):
+            if patch.asset_id not in assets_by_id:
+                issues.append(FAAssetPatchIssue(asset_id=patch.asset_id, index=index, code=FAAssetPatchCode.ASSET_NOT_FOUND, message=f"Asset {patch.asset_id} not found"))
+                continue
+            new_name = patch_dict.get("display_name")
+            if new_name:
+                holder = held_by.get(new_name)
+                if holder is not None and holder != patch.asset_id:
+                    issues.append(FAAssetPatchIssue(asset_id=patch.asset_id, index=index, code=FAAssetPatchCode.ASSET_NAME_TAKEN, message=f"The name '{new_name}' is already used by another asset", params={"name": new_name}, field="display_name"))
+                else:
+                    held_by = {name: owner for name, owner in held_by.items() if owner != patch.asset_id}
+                    held_by[new_name] = patch.asset_id
+            if patch_dict.get("asset_type") is None:
+                continue
+            old_type, new_type = projected_type[patch.asset_id], AssetType(patch_dict["asset_type"])
+            projected_type[patch.asset_id] = new_type
+            type_changes.append((index, patch.asset_id, old_type, new_type))
 
-                # Track updated fields
-                updated_fields: List[OldNew[str]] = []
+        to_index_ids = sorted({asset_id for _, asset_id, old_type, new_type in type_changes if new_type == AssetType.INDEX and old_type != AssetType.INDEX})
+        tx_counts: dict[int, int] = {}
+        if to_index_ids:
+            tx_counts = dict((await session.execute(select(Transaction.asset_id, func.count()).where(Transaction.asset_id.in_(to_index_ids)).group_by(Transaction.asset_id))).all())
 
-                for field, value in patch_dict.items():
-                    logger.debug(f"Patching field '{field}': '{value}'")
-                    if field == "classification_params":
-                        # None = clear all classification_params
-                        if value is None:
-                            value = None  # Will set classification_params to NULL in DB
-                        elif not value:  # Empty dict = also clear
-                            value = None
+        for index, asset_id, old_type, new_type in type_changes:
+            tx_count = tx_counts.get(asset_id, 0)
+            verdict = classify_type_change(old_type, new_type, tx_count)
+            if verdict == TypeChangeVerdict.INDEX_WITH_TRANSACTIONS:
+                issues.append(FAAssetPatchIssue(asset_id=asset_id, index=index, code=FAAssetPatchCode.INDEX_WITH_TRANSACTIONS, message=f"Asset {asset_id} has {tx_count} transactions and cannot become an INDEX", params={"tx_count": tx_count}, field="asset_type"))
+            elif verdict == TypeChangeVerdict.FAMILY_WARNING:
+                warnings.append(FAAssetPatchIssue(asset_id=asset_id, index=index, code=FAAssetPatchCode.ASSET_FAMILY_CHANGE, message=f"Asset {asset_id} moves from {old_type.value} to {new_type.value}, another type family", params={"from": old_type.value, "to": new_type.value}, field="asset_type"))
+
+        issues.sort(key=lambda issue: issue.index)
+        return issues, warnings
+
+    @staticmethod
+    async def _names_held(prepared: list[tuple[FAAssetPatchItem, dict]], assets_by_id: dict[int, Asset], session: AsyncSession) -> dict[str, int]:
+        """``{name: asset id}`` of the names the batch can clash with: the loaded names of the batch's assets, plus the
+        holders outside the batch of the names the items ask for (one query, none when nobody renames)."""
+        held_by = {asset.display_name: asset_id for asset_id, asset in assets_by_id.items()}
+        wanted = {patch_dict["display_name"] for _, patch_dict in prepared if patch_dict.get("display_name")}
+        if wanted:
+            rows = (await session.execute(select(Asset.id, Asset.display_name).where(Asset.display_name.in_(wanted)))).all()
+            held_by.update({name: asset_id for asset_id, name in rows if asset_id not in assets_by_id})
+        return held_by
+
+    @staticmethod
+    def _unsaved_response(patches: List[FAAssetPatchItem], issues: list[FAAssetPatchIssue], warnings: list[FAAssetPatchIssue]) -> FABulkAssetPatchResponse:
+        """The answer of a batch that saved nothing: every result failed, the item with an issue carries its message."""
+        message_of = {}
+        for issue in issues:
+            message_of.setdefault(issue.index, issue.message)
+        results = [FAAssetPatchResult(asset_id=patch.asset_id, success=False, message=message_of.get(index, "Not saved: another asset of the batch has an issue"), updated_fields=None) for index, patch in enumerate(patches)]
+        return FABulkAssetPatchResponse(results=results, success_count=0, errors=[], committed=False, issues=issues, warnings=warnings)
+
+    @staticmethod
+    def _apply_patch_item(asset: Asset, patch_dict: dict) -> List[OldNew[str]]:  # noqa: C901 — per-field patch mapping, classification shallow-merge branch
+        """Write one item's fields on its asset (``setattr``, no flush): the fields written, old and new."""
+        asset_classification_params_before = json.loads(asset.classification_params) if asset.classification_params else {}
+        logger.debug(f"Asset found for patching: id={asset.id}: {asset.model_dump_json()}")
+
+        # Track updated fields
+        updated_fields: List[OldNew[str]] = []
+
+        for field, value in patch_dict.items():
+            logger.debug(f"Patching field '{field}': '{value}'")
+            if field == "classification_params":
+                # None = clear all classification_params
+                if value is None:
+                    value = None  # Will set classification_params to NULL in DB
+                elif not value:  # Empty dict = also clear
+                    value = None
+                else:
+                    # PATCH semantics for classification_params:
+                    # - If a field (e.g., sector_area, geographic_area) is present in patch, replace it completely
+                    # - If a field is absent from patch, keep the existing value
+                    # NO deep merge: each field is atomic (sector_area.distribution is replaced as a whole)
+
+                    # Start with existing values
+                    merged = dict(asset_classification_params_before)
+
+                    # Replace only the fields present in the patch (shallow merge, not deep)
+                    for key, val in value.items():
+                        if val is not None and val != "":
+                            merged[key] = val
                         else:
-                            # PATCH semantics for classification_params:
-                            # - If a field (e.g., sector_area, geographic_area) is present in patch, replace it completely
-                            # - If a field is absent from patch, keep the existing value
-                            # NO deep merge: each field is atomic (sector_area.distribution is replaced as a whole)
+                            # Explicit null/empty = remove field
+                            merged.pop(key, None)
 
-                            # Start with existing values
-                            merged = dict(asset_classification_params_before)
-
-                            # Replace only the fields present in the patch (shallow merge, not deep)
-                            for key, val in value.items():
-                                if val is not None and val != "":
-                                    merged[key] = val
-                                else:
-                                    # Explicit null/empty = remove field
-                                    merged.pop(key, None)
-
-                            # Validate and serialize
-                            value = FAClassificationParams(**merged).model_dump(mode="json", exclude_none=True)
-                            if not value:  # If result is empty dict, set to None
-                                value = None
-
-                    # Convert empty strings/dicts to None, but preserve boolean False
-                    if not isinstance(value, bool) and not value:
+                    # Validate and serialize
+                    value = FAClassificationParams(**merged).model_dump(mode="json", exclude_none=True)
+                    if not value:  # If result is empty dict, set to None
                         value = None
 
-                    if isinstance(value, dict):
-                        value = json.dumps(value)  # Transform dict as serialized JSON
-                    oldVal = getattr(asset, field)
-                    setattr(asset, field, value)
-                    updated_fields.append(OldNew(info=field, old=str(oldVal) if oldVal is not None else None, new=str(value) if value is not None else None))
-                    logger.debug(f"updated field '{field}': '{oldVal}' -> '{value}'")
+            # Convert empty strings/dicts to None, but preserve boolean False
+            if not isinstance(value, bool) and not value:
+                value = None
 
-                await session.flush()
+            if isinstance(value, dict):
+                value = json.dumps(value)  # Transform dict as serialized JSON
+            oldVal = getattr(asset, field)
+            setattr(asset, field, value)
+            updated_fields.append(OldNew(info=field, old=str(oldVal) if oldVal is not None else None, new=str(value) if value is not None else None))
+            logger.debug(f"updated field '{field}': '{oldVal}' -> '{value}'")
 
-                results.append(
-                    FAAssetPatchResult(
-                        asset_id=patch.asset_id,
-                        success=True,
-                        message=f"Asset patched successfully ({len(updated_fields)} fields)",
-                        updated_fields=updated_fields,
-                    )
-                )
-
-                logger.info(f"Asset patched: id={patch.asset_id}, fields={updated_fields}")
-
-            except Exception as e:
-                logger.exception(f"Error patching asset {patch.asset_id}: {e}")
-                results.append(
-                    FAAssetPatchResult(
-                        asset_id=patch.asset_id,
-                        success=False,
-                        message=f"Error: {e!s}",
-                        updated_fields=None,
-                    )
-                )
-
-        # N68 (developer decision of 19/10/2026): a currency change is never blocked. The prices and the events that are
-        # not SPLITs carry the old currency, so they go with it, in the same transaction as the change; the SPLIT events
-        # and the transactions linked to them stay. The interface shows the counts first
-        # (``GET /assets/{id}/market-data/summary``) and asks.
-        # Imported here, not at the top: ``currency_change`` imports ``core``, whose theine cache starts a thread at import, and this
-        # module is in the import chain of the BRIM parse pool's forkserver preload, which must stay single-threaded.
-        from backend.app.services.assets.currency_change import delete_market_data_of_assets, drop_provider_caches, provider_cache_keys  # noqa: PLC0415 — keeps the forkserver preload single-threaded
-
-        currency_changed_ids = [asset_id for asset_id, asset in assets_by_id.items() if asset.currency != currency_before[asset_id]]
-        cache_keys = await provider_cache_keys(session, currency_changed_ids)
-        await delete_market_data_of_assets(session, currency_changed_ids)
-
-        # Commit all successful patches
-        await session.commit()
-
-        await drop_provider_caches(cache_keys, asset_ids=currency_changed_ids)
-
-        success_count = sum(1 for r in results if r.success)
-
-        return FABulkAssetPatchResponse(results=results, success_count=success_count, errors=[])
+        return updated_fields
 
     @staticmethod
     async def merge_assets(  # noqa: C901 — sequential 5-stage merge, per-stage collision branches

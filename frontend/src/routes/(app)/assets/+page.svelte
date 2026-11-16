@@ -19,11 +19,12 @@
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
-    import {BarChart3, CalendarSync, ChartLine, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, CalendarSync, ChartLine, Check, Network, Pencil, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import PageBackButton from '$lib/components/layout/PageBackButton.svelte';
     import AssetCard from '$lib/features/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/features/assets/AssetTable.svelte';
     import AssetTable from '$lib/features/assets/AssetTable.svelte';
+    import type DataTable from '$lib/components/table/DataTable.svelte';
     import AssetBrowseOrder from '$lib/features/assets/AssetBrowseOrder.svelte';
     import {fetchCurrentPrices, computeDirection, livePollFailure, livePollOutcome, type LivePriceResult} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
@@ -42,6 +43,8 @@
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import AssetBulkEditModal from '$lib/features/assets/bulk/AssetBulkEditModal.svelte';
+    import type {BulkAsset} from '$lib/features/assets/bulk/assetBulkEdit';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import ChartSettingsModal from '$lib/features/signals/components/ChartSettingsModal.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -105,6 +108,8 @@
         /** Eligible as a comparison benchmark: the comparison picker lists these first (Y5-F4). */
         is_benchmark?: boolean;
         quote_base_quantity?: number | null;
+        /** The user's own link for the asset (notes, a dashboard): read by the bulk edit. */
+        user_url?: string | null;
         tx_count?: number;
         /** A positive quantity is held **now** in a broker the user owns (Risk, `FAinfoResponse`). */
         held_by_me?: boolean;
@@ -133,19 +138,43 @@
     let error = $state<string | null>(null);
     // F15 round-2 — one AssetTable per usage panel (own / others / watched).
     // Column layout is mirrored live across the three; pagination stays independent.
-    let assetTableRefs: Record<string, AssetTable | undefined> = $state({});
+    // The DataTable of each panel, registered by the tables themselves (`registerTable`): one entry per table instance, taken away by that
+    // instance alone. The entries live in a plain Map, not in `$state`: a panel that re-mounts registers its new table while the old one is
+    // still being torn down, and a read-modify-write of reactive state in those phases lost entries. `tablesVersion` only says «it changed».
+    type PanelTable = {panelId: string; table: DataTable<AssetRow>};
+    const panelTables = new Map<symbol, PanelTable>();
+    let tablesCounter = 0;
+    let tablesVersion = $state(0);
+    function registerPanelTable(panelId: string, table: DataTable<AssetRow>): () => void {
+        const key = Symbol(panelId);
+        panelTables.set(key, {panelId, table});
+        tablesVersion = ++tablesCounter;
+        return () => {
+            panelTables.delete(key);
+            tablesVersion = ++tablesCounter;
+        };
+    }
+    /** The tables that exist now, in the order of the panels: the first one drives the column menu, the others follow it. */
+    let liveTableRefs = $derived.by(() => {
+        void tablesVersion;
+        const entries = [...panelTables.values()];
+        return (['own', 'others', 'analysis'] as const).flatMap((id) => entries.filter((entry) => entry.panelId === id).map((entry) => entry.table));
+    });
     let panelSelections: Record<string, AssetRow[]> = $state({});
     let selectedAssetRows = $derived(Object.values(panelSelections).flat());
 
     /** Mirror a live column resize onto the sibling tables. */
     function mirrorColumnResize(sourcePanel: string, columnId: string, width: number) {
         for (const pid of ['own', 'others', 'analysis']) {
-            if (pid !== sourcePanel) assetTableRefs[pid]?.getTableRef()?.setColumnWidth(columnId, width);
+            if (pid !== sourcePanel) for (const entry of panelTables.values()) if (entry.panelId === pid) entry.table.setColumnWidth(columnId, width);
         }
     }
 
+    /** Bumped to tell every AssetTable to drop its selection: a table does not depend on a ref the page holds. */
+    let clearSelectionToken = $state(0);
+
     function clearAllTableSelections() {
-        for (const ref of Object.values(assetTableRefs)) ref?.getTableRef()?.clearSelection();
+        clearSelectionToken++;
         panelSelections = {};
     }
     /** Set of asset IDs currently syncing (for per-card/row rotating icon) */
@@ -168,6 +197,9 @@
 
     // Bulk delete confirmation dialog
     let bulkDeleteDialogOpen = $state(false);
+    // Bulk edit of the selected assets (lane 65): a snapshot of the selection taken when the pencil is pressed.
+    let bulkEditOpen = $state(false);
+    let bulkEditAssets = $state<BulkAsset[]>([]);
     let deletingAssets = $state<AssetRow[]>([]);
     let bulkDeleteResults = $state<{label: string; success: boolean; detail?: string; action?: {href: string; label: string; testId?: string}}[]>([]);
 
@@ -621,6 +653,7 @@
                 asset_type: item.asset_type ?? null,
                 is_benchmark: item.is_benchmark === true,
                 quote_base_quantity: item.quote_base_quantity ?? 1,
+                user_url: item.user_url ?? null,
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
                 tx_count: item.tx_count ?? 0,
@@ -1491,6 +1524,31 @@
         clearAllTableSelections();
     }
 
+    /** The selected assets, in the order of the selection, as the list holds them now. */
+    function selectedBulkAssets() {
+        const byId = new Map(assets.map((a) => [a.id, a]));
+        return selectedAssetRows
+            .map((row) => byId.get(row.id))
+            .filter((a): a is AssetState => a !== undefined)
+            .map((a) => ({id: a.id, display_name: a.display_name, asset_type: a.asset_type, active: a.active, is_benchmark: a.is_benchmark, quote_base_quantity: a.quote_base_quantity, icon_url: a.icon_url, user_url: a.user_url}));
+    }
+
+    /** The pencil: the selected assets, in the order of the selection, as the list holds them now. */
+    function handleBulkEditAssets() {
+        bulkEditAssets = selectedBulkAssets();
+        bulkEditOpen = true;
+    }
+
+    /**
+     * The bulk edit saved (all or nothing): drop the cached rows and reload the list. The modal stays open on its summary
+     * and the rows stay selected, so the same assets can be edited again: the modal gets the reloaded values.
+     */
+    async function handleBulkEditSaved(saved: {ids: number[]}) {
+        invalidateAfterMutation(saved.ids);
+        await pageBusy.track('assets-reload', () => loadAssets({soft: true}));
+        if (bulkEditOpen) bulkEditAssets = selectedBulkAssets();
+    }
+
     function handleBulkDeleteAssets() {
         deletingAssets = [...selectedAssetRows];
         bulkDeleteDialogOpen = true;
@@ -1819,8 +1877,10 @@
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedAssetRows.length > 0}
                 <DataTableToolbar
+                    variant="floating"
                     selectedCount={selectedAssetRows.length}
                     bulkActions={[
+                        {id: 'edit', icon: Pencil, label: () => $t('assets.bulkEdit.action', {values: {count: selectedAssetRows.length}}), shortLabel: () => $t('common.edit'), primary: true, onClick: () => handleBulkEditAssets()},
                         {id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets()},
                         {id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets()},
                         {id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets()},
@@ -2127,7 +2187,7 @@
             {:else}
                 <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
                 {#if viewMode === 'list'}
-                    <ColumnVisibilityToggle tableRef={assetTableRefs['own']?.getTableRef()} additionalTableRefs={[assetTableRefs['others']?.getTableRef(), assetTableRefs['analysis']?.getTableRef()].filter((r) => r != null)} showLabel={showActionLabels} />
+                    <ColumnVisibilityToggle tableRef={liveTableRefs[0]} additionalTableRefs={liveTableRefs.slice(1)} showLabel={showActionLabels} />
                 {:else}
                     <!-- The cards' view (Y-40): absolute, percent, rolling return -->
                     <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="assets-global-view" data-view={globalPrimaryView}>
@@ -2365,7 +2425,7 @@
                             <p class="text-[11px] text-lf-muted">{$t(`assets.panels.${panel.id}Hint`)}</p>
                         </header>
                         <AssetTable
-                            bind:this={assetTableRefs[panel.id]}
+                            registerTable={registerPanelTable}
                             data={tableRows.filter((r) => r.txScope === panel.id)}
                             loading={false}
                             {visiblePeriods}
@@ -2374,11 +2434,13 @@
                             dateEnd={urlDateEnd}
                             storageKey="assetsTable-{panel.id}"
                             browseSegment={panel.id}
+                            onedit={handleEditAsset}
                             onsync={handleSyncAsset}
                             onrefresh={handleRefreshAsset}
                             ondelete={handleDeleteAsset}
                             onmerge={handleMergeAsset}
                             onColumnResize={(colId, w) => mirrorColumnResize(panel.id, colId, w)}
+                            {clearSelectionToken}
                             onselectionchange={(rows) => {
                                 panelSelections = {...panelSelections, [panel.id]: rows};
                             }}
@@ -2391,6 +2453,7 @@
 </div>
 
 <AssetBrowseOrder view={viewMode} panels={assetPanels} />
+<AssetBulkEditModal open={bulkEditOpen} assets={bulkEditAssets} onclose={() => (bulkEditOpen = false)} onsaved={handleBulkEditSaved} />
 <!-- Chart Settings Modal (D4) -->
 <ChartSettingsModal
     axisContext={settingsTargetId ? (assets.find((asset) => asset.id === Number(settingsTargetId))?.currency ?? '—') : $t('common.preview')}

@@ -11,7 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
-- Trade Republic: imports the new «Transaction export» CSV (profile › Account statements › Transaction export), also when re-saved by Excel: buys and sells of funds, stocks and crypto with their fee and tax, interest with its withholding tax, stamp duty, tax refunds as interest, dividends and transfers. The importer is no longer in beta, and its guide shows how to download the file. Rows of another account, such as a child's account, are left out with a note: export that account from its own login.
+- Trade Republic: imports the new «Transaction export» CSV (profile › Account statements › Transaction export), also when re-saved by Excel: buys and sells of funds, stocks and crypto with their fee and tax, interest with its withholding tax, stamp duty, tax refunds as interest, dividends and transfers. The importer is no longer in beta, and its guide shows how to download the file. Rows of another account, such as a child's account, are left out with a note: export that account from its own login. Thanks to [valeriomicacchi-cpu](https://github.com/valeriomicacchi-cpu) for the real export behind it.
+- Edit several assets at once: select them in the Assets table and use «Edit selected» to change the type, benchmark, active state, units per single price, icon or personal URL of all of them. «Validate now» shows what blocks the save (an asset with transactions cannot become an Index) and what deserves a look (a type moving to another family, such as crowdfunding → ETF), and a summary shows every change before the save, which is all or nothing.
+- Lots analysis in FIFO and LIFO: the lots panel computes both methods in one request and switches between them with a selector in its header (FIFO first, not saved). The lots you picked stay picked; which lot a sale closes, and the figures that follow from it, change with the method. The theory pages explain the Italian rule (LIFO in the self-declared regime, average cost in the managed one) and the limits of the calculation.
+- The lots panel's data-quality banner offers «Add FX pair» and «Sync rates» on a missing or old exchange rate, as the Dashboard banner does.
+- Pending email change in Profile: the address waiting for confirmation, written in full, when its link expires, «Send again» and «Cancel the request».
+- Administrators see pending email changes: an «Email change pending» badge on the account, and the link in «Account links» can be revoked.
+- Dashboard › Your Positions: «Global» or «Broker». With two brokers or more, a switch shows an asset held at several brokers as one row, in the Portfolio and Period views, their maps and the return chart (one line per asset); the Broker column shows the icons of every broker that holds it. Quantities, values, P&L and income are summed; percentages, average price and Yield on Cost are worked out from the sums, never averaged, and a sale keeps the cost of the broker that sold. The choice is remembered on each device. Thanks to Daneltones8 ([#80](https://github.com/Librefolio/LibreFolio/issues/80)).
+- API: `POST /portfolio/report` accepts `group_by` (`broker`, the default, or `asset`); its rows carry `broker_ids`.
+- Bulk edit of assets: «Remove icon» and «Remove URL» clear the icon or the personal URL of the selected assets that have one; the others are left as they are.
+- Assets table: each row has an «Edit» action that opens the asset editor in place, without going to the detail page.
+- FED exchange rates now also cover the Malaysian ringgit (MYR), the Sri Lankan rupee (LKR) and the Venezuelan bolívar (VES, from 4 October 2021, the last redenomination).
+- Routes that use FED show an ℹ️ note: FED rates are daily, one per US business day, but the Federal Reserve publishes them once a week, on Mondays, so the latest FED rate can be up to about 10 days old. Provider notes now come in two levels in the route picker: ℹ️ for a fact worth knowing, ⚠️ for a data limit such as the SNB's monthly averages.
 
 ### 🔄 Changed
 
@@ -22,9 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Risk analysis: when an asset is left out because an exchange rate is missing, the message now names the currency pair and says from which date a rate is stored, or that none is.
 - Assets and FX lists, Rolling Return view: the cards now compare across types, as the detail pages do. An asset card can chart FX pairs and an FX card can chart assets, set from the card's «Chart Settings».
 - Lots analysis: within one day, purchases and incoming adjustments now come before sales and outgoing adjustments. A sale recorded before the purchase of the same day no longer makes the analysis fail; on a broker that allows short selling, a short opened and covered within one day now shows as a long lot, with the same realized gain.
+- Asset detail header: Transactions is now a badge with an icon and the number of transactions, so it reads as a link; the provider badge itself opens the asset's web page (the one you set, or else the provider's) in a new tab, and its tooltip says where it goes. The separate ↗ icon is gone.
+- Asset detail header on tablet and phone: below 1024 px the badges get a row of their own under the name; on a phone ← and ‹ n/N › share the top row, the name has the full width, and the badges follow in two groups (type and currency; Transactions and provider).
+- An asset that has transactions can no longer become an Index from the asset editor: the editor says how many transactions it has, and nothing is saved.
+- Changing your email waits for confirmation when email works: with email set up and `LIBREFOLIO_PUBLIC_URL` set, a new address in Profile is not used until you click the link sent to it (valid for 24 hours) while signed in to your account. Already signed in, one click is enough; otherwise the page asks you to sign in first and brings you back. Your old address is told at once. You stay signed in on the browser you confirm from, and your other devices are signed out. The page tells you as soon as it opens whether you need to sign in, whether the link belongs to another account (with «Sign out and sign in with the right account») or no longer works; the page and the emails put one idea per line, with the important words in bold. Without email nothing changes: the new address applies straight away.
+- Dashboard › Your Positions: «See all» is now a small badge, and on a phone the three view switches (Portfolio/Period, Global/Broker, table/map) sit on their own row under the title.
+- Bulk edit of assets: after a save the window stays open on the summary with a green «Saved» check, and the selection stays, so you can keep working on the same assets. The summary shows the new icon as a thumbnail; the fields sit on one grid, with the current value under each field and its reset button on the same row, and the window has no inner scrollbar.
+- The selection bar of the tables (assets, transactions, FX, a broker's transactions) now floats at the bottom of the screen while rows are selected, and stays there after a save; Esc clears the selection when the focus is in it.
 
 ### 🐛 Fixed
 
+- Signing out while a page is still loading now always returns to the plain sign-in page, instead of offering to come back to that page.
+- In Profile, the username and email fields are as wide as the password field, so a long address is no longer cut.
 - Uploading a `.json` file no longer loses its contents, and files with an unusual or very long extension are stored safely.
 - The FX, Files and Assets lists no longer blank out to a spinner after a refresh or an edit: they stay on screen while the new data arrives.
 - Switching tabs on an asset's page keeps the date range you chose.
@@ -41,10 +61,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The backup command reads `--password-file` and `--instance-key-file` with a single open: a file swapped after the check can no longer be read in its place.
 
 - On an instance blocked by its hosting provider, the administrator also sees the «Backups already kept» and can download them, not only make a new one.
+- Importing a report no longer shows a success message when the change of an asset's identifiers was not saved.
+- Assets: the «n selected» chip always clears the whole selection, and the column menu and column resizing act on both asset tables (yours and the others'); before, one of the two could be left out.
+- FED exchange rates for 16 currencies were stored upside down (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB): 1 JPY showed as 158 USD instead of 0.0063. Rates already stored are not changed. To correct them, open the FX page, choose the «All» period and use «Sync All»: every pair whose route uses FED, also as one step of a chain (for example INR → USD → EUR), is fetched again and overwritten.
+- The Bank of England (BOE) provider downloaded nothing, because the Bank's database changed its download address; it works again. Its euro rate also came from the wrong series (euro against the US dollar instead of against sterling): every pair whose route uses BOE for the euro stays wrong until you sync it again the same way («All» period, «Sync All»).
 
 ### ⚠️ Breaking changes
 
 - Missing exchange rates are no longer reported as text in `errors` by the price query, event query and conversion endpoints: they come in a new `fx_issues` list of `{code, from_currency, to_currency, first_date, last_date, count}`, in the direction of the conversion.
+- `PATCH /api/v1/assets` is all or nothing: if any item has an issue, nothing is saved. The response gains `committed`, `issues` and `warnings` (codes `assetNotFound`, `indexWithTransactions`, `assetNameTaken`, `patchFailed`; warning `assetFamilyChange`). A name already used by another asset is reported as `assetNameTaken` instead of a generic failure. The new `POST /api/v1/assets/validate` runs the same checks and never saves.
+- `POST /api/v1/portfolio/lots/analysis` answers in a new shape: the parts no matching method changes (`asset_id`, `target_currency`, `quote_base_quantity`, `range`, `calculation_metadata`, `market_price_history`, `broker_wac_history`, `cumulative_wac_history`) stay at the top; everything read from the lot replay (`calculation_status`, `data_quality`, `lots`, `gantt_segments`, `custody_history`, `lot_events`, the value, return, price and performance histories, `income_events`, `economic_allocation_groups`, the orphans) moves under `methods.FIFO` / `methods.LIFO`. The request takes `matching_methods` (default `["FIFO"]`).
 
 ## [1.3.0] - 2026-11-10
 

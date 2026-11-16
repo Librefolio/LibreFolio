@@ -361,6 +361,28 @@ test.describe('TransactionsTable (main read-view)', () => {
         // Close
         await page.keyboard.press('Escape');
     });
+
+    // U8 — the selection bar floats at the bottom of the screen and never hides the last row of the table. The row ticked is the
+    // last one of the page: it is the row the bar could cover.
+    test('the selection bar floats at the bottom and does not cover the last row', async ({page}) => {
+        const table = page.getByTestId('tx-table');
+        const lastRow = table.locator('tbody tr[data-row-id]').last();
+        await expect(lastRow).toBeVisible({timeout: 5_000});
+        await lastRow.getByTestId(/^dt-row-checkbox-/).click();
+        const bar = page.getByTestId('selection-toolbar');
+        await expect(bar).toBeVisible({timeout: 5_000});
+        await expect(bar).toHaveAttribute('data-variant', 'floating');
+
+        // At the end of the page the last row sits above the bar: the page keeps room for it.
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        const barBox = await bar.boundingBox();
+        const lastBox = await lastRow.boundingBox();
+        const viewport = page.viewportSize();
+        if (!barBox || !lastBox || !viewport) throw new Error('The bar and the last row must be on screen to be measured.');
+        expect(barBox.y + barBox.height, 'the bar is at the bottom of the viewport').toBeLessThanOrEqual(viewport.height);
+        expect(barBox.y + barBox.height, 'close to the bottom edge').toBeGreaterThanOrEqual(viewport.height - 48);
+        expect(lastBox.y + lastBox.height, 'the last row ends above the bar').toBeLessThanOrEqual(barBox.y + 1);
+    });
 });
 
 // ---------------------------------------------------------------------------

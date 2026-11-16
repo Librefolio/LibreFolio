@@ -99,7 +99,7 @@
     },
     "lots": {
       "unifiedLots": "Lotti",
-      "unifiedLotsHint": "Vista unificata dei lotti FIFO con selezione multipla e dettaglio custodia.",
+      "unifiedLotsHint": "Vista unificata dei lotti ({method}) con selezione multipla e dettaglio custodia.",
       "ganttTitle": "Vita e custodia dei lotti",
       "openOnly": "Aperti",
       "valueComparisonTitle": "Valore dei lotti selezionati",
@@ -118,7 +118,7 @@
       "custody": "Custodia",
       "openQuantity": "Quantità aperta",
       "currentValue": "Valore corrente",
-      "fifoPnl": "P&L FIFO",
+      "fifoPnl": "P&L {method}",
       "noUnifiedLots": "Nessun lotto corrisponde ai filtri attuali",
       "noGanttData": "Nessuna cronologia di custodia nel periodo selezionato",
       "inTransit": "In transito",
@@ -127,7 +127,7 @@
       "lotLabel": "Lotto {date}",
       "lotWord": "Lotto",
       "shortLotLabel": "Short {date}",
-      "detailTitle": "Dettaglio Lotti FIFO",
+      "detailTitle": "Dettaglio lotti · {method}",
       "loadFailed": "Impossibile caricare i dati dei lotti",
       "analysisFailed": "I lotti di questo asset non si possono ricostruire: alcune sue transazioni non tornano. Lotti, cronologia e confronto sono nascosti; le linee del costo medio qui sotto non ne risentono.",
       "combined": "Combinato",
@@ -290,7 +290,10 @@
       "yAxisFromZero": "Da 0",
       "annualizedReturn": "Annualizzato",
       "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) del singolo lotto sulla sua durata di detenzione, al netto di proventi e spese, per confrontare lotti tenuti per periodi diversi.",
-      "analysisFailedFix": "Correggi queste transazioni e i lotti tornano:"
+      "analysisFailedFix": "Correggi queste transazioni e i lotti tornano:",
+      "matchingMethod": "Metodo di abbinamento",
+      "methodFifoHint": "FIFO: una vendita chiude per primo il lotto più vecchio",
+      "methodLifoHint": "LIFO: una vendita chiude per primo il lotto più recente"
     },
     "createdInSystem": "Creato nel Sistema",
     "deleteBlockedTitle": "Impossibile eliminare il broker",

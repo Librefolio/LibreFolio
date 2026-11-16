@@ -219,6 +219,14 @@ class LegacyFxRateResolver:
             self.convert(amount, currency, first + timedelta(days=offset))
         return converted
 
+    def read_only_copy(self) -> "LegacyFxRateResolver":
+        """Since project 69 (L3a) each matching method converts through a copy of the resolver: it reads the rates loaded and
+        keeps its own gaps, from a copy of those recorded so far. Here too the legacy rates are shared, the gaps copied."""
+        copy = LegacyFxRateResolver(self.target_currency)
+        copy._needs, copy._seen, copy._loaded, copy._rates = self._needs, self._seen, self._loaded, self._rates
+        copy._missing = defaultdict(set, {pair: set(days) for pair, days in self._missing.items()})
+        return copy
+
 
 def legacy_collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collection blocks, no decision tree
     *,

@@ -274,10 +274,12 @@ What goes and what stays:
 
 Where it happens:
 
-- **`PATCH /api/v1/assets`** (`AssetCRUDService.patch_assets_bulk()`). It remembers the currency of
-  every patched asset before the loop; after the loop, for the assets whose currency now differs, it
-  reads the cache keys, calls `delete_market_data_of_assets()`, and commits **once**, so the change and
-  the deletion are one transaction. Then it drops the caches. There is no blocker token any more:
+- **`PATCH /api/v1/assets`** (`AssetCRUDService.patch_assets_bulk()`, all or nothing: see
+  [Asset Patch](architecture.md#asset-patch)). It remembers the currency of every patched asset before
+  applying; after applying the items, for the assets whose currency now differs, it reads the cache keys,
+  calls `delete_market_data_of_assets()`, and commits **once**, so the change and the deletion are one
+  transaction. Then it drops the caches. `POST /api/v1/assets/validate` runs the same path and rolls
+  back, so the wipe is undone and no cache is dropped. There is no blocker token any more:
   `CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA` is gone from the per-item `message` and from the route, which
   no longer answers 409 when every item failed. The deletion follows the *result* (the stored currency
   changed), so it runs for any caller of the API, not only the interface.

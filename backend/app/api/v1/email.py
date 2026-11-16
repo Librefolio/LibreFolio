@@ -10,15 +10,17 @@ server), the hourly budget and whether emails can carry links. Every emailed lin
 import math
 from typing import Annotated, NoReturn
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.v1.auth import _issue_session_cookie, _session_ttl_hours, get_current_user
 from backend.app.api.v1.settings import require_admin
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.email import (
     EmailBudgetRead,
+    EmailChangeCheckResponse,
     EmailChangeConfirmRequest,
     EmailChangeConfirmResponse,
     EmailCheckRead,
@@ -34,7 +36,7 @@ from backend.app.schemas.email import (
     PasswordResetEmailAccepted,
     PasswordResetEmailRequest,
 )
-from backend.app.services.accounts import instance_owner
+from backend.app.services.accounts import email_change, instance_owner
 from backend.app.services.email import flows, verification
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.email.delivery import EmailDeliveryError, EmailRateLimitedError, EmailUnavailableError, budget_status, email_config_state
@@ -191,19 +193,63 @@ async def confirm_email_verification(body: EmailVerificationConfirmRequest, sess
     return EmailVerificationConfirmResponse(username=user.username)
 
 
-@router.post("/email-change/confirm", response_model=EmailChangeConfirmResponse, summary="Confirm the new address of the instance owner: spend the link emailed to it")
-async def confirm_owner_email_change(body: EmailChangeConfirmRequest, background: BackgroundTasks, session: AsyncSession = Depends(get_session_generator)) -> EmailChangeConfirmResponse:
-    """No session needed: the link proves that its reader received the email at the new address, which the host put in
-    ``LIBREFOLIO_ADMIN_EMAIL`` of a managed instance. The owner's address becomes the link's, verified; every session of
-    the owner ends (it signs in again, same password); its other change links and its password-reset links stop
-    working. When email works, after the answer the address it had before gets a notice and the new one a confirmation
-    that the change is complete (UA2), as for a change of the profile.
+async def _session_account_id(request: Request, session: AsyncSession) -> int | None:
+    """The account of the request's session, or None: no cookie, a cookie no longer valid, an inactive account — the very
+    rules of ``get_current_user``, read without demanding them (never a 401 here)."""
+    try:
+        return (await get_current_user(request, session)).id
+    except HTTPException:
+        return None
 
-    400 ``TOKEN_INVALID`` with the token's ``status`` (``expired``, ``consumed``, ``revoked``, ``unknown``): ``revoked``
-    also when the link no longer matches the instance (the host changed the variable again, the instance is no longer
-    managed, the account is no longer the owner, or another account took the address meanwhile; the link is revoked
-    then and nothing changed). A token of another purpose is ``unknown``.
+
+@router.post("/email-change/check", response_model=EmailChangeCheckResponse, summary="Read what a change link's page shows, without spending the link")
+async def check_email_change_link(body: EmailChangeConfirmRequest, request: Request, session: AsyncSession = Depends(get_session_generator)) -> EmailChangeCheckResponse:
+    """The page of a change link asks this on opening (lots E2, E3): ``ready``, ``signin`` or ``other_account``. The link is neither spent nor revoked, and the answer names no account. A link
+    that no longer works answers as its click would: 400 ``TOKEN_INVALID`` with its ``status``, whoever asks."""
+    try:
+        status_ = await email_change.check_link(session, body.token, acting_user_id=await _session_account_id(request, session))
+    except email_change.ProfileEmailChangeLinkInvalidError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": "TOKEN_INVALID", "status": exc.code, "message": "This confirmation link is not valid"}) from None
+    return EmailChangeCheckResponse(status=status_)
+
+
+@router.post("/email-change/confirm", response_model=EmailChangeConfirmResponse, summary="Confirm a new email address: spend the link emailed to it")
+async def confirm_owner_email_change(body: EmailChangeConfirmRequest, request: Request, response: Response, background: BackgroundTasks, session: AsyncSession = Depends(get_session_generator)) -> EmailChangeConfirmResponse:
+    """Two flows share the link page; the link decides which.
+
+    A change asked from Profile (release 1.4): the link proves that its reader received the email at the new address, and
+    the session of the request that it is the account's owner (decision D10). With the session of the link's account the
+    address becomes the link's, verified; every OTHER session of the account ends, while the one that confirmed gets a new
+    session cookie and stays signed in (lot E1, as the Profile announces: «the other devices will be signed out»); after
+    the answer the old address gets a notice and the new one a confirmation. Without that session — none, one no longer valid — 403
+    ``EMAIL_CHANGE_SIGN_IN_REQUIRED``; with another account's, 403 ``EMAIL_CHANGE_OTHER_ACCOUNT``, which says only that the link
+    is not for the account signed in, never whose it is. Nothing changed: the link still works once its account signs in.
+
+    The owner of a managed instance (A5-1b): no session needed. The host put the new address in ``LIBREFOLIO_ADMIN_EMAIL``,
+    and the owner may have no way to sign in any more. The owner's address becomes the link's, verified; every session of
+    the owner ends (it signs in again, same password); its other change links and its password-reset links stop working;
+    the emails of a completed change follow as for the Profile.
+
+    400 ``TOKEN_INVALID`` with the token's ``status`` (``expired``, ``consumed``, ``revoked``, ``unknown``), whoever asks:
+    ``revoked`` also when the link no longer matches (another account took the address meanwhile, the account is inactive;
+    for the owner, the host changed the variable again, the instance is no longer managed, the account is no longer the
+    owner); the link is revoked then and nothing changed. A token of another purpose is ``unknown``.
     """
+    if await email_change.link_flow(session, body.token) == "profile":
+        acting_user_id = await _session_account_id(request, session)
+        try:
+            confirmed = await email_change.confirm_profile_change(session, body.token, acting_user_id=acting_user_id)
+        except email_change.ProfileEmailChangeOtherAccountError:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error_code": "EMAIL_CHANGE_OTHER_ACCOUNT", "message": "This link belongs to another account: sign out, then sign in with the account that asked for this change"}) from None
+        except email_change.ProfileEmailChangeSignInRequiredError:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error_code": "EMAIL_CHANGE_SIGN_IN_REQUIRED", "message": "Sign in to the account that asked for this change to confirm it"}) from None
+        except email_change.ProfileEmailChangeLinkInvalidError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": "TOKEN_INVALID", "status": exc.code, "message": "This confirmation link is not valid"}) from None
+        # The change ended every session of the account (its session version went up): the one that confirmed is renewed,
+        # so only the others are signed out.
+        _issue_session_cookie(response, request, confirmed.user, await _session_ttl_hours(session))
+        background.add_task(flows.email_changed_work, confirmed.user.id, confirmed.old_email, confirmed.user.email, engine=session.bind, by_host=False)
+        return EmailChangeConfirmResponse(username=confirmed.user.username, session_kept=True)
     try:
         changed = await instance_owner.confirm_email_change(session, body.token)
     except instance_owner.OwnerEmailChangeLinkInvalidError as exc:
@@ -211,7 +257,7 @@ async def confirm_owner_email_change(body: EmailChangeConfirmRequest, background
     # The notice to the old address and the confirmation to the new one (workstream E, UA2): after the answer, with a
     # session of its own; never raises.
     background.add_task(flows.email_changed_work, changed.user.id, changed.old_email, changed.user.email, engine=session.bind, by_host=True)
-    return EmailChangeConfirmResponse(username=changed.user.username)
+    return EmailChangeConfirmResponse(username=changed.user.username, session_kept=False)
 
 
 @router.post("/verification/resend", response_model=EmailVerificationResendResponse, summary="Send the verification email again, with the credentials of the sign-in")

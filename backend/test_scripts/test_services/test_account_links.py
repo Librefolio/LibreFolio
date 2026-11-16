@@ -17,6 +17,9 @@ An account link is one row of ``account_tokens``. The contract pinned here:
    retired —, read before the purpose: an expired setup link is ``not_found``, not ``not_revocable``; ``not_revocable``
    for an open ``admin_setup`` or ``email_change`` link. A refusal changes nothing. It flushes and does not commit: a
    rollback undoes it.
+4. (release 1.4, project 71) A change of address asked from Profile — an ``email_change`` link the account issued for
+   itself, ``created_by_user_id == user_id`` (``is_profile_change``) — is ``revocable`` while open and ``revoke_link``
+   revokes it; the owner's link (no creator) and one of another creator stay ``not_revocable``.
 
 Replaces ``registration_service.revoke_invite`` (removed by UA3) and the tests that pinned it in
 ``test_registration_service.py``: a revoked invitation is still out of ``list_pending_invites``.
@@ -374,3 +377,46 @@ async def test_revoke_link_flushes_and_does_not_commit(engine: AsyncEngine) -> N
 def test_revocable_purposes_are_the_three_the_users_tab_revokes() -> None:
     """Contract 2/3: invitations, password resets and email verifications; never the setup link nor the owner's email change."""
     assert account_links.REVOCABLE_PURPOSES == frozenset({INVITE, PASSWORD_RESET, EMAIL_VERIFICATION})
+
+
+# =============================================================================
+# The change of address asked from Profile (release 1.4, project 71, step 2.6)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_an_open_profile_email_change_is_revocable_and_revoked(engine: AsyncEngine) -> None:
+    """Contract 4 (project 71): an ``email_change`` link the account issued for itself (``created_by_user_id == user_id``,
+    a change asked from Profile) is ``revocable`` while open, and ``revoke_link`` revokes it — that row only, nothing else
+    written; ``is_profile_change`` names it. Once revoked it is listed ``revoked`` and no longer revocable."""
+    users = await _add_users(engine, "anna", "bruno")
+    profile = await _issue(engine, EMAIL_CHANGE, now=NOW - timedelta(minutes=5), user_id=users["anna"], email="anna-new@example.com", created_by_user_id=users["anna"], ttl=timedelta(hours=24))
+    other = await _issue(engine, EMAIL_CHANGE, now=NOW - timedelta(minutes=4), user_id=users["bruno"], email="bruno-new@example.com", created_by_user_id=users["bruno"], ttl=timedelta(hours=24))
+
+    async with AsyncSession(engine) as session:
+        before = {view.record.id: (view.revocable, account_links.is_profile_change(view.record)) for view in await account_links.list_links(session, now=NOW)}
+    assert before == {profile.record.id: (True, True), other.record.id: (True, True)}
+
+    assert await _revoke_link(engine, profile.record.id) == "revoked"
+
+    consumed_at, revoked_at = await _row(engine, profile.record.id)
+    assert (consumed_at, revoked_at is not None) == (None, True), "revoked, not spent"
+    assert await _row(engine, other.record.id) == (None, None), "another account's change is untouched"
+    async with AsyncSession(engine) as session:
+        after = {view.record.id: (view.state, view.revocable) for view in await account_links.list_links(session, now=NOW)}
+        assert (await inspect_token(session, profile.token, EMAIL_CHANGE)).status == TokenStatus.REVOKED
+    assert after[profile.record.id] == (account_links.LinkState.REVOKED, False)
+
+
+@pytest.mark.asyncio
+async def test_an_email_change_issued_by_another_account_is_not_a_profile_change(engine: AsyncEngine) -> None:
+    """Contract 4: an open ``email_change`` link whose creator is another account (no flow issues one; a guard) is no
+    Profile change: not revocable, and ``revoke_link`` answers ``not_revocable`` and changes nothing."""
+    users = await _add_users(engine, "carla", "admin")
+    issued = await _issue(engine, EMAIL_CHANGE, now=NOW - timedelta(minutes=5), user_id=users["carla"], email="carla-new@example.com", created_by_user_id=users["admin"], ttl=timedelta(hours=24))
+
+    async with AsyncSession(engine) as session:
+        (view,) = [view for view in await account_links.list_links(session, now=NOW) if view.record.id == issued.record.id]
+    assert (view.revocable, account_links.is_profile_change(view.record)) == (False, False)
+    assert await _revoke_link(engine, issued.record.id) == "not_revocable"
+    assert await _row(engine, issued.record.id) == (None, None)

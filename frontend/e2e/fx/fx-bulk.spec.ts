@@ -65,6 +65,22 @@ test.describe('FX list-view bulk actions', () => {
         }
     });
 
+    // U8 — the selection bar floats at the bottom of the screen and never hides the last row.
+    test('the selection bar floats at the bottom and does not cover the last row', async ({page}) => {
+        await selectAllRows(page);
+        const bar = page.getByTestId('selection-toolbar');
+        await expect(bar).toHaveAttribute('data-variant', 'floating');
+
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        const barBox = await bar.boundingBox();
+        const lastRow = await rows(page).last().boundingBox();
+        const viewport = page.viewportSize();
+        if (!barBox || !lastRow || !viewport) throw new Error('The bar and the last row must be on screen to be measured.');
+        expect(barBox.y + barBox.height, 'the bar is at the bottom of the viewport').toBeLessThanOrEqual(viewport.height);
+        expect(barBox.y + barBox.height, 'close to the bottom edge').toBeGreaterThanOrEqual(viewport.height - 48);
+        expect(lastRow.y + lastRow.height, 'the last row ends above the bar').toBeLessThanOrEqual(barBox.y + 1);
+    });
+
     test('bulk sync opens the sync modal without fetching rates', async ({page}) => {
         await selectAllRows(page);
         await page.getByTestId('toolbar-action-sync').click();

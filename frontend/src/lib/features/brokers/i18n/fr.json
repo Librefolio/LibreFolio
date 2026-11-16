@@ -99,7 +99,7 @@
     },
     "lots": {
       "unifiedLots": "Lots",
-      "unifiedLotsHint": "Vue unifiée des lots FIFO avec sélection multiple et détail de conservation.",
+      "unifiedLotsHint": "Vue unifiée des lots ({method}) avec sélection multiple et détail de conservation.",
       "ganttTitle": "Vie et conservation des lots",
       "openOnly": "Ouverts",
       "valueComparisonTitle": "Valeur des lots sélectionnés",
@@ -118,7 +118,7 @@
       "custody": "Conservation",
       "openQuantity": "Quantité ouverte",
       "currentValue": "Valeur actuelle",
-      "fifoPnl": "P&L FIFO",
+      "fifoPnl": "P&L {method}",
       "noUnifiedLots": "Aucun lot ne correspond aux filtres actuels",
       "noGanttData": "Aucun historique de conservation dans la période sélectionnée",
       "inTransit": "En transit",
@@ -127,7 +127,7 @@
       "lotLabel": "Lot {date}",
       "lotWord": "Lot",
       "shortLotLabel": "Short {date}",
-      "detailTitle": "Détail des Lots FIFO",
+      "detailTitle": "Détail des lots · {method}",
       "loadFailed": "Échec du chargement des données de lots",
       "analysisFailed": "Les lots de cet actif ne peuvent pas être reconstruits : certaines de ses transactions ne concordent pas. Les lots, leur chronologie et la comparaison sont masqués ; les lignes du coût moyen ci-dessous ne sont pas concernées.",
       "combined": "Combiné",
@@ -290,7 +290,10 @@
       "yAxisFromZero": "Depuis 0",
       "annualizedReturn": "Annualisé",
       "annualizedReturnTooltip": "Rendement net annualisé (TCAC) de ce lot unique sur sa durée de détention, net des revenus et frais, pour comparer des lots détenus sur des durées différentes.",
-      "analysisFailedFix": "Corrigez ces transactions et les lots reviennent :"
+      "analysisFailedFix": "Corrigez ces transactions et les lots reviennent :",
+      "matchingMethod": "Méthode d'appariement",
+      "methodFifoHint": "FIFO : une vente clôt d'abord le lot le plus ancien",
+      "methodLifoHint": "LIFO : une vente clôt d'abord le lot le plus récent"
     },
     "createdInSystem": "Créé dans le Système",
     "deleteBlockedTitle": "Impossible de supprimer le courtier",

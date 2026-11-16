@@ -45,6 +45,8 @@
         nav_weight_percent?: string | (string | null)[] | null;
         gain_loss?: string | (string | null)[] | null;
         gain_loss_percent?: string | (string | null)[] | null;
+        /** The brokers the row stands for (project 74): several for an asset summed over them («Globale»). */
+        broker_ids?: number[];
     }
 
     /** One group's unrealized G/L as the backend gives it (`summary.holding_groups`, W8): asset_type null is the whole broker. */
@@ -55,9 +57,11 @@
         holdingGroups?: HoldingGroup[];
         displayCurrency?: string;
         onAnalyze?: (assetId: number) => void;
+        /** «Globale» (project 74): one tile per asset over its brokers, the tree has no broker level (type → asset). */
+        globalView?: boolean;
     }
 
-    let {holdings = [], holdingGroups = [], displayCurrency = 'EUR', onAnalyze}: Props = $props();
+    let {holdings = [], holdingGroups = [], displayCurrency = 'EUR', onAnalyze, globalView = false}: Props = $props();
 
     let chartWrapper: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
@@ -378,13 +382,14 @@
             const brokerInfo = bid ? getBrokerInfo(bid) : null;
             const bName = safeString(h.broker_name) || brokerInfo?.name || 'Unknown';
             const aType = h.asset_type || 'Unknown';
-            const brokerKey = bid != null ? `broker_${bid}` : `broker_name_${bName}`;
+            // «Globale»: every holding under one root, whose type nodes become the tree (no broker level)
+            const brokerKey = globalView ? 'global' : bid != null ? `broker_${bid}` : `broker_name_${bName}`;
 
             if (!brokerMap.has(brokerKey)) {
-                const brokerIconUrl = getBrokerIconUrl(brokerInfo);
+                const brokerIconUrl = globalView ? null : getBrokerIconUrl(brokerInfo);
                 brokerMap.set(brokerKey, {
-                    name: bName,
-                    brokerId: bid,
+                    name: globalView ? '' : bName,
+                    brokerId: globalView ? null : bid,
                     iconUrl: brokerIconUrl,
                     iconRichKey: brokerIconUrl ? `broker_${sanitizeRichKeySegment(bid ?? bName)}` : null,
                     value: 0,
@@ -429,7 +434,13 @@
                     assetId: h.asset_id,
                     name: h.asset_name,
                     brokerId: bid,
-                    broker: bName,
+                    // «Globale»: the tile's header names every broker that holds the asset
+                    broker: globalView
+                        ? (h.broker_ids ?? [])
+                              .map((id) => getBrokerInfo(id)?.name ?? '')
+                              .filter(Boolean)
+                              .join(' · ') || bName
+                        : bName,
                     type: translateAssetType(aType),
                     value: val,
                     weight,
@@ -440,10 +451,11 @@
         }
 
         // A group the backend did not send has no G/L: no figure, never a sum made up here.
-        const groupKey = (brokerId: number, assetType: string | null) => JSON.stringify([brokerId, assetType]);
-        const groups = new Map(holdingGroups.map((group) => [groupKey(group.broker_id, safeString(group.asset_type)), group]));
+        const groupKey = (brokerId: number | null, assetType: string | null) => JSON.stringify([brokerId, assetType]);
+        const groups = new Map(holdingGroups.map((group) => [groupKey(safeNumber(group.broker_id), safeString(group.asset_type)), group]));
         function groupGainLoss(brokerId: number | null, assetType: string | null): {gl: number | null; glPct: number | null} {
-            const group = brokerId == null ? undefined : groups.get(groupKey(brokerId, assetType));
+            // «Globale»: the backend's groups are the asset types over every broker (broker null)
+            const group = brokerId == null && !globalView ? undefined : groups.get(groupKey(brokerId, assetType));
             return {gl: safeDecimal(safeCurrency(group?.gain_loss)?.amount), glPct: safeDecimal(group?.gain_loss_percent)};
         }
 
@@ -468,6 +480,10 @@
                         glPct: typeGroup.glPct,
                     },
                 });
+            }
+            if (globalView) {
+                tree.push(...children);
+                continue;
             }
             const brokerGroup = groupGainLoss(brokerNode.brokerId, null);
             tree.push({

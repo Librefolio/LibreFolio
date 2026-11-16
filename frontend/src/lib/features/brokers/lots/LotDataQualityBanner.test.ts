@@ -46,6 +46,7 @@ import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/compo
 import {_} from '$lib/i18n';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 import LotDataQualityBanner from './LotDataQualityBanner.svelte';
+import {STALE_FX_ACTION, STALE_FX_CODE, staleFxIssue} from '$lib/features/dashboard/staleFxIssue';
 
 const INCOME = 'ASSET_INCOME_NO_ELIGIBLE_LOTS';
 const FALLBACK = 'REFERENCE_PRICE_FALLBACK';
@@ -244,5 +245,123 @@ describe('LotDataQualityBanner — the banner in the tone of its worst group, ea
             expect(block, `${code}: its own severity`).toHaveAttribute('data-severity', severity);
             expect(block, `${code}: the tone of its severity, ${TONE_OF[severity]}`).toHaveAttribute('data-tone', TONE_OF[severity]);
         }
+    });
+});
+
+/**
+ * Project 69, L4 (the developer, 12/11/2026: «si aggiungi il sinc e se riesci cerca di far riusare il codice già scritto
+ * per l'altro banner»): the lots banner offers the Dashboard's FX actions on its FX issues, drawn by the Dashboard's own
+ * `DataQualityIssueActions` — the same shapes and `data-testid`s — and handled by the parent (`onaction`).
+ *
+ * - `sync_fx_pair` fixes its whole issue: one button `data-quality-cta-{code}` in the issue's block, before the issue's
+ *   own message line; a click hands the parent the action, the backend's target and the issue; while `busyCode` is the
+ *   issue's code the button is disabled.
+ * - `add_fx_pair` works on one pair at a time: one chip `data-quality-fx-pair-{slug}` per pair, after the message, each
+ *   handing its own pair; no aggregate button.
+ * - Since L4b also `sync_stale_fx`, the old-rate row's sync (a pair sync too). Nothing else: an issue with another
+ *   action (`navigate_asset` on a cost basis it cannot know) draws its message and no control — the panel is already
+ *   on that asset (coordinator, 12/11).
+ *
+ * The fixtures are the issues `_report_gaps` → `build_data_quality_report` sends (`financial_math/portfolio/data_quality.py`):
+ * no lot, the pair slugs sorted, the sync's target its first pair, the add with none. Red before L4: the banner drew no
+ * control at all (it read no `cta_action`).
+ */
+describe('LotDataQualityBanner — the FX actions of the Dashboard banner (project 69, L4)', () => {
+    const SYNC: DataQualityIssue = {
+        domain: 'PORTFOLIO',
+        code: 'MISSING_FX_RATES',
+        severity: 'warning',
+        message_i18n_key: 'dataQuality.missingFxRates',
+        message_params: {count: 1, date_from: '2024-03-01', date_to: '2024-03-05', dates_count: 2},
+        affected_fx_pairs: ['EUR-ISK'],
+        cta_action: 'sync_fx_pair',
+        cta_target: 'EUR-ISK',
+        group_key: 'missing_fx_rates',
+    };
+    const ADD: DataQualityIssue = {
+        domain: 'PORTFOLIO',
+        code: 'MISSING_FX_MARKET',
+        severity: 'warning',
+        message_i18n_key: 'dataQuality.missingFx',
+        message_params: {count: 2},
+        affected_fx_pairs: ['EUR-GBP', 'EUR-ISK'],
+        cta_action: 'add_fx_pair',
+        cta_target: null,
+        group_key: 'missing_fx',
+    };
+    const COST: DataQualityIssue = {
+        domain: 'PORTFOLIO',
+        code: 'MISSING_COST_BASIS',
+        severity: 'warning',
+        message_i18n_key: 'dataQuality.missingCostBasis',
+        message_params: {count: 1},
+        affected_asset_ids: [7],
+        affected_asset_names: ['X'],
+        cta_action: 'navigate_asset',
+        cta_target: '7',
+        group_key: 'missing_cost_basis',
+    };
+
+    function mountWithActions(busyCode: string | null = null) {
+        const calls: Array<[string, string | null, DataQualityIssue]> = [];
+        render(LotDataQualityBanner, {issues: [SYNC, ADD, COST], lotDates: LOT_DATES, onaction: (action: string, target: string | null, issue: DataQualityIssue) => calls.push([action, target, issue]), busyCode});
+        const banner = screen.getByTestId('lot-data-quality-banner');
+        return {banner, toggle: within(banner).getByTestId('lot-data-quality-toggle'), calls};
+    }
+
+    it('draws the sync button before its message, and hands the parent the action, the target and the issue', async () => {
+        const {banner, toggle, calls} = mountWithActions();
+        await unfold(toggle);
+        const block = blockOf(banner, 'MISSING_FX_RATES');
+        const button = within(block).getByTestId('data-quality-cta-MISSING_FX_RATES');
+        const [message] = messagesIn(block);
+        expect(message, 'the issue writes its message').toBeTruthy();
+        expect(button.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING, 'the button comes before what it fixes').toBeTruthy();
+        expect(button).toBeEnabled();
+        await fireEvent.click(button);
+        expect(calls).toEqual([['sync_fx_pair', 'EUR-ISK', SYNC]]);
+    });
+
+    it('disables the sync button while its code is busy', async () => {
+        const {banner, toggle} = mountWithActions('MISSING_FX_RATES');
+        await unfold(toggle);
+        expect(within(blockOf(banner, 'MISSING_FX_RATES')).getByTestId('data-quality-cta-MISSING_FX_RATES')).toBeDisabled();
+    });
+
+    it('draws one add chip per pair after the message, each handing its own pair, and no button for all of them', async () => {
+        const {banner, toggle, calls} = mountWithActions();
+        await unfold(toggle);
+        const block = blockOf(banner, 'MISSING_FX_MARKET');
+        const [message] = messagesIn(block);
+        const chips = ['EUR-GBP', 'EUR-ISK'].map((pair) => within(block).getByTestId(`data-quality-fx-pair-${pair}`));
+        for (const chip of chips) expect(message.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING, 'a chip comes after the message').toBeTruthy();
+        expect(within(block).queryByTestId('data-quality-cta-MISSING_FX_MARKET')).toBeNull();
+        await fireEvent.click(chips[1]);
+        expect(calls).toEqual([['add_fx_pair', 'EUR-ISK', ADD]]);
+    });
+
+    it('draws no control for an action other than the pair actions, only its message', async () => {
+        const {banner, toggle} = mountWithActions();
+        await unfold(toggle);
+        const block = blockOf(banner, 'MISSING_COST_BASIS');
+        expect(messagesIn(block), 'presence barrier: the issue writes its message').toHaveLength(1);
+        expect(within(block).queryAllByRole('button')).toEqual([]);
+    });
+
+    // L4b (coordinator, 12/11, on the developer's request): «sync the pair» on the old-rate row too. The panel builds
+    // that row from its block's `stale_fx_pairs` with the Dashboard's own `staleFxIssue`; the button is the Dashboard's.
+    it('draws the old-rate row’s sync button before its message, and hands the parent its action and its pair', async () => {
+        const stale = staleFxIssue([{pair: 'EUR/ISK', last_rate_date: '2024-03-01', stale_days: 30}], '2024-03-31');
+        expect(stale, 'precondition: one old rate makes one row').not.toBeNull();
+        const calls: Array<[string, string | null, DataQualityIssue]> = [];
+        render(LotDataQualityBanner, {issues: [stale!], lotDates: LOT_DATES, onaction: (action: string, target: string | null, issue: DataQualityIssue) => calls.push([action, target, issue])});
+        const banner = screen.getByTestId('lot-data-quality-banner');
+        await unfold(within(banner).getByTestId('lot-data-quality-toggle'));
+        const block = blockOf(banner, STALE_FX_CODE);
+        const button = within(block).getByTestId(`data-quality-cta-${STALE_FX_CODE}`);
+        const [message] = messagesIn(block);
+        expect(button.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING, 'the button comes before what it fixes').toBeTruthy();
+        await fireEvent.click(button);
+        expect(calls).toEqual([[STALE_FX_ACTION, stale!.cta_target, stale]]);
     });
 });

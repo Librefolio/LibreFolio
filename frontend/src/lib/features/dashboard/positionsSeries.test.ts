@@ -14,7 +14,26 @@
  */
 
 import {describe, expect, it} from 'vitest';
-import {MAX_CHART_POSITIONS, PORTFOLIO_LINE_ID, assetColorRanks, assetIdOfLineId, lineDashes, lineOnDay, lineValue, portfolioLine, positionLine, positionLineId, positionLines, rankAssetsByWeight, selectionKeys, type HistoryPointLike, type PositionSeries, type PositionSeriesPoint, type PositionsSeriesResponse} from './positionsSeries';
+import {
+    MAX_CHART_POSITIONS,
+    PORTFOLIO_LINE_ID,
+    assetColorRanks,
+    assetIdOfLineId,
+    lineDashes,
+    lineOnDay,
+    lineValue,
+    portfolioLine,
+    positionLine,
+    positionLineId,
+    positionLines,
+    rankAssetsByWeight,
+    regroupSelection,
+    selectionKeys,
+    type HistoryPointLike,
+    type PositionSeries,
+    type PositionSeriesPoint,
+    type PositionsSeriesResponse,
+} from './positionsSeries';
 import {makePositionKey} from '$lib/features/dashboard/positionKey';
 
 // =============================================================================
@@ -734,7 +753,10 @@ describe('positionsSeries — lineDashes: the same asset at two brokers keeps it
     });
 
     it('two brokers of one asset: the first (lower broker id) solid, the other dashed, whatever the order of the lines', () => {
-        for (const ids of [['22-1', '22-2'], ['22-2', '22-1']]) {
+        for (const ids of [
+            ['22-1', '22-2'],
+            ['22-2', '22-1'],
+        ]) {
             const dashes = lineDashes(ids);
             expect(dashes.get('22-1')).toBe('solid');
             expect(dashes.get('22-2')).toBe('dashed');
@@ -750,5 +772,35 @@ describe('positionsSeries — lineDashes: the same asset at two brokers keeps it
 
     it('other assets do not count: 11-2 beside 22-1 is a line alone', () => {
         expect(lineDashes(['22-1', '11-2']).get('11-2')).toBe('solid');
+    });
+});
+
+describe('positionsSeries — regroupSelection: the ticked lines follow the «Globale / Broker» switch (project 74)', () => {
+    const row = (assetId: number, brokerId: number | null) => ({key: makePositionKey(assetId, brokerId), assetId, brokerId});
+    const brokerRows = [row(7, 1), row(7, 2), row(8, 1)];
+
+    it('to Globale: each ticked asset once, summed over its brokers (broker null), in the order ticked', () => {
+        expect(regroupSelection([row(8, 1), row(7, 2), row(7, 1)], 'asset', brokerRows)).toEqual([row(8, null), row(7, null)]);
+    });
+
+    it('to Broker: a ticked asset becomes every row of it at a broker, in the rows’ order', () => {
+        expect(regroupSelection([row(7, null)], 'broker', brokerRows)).toEqual([row(7, 1), row(7, 2)]);
+    });
+
+    it('to Broker: an asset with no row at a broker any more (sold in the period) is dropped, and the chart’s cap holds', () => {
+        expect(regroupSelection([row(9, null)], 'broker', brokerRows)).toEqual([]);
+        const many = Array.from({length: MAX_CHART_POSITIONS + 5}, (_, index) => row(100 + index, 1));
+        expect(
+            regroupSelection(
+                many.map((entry) => row(entry.assetId, null)),
+                'broker',
+                many,
+            ),
+        ).toHaveLength(MAX_CHART_POSITIONS);
+    });
+
+    it('rows already in the target grouping stay as they are', () => {
+        expect(regroupSelection([row(7, 1)], 'broker', brokerRows)).toEqual([row(7, 1)]);
+        expect(regroupSelection([row(7, null)], 'asset', brokerRows)).toEqual([row(7, null)]);
     });
 });

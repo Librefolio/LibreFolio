@@ -47,8 +47,10 @@ import type {SupportedLocale} from '$lib/i18n';
 
 vi.mock('$lib/i18n', () => {
     const identity = readable((key: string) => key);
+    // The same translator, but a text asked with values carries them after its key, so a test can read what was passed
+    const withValues = readable((key: string, options?: {values?: Record<string, unknown>}) => (options?.values ? `${key} ${JSON.stringify(options.values)}` : key));
     return {
-        _: identity,
+        _: withValues,
         t: identity,
         locale: writable('en'),
         date: readable((v: unknown) => String(v)),
@@ -88,7 +90,7 @@ vi.mock('$lib/stores/app/notify.svelte', () => ({notify: (...args: unknown[]) =>
 
 const checkAuth = vi.fn(async () => undefined);
 const logout = vi.fn(async () => undefined);
-const user = writable<{username: string; email: string; created_at?: string} | null>(null);
+const user = writable<{username: string; email: string; created_at?: string; pending_email_change?: {email: string; expires_at: string} | null} | null>(null);
 vi.mock('$lib/stores/app/auth', () => ({
     auth: {checkAuth: () => checkAuth(), logout: () => logout()},
     currentUser: {subscribe: (run: (v: unknown) => void) => user.subscribe(run)},
@@ -119,6 +121,9 @@ import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 const settingsGet = () => vi.mocked(zodiosApi.get_user_settings_endpoint_api_v1_settings_user_get as never) as ReturnType<typeof vi.fn>;
 const settingsPut = () => vi.mocked(zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put as never) as ReturnType<typeof vi.fn>;
 const profilePut = () => vi.mocked(zodiosApi.update_profile_api_v1_auth_profile_put as never) as ReturnType<typeof vi.fn>;
+// The two routes of the change of address that waits for its link (project 71, step 2.4).
+const cancelPending = () => vi.mocked(zodiosApi.cancel_pending_email_change_api_v1_auth_profile_email_change_delete as never) as ReturnType<typeof vi.fn>;
+const resendPending = () => vi.mocked(zodiosApi.resend_pending_email_change_api_v1_auth_profile_email_change_resend_post as never) as ReturnType<typeof vi.fn>;
 const deleteMe = () => vi.mocked(zodiosApi.delete_own_account_api_v1_auth_users_me_delete as never) as ReturnType<typeof vi.fn>;
 // What the deletion dialog asks on opening (lot A6b), and the administrator's pair it must never use from here.
 const previewMe = () => vi.mocked(zodiosApi.preview_own_account_deletion_api_v1_auth_users_me_deletion_preview_get as never) as ReturnType<typeof vi.fn>;
@@ -1718,5 +1723,192 @@ describe('ProfileTab — the e-mail row follows the server (A-28, A-36)', () => 
 
         await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(1));
         expect(profilePut()).toHaveBeenCalledWith({email: 'Alice@example.com', current_password: CURRENT_PASSWORD});
+    });
+});
+
+// =========================================================================
+describe('ProfileTab — a change of address that waits for its link (project 71, step 2.8)', () => {
+    const WAITING = {email: 'anan.rossi@example.org', expires_at: '2026-11-13T14:30:00Z'};
+
+    beforeEach(() => {
+        // `clearAllMocks` keeps the implementations a test set: every one starts from the plain answers
+        checkAuth.mockReset().mockImplementation(async () => undefined);
+        cancelPending()
+            .mockReset()
+            .mockResolvedValue(undefined as never);
+        resendPending()
+            .mockReset()
+            .mockResolvedValue({email: WAITING.email, expires_at: WAITING.expires_at} as never);
+    });
+    const box = () => screen.queryByTestId('profile-email-pending');
+    const notified = () => notify.mock.calls.map((call) => (call[0] as {name: string}).name);
+
+    /** Alice, unlocked, asking for another address with her password: what a save of the e-mail row sends. */
+    async function askForAddress(address = 'anan.rossi@example.org') {
+        await mountUnlocked();
+        await type(email(), address);
+        await typeEmailPassword(CURRENT_PASSWORD);
+    }
+
+    it('PTU-01 shows the box under the e-mail row while a change waits — locked or not — and none otherwise', async () => {
+        await mount();
+        expect(box()).toBeNull();
+
+        user.set({username: 'alice', email: 'alice@example.com', pending_email_change: WAITING});
+
+        await waitFor(() => expect(box()).toBeInTheDocument());
+        expect(screen.getByTestId('profile-email-pending-address')).toHaveTextContent(WAITING.email);
+        expect(box()?.getAttribute('data-expires-at')).toBe(WAITING.expires_at);
+        // The row keeps the address the account really has
+        expect(email()).toHaveValue('alice@example.com');
+        expect(email()).toBeDisabled();
+        const row = screen.getByTestId('profile-email').closest('.setting-row') as HTMLElement;
+        expect(row.parentElement?.contains(box())).toBe(true);
+        expect(row.contains(box())).toBe(false);
+    });
+
+    it('PTU-02 a «pending» answer of the e-mail save is not «saved»: the field goes back, an info toast says where the link went', async () => {
+        profilePut().mockResolvedValue({email_change: 'pending'} as never);
+        await askForAddress('a&b@example.org');
+
+        await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
+
+        await waitFor(() => expect(notified()).toContain('settings.profile.email.pending'));
+        expect(email()).toHaveValue('alice@example.com');
+        expect(fieldButtons('profile-email', 'save')).toHaveLength(0);
+        expect(emailPassword()).toBeNull();
+        const toast = notify.mock.calls.map((call) => call[0] as {name: string; toast?: {variant: string; message: string}}).find((event) => event.name === 'settings.profile.email.pending');
+        expect(toast?.toast?.variant).toBe('info');
+        expect(toast?.toast?.message).toContain('a&amp;b@example.org');
+        expect(toast?.toast?.message).not.toContain('a&b@example.org');
+        expect(toast?.toast?.message).toContain('settings.emailPending.sent');
+        expect(notified()).not.toContain('settings.profile.saved');
+        expect(checkAuth).toHaveBeenCalled();
+    });
+
+    it('PTU-03 «applied» (and an answer without the field) is a save, as before', async () => {
+        profilePut().mockResolvedValue({email_change: 'applied'} as never);
+        await askForAddress();
+
+        await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
+
+        await waitFor(() => expect(notified()).toContain('settings.profile.saved'));
+        expect(notified()).not.toContain('settings.profile.email.pending');
+    });
+
+    it('PTU-04 save all: the username is saved, the address waits — each in its own words', async () => {
+        profilePut().mockImplementation((async (payload: {email?: string}) => (payload.email ? {email_change: 'pending'} : {email_change: null})) as never);
+        await askForAddress();
+        await type(username(), 'alice2');
+
+        await fireEvent.click(screen.getByTestId('profile-save-all'));
+
+        await waitFor(() => expect(notified()).toContain('settings.profile.email.pending'));
+        expect(notified()).toContain('settings.profile.saved');
+        expect(notified()).not.toContain('settings.profile.save.partial');
+        expect(username()).toHaveValue('alice2');
+        expect(email()).toHaveValue('alice@example.com');
+        const saved = notify.mock.calls.map((call) => call[0] as {name: string; detail: {saved?: string[]; failed?: string[]}}).find((event) => event.name === 'settings.profile.saved');
+        expect(saved?.detail.saved).toEqual(['username']);
+    });
+
+    it('PTU-05 save all with the address alone: only the info toast, no «saved» summary', async () => {
+        profilePut().mockResolvedValue({email_change: 'pending'} as never);
+        await askForAddress();
+
+        await fireEvent.click(screen.getByTestId('profile-save-all'));
+
+        await waitFor(() => expect(notified()).toContain('settings.profile.email.pending'));
+        expect(notified()).not.toContain('settings.profile.saved');
+        expect(email()).toHaveValue('alice@example.com');
+    });
+
+    it.each([
+        ['EMAIL_RATE_LIMITED', 429],
+        ['EMAIL_DELIVERY_FAILED', 502],
+        ['EMAIL_UNAVAILABLE', 409],
+        ['EMAIL_LINKS_UNAVAILABLE', 409],
+    ])('PTU-06 %s is worded by the tab, with its code; the address and the password typed stay for another try', async (code) => {
+        profilePut().mockRejectedValue(axiosError({error_code: code, message: 'server words'}));
+        await askForAddress();
+
+        await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
+
+        await waitFor(() => expect(error()).toBeInTheDocument());
+        expect(error()?.getAttribute('data-error-code')).toBe(code);
+        expect(error()).not.toHaveTextContent('server words');
+        expect(email()).toHaveValue('anan.rossi@example.org');
+        expect(emailPassword()).toHaveValue(CURRENT_PASSWORD);
+        expect(notified()).not.toContain('settings.profile.email.pending');
+    });
+
+    it('PTU-07 «Cancel the request» calls the route, then reads the account again, and says so', async () => {
+        user.set({username: 'alice', email: 'alice@example.com', pending_email_change: WAITING});
+        await mount();
+        const calls: string[] = [];
+        cancelPending().mockImplementation((async () => void calls.push('cancel')) as never);
+        checkAuth.mockImplementation((async () => void calls.push('checkAuth')) as never);
+
+        await fireEvent.click(screen.getByTestId('profile-email-pending-cancel'));
+
+        await waitFor(() => expect(notified()).toContain('settings.profile.email.cancelled'));
+        expect(calls).toEqual(['cancel', 'checkAuth']);
+    });
+
+    it('PTU-08 «Send again» calls the route, reads the account again (the new expiry) and tells it with an info toast', async () => {
+        user.set({username: 'alice', email: 'alice@example.com', pending_email_change: WAITING});
+        await mount();
+        resendPending().mockResolvedValue({email: WAITING.email, expires_at: '2026-11-14T14:30:00Z'} as never);
+
+        await fireEvent.click(screen.getByTestId('profile-email-pending-resend'));
+
+        await waitFor(() => expect(notified()).toContain('settings.profile.email.resent'));
+        expect(resendPending()).toHaveBeenCalledTimes(1);
+        expect(checkAuth).toHaveBeenCalled();
+        const event = notify.mock.calls.map((call) => call[0] as {name: string; toast?: {variant: string}}).find((e) => e.name === 'settings.profile.email.resent');
+        expect(event?.toast?.variant).toBe('info');
+    });
+
+    it.each([
+        ['EMAIL_RATE_LIMITED', 'EMAIL_RATE_LIMITED', false],
+        ['EMAIL_DELIVERY_FAILED', 'EMAIL_DELIVERY_FAILED', false],
+        ['EMAIL_UNAVAILABLE', 'EMAIL_UNAVAILABLE', false],
+        ['EMAIL_TAKEN', 'EMAIL_TAKEN', true],
+    ])('PTU-09 «Send again» refused with %s: the banner carries %s; the account is read again only when the request is gone (%s)', async (code, shown, readsAgain) => {
+        user.set({username: 'alice', email: 'alice@example.com', pending_email_change: WAITING});
+        await mount();
+        resendPending().mockRejectedValue(axiosError({error_code: code, message: 'server words'}));
+
+        await fireEvent.click(screen.getByTestId('profile-email-pending-resend'));
+
+        await waitFor(() => expect(error()).toBeInTheDocument());
+        expect(error()?.getAttribute('data-error-code')).toBe(shown);
+        expect(checkAuth).toHaveBeenCalledTimes(readsAgain ? 1 : 0);
+    });
+
+    it('PTU-10 nothing waits any more (404 EMAIL_CHANGE_NOT_PENDING): no banner, the account is read again so the box goes', async () => {
+        user.set({username: 'alice', email: 'alice@example.com', pending_email_change: WAITING});
+        await mount();
+        resendPending().mockRejectedValue(axiosError({error_code: 'EMAIL_CHANGE_NOT_PENDING', message: 'x'}));
+        checkAuth.mockImplementation((async () => user.set({username: 'alice', email: 'alice@example.com', pending_email_change: null})) as never);
+
+        await fireEvent.click(screen.getByTestId('profile-email-pending-resend'));
+
+        await waitFor(() => expect(box()).toBeNull());
+        expect(error()).toBeNull();
+    });
+
+    it('PTU-11 the box waits (data-busy) while a request of its own runs, and the tab reports the same', async () => {
+        user.set({username: 'alice', email: 'alice@example.com', pending_email_change: WAITING});
+        await mount();
+        const running = deferred<unknown>();
+        resendPending().mockReturnValue(running.promise as never);
+
+        await fireEvent.click(screen.getByTestId('profile-email-pending-resend'));
+
+        await waitFor(() => expect(box()?.getAttribute('data-busy')).toBe('true'));
+        expect(screen.getByTestId('profile-email-pending-cancel')).toBeDisabled();
+        running.resolve({email: WAITING.email, expires_at: WAITING.expires_at});
+        await waitFor(() => expect(box()?.getAttribute('data-busy')).toBe('false'));
     });
 });

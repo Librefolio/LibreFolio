@@ -347,6 +347,28 @@ describe('FxProviderSelect', () => {
         expect(selectedRow(DIRECT_KEY)).toHaveAttribute('data-warnings', '1');
     });
 
+    it('shows an info note with the info icon, and a warning with the warning icon (lane 75)', async () => {
+        await setupI18n();
+        // ECB's note is a fact to know (info level, like FED's weekly release); BOE's is a warning. A route takes the
+        // most serious level of its providers' notes; the icon follows it.
+        graphReturns([DIRECT, CHAIN], [{...ECB, warning_i18n: {en: 'Published weekly'}, warning_level: 'info'}, {...FED, warning_i18n: {en: 'Monthly only'}, warning_level: 'warning'}, BOE, MANUAL]);
+        mount();
+        await settled();
+        const picker = await openPicker();
+
+        const direct = within(picker).getByTestId('fx-route-direct-ECB');
+        expect(direct).toHaveAttribute('data-warnings', '1');
+        expect(direct).toHaveAttribute('data-warning-level', 'info');
+        expect(within(direct).getByTestId('fx-route-note-icon')).toHaveAttribute('data-level', 'info');
+
+        // The chain ECB→FED carries both notes: the warning wins.
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+        const chain = within(picker).getByTestId('fx-route-chain-2step-ECB-FED');
+        expect(chain).toHaveAttribute('data-warnings', '2');
+        expect(chain).toHaveAttribute('data-warning-level', 'warning');
+        expect(within(chain).getByTestId('fx-route-note-icon')).toHaveAttribute('data-level', 'warning');
+    });
+
     it('shows no warnings when no provider on the route carries one', async () => {
         await setupI18n();
         // The default fixture has no warnings — a route must not manufacture one.

@@ -80,8 +80,9 @@
  * selector itself, never for a guess at a duration.
  *
  * Subjects. /assets, /dashboard and /fx need none. The detail pages choose theirs over the API, by property.
- * The asset is the header's worst case: its title is capped at 15ch inside two flex wrappers that cannot
- * shrink below it (the developer's data: a page wider than the viewport below ~341 px). So, among the active
+ * The asset is the header's worst case: its title is the one part that can be wider than the screen, and it
+ * must scroll inside its own box (min-w-0 on the two flex wrappers; the developer's data once made a page wider
+ * than the viewport below ~341 px, when the title had a 15ch cap it could not shrink below). So, among the active
  * assets priced by a market provider (not a parametric one) with at least two stored prices, the test takes the
  * one with the longest display name; when none reaches 25 characters it creates its own — a realistic ETF name
  * with a unique suffix, priced by mockprov under the identifier the mock refuses to quote, with a month of
@@ -137,8 +138,8 @@ const PROBE_PAST_PX = 200;
 const PAGE_PROBE_ID = 'toolbar-sweep-page-probe';
 const PAGE_PROBE_PAST_PX = 4;
 /**
- * The asset detail header is widest for a long name: its title is capped at 15ch but cannot shrink below
- * that cap. A realistic ETF name for the asset the test creates when no eligible one is long enough; it gets
+ * The asset detail header is widest for a long name: below lg the title may take the whole row and must scroll
+ * inside it, never widen the page. A realistic ETF name for the asset the test creates when no eligible one is long enough; it gets
  * a unique suffix (display_name is unique), and marks the rows this spec creates, which are never borrowed.
  */
 const LONG_ASSET_NAME = 'Xtrackers MSCI World Industrials UCITS ETF 1C';

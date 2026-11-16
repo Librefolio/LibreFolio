@@ -48,9 +48,42 @@
         onAnalyze: (assetId: number) => void;
         onCloseAnalysis: () => void;
         refreshVersion: number;
+        /** The lots panel synced rates or added a pair from its banner (project 69, L4): the view's report is asked again. */
+        onLotsRatesChanged?: () => void;
+        /** «Globale / Broker» (project 74): the grouping on screen, whether the switch is shown, and the user's choice. */
+        grouping: PanelProps['grouping'];
+        groupingAvailable: boolean;
+        onGroupingChange: PanelProps['onGroupingChange'];
     }
 
-    let {testId, snapshot, brokers, brokerIds, canAsk, assetsHref, onRequestContribution, positionsSeries, positionsSeriesLoading, positionsSeriesFailed, onRequestPositionsSeries, positionsRolling, onRequestPositionsRolling, rollingSelection, rollingAutoPreset, onRollingSelectionChange, activeAssetId, activeAsset, displayCurrency, onAnalyze, onCloseAnalysis, refreshVersion}: Props = $props();
+    let {
+        testId,
+        snapshot,
+        brokers,
+        brokerIds,
+        canAsk,
+        assetsHref,
+        onRequestContribution,
+        positionsSeries,
+        positionsSeriesLoading,
+        positionsSeriesFailed,
+        onRequestPositionsSeries,
+        positionsRolling,
+        onRequestPositionsRolling,
+        rollingSelection,
+        rollingAutoPreset,
+        onRollingSelectionChange,
+        activeAssetId,
+        activeAsset,
+        displayCurrency,
+        onAnalyze,
+        onCloseAnalysis,
+        refreshVersion,
+        onLotsRatesChanged,
+        grouping,
+        groupingAvailable,
+        onGroupingChange,
+    }: Props = $props();
 
     const summaryLoading = $derived(snapshot.reportLoading && !snapshot.summary);
 </script>
@@ -80,6 +113,10 @@
         {rollingSelection}
         {rollingAutoPreset}
         {onRollingSelectionChange}
+        {grouping}
+        {groupingAvailable}
+        {onGroupingChange}
+        groupedSummary={snapshot.groupedSummary}
     />
     <LotsAnalysisPanel
         open={activeAssetId != null}
@@ -91,5 +128,6 @@
         onClose={onCloseAnalysis}
         ready={canAsk}
         {refreshVersion}
+        onRatesChanged={onLotsRatesChanged}
     />
 </div>

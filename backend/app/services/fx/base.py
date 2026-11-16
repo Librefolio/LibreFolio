@@ -178,6 +178,16 @@ class FXRateProvider(PluginSettingsMixin, ABC):
         return {}
 
     @property
+    def warning_level(self) -> Literal["info", "warning"]:
+        """
+        How serious ``warning_i18n`` is: ``"warning"`` (⚠️, a limit of the data that can mislead, e.g. SNB's monthly
+        averages) or ``"info"`` (ℹ️, a fact worth knowing, e.g. FED's daily rates released once a week).
+
+        Default: ``"warning"``.
+        """
+        return "warning"
+
+    @property
     def docs_url(self) -> str | None:
         """
         URL to the documentation page for this provider.

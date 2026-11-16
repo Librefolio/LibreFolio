@@ -66,6 +66,8 @@ type ReportBody = {summary?: {holdings?: ReportHolding[]; data_quality?: {issues
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
 type LotsRequestBody = {asset_id?: number; requested_analyses?: string[]};
 type LotsBody = {lots?: Array<{lot_id: number; opening_broker_id: number}> | null};
+/** The lots analysis answer: the panel shows the FIFO block (project 69, D11). */
+type LotsAnswer = {methods: {FIFO: LotsBody}};
 
 type Owned = {user: DisposableUser | null; brokerIds: number[]; assetIds: number[]};
 type Seeded = {assetId: number; brokerId: number};
@@ -374,7 +376,7 @@ test.describe('STALE_PRICE banner — dashboard (D8)', () => {
             expect(staleIssue, 'the issue offers «Sync prices» for this asset').toMatchObject({cta_action: 'sync_asset_prices', affected_asset_ids: [seeded.assetId]});
 
             // One BUY on the account's only broker: exactly one lot opened there is a count this test created.
-            const lots = await jsonFrom<LotsBody>(await firstLots, 'first answer of the lots panel');
+            const lots = (await jsonFrom<LotsAnswer>(await firstLots, 'first answer of the lots panel')).methods.FIFO;
             const ownLots = (lots.lots ?? []).filter((lot) => lot.opening_broker_id === seeded.brokerId);
             expect(ownLots, `the lots answer lists the lot of the seeded BUY; it lists ${JSON.stringify(lots.lots ?? [])}`).toHaveLength(1);
 
@@ -420,7 +422,7 @@ test.describe('STALE_PRICE banner — dashboard (D8)', () => {
             const refreshedAnswer = await refreshed?.response();
             if (!refreshedAnswer) throw new Error('The lots analysis asked again after the sync got no answer');
             // The canned sync wrote nothing, so the answer cannot move: asked and answered is the whole claim.
-            const lotsAfter = await jsonFrom<LotsBody>(refreshedAnswer, 'lots analysis asked again after the sync');
+            const lotsAfter = (await jsonFrom<LotsAnswer>(refreshedAnswer, 'lots analysis asked again after the sync')).methods.FIFO;
             expect(
                 (lotsAfter.lots ?? []).map((lot) => lot.lot_id),
                 'the answer asked again still lists the lot',

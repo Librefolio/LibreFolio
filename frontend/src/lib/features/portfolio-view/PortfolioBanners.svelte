@@ -9,7 +9,7 @@
 <script lang="ts">
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
-    import FxPairAddModal from '$lib/features/fx/FxPairAddModal.svelte';
+    import BannerFxPairDialog from './BannerFxPairDialog.svelte';
     import type {PortfolioBannerActions} from './portfolioBannerActions.svelte';
 
     interface Props {
@@ -18,13 +18,9 @@
     }
 
     let {issues, actions}: Props = $props();
-
-    const fxParts = $derived(actions.fxPairSlug.includes('-') ? actions.fxPairSlug.split('-') : actions.fxPairSlug.split('/'));
 </script>
 
 <DataQualityBanner {issues} mode="grouped" onaction={(action, target, issue) => actions.handleAction(action, target, issue)} busyCode={actions.syncingCode} />
 
-<!-- FxPairAddModal — opened from DataQualityBanner CTA (and from the currency selector's «create forex») -->
-{#if actions.fxPairModalOpen}
-    <FxPairAddModal bind:open={actions.fxPairModalOpen} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} oncreated={() => actions.handleFxPairCreated()} onsynced={(detail) => actions.handleFxPairCreationSynced(detail)} />
-{/if}
+<!-- The dialog that adds a pair: opened from the banner's chip and from the currency selector's «create forex» -->
+<BannerFxPairDialog {actions} />

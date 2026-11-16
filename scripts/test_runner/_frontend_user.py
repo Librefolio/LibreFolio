@@ -4,6 +4,7 @@ import subprocess
 
 from . import _common
 from ._common import Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_header, print_section, print_success
+from ._coverage import vitest_env
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
@@ -14,6 +15,7 @@ def front_user_unit(verbose: bool = False, ui: bool = False, headed: bool = Fals
         ["npx", "vitest", "run", "src/lib/stores/app/auth.test.ts", "src/lib/stores/app/clientSession.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-user"),
     )
     if result.returncode == 0:
         print_success("User store Vitest unit tests - PASSED")

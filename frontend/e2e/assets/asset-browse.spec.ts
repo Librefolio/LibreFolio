@@ -180,10 +180,10 @@ test.beforeEach(async ({page}) => {
 // =============================================================================
 
 /** Three plain EUR stocks, one list payload: `E2E Browse <token> Alpha|Beta|Gamma`. */
-async function createTrio(page: Page, owned: Owned): Promise<Trio> {
+async function createTrio(page: Page, owned: Owned, middleUserUrl?: string): Promise<Trio> {
     const token = uniqueSuffix();
     const names: string[] = WORDS.map((word) => `E2E Browse ${token} ${word}`);
-    const items = names.map((name) => schemas.FAAssetCreateItem.parse({display_name: name, currency: 'EUR', asset_type: 'STOCK', active: true}));
+    const items = names.map((name, index) => schemas.FAAssetCreateItem.parse({display_name: name, currency: 'EUR', asset_type: 'STOCK', active: true, ...(index === 1 && middleUserUrl ? {user_url: middleUserUrl} : {})}));
     const response = await page.request.post(`${API_BASE}/assets`, {data: items});
     const body = (await response.json().catch(() => null)) as {results?: Array<{asset_id?: number | null; display_name: string; success: boolean; message?: string}>} | null;
     const results = body?.results ?? [];
@@ -817,4 +817,102 @@ test.describe('Asset detail ‹ n/N › — a move carries the date range the pa
         await expect(picker.start, `after a reload the picker shows the chosen start, ${chosen.start} (${opened.start} is the one the page was opened with)`).toHaveValue(chosen.start ?? '');
         await expect(picker.end, `and the chosen end, ${chosen.end}`).toHaveValue(chosen.end ?? '');
     });
+});
+
+// =============================================================================
+// AB-009..AB-012 — the header rows: tablet, desktop and phone
+// =============================================================================
+
+/** The viewport-space box of a test id on the page. */
+async function boxOf(page: Page, testId: string): Promise<{left: number; top: number; bottom: number; centerY: number}> {
+    const box = await page.getByTestId(testId).boundingBox();
+    if (!box) throw new Error(`"${testId}" has no box: it is not rendered or not visible`);
+    return {left: box.x, top: box.y, bottom: box.y + box.height, centerY: box.y + box.height / 2};
+}
+
+/** Gives the middle asset a transaction count without writing a transaction: the page reads `assetInfo` from this list. */
+async function giveMiddleTransactions(page: Page, middle: OwnedAsset): Promise<void> {
+    await page.route('**/api/v1/assets/query*', async (route) => {
+        const response = await route.fetch();
+        const body = (await response.json()) as Array<{id: number; tx_count?: number}>;
+        for (const item of body) if (item.id === middle.id) item.tx_count = 3;
+        await route.fulfill({response, json: body});
+    });
+}
+
+/** Opens the middle asset of a fresh trio on the viewport, ready to measure: transactions, a provider-less badge with an address, the nav ready. */
+async function openMiddleOn(page: Page, owned: Owned, baseURL: string | undefined, viewport: {width: number; height: number}): Promise<OwnedAsset> {
+    const trio = await createTrio(page, owned, 'https://provider.example/asset');
+    await keepOffline(page, baseURL);
+    await giveMiddleTransactions(page, trio.assets[1]);
+    await page.setViewportSize(viewport);
+    const order = await gridOrderOf(page, trio);
+    await openCard(page, order[1]);
+    await expectBrowseReady(page, 'list');
+    await expect(page.getByTestId('asset-detail-transactions-link')).toBeVisible();
+    return order[1];
+}
+
+test.describe('Asset detail header rows (project 71, block 1)', () => {
+    test('AB-009 768×1024: ←, the name and ‹ n/N › share a row; both badge groups sit below the name, from the icon edge', async ({page, owned, baseURL}) => {
+        await openMiddleOn(page, owned, baseURL, {width: 768, height: 1024});
+        await expect(async () => {
+            const back = await boxOf(page, 'asset-detail-back-btn');
+            const name = await boxOf(page, 'asset-detail-name');
+            const nav = await boxOf(page, 'asset-browse-nav');
+            expect(Math.abs(back.centerY - name.centerY), '← and the name on one row').toBeLessThanOrEqual(6);
+            expect(Math.abs(nav.centerY - name.centerY), '‹ n/N › and the name on one row').toBeLessThanOrEqual(6);
+            const identity = await boxOf(page, 'asset-detail-identity');
+            for (const group of ['asset-detail-badges-what', 'asset-detail-badges-where']) {
+                const box = await boxOf(page, group);
+                expect(box.top, `${group} starts below the name`).toBeGreaterThanOrEqual(name.bottom);
+            }
+            const what = await boxOf(page, 'asset-detail-badges-what');
+            expect(Math.abs(what.left - identity.left), 'the badges start at the icon edge').toBeLessThanOrEqual(2);
+        }).toPass({timeout: 5_000});
+    });
+
+    test('AB-010 1280×800: ←, the name, both badge groups and ‹ n/N › share one row', async ({page, owned, baseURL}) => {
+        await openMiddleOn(page, owned, baseURL, {width: 1280, height: 800});
+        await expect(async () => {
+            const name = await boxOf(page, 'asset-detail-name');
+            for (const id of ['asset-detail-back-btn', 'asset-detail-badges-what', 'asset-detail-badges-where', 'asset-browse-nav']) {
+                const box = await boxOf(page, id);
+                expect(Math.abs(box.centerY - name.centerY), `${id} on the name's row`).toBeLessThanOrEqual(6);
+            }
+        }).toPass({timeout: 5_000});
+    });
+
+    for (const [id, width, height] of [
+        ['AB-011', 390, 844],
+        ['AB-012', 360, 780],
+    ] as const) {
+        test(`${id} ${width}×${height}: four rows — ← and ‹ n/N ›; the name; type and currency; Transactions and provider — and no sideways scroll`, async ({page, owned, baseURL}) => {
+            await openMiddleOn(page, owned, baseURL, {width, height});
+            await expect(async () => {
+                const back = await boxOf(page, 'asset-detail-back-btn');
+                const nav = await boxOf(page, 'asset-browse-nav');
+                const name = await boxOf(page, 'asset-detail-name');
+                // Row 1: ← and ‹ n/N › on one line, ← on the left; both end above the name
+                expect(Math.abs(back.centerY - nav.centerY), 'row 1: ← and ‹ n/N › on one line').toBeLessThanOrEqual(4);
+                expect(back.left, 'row 1: ← sits left of ‹ n/N ›').toBeLessThan(nav.left);
+                expect(back.bottom, 'row 1 ends above the name').toBeLessThanOrEqual(name.top);
+                expect(nav.bottom, 'row 1 ends above the name').toBeLessThanOrEqual(name.top);
+                // Row 3: type and currency side by side, under the name
+                const type = await boxOf(page, 'asset-detail-type-badge');
+                const currency = await boxOf(page, 'asset-detail-currency');
+                expect(Math.abs(type.centerY - currency.centerY), 'row 3: type and currency on one line').toBeLessThanOrEqual(4);
+                expect(type.top, 'row 3 is below the name').toBeGreaterThanOrEqual(name.bottom);
+                // Row 4: Transactions and the provider badge side by side, under the first group
+                const what = await boxOf(page, 'asset-detail-badges-what');
+                const transactions = await boxOf(page, 'asset-detail-transactions-link');
+                const provider = await boxOf(page, 'asset-detail-provider-badge');
+                expect(Math.abs(transactions.centerY - provider.centerY), 'row 4: Transactions and provider on one line').toBeLessThanOrEqual(4);
+                expect(transactions.top, 'row 4 is below row 3').toBeGreaterThanOrEqual(what.bottom);
+                expect(provider.top, 'row 4 is below row 3').toBeGreaterThanOrEqual(what.bottom);
+            }).toPass({timeout: 5_000});
+            const reading = await readEdges(page, []);
+            expect(reading.pageOverflow, `at ${width} px the page does not scroll sideways: its furthest box ends ${px(reading.pageOverflow)} past the layout's right edge`).toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
+        });
+    }
 });

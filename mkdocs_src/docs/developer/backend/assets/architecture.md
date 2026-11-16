@@ -23,7 +23,8 @@ responsibility:
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
 | `period_changes.py` | The fixed-period changes of the Assets table, and on request the whole-range change of the Assets cards: each asset's price on the days the change needs, read in grouped queries and converted at each day's rate ([Fixed-Period Changes](#fixed-period-changes)). |
 | `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
-| `crud.py` | Asset create, list, patch, delete, and merge operations. |
+| `crud.py` | Asset create, list, delete and merge operations, and the all-or-nothing patch `patch_assets_bulk()` ([Asset Patch](#asset-patch)). |
+| `type_rules.py` | Pure rules of the asset type, no database: the family of a type (`asset_type_family()`: `ETF_*` → `ETF`, `CROWDFUND_*` → `CROWDFUND`, any other type is its own), `family_changed()`, `type_allows_transactions()` (only `INDEX` forbids them) and `classify_type_change()`, which judges a change of type for an asset with a given number of transactions. The patch and the transaction batch import what they need from here, so the rule is written once ([Asset Patch](#asset-patch)). |
 | `search.py` | Cross-provider batch search, SSE search, query caching, link-finder fallback, and URL resolution; for each provider that did not answer, the reason the client needs ([Interactive Search Stack](#interactive-search)). |
 | `web_link_finder.py` | The last-resort web lookup of `search.py`: an external metasearch engine that turns a query into candidate provider-domain URLs (see [Asset Search & Link-Finder](search_link_finder.md)). |
 | `manager.py` | The single `AssetSourceManager` class, composed from the provider, metadata, price-store, currency-change, event-store, query, and refresh operation mixins. |
@@ -1232,12 +1233,122 @@ cost unknown it stays `MISSING`.
 
 ---
 
+## ✏️ Asset Patch: All or Nothing {: #asset-patch }
+
+`PATCH /api/v1/assets` takes a list of `FAAssetPatchItem`, each with its own `asset_id` and its own
+fields, so one request can give every asset a different configuration. A single asset's edit is a
+batch of one item. The batch is **all or nothing**: if any item has an issue, nothing is saved.
+`POST /api/v1/assets/validate` runs the very same service and always rolls back, the way
+`POST /transactions/validate` and `/transactions/commit` do for transactions.
+
+```mermaid
+flowchart TD
+    V["POST /assets/validate"] --> S
+    P["PATCH /assets"] --> S
+    S["AssetCRUDService.patch_assets_bulk(patches, session, commit)"] --> K["1 · check every item, nothing written"]
+    K --> D{"any issue?"}
+    D -- yes --> R["rollback · committed=false · every result failed"]
+    D -- no --> X["2 · apply: setattr + flush per item, then the currency wipe (N68)"]
+    X -- "exception" --> R
+    X -- "commit=False" --> R2["rollback · committed=false · results as if saved"]
+    X -- "commit=True" --> C["3 · one commit · drop provider caches · committed=true"]
+```
+
+### 🔎 The check step {: #asset-patch-checks }
+
+`_check_patch_items()` judges **every** item against the stored assets before any `setattr`, loading
+the assets in one query and counting transactions in one more, and only when an item makes an asset
+an `INDEX`. It never stops at the first problem: the answer lists them all.
+
+| Code | Kind | When | `params`, `field` |
+|---|---|---|---|
+| `assetNotFound` | issue | The `asset_id` does not exist | none |
+| `indexWithTransactions` | issue | The type becomes `INDEX` on an asset that has transactions. An asset that already is `INDEX` is never blocked and never cleaned up | `tx_count`; `field="asset_type"` |
+| `assetNameTaken` | issue | The new `display_name` is held by another asset (`uq_assets_display_name`) | `name`; `field="display_name"` |
+| `assetFamilyChange` | warning | The type moves to another family (`asset_type_family(old) != asset_type_family(new)`). It never blocks and corrects nothing; an asset already blocked does not also get it | `from`, `to`; `field="asset_type"` |
+| `patchFailed` | issue | An exception while **applying** (below): the one failure only the database reveals | none |
+
+Two rules shape the checks:
+
+- **Names are judged in the order of the batch**, as the apply step meets them, because each item is
+  flushed before the next: a name an earlier item has just left is free for a later one, a name still
+  held (by an asset in the batch or outside it) is not, an asset that keeps its own name is no clash,
+  and of two items taking the same new name the second is the issue. The check therefore agrees with
+  what the flush would do, without writing.
+- **The type is projected item after item**, so a batch that patches the same asset twice judges the
+  second change against the first.
+
+The family and the `INDEX` rule are not in `crud.py`: they are the pure functions of
+`type_rules.py`, which `services/transactions/batch_creates.py` imports too (the refusal
+*Cannot create transactions for INDEX assets*), so the rule is written once.
+
+### ⚙️ Apply, commit and rollback {: #asset-patch-apply }
+
+- With **any issue**, the session is rolled back and the answer is `committed=false` with **every**
+  `results[i].success` false: the item with an issue carries its message, the others say another
+  asset of the batch has an issue. A caller that still reads only `results[0].success` therefore never
+  announces a save that did not happen.
+- Without issues the items are applied by `_apply_patch_item()`: the rules of an explicit `null`
+  (`CLEARED_BY_NULL` clears the icon, the user URL and an identifier; for any other field a `null`
+  is ignored), the shallow merge of `classification_params` and the replacement of
+  `identifier_other`, then a flush. This is the single place a later feature hooks its own write into
+  the same transaction.
+- The currency change (N68) follows the *result*: the assets whose stored currency now differs lose
+  their prices and non-`SPLIT` events, in the same transaction ([Market-Data
+  Wipe](events.md#market-data-wipe)). The provider cache keys are read **only for a real save**.
+- An exception while applying becomes the issue `patchFailed`, with a rollback, so the items already
+  flushed are undone too.
+- **One commit** ends a real save, and only **after** it the provider caches of the assets whose
+  currency changed are dropped: never on `/validate`, never after a rollback.
+
+### 📤 The answer {: #asset-patch-response }
+
+`FABulkAssetPatchResponse` keeps the shape of the old one (`results`, `success_count`, `errors`;
+`updated_fields` lists every field sent, even one whose value does not change) and gains three
+fields:
+
+| Field | Meaning |
+|---|---|
+| `committed` | `true` only when every item was saved. Always `false` from `/validate` |
+| `issues` | Blocking problems, each an `FAAssetPatchIssue` (`asset_id`, `index` of the item, `code`, an English `message` for logs and API clients, `params`, `field`). The interface translates from `code` |
+| `warnings` | The same shape, never blocking |
+
+Both routes answer **200** also when `committed` is `false`, like `/transactions/commit`; a malformed
+body is a 422 of Pydantic. A request without issues on `/validate` answers `committed=false` with the
+`results` it **would** have saved.
+
+!!! warning "Breaking change since 1.4"
+
+    `PATCH /api/v1/assets` no longer saves part of a batch, and its answer gained `committed`,
+    `issues` and `warnings`. A client that read `results[i].success` of a one-item batch keeps working
+    (a refused batch says `success=false` there); one that relied on a partial save must now read
+    `committed`. In the application the four callers of the old shape (the asset form, the currency
+    change dialog and the two identifier saves of the import wizard) read `committed` through
+    `assetPatchResult.ts`.
+
+### 🧺 The bulk edit of the interface {: #asset-bulk-edit }
+
+The «Edit selected» window of the Assets table (`frontend/src/lib/features/assets/bulk/`) is the
+second client of this service:
+
+| File | Role |
+|---|---|
+| `assetBulkEdit.ts` | Pure: counts of what the selected assets hold, the `PATCH` payload with **only the fields that change for each asset** (no `null` is ever sent), the rows of the summary |
+| `assetBulkVerify.ts` | Pure: the answer of `/validate` organised for the banners, blocks before warnings, grouped by `code` |
+| `AssetBulkEditModal.svelte`, `AssetBulkSummary.svelte` | The two steps; «Continue» runs `/validate`, «Save» runs `PATCH` with the same payload; a `committed=false` answer keeps the modal on the summary with the issues |
+
+The type rules are the backend's alone: the frontend shows the `issues` and `warnings` it receives and
+computes none of them.
+
+---
+
 ## 🌐 API Endpoints Summary
 
 | Endpoint | Method | Description |
 |---|---|---|
 | `POST /api/v1/assets` | POST | Bulk create assets |
-| `PATCH /api/v1/assets` | PATCH | Bulk update assets. An item that changes the currency deletes, in the same call and transaction, the asset's prices and non-`SPLIT` events and unlinks their transactions; never refused (N68) |
+| `PATCH /api/v1/assets` | PATCH | Bulk update assets, **all or nothing**: every item is checked first, any issue saves nothing; the answer is 200 either way, with `committed`, `issues` and `warnings` ([Asset Patch](#asset-patch)). An item that changes the currency deletes, in the same call and transaction, the asset's prices and non-`SPLIT` events and unlinks their transactions; the change itself is never refused (N68) |
+| `POST /api/v1/assets/validate` | POST | Dry run of the row above: same body, same service, always rolled back. Answers the issues and warnings the `PATCH` would answer, with `committed` always `false`; saves nothing and drops no cache |
 | `GET /api/v1/assets` | GET | Bulk read by IDs (with metadata) |
 | `GET /api/v1/assets/query` | GET | Filtered list (search, type, currency, active); `active=true` lists all active assets |
 | `DELETE /api/v1/assets` | DELETE | Bulk delete (cascade provider+prices) |

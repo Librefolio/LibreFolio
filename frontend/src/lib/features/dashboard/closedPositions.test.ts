@@ -46,3 +46,11 @@ describe('closedPositionsToList', () => {
         expect(ids(closedPositionsToList([closed(5, 1, 'TRANSFER', 1)], [held(5, 1)]))).toEqual(['5-1']);
     });
 });
+
+describe('closedPositionsToList — «Globale» (project 74)', () => {
+    const summed = (assetId: number, isFullySold: boolean): ClosedPositionLike => ({asset_id: assetId, broker_id: null, is_fully_sold: isFullySold, closed_by: isFullySold ? 'SELL' : null});
+
+    it('an asset summed over its brokers is listed only when every broker closed it', () => {
+        expect(closedPositionsToList([summed(5, true), summed(6, false)], [{asset_id: 6, broker_id: null}]).map((p) => p.asset_id)).toEqual([5]);
+    });
+});

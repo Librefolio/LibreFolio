@@ -47,15 +47,15 @@
   },
   "email_changed": {
     "subject": "L'indirizzo email del tuo account LibreFolio è cambiato",
-    "intro": "L'indirizzo email del tuo account su $instance è stato cambiato. Questo messaggio va all'indirizzo che aveva prima.",
-    "advice": "Se il cambio l'hai fatto tu, non devi fare niente. Se no, qualcuno potrebbe usare il tuo account: cambia subito la password, se riesci ancora ad accedere, e avvisa l'amministratore di $instance.",
-    "intro_host": "L'indirizzo email del tuo account su $instance è stato cambiato da chi gestisce questa istanza. Questo messaggio arriva all'indirizzo che aveva prima.",
-    "advice_host": "Se chi gestisce l'istanza ti ha avvisato di questo cambio, non devi fare nulla. Altrimenti chiedi a chi gestisce $instance se il cambio è suo.",
+    "intro": "L'indirizzo email del tuo account su $instance **è stato cambiato**.\nQuesto messaggio va all'indirizzo che aveva prima.",
+    "advice": "Se il cambio l'hai fatto tu, non devi fare niente.\nSe no, qualcuno potrebbe usare il tuo account: **cambia subito la password**, se riesci ancora ad accedere, e avvisa l'amministratore di $instance.",
+    "intro_host": "L'indirizzo email del tuo account su $instance **è stato cambiato da chi gestisce questa istanza**.\nQuesto messaggio arriva all'indirizzo che aveva prima.",
+    "advice_host": "Se chi gestisce l'istanza ti ha avvisato di questo cambio, non devi fare nulla.\nAltrimenti **chiedi a chi gestisce $instance** se il cambio è suo.",
     "new_subject": "Il tuo account LibreFolio ora usa questo indirizzo email",
-    "new_intro": "Questo è ora l'indirizzo email del tuo account su $instance: l'account accede con questo indirizzo e riceve qui le sue email.",
-    "new_advice": "Se il cambio l'hai fatto tu, non devi fare niente. Se non hai un account su $instance, qualcuno ha inserito questo indirizzo per errore: avvisa l'amministratore di $instance.",
-    "new_intro_host": "Il cambio di indirizzo chiesto da chi gestisce $instance è completato: questo è ora l'indirizzo email del tuo account, che accede con questo indirizzo e riceve qui le sue email.",
-    "new_advice_host": "Se non te lo aspettavi, chiedi a chi gestisce $instance."
+    "new_intro": "Questo è ora **l'indirizzo email del tuo account** su $instance.\nL'account accede con questo indirizzo e riceve qui le sue email.",
+    "new_advice": "Se il cambio l'hai fatto tu, non devi fare niente.\nSe non hai un account su $instance, qualcuno ha inserito questo indirizzo per errore: **avvisa l'amministratore** di $instance.",
+    "new_intro_host": "Il cambio di indirizzo chiesto da chi gestisce $instance **è completato**.\nQuesto è ora l'indirizzo email del tuo account, che accede con questo indirizzo e riceve qui le sue email.",
+    "new_advice_host": "Se non te lo aspettavi, **chiedi a chi gestisce** $instance."
   },
   "email_change_confirmation": {
     "subject": "Conferma il nuovo indirizzo email del tuo account amministratore di LibreFolio",
@@ -63,5 +63,16 @@
     "action": "Conferma questo indirizzo",
     "expiry": "Il link funziona una sola volta e scade tra $duration. Dopo la conferma l'account accede con questo indirizzo e le sue sessioni aperte terminano.",
     "ignore": "Se non aspettavi questa email puoi ignorarla: non cambia nulla."
+  },
+  "email_change_request": {
+    "subject": "Conferma il nuovo indirizzo email del tuo account LibreFolio",
+    "intro": "Qualcuno ha chiesto di usare questo indirizzo email per un account su $instance.\nConfermalo per completare il cambio: fino ad allora **non cambia nulla** e l'account mantiene il suo indirizzo attuale.",
+    "action": "Conferma questo indirizzo",
+    "expiry": "Il link funziona **una sola volta** e scade tra **$duration**.\nDopo la conferma l'account accede con questo indirizzo; il browser che conferma resta collegato e **le altre sessioni dell'account terminano**.",
+    "signin": "Per confermare devi essere **entrato nel tuo account**: se non lo sei, la pagina ti chiede prima di accedere.",
+    "ignore": "Se non sei stato tu, puoi ignorare questa email: **non cambia nulla**, e senza accedere a quell'account nessuno può confermare.",
+    "requested_subject": "È stato chiesto di cambiare l'indirizzo email del tuo account LibreFolio",
+    "requested_intro": "Qualcuno ha chiesto di cambiare l'indirizzo email del tuo account su $instance.\n**Per ora non è cambiato nulla**: il nuovo indirizzo va prima confermato da dentro l'account.",
+    "requested_advice": "Se l'hai chiesto tu, non devi fare niente.\nSe no, qualcuno potrebbe usare il tuo account: **cambia subito la password**, cosa che annulla anche la richiesta, e avvisa l'amministratore di $instance."
   }
 }

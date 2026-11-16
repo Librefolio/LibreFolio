@@ -146,7 +146,8 @@
       },
       "tooManyItems": "Nothing was saved: the server takes at most {max, number} values in one save, and this one held {count, number}. Save them in smaller parts."
     },
-    "errorWithRequestId": "{message} (code: {requestId})"
+    "errorWithRequestId": "{message} (code: {requestId})",
+    "selectionActions": "Actions on the selection"
   },
   "csvImport": {
     "title": "Import CSV Data",

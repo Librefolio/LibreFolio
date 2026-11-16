@@ -53,7 +53,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from . import _common
+from . import _common, _coverage, _run_cache
 from ._common import Colors, print_error, print_info, print_success, print_warning
 from ._inventory import PROJECT_ROOT
 
@@ -117,26 +117,44 @@ def _junit_results(report: Path, known: list) -> dict:
     dirs = [k for k in known if k.endswith("/")]
     outcome: dict = {}
     for case in root.iter("testcase"):
-        parts = (case.get("classname") or "").split(".")
-        if parts[:2] == ["backend", "test_scripts"]:
-            parts = parts[2:]
-        module = None
-        walk = list(parts)
-        while walk:
-            candidate = "/".join(walk) + ".py"
-            if candidate in known:
-                module = candidate
-                break
-            walk = walk[:-1]
-        if module is None:
-            dotted = "/".join(parts) + "/"
-            module = max((d for d in dirs if dotted.startswith(d)), key=len, default=None)
+        module = _case_owner(case, known, dirs)
         if module is None:
             continue
         # error/failure children mark a red; skipped is not one.
         red = case.find("failure") is not None or case.find("error") is not None
         outcome[module] = outcome.get(module, True) and not red
     return outcome
+
+
+def _case_owner(case, known: list, dirs: list) -> str | None:
+    """The unit that owns a junit test case: its module, walking back from the class, or the deepest directory unit."""
+    parts = (case.get("classname") or "").split(".")
+    if parts[:2] == ["backend", "test_scripts"]:
+        parts = parts[2:]
+    walk = list(parts)
+    while walk:
+        candidate = "/".join(walk) + ".py"
+        if candidate in known:
+            return candidate
+        walk = walk[:-1]
+    dotted = "/".join(parts) + "/"
+    return max((d for d in dirs if dotted.startswith(d)), key=len, default=None)
+
+
+def _junit_durations(report: Path, known: list, category: str) -> None:
+    """Hand each unit's seconds (the sum of its cases' ``time``) to ``_run_cache.DURATIONS``."""
+    try:
+        root = ET.parse(report).getroot()
+    except (OSError, ET.ParseError):
+        return
+    dirs = [k for k in known if k.endswith("/")]
+    seconds: dict = {}
+    for case in root.iter("testcase"):
+        module = _case_owner(case, known, dirs)
+        if module is not None:
+            seconds[module] = seconds.get(module, 0.0) + float(case.get("time") or 0)
+    for module, spent in seconds.items():
+        _run_cache.DURATIONS.add(category, "pytest", module, spent)
 
 
 def _pytest_cmd(paths: list, coverage: bool, junit: Path, verbose: bool) -> list:
@@ -147,13 +165,8 @@ def _pytest_cmd(paths: list, coverage: bool, junit: Path, verbose: bool) -> list
         cmd.append("-s")
     cmd += [*paths, "-v", "--no-header", f"--junit-xml={junit}"]
     if coverage:
-        html_dir = "htmlcov-backend" if _common._COVERAGE_SOURCE != "frontend" else "htmlcov-backend-e2e"
-        cmd += [
-            "--cov=backend/app",
-            "--cov-append",
-            f"--cov-report=html:{html_dir}",
-            "--cov-report=term-missing:skip-covered",
-        ]
+        # No report here: the finalizer writes the HTML once per run (step 3.9), as with the parallel workers.
+        cmd += ["--cov=backend/app", "--cov-append", "--cov-report="]
     return cmd
 
 
@@ -191,6 +204,7 @@ def _run_group(category: str, paths: list, coverage: bool, verbose: bool) -> dic
     accumulated = data_dir / source
     main_cov = PROJECT_ROOT / ".coverage"
     if coverage:
+        _coverage.LEDGER.expect_python(source)
         env["COVERAGE_RUN"] = "1"
         data_dir.mkdir(exist_ok=True)
         if accumulated.exists():
@@ -225,6 +239,7 @@ def _run_group(category: str, paths: list, coverage: bool, verbose: bool) -> dic
             shutil.copy2(str(main_cov), str(accumulated))
 
     verdicts = _junit_results(report, paths)
+    _junit_durations(report, paths, category)
     missing = [p for p in paths if p not in verdicts]
     if missing:
         print_warning(f"{category}: {len(missing)} unit(s) produced no test case — treated as failures")

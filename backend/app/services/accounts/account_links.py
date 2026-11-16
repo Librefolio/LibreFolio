@@ -5,9 +5,10 @@ A link is one row of ``account_tokens``. Its state is read in ``token_service.in
 first (a retired link, revoked and consumed at once, reads as revoked), then the use, then the expiry.
 
 Administrators revoke the open links of the purposes they handle from the Users tab: invitations, password-reset
-links and email-verification links. The setup link of the initial administrator is cancelled from its account
-(``PATCH /users/{id}`` with ``cancel_setup``), and the owner's email change follows the host's variable, which issues
-it again at the next start: neither is revoked here.
+links, email-verification links, and the changes of address users asked for from Profile (release 1.4, project 71: an
+``email_change`` link the account issued for itself, ``is_profile_change``). The setup link of the initial administrator
+is cancelled from its account (``PATCH /users/{id}`` with ``cancel_setup``), and the owner's email change follows the
+host's variable, which issues it again at the next start: neither is revoked here.
 """
 
 from dataclasses import dataclass
@@ -51,7 +52,18 @@ class AccountLinkView:
 
     @property
     def revocable(self) -> bool:
-        return self.state == LinkState.OPEN and self.record.purpose in REVOCABLE_PURPOSES
+        return self.state == LinkState.OPEN and _revocable_kind(self.record)
+
+
+def is_profile_change(record: AccountToken) -> bool:
+    """Whether ``record`` is a change of address asked from Profile: an ``email_change`` link its own account issued.
+    The owner's link, which the host's variable drives, carries no creator."""
+    return record.purpose == AccountTokenPurpose.EMAIL_CHANGE and record.created_by_user_id is not None and record.created_by_user_id == record.user_id
+
+
+def _revocable_kind(record: AccountToken) -> bool:
+    """A link of a purpose administrators revoke here, or a change of address asked from Profile."""
+    return record.purpose in REVOCABLE_PURPOSES or is_profile_change(record)
 
 
 def link_state(record: AccountToken, now: datetime) -> LinkState:
@@ -111,14 +123,15 @@ async def revoke_link(session: AsyncSession, link_id: int, *, now: Optional[date
     """Revoke the open link ``link_id`` (flushed, not committed).
 
     ``not_found`` when no such link is open (unknown, used, expired or revoked already); ``not_revocable`` for an open
-    link of a purpose administrators do not revoke here (``REVOCABLE_PURPOSES``). The revocation is one conditional
-    UPDATE: a link spent meanwhile is not revoked, and answers ``not_found``.
+    link administrators do not revoke here: not of ``REVOCABLE_PURPOSES`` and no change of address asked from Profile
+    (the setup link, the owner's email change). The revocation is one conditional UPDATE: a link spent meanwhile is not
+    revoked, and answers ``not_found``.
     """
     moment = now or utcnow()
     record = await session.get(AccountToken, link_id)
     if record is None or link_state(record, moment) != LinkState.OPEN:
         return "not_found"
-    if record.purpose not in REVOCABLE_PURPOSES:
+    if not _revocable_kind(record):
         return "not_revocable"
     purpose = AccountTokenPurpose(record.purpose)
     revoked = await token_service.revoke_tokens(session, token_id=link_id, purpose=purpose, now=moment)

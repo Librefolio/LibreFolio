@@ -5,6 +5,7 @@ import subprocess
 
 from . import _common
 from ._common import Colors, _get_category_tests_for_all, _run_test_suite, add_test, make_category, print_error, print_header, print_section, print_success
+from ._coverage import vitest_env
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
@@ -161,6 +162,9 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/transactions/eventReconciliation.test.ts",
             "src/lib/features/transactions/__tests__/transactionsReconcileButton.wiring.test.ts",
             "src/lib/features/assets/currencyChangeErrors.test.ts",
+            "src/lib/features/assets/assetPatchResult.test.ts",
+            "src/lib/features/assets/bulk/assetBulkEdit.test.ts",
+            "src/lib/features/assets/bulk/assetBulkVerify.test.ts",
             "src/lib/features/assets/assetPayload.test.ts",
             "src/lib/features/assets/assetSearchSelection.test.ts",
             "src/lib/features/assets/assetSearchSections.test.ts",
@@ -362,6 +366,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-utility"),
     )
     if result.returncode == 0:
         print_success("Core store Vitest unit tests - PASSED")
@@ -435,6 +440,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/layout/PageBackButton.test.ts",
             "src/lib/components/table/DataTableColumnFilter.test.ts",
             "src/lib/components/table/DataTable.test.ts",
+            "src/lib/components/table/DataTableToolbar.test.ts",
             "src/lib/components/table/DataTable.rowOrder.test.ts",
             "src/lib/components/table/DataTable.navigate.test.ts",
             "src/lib/components/table/DataTable.rowDeleted.test.ts",
@@ -446,6 +452,9 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/AssetSearchAutocomplete.test.ts",
             "src/lib/features/assets/AssetCurrencyChangeModal.test.ts",
             "src/lib/features/assets/AssetModal.currencyChange.test.ts",
+            "src/lib/features/assets/bulk/AssetBulkEditModal.test.ts",
+            "src/lib/features/assets/bulk/AssetBulkEditModal.verify.test.ts",
+            "src/lib/features/assets/bulk/AssetBulkEditModal.summary.test.ts",
             "src/lib/features/transactions/EventReconciliationModal.test.ts",
             "src/lib/features/assets/AssetDataEditorSection.test.ts",
             "src/lib/features/assets/ProviderComparisonModal.test.ts",
@@ -454,6 +463,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/providerProbeState.test.ts",
             "src/lib/features/assets/AssetSyncModal.test.ts",
             "src/lib/features/assets/AssetBrowseNav.test.ts",
+            "src/lib/features/assets/detail/AssetDetailHeader.test.ts",
             "src/lib/features/assets/detail/AssetDetailSignalsPanel.test.ts",
             "src/lib/features/assets/detail/AssetDetailMeasuresSection.test.ts",
             "src/lib/features/assets/detail/AssetChartModeToggle.test.ts",
@@ -584,6 +594,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/AccountDeletionDialog.test.ts",
             "src/lib/features/settings/tabs/PreferencesTab.test.ts",
             "src/lib/features/settings/tabs/ProfileTab.test.ts",
+            "src/lib/features/settings/PendingEmailChangeBox.test.ts",
             "src/lib/features/settings/ProtectedEmailModal.test.ts",
             "src/lib/features/settings/tabs/AboutTab.test.ts",
             "src/lib/features/settings/tabs/AboutTab.legal.test.ts",
@@ -611,6 +622,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/tabs/GlobalSettingsTab.verification.test.ts",
             "src/lib/features/settings/users/UserRow.verification.test.ts",
             "src/lib/features/settings/users/UserRow.pendingSetup.test.ts",
+            "src/lib/features/settings/users/UserRow.pendingEmailChange.test.ts",
             "src/lib/features/settings/users/UserRow.avatar.test.ts",
             "src/lib/features/settings/users/UserRow.selfHint.test.ts",
             "src/routes/(app)/settings/[...path]/page.tabs.test.ts",
@@ -657,6 +669,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/steps/FxStep.test.ts",
             "src/lib/features/tools/pac-allocator/planner/request.test.ts",
             "src/lib/components/ui/display/BrokerBadge.test.ts",
+            "src/lib/components/ui/display/BrokerBadgeStack.test.ts",
             "src/lib/features/instance/components/InstanceNotices.test.ts",
             "src/lib/features/instance/components/InstanceBlockedPage.test.ts",
             "src/lib/features/instance/components/UserLimitChoicePage.test.ts",
@@ -687,6 +700,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-utility"),
     )
     if result.returncode == 0:
         print_success("Svelte component unit tests - PASSED")
@@ -736,6 +750,7 @@ def front_onboarding_component_unit(
         ],
         cwd="frontend",
         capture_output=not verbose,
+        env=vitest_env("front-utility"),
     )
     if result.returncode == 0:
         print_success("Onboarding component unit tests - PASSED")
@@ -1169,6 +1184,28 @@ def front_csp_collector(verbose: bool = False, ui: bool = False, headed: bool = 
     return _run_playwright("layout/csp-collector.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_login_reuse(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the tests of how login() signs a user in and what it costs (project 71, steps 3.14 and 3.15): the annotations login-path and login-ms."""
+    print_section("Frontend Login Reuse Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/login-reuse.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_js_coverage_sink(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the pure tests of the worker's JS coverage sink and of the stopwatches of the E2E collection (project 71, step 3.6): what a merge and a write cost, one record per test with six fields, the log of a worker, the flag that turns them on."""
+    print_section("Frontend JS Coverage Sink Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/js-coverage-sink.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_cloud_smoke(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the cloud smoke (H-43) on a managed lane: CLOUD_SMOKE_SPECS, desktop, the collector failing on a violation of the report-only policy the baseline does not know."""
     print_section("Frontend Cloud Smoke (managed lane)")
@@ -1316,6 +1353,16 @@ def front_email_send_link(verbose: bool = False, ui: bool = False, headed: bool 
     if not _ensure_test_users():
         return False
     return _run_playwright("settings/email-send-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_profile_email_change(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the E2E tests of a change of address asked from Profile (project 71): the Profile box, the Users badge, the link page's sign-in."""
+    print_section("Frontend Profile Email Change Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/profile-email-change.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_forgot_password_email(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -1712,6 +1759,24 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "login-reuse",
+        front_login_reuse,
+        name="Login Reuse",
+        desc="Project 71 steps 3.14-3.15 (D7): login() annotates every test with login-path (form) and login-ms (its milliseconds), which Playwright's JSON report carries per test",
+        prereq="Populated DB + test users",
+        tests="layout/login-reuse.spec.ts",
+    )
+    add_test(
+        cat,
+        "js-coverage-sink",
+        front_js_coverage_sink,
+        name="JS Coverage Sink",
+        desc="Project 71 step 3.6: the worker's JS coverage sink (e2e/fixtures/js-coverage-sink.ts) and the stopwatches of the E2E coverage collection, all pure: with a write every two tests the sink returns the merge and write times (the second add has a write time, the first none), a record has exactly evaluate_ms, payload_bytes, merge_ms, flush_ms, rss_mb and heap_mb, the log appends one JSON line per test to coverage-js/timing/worker-<index>-<pid>.jsonl, only LF_COV_TIMING=1 turns them on and the size is counted in bytes",
+        prereq="Frontend build + test users",
+        tests="layout/js-coverage-sink.spec.ts",
+    )
+    add_test(
+        cat,
         "cloud-smoke",
         front_cloud_smoke,
         name="Cloud Smoke (managed lane)",
@@ -1780,6 +1845,15 @@ def populate_registry(registry: dict) -> None:
         desc="«Send by email» in Settings › Users (workstream E, lots E4b and E-8): the invitation and reset dialogs on the lane's backend, GET /system/instance answered with the real response and email.links true or false, POST /email/links on a simulated server: offered only with links, an invitation prefilled with its address posting {purpose, token, to} with no language by default, or with language: it chosen in its select, a reset link posting {purpose, token} without to or language, no select, «sent» and email.link.sent, a 429 with its wait in email.link.sendFailed; every invitation and disposable account it creates removed after it",
         prereq="Admin user + test users; registration open on the lane; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
         tests="settings/email-send-link.spec.ts",
+    )
+    add_test(
+        cat,
+        "profile-email-change",
+        front_profile_email_change,
+        name="Profile Email Change E2E",
+        desc="A change of address asked from Profile (project 71), every route simulated per test with page.route and checked against the generated schemas, the fixture user's address never changed: saving a new address gives settings.profile.email.pending, an info toast and the pending box, the field keeping the account's address; Send again and Cancel the request call their routes, cancelled the box goes; on a 375 px phone the box's buttons go under its text; the administrator sees the pending badge on the account and revokes its open link (DELETE /users/account-links/{id}, accounts.link.revoked); the link page answered 403 EMAIL_CHANGE_SIGN_IN_REQUIRED shows signin, its button opens the sign-in with the way back, and after the fixture user signs in the page is back ready and sends the same token",
+        prereq="Test users created; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
+        tests="settings/profile-email-change.spec.ts",
     )
     add_test(
         cat,

@@ -28,6 +28,21 @@ describe('scopeKey — two scopes are the same question when this is equal', () 
     });
 });
 
+describe('the grouping of the positions (project 74, «Globale»)', () => {
+    it('the contribution and the light summary ask group_by=asset in Globale, and nothing new in Broker', () => {
+        expect(contributionCall(scope).options?.groupByAsset).toBeFalsy();
+        expect(contributionCall(scope, 'broker')).toEqual(contributionCall(scope));
+        const grouped = contributionCall(scope, 'asset');
+        expect(grouped).toMatchObject({...contributionCall(scope), options: {groupByAsset: true}});
+        expect(lightSummaryCall(scope, 'asset').options).toMatchObject({groupByAsset: true});
+        expect(lightSummaryCall(scope).options?.groupByAsset).toBeFalsy();
+    });
+
+    it('keeps the whole-broker flag next to the grouping (the broker page never groups, but the two must not drop each other)', () => {
+        expect(contributionCall({...scope, fullShare: true}, 'asset').options).toEqual({fullShare: true, groupByAsset: true});
+    });
+});
+
 describe('the three questions of one scope', () => {
     it('the main report asks the eager sections and none of the lazy ones', () => {
         const call = mainReportCall(scope, {wantsBrokerPnlHistory: true});

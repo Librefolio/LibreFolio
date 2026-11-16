@@ -47,8 +47,9 @@ Dividends, splits, interest and other asset events, drawn as markers on the char
 ## 🔧 Header and toolbar
 
 - **←** goes back to the list, or to the page you came from, in one step, even after browsing with the arrows.
-- **The asset** — a dot (green active, red archived), its name, type and currency, a **Transactions (N)** link when it has any, its provider (or **✏️ Manual**), and a link to its web page: the one you set on the asset, or else the provider's.
+- **The asset** — a dot (green active, red archived), its name, type and currency, a **⇄ Transactions** badge with their number when it has any, and its provider badge (or **✏️ Manual**). When the asset has a web page — the one you set on it, or else the provider's — the provider badge shows ↗ and opens it in a new tab.
 - **‹ n/N ›** — the previous or next asset, keeping the same dates (see the panel below).
+- On a phone, ← and ‹ n/N › share the top row, the name has the next one, and the badges follow.
 - **Date range** and **Convert to** — the period and the currency of the [chart](chart.md).
 - **AI Export** — copies the asset's data for an AI assistant ([Asset AI Export](../../ai-export/asset.md)).
 - **Edit** (✏️) — opens the asset form ([Create & Edit](../create-edit.md)).

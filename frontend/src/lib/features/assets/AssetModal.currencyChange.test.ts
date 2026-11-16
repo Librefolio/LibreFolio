@@ -122,7 +122,7 @@ beforeEach(async () => {
     vi.clearAllMocks();
     (zodiosApi.list_assets_api_v1_assets_query_get as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (zodiosApi.list_providers_api_v1_assets_provider_get as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    patchFn().mockResolvedValue({results: [{success: true, asset_id: ASSET_ID}], success_count: 1} as never);
+    patchFn().mockResolvedValue({results: [{success: true, asset_id: ASSET_ID}], success_count: 1, committed: true, issues: [], warnings: []} as never);
     summaryFn().mockResolvedValue(summary() as never);
     vi.stubGlobal(
         'fetch',
@@ -308,6 +308,9 @@ describe('AssetModal — the blocker token and the 409 are gone', () => {
         patchFn().mockResolvedValue({
             results: [{success: false, asset_id: ASSET_ID, message: 'CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|prices=3|events_manual=1|events_provider=0|linked_tx=2|oldest=2020-01-01|newest=2024-01-01|from=USD|to=EUR'}],
             success_count: 0,
+            committed: false,
+            issues: [{asset_id: ASSET_ID, index: 0, code: 'patchFailed', message: 'CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|prices=3|events_manual=1|events_provider=0|linked_tx=2|oldest=2020-01-01|newest=2024-01-01|from=USD|to=EUR'}],
+            warnings: [],
         } as never);
         const {onupdated} = await mountEdit();
         await chooseCurrency('EUR');

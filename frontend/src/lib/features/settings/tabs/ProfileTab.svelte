@@ -17,6 +17,14 @@
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
     import {sameEmail} from '$lib/features/auth/emailCase';
     import ProtectedEmailModal from '$lib/features/settings/ProtectedEmailModal.svelte';
+    import PendingEmailChangeBox from '$lib/features/settings/PendingEmailChangeBox.svelte';
+
+    /** The change of address a user waits for, read from the account. The generated type of the field is `PendingEmailChangeRead | null | an array of them` (a quirk of the client generator, as for `whats_new`): only an object with both values counts. */
+    function readPendingChange(value: unknown): {email: string; expires_at: string} | null {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+        const {email, expires_at} = value as {email?: unknown; expires_at?: unknown};
+        return typeof email === 'string' && typeof expires_at === 'string' ? {email, expires_at} : null;
+    }
 
     // Format date for display, in the interface locale (M-18). The template passes it: read there, the
     // store is tracked, and the date follows a language change.
@@ -71,6 +79,11 @@
     let emailPassword = '';
     /** The server asked for the password for an address the tab read as unchanged (A-36): the field shows anyway. */
     let serverAsksPassword = false;
+
+    /** The change of address that waits for its link (project 71): the address the account does not have yet, and its expiry. */
+    $: pendingChange = readPendingChange($currentUser?.pending_email_change);
+    /** «Send again» or «Cancel the request» is running: the box waits. */
+    let pendingBusy = false;
 
     // Original values (from server)
     let originalUsername = $currentUser?.username ?? '';
@@ -138,7 +151,17 @@
         USERNAME_INVALID: 'auth.validation.usernameNoAt',
         // The paying administrator of a managed instance changes its address through the host (A5-1b): the modal says so
         ACCOUNT_PROTECTED: 'settings.protectedEmail.message',
+        // A new address that waits for its link (project 71): the email cannot go now, or too many were asked
+        EMAIL_RATE_LIMITED: 'settings.emailPending.rateLimited',
+        EMAIL_DELIVERY_FAILED: 'settings.emailPending.deliveryFailed',
+        EMAIL_UNAVAILABLE: 'settings.emailPending.unavailable',
+        EMAIL_LINKS_UNAVAILABLE: 'settings.emailPending.unavailable',
+        // «Send again» for an address another account took meanwhile (the request is gone)
+        EMAIL_TAKEN: 'auth.validation.emailTaken',
     };
+
+    /** The refusals after which the password typed stays for another try: it was right, and waiting or the host is all there is to do (A8b, project 71). */
+    const KEEPS_PASSWORD = new Set(['TOO_MANY_ATTEMPTS', 'EMAIL_RATE_LIMITED', 'EMAIL_DELIVERY_FAILED', 'EMAIL_UNAVAILABLE', 'EMAIL_LINKS_UNAVAILABLE']);
 
     /** A refusal as the tab shows it: a known code in words (with the code), the server's sentence, or a generic text. */
     function describeRefusal(e: unknown): {code: string | null; text: string} {
@@ -155,6 +178,75 @@
     function clearError() {
         error = null;
         errorCode = null;
+    }
+
+    /** The `error_code` of a refusal, or null. */
+    function refusalCodeOf(e: unknown): string | null {
+        const detail: unknown = isAxiosError(e) ? e.response?.data?.detail : null;
+        const code = detail && typeof detail === 'object' ? (detail as {error_code?: unknown}).error_code : null;
+        return typeof code === 'string' ? code : null;
+    }
+
+    function showRefusal(refusal: {code: string | null; text: string}) {
+        error = refusal.text;
+        errorCode = refusal.code;
+        setTimeout(clearError, 5000);
+    }
+
+    /** The server kept the account's address and sent a link to the new one (project 71): the field shows the real address again. */
+    function settleAsWaiting() {
+        editedEmail = originalEmail;
+        emailPassword = '';
+        serverAsksPassword = false;
+    }
+
+    /** An info toast, not a «saved»: the address has not changed yet. The address is escaped, the toast is HTML. */
+    function notifyWaiting(address: string) {
+        notify({
+            name: 'settings.profile.email.pending',
+            detail: {field: 'email'},
+            toast: {variant: 'info', message: $_('settings.emailPending.sent', {values: {email: escapeHtml(address)}})},
+        });
+    }
+
+    /** «Send again»: a new link to the address that waits, a new expiry (read again with the account). */
+    async function resendPendingChange() {
+        const waiting = pendingChange;
+        pendingBusy = true;
+        clearError();
+        try {
+            const answer = await zodiosApi.resend_pending_email_change_api_v1_auth_profile_email_change_resend_post(undefined);
+            await auth.checkAuth();
+            notify({
+                name: 'settings.profile.email.resent',
+                detail: {},
+                toast: {variant: 'info', message: $_('settings.emailPending.resent', {values: {email: escapeHtml(answer?.email ?? waiting?.email ?? '')}})},
+            });
+        } catch (e: unknown) {
+            debug.error('ProfileTab', 'resendPendingChange failed', e);
+            const code = refusalCodeOf(e);
+            // Nothing waits any more, or the address was taken and the request revoked: the box goes with the account read again
+            if (code === 'EMAIL_CHANGE_NOT_PENDING' || code === 'EMAIL_TAKEN') await auth.checkAuth();
+            if (code !== 'EMAIL_CHANGE_NOT_PENDING') showRefusal(describeRefusal(e));
+        } finally {
+            pendingBusy = false;
+        }
+    }
+
+    /** «Cancel the request»: the link stops working; the account keeps its address. */
+    async function cancelPendingChange() {
+        pendingBusy = true;
+        clearError();
+        try {
+            await zodiosApi.cancel_pending_email_change_api_v1_auth_profile_email_change_delete(undefined);
+            await auth.checkAuth();
+            notify({name: 'settings.profile.email.cancelled', detail: {}, toast: {variant: 'info', message: $_('settings.emailPending.cancelled')}});
+        } catch (e: unknown) {
+            debug.error('ProfileTab', 'cancelPendingChange failed', e);
+            showRefusal(describeRefusal(e));
+        } finally {
+            pendingBusy = false;
+        }
     }
 
     /** The body of an email save: the current password only when the address itself changes (A6e, P18). */
@@ -186,8 +278,15 @@
         try {
             const payload = field === 'username' ? {username: editedUsername} : emailPayload();
 
-            await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
+            const answer = await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
             await auth.checkAuth();
+            // The address waits for its link: nothing was saved, and the row goes back to the address the account has (project 71)
+            if (field === 'email' && answer?.email_change === 'pending') {
+                const waitingFor = editedEmail;
+                settleAsWaiting();
+                notifyWaiting(waitingFor);
+                return;
+            }
             // The input takes the form the server kept (A-28), so the row settles
             if (field === 'email') adoptStoredEmail();
 
@@ -216,7 +315,7 @@
                 // Retrying is no use: the stored address goes back, and with it the question for the password
                 editedEmail = originalEmail;
                 emailPassword = '';
-            } else if (refusal.code && refusal.code !== 'TOO_MANY_ATTEMPTS') emailPassword = '';
+            } else if (refusal.code && !KEEPS_PASSWORD.has(refusal.code)) emailPassword = '';
             else if (!refusal.code) editedEmail = originalEmail;
             setTimeout(clearError, 5000);
         } finally {
@@ -243,12 +342,19 @@
         if (emailModified) fields.push('email');
 
         const saved: {field: 'username' | 'email'; label: string}[] = [];
+        /** The address that waits for its link, when the server answered «pending» (project 71): neither saved nor failed. */
+        let waitingFor: string | null = null;
         const failed: {field: 'username' | 'email'; label: string; reason: string; code: string | null}[] = [];
 
         for (const field of fields) {
             try {
                 const payload = field === 'username' ? {username: editedUsername} : emailPayload();
-                await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
+                const answer = await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
+                if (field === 'email' && answer?.email_change === 'pending') {
+                    waitingFor = editedEmail;
+                    settleAsWaiting();
+                    continue;
+                }
                 saved.push({field, label: field === 'username' ? $_('auth.username') : $_('auth.email')});
                 if (field === 'username') originalUsername = editedUsername;
                 else originalEmail = editedEmail;
@@ -275,12 +381,12 @@
                     // Retrying is no use: the stored address goes back, and with it the question for the password
                     editedEmail = originalEmail;
                     emailPassword = '';
-                } else if (refusal.code && refusal.code !== 'TOO_MANY_ATTEMPTS') emailPassword = '';
+                } else if (refusal.code && !KEEPS_PASSWORD.has(refusal.code)) emailPassword = '';
                 else if (!refusal.code) editedEmail = originalEmail;
             }
         }
 
-        if (saved.length > 0) {
+        if (saved.length > 0 || waitingFor !== null) {
             await auth.checkAuth();
             if (saved.some((item) => item.field === 'email')) adoptStoredEmail();
         }
@@ -309,6 +415,8 @@
                 toast: {variant: failed.length === 0 ? 'success' : saved.length === 0 ? 'error' : 'warning', message},
             });
         }
+
+        if (waitingFor !== null) notifyWaiting(waitingFor);
 
         saving = false;
     }
@@ -372,7 +480,7 @@
     }
 </script>
 
-<div class="space-y-6 text-lf-primary" data-testid="profile-tab" data-busy={saving ? 'true' : 'false'} aria-busy={saving}>
+<div class="space-y-6 text-lf-primary" data-testid="profile-tab" data-busy={saving || pendingBusy ? 'true' : 'false'} aria-busy={saving || pendingBusy}>
     <!-- Header with Lock/Unlock + Save/Undo All -->
     <div class="flex items-center justify-between pb-4 border-b border-lf-subtle">
         <div>
@@ -489,7 +597,7 @@
                 <input
                     bind:value={editedUsername}
                     class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field
-                           text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
+                           text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-72 sm:shrink-0 sm:text-right
                            focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all
                            disabled:opacity-50 disabled:cursor-not-allowed"
                     data-testid="profile-username"
@@ -511,10 +619,17 @@
                     <!-- Action buttons - next to label on mobile, hidden on desktop -->
                     {#if !isLocked && emailModified}
                         <div class="flex items-center space-x-1 sm:hidden">
-                            <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
+                            <button
+                                type="button"
+                                on:click={() => saveField('email')}
+                                disabled={saving || emailNeedsPassword}
+                                class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50"
+                                title={$_('common.save')}
+                                data-testid="profile-email-save"
+                            >
                                 <Save size={14} />
                             </button>
-                            <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
+                            <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')} data-testid="profile-email-undo">
                                 <Undo size={14} />
                             </button>
                         </div>
@@ -523,17 +638,25 @@
                 <p class="text-xs text-lf-muted mt-1">{$_('settings.emailHint')}</p>
             </div>
 
-            <!-- Right: Actions (desktop only) + Input, and under the input the password a change of address asks for (UA2) -->
+            <!-- Right: Actions (desktop only) + Input, and under the input the password a change of address asks for (UA2). The field is
+                 as wide as that password field (lot E5): the buttons sit beside it, they never take its width -->
             <div class="flex flex-col w-full sm:w-auto sm:items-end gap-3">
                 <div class="flex items-center space-x-3 w-full sm:w-auto">
                     <!-- Action buttons - desktop only -->
                     {#if !isLocked}
                         <div class="hidden sm:flex items-center space-x-1">
                             {#if emailModified}
-                                <button type="button" on:click={() => saveField('email')} disabled={saving || emailNeedsPassword} class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" title={$_('common.save')}>
+                                <button
+                                    type="button"
+                                    on:click={() => saveField('email')}
+                                    disabled={saving || emailNeedsPassword}
+                                    class="p-1.5 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50"
+                                    title={$_('common.save')}
+                                    data-testid="profile-email-save"
+                                >
                                     <Save size={14} />
                                 </button>
-                                <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')}>
+                                <button type="button" on:click={() => undoField('email')} class="p-1.5 bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" title={$_('common.undo')} data-testid="profile-email-undo">
                                     <Undo size={14} />
                                 </button>
                             {/if}
@@ -544,7 +667,7 @@
                     <input
                         bind:value={editedEmail}
                         class="px-3 py-2 border border-lf-input rounded-lg bg-lf-field
-                               text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-auto sm:min-w-[200px] sm:text-right
+                               text-lf-primary hover:border-lf-input-hover text-sm w-full sm:w-72 sm:shrink-0 sm:text-right
                                focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all
                                disabled:opacity-50 disabled:cursor-not-allowed"
                         data-testid="profile-email"
@@ -573,6 +696,13 @@
                 {/if}
             </div>
         </div>
+
+        <!-- The change of address that waits for its link, under the Email row (project 71) -->
+        {#if pendingChange}
+            <div class="pb-4 border-b border-lf-subtle">
+                <PendingEmailChangeBox email={pendingChange.email} expiresAt={pendingChange.expires_at} busy={saving || pendingBusy} onResend={resendPendingChange} onCancel={cancelPendingChange} />
+            </div>
+        {/if}
 
         <!-- Account Created (readonly) -->
         <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between py-4 gap-2">

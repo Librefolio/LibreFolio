@@ -75,6 +75,7 @@ import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/c
 import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
 import {userLimit} from '$lib/features/instance/userLimit.svelte';
 import {loginUrl} from '$lib/utils/internalPath';
+import {setSignOutRequested} from '$lib/stores/app/signOutIntent';
 
 const BLOCKED_BODY = {detail: {code: 'instance_blocked', message: 'This instance is blocked by its hosting provider'}};
 const AWAITING_RESTORE_BODY = {detail: {code: 'instance_awaiting_restore', message: 'This instance is waiting for a restore'}};
@@ -109,6 +110,7 @@ beforeEach(() => {
 
 afterEach(() => {
     mocks.environment.browser = false;
+    setSignOutRequested(false);
     window.history.replaceState(null, '', '/');
 });
 
@@ -332,6 +334,19 @@ describe('zodios-client — a 401 goes to the login, but not from the anonymous 
         expect(error?.response?.status, 'Barrier: the 401 reached the caller').toBe(401);
         expect(mocks.goto, 'one navigation').toHaveBeenCalledTimes(1);
         expect(mocks.goto, 'to the login, as today').toHaveBeenCalledWith(loginUrl(path));
+    });
+
+    // red until the sign-out race is fixed (found by project 71, step 3.15): a page still loading when its user signs out
+    // gets its requests answered 401 once the cookie is gone; they sent the user to `/?redirect=<page>`, the login of a
+    // session that ended on its own, instead of the plain login a sign-out asked for.
+    it('a 401 that lands after the user asked to sign out goes nowhere: the sign-out opens the plain login itself', async () => {
+        openAt('/dashboard');
+        setSignOutRequested(true);
+
+        const error = await requestAnswered(401, NOT_AUTHENTICATED);
+
+        expect(error?.response?.status, 'Barrier: the 401 reached the caller').toBe(401);
+        expect(mocks.goto, 'no login carrying the page: the user asked to leave').not.toHaveBeenCalled();
     });
 
     // guard

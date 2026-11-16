@@ -5913,11 +5913,11 @@
     }
   },
   "user/fx/providers/fed.en.md": {
-    "md5": "232b9f9cddc8a0a6b86bba08842c80c9",
+    "md5": "b552700ea2722aa16310e4b6bad752da",
     "langs_done": [
+      "es",
       "fr",
-      "it",
-      "es"
+      "it"
     ],
     "last_translated": "2026-06-19T17:38:23.060966+00:00",
     "analysis": "[{\"name\": \"provider\", \"keywords\": [\"software data provider API integration\"]}, {\"name\": \"fallback\", \"keywords\": [\"software fallback mechanism redundancy\"]}, {\"name\": \"Reference rate\", \"keywords\": [\"financial reference exchange rate\"]}, {\"name\": \"Base Currency\", \"keywords\": [\"forex base currency vs quote currency\"]}, {\"name\": \"G10 Currencies\", \"keywords\": [\"G10 currencies list finance\"]}, {\"name\": \"Quotes format\", \"keywords\": [\"currency quote format direct vs indirect\"]}, {\"name\": \"inverts and normalizes\", \"keywords\": [\"currency rate inversion normalization\"]}, {\"name\": \"US business days\", \"keywords\": [\"US banking business days calendar\"]}]",
@@ -5932,7 +5932,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Violation**: The word \"fallback\" is explicitly defined in the glossary as \"fallback\". The translation uses \"di backup\".\n  - *Incorrect*: \"fonte primaria o di backup ideale\"\n  - *Correct*: \"fonte primaria o fallback ideale\"\n- **Terminology Accuracy**: While \"Capacità\" is a literal translation of \"Capabilities\", in a technical software context referring to features or functions, \"Funzionalità\" is the standard and more natural Italian term.\n  - *Incorrect*: \"## 📊 Capacità\"\n  - *Correct*: \"## 📊 Funzionalità\"\n- **Semantic Nuance**: The phrase \"tassi storici approfonditi\" for \"Deep historical rates\" is slightly unnatural. In financial contexts, \"deep\" refers to the extent/length of the data available. \"Tassi storici estesi\" or \"Tassi storici a lungo termine\" is more accurate.\n  - *Incorrect*: \"tassi storici approfonditi\"\n  - *Correct*: \"tassi storici estesi\"\n- **Terminology Consistency**: The term \"asset search\" is translated as \"ricerca di asset\". While correct, the glossary lists \"smart search\" as \"ricerca intelligente\". To maintain a consistent UI-like vocabulary, \"ricerca asset\" (without the preposition) is more professional.\n  - *Incorrect*: \"nessuna ricerca di asset\"\n  - *Correct*: \"nessuna ricerca asset\"\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 69.3
+        "elapsed_s": 69.3,
+        "stamped_at": "2026-11-16T12:07:04.222064+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-06-19T17:08:28.534385+00:00",
@@ -5943,7 +5945,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology (Glossary Violation)**: The term \"fallback\" is explicitly defined in the glossary as \"fallback\". The translation uses \"de secours\", which violates the mandatory mapping.\n  - *Incorrect*: \"C'est la source principale ou de secours idéale\"\n  - *Correct*: \"C'est la source principale ou fallback idéale\"\n\n- **Terminology (Glossary Violation)**: The term \"provider\" is mapped to \"fournisseur\". While the translation uses \"fournisseur\" in the first sentence, the header title \"Federal Reserve (FED)\" is missing the mapping of \"provider\" if it were implied, but specifically, the glossary defines \"asset provider\" as \"fournisseur d'actif\". While \"fournisseur\" is used, ensure consistency across the suite.\n\n- **Accuracy/Terminology**: \"Série monétaire\" is a literal translation of \"currency series\". In a financial/econometric context (like FRED), \"série\" refers to the time series. \"Série de données monétaires\" or simply \"série\" is more accurate.\n  - *Incorrect*: \"(dépend de la série monétaire)\"\n  - *Correct*: \"(dépend de la série de données)\" or \"(dépend de la série)\"\n\n- **Grammar/Natural Phrasing**: \"Quotidienne les jours ouvrables américains\" is slightly clunky. Adding \"durant\" or \"pendant\" improves flow.\n  - *Incorrect*: \"Fréquence de mise à jour : Quotidienne les jours ouvrables américains\"\n  - *Correct*: \"Fréquence de mise à jour : Quotidienne durant les jours ouvrables américains\"\n\n- **Terminology**: \"Devises supportées\" is a common anglicism (from \"supported\"). In technical French, \"Devises prises en charge\" is the standard professional term.\n  - *Incorrect*: \"## 💰 Devises supportées\"\n  - *Correct*: \"## 💰 Devises prises en charge\"\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 135.9
+        "elapsed_s": 135.9,
+        "stamped_at": "2026-11-16T12:07:04.222064+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-06-19T17:38:23.060983+00:00",
@@ -5954,7 +5958,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Violation**: The word \"fallback\" is listed in the glossary as a mandatory term to be kept as \"fallback\". The translation uses \"de respaldo\". Change \"fuente primaria o de respaldo ideal\" to \"fuente primaria o fallback ideal\".\n- **Terminology Violation**: The glossary defines \"exchange rate\" as \"tipo de cambio\". While the translation uses this correctly in the first paragraph, it switches to \"tasas\" (rates) multiple times in the \"Capacidades\", \"Especificaciones\", and \"Notas Importantes\" sections. For consistency with the glossary and technical precision, replace \"tasas\" with \"tipos de cambio\" or \"tipos\" where applicable. \n    - Example: \"Tasa de referencia\" $\\rightarrow$ \"Tipo de referencia\".\n    - Example: \"Tasas históricas profundas\" $\\rightarrow$ \"Tipos históricos profundos\".\n    - Example: \"solo tasas FX\" $\\rightarrow$ \"solo tipos de cambio FX\".\n    - Example: \"proporciona tasas\" $\\rightarrow$ \"proporciona tipos de cambio\".\n    - Example: \"normaliza automáticamente estas tasas\" $\\rightarrow$ \"normaliza automáticamente estos tipos\".\n    - Example: \"No se publican tasas\" $\\rightarrow$ \"No se publican tipos de cambio\".\n- **Grammatical Accuracy/Natural Phrasing**: In the \"Especificaciones\" section, \"No requerida\" is a literal translation of \"Not required\". In Spanish technical documentation, it is more natural to use the masculine form \"No requerido\" when referring to the \"API Key\" (since *clave* is feminine but *key* is treated as a masculine loanword/concept, or simply referring to the requirement). Better yet, use \"No es necesaria\".\n- **Terminology Consistency**: In \"Capacidades\", \"Búsqueda de activos\" is correct per glossary, but \"tasas FX\" should be updated to \"tipos de cambio FX\" to maintain consistency with the \"exchange rate\" $\\rightarrow$ \"tipo de cambio\" mapping.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 63.9
+        "elapsed_s": 63.9,
+        "stamped_at": "2026-11-16T12:07:04.222064+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -6201,11 +6207,11 @@
     }
   },
   "user/fx/providers/boe.en.md": {
-    "md5": "14ba3517513ed9650f9d28e067c88e7a",
+    "md5": "e441ed69ec0fd3991d49c9a866e0a704",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-06-19T17:38:44.314990+00:00",
     "analysis": "[{\"name\": \"provider\", \"keywords\": [\"software data provider API integration\"]}, {\"name\": \"reference exchange rates\", \"keywords\": [\"financial reference rate foreign exchange\"]}, {\"name\": \"Sterling-denominated\", \"keywords\": [\"denominated currency financial portfolio\"]}, {\"name\": \"Current Price\", \"keywords\": [\"financial asset current price real-time data\"]}, {\"name\": \"asset search\", \"keywords\": [\"financial asset lookup ticker search\"]}, {\"name\": \"Base Currency\", \"keywords\": [\"forex base currency quote currency\"]}, {\"name\": \"API Key\", \"keywords\": [\"API authentication key\"]}, {\"name\": \"Quotes format\", \"keywords\": [\"FX quote format direct vs indirect quote\"]}, {\"name\": \"normalizes this representation\", \"keywords\": [\"data normalization software engineering\"]}, {\"name\": \"UK business days\", \"keywords\": [\"UK banking calendar business days\"]}, {\"name\": \"bank holidays\", \"keywords\": [\"UK public holidays bank holidays\"]}]",
@@ -6220,7 +6226,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Untranslated Headings**: The headings \"Capabilities\", \"Specifications\", and \"Supported Currencies\" were left in English. These must be translated to maintain consistency with the rest of the document.\n    - Change `## 📊 Capabilities` to `## 📊 Funzionalità`\n    - Change `## 🔧 Specifications` to `## 🔧 Specifiche`\n    - Change `## 💰 Supported Currencies` to `## 💰 Valute supportate`\n- **Terminology Consistency (Glossary)**: While most terms are correct, ensure the translation of \"coverage\" aligns with the glossary. The translation uses \"copertura\", which is correct, but the heading \"Capabilities\" (now \"Funzionalità\") contains \"Ricerca asset\"; ensure \"asset\" remains \"asset\" as per glossary (this is currently correct).\n- **Grammar/Natural Flow**: In the sentence \"Rappresenta un eccellente riferimento per i portafogli denominati in Sterline\", the word \"Sterline\" should be lowercase (\"sterline\") as it is a common noun in Italian, unless referring to the specific currency code GBP.\n    - Change `denominati in Sterline` to `denominati in sterline`.\n- **Terminology Precision**: In the \"Important Notes\" section, \"internamente\" is used for \"behind the scenes\". While acceptable, \"automaticamente in background\" or \"dietro le quinte\" is more common in technical documentation for software processes. However, \"internamente\" is grammatically correct.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 80.2
+        "elapsed_s": 80.2,
+        "stamped_at": "2026-11-16T12:07:07.368701+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-06-19T17:38:44.314921+00:00",
@@ -6231,7 +6239,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology**: The word \"Capabilities\" is translated as \"Capacités\". In a technical/software context for features or functionality, \"Fonctionnalités\" is the standard and more accurate term.\n  - *Current*: `## 📊 Capacités`\n  - *Suggested*: `## 📊 Fonctionnalités`\n\n- **Terminology/Grammar**: The word \"supporte\" is an anglicism (from \"to support\"). In French, when referring to compatibility or availability of currencies, \"prend en charge\" or \"est compatible avec\" should be used.\n  - *Current*: `La Bank of England supporte environ 15 devises majeures`\n  - *Suggested*: `La Bank of England prend en charge environ 15 devises majeures`\n\n- **Terminology/Consistency**: \"Devises supportées\" uses the same anglicism mentioned above.\n  - *Current*: `## 💰 Devises supportées`\n  - *Suggested*: `## 💰 Devises prises en charge`\n\n- **Grammar/Gender**: The abbreviation \"BOE\" (Bank of England) refers to \"La Banque d'Angleterre\", which is feminine. The translation uses \"le BOE\" (via \"de la BOE\" in one place and \"le fournisseur Bank of England\" in another). For consistency and correctness, \"la BOE\" should be used when referring to the institution.\n  - *Current*: `(récupérée depuis la base de données statistique de la BOE)` (Correct) / `Le fournisseur Bank of England (BOE)` (Correct as it refers to \"le fournisseur\"). However, ensure consistency.\n\n- **Semantic Accuracy**: \"Deep historical coverage\" is translated as \"Couverture historique approfondie\". While grammatically correct, in a data context, \"historique étendu\" or \"couverture historique complète\" is more natural.\n  - *Current*: `Couverture historique approfondie`\n  - *Suggested*: `Couverture historique étendue`\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 74.7
+        "elapsed_s": 74.7,
+        "stamped_at": "2026-11-16T12:07:07.368701+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-06-19T17:38:44.314992+00:00",
@@ -6242,7 +6252,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology (Glossary Violation):** In the \"Capabilities\" section, the translation uses \"tipos de FX\" for \"FX rates\". While \"FX\" is common, the glossary explicitly maps \"exchange rate\" to \"tipo de cambio\". To maintain consistency with the glossary and the rest of the document, change \"solo tipos de FX\" to \"solo tipos de cambio\".\n- **Grammar/Syntax (Anglicism):** In the \"Supported Currencies\" section, the phrase \"El Bank of England soporta...\" uses \"soportar\" as a literal translation of the English \"support\". In Spanish, when referring to software, services, or compatibility, \"compatible con\" or \"admite\" is the correct term. Change \"soporta aproximadamente 15 monedas\" to \"admite aproximadamente 15 monedas\".\n- **Terminology/Accuracy:** In the \"Important Notes\" section, \"internamente\" is used for \"behind the scenes\". While not incorrect, \"de forma interna\" or \"automáticamente en segundo plano\" is more technical and accurate for documentation describing software processes. Suggest changing \"normaliza automáticamente esta representación internamente\" to \"normaliza automáticamente esta representación en segundo plano\".\n- **Consistency:** In the first paragraph, \"Libras\" is used for \"Sterling-denominated portfolios\". To be precise and consistent with the previous sentence (\"Libra Esterlina\"), it should be \"denominadas en libras esterlinas\". Change \"denominadas en Libras\" to \"denominadas en libras esterlinas\".\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 85.7
+        "elapsed_s": 85.7,
+        "stamped_at": "2026-11-16T12:07:07.368701+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },

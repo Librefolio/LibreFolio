@@ -19,7 +19,7 @@ from scripts.coverage_analysis import register_subparser as register_cov_parser
 from scripts.coverage_analysis import run_analysis as run_coverage_analysis
 
 # Import common module to set its globals
-from . import _common, _frontend_common
+from . import _common, _coverage, _frontend_common, _run_cache
 from ._backend_external import _get_external_extra_args
 from ._common import (
     Colors,
@@ -428,10 +428,8 @@ def _build_extra_args(category: str) -> list:
     return extra_args
 
 
-def create_parser() -> argparse.ArgumentParser:
-    """Create and configure argument parser using TEST_REGISTRY."""
-    parser = argparse.ArgumentParser(description="LibreFolio Test Runner - Organized test execution", formatter_class=argparse.RawDescriptionHelpFormatter, epilog=_generate_main_epilog())
-
+def _add_run_flags(parser: argparse.ArgumentParser) -> None:
+    """Register the run flags on ``parser``: the one place both parsers (the runner's own and the ``test`` sub-command of ``dev.py``) get them from."""
     parser.add_argument("-q", "--quiet", action="store_true", help="Suppress detailed test output (default: verbose)", default=False)
     parser.add_argument("--coverage", nargs="?", const="all", choices=["py", "js", "all"], metavar="LANG", help=_COVERAGE_HELP, default=None)
     parser.add_argument("--cov-clean-backend", action="store_true", help="Clean Python coverage from backend tests", default=False)
@@ -449,8 +447,21 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
     parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived). Defaults to .testLog; pass an empty string to disable", default=DEFAULT_LOG_DIR)
     parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
+    parser.add_argument(
+        "--quotable",
+        action="store_true",
+        help="The run to quote, whole: stands for --fresh-run --coverage all --cov-clean-backend --cov-clean-backend-e2e --cov-clean-js. Needs the category `all` written; refuses --resume, test names, --fail-fast, the provider filters, a coverage other than `all`, --list and --run-status. Writes .coverage_data/coverage-summary.json",
+        default=False,
+    )
     parser.add_argument("--assume-scoped", dest="assume_scoped", action="store_true", help="Experiment: run every server-backed unit in parallel, whatever the catalogue says. The reds are the work list, not a regression", default=False)
     _add_runtime_args(parser)
+
+
+def create_parser() -> argparse.ArgumentParser:
+    """Create and configure argument parser using TEST_REGISTRY."""
+    parser = argparse.ArgumentParser(description="LibreFolio Test Runner - Organized test execution", formatter_class=argparse.RawDescriptionHelpFormatter, epilog=_generate_main_epilog())
+
+    _add_run_flags(parser)
 
     subparsers = parser.add_subparsers(dest="category", help="Test category to run", required=False)
 
@@ -480,22 +491,7 @@ def register_subparser(parent_subparsers):
     """Register test commands as a subparser of dev.py."""
     test_parser = parent_subparsers.add_parser("test", help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-broker, front-user, front-fx, front-transaction, all, all-backend, all-frontend)", description="LibreFolio Test Runner")
 
-    test_parser.add_argument("-q", "--quiet", action="store_true", help="Suppress detailed test output (default: verbose)", default=False)
-    test_parser.add_argument("--coverage", nargs="?", const="all", choices=["py", "js", "all"], metavar="LANG", help=_COVERAGE_HELP, default=None)
-    test_parser.add_argument("--cov-clean-backend", action="store_true", help="Clean Python coverage from backend tests", default=False)
-    test_parser.add_argument("--cov-clean-backend-e2e", "--cov-clean-frontend", action="store_true", dest="cov_clean_backend_e2e", help="Clean Python coverage collected during E2E runs", default=False)
-    test_parser.add_argument("--cov-clean-js", action="store_true", help="Clean JS/Svelte coverage (raw V8 data and reports)", default=False)
-    test_parser.add_argument("--workers", metavar="N", default="1", help="Parallel workers for isolation-safe units (N or 'auto'; default 1 = serial)")
-    test_parser.add_argument("--fail-fast", dest="fail_fast", action="store_true", help="Stop at the first failing action instead of running everything", default=False)
-    test_parser.add_argument("--no-consolidate", action="store_true", help="Run one invocation per action instead of one per category (backend and frontend)", default=False)
-    test_parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
-    test_parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
-    test_parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
-    test_parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
-    test_parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived). Defaults to .testLog; pass an empty string to disable", default=DEFAULT_LOG_DIR)
-    test_parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
-    test_parser.add_argument("--assume-scoped", dest="assume_scoped", action="store_true", help="Experiment: run every server-backed unit in parallel, whatever the catalogue says. The reds are the work list, not a regression", default=False)
-    _add_runtime_args(test_parser)
+    _add_run_flags(test_parser)
 
     test_subparsers = test_parser.add_subparsers(dest="category", title="Test categories", metavar="")
 
@@ -609,6 +605,13 @@ def shared_backend_for(category: str, args):
     from ._scheduler import resolve_workers
     from ._server import SharedTestServer
 
+    # Under Python coverage the server's parts are combined into the E2E database by a frontend or a whole run's finalizer, and
+    # folded into the backend database by the finalizer of one backend category (`api`, `e2e`).
+    if _common._COVERAGE_PY:
+        if _common._COVERAGE_SOURCE == "backend":
+            _coverage.LEDGER.expect_backend_server()
+        else:
+            _coverage.LEDGER.expect_python("frontend")
     with SharedTestServer(
         coverage=bool(_common._COVERAGE_PY),
         client_workers=resolve_workers(getattr(args, "workers", "1")),
@@ -748,14 +751,21 @@ def _timed_run(args, body):
 
     fresh = bool(getattr(args, "fresh_run", False))
     resumed = bool(getattr(args, "resume", False))
-    _campaign_begin(reset=fresh)
+    token = _campaign_begin(reset=fresh)
+    # The run's durations start empty and end in .coverage_data/durations.json, named by the campaign record (step 3.10).
+    _run_cache.DURATIONS.reset()
     rc = 1
     try:
         rc = body()
         return rc
     finally:
-        _campaign_end(success=rc == 0, label=str(getattr(args, "category", "run")), fresh=fresh, resumed=resumed)
-        note = _campaign_summary()
+        try:
+            durations = _run_cache.write_durations(with_coverage_timing=bool(_common._COVERAGE_JS))
+        except OSError as exc:
+            print_warning(f"Could not write the run's durations: {exc}")
+            durations = None
+        this_run = _campaign_end(token, success=rc == 0, label=str(getattr(args, "category", "run")), fresh=fresh, resumed=resumed, durations=str(durations) if durations else None)
+        note = _campaign_summary(this_run)
         if note:
             print()
             print_header("Timing")
@@ -783,7 +793,8 @@ def _refused_test_names(args) -> str | None:
 def _dispatch_test_command(args):
     """Dispatch test command from dev.py, optionally teeing the full log to a file."""
     _common.line_buffer_output()
-    refusal = _refused_test_names(args)
+    args = _prepare_args(args)
+    refusal = _refused_quotable(args) or _refused_test_names(args)
     if refusal:
         print_error(refusal)
         return 2
@@ -856,6 +867,14 @@ def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> 
     Returns False when the request cannot be honoured (e.g. ``--coverage js``
     on a backend-only suite), in which case the caller must abort.
     """
+    # A run starts from an empty ledger: nothing an earlier run of this process launched is expected again.
+    quotable = bool(getattr(args, "quotable", False))
+    _coverage.LEDGER.reset(categories=[args.category] if getattr(args, "category", None) else [], quotable=quotable)
+    if quotable:
+        # The old summary goes before anything runs, so a run that dies leaves none; the commit and the tree are read now,
+        # before the run's own writes and before the cleaning below.
+        _coverage.forget_summary()
+        _coverage.LEDGER.start_state = _coverage._git_state()
     _common._COVERAGE_MODE = coverage
     _common._RESUME_MODE = resume
     _common.set_fail_fast(getattr(args, "fail_fast", False))
@@ -1034,6 +1053,8 @@ def _parallel_for_scope(args, scope: str, workers: int, verbose: bool) -> tuple:
             return True, set()
 
     print_header(f"Parallel pass — {len(p['parallel_paths'])} isolation-safe unit(s) across {len(p['groups'])} worker(s)")
+    if _common._COVERAGE_PY:
+        _coverage.LEDGER.expect_python(_common._COVERAGE_SOURCE or "backend")
     outcome = run_groups(p["groups"], verbose=verbose, coverage=_common._COVERAGE_PY)
 
     # A pass whose coverage was not combined is not green: the 07/10 run lost two passes and reported success.
@@ -1222,6 +1243,72 @@ def _apply_parallel(args, verbose: bool) -> tuple:
     return ok, True
 
 
+def _finish_coverage(success: bool) -> int:
+    """The end of every run, through either entry of the runner: with ``--coverage``, print the summary header and finalize the
+    Python and the JS coverage asked, whatever the tests' verdict (a red run's coverage was still tracked), then check that every
+    piece the run launched under coverage is there (``report_coverage_pieces``, step 3.3). Returns the exit code: 0 when
+    ``success`` and, under coverage, no piece missing; 1 otherwise."""
+    if _common._COVERAGE_MODE:
+        print()
+        print_header("Coverage Report Summary")
+        if success:
+            print_success("✅ All tests passed with coverage tracking!")
+        else:
+            print_warning("⚠️  Some tests failed, but coverage was still tracked")
+
+        is_front = _common._COVERAGE_SOURCE == "frontend"
+        is_all = _common._COVERAGE_SOURCE is None
+
+        print()
+        print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
+        print()
+        finalized = _finalize_coverage(is_front, is_all) if _common._COVERAGE_PY else None
+        if _common._COVERAGE_JS:
+            _finalize_js_coverage()
+        # Step 3.3: what the run launched under coverage must be on disk; a missing piece makes the run red.
+        rows = _coverage.report_coverage_pieces(_coverage.LEDGER, "frontend" if is_front else "all" if is_all else "backend", finalized)
+        # Step 3.4: the pure numbers, lines and branches apart, on screen and in .coverage_data/coverage-summary.json.
+        _coverage.summarize(_coverage.LEDGER, rows, success=success)
+        return 0 if success and all(row.ok for row in rows) else 1
+
+    return 0 if success else 1
+
+
+def _prepare_args(args):
+    """The one place where a flag that stands for other flags is expanded, before anything reads the arguments: called first by
+    ``main()`` and by ``_dispatch_test_command()``, so the campaign (``_timed_run`` reads ``fresh_run``) opens on the expanded
+    arguments. ``--quotable`` stands for ``--fresh-run --coverage all --cov-clean-backend --cov-clean-backend-e2e
+    --cov-clean-js``; a ``--coverage`` the user gave is left as it is, for ``_refused_quotable`` to refuse. Without
+    ``--quotable`` the arguments come back as they are."""
+    if getattr(args, "quotable", False):
+        args.fresh_run = True
+        args.coverage = args.coverage or "all"
+        args.cov_clean_backend = args.cov_clean_backend_e2e = args.cov_clean_js = True
+    return args
+
+
+def _refused_quotable(args) -> str | None:
+    """Why this ``--quotable`` command line is refused, or ``None``. Both entries ask, after ``_prepare_args`` and before
+    anything starts, and answer exit 2: a number to quote comes from one whole run of everything, so whatever makes a run
+    partial is refused, naming the flag. The category ``all`` has to be written: without it the bodies stop before measuring
+    anything."""
+    if not getattr(args, "quotable", False):
+        return None
+    refused = [
+        (getattr(args, "category", None) != "all", "it needs the category `all` written (dev.py test --quotable all): any other scope is not the whole run"),
+        (getattr(args, "resume", False), "--resume would skip what already passed, and its coverage is not in this run"),
+        (getattr(args, "fail_fast", False), "--fail-fast stops before every piece has run"),
+        (bool(getattr(args, "test_names", None)), "test names run part of a category: it takes no test names"),
+        (bool(getattr(args, "providers", None)), "--providers leaves providers out"),
+        (bool(getattr(args, "exclude_providers", None)), "--exclude-providers leaves providers out"),
+        (getattr(args, "coverage", None) not in (None, "all"), f"--coverage {getattr(args, 'coverage', None)} measures one language: it stands for --coverage all"),
+        (getattr(args, "list_tests", False), "--list runs nothing"),
+        (getattr(args, "run_status", False), "--run-status runs nothing"),
+    ]
+    reasons = [why for refuse, why in refused if refuse]
+    return f"--quotable refused: {'; '.join(reasons)}." if reasons else None
+
+
 def _dispatch_test_command_body(args):  # noqa: C901 — flat sequential step driver, no nested logic
     if not _configure_runtime(args):
         return 1
@@ -1269,26 +1356,7 @@ def _dispatch_test_command_body(args):  # noqa: C901 — flat sequential step dr
     _common._SKIP_ACTIONS = set()
     _common._FAILED_ACTIONS = set()
 
-    if _common._COVERAGE_MODE:
-        print()
-        print_header("Coverage Report Summary")
-        if success:
-            print_success("✅ All tests passed with coverage tracking!")
-        else:
-            print_warning("⚠️  Some tests failed, but coverage was still tracked")
-
-        is_front = _common._COVERAGE_SOURCE == "frontend"
-        is_all = _common._COVERAGE_SOURCE is None
-
-        print()
-        print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
-        print()
-        if _common._COVERAGE_PY:
-            _finalize_coverage(is_front, is_all)
-        if _common._COVERAGE_JS:
-            _finalize_js_coverage()
-
-    return 0 if success else 1
+    return _finish_coverage(success)
 
 
 def main():
@@ -1297,8 +1365,8 @@ def main():
     parser = create_parser()
 
     argcomplete.autocomplete(parser)
-    args = parser.parse_args(normalize_coverage_argv(sys.argv[1:]))
-    refusal = _refused_test_names(args)
+    args = _prepare_args(parser.parse_args(normalize_coverage_argv(sys.argv[1:])))
+    refusal = _refused_quotable(args) or _refused_test_names(args)
     if refusal:
         print_error(refusal)
         return 2
@@ -1393,23 +1461,4 @@ def _main_body(parser, args):  # noqa: C901 — flat sequential step driver, no 
     _common._SKIP_ACTIONS = set()
     _common._FAILED_ACTIONS = set()
 
-    if _common._COVERAGE_MODE:
-        print()
-        print_header("Coverage Report Summary")
-        if success:
-            print_success("✅ All tests passed with coverage tracking!")
-        else:
-            print_warning("⚠️  Some tests failed, but coverage was still tracked")
-
-        is_front = _common._COVERAGE_SOURCE == "frontend"
-        is_all = _common._COVERAGE_SOURCE is None
-
-        print()
-        print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
-        print()
-        if _common._COVERAGE_PY:
-            _finalize_coverage(is_front, is_all)
-        if _common._COVERAGE_JS:
-            _finalize_js_coverage()
-
-    return 0 if success else 1
+    return _finish_coverage(success)

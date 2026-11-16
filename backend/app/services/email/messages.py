@@ -1,12 +1,14 @@
 """The emails LibreFolio sends: their texts in the four languages of the interface, and the message with its headers.
 
 Each kind of email has a builder (``build_password_reset``, ``build_password_reset_after_restore``, ``build_invite``, ``build_verification``,
-``build_admin_setup``, ``build_test_message``, ``build_email_changed``, ``build_email_changed_new_address``, ``build_email_change_confirmation``) that returns an ``EmailContent``: a subject, a plain-text part and an
+``build_admin_setup``, ``build_test_message``, ``build_email_changed``, ``build_email_changed_new_address``, ``build_email_change_confirmation``,
+``build_email_change_request_confirmation``, ``build_email_change_requested``) that returns an ``EmailContent``: a subject, a plain-text part and an
 HTML part, in the language asked for (``email_language``: an unknown one is English). The texts live in
 ``templates/<language>.json``, one file per language with the same keys and the same ``$placeholders``; the HTML layout
 in ``templates/layout.html``, whose green header shows the logo (``templates/logo.png``, attached inline by ``compose_message``). Every value that comes from a person — a user name, the name of the instance, who sent an
 invitation — is escaped in the HTML part, and none goes into a subject. The emails a stranger can have sent to an
-address of their choice (a password reset, an email verification, the notice and the confirmation of an email change) carry no text of
+address of their choice (a password reset, an email verification, the notice and the confirmation of an email change, the
+confirmation and the notice of a change asked from Profile) carry no text of
 theirs: their builders take no user name and nothing of the other address (night decision N62). ``compose_message`` adds
 the headers.
 
@@ -17,6 +19,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -48,6 +51,7 @@ class EmailKind(StrEnum):
     TEST = "test"
     EMAIL_CHANGED = "email_changed"
     EMAIL_CHANGE_CONFIRMATION = "email_change_confirmation"
+    EMAIL_CHANGE_REQUEST = "email_change_request"
 
 
 @dataclass(frozen=True)
@@ -102,6 +106,22 @@ def _fill(template: str, values: Mapping[str, str]) -> str:
     return Template(template).substitute(values)
 
 
+#: A phrase that matters in a text of the catalogue: ``**…**`` (project 71, lot E4).
+_STRONG = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
+
+
+def _plain_text(template: str, values: Mapping[str, str]) -> str:
+    """A text of the catalogue for the plain-text part: its line breaks kept, its ``**`` marks dropped."""
+    return _fill(template.replace("**", ""), values)
+
+
+def _html_text(template: str, values: Mapping[str, str]) -> str:
+    """A text of the catalogue for the HTML part: escaped, ``**…**`` as ``<strong>``, a line break as ``<br>``, and only
+    then filled with the values, escaped: neither a translation nor a value can bring markup, and a value's ``**`` stays."""
+    marked = _STRONG.sub(r"<strong>\1</strong>", html.escape(template)).replace("\n", "<br>")
+    return _fill(marked, {key: html.escape(value) for key, value in values.items()})
+
+
 #: Bidirectional embeddings, overrides and isolates: removed, so a value cannot reorder the text around it.
 _BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 
@@ -125,25 +145,27 @@ def _render(
     link: str | None = None,
     subject_key: str = "subject",
 ) -> EmailContent:
-    """Assemble the two parts of an email from the keys of its section, filled with ``values`` (each on one line)."""
+    """Assemble the two parts of an email from the keys of its section, filled with ``values`` (each on one line).
+
+    A text may break its lines and mark what matters (``\\n``, ``**…**``): ``_plain_text`` and ``_html_text`` write them.
+    """
     catalog = _CATALOGS[language]
     section = catalog[kind.value]
     values = {key: _one_line(value) for key, value in values.items()}
-    lines_before = [_fill(section[key], values) for key in before]
-    lines_after = [_fill(section[key], values) for key in after]
-    opening = _fill(catalog["common"][greeting], values)
+    texts_before = [catalog["common"][greeting], *(section[key] for key in before)]
+    texts_after = [section[key] for key in after]
     footer = _fill(catalog["common"]["footer"], values)
 
-    text_blocks = [opening, *lines_before]
-    html_blocks = [_PARAGRAPH.format(html.escape(line)) for line in (opening, *lines_before)]
+    text_blocks = [_plain_text(text, values) for text in texts_before]
+    html_blocks = [_PARAGRAPH.format(_html_text(text, values)) for text in texts_before]
     if link is not None:
         action = section["action"]
         href = html.escape(link, quote=True)
         text_blocks.append(f"{action}\n{link}")
         html_blocks.append(_BUTTON.format(href=href, label=html.escape(action)))
         html_blocks.append(_FALLBACK.format(hint=html.escape(catalog["common"]["button_fallback"]), href=href, text=href))
-    text_blocks.extend(lines_after)
-    html_blocks.extend(_PARAGRAPH.format(html.escape(line)) for line in lines_after)
+    text_blocks.extend(_plain_text(text, values) for text in texts_after)
+    html_blocks.extend(_PARAGRAPH.format(_html_text(text, values)) for text in texts_after)
 
     text = "\n\n".join(text_blocks) + f"\n\n-- \n{footer}\n"
     page = _LAYOUT.substitute(lang=language, subject=html.escape(section[subject_key]), body="\n".join(html_blocks), footer=html.escape(footer), logo_cid=LOGO_CONTENT_ID)
@@ -256,6 +278,26 @@ def build_email_change_confirmation(*, language: str | None, username: str, link
     lang = email_language(language)
     values = {"username": username, "instance": instance, "duration": _duration(ttl, lang)}
     return _render(EmailKind.EMAIL_CHANGE_CONFIRMATION, lang, greeting="greeting", before=["intro"], after=["expiry", "ignore"], values=values, link=_checked_link(link))
+
+
+def build_email_change_request_confirmation(*, language: str | None, link: str, ttl: timedelta, instance: str) -> EmailContent:
+    """The link that completes a change of address a user asked for from Profile, sent to the NEW address.
+
+    Whoever asks chooses this recipient, so a stranger may read it: no user name and nothing of the old address (N62).
+    It says that the link confirms only from inside the account that asked (D10): a stranger who clicks it can do nothing.
+    """
+    lang = email_language(language)
+    values = {"instance": instance, "duration": _duration(ttl, lang)}
+    return _render(EmailKind.EMAIL_CHANGE_REQUEST, lang, greeting="greeting_anonymous", before=["intro"], after=["expiry", "signin", "ignore"], values=values, link=_checked_link(link))
+
+
+def build_email_change_requested(*, language: str | None, instance: str) -> EmailContent:
+    """The notice to the address an account has now, when a change of address is asked from Profile (D5.1): nothing has
+    changed yet, and changing the password cancels the request. No link, no user name and nothing of the new address (N62).
+    """
+    lang = email_language(language)
+    values = {"instance": instance}
+    return _render(EmailKind.EMAIL_CHANGE_REQUEST, lang, greeting="greeting_anonymous", before=["requested_intro"], after=["requested_advice"], values=values, subject_key="requested_subject")
 
 
 class EmailRecipientError(ValueError):

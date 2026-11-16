@@ -18,6 +18,7 @@
     import {getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {makePositionKey} from '$lib/features/dashboard/positionKey';
+    import BrokerBadgeStack from '$lib/components/ui/display/BrokerBadgeStack.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -42,8 +43,10 @@
         asset_name: string;
         asset_ticker?: string | (string | null)[] | null;
         asset_type: string;
-        broker_id: number;
-        broker_name: string;
+        /** None for an asset summed over several brokers (project 74, «Globale»). */
+        broker_id: number | (number | null)[] | null;
+        broker_name: string | (string | null)[] | null;
+        broker_ids?: number[];
         period_unrealized_delta?: NumericLike;
         period_realized_gain_loss?: NumericLike;
         period_income?: NumericLike;
@@ -115,9 +118,11 @@
         key: string;
         assetName: string;
         assetType: string;
-        brokerId: number;
+        brokerId: number | null;
         brokerName: string;
         broker: BrokerLike | null;
+        /** «Globale» (project 74): the brokers of a row summed over several; one or none otherwise. */
+        brokers: BrokerLike[];
         pnl: number | null;
         annualizedReturn: number | null;
         unrealizedDelta: number | null;
@@ -150,14 +155,17 @@
             .map((p) => {
                 const isFullySold = p.is_fully_sold ?? false;
                 const status = statusFromSoldFlag(isFullySold);
-                const holdingMatch = holdingsByKey.get(makePositionKey(p.asset_id, p.broker_id)) ?? null;
+                const holdingMatch = holdingsByKey.get(makePositionKey(p.asset_id, safeNumber(p.broker_id))) ?? null;
+                const rowBrokers = (p.broker_ids ?? []).map((id) => brokerMap.get(id) ?? {id, name: `#${id}`});
+                const brokerId = safeNumber(p.broker_id);
                 return {
-                    key: `pos-${p.broker_id}-${p.asset_id}`,
+                    key: `pos-${brokerId ?? 'all'}-${p.asset_id}`,
                     assetName: p.asset_name,
                     assetType: p.asset_type,
-                    brokerId: p.broker_id,
-                    brokerName: p.broker_name,
-                    broker: brokerMap.get(p.broker_id) ?? null,
+                    brokerId,
+                    brokerName: safeString(p.broker_name) ?? rowBrokers.map((entry) => entry.name).join(' · '),
+                    broker: brokerId == null ? null : (brokerMap.get(brokerId) ?? null),
+                    brokers: rowBrokers,
                     pnl: safeDecimal(p.period_pnl),
                     annualizedReturn: safeDecimal(p.annualized_return),
                     unrealizedDelta: safeDecimal(p.period_unrealized_delta),
@@ -422,12 +430,15 @@
                 filterable: false,
                 getValue: (row) => row.brokerName,
                 cell: (row) => {
-                    const broker = row.broker;
+                    // «Globale» (project 74): the brokers of an asset summed over several, as icons
+                    if (row.brokers.length > 1) return {type: 'custom', component: BrokerBadgeStack, props: {brokers: row.brokers, countLabel: $_('dashboard.groupBy.brokerCount', {values: {count: row.brokers.length}})}};
+                    // A «Globale» row of one broker names it in `broker_ids` only (project 74): its badge as a per-broker row's
+                    const broker = row.broker ?? row.brokers[0] ?? null;
                     return {
                         type: 'custom',
                         component: BrokerBadge,
                         props: {
-                            broker: broker ?? {id: row.brokerId, name: row.brokerName},
+                            broker: broker ?? {id: row.brokerId ?? 0, name: row.brokerName},
                             size: 16,
                             showName: true,
                             tooltip: row.brokerName,
