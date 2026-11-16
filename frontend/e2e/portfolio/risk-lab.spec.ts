@@ -194,7 +194,7 @@ const MOCK_ALGORITHM_VERSION = 'e2e-mock-v1';
  * None of these numbers was read off a running backend, a populated lane, or a
  * probe. They were chosen by hand so that:
  *
- *  - every one of them satisfies the payload contract in `schemas/risk.py` —
+ *  - every one of them satisfies the payload contract in `schemas/risk/outputs.py` (the `RiskAssetSet*` models) —
  *    the sign constraints (`ge=0` on the VaR pair, `le=0` on the drawdown pair),
  *    the tail orderings (`CVaR ≥ VaR`, `CDaR ≤ DaR`, `CDaR ≥ max_drawdown`) and
  *    the drawdown episode contract (`recovered` carries a recovery date, `open`
@@ -891,7 +891,7 @@ function assetSetKpiOutput(request: RiskRequest, analytic: RiskAnalyticRequest, 
  * line is drawn only when a point whose role is `portfolio` exists. So the
  * verdict "paid well for the risk" is not switched off on this page — it is
  * unexpressible, and making it expressible again would take an edit to
- * `schemas/risk.py`, visible in a diff.
+ * `RiskAssetSetReturnOutput` (`schemas/risk/outputs.py`), visible in a diff.
  */
 function assetSetRiskReturnOutput(request: RiskRequest, options: RiskStubOptions) {
     const {covered} = preparedAssetIds(request, options);

@@ -51,12 +51,13 @@ interface RiskMockOptions {
      * Answers the simulation with `unavailable`, the way a busy worker, a
      * timeout or a series too short does.
      *
-     * `schemas/risk.py:1056` forbids an `unavailable` result from carrying an
-     * output, so this is not an unlikely corner: it is the **only** shape that
-     * branch can take. Every step of L4 renders on `{#if output}`, so before
-     * the level disclosed its health the reader got a blank panel with no cause
-     * — and no fixture in this suite had ever produced the state that reveals
-     * it. Opt-in, so every other test is unmoved.
+     * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+     * forbids an `unavailable` result from carrying an output, so this is not
+     * an unlikely corner: it is the **only** shape that branch can take. Every
+     * step of L4 renders on `{#if output}`, so before the level disclosed its
+     * health the reader got a blank panel with no cause — and no fixture in
+     * this suite had ever produced the state that reveals it. Opt-in, so every
+     * other test is unmoved.
      */
     unavailableSimulation?: boolean;
     /**
@@ -109,7 +110,8 @@ interface RiskMockOptions {
      * code would degrade both at once, and a test asking *under which level* a
      * measurement is disclosed could not tell the two claims apart.
      *
-     * Each status keeps a shape `validate_status_payload` (`schemas/risk.py`)
+     * Each status keeps a shape that
+     * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
      * accepts. `partial` keeps the output the stub answered with — a partial
      * measurement is still drawn, which is what makes it partial rather than
      * missing — and `unavailable` drops it (`output: null`) and carries an
@@ -1096,9 +1098,10 @@ function withInjectedWarnings(result: Record<string, unknown>, options: RiskMock
  * Replaces a result with the failure its analytic would have returned.
  *
  * `output: null` and `status: 'failed'` together, never one without the other:
- * `schemas/risk.py` forbids a failed result from carrying an output, so a stub
- * that kept the output while flipping the status would model a payload the
- * backend cannot emit — and the level would render its rows *and* its error.
+ * `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+ * forbids a failed result from carrying an output, so a stub that kept the
+ * output while flipping the status would model a payload the backend cannot
+ * emit — and the level would render its rows *and* its error.
  */
 function withInjectedError(result: Record<string, unknown>, options: RiskMockOptions): Record<string, unknown> {
     const code = options.analyticErrors?.[String(result.analytic_code)];
@@ -2787,10 +2790,11 @@ test.describe('Risk analysis functional integration', () => {
         await expect(panel.getByTestId('risk-simulation-run')).toBeEnabled({timeout: 8_000});
         await panel.getByTestId('risk-simulation-run').click();
 
-        // `schemas/risk.py:1056` forbids an `unavailable` result from carrying an
-        // output, and every rung renders on `{#if output}`. So the absence below
-        // is guaranteed by the contract, not by this fixture's choices — which is
-        // exactly why the *presence* of the disclosure is the whole assertion.
+        // `RiskAnalyticResult.validate_status_payload` (`schemas/risk/results.py`)
+        // forbids an `unavailable` result from carrying an output, and every
+        // rung renders on `{#if output}`. So the absence below is guaranteed by
+        // the contract, not by this fixture's choices — which is exactly why the
+        // *presence* of the disclosure is the whole assertion.
         const health = panel.getByTestId('risk-level-4-health');
         await expect(health).toBeVisible({timeout: 8_000});
         await expect(health).toHaveAttribute('data-count', '1');
