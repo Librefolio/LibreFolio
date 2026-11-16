@@ -296,7 +296,8 @@ async def _sse(stream) -> list[dict]:
 async def test_a_refused_live_price_keeps_the_last_stored_price_and_says_why(private_db: AsyncEngine, cooldowns: Cooldowns, monkeypatch: pytest.MonkeyPatch):
     """XRL-R01 — contract 1: mockprov refuses (Retry-After 90): the stored 42.5 of 2 January, ``db:last_known``, RATE_LIMITED, 90 s."""
     print_section("XRL-R01: live price refused, last known price kept")
-    calls = _count(monkeypatch, MockProvider, "get_current_value")
+    # mockprov reads current values in bulk (project 76, C2): the live price is one get_current_values_bulk call
+    calls = _count(monkeypatch, MockProvider, "get_current_values_bulk")
     asset_id = await _asset(private_db, params={"mock_rate_limited": 90}, last_price=(date(2026, 1, 2), Decimal("42.5")))
 
     (item,) = await _current_prices(private_db, [asset_id])
@@ -311,7 +312,8 @@ async def test_a_refused_live_price_keeps_the_last_stored_price_and_says_why(pri
 @pytest.mark.asyncio
 async def test_while_paused_a_live_price_without_a_stored_one_is_the_error_item_with_the_wait(private_db: AsyncEngine, clock: FakeClock, monkeypatch: pytest.MonkeyPatch):
     """XRL-R02 — contract 1: after the refusal, another asset of the same provider, 30 s later: no call, no price, RATE_LIMITED, 60 s left."""
-    calls = _count(monkeypatch, MockProvider, "get_current_value")
+    # mockprov reads current values in bulk (project 76, C2): the live price is one get_current_values_bulk call
+    calls = _count(monkeypatch, MockProvider, "get_current_values_bulk")
     refused_id = await _asset(private_db, params={"mock_rate_limited": 90})
     paused_id = await _asset(private_db)
     await _current_prices(private_db, [refused_id])
