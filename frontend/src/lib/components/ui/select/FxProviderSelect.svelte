@@ -29,6 +29,10 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
+    /** A provider note's level (`warning_level`): a data limit that can mislead, or a fact worth knowing. */
+    type NoteLevel = 'info' | 'warning';
+    const NOTE_SIGN: Record<NoteLevel, string> = {info: 'ℹ️', warning: '⚠️'};
+
     // =========================================================================
     // Types
     // =========================================================================
@@ -375,7 +379,12 @@
         return prov.warning_i18n[language] ?? prov.warning_i18n['en'] ?? '';
     }
 
-    /** Collect all unique provider warnings for a route (deduplicated). */
+    /** How serious a provider's note is: 'warning' (⚠️) unless the provider marks it 'info' (ℹ️). */
+    function getProviderWarningLevel(code: string): NoteLevel {
+        return providerMap.get(code)?.warning_level === 'info' ? 'info' : 'warning';
+    }
+
+    /** Collect all unique provider notes for a route (deduplicated), each led by its level's sign. */
     function getRouteWarnings(route: RouteOption): string[] {
         const seen = new Set<string>();
         const warnings: string[] = [];
@@ -383,9 +392,16 @@
             if (seen.has(code)) continue;
             seen.add(code);
             const w = getProviderWarning(code);
-            if (w) warnings.push(`${getProviderName(code)}: ${w}`);
+            if (w) warnings.push(`${NOTE_SIGN[getProviderWarningLevel(code)]} ${getProviderName(code)}: ${w}`);
         }
         return warnings;
+    }
+
+    /** The most serious level among the notes of a route's providers; '' when none has a note. */
+    function getRouteWarningLevel(route: RouteOption): NoteLevel | '' {
+        const levels = route.providers.filter((code) => getProviderWarning(code)).map(getProviderWarningLevel);
+        if (levels.length === 0) return '';
+        return levels.includes('warning') ? 'warning' : 'info';
     }
 
     // =========================================================================
@@ -465,8 +481,9 @@
     function legendTooltipHtml(prov: ProviderInfo): string {
         const desc = getProviderDescription(prov);
         const warning = getProviderWarning(prov.code);
+        const level = getProviderWarningLevel(prov.code);
         let h = `<strong>${escapeHtml(prov.name)}</strong><br/>${escapeHtml(desc)}`;
-        if (warning) h += `<br/><br/><span class="text-lf-warning-on-inverse">⚠️ ${escapeHtml(warning)}</span>`;
+        if (warning) h += `<br/><br/><span class="${level === 'info' ? 'text-lf-info-on-inverse' : 'text-lf-warning-on-inverse'}">${NOTE_SIGN[level]} ${escapeHtml(warning)}</span>`;
         return h;
     }
 </script>
@@ -474,6 +491,15 @@
 <!-- ===================================================================== -->
 <!-- COMPONENT TEMPLATE                                                    -->
 <!-- ===================================================================== -->
+
+<!-- A provider note's sign: ℹ️ for a fact worth knowing, ⚠️ for a data limit that can mislead -->
+{#snippet noteIcon(level: NoteLevel | '', size: number)}
+    {#if level === 'info'}
+        <Info {size} class="text-lf-info flex-shrink-0" data-testid="fx-route-note-icon" data-level="info" />
+    {:else}
+        <AlertTriangle {size} class="text-lf-warning flex-shrink-0" data-testid="fx-route-note-icon" data-level="warning" />
+    {/if}
+{/snippet}
 
 {#if loading}
     <div class="flex items-center justify-center gap-2 py-4 text-xs text-lf-muted" data-testid="fx-route-loading">
@@ -490,7 +516,7 @@
         {#if orderedSelected.length > 0}
             <OrderableList items={orderedSelected} keyFn={routeKey} onReorder={handleReorder} {disabled}>
                 {#snippet children({item: route, index})}
-                    <div class="flex items-center gap-2 min-w-0" data-testid="fx-route-selected" data-route-key={route.key} data-priority={index + 1} data-warnings={getRouteWarnings(route).length}>
+                    <div class="flex items-center gap-2 min-w-0" data-testid="fx-route-selected" data-route-key={route.key} data-priority={index + 1} data-warnings={getRouteWarnings(route).length} data-warning-level={getRouteWarningLevel(route)}>
                         <!-- Route visualization -->
                         {#if route.isDirect}
                             {@const step = route.chainSteps[0]}
@@ -548,7 +574,7 @@
                         <!-- Provider warnings triangle -->
                         {#if getRouteWarnings(route).length > 0}
                             <Tooltip html={warningsTooltipHtml(getRouteWarnings(route))} position="top">
-                                <AlertTriangle size={13} class="text-lf-warning" />
+                                {@render noteIcon(getRouteWarningLevel(route), 13)}
                             </Tooltip>
                         {/if}
                         <!-- Remove button -->
@@ -611,7 +637,7 @@
                                         <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(prov.code)}</span>
                                         <span class="text-[10px] font-semibold text-lf-secondary">{prov.code}</span>
                                         {#if provWarning}
-                                            <AlertTriangle size={10} class="text-lf-warning flex-shrink-0" />
+                                            {@render noteIcon(getProviderWarningLevel(prov.code), 10)}
                                         {/if}
                                     </a>
                                 </Tooltip>
@@ -656,6 +682,7 @@
                                 type="button"
                                 data-testid="fx-route-direct-{route.providers[0]}"
                                 data-warnings={warnings.length}
+                                data-warning-level={getRouteWarningLevel(route)}
                                 class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-lf-subtle bg-lf-card hover:border-lf-success-line hover:bg-lf-success-soft/50"
                                 onclick={() => addRoute(route)}
                             >
@@ -678,7 +705,7 @@
                                     <span class="font-medium text-lf-secondary text-[11px]">{step.to}</span>
                                     {#if warnings.length > 0}
                                         <Tooltip html={warningsTooltipHtml(warnings)} position="top">
-                                            <AlertTriangle size={11} class="text-lf-warning" />
+                                            {@render noteIcon(getRouteWarningLevel(route), 11)}
                                         </Tooltip>
                                     {/if}
                                     <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-lf-success-soft text-lf-success-on-soft flex-shrink-0">1 step</span>
@@ -722,6 +749,8 @@
                                 <button
                                     type="button"
                                     data-testid="fx-route-chain-{route.stepCount}step-{route.providers.join('-')}"
+                                    data-warnings={warnings.length}
+                                    data-warning-level={getRouteWarningLevel(route)}
                                     class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-lf-subtle bg-lf-card hover:border-lf-info-line hover:bg-lf-info-soft/50"
                                     onclick={() => addRoute(route)}
                                 >
@@ -754,7 +783,7 @@
                                         </span>
                                         {#if warnings.length > 0}
                                             <Tooltip html={warningsTooltipHtml(warnings)} position="top">
-                                                <AlertTriangle size={11} class="text-lf-warning" />
+                                                {@render noteIcon(getRouteWarningLevel(route), 11)}
                                             </Tooltip>
                                         {/if}
                                         <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-lf-info-soft text-lf-info-on-soft flex-shrink-0 whitespace-nowrap">

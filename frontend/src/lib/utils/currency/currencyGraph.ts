@@ -47,6 +47,8 @@ export interface ProviderInfo {
     description_i18n?: Record<string, string>;
     /** Multilingual provider warnings/caveats {lang_code: warning}. Empty = no warning. */
     warning_i18n?: Record<string, string>;
+    /** How serious `warning_i18n` is: 'warning' (⚠️, a data limit that can mislead) or 'info' (ℹ️, a fact worth knowing). */
+    warning_level?: 'info' | 'warning';
     /** URL to documentation page for this provider */
     docs_url?: string | null;
 }
