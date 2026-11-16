@@ -163,6 +163,13 @@ without history (`supports_history = False`, such as the CSS Scraper) therefore 
 one sync at a time, one point per day; outside syncs, the
 [current-quote write-back](#current-quotes-and-todays-ohlc) stores the same day's point.
 
+A provider that [reads in bulk](#bulk-current-reads) gets no `get_current_value()` call per asset:
+PREPARE also plans, with its session, one bulk read of the group of the items whose range reaches
+today, and FETCH runs it before the items (project 76, C3). Each item then takes its quote from that
+read, or its refusal for too many requests (the pause the read met then holds the history too, so
+the history is not asked), or the reason the price columns refused it (X-R51). The read is the live
+read's: within its stamp, a refresh makes no call, and a refresh of one asset reads the whole group.
+
 Before asking a provider's history from a dated start, FETCH reads the core history cache
 (`core._asset_history_cache`): it asks from the first day the cached entry misses between the start
 and `history_end`, the last day asked as a price (yesterday when the range reaches today), and skips
@@ -1057,8 +1064,9 @@ one `_live_quote_item()` per asset, unchanged, and both run in the same `gather`
   that ask different sets — the scheduler every 10 minutes, the Assets list, a detail page, the
   dashboard — then find their quotes in the cache, and the whole group expires at once: one call
   per group per expiry.
-- **The group stamp.** A read leaves `(expiry, members)` for its group, members being the cache
-  keys it covered. Within the stamp, a member without a cached quote — left out of the answer,
+- **The group stamp.** A read leaves `(expiry, members, notes)` for its group, members being the
+  cache keys it covered and notes the reasons of the quotes it refused for the price columns
+  (X-R51), which a refresh within the stamp still reports. Within the stamp, a member without a cached quote — left out of the answer,
   answered with its own error, or refused by the price columns — is served from the database
   without a call. An asset outside the members (an assignment newer than the read) reads the group
   again. A read that fails for another reason leaves a short stamp, so a broken source is not
