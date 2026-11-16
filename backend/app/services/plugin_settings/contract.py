@@ -26,6 +26,13 @@ from backend.app.services.plugin_settings.fields import PluginSettingField, Sett
 from backend.app.services.plugin_settings.groups import SettingsGroup, plugin_groups
 
 
+def qualified_missing(own: tuple[str, ...], groups: Mapping[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """The fields that leave a plugin not configured, its groups' included: its own keys, then ``<group>.<field>`` for each
+    group by name (a dot never occurs in a field key). THE one rule of a call (``BoundSettings.missing``) and of the
+    catalogue's ``configured`` (``service.read_catalogue``), so the two never disagree."""
+    return tuple(own) + tuple(f"{name}.{key}" for name in sorted(groups) for key in groups[name])
+
+
 class BoundSettings:
     """The values of one plugin's fields for one use: plain values, secrets, and the required fields left without one.
 
@@ -91,8 +98,7 @@ class BoundSettings:
         """The fields without a usable value: a required one left without a value, or one whose environment variable is
         set but invalid. The plugin is not configured while one is left. A group's field is named ``<group>.<field>``
         (``coingecko.api_key``): a dot never occurs in a field key."""
-        grouped = tuple(f"{name}.{key}" for name, bound in sorted(self._groups.items()) for key in bound.missing)
-        return self._missing + grouped
+        return qualified_missing(self._missing, {name: bound.missing for name, bound in self._groups.items()})
 
     @property
     def fingerprint(self) -> str:

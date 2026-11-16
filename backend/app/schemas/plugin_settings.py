@@ -20,12 +20,15 @@ from backend.app.schemas.common import StrictModel
 
 
 class PluginSettingFamily(StrEnum):
-    """The plugin families whose plugins may declare settings."""
+    """The plugin families whose plugins may declare settings, and ``group``: a shared settings group, the values several
+    plugins read (project 76), listed and written like a plugin of its own."""
 
     ASSET = "asset"
     FX = "fx"
     BRIM = "brim"
     TOOL = "tool"
+    ENRICHER = "enricher"
+    GROUP = "group"
 
 
 class PluginSettingScope(StrEnum):
@@ -115,8 +118,16 @@ class PluginSettingFieldRead(StrictModel):
     updated_at: datetime | None = Field(None, description="When the saved value last changed")
 
 
+class PluginSettingsPluginRef(StrictModel):
+    """A plugin named by another entry: the plugins that read a shared group."""
+
+    family: PluginSettingFamily
+    plugin_code: str
+    plugin_name: str
+
+
 class PluginSettingsPluginRead(StrictModel):
-    """A plugin and its fields."""
+    """A plugin and its fields; or a shared settings group (``family="group"``, ``plugin_code`` its name) and its fields."""
 
     family: PluginSettingFamily
     plugin_code: str
@@ -124,9 +135,12 @@ class PluginSettingsPluginRead(StrictModel):
     icon_url: str | None = Field(None, description="The plugin's icon, as its family's provider list publishes it (a remote URL or a path of this instance); null when it has none, and the app shows a neutral icon")
     configured: bool = Field(
         ...,
-        description="Every required field has a usable value and no environment variable is invalid: otherwise the plugin answers its calls with NOT_CONFIGURED. Judged on every field, the ones not listed here too",
+        description="Every required field has a usable value and no environment variable is invalid: otherwise the plugin answers its calls with NOT_CONFIGURED. Judged on every field, the ones not listed here too, and for a plugin on the fields of the groups it reads",
     )
     fields: list[PluginSettingFieldRead]
+    groups: list[str] = Field(default_factory=list, description="The shared settings groups the plugin reads, by name: their fields are listed in the groups' own entries")
+    used_by: list[PluginSettingsPluginRef] = Field(default_factory=list, description="For a group: the plugins that read it")
+    name_key: str | None = Field(None, description="For a group: the i18n key of its name; plugin_name is the English fallback")
 
 
 class PluginSettingsCatalogResponse(StrictModel):

@@ -25,6 +25,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 
+from backend.app.config import is_test_mode
 from backend.app.services.plugin_settings.fields import (
     FAMILY_RULES,
     FIELD_KEY,
@@ -90,6 +91,19 @@ def release_group(name: str) -> None:
     release_env_variables(GROUP_FAMILY, name)
 
 
+def is_withheld(group: SettingsGroup | None) -> bool:
+    """X-R44 for groups: a test-only group is not served outside test mode, like a test-only plugin. Registered in every
+    process (the plugin that reads it is registered everywhere too, withheld by its registry), but never listed nor
+    written on a production instance. ``is_test_mode()`` is read at each call."""
+    return group is not None and group.test_only and not is_test_mode()
+
+
+def served_group(name: str) -> SettingsGroup | None:
+    """The group ``name`` as the catalogue and the writes see it: None when none is registered, or when it is withheld."""
+    group = get_group(name)
+    return None if is_withheld(group) else group
+
+
 def get_group(name: str) -> SettingsGroup | None:
     """The group ``name``, or None when none is registered."""
     with _groups_lock:
@@ -140,3 +154,8 @@ def validate_plugin_groups(plugin_class: type, *, family: str) -> None:
             raise SettingsDeclarationError(f"field {sorted(shared)[0]!r} is declared by the plugin and by its group {name!r}")
         if group.has_secrets and (rules is None or not rules.secrets):
             raise SettingsDeclarationError(f"group {name!r} holds a secret, and the plugins of the {family!r} family cannot")
+
+
+# The groups that ship, one module each, registered on import: here, so that every process that imports the settings
+# (the server, a spawned worker) has them before the plugins that read them. At the end: they import this module.
+from backend.app.services.plugin_settings.groups import mock as _mock_group  # noqa: E402, F401 — registered on import
