@@ -307,6 +307,11 @@
     "duplicateNameExists": "Un courtier nommé « {name} » existe déjà.",
     "deleted": "Courtier « {name} » supprimé.",
     "deletedWithTransactions": "Courtier « {name} » et {count} transactions supprimés.",
-    "created": "Courtier « {name} » créé."
+    "created": "Courtier « {name} » créé.",
+    "docsHelp": {
+      "list": "Vos courtiers et comptes : chacun a ses liquidités et ses positions. Ouvrez-en un pour voir son portefeuille, importer ses relevés ou le partager.",
+      "info": "Les réglages du courtier : s'il est actif, depuis quand, et s'il autorise des liquidités négatives ou des positions à découvert.",
+      "sharing": "Qui d'autre peut voir ou modifier ce courtier, et avec quel rôle : propriétaire, éditeur ou lecteur."
+    }
   }
 }

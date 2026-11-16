@@ -22,6 +22,7 @@
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import type {Broker} from '$lib/types';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
     type CurrencyLike = {code: string; amount: number | string};
     type PageBroker = {
@@ -392,6 +393,7 @@
                 <Plus size={18} />
                 <span class="hidden sm:inline">{$_('brokers.addBroker')}</span>
             </button>
+            <DocsLink path="user/brokers/" label={$_('brokers.docsHelp.list')} icon="book" size={16} testId="brokers-docs" />
         </div>
     </div>
 

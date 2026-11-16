@@ -307,6 +307,11 @@
     "duplicateNameExists": "Esiste già un broker chiamato \"{name}\".",
     "deleted": "Broker \"{name}\" eliminato.",
     "deletedWithTransactions": "Broker \"{name}\" e {count} transazioni eliminati.",
-    "created": "Broker \"{name}\" creato."
+    "created": "Broker \"{name}\" creato.",
+    "docsHelp": {
+      "list": "I tuoi broker e conti: ognuno ha la sua liquidità e le sue posizioni. Aprine uno per vederne il portafoglio, importarne i report o condividerlo.",
+      "info": "Le impostazioni del broker: se è attivo, quando è stato aperto e se ammette liquidità negativa o posizioni corte.",
+      "sharing": "Chi altro può vedere o modificare questo broker, e con quale ruolo: proprietario, editor o lettore."
+    }
   }
 }
