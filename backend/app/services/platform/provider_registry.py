@@ -22,6 +22,7 @@ from typing import Dict, List, Type
 from backend.app.config import PROJECT_ROOT, is_test_mode
 from backend.app.logging_config import get_logger
 from backend.app.services.plugin_settings.fields import SettingsDeclarationError, claim_env_variables, validate_declaration
+from backend.app.services.plugin_settings.groups import validate_plugin_groups
 
 logger = get_logger(__name__)
 
@@ -291,15 +292,20 @@ class AbstractPluginRegistry:
 
     @classmethod
     def _validate_settings_declaration(cls, plugin_class: Type) -> None:
-        """Refuse a plugin whose ``settings_fields`` are invalid for this family (``plugin_settings/fields.py``)."""
+        """Refuse a plugin whose ``settings_fields`` are invalid for this family (``plugin_settings/fields.py``), or
+        whose ``settings_groups`` name an unknown group or clash with its fields (``plugin_settings/groups``)."""
         fields = getattr(plugin_class, "settings_fields", ())
-        if not fields:
+        groups = getattr(plugin_class, "settings_groups", ())
+        if not fields and not groups:
             return
         family = cls.settings_family()
         if family is None:
             raise SettingsDeclarationError(f"{plugin_class.__qualname__}: the plugins of {cls.__name__} cannot declare settings")
         try:
-            validate_declaration(fields, family=family)
+            if fields:
+                validate_declaration(fields, family=family)
+            if groups:
+                validate_plugin_groups(plugin_class, family=family)
         except SettingsDeclarationError as error:
             raise SettingsDeclarationError(f"{plugin_class.__qualname__}: {error}") from None
 
