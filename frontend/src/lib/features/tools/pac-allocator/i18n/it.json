@@ -74,20 +74,20 @@
           "notYetSupported": "Non ancora supportati: regime fiscale, minusvalenze, commissioni di vendita.",
           "fixBeforeApplying": "Alcuni campi non sono validi: correggi quelli in rosso per applicare.",
           "profileSave": {
-            "button": "Salva nel profilo del broker",
-            "title": "Salvare nel profilo di {name}?",
-            "intro": "Il profilo del broker è appena stato riletto. Conferma scrive queste modifiche; le altre valute e il regime fiscale restano come sono. Una commissione di vendita «uguale all’acquisto» segue quella di acquisto, anche in una valuta nuova.",
+            "button": "Salva nel broker",
+            "title": "Salvare in {name}?",
+            "intro": "Il broker è appena stato riletto. Conferma scrive queste modifiche; le altre valute e il regime fiscale restano come sono. Una commissione di vendita «uguale all’acquisto» segue quella di acquisto, anche in una valuta nuova.",
             "created": "{currency}: nuova",
             "updated": "{currency}: aggiornata",
             "conversionManual": "Conversione di valuta: converti tu prima di comprare",
             "conversionAutomatic": "Conversione di valuta: converte il Broker quando compri",
-            "nothing": "Il profilo del broker dice già questo: non c’è niente da salvare.",
+            "nothing": "Il broker dice già questo: non c’è niente da salvare.",
             "confirm": "Conferma",
-            "reading": "Lettura del profilo del broker…",
-            "readFailed": "Non è stato possibile leggere il profilo del broker: non è stato salvato niente.",
+            "reading": "Lettura del broker…",
+            "readFailed": "Non è stato possibile leggere il broker: non è stato salvato niente.",
             "refused": "Il broker non ha accettato la modifica: non è stato salvato niente.",
-            "saved": "Salvato nel profilo del broker.",
-            "writeFailed": "Il salvataggio non si è concluso: apri il broker per controllare il suo profilo."
+            "saved": "Salvato nel broker.",
+            "writeFailed": "Il salvataggio non si è concluso: apri il broker per controllarlo."
           }
         },
         "brokers": {

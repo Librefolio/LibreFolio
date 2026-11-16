@@ -74,20 +74,20 @@
           "notYetSupported": "Not supported yet: tax regime, losses, sell fees.",
           "fixBeforeApplying": "Some fields are not valid: fix the ones in red to apply.",
           "profileSave": {
-            "button": "Save to the broker profile",
-            "title": "Save to the profile of {name}?",
-            "intro": "The broker's profile has just been read again. Confirm writes these changes; its other currencies and its tax regime stay as they are. A sale fee set «same as the purchase» follows the purchase fee, also in a new currency.",
+            "button": "Save to the broker",
+            "title": "Save to {name}?",
+            "intro": "The broker has just been read again. Confirm writes these changes; its other currencies and its tax regime stay as they are. A sale fee set «same as the purchase» follows the purchase fee, also in a new currency.",
             "created": "{currency}: new",
             "updated": "{currency}: updated",
             "conversionManual": "Currency conversion: you convert before buying",
             "conversionAutomatic": "Currency conversion: the Broker converts when you buy",
-            "nothing": "The broker's profile already says this: there is nothing to save.",
+            "nothing": "The broker already says this: there is nothing to save.",
             "confirm": "Confirm",
-            "reading": "Reading the broker's profile…",
-            "readFailed": "The broker's profile could not be read: nothing was saved.",
+            "reading": "Reading the broker…",
+            "readFailed": "The broker could not be read: nothing was saved.",
             "refused": "The broker did not accept the change: nothing was saved.",
-            "saved": "Saved to the broker's profile.",
-            "writeFailed": "The save did not complete: open the broker to check its profile."
+            "saved": "Saved to the broker.",
+            "writeFailed": "The save did not complete: open the broker to check it."
           }
         },
         "brokers": {

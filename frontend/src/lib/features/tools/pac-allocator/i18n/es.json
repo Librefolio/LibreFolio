@@ -74,20 +74,20 @@
           "notYetSupported": "Aún no compatibles: régimen fiscal, minusvalías, comisiones de venta.",
           "fixBeforeApplying": "Algunos campos no son válidos: corrige los que están en rojo para aplicar.",
           "profileSave": {
-            "button": "Guardar en el perfil del bróker",
-            "title": "¿Guardar en el perfil de {name}?",
-            "intro": "El perfil del bróker se acaba de volver a leer. Confirmar escribe estos cambios; sus otras divisas y su régimen fiscal quedan como están. Una comisión de venta «igual que la compra» sigue a la de compra, también en una divisa nueva.",
+            "button": "Guardar en el bróker",
+            "title": "¿Guardar en {name}?",
+            "intro": "El bróker se acaba de volver a leer. Confirmar escribe estos cambios; sus otras divisas y su régimen fiscal quedan como están. Una comisión de venta «igual que la compra» sigue a la de compra, también en una divisa nueva.",
             "created": "{currency}: nueva",
             "updated": "{currency}: actualizada",
             "conversionManual": "Conversión de divisa: conviertes tú antes de comprar",
             "conversionAutomatic": "Conversión de divisa: el bróker convierte cuando compras",
-            "nothing": "El perfil del bróker ya dice esto: no hay nada que guardar.",
+            "nothing": "El bróker ya dice esto: no hay nada que guardar.",
             "confirm": "Confirmar",
-            "reading": "Leyendo el perfil del bróker…",
-            "readFailed": "No se ha podido leer el perfil del bróker: no se ha guardado nada.",
+            "reading": "Leyendo el bróker…",
+            "readFailed": "No se ha podido leer el bróker: no se ha guardado nada.",
             "refused": "El bróker no ha aceptado el cambio: no se ha guardado nada.",
-            "saved": "Guardado en el perfil del bróker.",
-            "writeFailed": "El guardado no ha terminado: abre el bróker para comprobar su perfil."
+            "saved": "Guardado en el bróker.",
+            "writeFailed": "El guardado no ha terminado: abre el bróker para comprobarlo."
           }
         },
         "brokers": {

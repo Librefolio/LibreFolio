@@ -74,20 +74,20 @@
           "notYetSupported": "Pas encore pris en charge : régime fiscal, moins-values, frais de vente.",
           "fixBeforeApplying": "Certains champs ne sont pas valides : corrigez ceux en rouge pour appliquer.",
           "profileSave": {
-            "button": "Enregistrer dans le profil du courtier",
-            "title": "Enregistrer dans le profil de {name} ?",
-            "intro": "Le profil du courtier vient d’être relu. Confirmer écrit ces changements ; ses autres devises et son régime fiscal restent tels quels. Des frais de vente « identiques à l’achat » suivent les frais d’achat, y compris dans une nouvelle devise.",
+            "button": "Enregistrer dans le courtier",
+            "title": "Enregistrer dans {name} ?",
+            "intro": "Le courtier vient d’être relu. Confirmer écrit ces changements ; ses autres devises et son régime fiscal restent tels quels. Des frais de vente « identiques à l’achat » suivent les frais d’achat, y compris dans une nouvelle devise.",
             "created": "{currency} : nouvelle",
             "updated": "{currency} : mise à jour",
             "conversionManual": "Conversion de devise : vous convertissez avant d’acheter",
             "conversionAutomatic": "Conversion de devise : le courtier convertit quand vous achetez",
-            "nothing": "Le profil du courtier dit déjà cela : il n’y a rien à enregistrer.",
+            "nothing": "Le courtier dit déjà cela : il n’y a rien à enregistrer.",
             "confirm": "Confirmer",
-            "reading": "Lecture du profil du courtier…",
-            "readFailed": "Le profil du courtier n’a pas pu être lu : rien n’a été enregistré.",
+            "reading": "Lecture du courtier…",
+            "readFailed": "Le courtier n’a pas pu être lu : rien n’a été enregistré.",
             "refused": "Le courtier n’a pas accepté le changement : rien n’a été enregistré.",
-            "saved": "Enregistré dans le profil du courtier.",
-            "writeFailed": "L’enregistrement n’a pas abouti : ouvrez le courtier pour vérifier son profil."
+            "saved": "Enregistré dans le courtier.",
+            "writeFailed": "L’enregistrement n’a pas abouti : ouvrez le courtier pour le vérifier."
           }
         },
         "brokers": {
