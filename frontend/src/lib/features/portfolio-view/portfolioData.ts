@@ -19,7 +19,23 @@
 
 import {get, writable, type Readable} from 'svelte/store';
 import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
-import {fetchReport as fetchStoreReport, peekReport as peekStoreReport, type AllocationHistoryDimensions, type PortfolioAcquisitionFundingSeries, type PortfolioBrokerPnlHistory, type PortfolioCostHistorySeries, type PortfolioDepositHistorySeries, type PortfolioHistoryPoint, type PortfolioIncomeHistorySeries, type PortfolioMwrrLinePoint, type PortfolioPnlCandleSeries, type PortfolioRange, type PortfolioReport, type PortfolioSummary, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
+import {
+    fetchReport as fetchStoreReport,
+    peekReport as peekStoreReport,
+    type AllocationHistoryDimensions,
+    type PortfolioAcquisitionFundingSeries,
+    type PortfolioBrokerPnlHistory,
+    type PortfolioCostHistorySeries,
+    type PortfolioDepositHistorySeries,
+    type PortfolioHistoryPoint,
+    type PortfolioIncomeHistorySeries,
+    type PortfolioMwrrLinePoint,
+    type PortfolioPnlCandleSeries,
+    type PortfolioRange,
+    type PortfolioReport,
+    type PortfolioSummary,
+    type PositionsContribution,
+} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {createLazyReportRetry, type LazyReportRetry} from '$lib/features/portfolio-view/lazyReportRetry.svelte';
 import {createPositionsSeriesController, type PositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
 import {createPositionsRollingController, type PositionsRollingController, type RollingScope} from '$lib/features/dashboard/positionsRolling';
@@ -27,7 +43,7 @@ import {startActivePolling, type ActivePolling, type ActivePollingState, type Po
 import {PORTFOLIO_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
 import {fetchCurrentPrices, livePollFailure, livePollOutcome, type LivePriceResult} from '$lib/services/livePriceService';
 import {todayIso} from '$lib/utils/dateOnly';
-import {contributionCall, lightSummaryCall, mainReportCall, pnlCandlesCall, scopeKey, withLiveLastPoint, type PortfolioScope, type ReportCall} from './portfolioDataScope';
+import {contributionCall, lightSummaryCall, mainReportCall, pnlCandlesCall, scopeKey, withLiveLastPoint, type PortfolioScope, type PositionsGrouping, type ReportCall} from './portfolioDataScope';
 
 /** What a page shows of its report. */
 export interface PortfolioDataState {
@@ -42,6 +58,8 @@ export interface PortfolioDataState {
     acquisitionFunding: PortfolioAcquisitionFundingSeries | undefined;
     allocationHistory: AllocationHistoryDimensions | null;
     positionsContribution: PositionsContribution | null;
+    /** «Globale» (project 74): the summary of the grouped question, whose holdings are one row per asset; null in Broker. */
+    groupedSummary: PortfolioSummary | null;
     pnlCandles: PortfolioPnlCandleSeries | null;
     /** The currency of the figures on screen: the one the last answer was asked in. Null before the first one. */
     appliedCurrency: string | null;
@@ -86,6 +104,8 @@ export interface PortfolioDataInputs {
     initialLoading?: boolean;
     /** The figures follow the current prices (FB-28). Default true: both pages do. */
     livePrices?(): boolean;
+    /** How the Positions panel groups its rows (project 74). Default 'broker'; the page calls `groupingChanged()` when it changes. */
+    grouping?(): PositionsGrouping;
 }
 
 /** The network and the session, injectable for the tests. */
@@ -110,8 +130,10 @@ export interface PortfolioData extends Readable<PortfolioDataState> {
      * again (or any, with `force`). `background` (after a price catch-up, Z-18): the page is not busy meanwhile.
      */
     loadAll(force?: boolean, propagateError?: boolean, options?: {background?: boolean}): Promise<void>;
-    /** The contribution of the scope on screen. */
+    /** The contribution of the scope on screen, in the grouping on screen. */
     loadContribution(options?: {background?: boolean}): Promise<void>;
+    /** The grouping changed (project 74): the rows of the other one leave, the cached ones of the new one show, nothing is asked. */
+    groupingChanged(): void;
     /** The synthetic P&L candles (G1b) of the scope on screen. */
     loadPnlCandles(): Promise<void>;
     /** Shows the cached report of the scope on screen, if any, and asks nothing. */
@@ -148,6 +170,7 @@ const EMPTY: PortfolioDataState = {
     acquisitionFunding: undefined,
     allocationHistory: null,
     positionsContribution: null,
+    groupedSummary: null,
     pnlCandles: null,
     appliedCurrency: null,
     reportLoading: false,
@@ -177,6 +200,9 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
     let shownContribution: PortfolioReport['positions_contribution'] = null;
 
     const alive = () => inputs.alive() && !disposed;
+    const grouping = (): PositionsGrouping => inputs.grouping?.() ?? 'broker';
+    /** The contribution's question: the scope and the grouping. An answer to another one is dropped. */
+    const contributionKey = (scope: PortfolioScope) => `${scopeKey(scope)}|${grouping()}`;
 
     // FB-28: the figures follow the current prices. One poller per report on screen: it is started again each time a main
     // report is applied (a load, a Refresh, a price catch-up, a new scope), with its first poll a whole interval away, so a
@@ -229,6 +255,14 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
         const summary = report?.summary as PortfolioSummary | null | undefined;
         if (!summary) return {...outcome, ok: false};
         state.update((current) => ({...current, summary, history: withLiveLastPoint(current.history, summary)}));
+        // «Globale» (project 74): its rows are another question's; asked the same way, so they follow the prices too
+        const askedGrouping = grouping();
+        if (askedGrouping === 'asset') {
+            const groupedReport = await api.fetchReport(lightSummaryCall(scope, 'asset'), true);
+            if (stale() || grouping() !== askedGrouping) return outcome;
+            const groupedSummary = groupedReport?.summary as PortfolioSummary | null | undefined;
+            if (groupedSummary) patch({groupedSummary});
+        }
         return outcome;
     }
 
@@ -258,14 +292,16 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
 
     function setContribution(report: PortfolioReport | null) {
         const contribution = report?.positions_contribution ?? null;
-        if (contribution === shownContribution) return;
+        // «Globale» (project 74): the same answer's summary holds the Portfolio's rows, one per asset
+        const groupedSummary = grouping() === 'asset' ? ((report?.summary as PortfolioSummary | null | undefined) ?? null) : null;
+        if (contribution === shownContribution && groupedSummary === get(state).groupedSummary) return;
         shownContribution = contribution;
-        patch({positionsContribution: (contribution as PositionsContribution | null | undefined) ?? null});
+        patch({positionsContribution: (contribution as PositionsContribution | null | undefined) ?? null, groupedSummary});
     }
 
     /** The contribution of the scope as the cache holds it (null: never asked). Returns whether the cached one is stale. */
     function showCachedContribution(scope: PortfolioScope): boolean {
-        const cached = api.peekReport(contributionCall(scope));
+        const cached = api.peekReport(contributionCall(scope, grouping()));
         setContribution(cached?.report ?? null);
         return cached?.stale === true;
     }
@@ -321,12 +357,12 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
     async function loadContribution({background = false}: {background?: boolean} = {}) {
         const generation = api.session.generation();
         const scope = inputs.scope();
-        const askedScope = scopeKey(scope);
+        const askedScope = contributionKey(scope);
         // Read before the first await: the effect that called this depends on them (Y-24).
         const allowed = contributionRetry.canAsk(askedScope);
         const busy = get(state);
         if (!inputs.canAsk() || busy.contributionLoading || busy.contributionRefreshing || busy.contributionInBackground || !allowed) return;
-        const call = contributionCall(scope);
+        const call = contributionCall(scope, grouping());
         const cached = api.peekReport(call);
         if (cached && !cached.stale) {
             setContribution(cached.report);
@@ -337,7 +373,7 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
         else patch({contributionLoading: true});
         try {
             const report = await api.fetchReport(call, false);
-            if (!alive() || !api.session.isCurrent(generation) || scopeKey(inputs.scope()) !== askedScope) return;
+            if (!alive() || !api.session.isCurrent(generation) || contributionKey(inputs.scope()) !== askedScope) return;
             // The outcome is recorded before the flags fall back in `finally`: the effect they wake reads it (Y-24).
             if (report) {
                 contributionRetry.succeeded(askedScope);
@@ -398,6 +434,12 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
         },
         loadAll,
         loadContribution,
+        groupingChanged() {
+            if (!alive()) return;
+            shownContribution = null;
+            patch({positionsContribution: null, groupedSummary: null});
+            if (inputs.canAsk()) showCachedContribution(inputs.scope());
+        },
         loadPnlCandles,
         hydrateFromCache,
         positionsSeries,
