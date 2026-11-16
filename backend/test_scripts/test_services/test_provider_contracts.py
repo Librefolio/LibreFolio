@@ -153,6 +153,10 @@ class TestFXProviderContract:
         if w:
             assert "en" in w
 
+    def test_warning_level_is_info_or_warning(self, provider):
+        """warning_level says how serious the note is: «info» (a fact to know, ℹ️) or «warning» (⚠️)."""
+        assert provider.warning_level in ("info", "warning"), f"{provider.code}: warning_level {provider.warning_level!r}"
+
 
 # FX providers whose quote currencies are a fixed table in the class
 # (`CURRENCY_SERIES`), so the count their description promises can be checked
