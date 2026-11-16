@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
@@ -44,9 +45,10 @@ from backend.app.schemas.common import (
     OldNew,
 )
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
-from backend.app.services.assets.profile.catalogue import normalize_value
+from backend.app.services.assets.profile.catalogue import ProfileValueError, normalize_value
 from backend.app.services.assets.profile.store import USER_SOURCE, ProfileWrite, move_voices, profile_today, write_values
 from backend.app.services.assets.type_rules import TypeChangeVerdict, classify_type_change
+from backend.app.services.enrichers.bindings import save_config
 from backend.app.services.financial_math.ledger_totals import position_quantities
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.asset.identifier import merge_other_identifiers
@@ -93,6 +95,53 @@ def _classification_writes(params: Optional[FAClassificationParams], parts: Iter
     return writes
 
 
+#: The fields of a create or patch item that are not columns of ``assets``: written to the profile and the bindings.
+_PROFILE_FIELDS = frozenset({"enrichers", "profile"})
+
+
+def _profile_problems(profile: Optional[dict]) -> list[tuple[str, str]]:
+    """``(voice, reason)`` for every value of ``profile`` the catalogue refuses; empty when every one fits."""
+    problems: list[tuple[str, str]] = []
+    for key, value in (profile or {}).items():
+        try:
+            normalize_value(key, value)
+        except ProfileValueError as error:
+            problems.append((key, error.reason))
+    return problems
+
+
+def _profile_issues(index: int, asset_id: int, profile: Optional[dict]) -> list[FAAssetPatchIssue]:
+    """The ``profileValueInvalid`` issues of one patch item: one per voice of its ``profile`` the catalogue refuses."""
+    return [FAAssetPatchIssue(asset_id=asset_id, index=index, code=FAAssetPatchCode.PROFILE_VALUE_INVALID, message=f"Profile voice '{key}' of asset {asset_id}: {reason}", params={"voice": key}, field=f"profile.{key}") for key, reason in _profile_problems(profile)]
+
+
+def _create_profile_writes(item: FAAssetCreateItem, user_id: Optional[int]) -> list[ProfileWrite]:
+    """The profile writes of one created asset: its classification's and its ``profile``'s. Every value is checked here,
+    before the asset is added: a refused value never leaves an asset written half (``ValueError``)."""
+    writes = _classification_writes(item.classification_params, _CLASSIFICATION_VOICES, user_id) if item.classification_params else []
+    for write in writes:
+        normalize_value(write.key, write.value)
+    if problems := _profile_problems(item.profile):
+        raise ValueError("; ".join(f"profile.{key}: {reason}" for key, reason in problems))
+    return _profile_writes(writes, item.profile, user_id)
+
+
+async def _write_created_profile(session: AsyncSession, asset_id: int, writes: list[ProfileWrite], item: FAAssetCreateItem, today: Optional[date]) -> None:
+    """Write a created asset's profile values and its enricher bindings, in the transaction of the asset."""
+    if writes and today is not None:
+        await write_values(session, asset_id, writes, today=today)
+    if item.enrichers:
+        await save_config(session, asset_id, {code: binding.model_dump() for code, binding in item.enrichers.items()})
+
+
+def _profile_writes(classification_writes: list[ProfileWrite], profile: Optional[dict], user_id: Optional[int]) -> list[ProfileWrite]:
+    """The writes of one item: its classification's (A4), then its ``profile`` values, which win on a voice both touch
+    (plan 68 §3.7, until lot D7)."""
+    profile = profile or {}
+    kept = [write for write in classification_writes if write.key not in profile]
+    return kept + [ProfileWrite(key=key, value=value, source=USER_SOURCE, user_id=user_id) for key, value in profile.items()]
+
+
 def _column_with_voices(column: Optional[str], voices: dict[str, object]) -> Optional[str]:
     """``classification_params`` with the parts of the profile ``voices`` moved to it by a merge (plan 68, A5): until lot
     D7 the column follows the profile. The other parts stay as they were."""
@@ -130,7 +179,7 @@ class AssetCRUDService:
             FABulkAssetCreateResponse with per-item results
         """
         results: list[FAAssetCreateResult] = []
-        today = await profile_today(session) if any(item.classification_params for item in assets) else None
+        today = await profile_today(session) if any(item.classification_params or item.profile for item in assets) else None
 
         for item in assets:
             try:
@@ -170,17 +219,13 @@ class AssetCRUDService:
 
                 # Handle classification_params, and its copy in the profile (checked first: a refused value never leaves
                 # an asset half written)
-                profile_writes: list[ProfileWrite] = []
                 if item.classification_params:
                     asset.classification_params = item.classification_params.model_dump_json(exclude_none=True)
-                    profile_writes = _classification_writes(item.classification_params, _CLASSIFICATION_VOICES, user_id)
-                    for write in profile_writes:
-                        normalize_value(write.key, write.value)
+                profile_writes = _create_profile_writes(item, user_id)
 
                 session.add(asset)
                 await session.flush()  # Get ID without committing
-                if profile_writes and today is not None:
-                    await write_values(session, asset.id, profile_writes, today=today)
+                await _write_created_profile(session, asset.id, profile_writes, item, today)
 
                 results.append(
                     FAAssetCreateResult(
@@ -586,15 +631,18 @@ class AssetCRUDService:
 
         # 2. Apply. Results are built from plain values: a rollback expires the rows.
         results: list[FAAssetPatchResult] = []
-        today = await profile_today(session) if any("classification_params" in patch_dict for _, patch_dict in prepared) else None
+        today = await profile_today(session) if any("classification_params" in patch_dict or patch_dict.get("profile") for _, patch_dict in prepared) else None
         failing = (0, patches[0].asset_id) if patches else (0, 0)
         try:
             for index, (patch, patch_dict) in enumerate(prepared):
                 failing = (index, patch.asset_id)
                 updated_fields = AssetCRUDService._apply_patch_item(assets_by_id[patch.asset_id], patch_dict)
                 await session.flush()
-                if today is not None and "classification_params" in patch_dict:
-                    await write_values(session, patch.asset_id, AssetCRUDService._patch_profile_writes(assets_by_id[patch.asset_id], patch_dict, user_id), today=today)
+                if today is not None and ("classification_params" in patch_dict or patch_dict.get("profile")):
+                    classification = AssetCRUDService._patch_profile_writes(assets_by_id[patch.asset_id], patch_dict, user_id) if "classification_params" in patch_dict else []
+                    await write_values(session, patch.asset_id, _profile_writes(classification, patch_dict.get("profile"), user_id), today=today)
+                if "enrichers" in patch_dict:
+                    await save_config(session, patch.asset_id, patch_dict["enrichers"] or {})
                 results.append(FAAssetPatchResult(asset_id=patch.asset_id, success=True, message=f"Asset patched successfully ({len(updated_fields)} fields)", updated_fields=updated_fields))
                 logger.info(f"Asset patched: id={patch.asset_id}, fields={updated_fields}")
 
@@ -646,6 +694,12 @@ class AssetCRUDService:
             # exclude_none above would turn {"sector_area": None} into {}, clearing all.
             if "classification_params" in patch.model_fields_set:
                 patch_dict["classification_params"] = patch.classification_params.model_dump(mode="json", exclude_unset=True) if patch.classification_params is not None else None
+            # The profile and the bindings as sent (plan 68, B3): a null of the profile is a value left empty on
+            # purpose, and the order of the bindings is their priority
+            if "profile" in patch.model_fields_set:
+                patch_dict["profile"] = dict(patch.profile) if patch.profile is not None else None
+            if "enrichers" in patch.model_fields_set:
+                patch_dict["enrichers"] = {code: binding.model_dump() for code, binding in patch.enrichers.items()} if patch.enrichers is not None else None
             prepared.append((patch, patch_dict))
         return prepared
 
@@ -676,6 +730,7 @@ class AssetCRUDService:
             if patch.asset_id not in assets_by_id:
                 issues.append(FAAssetPatchIssue(asset_id=patch.asset_id, index=index, code=FAAssetPatchCode.ASSET_NOT_FOUND, message=f"Asset {patch.asset_id} not found"))
                 continue
+            issues.extend(_profile_issues(index, patch.asset_id, patch_dict.get("profile")))
             new_name = patch_dict.get("display_name")
             if new_name:
                 holder = held_by.get(new_name)
@@ -736,6 +791,8 @@ class AssetCRUDService:
         updated_fields: List[OldNew[str]] = []
 
         for field, value in patch_dict.items():
+            if field in _PROFILE_FIELDS:
+                continue  # written to the profile and the bindings by patch_assets_bulk, not to a column
             logger.debug(f"Patching field '{field}': '{value}'")
             if field == "classification_params":
                 # None = clear all classification_params

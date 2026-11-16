@@ -21,12 +21,14 @@ from backend.app.schemas.assets.assets import (
     FABulkAssetPatchResponse,
     FAinfoResponse,
 )
+from backend.app.schemas.assets.enrichers import FAAssetEnrichers
 from backend.app.schemas.assets.metadata import (
     FAAssetMetadataResponse,
     FAClassificationParams,
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.enrichers.bindings import AssetEnricherRow, load_enrichers
 
 logger = get_logger(__name__)
 
@@ -336,6 +338,13 @@ async def merge_assets(
 
 
 # Bulk read endpoint
+def _asset_enrichers(row: AssetEnricherRow | None) -> FAAssetEnrichers | None:
+    """The asset's enrichers as ``GET /assets`` shows them (plan 68, B3); None when it has no row."""
+    if row is None:
+        return None
+    return FAAssetEnrichers(config=row.config, state=row.state, updated_at=row.updated_at)
+
+
 @crud_router.get("", response_model=List[FAAssetMetadataResponse], tags=["FA CRUD"])
 async def read_assets_bulk(
     asset_ids: List[int] = Query(..., description="List of asset IDs to read"),
@@ -421,6 +430,7 @@ async def read_assets_bulk(
         ).where(AssetProviderAssignment.asset_id.in_(asset_ids))
         provider_result = await session.execute(provider_stmt)
         provider_map = {row[0]: row[1] for row in provider_result.fetchall()}
+        enricher_rows = await load_enrichers(session, asset_ids)
 
         responses = []
         for asset_id in asset_ids:
@@ -450,6 +460,7 @@ async def read_assets_bulk(
                     quote_base_quantity=asset.quote_base_quantity,
                     classification_params=classification_params,
                     provider_code=provider_map.get(asset.id),
+                    enrichers=_asset_enrichers(enricher_rows.get(asset.id)),
                 )
             )
 
