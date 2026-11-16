@@ -29,11 +29,14 @@
     interface LogItemCurrentPrice {
         asset_id: number;
         name: string;
-        ok: boolean;
-        error?: string;
+        /** current_price items carry ok/deferred; profile_read items carry status instead. */
+        ok?: boolean;
+        error?: string | null;
         icon_url?: string;
         deferred?: boolean;
         retry_after?: number | null;
+        status?: 'ok' | 'error' | 'deferred';
+        voices_written?: number;
     }
 
     interface LogItemHistory {
@@ -100,6 +103,7 @@
         {value: 'all', label: $_('settings.global.scheduler.log.allJobs')},
         {value: 'current_price', label: '💰 ' + $_('common.currentPrice')},
         {value: 'history_sync', label: '📊 ' + $_('settings.global.scheduler.log.historySync')},
+        {value: 'profile_read', label: '🪪 ' + $_('settings.global.scheduler.log.profileRead')},
     ]);
 
     let statusSelectOptions = $derived([
@@ -222,6 +226,8 @@
                 return '💰 ' + $_('common.currentPrice');
             case 'history_sync':
                 return '📊 ' + $_('settings.global.scheduler.log.historySync');
+            case 'profile_read':
+                return '🪪 ' + $_('settings.global.scheduler.log.profileRead');
             default:
                 return job;
         }
@@ -250,7 +256,8 @@
 
     function summaryText(entry: LogEntry): string {
         const s = entry.summary;
-        if (entry.job === 'current_price') {
+        // A profile read counts its assets as a price run counts its items
+        if (entry.job === 'current_price' || entry.job === 'profile_read') {
             const ok = s.ok ?? 0;
             const err = s.err ?? 0;
             const deferred = s.deferred ?? 0;
@@ -272,6 +279,13 @@
         if (aDef + fDef > 0) parts.push(`${aDef + fDef} ⏸`);
         if (aErr + fErr > 0) parts.push(`${aErr + fErr} ✗`);
         return parts.join(' · ');
+    }
+
+    /** An item's outcome: a profile item says it, a price item has ok/deferred (deferred wins). */
+    function itemStatus(item: LogItemCurrentPrice): 'ok' | 'error' | 'deferred' {
+        if (item.status) return item.status;
+        if (item.deferred) return 'deferred';
+        return item.ok ? 'ok' : 'error';
     }
 
     /** First N names for preview */
@@ -408,11 +422,11 @@
                         <!-- Collapsible detail -->
                         {#if expanded && detail}
                             <div class="px-4 py-3 border-t border-lf-subtle space-y-3" data-testid="scheduler-log-entry-detail">
-                                <!-- current_price items (table) -->
+                                <!-- current_price and profile_read items (table) -->
                                 {#if entry.items && entry.items.length > 0}
                                     <div>
                                         <h4 class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider mb-1">
-                                            💰 {$_('common.currentPrice')}
+                                            {jobLabel(entry.job)}
                                         </h4>
                                         <table class="w-full text-xs">
                                             <thead>
@@ -424,11 +438,12 @@
                                             </thead>
                                             <tbody>
                                                 {#each entry.items as item}
-                                                    <tr class="border-t border-lf-subtle" data-testid="scheduler-log-item" data-deferred={item.deferred ? 'true' : 'false'}>
+                                                    {@const itemState = itemStatus(item)}
+                                                    <tr class="border-t border-lf-subtle" data-testid="scheduler-log-item" data-status={itemState} data-deferred={itemState === 'deferred' ? 'true' : 'false'}>
                                                         <td class="py-1 pr-2">
-                                                            {#if item.deferred}
+                                                            {#if itemState === 'deferred'}
                                                                 <span class="inline-flex text-lf-warning" data-testid="scheduler-log-item-deferred"><CirclePause size={13} /></span>
-                                                            {:else if item.ok}
+                                                            {:else if itemState === 'ok'}
                                                                 <CheckCircle size={13} class="text-lf-success" />
                                                             {:else}
                                                                 <XCircle size={13} class="text-lf-danger" />
@@ -438,10 +453,13 @@
                                                             <span class="font-medium text-lf-secondary">{item.name}</span>
                                                         </td>
                                                         <td class="py-1">
-                                                            {#if item.deferred}
+                                                            {#if itemState === 'deferred'}
                                                                 <span class="text-lf-warning" title={item.error ?? undefined}>{$_('settings.global.scheduler.log.deferred')}</span>
-                                                            {:else if item.ok}
+                                                            {:else if itemState === 'ok'}
                                                                 <span class="text-lf-success">✓</span>
+                                                                {#if entry.job === 'profile_read'}
+                                                                    <span class="text-lf-muted ml-1" data-testid="scheduler-log-item-voices">{$_('settings.global.scheduler.log.voicesWritten', {values: {count: item.voices_written ?? 0}})}</span>
+                                                                {/if}
                                                             {:else if item.error}
                                                                 <Tooltip text={item.error} position="top" maxWidth="500px">
                                                                     <!-- svelte-ignore a11y_no_static_element_interactions -->
