@@ -21,6 +21,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - API : `POST /portfolio/report` accepte `group_by` (`broker`, par défaut, ou `asset`) ; ses lignes portent `broker_ids`.
 - Modification de plusieurs actifs : «Retirer l'icône» et «Retirer l'URL» effacent l'icône ou l'URL personnelle des actifs sélectionnés qui en ont une ; les autres restent tels quels.
 - Tableau des actifs : chaque ligne a une action «Modifier» qui ouvre l'éditeur de l'actif sur place, sans aller à la page de détail.
+- Les taux FED couvrent aussi le ringgit malaisien (MYR), la roupie srilankaise (LKR) et le bolívar vénézuélien (VES, depuis le 4 octobre 2021, la dernière dénomination).
+- Les routes qui utilisent FED affichent une note ℹ️ : les taux FED sont quotidiens, un par jour ouvré américain, mais la Réserve fédérale les publie une fois par semaine, le lundi, donc le dernier taux FED peut avoir jusqu'à environ 10 jours. Les notes des fournisseurs ont désormais deux niveaux dans le choix de la route : ℹ️ pour un fait utile à savoir, ⚠️ pour une limite des données comme les moyennes mensuelles de la BNS.
 
 ### 🔄 Modifié
 
@@ -61,6 +63,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Sur une instance bloquée par son hébergeur, l'administrateur voit aussi les «Sauvegardes déjà conservées» et peut les télécharger, pas seulement en faire une nouvelle.
 - L'import d'un relevé n'affiche plus de message de succès quand la modification des identifiants d'un actif n'a pas été enregistrée.
 - Actifs : la puce «n sélectionnés» efface toujours toute la sélection, et le menu des colonnes et le redimensionnement des colonnes agissent sur les deux tableaux d'actifs (les vôtres et ceux des autres) ; avant, l'un des deux pouvait être oublié.
+- Les taux FED de 16 devises étaient enregistrés à l'envers (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB) : 1 JPY valait 158 USD au lieu de 0,0063. Les taux déjà enregistrés ne sont pas modifiés. Pour les corriger, ouvrez la page Devises, choisissez la période «Tout» et utilisez «Sync. Tout» : chaque paire dont la route utilise FED, même comme étape d'une chaîne (par exemple INR → USD → EUR), est téléchargée à nouveau et écrasée.
+- Le fournisseur de la Bank of England (BOE) ne téléchargeait rien, car la base de données de la banque a changé son adresse de téléchargement ; il fonctionne de nouveau. Son taux de l'euro venait aussi de la mauvaise série (euro contre dollar américain au lieu de contre livre sterling) : chaque paire dont la route utilise BOE pour l'euro reste fausse jusqu'à une nouvelle synchronisation de la même façon (période «Tout», «Sync. Tout»).
 
 ### ⚠️ Changements incompatibles
 

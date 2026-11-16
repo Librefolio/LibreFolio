@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: `POST /portfolio/report` accepts `group_by` (`broker`, the default, or `asset`); its rows carry `broker_ids`.
 - Bulk edit of assets: «Remove icon» and «Remove URL» clear the icon or the personal URL of the selected assets that have one; the others are left as they are.
 - Assets table: each row has an «Edit» action that opens the asset editor in place, without going to the detail page.
+- FED exchange rates now also cover the Malaysian ringgit (MYR), the Sri Lankan rupee (LKR) and the Venezuelan bolívar (VES, from 4 October 2021, the last redenomination).
+- Routes that use FED show an ℹ️ note: FED rates are daily, one per US business day, but the Federal Reserve publishes them once a week, on Mondays, so the latest FED rate can be up to about 10 days old. Provider notes now come in two levels in the route picker: ℹ️ for a fact worth knowing, ⚠️ for a data limit such as the SNB's monthly averages.
 
 ### 🔄 Changed
 
@@ -61,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On an instance blocked by its hosting provider, the administrator also sees the «Backups already kept» and can download them, not only make a new one.
 - Importing a report no longer shows a success message when the change of an asset's identifiers was not saved.
 - Assets: the «n selected» chip always clears the whole selection, and the column menu and column resizing act on both asset tables (yours and the others'); before, one of the two could be left out.
+- FED exchange rates for 16 currencies were stored upside down (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB): 1 JPY showed as 158 USD instead of 0.0063. Rates already stored are not changed. To correct them, open the FX page, choose the «All» period and use «Sync All»: every pair whose route uses FED, also as one step of a chain (for example INR → USD → EUR), is fetched again and overwritten.
+- The Bank of England (BOE) provider downloaded nothing, because the Bank's database changed its download address; it works again. Its euro rate also came from the wrong series (euro against the US dollar instead of against sterling): every pair whose route uses BOE for the euro stays wrong until you sync it again the same way («All» period, «Sync All»).
 
 ### ⚠️ Breaking changes
 

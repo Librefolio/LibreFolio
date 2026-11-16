@@ -21,6 +21,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - API: `POST /portfolio/report` accetta `group_by` (`broker`, il default, o `asset`); le sue righe portano `broker_ids`.
 - Modifica di più asset: «Rimuovi icona» e «Rimuovi URL» tolgono l'icona o l'URL personale agli asset selezionati che ce l'hanno; gli altri restano come sono.
 - Tabella Asset: ogni riga ha un'azione «Modifica» che apre l'editor dell'asset sul posto, senza andare alla pagina di dettaglio.
+- I cambi FED coprono anche il ringgit malese (MYR), la rupia dello Sri Lanka (LKR) e il bolívar venezuelano (VES, dal 4 ottobre 2021, l'ultima ridenominazione).
+- Le route che usano FED mostrano una nota ℹ️: i cambi FED sono giornalieri, uno per giorno lavorativo USA, ma la Federal Reserve li pubblica una volta a settimana, il lunedì, quindi l'ultimo cambio FED può avere fino a circa 10 giorni. Le note dei provider hanno ora due livelli nella scelta della route: ℹ️ per un fatto utile da sapere, ⚠️ per un limite dei dati come le medie mensili della SNB.
 
 ### 🔄 Modifiche
 
@@ -61,6 +63,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Su un'istanza bloccata dal fornitore di hosting l'amministratore vede anche i «Backup già conservati» e può scaricarli, non solo farne uno nuovo.
 - L'importazione di un report non mostra più un messaggio di successo quando la modifica degli identificativi di un asset non è stata salvata.
 - Asset: il chip «n selezionati» toglie sempre tutta la selezione, e il menu delle colonne e il ridimensionamento delle colonne agiscono su entrambe le tabelle degli asset (i tuoi e quelli degli altri); prima una delle due poteva restare fuori.
+- I cambi FED di 16 valute erano salvati capovolti (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB): 1 JPY risultava 158 USD invece di 0,0063. I cambi già salvati non vengono toccati. Per correggerli apri la pagina Cambi, scegli il periodo «Tutti» e usa «Sinc. Tutto»: ogni coppia la cui route usa FED, anche come passo di una catena (per esempio INR → USD → EUR), viene riscaricata e sovrascritta.
+- Il provider della Bank of England (BOE) non scaricava nulla, perché il database della banca ha cambiato indirizzo di download; ora funziona di nuovo. Anche il suo cambio dell'euro veniva dalla serie sbagliata (euro contro dollaro USA invece che contro sterlina): ogni coppia la cui route usa BOE per l'euro resta sbagliata finché non la risincronizzi allo stesso modo (periodo «Tutti», «Sinc. Tutto»).
 
 ### ⚠️ Modifiche incompatibili
 

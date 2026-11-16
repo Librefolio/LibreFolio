@@ -21,6 +21,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - API: `POST /portfolio/report` acepta `group_by` (`broker`, por defecto, o `asset`); sus filas llevan `broker_ids`.
 - Edición de varios activos: «Quitar el icono» y «Quitar la URL» borran el icono o la URL personal de los activos seleccionados que la tienen; los demás quedan como están.
 - Tabla de activos: cada fila tiene una acción «Editar» que abre el editor del activo en el sitio, sin ir a la página de detalle.
+- Los tipos de cambio FED cubren también el ringgit malayo (MYR), la rupia de Sri Lanka (LKR) y el bolívar venezolano (VES, desde el 4 de octubre de 2021, la última redenominación).
+- Las rutas que usan FED muestran una nota ℹ️: los tipos FED son diarios, uno por día hábil en EE. UU., pero la Reserva Federal los publica una vez a la semana, los lunes, así que el último tipo FED puede tener hasta unos 10 días. Las notas de los proveedores tienen ahora dos niveles en el selector de ruta: ℹ️ para un dato útil, ⚠️ para un límite de los datos como las medias mensuales del SNB.
 
 ### 🔄 Cambios
 
@@ -61,6 +63,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - En una instancia bloqueada por su proveedor de alojamiento, el administrador también ve las «Copias de seguridad ya guardadas» y puede descargarlas, no solo hacer una nueva.
 - La importación de un informe ya no muestra un mensaje de éxito cuando el cambio de los identificadores de un activo no se ha guardado.
 - Activos: el chip «n seleccionados» siempre quita toda la selección, y el menú de columnas y el cambio de ancho de las columnas actúan en las dos tablas de activos (los tuyos y los de los demás); antes una de las dos podía quedar fuera.
+- Los tipos de cambio FED de 16 divisas se guardaban al revés (JPY, CAD, CHF, SEK, DKK, NOK, CNY, INR, BRL, MXN, ZAR, SGD, HKD, KRW, TWD, THB): 1 JPY aparecía como 158 USD en lugar de 0,0063. Los tipos ya guardados no se modifican. Para corregirlos, abre la página Divisas, elige el periodo «Todo» y usa «Sinc. Todo»: cada par cuya ruta usa FED, también como paso de una cadena (por ejemplo INR → USD → EUR), se descarga de nuevo y se sobrescribe.
+- El proveedor del Bank of England (BOE) no descargaba nada, porque la base de datos del banco cambió su dirección de descarga; vuelve a funcionar. Su tipo del euro también venía de la serie equivocada (euro frente al dólar estadounidense en lugar de frente a la libra esterlina): cada par cuya ruta usa BOE para el euro sigue mal hasta que lo vuelvas a sincronizar de la misma forma (periodo «Todo», «Sinc. Todo»).
 
 ### ⚠️ Cambios incompatibles
 
