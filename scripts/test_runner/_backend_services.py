@@ -1455,6 +1455,15 @@ def services_bulk_current_values(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Bulk current values tests", verbose=verbose)
 
 
+def services_yahoo_finance_bulk(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 C5: Yahoo Finance reads current values in bulk (recorded v7 response; no DB, no server, no network)."""
+    print_section("Services: Yahoo Finance Bulk Current Values (project 76, C5)")
+    print_info("Testing: asset_source_providers/yahoo_finance/plugin.py (get_current_values_bulk, _fetch_v7_quotes, _quote_from_info, _bulk_quote_available)")
+    print_info("Tests: same result as get_current_value on the recorded quotes, exchange-zone dates, one request, absent key for an unreturned symbol, previous-close fallback and NO_DATA, 429 raised once, ISIN resolution, wrong identifier type, capability, same symbol twice")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_yahoo_finance_bulk.py", test_names)
+    return run_command(cmd, "Yahoo Finance bulk tests", verbose=verbose)
+
+
 def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
     """R13-SEC9-1/-3/-4 + Y's D1: POST /assets/prices/current (no lane DB, no server, no network)."""
     print_section("Services: Current Prices Bulk (R13-SEC9, Y's D1)")
@@ -4378,6 +4387,15 @@ Note: No backend server required.
         services_provider_errors,
         name="Provider Error Paths",
         desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52); FED and BOE read each currency from its series, in the direction the bank quotes it (lane 75)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "yahoo-finance-bulk",
+        services_yahoo_finance_bulk,
+        name="Yahoo Finance Bulk Current Values (project 76, C5)",
+        desc="Yahoo's current values in one v7 quote request: same value, currency and exchange-zone date as the single read on the recorded response, one request for all symbols, an unreturned symbol answers nothing, previous-close fallback and NO_DATA, a 429 raised once and never retried, ISIN resolved to its symbol, wrong identifier type refused per item, capability flags",
+        # PURE: the recorded v7 response served by a replaced YfData.get_raw_json and a fake yf; no DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
