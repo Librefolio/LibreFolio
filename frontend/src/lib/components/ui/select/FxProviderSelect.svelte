@@ -483,7 +483,7 @@
         const warning = getProviderWarning(prov.code);
         const level = getProviderWarningLevel(prov.code);
         let h = `<strong>${escapeHtml(prov.name)}</strong><br/>${escapeHtml(desc)}`;
-        if (warning) h += `<br/><br/><span class="${level === 'info' ? 'text-lf-info-on-inverse' : 'text-lf-warning-on-inverse'}">${NOTE_SIGN[level]} ${escapeHtml(warning)}</span>`;
+        if (warning) h += `<br/><br/><span class="${level === 'info' ? 'text-lf-info-on-inverse' : 'text-lf-warning-on-inverse'}">${escapeHtml(NOTE_SIGN[level])} ${escapeHtml(warning)}</span>`;
         return h;
     }
 </script>
