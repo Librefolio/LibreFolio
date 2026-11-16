@@ -1440,6 +1440,17 @@ def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Bulk writes chunked tests", verbose=verbose)
 
 
+def services_bulk_current_values(verbose: bool = False, test_names: list = None) -> bool:
+    """Project 76 C1: the bulk current-price read contract of asset providers (no DB, no server, no network)."""
+    print_section("Services: Bulk Current Values (project 76, C1)")
+    print_info("Testing: schemas/prices.py (FACurrentValueRequest), services/assets/base.py (supports_bulk_current, bulk_current_max_items, get_current_values_bulk), asset_source_providers/mockprov/plugin.py")
+    print_info(
+        "Tests: the default refuses (NOT_SUPPORTED); class-definition guards (TypeError); the request refuses extra fields and an empty key; mockprov answers per key like get_current_value, omits on command, answers NOT_FOUND per item, refuses the whole call when rate limited, and records every call"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_current_values.py", test_names)
+    return run_command(cmd, "Bulk current values tests", verbose=verbose)
+
+
 def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
     """R13-SEC9-1/-3/-4 + Y's D1: POST /assets/prices/current (no lane DB, no server, no network)."""
     print_section("Services: Current Prices Bulk (R13-SEC9, Y's D1)")
@@ -3503,6 +3514,15 @@ Note: No backend server required.
         desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused; delete_rates_bulk matches by bisection (≤ 4⌈log₂(D+1)⌉ counted comparisons per deletion, 2 000 × 2 000) and equals a brute-force scan on random requests (overlaps, end < start, missing pair, single days); MF-SEC9e bulk_delete_prices: a row in two ranges counted once, an asset in two items answers its total over both in each result, per-asset counts sum to total_deleted; empty request → empty response, DELETE /assets/prices 200; 2 000 ranges send ≤ ⌈intervals/500⌉+2 SELECTs and DELETEs (engine statement count, not 1 per range); brute-force reference on random overlapping requests; guards: inclusive bounds, end=start, adjacent and disjoint random ranges; guard: POST /assets/prices answers a service ValueError (the digits refusal) 400 with its own message",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; services, the FX provider lookup
         # and route loggers replaced by monkeypatch; the cap/failure cases hand the routes stand-in sessions.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "bulk-current-values",
+        services_bulk_current_values,
+        name="Bulk Current Values (project 76, C1)",
+        desc="The bulk current-price read contract of asset providers: FACurrentValueRequest, supports_bulk_current / bulk_current_max_items / get_current_values_bulk with their class-definition guards, and mockprov's bulk answer (per key, omit, NOT_FOUND per item, whole-call rate limit, call recording)",
+        # PURE: schema and class-definition checks, and mockprov called directly; no DB, no server, no network.
         isolation="pure",
     )
     add_test(
