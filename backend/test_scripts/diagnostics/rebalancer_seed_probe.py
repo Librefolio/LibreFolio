@@ -9,6 +9,9 @@ seeds and branching priorities, and fails when a run's lower bound (or a stage i
 - the best plan any run of the same scenario found (its exact score, replayed), or
 - the scenario's reference: the exact score of a valid plan known from outside (``--reference``).
 
+It also fails when a run's plan cannot be carried out: the planner's own step counter (``planner._executable_steps``)
+refuses it, as it would refuse to publish it (lot CR of project 67: the cash rule makes every plan executable).
+
 Scenarios: ``g5`` (the planner's real request on the test server's mock data,
 ``backend/test_scripts/fixtures/pac_allocator/rebalancer_plan_request.g5-browser.2-0-0.json``), ``g5-all-eur`` (the
 same, with every USD price, route and cash moved to EUR at the request's rate, and no currency pair) and ``g5-one-route``
@@ -41,9 +44,11 @@ if str(PROJECT_ROOT) not in sys.path:
 os.environ.setdefault("LIBREFOLIO_TEST_MODE", "1")
 
 from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_INPUT_ADAPTER  # noqa: E402
+from backend.app.services.pac_allocator import planner, planner_report, rebalancer_report  # noqa: E402
 from backend.app.services.pac_allocator.compiler import compile_policy_program  # noqa: E402
-from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate  # noqa: E402
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups  # noqa: E402
 from backend.app.services.pac_allocator.normalize import normalize_rebalancer_plan  # noqa: E402
+from backend.app.services.pac_allocator.plan_sequence import PlanNotExecutableError  # noqa: E402
 from backend.app.services.pac_allocator.solver import solve_policy_program  # noqa: E402
 
 G5_REQUEST = PROJECT_ROOT / "backend/test_scripts/fixtures/pac_allocator/rebalancer_plan_request.g5-browser.2-0-0.json"
@@ -97,6 +102,24 @@ def _one_route(request: dict) -> dict:
 SCENARIOS = {"g5": _g5, "g5-all-eur": lambda: _all_eur(_g5()), "g5-one-route": lambda: _one_route(_g5())}
 
 
+def executable(scenario, evaluation) -> bool:
+    """Whether the planner's step counter finds an order the balances can follow, the steps built as the planner builds them."""
+    sequence = planner_report._SequenceAllocator()
+    try:
+        planner._executable_steps(
+            scenario,
+            planner_report.build_ledger_rows(evaluation),
+            planner_report.build_rounding_top_ups(scenario, rounding_top_ups(scenario, evaluation)),
+            planner_report.build_funding_actions(scenario, evaluation, sequence),
+            rebalancer_report.build_transfers(evaluation, sequence),
+            planner_report.build_conversions(scenario, evaluation, sequence),
+            planner_report.build_order_rows(scenario, evaluation, sequence),
+        )
+    except PlanNotExecutableError:
+        return False
+    return True
+
+
 def run_once(request: dict, seed: int, priorities: tuple[int, int] | None, budget: float) -> dict:
     scenario = normalize_rebalancer_plan(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(request)).normalized
     view = build_exact_policy_view(scenario)
@@ -106,20 +129,25 @@ def run_once(request: dict, seed: int, priorities: tuple[int, int] | None, budge
         binary, quantity = priorities
         for var in program.variables.quanta.values():
             program.model.chgVarBranchPriority(var, quantity)
-        for group in (program.variables.buy_active, program.variables.funding_active, program.variables.fx_active, program.variables.transfer_active):
+        pool = program.variables.pool
+        for group in (program.variables.buy_active, program.variables.funding_active, program.variables.fx_active, *((pool.active, pool.moving) if pool is not None else ())):
             for var in group.values():
                 program.model.chgVarBranchPriority(var, binary)
+        for var in pool.net.values() if pool is not None else ():
+            program.model.chgVarBranchPriority(var, quantity)
     load = os.getloadavg()[0]
     start = time.monotonic()
     run = solve_policy_program(program, time_budget_seconds=budget)
     stage = run.stages[0]
     exact = None
+    steps_ok = None
     if run.candidate is not None:
         evaluation = evaluate_exact_candidate(scenario, view, run.candidate)
         if evaluation.candidate_valid and evaluation.feasible:
             by_ref = {item.ref_id: item.value for item in evaluation.objectives}
             first = by_ref[view.objectives[0].ref_id]
             exact = Fraction(first.numerator, first.denominator)
+            steps_ok = executable(scenario, evaluation)
     scale = float(stage.scale)
     band = getattr(next((item for item in program.objective_stages if item.code == stage.objective_code), None), "band", 0.0) / scale
     return {
@@ -130,6 +158,7 @@ def run_once(request: dict, seed: int, priorities: tuple[int, int] | None, budge
         "primal": None if stage.primal is None else stage.primal / scale,
         "dual": None if stage.dual is None else stage.dual / scale,
         "exact": exact,
+        "executable": steps_ok,
     }
 
 
@@ -156,10 +185,13 @@ def main(argv: list[str] | None = None) -> int:
             for seed in _seeds(args.seeds):
                 row = run_once(request, seed, PRIORITIES[priority], args.budget) | {"seed": seed, "priority": priority}
                 rows.append(row)
-                print(f"{name:<11} seed {seed:>2} {priority:<11} load {row['load']:>5} wall {row['wall']:>5}s {row['status']:<10} primal {row['primal']} dual {row['dual']} exact {None if row['exact'] is None else float(row['exact'])}", flush=True)
+                print(f"{name:<11} seed {seed:>2} {priority:<11} load {row['load']:>5} wall {row['wall']:>5}s {row['status']:<10} primal {row['primal']} dual {row['dual']} exact {None if row['exact'] is None else float(row['exact'])} executable {row['executable']}", flush=True)
         best = min((row["exact"] for row in rows if row["exact"] is not None), default=None)
         ceiling = min(value for value in (best, REFERENCES.get(name)) if value is not None)
         for row in rows:
+            if row["executable"] is False:
+                failures += 1
+                print(f"FAIL {name} seed {row['seed']} {row['priority']}: the plan cannot be carried out (the step counter refuses it)")
             above = row["dual"] is not None and Fraction(row["dual"]) > ceiling
             # A closed stage's floating value may sit above the exact score of its own plan by its quadratic rows' band.
             closed_above = row["status"] == "finished" and row["primal"] is not None and Fraction(row["primal"]) > ceiling + Fraction(row["band"])
