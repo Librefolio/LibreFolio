@@ -54,7 +54,7 @@ Most caches register at import time, but some (`yfinance_currency`) only when th
 | `search_results` | 5000 | 24 h | `assets/core.py` — individual search items |
 | `search_queries` | 500 | 15 min | `assets/core.py` — query → results |
 | `asset_history_fetch` | 500 | 15 min | `assets/core.py` |
-| `asset_current_fetch` | 300 | 2 min | `assets/core.py` |
+| `asset_current_fetch` | 5000 | 2 min, or the provider's `current_min_refresh_seconds` | `assets/core.py` |
 | `asset_metadata_fetch` | 200 | 30 min | `assets/core.py` |
 | `fx_provider_responses` | 200 | 5 min | `fx/sync.py` |
 | `fx_provider_currencies` | 32 | 24 h | `fx/catalog.py` — supported currencies per FX provider, for `GET /fx/providers`; a fallback after a failed fetch is kept 5 min |

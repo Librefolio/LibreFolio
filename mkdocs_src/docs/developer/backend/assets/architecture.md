@@ -169,6 +169,9 @@ today, and FETCH runs it before the items (project 76, C3). Each item then takes
 read, or its refusal for too many requests (the pause the read met then holds the history too, so
 the history is not asked), or the reason the price columns refused it (X-R51). The read is the live
 read's: within its stamp, a refresh makes no call, and a refresh of one asset reads the whole group.
+So for a bulk provider a refusal of that read costs the round its history too: nothing is stored, the
+result is FAILED with `RATE_LIMITED`, and the next round, once the pause is over, stores it (a delay,
+never a wrong value; racing the history against the pause would gain nothing).
 
 Before asking a provider's history from a dated start, FETCH reads the core history cache
 (`core._asset_history_cache`): it asks from the first day the cached entry misses between the start
@@ -1064,6 +1067,12 @@ one `_live_quote_item()` per asset, unchanged, and both run in the same `gather`
   that ask different sets — the scheduler every 10 minutes, the Assets list, a detail page, the
   dashboard — then find their quotes in the cache, and the whole group expires at once: one call
   per group per expiry.
+- **The interval.** A provider may declare `current_min_refresh_seconds` (a property, typically
+  from a setting): its current values stay fresh that long, two minutes otherwise, and less than
+  two minutes is ignored and logged (`core.current_cache_ttl()`, read on the configured instance
+  only). Every writer of the current-value cache stores with it (`core.remember_current_value()`),
+  bulk or per asset, and a group's stamp lasts as long. Whether a group must be read is decided by
+  the stamp alone.
 - **The group stamp.** A read leaves `(expiry, members, notes)` for its group, members being the
   cache keys it covered and notes the reasons of the quotes it refused for the price columns
   (X-R51), which a refresh within the stamp still reports. Within the stamp, a member without a cached quote — left out of the answer,
@@ -1273,7 +1282,8 @@ cost unknown it stays `MISSING`.
   search-result, and search-query singleton caches. Responsibility modules dereference these
   objects through `core`, preserving one identity and one monkeypatch point.
 - **`_asset_current_cache`**: up to 5,000 entries, since a [bulk read](#bulk-current-reads) caches every
-  active asset of its provider; caches provider current-value results for two minutes, as the price
+  active asset of its provider; caches provider current-value results for two minutes, or for the
+  provider's [interval](#bulk-current-reads) (`current_min_refresh_seconds`), as the price
   columns keep them: the live-query path and the refresh store a quote only once
   `storable_current_value()` has passed it, truncated if need be, so the cache never holds one
   that cannot be served or written ([Current Quotes and Today's OHLC](#current-quotes-and-todays-ohlc)).

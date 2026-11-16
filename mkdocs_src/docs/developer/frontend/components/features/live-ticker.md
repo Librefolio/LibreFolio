@@ -648,12 +648,12 @@ sequenceDiagram
     participant DB as PriceHistory
 
     Page->>API: [asset_ids]
-    opt provider assigned, no quote in the 2-min cache
-        API->>Prov: get_current_value(), 10 s timeout
+    opt provider assigned, no quote in the cache (2 min, or the provider's interval)
+        API->>Prov: get_current_value(), 10 s timeout (one get_current_values_bulk per group for a bulk provider)
         Prov-->>API: value, currency, as_of_date
     end
     alt quote, fresh or cached, kept by storable_current_value()
-        Note over API: served as the price columns keep it, a fresh quote cached 2 min
+        Note over API: served as the price columns keep it, a fresh quote cached 2 min or the provider's interval
     else no provider, the provider failed or is paused, or its quote is refused
         API->>DB: latest stored close that reads a number
         DB-->>API: value, source db:last_known
@@ -666,8 +666,9 @@ sequenceDiagram
   (`storable_current_value()`, `backend/app/services/assets/price_store.py`; X-R40, W-B62): in
   its own form when the history's truncation leaves it unchanged (`101.5` stays `101.5`),
   truncated otherwise (`65432.1234567890999` → `65432.123456789`). Only such a quote is cached,
-  for two minutes (`_asset_current_cache`, `backend/app/services/assets/core.py`, shared with
-  the price sync), and a cached one is served the same way.
+  for two minutes, or the provider's interval (`current_min_refresh_seconds`) (`_asset_current_cache`,
+  `backend/app/services/assets/core.py`, shared with the price sync), and a cached one is served
+  the same way.
 - **A refused quote**, one no price column can keep (not finite, more than 12 digits before the
   decimal point, or non-zero but 0 once truncated to 12 decimal places, such as `1E-13`) or, since
   N92, one not above 0, is neither served, cached nor written: the asset falls back to the database exactly as after a
