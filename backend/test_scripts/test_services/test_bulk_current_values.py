@@ -1,4 +1,4 @@
-"""Project 76, lots C1, C2 and C3 — the «bulk current-price read» of asset providers (no server, no network).
+"""Project 76, lots C1, C2, C3 and C4 — the «bulk current-price read» of asset providers (no server, no network).
 
 Lot C1 is pure (no DB). Lot C2 runs ``PriceQueryOperations.get_current_prices_bulk`` on a private SQLite file (see the C2
 section at the end of this file).
@@ -66,6 +66,24 @@ current value through the same bulk group as the live read, BEFORE the per-asset
     ``get_current_value`` of its own; a second refresh within the stamp makes no call at all.
 25. The X-R51 note outlives the read that met it: a live read refuses the quote for the price columns, then a refresh
     within the stamp (no new call) still carries the note.
+
+Lot C4 — the minimum refresh interval of current values (``AssetSourceProvider.current_min_refresh_seconds``,
+``core.current_cache_ttl``):
+
+26. No interval declared: ``None``, a TTL of 120 s (an object that is no plugin too).
+27. A number of at least 120 is the TTL; anything else (a bool, a text, 0, a negative number, below 120, a property
+    that raises) gives 120 s.
+28. Plan 4.1: 20 assets, interval 1800 s, the scheduler, the list and a detail page asking staggered sets for a fake
+    hour: 2 bulk calls of 20 keys.
+29. A history refresh within the interval makes no extra bulk call.
+30. Without an interval the group is read again after 120 s; with 1800 it is not.
+31. The per-asset path stores its quote with the provider's TTL, live and in a refresh.
+32. Bulk first (XRL-R06 for a bulk provider): a refused bulk read fails the refresh with nothing stored and the history
+    not asked; after the pause the next refresh stores the history and today.
+33. Requested assets outside the active set do not chase each other out of the stamp: two inactive assets asked in
+    turn within the interval cost one read each, not one per request.
+34. A current-value cache emptied within the stamp (the administrator's «clear caches») is read again at the next
+    request, not served from the database until the stamp ends.
 """
 
 from __future__ import annotations
@@ -107,6 +125,7 @@ from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceE
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.assets.price_store import unstorable_quote_reason
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.platform import provider_cooldown
 from backend.app.services.plugin_settings.fields import env_name, env_variables
 from backend.app.utils.runtime.cache import NamedCache
@@ -849,3 +868,292 @@ async def test_c3_the_unstorable_note_outlives_the_read_that_met_it(private_db: 
     assert calls == 1, "within the stamp: no new call"
     assert unstorable_quote_reason(Decimal("1E-13")) in results[asset_id].errors
     print_success("no new call, the X-R51 note still reported")
+
+
+# =============================================================================
+# LOT C4 — the minimum refresh interval of current values
+# =============================================================================
+
+C4_CODE_PER_ASSET = "c4_per_asset"
+C4_CODE_BULK_ONCE = "c4_bulk_refused_once"
+
+
+def _interval(monkeypatch: pytest.MonkeyPatch, value: object) -> None:
+    """``MockProvider`` declares ``current_min_refresh_seconds`` = ``value`` (the property does not exist before C4)."""
+    monkeypatch.setattr(MockProvider, "current_min_refresh_seconds", property(lambda self: value), raising=False)
+
+
+def _hand_out(monkeypatch: pytest.MonkeyPatch, doubles: dict[str, type]) -> None:
+    """The provider registry hands out a new instance of ``doubles[code]`` for those codes, its own providers otherwise."""
+    original = AssetProviderRegistry.get_provider_instance
+
+    def get_provider_instance(_cls, code, **kwargs):
+        double = doubles.get(code)
+        return double() if double is not None else original(code, **kwargs)
+
+    monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(get_provider_instance))
+
+
+def test_c4_default_is_no_interval_and_a_ttl_of_120():
+    """C4-01 — contract 26: no declared interval is ``None`` and the TTL is 120 s; an object that is no plugin has 120 s too."""
+    print_section("C4-01: default interval")
+    assert MockProvider().current_min_refresh_seconds is None
+    assert core.current_cache_ttl(MockProvider()) == 120.0
+    assert core.current_cache_ttl(object()) == 120.0
+    print_success("None -> 120.0")
+
+
+@pytest.mark.parametrize("declared", [1800, 1800.5, 120])
+def test_c4_a_declared_interval_is_the_ttl(monkeypatch: pytest.MonkeyPatch, declared):
+    """C4-02 — contract 27: a number of at least 120 (int or float) is the TTL, as a float."""
+    _interval(monkeypatch, declared)
+    ttl = core.current_cache_ttl(MockProvider())
+    assert ttl == float(declared) and isinstance(ttl, float)
+
+
+def _raising(self):
+    raise RuntimeError("the property failed")
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [
+        pytest.param(True, id="bool"),
+        pytest.param("1800", id="string"),
+        pytest.param(0, id="zero"),
+        pytest.param(-5, id="negative"),
+        pytest.param(60, id="below-120"),
+        pytest.param(_raising, id="raises"),
+    ],
+)
+def test_c4_an_invalid_interval_falls_back_to_120(monkeypatch: pytest.MonkeyPatch, declared):
+    """C4-03 — contract 27: anything else than a number of at least 120 (or an error of the property) is 120.0."""
+    prop = property(declared) if callable(declared) else property(lambda self: declared)
+    monkeypatch.setattr(MockProvider, "current_min_refresh_seconds", prop, raising=False)
+    assert core.current_cache_ttl(MockProvider()) == 120.0
+
+
+@pytest.mark.asyncio
+async def test_c4_a_fake_hour_of_the_plan_makes_two_bulk_calls(private_db: AsyncEngine, groups: _Groups, clock: FakeClock, monkeypatch: pytest.MonkeyPatch):
+    """C4-04 — contract 28 (plan 4.1): 20 assets, interval 1800 s; the scheduler asks all 20 every 600 s, the list the first
+    10 every 60 s, the detail page asks #15 every 30 s between t=1200 and t=2400, for a fake hour: 2 bulk calls of 20 keys."""
+    print_section("C4-04: the call count of the plan")
+    _interval(monkeypatch, 1800)
+    ids = [await _asset(private_db) for _ in range(20)]
+    groups.bc  # noqa: B018
+    answered: list[tuple] = []
+
+    async def ask(subset: list[int]) -> None:
+        items = await _prices(private_db, subset)
+        answered.extend(_served(items[i]) for i in subset)
+
+    for t in range(0, 3600, 30):
+        clock.now = START + t
+        if t % 600 == 0:
+            await ask(ids)
+        if t % 60 == 0:
+            await ask(ids[:10])
+        if 1200 <= t <= 2400:
+            await ask([ids[14]])
+
+    assert _lens() == [20, 20], "one read at t=0, one at t=1800"
+    assert set(answered) == {(Decimal("100.00"), "provider:mockprov", None)}
+    print_success("2 bulk calls of 20 keys in a fake hour")
+
+
+@pytest.mark.asyncio
+async def test_c4_a_history_refresh_makes_no_extra_bulk_call_within_the_interval(private_db: AsyncEngine, groups: _Groups, clock: FakeClock, monkeypatch: pytest.MonkeyPatch):
+    """C4-05 — contract 29: interval 1800; reads at t=0 and t=1800, a refresh of all 20 over a range reaching today at t=900
+    and at t=2700: no extra bulk call (1 by t=900, 2 in all); today's price stored."""
+    _interval(monkeypatch, 1800)
+    ids = [await _asset(private_db) for _ in range(20)]
+    groups.bc  # noqa: B018
+    today = date.today()
+
+    clock.now = START
+    await _prices(private_db, ids)
+    clock.now = START + 900
+    await _refresh_many(private_db, ids, today - timedelta(days=3), today)
+    assert _lens() == [20], "the refresh at t=900 reads nothing more"
+    clock.now = START + 1800
+    await _prices(private_db, ids)
+    clock.now = START + 2700
+    results = await _refresh_many(private_db, ids, today - timedelta(days=3), today)
+
+    assert _lens() == [20, 20]
+    for i in ids:
+        assert results[i].status != SyncStatus.FAILED
+        assert (await _days(private_db, i)).get(today) == Decimal("100.00")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("declared", "calls"), [(None, [3, 3]), (1800, [3])])
+async def test_c4_the_group_is_read_again_after_120_seconds_only_without_an_interval(private_db: AsyncEngine, groups: _Groups, clock: FakeClock, monkeypatch: pytest.MonkeyPatch, declared, calls):
+    """C4-06 — contract 30: asks at t=0 and t=121: without an interval two calls, with 1800 one."""
+    _interval(monkeypatch, declared)
+    ids = [await _asset(private_db) for _ in range(3)]
+    groups.bc  # noqa: B018
+
+    await _prices(private_db, ids)
+    clock.now = START + STAMP_PASSED
+    await _prices(private_db, ids)
+
+    assert _lens() == calls
+
+
+class _PerAssetProvider(MockProvider):
+    """mockprov without bulk support, declaring a minimum refresh interval of 1800 s."""
+
+    settings_fields = ()
+    supports_bulk_current = False
+
+    @property
+    def provider_code(self) -> str:
+        return C4_CODE_PER_ASSET
+
+    @property
+    def current_min_refresh_seconds(self):
+        return 1800
+
+
+def _record_ttls(monkeypatch: pytest.MonkeyPatch) -> list:
+    """Wrap the private current-value cache's ``set``: the ``ttl`` of every entry stored."""
+    ttls: list = []
+    cache = core._asset_current_cache
+    original = cache.set
+
+    def recording(key, value, *args, ttl=None, **kwargs):
+        ttls.append(ttl)
+        return original(key, value, *args, ttl=ttl, **kwargs)
+
+    monkeypatch.setattr(cache, "set", recording)
+    return ttls
+
+
+async def _per_asset_asset(engine: AsyncEngine) -> int:
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        asset = Asset(display_name=_unique("C4 asset"), currency="USD", asset_type=AssetType.STOCK)
+        session.add(asset)
+        await session.flush()
+        session.add(AssetProviderAssignment(asset_id=asset.id, provider_code=C4_CODE_PER_ASSET, identifier=_unique("C4"), identifier_type=ProviderInputType.TICKER, provider_params="{}"))
+        await session.commit()
+        return asset.id
+
+
+@pytest.mark.asyncio
+async def test_c4_the_per_asset_live_read_stores_the_quote_with_the_providers_ttl(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch):
+    """C4-07 — contract 31: a live read of an asset of a provider without bulk support declaring 1800 stores its quote with
+    ttl 1800 s."""
+    _hand_out(monkeypatch, {C4_CODE_PER_ASSET: _PerAssetProvider})
+    asset_id = await _per_asset_asset(private_db)
+    groups.bc  # noqa: B018
+    ttls = _record_ttls(monkeypatch)
+
+    items = await _prices(private_db, [asset_id])
+
+    assert items[asset_id].source == f"provider:{C4_CODE_PER_ASSET}"
+    assert ttls and set(ttls) == {timedelta(seconds=1800)}, f"ttl of the entries stored: {ttls}"
+
+
+@pytest.mark.asyncio
+async def test_c4_the_per_asset_refresh_stores_the_quote_with_the_providers_ttl(private_db: AsyncEngine, groups: _Groups, monkeypatch: pytest.MonkeyPatch):
+    """C4-08 — contract 31: the same for a refresh over a range reaching today."""
+    _hand_out(monkeypatch, {C4_CODE_PER_ASSET: _PerAssetProvider})
+    asset_id = await _per_asset_asset(private_db)
+    groups.bc  # noqa: B018
+    ttls = _record_ttls(monkeypatch)
+    today = date.today()
+
+    results = await _refresh_many(private_db, [asset_id], today - timedelta(days=3), today)
+
+    assert results[asset_id].status != SyncStatus.FAILED
+    assert ttls and set(ttls) == {timedelta(seconds=1800)}, f"ttl of the entries stored: {ttls}"
+
+
+@pytest.mark.asyncio
+async def test_c4_a_bulk_provider_refused_once_fails_the_refresh_then_serves_it_after_the_pause(private_db: AsyncEngine, groups: _Groups, clock: FakeClock, monkeypatch: pytest.MonkeyPatch):
+    """C4-09 — contract 32 (plan 3.1 point 5): the bulk call is refused (240 s) on its first call only. Round 1: FAILED,
+    RATE_LIMITED, 240.0, nothing stored, no history asked. Past the pause, round 2: OK, the history days and today stored."""
+    print_section("C4-09: bulk first, refused once")
+    history: list[int] = []
+
+    class _BulkRefusedOnce(MockProvider):
+        settings_fields = ()
+        bulk_calls = 0
+
+        @property
+        def provider_code(self) -> str:
+            return C4_CODE_BULK_ONCE
+
+        async def get_current_values_bulk(self, items):
+            type(self).bulk_calls += 1
+            if type(self).bulk_calls == 1:
+                raise AssetRateLimitedError("bulk read refused for too many requests (testing)", retry_after=240.0)
+            return await super().get_current_values_bulk(items)
+
+        async def get_history_value(self, identifier, identifier_type, provider_params, start_date, end_date):
+            history.append(1)
+            return await super().get_history_value(identifier, identifier_type, provider_params, start_date, end_date)
+
+    _hand_out(monkeypatch, {C4_CODE_BULK_ONCE: _BulkRefusedOnce})
+    async with AsyncSession(private_db, expire_on_commit=False) as session:
+        asset = Asset(display_name=_unique("C4 asset"), currency="USD", asset_type=AssetType.STOCK)
+        session.add(asset)
+        await session.flush()
+        session.add(AssetProviderAssignment(asset_id=asset.id, provider_code=C4_CODE_BULK_ONCE, identifier=_unique("C4"), identifier_type=ProviderInputType.TICKER, provider_params="{}"))
+        await session.commit()
+        asset_id = asset.id
+    groups.bc  # noqa: B018
+    today = date.today()
+    window = {today - timedelta(days=offset) for offset in range(0, 6)}
+
+    first = (await _refresh_many(private_db, [asset_id], today - timedelta(days=5), today))[asset_id]
+
+    assert (first.status, first.error_code, first.retry_after) == (SyncStatus.FAILED, "RATE_LIMITED", 240.0)
+    assert await _days(private_db, asset_id) == {}
+    assert history == [], "the bulk read comes first: the pause holds the history"
+    clock.now += 241
+
+    second = (await _refresh_many(private_db, [asset_id], today - timedelta(days=5), today))[asset_id]
+
+    assert second.status == SyncStatus.OK and second.error_code is None
+    assert set(await _days(private_db, asset_id)) == window
+    assert _BulkRefusedOnce.bulk_calls == 2
+    print_success("round 1 FAILED, round 2 stored the history and today")
+
+
+@pytest.mark.asyncio
+async def test_c4_inactive_assets_asked_in_turn_do_not_chase_each_other_out(private_db: AsyncEngine, groups: _Groups, clock: FakeClock, monkeypatch: pytest.MonkeyPatch):
+    """C4-11 — contract 33: interval 1800; two inactive assets (two detail pages) asked in turn four times within the
+    stamp: two reads (one for each, the first time), never one per request."""
+    print_section("C4-11: inactive assets asked in turn")
+    _interval(monkeypatch, 1800)
+    x = await _asset(private_db, active=False)
+    y = await _asset(private_db, active=False)
+    groups.bc  # noqa: B018
+    for step, asset_id in enumerate([x, y, x, y]):
+        clock.now = START + 10 * step
+        items = await _prices(private_db, [asset_id])
+        assert items[asset_id].source == "provider:mockprov"
+    assert len(_lens()) == 2, f"one read for each asset, not one per request: {_lens()}"
+    print_success("2 reads for 4 requests")
+
+
+@pytest.mark.asyncio
+async def test_c4_an_emptied_cache_is_read_again_within_the_stamp(private_db: AsyncEngine, groups: _Groups, clock: FakeClock, monkeypatch: pytest.MonkeyPatch):
+    """C4-12 — contract 34: interval 1800; a read, then the current-value cache emptied («clear caches»): the next
+    request within the stamp reads the group again and is served by the provider."""
+    print_section("C4-12: an emptied cache is read again")
+    _interval(monkeypatch, 1800)
+    a = await _asset(private_db)
+    b = await _asset(private_db)
+    groups.bc  # noqa: B018
+    clock.now = START
+    await _prices(private_db, [a, b])
+    assert len(_lens()) == 1
+    core._asset_current_cache.clear()
+    clock.now = START + 60
+    items = await _prices(private_db, [a])
+    assert len(_lens()) == 2, "the emptied cache makes the group read again"
+    assert items[a].source == "provider:mockprov"
+    print_success("read again after the cache was emptied")
