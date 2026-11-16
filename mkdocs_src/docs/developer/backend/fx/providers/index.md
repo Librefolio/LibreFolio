@@ -7,14 +7,14 @@ This section provides the technical documentation for each Foreign Exchange (FX)
 | Provider | Code | Base Currency | Currencies | API Format | API Key | Test Level |
 |:---|:---|:---:|:---:|:---:|:---:|:---|
 | [**European Central Bank**](ecb.md) | `ECB` | EUR | ~45 | JSON/XML | No | Stable |
-| [**Federal Reserve**](fed.md) | `FED` | USD | ~20 | CSV | No | Beta |
-| [**Bank of England**](boe.md) | `BOE` | GBP | ~15 | CSV/HTML | No | Beta |
+| [**Federal Reserve**](fed.md) | `FED` | USD | 23 | CSV | No | Beta |
+| [**Bank of England**](boe.md) | `BOE` | GBP | 15 | CSV | No | Beta |
 | [**Swiss National Bank**](snb.md) | `SNB` | CHF | ~25 | JSON | No | Beta |
 
 ### 📝 General Notes
 
 - **Base Currency**: The currency against which all other rates are quoted by the provider. LibreFolio automatically handles conversions between any pair, regardless of the provider's base currency.
-- **Update Frequency**: ECB, FED and BOE update their rates once per business day (weekdays only). The SNB publishes monthly averages only, stored on the 1st of each month.
+- **Update Frequency**: ECB and BOE publish one rate per business day, each day (weekdays only). FED holds one rate per US business day too, but FRED releases them once a week, on Mondays ([FED](fed.md#release-schedule)). The SNB publishes monthly averages only, stored on the 1st of each month.
 - **No API Keys**: All core providers use publicly accessible APIs — no registration or API keys required.
 
 ## 📚 Technical Details
