@@ -26,11 +26,14 @@ table      ``[{"from": …, "to": …, "rate": …}]``      rows in order
 
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
+from backend.app.db.models import AssetType
+from backend.app.schemas.assets.enrichers import FAEnricherBinding
 from backend.app.schemas.common import StrictModel
 
 
@@ -91,3 +94,65 @@ class FAProfileVoice(StrictModel):
     volatile: bool = Field(False, description="Changes at every read (fund size, yields, duration…): «Ultime variazioni» leaves its source rows out")
     choices: tuple[str, ...] = Field((), description="The codes a choice voice accepts; empty for the others")
     map_keys: Optional[ProfileMapKeys] = Field(None, description="What a map voice's keys are; None for the others")
+
+
+class FAProfileReadOutcome(StrictModel):
+    """One enricher's read for one asset (``ask`` and ``refresh``)."""
+
+    code: str
+    identifier_type: str
+    identifier: str
+    status: str = Field(..., description="ok, not_found, error")
+    voices: list[str] = Field(default_factory=list, description="The voices it gave, after the catalogue")
+    error_code: Optional[str] = Field(None, description="RATE_LIMITED for a refusal for too many requests")
+    retry_after: Optional[float] = None
+    from_cache: bool = False
+
+
+class FAProfileAskVoice(StrictModel):
+    """One voice as the enrichers give it: the merged value and its enricher, and what the others gave."""
+
+    value: Any = Field(None, description="The value in its stored form (never null: a source never empties a voice)")
+    source: str
+    source_date: Optional[date] = None
+    others: Dict[str, Any] = Field(default_factory=dict, description="Enricher code → its value, for the others that gave it")
+
+
+class FAProfileAskRequest(StrictModel):
+    """``POST /assets/profile/ask``: read an asset's enrichers without saving. Either ``asset_id`` (its bindings and
+    type), or ``asset_type`` with ``enrichers`` (an asset not created yet). Without ``keys``, every voice («Chiedi tutto»)."""
+
+    asset_id: Optional[int] = None
+    asset_type: Optional[AssetType] = None
+    enrichers: Optional[Dict[str, FAEnricherBinding]] = None
+    keys: Optional[List[str]] = None
+
+    @model_validator(mode="after")
+    def _one_asset(self) -> FAProfileAskRequest:
+        if self.asset_id is None and (self.asset_type is None or self.enrichers is None):
+            raise ValueError("asset_id, or asset_type with enrichers")
+        if self.asset_id is not None and self.enrichers is not None:
+            raise ValueError("asset_id or enrichers, not both")
+        return self
+
+
+class FAProfileAskResponse(StrictModel):
+    """What the enrichers give now, merged, and how each read went. Nothing was written."""
+
+    voices: Dict[str, FAProfileAskVoice]
+    outcomes: List[FAProfileReadOutcome]
+
+
+class FAProfileRefreshResult(StrictModel):
+    """«Aggiorna» for one asset: the voices written and how each enricher's read went."""
+
+    asset_id: int
+    written: List[str] = Field(default_factory=list)
+    outcomes: List[FAProfileReadOutcome] = Field(default_factory=list)
+    error: Optional[str] = Field(None, description="Why nothing was read (an asset that does not exist)")
+
+
+class FAProfileRefreshResponse(StrictModel):
+    """``POST /assets/profile/refresh``."""
+
+    results: List[FAProfileRefreshResult]
