@@ -1976,13 +1976,14 @@ async def _p05_patch_counting(patches: list[FAAssetPatchItem]) -> tuple[object, 
 
 
 @pytest.mark.asyncio
-async def test_p05_patch_without_currency_change_issues_one_select_total():
-    """20 patched assets, no currency change → ONE SELECT (the bulk preload).
+async def test_p05_patch_without_currency_change_issues_two_selects_total():
+    """20 renamed assets, no currency change → TWO SELECTs: the bulk preload and the names check.
 
     Before P0-5 this was one `Asset.get` per patch (20 SELECTs here); any
-    regression to per-item lookups makes this number climb linearly. The 20
-    UPDATEs (one per real rename) are the work itself and are deliberately not
-    counted — see _QueryCounter.
+    regression to per-item lookups makes this number climb linearly. A rename
+    also asks, in one query for the whole batch, which other assets hold the new
+    names (``assetNameTaken``, 7ddf0404b). The 20 UPDATEs (one per real rename)
+    are the work itself and are deliberately not counted — see _QueryCounter.
     """
     asset_ids, uid = await _p05_make_assets(20, "plain")
     # The rename targets must be unique too: display_name is uniquely indexed,
@@ -1992,7 +1993,7 @@ async def test_p05_patch_without_currency_change_issues_one_select_total():
     response, counter = await _p05_patch_counting(patches)
 
     assert response.success_count == 20
-    assert counter.selects == 1, f"expected the single bulk preload SELECT, got {counter.selects} SELECTs:\n" + "\n".join(counter.statements)
+    assert counter.selects == 2, f"expected the bulk preload and the names check, got {counter.selects} SELECTs:\n" + "\n".join(counter.statements)
 
 
 async def _p05_seed_market_data(asset_ids: list[int], tag: str) -> None:
