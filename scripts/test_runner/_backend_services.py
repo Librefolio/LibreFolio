@@ -110,6 +110,7 @@ PAC_PLANNER_PROOF_TEST_PATH = "backend/test_scripts/test_services/test_pac_plann
 PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_wire_numbers.py"
 PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
+PAC_PLANNER_SEQUENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_plan_sequence.py"
 PAC_PLANNER_PREVIEW_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_preview.py"
 PAC_PLANNER_REFERENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_reference.py"
 
@@ -170,6 +171,13 @@ def services_pac_planner_report(verbose: bool = False, test_names: list = None) 
     print_section("Services: PAC/Rebalancer Wire Projection")
     cmd = _build_pytest_cmd(PAC_PLANNER_REPORT_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer wire projection tests", verbose=verbose)
+
+
+def services_pac_planner_sequence(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plan's step counter: an order the balances can follow, checked on the engine's own plans."""
+    print_section("Services: PAC/Rebalancer Step Counter")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SEQUENCE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer step counter tests", verbose=verbose)
 
 
 def services_pac_planner_service(verbose: bool = False, test_names: list = None) -> bool:
@@ -2617,6 +2625,14 @@ Note: No backend server required.
         services_pac_planner_wire_numbers,
         name="PAC/Rebalancer Wire Numbers",
         desc="Lossless exact-to-wire projection, canonical spelling, non-authoritative display and fail-closed envelope limits",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-sequence",
+        services_pac_planner_sequence,
+        name="PAC/Rebalancer Step Counter",
+        desc="The plan's steps numbered in an order the balances can follow; the invariant replayed on the engine's own plans (G5, a PAC deposit and exchange)",
         isolation="pure",
     )
     add_test(

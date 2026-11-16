@@ -64,6 +64,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
+from fractions import Fraction
 
 from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, OptimalProvenProof, RebalancerOptimalProvenProof, SolverStatusWitness
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
@@ -88,8 +90,8 @@ from backend.app.schemas.pac_allocator.results import (
     RebalancerPlannerUnsupportedResult,
 )
 from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution, PacNoOpSolution, RebalancerIncumbentSolution, RebalancerNoOpSolution
+from backend.app.services.pac_allocator import plan_sequence, rebalancer_report
 from backend.app.services.pac_allocator import planner_report as report
-from backend.app.services.pac_allocator import rebalancer_report
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing, evaluate_exact_candidate, rounding_top_ups
@@ -399,6 +401,31 @@ def _common_ready_fields(scenario, view, search: _Search, evaluation: ExactEvalu
     }
 
 
+def _executable_steps(scenario: ExactPlannerScenario, ledger_rows: list, top_up_rows: list, funding_actions: list, transfers: list, conversions: list, order_rows: list) -> tuple[list, list, list, list]:
+    """Number the plan's steps in an order the balances can follow (contract §6.3, specification §15 n. 7; F4a of project
+    67): the builders number in a fixed order of kinds, this renumbers from the ledger's initial balances
+    (``plan_sequence``), keeps each section ascending as the schema wants, and checks the invariant on the result: replayed
+    in its numbers, the plan never takes a balance below zero and ends at the ledger's final balances. A plan no order can
+    pay raises ``PlanNotExecutableError``: a defect, never a plan to publish. A rounding top-up is cash the user adds to its
+    cell for the plan to execute (``PlannerRoundingTopUp``): it counts from the start, and the cell ends at zero instead of
+    the ledger's negative balance."""
+    cells = {cash.cash_id: (cash.broker_id, cash.selected.currency) for cash in scenario.existing_cash}
+    added = {(row.broker_id, row.currency): Fraction(Decimal(row.amount)) for row in top_up_rows}
+    initial = {(row.broker_id, row.currency): Fraction(Decimal(row.initial_selected)) + added.get((row.broker_id, row.currency), Fraction(0)) for row in ledger_rows}
+    final = {(row.broker_id, row.currency): Fraction(Decimal(row.final_physical)) + added.get((row.broker_id, row.currency), Fraction(0)) for row in ledger_rows}
+    flows = plan_sequence.step_flows(funding_actions, transfers, conversions, order_rows, cells)
+    number = {flow.key: position for position, flow in enumerate(plan_sequence.executable_order(initial, flows), start=1)}
+
+    def renumber(rows: list, key: str) -> list:
+        renumbered = [row.model_copy(update={"sequence": number[getattr(row, key)]}) if getattr(row, key) in number else row for row in rows]
+        numbered = sorted((row for row in renumbered if row.sequence is not None), key=lambda row: row.sequence)
+        return numbered + [row for row in renumbered if row.sequence is None]
+
+    funding_actions, transfers, conversions, order_rows = renumber(funding_actions, "action_id"), renumber(transfers, "transfer_id"), renumber(conversions, "conversion_id"), renumber(order_rows, "order_id")
+    plan_sequence.assert_executable(initial, plan_sequence.step_flows(funding_actions, transfers, conversions, order_rows, cells), final)
+    return funding_actions, transfers, conversions, order_rows
+
+
 def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...], _solver: SolverRunResult | None = None) -> dict:
     """Assemble the primary solution.
 
@@ -406,13 +433,16 @@ def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView,
     and order rows — not one per section. The schema wants ids and sequences
     unique across the sections *and* each section internally ascending;
     separate counters would collide on row one, and a single dense counter
-    satisfies both at once. The call order is the execution order: funding
-    first, then the conversions the user performs, then the orders.
+    satisfies both at once. The builders number in a fixed order (funding, the conversions the user performs, the orders);
+    ``_executable_steps`` then renumbers the steps in an order the balances can follow.
     """
     sequence = report._SequenceAllocator()
+    ledger_rows = report.build_ledger_rows(evaluation)
+    top_up_rows = report.build_rounding_top_ups(scenario, top_ups)
     funding_actions = report.build_funding_actions(scenario, evaluation, sequence)
     conversions = report.build_conversions(scenario, evaluation, sequence)
     order_rows = report.build_order_rows(scenario, evaluation, sequence)
+    funding_actions, _, conversions, order_rows = _executable_steps(scenario, ledger_rows, top_up_rows, funding_actions, [], conversions, order_rows)
     return {
         "solution_id": _PRIMARY_SOLUTION_ID,
         "solution_kind": "primary",
@@ -422,8 +452,8 @@ def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView,
         "funding_actions": funding_actions,
         "conversions": conversions,
         "order_rows": order_rows,
-        "ledger_rows": report.build_ledger_rows(evaluation),
-        "rounding_top_ups": report.build_rounding_top_ups(scenario, top_ups),
+        "ledger_rows": ledger_rows,
+        "rounding_top_ups": top_up_rows,
         "exposure_rows": report.build_exposure_rows(scenario, evaluation),
         "accounting": report.build_accounting(scenario, evaluation),
         "costs": report.build_costs(scenario, evaluation),
@@ -434,13 +464,17 @@ def _build_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView,
 
 def _rebalancer_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation, top_ups: tuple[ExactRoundingTopUp, ...], solver: SolverRunResult) -> dict:
     """Assemble a Rebalancer solution (contract §6): the PAC's shared rows plus the items on ``F``, the transfers, the plan
-    accounts and the score. One step counter, in execution order: deposits, transfers, the conversions the user performs,
-    then the orders. The tax parts are empty until a plan sells (C1, C2 of project 67)."""
+    accounts and the score. One step counter, in an order the balances can follow (``_executable_steps``): an exchange
+    before a transfer that spends its proceeds, a transfer before the exchange or purchase that spends what it brings. The
+    tax parts are empty until a plan sells (C1, C2 of project 67)."""
     sequence = report._SequenceAllocator()
+    ledger_rows = report.build_ledger_rows(evaluation)
+    top_up_rows = report.build_rounding_top_ups(scenario, top_ups)
     funding_actions = report.build_funding_actions(scenario, evaluation, sequence)
     transfers = rebalancer_report.build_transfers(evaluation, sequence)
     conversions = report.build_conversions(scenario, evaluation, sequence)
     order_rows = report.build_order_rows(scenario, evaluation, sequence)
+    funding_actions, transfers, conversions, order_rows = _executable_steps(scenario, ledger_rows, top_up_rows, funding_actions, transfers, conversions, order_rows)
     return {
         "solution_id": _PRIMARY_SOLUTION_ID,
         "solution_kind": "primary",
@@ -452,8 +486,8 @@ def _rebalancer_solution_parts(scenario: ExactPlannerScenario, view: ExactPolicy
         "conversions": conversions,
         "transfers": transfers,
         "order_rows": order_rows,
-        "ledger_rows": report.build_ledger_rows(evaluation),
-        "rounding_top_ups": report.build_rounding_top_ups(scenario, top_ups),
+        "ledger_rows": ledger_rows,
+        "rounding_top_ups": top_up_rows,
         "exposure_rows": rebalancer_report.build_rebalancer_exposure_rows(scenario, evaluation),
         "accounting": report.build_accounting(scenario, evaluation),
         "costs": report.build_costs(scenario, evaluation),

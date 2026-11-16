@@ -534,8 +534,9 @@ def build_conversions(scenario: ExactPlannerScenario, evaluation: ExactEvaluatio
     the ledger identity reconciles on posted amounts (an exact 9.504 USD credit posts as 10). ``spread_loss`` by contrast is an
     economic cost and stays exact, matching ``_evaluate_costs``. ``evaluation.fx`` is already in canonical (Broker, source,
     destination) order and holds each pair once (``ExactEvaluation`` refuses duplicates). Manual conversions take the next
-    sequences in that order, which puts them between funding and orders; automatic ones happen inside the orders and carry
-    none. The provenance is the Broker's: a conversion has no route of its own (D12).
+    sequences of the shared counter, provisionally: ``planner._executable_steps`` renumbers every step in an order the
+    balances can follow (``plan_sequence``). Automatic ones happen when a step spends their currency and carry none. The
+    provenance is the Broker's: a conversion has no route of its own (D12).
     """
     broker_by_id = {broker.broker_id: broker for broker in scenario.brokers}
     conversions: list[PlannerConversion] = []

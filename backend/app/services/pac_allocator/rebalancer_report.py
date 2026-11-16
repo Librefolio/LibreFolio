@@ -163,7 +163,8 @@ def build_uninvested_row(scenario: ExactPlannerScenario, evaluation: ExactEvalua
 
 def build_transfers(evaluation: ExactEvaluation, sequence) -> list[PlannerTransfer]:
     """One row per transfer the plan makes, read off its ``transfer_out`` postings (the replay posts only nonzero ones), in
-    their canonical order; each takes the next step of the shared counter."""
+    their canonical order; each takes the next step of the shared counter, provisionally: ``planner._executable_steps``
+    renumbers every step in an order the balances can follow (``plan_sequence``)."""
     rows = []
     for posting in evaluation.postings:
         if posting.family != "transfer_out" or posting.exact_amount == _ZERO:
