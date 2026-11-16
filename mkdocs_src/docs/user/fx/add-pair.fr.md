@@ -22,7 +22,8 @@ Cliquez sur **Ajouter une route de conversion** pour voir toutes les façons don
 peuvent produire ce taux :
 
 - 🔗 **Conversion directe (1 étape)** — un fournisseur publie la paire ;
-- 🔀 **Conversion en chaîne** — passe par d'autres devises, regroupées par nombre d'étapes ;
+- 🔀 **Conversion en chaîne** — passe par d'autres devises, regroupées par nombre d'étapes ; un grand groupe
+  affiche ses 200 premières routes et un bouton **Afficher plus** pour les autres ;
 - 🚫 **Non utilisables** — fournisseurs qui ne peuvent pas atteindre cette paire.
 
 Filtrez avec la zone de recherche (fournisseur, devise ou pays), puis cliquez sur une route pour

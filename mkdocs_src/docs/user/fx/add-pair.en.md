@@ -20,7 +20,8 @@ hides the currencies already paired with the other one, so a pair cannot be adde
 Click **Add conversion route** to see every way the providers can produce this rate:
 
 - 🔗 **Direct conversion (1 step)** — one provider publishes the pair;
-- 🔀 **Chain conversion** — steps through other currencies, grouped by number of steps;
+- 🔀 **Chain conversion** — steps through other currencies, grouped by number of steps; a large group shows its
+  first 200 routes and a **Show more** button for the others;
 - 🚫 **Not usable** — providers that cannot reach this pair.
 
 Filter with the search box (provider, currency or country), then click a route to add it.
